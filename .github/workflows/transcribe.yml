@@ -39,7 +39,12 @@ jobs:
         run: python transcribe.py
 
       - name: Run no-key YouTube transcript fallback
+        continue-on-error: true
         run: python youtube_public_fallback.py
+
+      - name: Validate and repair public transcripts
+        continue-on-error: true
+        run: python repair_public_transcripts.py
 
       - name: Commit generated results
         if: always()
