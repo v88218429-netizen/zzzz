@@ -1,0 +1,9 @@
+{
+  "request": "2026-09-17_youtube_KF57cbDT--g.json",
+  "mode": "single",
+  "completed": 1,
+  "errors": [],
+  "collection": "collections/2026-09-17_youtube_KF57cbDT--g.md",
+  "processed_at": "2026-09-17T20:07:59.329124+00:00",
+  "engine": "public-youtube-transcript-fallback"
+}

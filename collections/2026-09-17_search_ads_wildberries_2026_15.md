@@ -3,117 +3,69 @@
 - Mode: search
 - Search: реклама Wildberries 2026
 - Requested videos: 15
-- Completed: 0
-- Errors: 15
-- Generated: 2026-09-17T20:03:00.736845+00:00
+- Completed: 14
+- Errors: 1
+- Generated: 2026-09-17T20:07:57.938819+00:00
 
 ## Videos
 
+1. **Wildberries - Жаркие скидки и призы (Россия) (2026)**
+   - Source: https://www.youtube.com/watch?v=MQpGeDRXktU
+   - Transcript: `transcripts/2026-09-17_search_ads_wildberries_2026_15__01_youtube_MQpGeDRXktU.md`
+   - Method: youtube-transcript.ai
+2. **НОВАЯ РЕКЛАМА на Wildberries 2026 | Как настроить, ПОШАГОВАЯ ИНСТРУКЦИЯ продвижения товаров на WB**
+   - Source: https://www.youtube.com/watch?v=RdUhso3iAJU
+   - Transcript: `transcripts/2026-09-17_search_ads_wildberries_2026_15__02_youtube_RdUhso3iAJU.md`
+   - Method: youtube-transcript.ai
+3. **РЕКЛАМА на Wildberries 2026 | Реклама за клик: почему все переходят на неё**
+   - Source: https://www.youtube.com/watch?v=WP6ez9sZWkY
+   - Transcript: `transcripts/2026-09-17_search_ads_wildberries_2026_15__03_youtube_WP6ez9sZWkY.md`
+   - Method: youtube-transcript.ai
+4. **Реклама «Wildberries» Олеся Иванченко (2026)**
+   - Source: https://www.youtube.com/watch?v=grq8iomHZxo
+   - Transcript: `transcripts/2026-09-17_search_ads_wildberries_2026_15__04_youtube_grq8iomHZxo.md`
+   - Method: youtube-transcript.ai
+5. **Как настроить РЕКЛАМУ на Wildberries 2026 | ПОШАГОВАЯ ИНСТРУКЦИЯ продвижения товаров на Вайлдберриз**
+   - Source: https://www.youtube.com/watch?v=3QlcK7Tx7l0
+   - Transcript: `transcripts/2026-09-17_search_ads_wildberries_2026_15__05_youtube_3QlcK7Tx7l0.md`
+   - Method: youtube-transcript.ai
+6. **Реклама Вайлдберриз - Это мой маркетплейс**
+   - Source: https://www.youtube.com/watch?v=GuPL8HTlZtk
+   - Transcript: `transcripts/2026-09-17_search_ads_wildberries_2026_15__07_youtube_GuPL8HTlZtk.md`
+   - Method: youtube-transcript.ai
+7. **Wildberries | Подарки для него и для нее | реклама 2026**
+   - Source: https://www.youtube.com/watch?v=C4UyHM46KgM
+   - Transcript: `transcripts/2026-09-17_search_ads_wildberries_2026_15__08_youtube_C4UyHM46KgM.md`
+   - Method: youtube-transcript.ai
+8. **Какую РЕКЛАМУ запускать на Wildberries 2026? Разбор РЕКЛАМНЫХ СВЯЗОК для селлеров**
+   - Source: https://www.youtube.com/watch?v=A3t3PDanpBA
+   - Transcript: `transcripts/2026-09-17_search_ads_wildberries_2026_15__09_youtube_A3t3PDanpBA.md`
+   - Method: youtube-transcript.ai
+9. **Реклама Wildberries» Мы сходимся в одном(2026)**
+   - Source: https://www.youtube.com/watch?v=XH23DbOeRQc
+   - Transcript: `transcripts/2026-09-17_search_ads_wildberries_2026_15__10_youtube_XH23DbOeRQc.md`
+   - Method: youtube-transcript.ai
+10. **Новогодняя реклама «Wildberries» НГ на WB (2025-2026)**
+   - Source: https://www.youtube.com/watch?v=-njs2Uq2x_c
+   - Transcript: `transcripts/2026-09-17_search_ads_wildberries_2026_15__11_youtube_-njs2Uq2x_c.md`
+   - Method: youtube-transcript.ai
+11. **Вся реклама на Wildberries простыми словами | Полный разбор 2026**
+   - Source: https://www.youtube.com/watch?v=o8kwgGxB_Xw
+   - Transcript: `transcripts/2026-09-17_search_ads_wildberries_2026_15__12_youtube_o8kwgGxB_Xw.md`
+   - Method: youtube-transcript.ai
+12. **Самая ДЕШЕВАЯ реклама на Вайлдберриз Настройка рекомендательных полок на Wildberries 2026**
+   - Source: https://www.youtube.com/watch?v=cqbO277fUX4
+   - Transcript: `transcripts/2026-09-17_search_ads_wildberries_2026_15__13_youtube_cqbO277fUX4.md`
+   - Method: youtube-transcript.ai
+13. **Как настраивать рекламу на Wildberries в 2026?**
+   - Source: https://www.youtube.com/watch?v=peyEAczExfw
+   - Transcript: `transcripts/2026-09-17_search_ads_wildberries_2026_15__14_youtube_peyEAczExfw.md`
+   - Method: youtube-transcript.ai
+14. **Как работает реклама ВБ 2026? ПОШАГОВАЯ НАСТРОЙКА**
+   - Source: https://www.youtube.com/watch?v=EhaF2yFxPhI
+   - Transcript: `transcripts/2026-09-17_search_ads_wildberries_2026_15__15_youtube_EhaF2yFxPhI.md`
+   - Method: youtube-transcript.ai
 
 ## Errors
 
-- https://www.youtube.com/watch?v=MQpGeDRXktU: command failed: yt-dlp --dump-single-json --no-warnings https://www.youtube.com/watch?v=MQpGeDRXktU
-STDOUT:
-null
-
-STDERR:
-ERROR: [youtube] MQpGeDRXktU: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
-
-- https://www.youtube.com/watch?v=RdUhso3iAJU: command failed: yt-dlp --dump-single-json --no-warnings https://www.youtube.com/watch?v=RdUhso3iAJU
-STDOUT:
-null
-
-STDERR:
-ERROR: [youtube] RdUhso3iAJU: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
-
-- https://www.youtube.com/watch?v=WP6ez9sZWkY: command failed: yt-dlp --dump-single-json --no-warnings https://www.youtube.com/watch?v=WP6ez9sZWkY
-STDOUT:
-null
-
-STDERR:
-ERROR: [youtube] WP6ez9sZWkY: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
-
-- https://www.youtube.com/watch?v=GuPL8HTlZtk: command failed: yt-dlp --dump-single-json --no-warnings https://www.youtube.com/watch?v=GuPL8HTlZtk
-STDOUT:
-null
-
-STDERR:
-ERROR: [youtube] GuPL8HTlZtk: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
-
-- https://www.youtube.com/watch?v=dUndQVgTy9M: command failed: yt-dlp --dump-single-json --no-warnings https://www.youtube.com/watch?v=dUndQVgTy9M
-STDOUT:
-null
-
-STDERR:
-ERROR: [youtube] dUndQVgTy9M: Please sign in. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
-
-- https://www.youtube.com/watch?v=3QlcK7Tx7l0: command failed: yt-dlp --dump-single-json --no-warnings https://www.youtube.com/watch?v=3QlcK7Tx7l0
-STDOUT:
-null
-
-STDERR:
-ERROR: [youtube] 3QlcK7Tx7l0: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
-
-- https://www.youtube.com/watch?v=C4UyHM46KgM: command failed: yt-dlp --dump-single-json --no-warnings https://www.youtube.com/watch?v=C4UyHM46KgM
-STDOUT:
-null
-
-STDERR:
-ERROR: [youtube] C4UyHM46KgM: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
-
-- https://www.youtube.com/watch?v=grq8iomHZxo: command failed: yt-dlp --dump-single-json --no-warnings https://www.youtube.com/watch?v=grq8iomHZxo
-STDOUT:
-null
-
-STDERR:
-ERROR: [youtube] grq8iomHZxo: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
-
-- https://www.youtube.com/watch?v=-njs2Uq2x_c: command failed: yt-dlp --dump-single-json --no-warnings https://www.youtube.com/watch?v=-njs2Uq2x_c
-STDOUT:
-null
-
-STDERR:
-ERROR: [youtube] -njs2Uq2x_c: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
-
-- https://www.youtube.com/watch?v=XH23DbOeRQc: command failed: yt-dlp --dump-single-json --no-warnings https://www.youtube.com/watch?v=XH23DbOeRQc
-STDOUT:
-null
-
-STDERR:
-ERROR: [youtube] XH23DbOeRQc: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
-
-- https://www.youtube.com/watch?v=EhaF2yFxPhI: command failed: yt-dlp --dump-single-json --no-warnings https://www.youtube.com/watch?v=EhaF2yFxPhI
-STDOUT:
-null
-
-STDERR:
-ERROR: [youtube] EhaF2yFxPhI: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
-
-- https://www.youtube.com/watch?v=peyEAczExfw: command failed: yt-dlp --dump-single-json --no-warnings https://www.youtube.com/watch?v=peyEAczExfw
-STDOUT:
-null
-
-STDERR:
-ERROR: [youtube] peyEAczExfw: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
-
-- https://www.youtube.com/watch?v=A3t3PDanpBA: command failed: yt-dlp --dump-single-json --no-warnings https://www.youtube.com/watch?v=A3t3PDanpBA
-STDOUT:
-null
-
-STDERR:
-ERROR: [youtube] A3t3PDanpBA: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
-
-- https://www.youtube.com/watch?v=Hi39iJeHldU: command failed: yt-dlp --dump-single-json --no-warnings https://www.youtube.com/watch?v=Hi39iJeHldU
-STDOUT:
-null
-
-STDERR:
-ERROR: [youtube] Hi39iJeHldU: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
-
-- https://www.youtube.com/watch?v=awlv4BIZlxs: command failed: yt-dlp --dump-single-json --no-warnings https://www.youtube.com/watch?v=awlv4BIZlxs
-STDOUT:
-null
-
-STDERR:
-ERROR: [youtube] awlv4BIZlxs: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
-
+- https://www.youtube.com/watch?v=dUndQVgTy9M: from_youtube_transcript_ai: HTTP Error 502: Bad Gateway | from_free_transcript_api: HTTP Error 404: Not Found
