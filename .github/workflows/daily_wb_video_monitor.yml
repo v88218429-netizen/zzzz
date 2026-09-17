@@ -1,0 +1,51 @@
+name: Daily WB video monitor
+
+on:
+  schedule:
+    - cron: '0 7 * * *'
+  workflow_dispatch:
+  push:
+    paths:
+      - 'daily_wb_video_monitor.py'
+      - '.github/workflows/daily_wb_video_monitor.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: daily-wb-video-monitor
+  cancel-in-progress: false
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install search tool
+        run: |
+          python -m pip install --upgrade pip
+          pip install yt-dlp
+
+      - name: Discover, transcribe and extract new WB videos and Shorts
+        run: python daily_wb_video_monitor.py
+
+      - name: Commit monitor state and new knowledge
+        run: |
+          git config user.name "wb-video-monitor-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add monitor/ transcripts/
+          if git diff --cached --quiet; then
+            echo "No monitor changes"
+          else
+            git commit -m "Update daily WB video monitor"
+            git pull --rebase origin "${GITHUB_REF_NAME}"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          fi
