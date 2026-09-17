@@ -1,0 +1,39 @@
+name: Transcribe video
+
+on:
+  push:
+    paths:
+      - 'requests/**.json'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  transcribe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install ffmpeg and Python tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          python -m pip install --upgrade pip
+          pip install yt-dlp openai-whisper
+      - name: Run transcriber
+        run: python transcribe.py
+      - name: Commit transcript
+        run: |
+          git config user.name "vk-transcriber-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add transcripts/
+          if git diff --cached --quiet; then
+            echo "No transcript changes"
+          else
+            git commit -m "Add generated transcript"
+            git push
+          fi
