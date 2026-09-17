@@ -16,5 +16,6 @@
     "https://www.youtube.com/watch?v=nFtGnkKLqG8",
     "https://www.youtube.com/watch?v=LqmQw35eDqA"
   ],
-  "language": "ru"
+  "language": "ru",
+  "retry": 2
 }
