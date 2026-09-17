@@ -1,0 +1,9 @@
+{
+  "request": "2026-09-17_wb_ads_2026_curated15.json",
+  "mode": "batch",
+  "completed": 15,
+  "errors": [],
+  "collection": "collections/2026-09-17_wb_ads_2026_curated15.md",
+  "processed_at": "2026-09-17T20:13:11.496490+00:00",
+  "engine": "public-youtube-transcript-fallback"
+}
