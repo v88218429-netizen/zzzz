@@ -1,0 +1,37 @@
+name: Repair transcripts
+
+on:
+  push:
+    paths:
+      - 'repair-trigger/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Validate and repair transcripts
+        run: python repair_public_transcripts.py
+      - name: Commit repaired transcripts
+        if: always()
+        run: |
+          git config user.name "video-transcriber-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add transcripts/
+          if git diff --cached --quiet; then
+            echo "No transcript repairs"
+          else
+            git commit -m "Repair invalid YouTube transcripts"
+            git pull --rebase origin "${GITHUB_REF_NAME}"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          fi
