@@ -13,6 +13,9 @@ jobs:
   transcribe:
     runs-on: ubuntu-latest
     timeout-minutes: 360
+    env:
+      SUPADATA_API_KEY: ${{ secrets.SUPADATA_API_KEY }}
+      YTDLP_PROXY: ${{ secrets.YTDLP_PROXY }}
     steps:
       - uses: actions/checkout@v4
         with:
