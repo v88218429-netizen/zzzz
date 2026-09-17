@@ -7,6 +7,7 @@ on:
   push:
     paths:
       - 'daily_wb_video_monitor.py'
+      - 'daily_wb_video_monitor_v2.py'
       - '.github/workflows/daily_wb_video_monitor.yml'
 
 permissions:
@@ -35,7 +36,7 @@ jobs:
           pip install yt-dlp
 
       - name: Discover, transcribe and extract new WB videos and Shorts
-        run: python daily_wb_video_monitor.py
+        run: python daily_wb_video_monitor_v2.py
 
       - name: Commit monitor state and new knowledge
         run: |
