@@ -202,6 +202,14 @@
       "status": "transcribed",
       "first_seen": "2026-09-17T20:43:58.784997+00:00",
       "transcript": "transcripts/2026-09-17_daily_wb_short_QLCnrim7rpY.md"
+    },
+    "b-iObLP9RNE": {
+      "title": "Реклама на Wildberries 2026: полный пошаговый план, ДРР, полки, кластеры и последние изменения",
+      "url": "https://www.youtube.com/watch?v=b-iObLP9RNE",
+      "kind": "video",
+      "status": "transcribed",
+      "first_seen": "2026-09-17T20:45:13.911319+00:00",
+      "transcript": "transcripts/2026-09-17_daily_wb_video_b-iObLP9RNE.md"
     }
   },
   "ignored": {
@@ -804,8 +812,32 @@
       "url": "https://www.youtube.com/watch?v=ZIX2Wc7nlYc",
       "status": "noise",
       "first_seen": "2026-09-17T20:43:51.497179+00:00"
+    },
+    "-qTx2eDn7z8": {
+      "title": "Обзор рекламы на Wildberries 2026",
+      "url": "https://www.youtube.com/watch?v=-qTx2eDn7z8",
+      "status": "noise",
+      "first_seen": "2026-09-17T20:45:11.789759+00:00"
+    },
+    "P6oZCL6d00w": {
+      "title": "🚨 Продажи на ВБ и Озон в 2026: конкуренты демпингуют, реклама не рентабельна — 3 правила выживания",
+      "url": "https://www.youtube.com/watch?v=P6oZCL6d00w",
+      "status": "noise",
+      "first_seen": "2026-09-17T20:45:11.789793+00:00"
+    },
+    "u0Nhu3dc5aQ": {
+      "title": "SHAZAM - Unicorn Scene | #shazam #scene #unicorn",
+      "url": "https://www.youtube.com/watch?v=u0Nhu3dc5aQ",
+      "status": "noise",
+      "first_seen": "2026-09-17T20:45:11.789810+00:00"
+    },
+    "86pWlSR73zU": {
+      "title": "DTC Capital City, A life BIGGER than your imagination",
+      "url": "https://www.youtube.com/watch?v=86pWlSR73zU",
+      "status": "noise",
+      "first_seen": "2026-09-17T20:45:11.789816+00:00"
     }
   },
   "baseline_date": "2026-09-17",
-  "updated_at": "2026-09-17T20:43:59.135179+00:00"
+  "updated_at": "2026-09-17T20:45:14.261467+00:00"
 }
