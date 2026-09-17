@@ -1,0 +1,8 @@
+{
+  "request": "2026-09-17_batch_test.json",
+  "mode": "batch",
+  "completed": 2,
+  "errors": [],
+  "collection": "collections/2026-09-17_batch_test.md",
+  "processed_at": "2026-09-17T19:49:37.074932+00:00"
+}
