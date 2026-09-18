@@ -15,7 +15,7 @@ permissions:
 
 concurrency:
   group: wb-os-k2-live-deploy
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   deploy:
