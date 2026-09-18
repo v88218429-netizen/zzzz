@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "updated_at": "2026-09-18T18:16:00+03:00",
+  "description": "Удалённые правила WB AI Manager. Запущенный агент подхватывает изменения автоматически; изменения кабинета WB остаются запрещены.",
+  "advertising": {
+    "strategy_mode": "balanced",
+    "target_drr_pct": 100,
+    "min_profit_after_ads_rub": 0,
+    "min_clicks_for_numeric_ad_decision": 50,
+    "min_orders_for_scale_up": 5,
+    "max_bid_step_pct": 7,
+    "max_spend_step_pct": 12,
+    "evaluation_window_hours": 3,
+    "min_stock_days_for_scale": 10,
+    "min_stock_days_for_hold": 7,
+    "target_stock_days": 14,
+    "trend_short_days": 3,
+    "trend_long_days": 14,
+    "max_trend_pct_for_forecast": 60,
+    "organic_growth_hold_threshold_pct": 20,
+    "weak_ctr_change_pct": -20,
+    "weak_cr_change_pct": -20,
+    "cpc_growth_warn_pct": 35,
+    "zero_orders_spend_rub": 1500,
+    "max_internal_spend_24h_rub": 20000
+  },
+  "principles": {
+    "unit_economics_is_hard_ceiling": true,
+    "never_raise_bid_without_unit_economics": true,
+    "orders_are_leading_signal_not_profit": true,
+    "buyouts_and_profit_are_lagging_outcomes": true,
+    "stock_does_not_directly_set_bid": true,
+    "one_advertising_controller_owns_bid_decisions": true,
+    "read_only": true
+  },
+  "group_overrides": {},
+  "sku_overrides": {}
+}
