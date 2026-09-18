@@ -1,0 +1,15 @@
+{
+  "task_id": "TRAVEL",
+  "query": "как путешествовать с семьей и управлять бизнесом удаленно",
+  "extra_queries": [
+    "предприниматель путешествия семья удаленное управление бизнесом",
+    "travel with kids entrepreneur",
+    "remote business travel family"
+  ],
+  "content": "Оба",
+  "limit_video": 8,
+  "limit_shorts": 10,
+  "depth_days": 60,
+  "knowledge_tag": "TRAVEL",
+  "language": "ru"
+}

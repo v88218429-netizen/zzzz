@@ -1,0 +1,15 @@
+{
+  "task_id": "GOAL_CLARITY",
+  "query": "как понять чего я действительно хочу от жизни",
+  "extra_queries": [
+    "идеальная жизнь упражнение 5 лет",
+    "lifestyle design ideal life",
+    "как определить настоящие желания а не навязанные"
+  ],
+  "content": "Оба",
+  "limit_video": 8,
+  "limit_shorts": 12,
+  "depth_days": 30,
+  "knowledge_tag": "LIFE",
+  "language": "ru"
+}
