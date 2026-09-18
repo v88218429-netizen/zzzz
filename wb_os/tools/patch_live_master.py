@@ -121,6 +121,16 @@ if "k2EvolutionWatchdogNotify_();" not in func2:
     func2 = func2.replace(needle, watchdog, 1)
 
 new_text = before + func2 + after
+
+# Repair the history status source. Real daily snapshots can exist even when
+# an older live project never persisted FF_STOCK_HISTORY_LAST_AT.
+old_history = "buildAutomationStatusRow_('История остатков', props.getProperty('FF_STOCK_HISTORY_LAST_AT'), 1560)"
+new_history = "buildAutomationStatusRow_('История остатков', k2EvolutionHistoryLastAt_(props), 1560)"
+if old_history in new_text:
+    new_text = new_text.replace(old_history, new_history, 1)
+elif new_history not in new_text:
+    raise SystemExit("PATCH_FAIL: history status source not found")
+
 path.write_text(new_text, encoding="utf-8")
 
 print("PATCH_OK:", path.relative_to(root))
