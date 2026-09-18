@@ -28,10 +28,15 @@ curl --connect-timeout 10 --max-time 30 -fsSL \
   "$REPO_RAW/wb_os/tools/patch_live_master.py" \
   -o "$WORK/patch_live_master.py"
 
-echo "[3/8] Нужен URL открытого Apps Script проекта."
-echo "В Chrome открой: таблица «Остатки v.1 27июля» → Расширения → Apps Script."
-echo
-read -r -p "Вставь URL из адресной строки Apps Script и нажми Enter: " SCRIPT_URL
+echo "[3/8] Определяю Apps Script проект."
+SCRIPT_URL="${1:-}"
+if [ -z "$SCRIPT_URL" ]; then
+  echo "В Chrome открой: таблица «Остатки v.1 27июля» → Расширения → Apps Script."
+  echo
+  read -r -p "Вставь URL из адресной строки Apps Script и нажми Enter: " SCRIPT_URL
+else
+  echo "URL проекта передан аргументом."
+fi
 
 SCRIPT_ID="$(printf '%s' "$SCRIPT_URL" | sed -nE 's#.*script\.google\.com/[^ ]*/projects/([^/ ?#]+).*#\1#p')"
 if [ -z "$SCRIPT_ID" ]; then
