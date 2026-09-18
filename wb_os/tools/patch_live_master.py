@@ -154,6 +154,38 @@ elif (
 ):
     raise SystemExit("PATCH_FAIL: K2 readiness block not found")
 
+# Step 2c: add WB public customer prices v4 to the master.
+price_marker = "syncWbPublicCustomerPricesV4_(forceAll);"
+if price_marker not in func:
+    save_marker = "    saveMasterCycleResult_(cycleErrors);"
+    if func.count(save_marker) != 1:
+        raise SystemExit(
+            "PATCH_FAIL: expected one saveMasterCycleResult_ call "
+            f"inside master, found={func.count(save_marker)}"
+        )
+
+    price_block = """    /* WB OS · WB public customer prices v4 */
+    try {
+      syncWbPublicCustomerPricesV4_(forceAll);
+    } catch (priceError) {
+      cycleErrors.push('WB public prices: ' + priceError.message);
+      Logger.log(
+        'WB public prices v4: ' +
+        (priceError.stack || priceError.message)
+      );
+    }
+
+"""
+
+    func = func.replace(
+        save_marker,
+        price_block + save_marker,
+        1,
+    )
+
+# Rebuild after all master-function migrations.
+new_text = before + func + after
+
 # Step 3: independently migrate history heartbeat self-healing.
 old_history = "buildAutomationStatusRow_('История остатков', props.getProperty('FF_STOCK_HISTORY_LAST_AT'), 1560)"
 new_history = "buildAutomationStatusRow_('История остатков', k2EvolutionHistoryLastAt_(props), 1560)"
@@ -168,6 +200,7 @@ required = [
     "k2EvolutionRecordFailure_(error)",
     "k2EvolutionWatchdogNotify_();",
     "k2EvolutionHistoryLastAt_(props)",
+    "syncWbPublicCustomerPricesV4_(forceAll);",
 ]
 missing = [marker for marker in required if marker not in new_text]
 if missing:
