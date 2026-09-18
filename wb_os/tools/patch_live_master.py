@@ -169,6 +169,16 @@ if price_marker not in func:
       syncWbPublicCustomerPricesV4_(forceAll);
     } catch (priceError) {
       cycleErrors.push('WB public prices: ' + priceError.message);
+
+      try {
+        wbPriceV4RecordFailure_(priceError);
+      } catch (priceDiagError) {
+        Logger.log(
+          'WB public prices diagnostics: ' +
+          priceDiagError.message
+        );
+      }
+
       Logger.log(
         'WB public prices v4: ' +
         (priceError.stack || priceError.message)
@@ -201,6 +211,7 @@ required = [
     "k2EvolutionWatchdogNotify_();",
     "k2EvolutionHistoryLastAt_(props)",
     "syncWbPublicCustomerPricesV4_(forceAll);",
+    "wbPriceV4RecordFailure_(priceError)",
 ]
 missing = [marker for marker in required if marker not in new_text]
 if missing:
