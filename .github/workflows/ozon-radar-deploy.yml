@@ -1,0 +1,70 @@
+name: Deploy Ozon Radar 1m
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [mainggg]
+    paths:
+      - "ozon_radar/**"
+      - ".github/workflows/ozon-radar-deploy.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ozon-radar-live
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, macOS, ozon-live]
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Preflight environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 --version
+          test -x "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+          test -f "$HOME/.clasprc.json"
+          echo "Chrome + Google OAuth are present."
+
+      - name: Build temporary probe environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          PROBE_VENV="$RUNNER_TEMP/ozon-radar-probe-venv"
+          rm -rf "$PROBE_VENV"
+          python3 -m venv "$PROBE_VENV"
+          "$PROBE_VENV/bin/python" -m pip install --upgrade pip >/dev/null
+          "$PROBE_VENV/bin/python" -m pip install -r ozon_radar/requirements.txt
+          echo "PROBE_VENV=$PROBE_VENV" >> "$GITHUB_ENV"
+
+      - name: Live Ozon browser probe
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$PROBE_VENV/bin/python" ozon_radar/worker.py             --probe "лопата садовая" "5094364543"             --max-position 30
+
+      - name: Install 1-minute launchd worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x ozon_radar/install_launchd.sh
+          bash ozon_radar/install_launchd.sh
+
+      - name: Verify installed worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          sleep 12
+          echo "--- launchctl ---"
+          launchctl print "gui/$(id -u)/com.max.ozon-radar" | head -80 || true
+          echo "--- health ---"
+          test -f "$HOME/.ozon-radar/health.json"
+          cat "$HOME/.ozon-radar/health.json"
+          echo "--- stderr tail ---"
+          tail -60 "$HOME/.ozon-radar/logs/stderr.log" 2>/dev/null || true
