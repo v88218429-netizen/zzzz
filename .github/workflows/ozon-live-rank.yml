@@ -37,6 +37,7 @@ jobs:
         run: |
           git config user.name "ozon-live-bot"
           git config user.email "actions@users.noreply.github.com"
+          test -f ozon_live/results/latest.json || exit 0
           git add ozon_live/results/latest.json
           git diff --cached --quiet && exit 0
           git commit -m "Ozon live positions [skip ci]"
