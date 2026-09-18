@@ -27,6 +27,9 @@ curl --connect-timeout 10 --max-time 30 -fsSL \
 curl --connect-timeout 10 --max-time 30 -fsSL \
   "$REPO_RAW/wb_os/tools/patch_live_master.py" \
   -o "$WORK/patch_live_master.py"
+curl --connect-timeout 10 --max-time 30 -fsSL \
+  "$REPO_RAW/wb_os/apps_script/WB_PUBLIC_PRICE_V4.gs" \
+  -o "$WORK/WB_PUBLIC_PRICE_V4.gs"
 
 echo "[3/8] Определяю Apps Script проект."
 SCRIPT_URL="${1:-}"
@@ -91,6 +94,7 @@ mkdir -p "$BACKUP"
 rsync -a "$PROJECT_DIR/" "$BACKUP/"
 
 cp "$WORK/K2_EVOLUTION_ENGINE.gs" "$PROJECT_DIR/K2_EVOLUTION_ENGINE.gs"
+cp "$WORK/WB_PUBLIC_PRICE_V4.gs" "$PROJECT_DIR/WB_PUBLIC_PRICE_V4.gs"
 python3 "$WORK/patch_live_master.py" "$PROJECT_DIR"
 
 echo "[7/8] Проверяю синтаксис..."
