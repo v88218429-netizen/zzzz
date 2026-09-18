@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   scan:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, ozon-live]
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
@@ -29,9 +29,9 @@ jobs:
       - name: Install dependencies
         run: pip install -r ozon_live/requirements.txt
       - name: Show Chrome
-        run: google-chrome --version || chromium --version
+        run: /Applications/Google\\ Chrome.app/Contents/MacOS/Google\\ Chrome --version || true
       - name: Run live scanner
-        run: xvfb-run -a python ozon_live/scanner.py --config ozon_live/config.json --out ozon_live/results/latest.json
+        run: python3 ozon_live/scanner.py --config ozon_live/config.json --out ozon_live/results/latest.json
       - name: Commit latest result
         if: always()
         run: |
