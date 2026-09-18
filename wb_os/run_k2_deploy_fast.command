@@ -96,10 +96,11 @@ python3 "$WORK/patch_live_master.py" "$PROJECT_DIR"
 echo "[7/8] Проверяю синтаксис..."
 COUNT=0
 while IFS= read -r -d '' f; do
-  TMP="$(mktemp -t wb-os-js.XXXXXX)"
+  TMPDIR_CHECK="$(mktemp -d -t wb-os-js-check.XXXXXX)"
+  TMP="$TMPDIR_CHECK/check.js"
   cp "$f" "$TMP"
   node --check "$TMP"
-  rm -f "$TMP"
+  rm -rf "$TMPDIR_CHECK"
   COUNT=$((COUNT+1))
 done < <(find "$PROJECT_DIR" -type f \( -name '*.gs' -o -name '*.js' \) -print0)
 
