@@ -1,0 +1,18 @@
+{
+  "generated_at": "2026-09-18T12:36:36.326746+00:00",
+  "source": "ozon_web_json",
+  "results": [
+    {
+      "captured_at": "2026-09-18T12:36:37.403988+00:00",
+      "article": "Лоток_К_18шт_6",
+      "sku": "4832817032",
+      "query": "органайзер для саморезов",
+      "max_items": 300,
+      "status": "http_error",
+      "http": 403,
+      "position": null,
+      "checked": 0,
+      "page": 1
+    }
+  ]
+}
