@@ -1,9 +1,9 @@
 {
-  "generated_at": "2026-09-18T12:36:36.326746+00:00",
+  "generated_at": "2026-09-18T12:37:46.387136+00:00",
   "source": "ozon_web_json",
   "results": [
     {
-      "captured_at": "2026-09-18T12:36:37.403988+00:00",
+      "captured_at": "2026-09-18T12:37:48.287880+00:00",
       "article": "Лоток_К_18шт_6",
       "sku": "4832817032",
       "query": "органайзер для саморезов",
@@ -12,7 +12,22 @@
       "http": 403,
       "position": null,
       "checked": 0,
-      "page": 1
+      "page": 1,
+      "endpoint": null,
+      "attempts": [
+        {
+          "endpoint": "https://api.ozon.ru/composer-api.bx/page/json/v2",
+          "http": 403
+        },
+        {
+          "endpoint": "https://api.ozon.ru/api/entrypoint-api.bx/page/json/v2",
+          "http": 403
+        },
+        {
+          "endpoint": "https://www.ozon.ru/api/entrypoint-api.bx/page/json/v2",
+          "http": 403
+        }
+      ]
     }
   ]
 }
