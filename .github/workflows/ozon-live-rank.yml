@@ -2,15 +2,6 @@ name: Ozon live rank scanner
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "17 */2 * * *"
-  push:
-    branches: [mainggg]
-    paths:
-      - "ozon_live/scanner.py"
-      - "ozon_live/config.json"
-      - "ozon_live/requirements.txt"
-      - ".github/workflows/ozon-live-rank.yml"
 
 permissions:
   contents: write
