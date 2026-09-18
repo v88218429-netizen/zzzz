@@ -1,0 +1,44 @@
+name: Ozon web rank 6x daily
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "10 0,4,8,12,16,20 * * *"
+  push:
+    branches: [mainggg]
+    paths:
+      - "ozon_web/**"
+      - ".github/workflows/ozon-web-rank.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ozon-web-rank
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: mainggg
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r ozon_web/requirements.txt
+      - name: Read Ozon web JSON search
+        run: python ozon_web/probe.py
+      - name: Commit latest result
+        if: always()
+        run: |
+          git config user.name "ozon-web-bot"
+          git config user.email "actions@users.noreply.github.com"
+          test -f ozon_web/results/latest.json || exit 0
+          git add ozon_web/results/latest.json
+          git diff --cached --quiet && exit 0
+          git commit -m "Ozon web position snapshot [skip ci]"
+          git pull --rebase origin mainggg
+          git push
