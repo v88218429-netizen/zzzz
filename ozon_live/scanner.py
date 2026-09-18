@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import argparse, json, os, random, re, sys, time
+import argparse, json, os, random, re, sys, time, subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import quote_plus
@@ -22,7 +22,14 @@ def driver_new():
     o=uc.ChromeOptions()
     for a in ["--no-sandbox","--disable-dev-shm-usage","--disable-infobars","--lang=ru-RU","--window-size=1920,1080"]:
         o.add_argument(a)
-    return uc.Chrome(options=o, headless=False, use_subprocess=True)
+    version_main=None
+    try:
+        v=subprocess.check_output(["google-chrome","--version"],text=True).strip()
+        m=re.search(r"(\\d+)\\.",v)
+        if m: version_main=int(m.group(1))
+    except Exception:
+        pass
+    return uc.Chrome(options=o, headless=False, use_subprocess=True, version_main=version_main)
 
 def click_if(driver, xpath):
     try:
