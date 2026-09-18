@@ -61,13 +61,6 @@ if "k2EvolutionFetchAndApply_()" not in func:
     /* 1. K2 · WB OS delta engine */
     if (forceAll || historyDue || shouldRunByProperty_('K2_LAST_SUCCESS_AT', MASTER_AUTOMATION_CFG.K2_EVERY_MINUTES)) {
       try {
-        if (!getMasterConfigurationState_().k2Ready) {
-          throw new Error(
-            'K2 не настроен: отсутствуют K2_USERNAME/K2_PASSWORD. ' +
-            'Запусти один раз saveK2Credentials().'
-          );
-        }
-
         var k2Result = k2EvolutionFetchAndApply_();
         k2Updated = Boolean(k2Result && k2Result.changed);
 
@@ -98,7 +91,21 @@ if "k2EvolutionFetchAndApply_()" not in func:
     if count != 1:
         raise SystemExit(f"PATCH_FAIL: K2 block replacements={count}")
 
-# Step 2: independently migrate the post-refresh watchdog.
+# Step 2a: repair K2 readiness semantics.
+# A saved K2 session (cookie + client id) is enough to continue syncing even
+# when username/password were never persisted in Script Properties.
+guard_pattern = re.compile(
+    r"""\n\s*if \(!getMasterConfigurationState_\(\)\.k2Ready\) \{\s*
+\s*throw new Error\(\s*
+\s*'K2 не настроен: отсутствуют K2_USERNAME/K2_PASSWORD\. ' \+\s*
+\s*'Запусти один раз saveK2Credentials\(\)\.'\s*
+\s*\);\s*
+\s*\}\s*""",
+    re.S,
+)
+func = guard_pattern.sub("\n", func)
+
+# Step 2b: independently migrate the post-refresh watchdog.
 needle = "    refreshAutomationStatusSheet_();"
 watchdog = """    refreshAutomationStatusSheet_();
 
@@ -125,6 +132,25 @@ if "k2EvolutionWatchdogNotify_();" not in func:
 
 new_text = before + func + after
 
+# Session-aware getMasterConfigurationState_ for already-working K2 sessions.
+old_ready = """k2Ready: Boolean(
+      String(props.getProperty('K2_USERNAME') || '').trim() &&
+      String(props.getProperty('K2_PASSWORD') || '')
+    ),"""
+new_ready = """k2Ready: Boolean(
+      (
+        String(props.getProperty('K2_USERNAME') || '').trim() &&
+        String(props.getProperty('K2_PASSWORD') || '')
+      ) || (
+        String(props.getProperty('K2_SESSION_COOKIE') || '').trim() &&
+        String(props.getProperty('K2_CLIENT_ID') || '').trim()
+      )
+    ),"""
+if old_ready in new_text:
+    new_text = new_text.replace(old_ready, new_ready, 1)
+elif new_ready not in new_text:
+    raise SystemExit("PATCH_FAIL: K2 readiness block not found")
+
 # Step 3: independently migrate history heartbeat self-healing.
 old_history = "buildAutomationStatusRow_('История остатков', props.getProperty('FF_STOCK_HISTORY_LAST_AT'), 1560)"
 new_history = "buildAutomationStatusRow_('История остатков', k2EvolutionHistoryLastAt_(props), 1560)"
@@ -139,6 +165,7 @@ required = [
     "k2EvolutionRecordFailure_(error)",
     "k2EvolutionWatchdogNotify_();",
     "k2EvolutionHistoryLastAt_(props)",
+    "K2_SESSION_COOKIE",
 ]
 missing = [marker for marker in required if marker not in new_text]
 if missing:
