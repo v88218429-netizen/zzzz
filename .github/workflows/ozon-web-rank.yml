@@ -30,6 +30,8 @@ jobs:
           python-version: "3.11"
       - run: pip install -r ozon_web/requirements.txt
       - name: Read Ozon web JSON search
+        env:
+          OZON_COOKIES_JSON: ${{ secrets.OZON_COOKIES_JSON }}
         run: python ozon_web/probe.py
       - name: Commit latest result
         if: always()
