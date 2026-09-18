@@ -1,0 +1,107 @@
+#!/usr/bin/env python3
+import pathlib
+import subprocess
+import sys
+import tempfile
+
+PATCHER = pathlib.Path(__file__).resolve().parents[1] / "tools" / "patch_live_master.py"
+
+LEGACY = r"""
+function runFinalAutomationCycle_(forceTelegram, forceAll) {
+  var cycleErrors = [];
+  var k2Updated = false;
+  var historyDue = false;
+
+  try {
+    /* 1. K2 */
+    if (forceAll || historyDue || shouldRunByProperty_('K2_LAST_SUCCESS_AT', MASTER_AUTOMATION_CFG.K2_EVERY_MINUTES)) {
+      try {
+        var items = getK2WarehouseItems_();
+        if (!items || !items.length) {
+          throw new Error('К2 вернул пустой список остатков.');
+        }
+        writeK2StocksToSheet_(items);
+        saveK2SyncSuccess_(items.length);
+        k2Updated = true;
+      } catch (error) {
+        cycleErrors.push('K2: ' + error.message);
+        if (getMasterConfigurationState_().telegramReady) {
+          notifyK2ApiError_(error);
+        }
+      }
+    }
+
+    /* 2. Иваново */
+    if (forceAll) {
+      exportFulfilmentStocks();
+    }
+
+    saveMasterCycleResult_(cycleErrors);
+    refreshAutomationStatusSheet_();
+  } finally {
+    releaseMasterRunGuard_();
+  }
+}
+
+function shouldRunByProperty_(propertyName, intervalMinutes) {
+  return true;
+}
+
+function refreshAutomationStatusSheet_() {
+  var props = PropertiesService.getScriptProperties();
+  var row = buildAutomationStatusRow_('История остатков', props.getProperty('FF_STOCK_HISTORY_LAST_AT'), 1560);
+}
+"""
+
+REQUIRED = [
+    "k2EvolutionFetchAndApply_()",
+    "k2EvolutionRecordFailure_(error)",
+    "k2EvolutionWatchdogNotify_();",
+    "k2EvolutionHistoryLastAt_(props)",
+]
+
+def run_patch(root: pathlib.Path):
+    p = subprocess.run(
+        [sys.executable, str(PATCHER), str(root)],
+        text=True,
+        capture_output=True,
+    )
+    if p.returncode != 0:
+        raise AssertionError(
+            f"patch failed rc={p.returncode}\nstdout={p.stdout}\nstderr={p.stderr}"
+        )
+
+def main():
+    with tempfile.TemporaryDirectory() as td:
+        root = pathlib.Path(td)
+        master = root / "Master.gs"
+        master.write_text(LEGACY, encoding="utf-8")
+
+        # First migration.
+        run_patch(root)
+        once = master.read_text(encoding="utf-8")
+        for marker in REQUIRED:
+            assert marker in once, marker
+        assert "writeK2StocksToSheet_(items);" not in once
+        assert once.count("k2EvolutionWatchdogNotify_();") == 1
+
+        # Second migration must be a true no-op, not a failure or duplicate.
+        run_patch(root)
+        twice = master.read_text(encoding="utf-8")
+        assert twice == once
+        assert twice.count("k2EvolutionWatchdogNotify_();") == 1
+
+        # A project with more than one candidate must fail closed.
+        (root / "Duplicate.gs").write_text(once, encoding="utf-8")
+        p = subprocess.run(
+            [sys.executable, str(PATCHER), str(root)],
+            text=True,
+            capture_output=True,
+        )
+        assert p.returncode != 0
+        assert "expected exactly one master source" in (p.stderr + p.stdout)
+
+    print("WB OS patcher tests: OK")
+
+if __name__ == "__main__":
+    main()
