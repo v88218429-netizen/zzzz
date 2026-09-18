@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import argparse, json, os, random, re, sys, time, subprocess
+import argparse, json, os, random, re, sys, time, subprocess, tempfile, zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import quote_plus
@@ -16,19 +16,85 @@ CITY_COORDS = {
     "Москва": (55.7558, 37.6173),
     "Ростов-на-Дону": (47.2357, 39.7015),
     "Краснодар": (45.0355, 38.9753),
+    "Санкт-Петербург": (59.9343, 30.3351),
+    "Казань": (55.7961, 49.1064),
+    "Самара": (53.1959, 50.1002),
+    "Екатеринбург": (56.8389, 60.6057),
+    "Новосибирск": (55.0084, 82.9357),
+}
+PROXY_CITY = {
+    "Москва":"moscow",
+    "Ростов-на-Дону":"rostov_on_don",
+    "Краснодар":"krasnodar",
+    "Санкт-Петербург":"saint_petersburg",
+    "Казань":"kazan",
+    "Самара":"samara",
+    "Екатеринбург":"yekaterinburg",
+    "Новосибирск":"novosibirsk",
 }
 
-def driver_new():
+def _proxy_credentials(city: str):
+    provider=(os.getenv("OZON_PROXY_PROVIDER") or "").strip().lower()
+    base=(os.getenv("OZON_PROXY_USER") or "").strip()
+    password=(os.getenv("OZON_PROXY_PASS") or "").strip()
+    host=(os.getenv("OZON_PROXY_HOST") or ("gate.decodo.com" if provider=="decodo" else "")).strip()
+    port=int(os.getenv("OZON_PROXY_PORT") or ("7000" if provider=="decodo" else "0"))
+    if not provider or not base or not password or not host or not port:
+        return None
+    city_slug=PROXY_CITY.get(city, re.sub(r"[^a-z0-9]+","_",city.lower()).strip("_"))
+    session=re.sub(r"[^a-z0-9]","",f"{city_slug}{int(time.time())}")[-24:]
+    if provider=="decodo":
+        prefix=base if base.startswith("user-") else "user-"+base
+        username=f"{prefix}-country-ru-city-{city_slug}-session-{session}"
+    elif provider=="brightdata":
+        username=f"{base}-country-ru-city-{city_slug}-session-{session}"
+    else:
+        tmpl=os.getenv("OZON_PROXY_USER_TEMPLATE","{user}")
+        username=tmpl.format(user=base,country="ru",city=city_slug,session=session)
+    return {"provider":provider,"host":host,"port":port,"username":username,"password":password}
+
+def _proxy_extension(proxy):
+    manifest={
+      "manifest_version":3,
+      "name":"Ozon Live Proxy",
+      "version":"1.0",
+      "permissions":["proxy","storage","webRequest","webRequestAuthProvider"],
+      "host_permissions":["<all_urls>"],
+      "background":{"service_worker":"background.js"}
+    }
+    bg=f"""
+chrome.proxy.settings.set({{
+  value: {{mode: 'fixed_servers', rules: {{singleProxy: {{scheme: 'http', host: '{proxy["host"]}', port: {proxy["port"]}}}, bypassList: ['localhost','127.0.0.1']}}}},
+  scope: 'regular'
+}});
+chrome.webRequest.onAuthRequired.addListener(
+  function(details, callback) {{ callback({{authCredentials: {{username: '{proxy["username"]}', password: '{proxy["password"]}'}}}}); }},
+  {{urls: ['<all_urls>']}},
+  ['asyncBlocking']
+);
+"""
+    td=tempfile.mkdtemp(prefix="ozon-proxy-")
+    p=os.path.join(td,"proxy.zip")
+    with zipfile.ZipFile(p,"w") as z:
+        z.writestr("manifest.json",json.dumps(manifest))
+        z.writestr("background.js",bg)
+    return p
+
+def driver_new(city=None):
     o=webdriver.ChromeOptions()
     for a in ["--no-sandbox","--disable-dev-shm-usage","--disable-infobars","--lang=ru-RU","--window-size=1920,1080","--disable-blink-features=AutomationControlled"]:
         o.add_argument(a)
     o.add_experimental_option("excludeSwitches", ["enable-automation"])
     o.add_experimental_option("useAutomationExtension", False)
+    proxy=_proxy_credentials(city or "")
+    if proxy:
+        o.add_extension(_proxy_extension(proxy))
     d=webdriver.Chrome(options=o)
     try:
         d.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument",{"source":"Object.defineProperty(navigator,'webdriver',{get:()=>undefined});"})
     except Exception:
         pass
+    d._ozon_proxy=proxy
     return d
 
 def click_if(driver, xpath):
@@ -57,6 +123,17 @@ def set_geo(driver, city):
 
 def set_city(driver, city):
     set_geo(driver,city)
+    proxy=getattr(driver,"_ozon_proxy",None)
+    if proxy:
+        # Residential city targeting is the authoritative geo layer.
+        # We still set browser geolocation coordinates, but do not depend on Ozon's UI selector.
+        driver.get("https://www.ozon.ru/")
+        time.sleep(random.uniform(4,6))
+        body=(driver.find_element(By.TAG_NAME,"body").text or "").lower()
+        if "похоже, нет соединения" in body or "выключите vpn" in body:
+            return {"ok":False,"reason":"proxy_blocked_or_not_applied"}
+        close_popups(driver)
+        return {"ok":True,"reason":"proxy_geo_"+proxy["provider"]}
     driver.get("https://www.ozon.ru/")
     time.sleep(random.uniform(3,5))
     close_popups(driver)
@@ -187,7 +264,7 @@ def run(config_path):
     results=[]
     for task in cfg["tasks"]:
         for city in task["cities"]:
-            d=driver_new()
+            d=driver_new(city)
             try:
                 loc=set_city(d,city)
                 if not loc["ok"]:
