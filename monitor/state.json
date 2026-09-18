@@ -218,6 +218,14 @@
       "status": "transcribed",
       "first_seen": "2026-09-18T08:25:08.662478+00:00",
       "transcript": "transcripts/2026-09-18_daily_wb_video_EfLLptQUUg8.md"
+    },
+    "_pbsdMt52Uo": {
+      "title": "Реклама товаров на Wildberries или Ozon через Яндекс.Директ. Дешево и сердито.",
+      "url": "https://www.youtube.com/watch?v=_pbsdMt52Uo",
+      "kind": "video",
+      "status": "transcribed",
+      "first_seen": "2026-09-18T09:27:24.325049+00:00",
+      "transcript": "transcripts/2026-09-18_daily_wb_video__pbsdMt52Uo.md"
     }
   },
   "ignored": {
@@ -1012,8 +1020,20 @@
       "url": "https://www.youtube.com/watch?v=IIC3JSyCiuU",
       "status": "noise",
       "first_seen": "2026-09-18T08:25:07.340354+00:00"
+    },
+    "2T7Aw-kyz24": {
+      "title": "The Super Mario Bros Movie | Happy Meal | TV Ad | McDonald’s UK In G Major 4",
+      "url": "https://www.youtube.com/watch?v=2T7Aw-kyz24",
+      "status": "noise",
+      "first_seen": "2026-09-18T09:27:22.501313+00:00"
+    },
+    "v-OKq711KDs": {
+      "title": "How to avoid going into the red on Wildberries! Sales on Wildberries! Commodity business! Commodi...",
+      "url": "https://www.youtube.com/watch?v=v-OKq711KDs",
+      "status": "noise",
+      "first_seen": "2026-09-18T09:27:22.501335+00:00"
     }
   },
   "baseline_date": "2026-09-17",
-  "updated_at": "2026-09-18T08:25:09.012627+00:00"
+  "updated_at": "2026-09-18T09:27:24.675205+00:00"
 }
