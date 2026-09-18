@@ -130,6 +130,7 @@ rsync -a "$PROJECT_DIR/" "$BACKUP/"
 echo "Rollback backup: $BACKUP"
 
 cp "$WORK/K2_EVOLUTION_ENGINE.gs" "$SOURCE_ROOT/K2_EVOLUTION_ENGINE.gs"
+cp "$WORK/WB_PUBLIC_PRICE_V4.gs" "$SOURCE_ROOT/WB_PUBLIC_PRICE_V4.gs"
 python3 "$WORK/patch_live_master.py" "$SOURCE_ROOT"
 
 COUNT=0
