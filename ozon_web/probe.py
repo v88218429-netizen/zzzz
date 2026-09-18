@@ -6,7 +6,11 @@ from urllib.parse import quote
 
 from curl_cffi import requests
 
-API_URL="https://www.ozon.ru/api/entrypoint-api.bx/page/json/v2"
+API_URLS=[
+ "https://api.ozon.ru/composer-api.bx/page/json/v2",
+ "https://api.ozon.ru/api/entrypoint-api.bx/page/json/v2",
+ "https://www.ozon.ru/api/entrypoint-api.bx/page/json/v2",
+]
 BASE_URL="https://www.ozon.ru"
 UA=("Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36")
@@ -30,9 +34,17 @@ def headers(referer=None):
     return h
 
 def api_get(session,page_path,referer=None):
-    url=f"{API_URL}?url={quote(page_path,safe='')}"
-    r=session.get(url,headers=headers(referer),timeout=30)
-    return r.status_code, r
+    attempts=[]
+    for base in API_URLS:
+        url=f"{base}?url={quote(page_path,safe='')}"
+        try:
+            r=session.get(url,headers=headers(referer),timeout=30)
+            attempts.append({"endpoint":base,"http":r.status_code})
+            if r.status_code==200:
+                return r.status_code,r,base,attempts
+        except Exception as e:
+            attempts.append({"endpoint":base,"error":repr(e)[:180]})
+    return (r.status_code if 'r' in locals() else 0),(r if 'r' in locals() else None),None,attempts
 
 def extract_items(data):
     for k,v in (data.get("widgetStates") or {}).items():
@@ -76,24 +88,24 @@ def scan_one(session,task):
     checked=0; page=0
     while checked<max_items and path and page<30:
         page+=1
-        code,r=api_get(session,path,ref)
-        if code!=200:
-            return {"status":"http_error","http":code,"position":None,"checked":checked,"page":page}
+        code,r,endpoint,attempts=api_get(session,path,ref)
+        if code!=200 or r is None:
+            return {"status":"http_error","http":code,"position":None,"checked":checked,"page":page,"endpoint":endpoint,"attempts":attempts}
         try:data=r.json()
         except Exception:return {"status":"bad_json","http":code,"position":None,"checked":checked,"page":page}
         items=extract_items(data)
         if not items:
-            return {"status":"empty_or_blocked","http":code,"position":None,"checked":checked,"page":page}
+            return {"status":"empty_or_blocked","http":code,"position":None,"checked":checked,"page":page,"endpoint":endpoint,"attempts":attempts}
         for item in items:
             pid=product_id(item)
             if not pid: continue
             checked+=1
             if pid==target:
-                return {"status":"ok","http":code,"position":checked,"checked":checked,"page":page}
+                return {"status":"ok","http":code,"position":checked,"checked":checked,"page":page,"endpoint":endpoint,"attempts":attempts}
             if checked>=max_items: break
         path=next_page(data)
         time.sleep(0.7)
-    return {"status":"not_found","http":200,"position":None,"checked":checked,"page":page}
+    return {"status":"not_found","http":200,"position":None,"checked":checked,"page":page,"endpoint":endpoint if 'endpoint' in locals() else None}
 
 def main():
     cfg=json.loads(Path("ozon_web/config.json").read_text(encoding="utf-8"))
