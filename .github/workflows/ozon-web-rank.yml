@@ -33,6 +33,11 @@ jobs:
         env:
           OZON_COOKIES_JSON: ${{ secrets.OZON_COOKIES_JSON }}
         run: python ozon_web/probe.py
+      - name: Sync result to Google Sheet
+        if: always()
+        env:
+          OZON_SHEET_ID: "1SHY1rz7XZeqOGkJSkitfSPlKs4cshS_5U63NSv0TO4c"
+        run: python ozon_web/sync_sheet.py
       - name: Commit latest result
         if: always()
         run: |
