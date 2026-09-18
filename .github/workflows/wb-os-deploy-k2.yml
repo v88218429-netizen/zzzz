@@ -1,0 +1,128 @@
+name: WB OS deploy K2 live
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [mainggg]
+    paths:
+      - "wb_os/apps_script/K2_EVOLUTION_ENGINE.gs"
+      - "wb_os/tools/discover_clasp_project.py"
+      - "wb_os/tools/patch_live_master.py"
+      - ".github/workflows/wb-os-deploy-k2.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wb-os-k2-live-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, macOS, ozon-live]
+    timeout-minutes: 12
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 --version
+          node --version
+          if command -v clasp >/dev/null 2>&1; then
+            clasp --version
+          elif command -v npx >/dev/null 2>&1; then
+            npx --yes @google/clasp --version
+          else
+            echo "clasp/npx unavailable"
+            exit 2
+          fi
+
+      - name: Discover exact live Apps Script project
+        id: discover
+        shell: bash
+        run: |
+          set -euo pipefail
+          PROJECT_DIR="$(python3 wb_os/tools/discover_clasp_project.py)"
+          test -f "$PROJECT_DIR/.clasp.json"
+          echo "project_dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
+          echo "Exact live project discovered (path kept private)."
+
+      - name: Pull live Apps Script before patching
+        shell: bash
+        env:
+          PROJECT_DIR: ${{ steps.discover.outputs.project_dir }}
+        run: |
+          set -euo pipefail
+          cd "$PROJECT_DIR"
+          if command -v clasp >/dev/null 2>&1; then
+            clasp pull
+          else
+            npx --yes @google/clasp pull
+          fi
+
+      - name: Resolve source root and make private local backup
+        id: source
+        shell: bash
+        env:
+          PROJECT_DIR: ${{ steps.discover.outputs.project_dir }}
+        run: |
+          set -euo pipefail
+          SOURCE_ROOT="$(PROJECT_DIR="$PROJECT_DIR" python3 - <<'PY'
+          import json, os, pathlib
+          p=pathlib.Path(os.environ["PROJECT_DIR"])
+          cfg=json.loads((p/".clasp.json").read_text(encoding="utf-8"))
+          root=str(cfg.get("rootDir") or "").strip()
+          print(str((p/root).resolve() if root else p.resolve()))
+          PY
+          )"
+          test -d "$SOURCE_ROOT"
+          echo "source_root=$SOURCE_ROOT" >> "$GITHUB_OUTPUT"
+
+          TS="$(date +%Y%m%d-%H%M%S)"
+          BACKUP="$HOME/.wb-os-backups/k2-$TS"
+          mkdir -p "$BACKUP"
+          rsync -a "$PROJECT_DIR/" "$BACKUP/"
+          echo "Private local rollback backup created."
+
+      - name: Install K2 Evolution and patch master
+        shell: bash
+        env:
+          SOURCE_ROOT: ${{ steps.source.outputs.source_root }}
+        run: |
+          set -euo pipefail
+          cp wb_os/apps_script/K2_EVOLUTION_ENGINE.gs "$SOURCE_ROOT/K2_EVOLUTION_ENGINE.gs"
+          python3 wb_os/tools/patch_live_master.py "$SOURCE_ROOT"
+
+      - name: Syntax check patched Apps Script
+        shell: bash
+        env:
+          SOURCE_ROOT: ${{ steps.source.outputs.source_root }}
+        run: |
+          set -euo pipefail
+          COUNT=0
+          while IFS= read -r -d '' f; do
+            TMP="$(mktemp -t wb-os-js.XXXXXX)"
+            cp "$f" "$TMP"
+            node --check "$TMP"
+            rm -f "$TMP"
+            COUNT=$((COUNT+1))
+          done < <(find "$SOURCE_ROOT" -type f \( -name '*.gs' -o -name '*.js' \) -print0)
+          test "$COUNT" -gt 0
+          echo "Syntax OK for $COUNT Apps Script files."
+
+      - name: Push to live Apps Script
+        shell: bash
+        env:
+          PROJECT_DIR: ${{ steps.discover.outputs.project_dir }}
+        run: |
+          set -euo pipefail
+          cd "$PROJECT_DIR"
+          if command -v clasp >/dev/null 2>&1; then
+            clasp push -f
+          else
+            npx --yes @google/clasp push -f
+          fi
+          echo "Live Apps Script push completed."
