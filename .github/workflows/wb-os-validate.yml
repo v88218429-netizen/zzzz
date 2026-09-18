@@ -6,6 +6,7 @@ on:
       - "wb_os/**"
   push:
     branches:
+      - "mainggg"
       - "wb-os-v0.1"
     paths:
       - "wb_os/**"
