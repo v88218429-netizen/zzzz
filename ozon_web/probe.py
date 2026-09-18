@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import csv, json, math, os, re, sys, time, uuid
+import csv, json, math, os, platform, re, sys, time, uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import quote
@@ -183,6 +183,27 @@ def load_cookie_secret():
             k,v=p.split("=",1); out[k.strip()]=v.strip()
     return out
 
+def load_local_chrome_cookies():
+    if platform.system() != "Darwin":
+        return {}, "not_macos", ""
+    if (os.getenv("OZON_LOAD_LOCAL_CHROME_COOKIES") or "1").strip().lower() in ("0","false","no"):
+        return {}, "disabled", ""
+    try:
+        import browser_cookie3
+        jar=browser_cookie3.chrome(domain_name=".ozon.ru")
+        cookies={}
+        for x in jar:
+            if x.name and x.value:
+                cookies[str(x.name)]=str(x.value)
+        if not cookies:
+            jar=browser_cookie3.chrome(domain_name="ozon.ru")
+            for x in jar:
+                if x.name and x.value:
+                    cookies[str(x.name)]=str(x.value)
+        return cookies, "chrome", ""
+    except Exception as e:
+        return {}, "chrome_error", repr(e)[:240]
+
 def previous_positions(history_path):
     prev={}
     p=Path(history_path)
@@ -236,8 +257,14 @@ def write_csv_outputs(items):
 def main():
     cfg=json.loads(Path("ozon_web/config.json").read_text(encoding="utf-8"))
     cookies=load_cookie_secret()
+    cookie_source="env_secret" if cookies else "none"
+    cookie_error=""
+    if not cookies:
+        cookies,cookie_source,cookie_error=load_local_chrome_cookies()
     out={"generated_at":datetime.now(timezone.utc).isoformat(),"source":"ozon_web_json",
-         "cookie_count":len(cookies),"results":[]}
+         "cookie_count":len(cookies),"cookie_source":cookie_source,"results":[]}
+    if cookie_error:
+        out["cookie_error"]=cookie_error
     with requests.Session(impersonate="chrome124") as s:
         if cookies: s.cookies.update(cookies)
         try:
