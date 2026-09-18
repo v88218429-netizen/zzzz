@@ -32,9 +32,9 @@ jobs:
         run: google-chrome --version || chromium --version
       - name: Proxy geo preflight
         env:
-          OZON_PROXY_PROVIDER: ${{ secrets.OZON_PROXY_PROVIDER }}
-          OZON_PROXY_HOST: ${{ secrets.OZON_PROXY_HOST }}
-          OZON_PROXY_PORT: ${{ secrets.OZON_PROXY_PORT }}
+          OZON_PROXY_PROVIDER: decodo
+          OZON_PROXY_HOST: gate.decodo.com
+          OZON_PROXY_PORT: "7000"
           OZON_PROXY_USER: ${{ secrets.OZON_PROXY_USER }}
           OZON_PROXY_PASS: ${{ secrets.OZON_PROXY_PASS }}
         run: |
@@ -43,9 +43,9 @@ jobs:
           python ozon_live/proxy_preflight.py
       - name: Run live scanner
         env:
-          OZON_PROXY_PROVIDER: ${{ secrets.OZON_PROXY_PROVIDER }}
-          OZON_PROXY_HOST: ${{ secrets.OZON_PROXY_HOST }}
-          OZON_PROXY_PORT: ${{ secrets.OZON_PROXY_PORT }}
+          OZON_PROXY_PROVIDER: decodo
+          OZON_PROXY_HOST: gate.decodo.com
+          OZON_PROXY_PORT: "7000"
           OZON_PROXY_USER: ${{ secrets.OZON_PROXY_USER }}
           OZON_PROXY_PASS: ${{ secrets.OZON_PROXY_PASS }}
         run: xvfb-run -a python ozon_live/scanner.py --config ozon_live/config.json --out ozon_live/results/latest.json
