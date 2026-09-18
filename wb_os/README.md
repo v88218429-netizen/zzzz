@@ -62,3 +62,6 @@ The same contract will be used for:
 - finance and RNP
 
 Each connector should emit normalized events and health, not directly mutate every downstream sheet.
+
+
+Validation: GitHub Actions runs only when `wb_os/**` changes or by manual dispatch; there is no cron polling.
