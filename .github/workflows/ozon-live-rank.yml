@@ -1,0 +1,43 @@
+name: Ozon live rank scanner
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 */2 * * *"
+  push:
+    branches: [mainggg]
+    paths:
+      - "ozon_live/scanner.py"
+      - "ozon_live/config.json"
+      - "ozon_live/requirements.txt"
+      - ".github/workflows/ozon-live-rank.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: mainggg
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: pip install -r ozon_live/requirements.txt
+      - name: Show Chrome
+        run: google-chrome --version || chromium --version
+      - name: Run live scanner
+        run: xvfb-run -a python ozon_live/scanner.py --config ozon_live/config.json --out ozon_live/results/latest.json
+      - name: Commit latest result
+        if: always()
+        run: |
+          git config user.name "ozon-live-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add ozon_live/results/latest.json
+          git diff --cached --quiet && exit 0
+          git commit -m "Ozon live positions [skip ci]"
+          git push
