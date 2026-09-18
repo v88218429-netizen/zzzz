@@ -30,7 +30,7 @@ jobs:
         run: pip install -r ozon_live/requirements.txt
       - name: Show Chrome
         run: google-chrome --version || chromium --version
-      - name: Run live scanner
+      - name: Proxy geo preflight
         env:
           OZON_PROXY_PROVIDER: ${{ secrets.OZON_PROXY_PROVIDER }}
           OZON_PROXY_HOST: ${{ secrets.OZON_PROXY_HOST }}
@@ -40,14 +40,22 @@ jobs:
         run: |
           test -n "$OZON_PROXY_USER" || { echo "Missing OZON_PROXY_USER secret"; exit 2; }
           test -n "$OZON_PROXY_PASS" || { echo "Missing OZON_PROXY_PASS secret"; exit 2; }
-          xvfb-run -a python ozon_live/scanner.py --config ozon_live/config.json --out ozon_live/results/latest.json
+          python ozon_live/proxy_preflight.py
+      - name: Run live scanner
+        env:
+          OZON_PROXY_PROVIDER: ${{ secrets.OZON_PROXY_PROVIDER }}
+          OZON_PROXY_HOST: ${{ secrets.OZON_PROXY_HOST }}
+          OZON_PROXY_PORT: ${{ secrets.OZON_PROXY_PORT }}
+          OZON_PROXY_USER: ${{ secrets.OZON_PROXY_USER }}
+          OZON_PROXY_PASS: ${{ secrets.OZON_PROXY_PASS }}
+        run: xvfb-run -a python ozon_live/scanner.py --config ozon_live/config.json --out ozon_live/results/latest.json
       - name: Commit latest result
         if: always()
         run: |
           git config user.name "ozon-live-bot"
           git config user.email "actions@users.noreply.github.com"
           test -f ozon_live/results/latest.json || exit 0
-          git add ozon_live/results/latest.json
+          git add ozon_live/results/latest.json ozon_live/results/proxy_health.json 2>/dev/null || true
           git add -f ozon_live/debug 2>/dev/null || true
           git diff --cached --quiet && exit 0
           git commit -m "Ozon live positions [skip ci]"
