@@ -168,11 +168,20 @@ required = [
     "k2EvolutionRecordFailure_(error)",
     "k2EvolutionWatchdogNotify_();",
     "k2EvolutionHistoryLastAt_(props)",
-    "K2_SESSION_COOKIE",
 ]
 missing = [marker for marker in required if marker not in new_text]
 if missing:
     raise SystemExit("PATCH_FAIL: post-condition missing: " + ", ".join(missing))
+
+# When the real project exposes getMasterConfigurationState_, it must be
+# session-aware after migration. Minimal test fixtures may omit that function.
+if (
+    "function getMasterConfigurationState_" in new_text
+    and "K2_SESSION_COOKIE" not in new_text
+):
+    raise SystemExit(
+        "PATCH_FAIL: session-aware readiness post-condition missing"
+    )
 
 path.write_text(new_text, encoding="utf-8")
 
