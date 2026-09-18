@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import quote_plus
 
-import undetected_chromedriver as uc
+from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -19,17 +19,17 @@ CITY_COORDS = {
 }
 
 def driver_new():
-    o=uc.ChromeOptions()
-    for a in ["--no-sandbox","--disable-dev-shm-usage","--disable-infobars","--lang=ru-RU","--window-size=1920,1080"]:
+    o=webdriver.ChromeOptions()
+    for a in ["--no-sandbox","--disable-dev-shm-usage","--disable-infobars","--lang=ru-RU","--window-size=1920,1080","--disable-blink-features=AutomationControlled"]:
         o.add_argument(a)
-    version_main=None
+    o.add_experimental_option("excludeSwitches", ["enable-automation"])
+    o.add_experimental_option("useAutomationExtension", False)
+    d=webdriver.Chrome(options=o)
     try:
-        v=subprocess.check_output(["google-chrome","--version"],text=True).strip()
-        m=re.search(r"(\\d+)\\.",v)
-        if m: version_main=int(m.group(1))
+        d.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument",{"source":"Object.defineProperty(navigator,'webdriver',{get:()=>undefined});"})
     except Exception:
         pass
-    return uc.Chrome(options=o, headless=False, use_subprocess=True, version_main=version_main)
+    return d
 
 def click_if(driver, xpath):
     try:
