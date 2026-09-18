@@ -12,9 +12,9 @@ echo "WB OS · K2 live deploy"
 echo "======================"
 
 if command -v clasp >/dev/null 2>&1; then
-  CLASP=(clasp)
+  run_clasp() { clasp "$@"; }
 elif command -v npx >/dev/null 2>&1; then
-  CLASP=(npx --yes @google/clasp)
+  run_clasp() { npx --yes @google/clasp "$@"; }
 else
   echo "Node/npm не найден. Установи Node.js и запусти файл ещё раз."
   exit 2
@@ -94,11 +94,11 @@ if [ ! -f "$HOME/.clasprc.json" ]; then
   echo ""
   echo "Нужна одноразовая авторизация Google для clasp."
   echo "Сейчас откроется браузер. Выбери тот же Google-аккаунт и нажми Разрешить."
-  "\${CLASP[@]}" login
+  run_clasp login
 fi
 
 cd "$PROJECT_DIR"
-"\${CLASP[@]}" pull
+run_clasp pull
 
 SOURCE_ROOT="$(
 python3 - <<'PY'
@@ -144,7 +144,7 @@ done < <(find "$SOURCE_ROOT" -type f \( -name '*.gs' -o -name '*.js' \) -print0)
 echo "Syntax OK: $COUNT files"
 
 cd "$PROJECT_DIR"
-"\${CLASP[@]}" push -f
+run_clasp push -f
 
 echo ""
 echo "✅ K2 Evolution code pushed to live Apps Script."
