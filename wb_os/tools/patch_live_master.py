@@ -148,7 +148,10 @@ new_ready = """k2Ready: Boolean(
     ),"""
 if old_ready in new_text:
     new_text = new_text.replace(old_ready, new_ready, 1)
-elif new_ready not in new_text:
+elif (
+    "function getMasterConfigurationState_" in new_text
+    and new_ready not in new_text
+):
     raise SystemExit("PATCH_FAIL: K2 readiness block not found")
 
 # Step 3: independently migrate history heartbeat self-healing.
