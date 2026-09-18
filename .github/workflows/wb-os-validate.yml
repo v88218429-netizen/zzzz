@@ -38,6 +38,15 @@ jobs:
           set -euo pipefail
           python3 wb_os/tests/test_patch_live_master.py
 
+      - name: Shell syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          for f in wb_os/*.command wb_os/**/*.sh; do
+            [ -e "$f" ] || continue
+            bash -n "$f"
+          done
+
       - name: Secret scan
         shell: bash
         run: |
