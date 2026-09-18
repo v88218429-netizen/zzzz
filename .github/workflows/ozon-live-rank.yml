@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   scan:
-    runs-on: [self-hosted, macOS, ozon-live]
+    runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
@@ -29,9 +29,18 @@ jobs:
       - name: Install dependencies
         run: pip install -r ozon_live/requirements.txt
       - name: Show Chrome
-        run: /Applications/Google\\ Chrome.app/Contents/MacOS/Google\\ Chrome --version || true
+        run: google-chrome --version || chromium --version
       - name: Run live scanner
-        run: python3 ozon_live/scanner.py --config ozon_live/config.json --out ozon_live/results/latest.json
+        env:
+          OZON_PROXY_PROVIDER: ${{ secrets.OZON_PROXY_PROVIDER }}
+          OZON_PROXY_HOST: ${{ secrets.OZON_PROXY_HOST }}
+          OZON_PROXY_PORT: ${{ secrets.OZON_PROXY_PORT }}
+          OZON_PROXY_USER: ${{ secrets.OZON_PROXY_USER }}
+          OZON_PROXY_PASS: ${{ secrets.OZON_PROXY_PASS }}
+        run: |
+          test -n "$OZON_PROXY_USER" || { echo "Missing OZON_PROXY_USER secret"; exit 2; }
+          test -n "$OZON_PROXY_PASS" || { echo "Missing OZON_PROXY_PASS secret"; exit 2; }
+          xvfb-run -a python ozon_live/scanner.py --config ozon_live/config.json --out ozon_live/results/latest.json
       - name: Commit latest result
         if: always()
         run: |
