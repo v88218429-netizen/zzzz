@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import json, re, sys, time, uuid
+import json, re, sys, time, uuid, os
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import quote
@@ -107,10 +107,30 @@ def scan_one(session,task):
         time.sleep(0.7)
     return {"status":"not_found","http":200,"position":None,"checked":checked,"page":page,"endpoint":endpoint if 'endpoint' in locals() else None}
 
+def load_cookie_secret():
+    raw=(os.getenv("OZON_COOKIES_JSON") or "").strip()
+    if not raw: return {}
+    try:
+        obj=json.loads(raw)
+        if isinstance(obj,list):
+            return {str(x["name"]):str(x["value"]) for x in obj if isinstance(x,dict) and x.get("name") and "value" in x}
+        if isinstance(obj,dict):
+            return {str(k):str(v) for k,v in obj.items()}
+    except Exception:
+        pass
+    # Accept raw Cookie header: a=b; c=d
+    out={}
+    for p in raw.split(";"):
+        if "=" in p:
+            k,v=p.split("=",1); out[k.strip()]=v.strip()
+    return out
+
 def main():
     cfg=json.loads(Path("ozon_web/config.json").read_text(encoding="utf-8"))
-    out={"generated_at":datetime.now(timezone.utc).isoformat(),"source":"ozon_web_json","results":[]}
+    cookies=load_cookie_secret()
+    out={"generated_at":datetime.now(timezone.utc).isoformat(),"source":"ozon_web_json","cookie_count":len(cookies),"results":[]}
     with requests.Session(impersonate="chrome124") as s:
+        if cookies: s.cookies.update(cookies)
         for t in cfg.get("tasks",[]):
             res=scan_one(s,t)
             out["results"].append({
