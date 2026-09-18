@@ -1,0 +1,173 @@
+{
+  "task_id": "GOAL_CLARITY",
+  "request": "GOAL_CLARITY_20260918_1331.json",
+  "query": "как понять чего я действительно хочу от жизни",
+  "knowledge_tag": "LIFE",
+  "generated_at": "2026-09-18T11:03:41.842158+00:00",
+  "videos": [
+    {
+      "video_id": "rp7owc3QI6M",
+      "url": "https://www.youtube.com/watch?v=rp7owc3QI6M",
+      "title": "В чём смысл ТВОЕЙ жизни? /Как понять себя и найти своё призвание?",
+      "channel": "Алексей Ситников",
+      "duration": 782,
+      "timestamp": null,
+      "query": "как понять чего я действительно хочу от жизни",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-18_GOAL_CLARITY_video_rp7owc3QI6M.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "KWFr9NdFKJY",
+      "url": "https://www.youtube.com/watch?v=KWFr9NdFKJY",
+      "title": "How do I figure out what I REALLY want? A simple 4-question technique",
+      "channel": "Психолог Наталья Жукова",
+      "duration": 1536,
+      "timestamp": null,
+      "query": "как понять чего я действительно хочу от жизни",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-18_GOAL_CLARITY_video_KWFr9NdFKJY.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "YkTflvIRiRg",
+      "url": "https://www.youtube.com/watch?v=YkTflvIRiRg",
+      "title": "Как понять чего я хочу !",
+      "channel": "Психолог Вероника Степанова",
+      "duration": 1081,
+      "timestamp": null,
+      "query": "как понять чего я действительно хочу от жизни",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-18_GOAL_CLARITY_video_YkTflvIRiRg.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "JC5SoAAa5MY",
+      "url": "https://www.youtube.com/watch?v=JC5SoAAa5MY",
+      "title": "СДЕЛАЙ ЭТО и ты поймешь свои ИСТИННЫЕ ЖЕЛАНИЯ! Как понять чего я хочу НА САМОМ ДЕЛЕ?",
+      "channel": "Психология | Игропрактика Лила ",
+      "duration": 367,
+      "timestamp": null,
+      "query": "как понять чего я действительно хочу от жизни",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-18_GOAL_CLARITY_video_JC5SoAAa5MY.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "04DCIckOn4w",
+      "url": "https://www.youtube.com/watch?v=04DCIckOn4w",
+      "title": "НЕ ЗНАЮ, ЧЕГО Я ХОЧУ. #Адакофе 108",
+      "channel": "АДА КОНДЭ",
+      "duration": 1061,
+      "timestamp": null,
+      "query": "как понять чего я действительно хочу от жизни",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-18_GOAL_CLARITY_video_04DCIckOn4w.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "MxwqI5y-USE",
+      "url": "https://www.youtube.com/watch?v=MxwqI5y-USE",
+      "title": "Как понять чем тебе нужно заниматься? | Маргулан Сейсембай",
+      "channel": "МАРГУЛАН СЕЙСЕМБАЙ",
+      "duration": 528,
+      "timestamp": null,
+      "query": "как понять чего я действительно хочу от жизни",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-18_GOAL_CLARITY_video_MxwqI5y-USE.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "1sxUT9Hx2h0",
+      "url": "https://www.youtube.com/watch?v=1sxUT9Hx2h0",
+      "title": "«Не знаю, чего хочу»: Что нам действительно важно?",
+      "channel": "Андрей Курпатов",
+      "duration": 3464,
+      "timestamp": null,
+      "query": "как понять чего я действительно хочу от жизни",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-18_GOAL_CLARITY_video_1sxUT9Hx2h0.md",
+      "method": "FreeTranscriptAPI"
+    }
+  ],
+  "errors": [
+    {
+      "video_id": "CgKVlG3Iq7o",
+      "url": "https://www.youtube.com/watch?v=CgKVlG3Iq7o",
+      "title": "HOW TO FIND YOUR CALLING. The Path to Yourself",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "QxJNKFMR2Vw",
+      "url": "https://www.youtube.com/watch?v=QxJNKFMR2Vw",
+      "title": "Мелл Робинс: Как понять чего ты хочешь на самом деле и начать делать то, что ты любишь",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "J6BEYqQirCs",
+      "url": "https://www.youtube.com/watch?v=J6BEYqQirCs",
+      "title": "Как понять, чего я хочу?",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "PKLhWLHi3Q8",
+      "url": "https://www.youtube.com/watch?v=PKLhWLHi3Q8",
+      "title": "Как понять, чего я хочу на самом деле?",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "uuuiNq1Qf9A",
+      "url": "https://www.youtube.com/watch?v=uuuiNq1Qf9A",
+      "title": "САМЫЙ БЫСТРЫЙ СПОСОБ ПОНЯТЬ ЧЕГО ТЫ ХОЧЕШЬ | Практика на осознание своих желаний",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "gqhKQA9UC2E",
+      "url": "https://www.youtube.com/watch?v=gqhKQA9UC2E",
+      "title": "Депутат партии Шария толкает речь о политике. #shorts",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "9NhPFQjUbbE",
+      "url": "https://www.youtube.com/watch?v=9NhPFQjUbbE",
+      "title": "Самолеты",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "GoJuGtjPJcA",
+      "url": "https://www.youtube.com/watch?v=GoJuGtjPJcA",
+      "title": "ЖАДИНА ♫ МУЛЬТиВАРИК ТВ ☺ ДОБРАЯ  МУЛЬТ ПЕСЕНКА ДЛЯ ДЕТЕЙ ♫ 0+",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "zyfHMFJAyA0",
+      "url": "https://www.youtube.com/watch?v=zyfHMFJAyA0",
+      "title": "Antonina Ivanovna Uralskaya (Original)",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "l-P74ZJ7eHQ",
+      "url": "https://www.youtube.com/watch?v=l-P74ZJ7eHQ",
+      "title": "Танцуй если знаешь этот новый тренд 2026 года",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "lslLgcbj32E",
+      "url": "https://www.youtube.com/watch?v=lslLgcbj32E",
+      "title": "🏡 Lifestyle, Adventure & Country Living – Your Perfect Base Near Derby!",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "dJ3jurX-hGc",
+      "url": "https://www.youtube.com/watch?v=dJ3jurX-hGc",
+      "title": "\"Living the Dream: Embrace a Luxurious Lifestyle\"#shorts",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "p3Z5Z_ODcZU",
+      "url": "https://www.youtube.com/watch?v=p3Z5Z_ODcZU",
+      "title": "Birchley Park Lifestyle Short",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    }
+  ]
+}

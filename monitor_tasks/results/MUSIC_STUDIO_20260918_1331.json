@@ -1,0 +1,46 @@
+{
+  "task_id": "MUSIC_STUDIO",
+  "request": "MUSIC_STUDIO_20260918_1331.json",
+  "query": "домашняя музыкальная студия в частном доме обзор",
+  "knowledge_tag": "MUSIC",
+  "generated_at": "2026-09-18T11:06:37.488750+00:00",
+  "videos": [],
+  "errors": [
+    {
+      "video_id": "KbatTVAV3sY",
+      "url": "https://www.youtube.com/watch?v=KbatTVAV3sY",
+      "title": "Budget Home Recording Studio: Building a Minimal Setup",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "Lu3hRYFoJe4",
+      "url": "https://www.youtube.com/watch?v=Lu3hRYFoJe4",
+      "title": "СТУДИЯ ЗВУКОЗАПИСИ ДОМА // ЧТО КУПИТЬ В 2026?",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "GAbN1Ydaj-s",
+      "url": "https://www.youtube.com/watch?v=GAbN1Ydaj-s",
+      "title": "Что купить для домашней студии в 2024?",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "BiTuSxEmhs0",
+      "url": "https://www.youtube.com/watch?v=BiTuSxEmhs0",
+      "title": "СВОЯ музыкальная СТУДИЯ. Обзор дома для гостиничного бизнеса. Рум-тур по ДВУМ гостевым коттеджам.",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "HjhUsM-u4zU",
+      "url": "https://www.youtube.com/watch?v=HjhUsM-u4zU",
+      "title": "СТУДИЯ ЗВУКОЗАПИСИ ДОМА/ЧТО КУПИТЬ В 2025?",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "QMJqxbaGL9E",
+      "url": "https://www.youtube.com/watch?v=QMJqxbaGL9E",
+      "title": "Алёна Свиридова: звукоизоляция студии в жилом доме",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    }
+  ]
+}

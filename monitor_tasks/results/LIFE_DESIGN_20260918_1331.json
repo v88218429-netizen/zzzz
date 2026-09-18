@@ -1,0 +1,130 @@
+{
+  "task_id": "LIFE_DESIGN",
+  "request": "LIFE_DESIGN_20260918_1331.json",
+  "query": "идеальная жизнь предпринимателя семья свобода образ жизни",
+  "knowledge_tag": "LIFE",
+  "generated_at": "2026-09-18T11:05:49.119759+00:00",
+  "videos": [],
+  "errors": [
+    {
+      "video_id": "vf7qq-YBd88",
+      "url": "https://www.youtube.com/watch?v=vf7qq-YBd88",
+      "title": "РОСКОШНЫЙ ОБРАЗ ЖИЗНИ МИЛЛИАРДЕРОВ! ЛУЧШАЯ МОТИВАЦИЯ И ВИЗУАЛИЗАЦИЯ! БОГАТАЯ ЖИЗНЬ",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "UZJys-IrGBw",
+      "url": "https://www.youtube.com/watch?v=UZJys-IrGBw",
+      "title": "После 50 я выбрала более скромную жизнь и обрела больше свободы",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "Bcild-5fvEg",
+      "url": "https://www.youtube.com/watch?v=Bcild-5fvEg",
+      "title": "Спорт. Бизнес. Семья. В здоровом теле - здоровый дух!",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "e3aqV3AF_nk",
+      "url": "https://www.youtube.com/watch?v=e3aqV3AF_nk",
+      "title": "Минус 22 кг и новый уровень энергии для предпринимателя",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "Iv2iUfg_AAQ",
+      "url": "https://www.youtube.com/watch?v=Iv2iUfg_AAQ",
+      "title": "Американская мечта за рубежом: образ жизни, свобода и лучшая жизнь для детей",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "C-fy5f808Yk",
+      "url": "https://www.youtube.com/watch?v=C-fy5f808Yk",
+      "title": "Карелия - Жизнь Время ⌛ и Свобода - Бесценны ⚠ Помните об этом ⚠ Живите здесь и сейчас",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "khU8FFj2LSw",
+      "url": "https://www.youtube.com/watch?v=khU8FFj2LSw",
+      "title": "Самая лучшая позиция в этом мире, это быть самим собой и опираться на свою внутреннюю силу.",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "ZLfY7BRbWco",
+      "url": "https://www.youtube.com/watch?v=ZLfY7BRbWco",
+      "title": "Солнечный ЭкоДом каждой семье.  Жизнь в достатке. Семья Балакиных. НА ЗЕМЛЕ 24",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "MzTQsrKIgZU",
+      "url": "https://www.youtube.com/watch?v=MzTQsrKIgZU",
+      "title": "Радмила Мутич: «С Siberian Wellness я поняла, что свобода – самый важный ресурс сегодня»",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "wjqEodazfPw",
+      "url": "https://www.youtube.com/watch?v=wjqEodazfPw",
+      "title": "5 детей, 150 бизнес-проектов. Как все успевать?",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "AQWqd4y7gRw",
+      "url": "https://www.youtube.com/watch?v=AQWqd4y7gRw",
+      "title": "Бизнес в декрете. Немного про меня и мой бизнес в декрете",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "Z11NJso7xyA",
+      "url": "https://www.youtube.com/watch?v=Z11NJso7xyA",
+      "title": "Ирина Скурчик. Формула успеха.",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "YJAP9b2vnh8",
+      "url": "https://www.youtube.com/watch?v=YJAP9b2vnh8",
+      "title": "Алексей Бабаянц. В чем истинный смысл жизненных трудностей?",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "fS6U1iP6jPg",
+      "url": "https://www.youtube.com/watch?v=fS6U1iP6jPg",
+      "title": "Sevak & JANAGA — На грани [mood video]",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "yNwL5IEkF3c",
+      "url": "https://www.youtube.com/watch?v=yNwL5IEkF3c",
+      "title": "— Where do you work? — At a private firm (St. Petersburg, 1993)",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "UPFaDyP1_iU",
+      "url": "https://www.youtube.com/watch?v=UPFaDyP1_iU",
+      "title": "DreamTrips Success Story | Mom Entrepreneur Builds Freedom for Her Family",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "Ib9X2A3BHKI",
+      "url": "https://www.youtube.com/watch?v=Ib9X2A3BHKI",
+      "title": "The great Lifestyle Design Myth",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "vDwYj2OG1CU",
+      "url": "https://www.youtube.com/watch?v=vDwYj2OG1CU",
+      "title": "Welcome to The Professional Creative Podast!",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "2HNRrqldW_A",
+      "url": "https://www.youtube.com/watch?v=2HNRrqldW_A",
+      "title": "Laptop Lifestyle?  Freedom??",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "SPFcvVqiQEc",
+      "url": "https://www.youtube.com/watch?v=SPFcvVqiQEc",
+      "title": "Kansas City Entrepreneur in Action: Luis Garcia of Hecho KC and Spyn Studio",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    }
+  ]
+}

@@ -1,0 +1,197 @@
+{
+  "task_id": "FAMILY_LIFE",
+  "request": "FAMILY_LIFE_20260918_1331.json",
+  "query": "семейная жизнь предпринимателя как совмещать бизнес и семью",
+  "knowledge_tag": "FAMILY",
+  "generated_at": "2026-09-18T11:03:03.822407+00:00",
+  "videos": [
+    {
+      "video_id": "d48UyC8mCso",
+      "url": "https://www.youtube.com/watch?v=d48UyC8mCso",
+      "title": "How to balance family and business, characteristics of the new generation, and leisure time toget...",
+      "channel": "Радислав Гандапас - лидерские стратегии",
+      "duration": 1876,
+      "timestamp": null,
+      "query": "семейная жизнь предпринимателя как совмещать бизнес и семью",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-18_FAMILY_LIFE_video_d48UyC8mCso.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "XPvKuJLD840",
+      "url": "https://www.youtube.com/watch?v=XPvKuJLD840",
+      "title": "Как совместить семью и бизнес? Работа и семья",
+      "channel": "Инна Мерзабекова PRO",
+      "duration": 755,
+      "timestamp": null,
+      "query": "семейная жизнь предпринимателя как совмещать бизнес и семью",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-18_FAMILY_LIFE_video_XPvKuJLD840.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "RK59rYZ6voM",
+      "url": "https://www.youtube.com/watch?v=RK59rYZ6voM",
+      "title": "Sholpan Tusipbekova: How to Balance Family and a Successful Business / Part 1",
+      "channel": "Anvar Kholikov",
+      "duration": 3958,
+      "timestamp": null,
+      "query": "семейная жизнь предпринимателя как совмещать бизнес и семью",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-18_FAMILY_LIFE_video_RK59rYZ6voM.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "Ll-P-JXWK6E",
+      "url": "https://www.youtube.com/watch?v=Ll-P-JXWK6E",
+      "title": "Запуск и личная жизнь: как совмещать бизнес и семью",
+      "channel": "Елизавета Максименко | про ИИ и ПРОДВИЖЕНИЕ",
+      "duration": 775,
+      "timestamp": null,
+      "query": "семейная жизнь предпринимателя как совмещать бизнес и семью",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-18_FAMILY_LIFE_video_Ll-P-JXWK6E.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "eDRoe03Sivs",
+      "url": "https://www.youtube.com/watch?v=eDRoe03Sivs",
+      "title": "Как совместить бизнес и воспитание детей?",
+      "channel": "ЮЛИЯ ТРУС ПРО БИЗНЕС",
+      "duration": 868,
+      "timestamp": null,
+      "query": "семейная жизнь предпринимателя как совмещать бизнес и семью",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-18_FAMILY_LIFE_video_eDRoe03Sivs.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "BieVd8cG_yA",
+      "url": "https://www.youtube.com/watch?v=BieVd8cG_yA",
+      "title": "Как совмещать бизнес, семью, материнство и всегда оставаться в ресурсе l МАРИЯ САМАРИНА",
+      "channel": "На Женском",
+      "duration": 1963,
+      "timestamp": null,
+      "query": "семейная жизнь предпринимателя как совмещать бизнес и семью",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-18_FAMILY_LIFE_video_BieVd8cG_yA.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "oLpSlnllZ3Y",
+      "url": "https://www.youtube.com/watch?v=oLpSlnllZ3Y",
+      "title": "Как сохранить семью и развивать бизнес.БИЗНЕС С РОДСТВЕННИКАМИ.",
+      "channel": "Familion",
+      "duration": 107,
+      "timestamp": null,
+      "query": "семейная жизнь предпринимателя как совмещать бизнес и семью shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-18_FAMILY_LIFE_short_oLpSlnllZ3Y.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "01pdieWK56o",
+      "url": "https://www.youtube.com/watch?v=01pdieWK56o",
+      "title": "Расстановка приоритетов: семья или бизнес. Что главное?",
+      "channel": "Иван Жураковский Психолог",
+      "duration": 141,
+      "timestamp": null,
+      "query": "семейная жизнь предпринимателя как совмещать бизнес и семью shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-18_FAMILY_LIFE_short_01pdieWK56o.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "Y52yFZQVyN0",
+      "url": "https://www.youtube.com/watch?v=Y52yFZQVyN0",
+      "title": "Её романы до брака и рождение сына. Личная жизнь Регины Тодоренко и всё о браке с Владом Топаловым",
+      "channel": "SocialPro",
+      "duration": 165,
+      "timestamp": null,
+      "query": "семейная жизнь предпринимателя как совмещать бизнес и семью shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-18_FAMILY_LIFE_short_Y52yFZQVyN0.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "175dTbSTMu8",
+      "url": "https://www.youtube.com/watch?v=175dTbSTMu8",
+      "title": "A serious talk between a dad and his one-year-old son!!!",
+      "channel": "Ванда Головина",
+      "duration": 65,
+      "timestamp": null,
+      "query": "предприниматель семья дети образ жизни shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-18_FAMILY_LIFE_short_175dTbSTMu8.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "98NumSB_en8",
+      "url": "https://www.youtube.com/watch?v=98NumSB_en8",
+      "title": "Подарки детям от предпринимателей",
+      "channel": "Телеканал Хабаровск",
+      "duration": 171,
+      "timestamp": null,
+      "query": "предприниматель семья дети образ жизни shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-18_FAMILY_LIFE_short_98NumSB_en8.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "6bNbkw8AI7s",
+      "url": "https://www.youtube.com/watch?v=6bNbkw8AI7s",
+      "title": "Трейлер нашего Канала - \"Казаковы - семья, друзья и лабрадор\"",
+      "channel": "Казаковы - семья, друзья и Лабрадор",
+      "duration": 60,
+      "timestamp": null,
+      "query": "предприниматель семья дети образ жизни shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-18_FAMILY_LIFE_short_6bNbkw8AI7s.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "SgpzQXh6GXs",
+      "url": "https://www.youtube.com/watch?v=SgpzQXh6GXs",
+      "title": "Кристина Дудкова – семейный блогер (5.7 млн. подписчиков), предприниматель.",
+      "channel": "LingvoNanny Agency",
+      "duration": 62,
+      "timestamp": null,
+      "query": "предприниматель семья дети образ жизни shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-18_FAMILY_LIFE_short_SgpzQXh6GXs.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "7Ryj9z3Qq1k",
+      "url": "https://www.youtube.com/watch?v=7Ryj9z3Qq1k",
+      "title": "20 стран на машине с детьми: предприниматель и отец четырех детей о семейном автотуризме",
+      "channel": "Томские истории I Tомск.ру",
+      "duration": 24,
+      "timestamp": null,
+      "query": "предприниматель семья дети образ жизни shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-18_FAMILY_LIFE_short_7Ryj9z3Qq1k.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "A4NE6pdqFOA",
+      "url": "https://www.youtube.com/watch?v=A4NE6pdqFOA",
+      "title": "ЗНАКОМСТВО! ВЗРОСЛАЯ  МАМА, ОНЛАЙН ПРЕДПРИНИМАТЕЛЬ!",
+      "channel": "СУПРУН НАТАЛЬЯ",
+      "duration": 65,
+      "timestamp": null,
+      "query": "предприниматель семья дети образ жизни shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-18_FAMILY_LIFE_short_A4NE6pdqFOA.md",
+      "method": "FreeTranscriptAPI"
+    }
+  ],
+  "errors": [
+    {
+      "video_id": "i6SXSrnK7Gc",
+      "url": "https://www.youtube.com/watch?v=i6SXSrnK7Gc",
+      "title": "Совету предпринимательства Видео поздравление от нашего центра Семья и детей приюта 🙏",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 404: Not Found"
+    }
+  ]
+}

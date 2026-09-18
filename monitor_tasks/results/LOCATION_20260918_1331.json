@@ -1,0 +1,142 @@
+{
+  "task_id": "LOCATION",
+  "request": "LOCATION_20260918_1331.json",
+  "query": "лучшие места для жизни с семьей предпринимателю Россия 2026",
+  "knowledge_tag": "LOCATION",
+  "generated_at": "2026-09-18T11:06:26.492510+00:00",
+  "videos": [],
+  "errors": [
+    {
+      "video_id": "JLmoMec-I1A",
+      "url": "https://www.youtube.com/watch?v=JLmoMec-I1A",
+      "title": "Куда переехать в 2026? Топ-страны для жизни",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "iipEe0I6_cw",
+      "url": "https://www.youtube.com/watch?v=iipEe0I6_cw",
+      "title": "ТОП-6 СТРАН ДЛЯ ПЕРЕЕЗДА ИЗ РОССИИ В 2026 / Куда переехать жить?",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "7dKP1k8QUUU",
+      "url": "https://www.youtube.com/watch?v=7dKP1k8QUUU",
+      "title": "Куда уехать, чтобы не пожалеть. Лучшие страны для жизни и эмиграции в 2026",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "Qviw-eoPheY",
+      "url": "https://www.youtube.com/watch?v=Qviw-eoPheY",
+      "title": "Куда УЕХАТЬ из России в 2026",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "BAJhujEeZVE",
+      "url": "https://www.youtube.com/watch?v=BAJhujEeZVE",
+      "title": "WHERE TO GO FROM RUSSIA? The Best Countries to Move to in 2026",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "7z5BLSRjL48",
+      "url": "https://www.youtube.com/watch?v=7z5BLSRjL48",
+      "title": "Как и куда уехать из России в 2026 | Необычные визы и программы для переезда (English sub) @Max_Katz",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "P39TjwUFPXE",
+      "url": "https://www.youtube.com/watch?v=P39TjwUFPXE",
+      "title": "TOP 5 VISA-FREE COUNTRIES TO MOVE TO IN 2026 | Complete Legalization Guide",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "EQTwoM2HrUA",
+      "url": "https://www.youtube.com/watch?v=EQTwoM2HrUA",
+      "title": "ЛУЧШИЕ СТРАНЫ ЕВРОПЫ ДЛЯ ЭМИГРАЦИИ в 2026 году",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "vxTI8npe6YI",
+      "url": "https://www.youtube.com/watch?v=vxTI8npe6YI",
+      "title": "Как выбрать страну для переезда в 2026 году | Личный опыт и советы по эмиграции.",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "XxRec8d1rj8",
+      "url": "https://www.youtube.com/watch?v=XxRec8d1rj8",
+      "title": "Топ стран для жизни и эмиграции в 2026. Ты будешь удивлен",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "uEEwr9ZgxC4",
+      "url": "https://www.youtube.com/watch?v=uEEwr9ZgxC4",
+      "title": "🔥 Фома и упыри - гаишники #Невский #Фома #Архитектор #shortsshow777",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "bfG02hiTwEs",
+      "url": "https://www.youtube.com/watch?v=bfG02hiTwEs",
+      "title": "A phone scammer showed police how he scams people.",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "M968xiI9FKY",
+      "url": "https://www.youtube.com/watch?v=M968xiI9FKY",
+      "title": "Последние слова Андрея Чикатило",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "RXII0YCAwvg",
+      "url": "https://www.youtube.com/watch?v=RXII0YCAwvg",
+      "title": "ТОП-5 уникальных мест России, которые стоит посетить в 2025 году",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "oQkLiIT6NNM",
+      "url": "https://www.youtube.com/watch?v=oQkLiIT6NNM",
+      "title": "New Berezkini and 1000 Rubles - Teaser",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "175dTbSTMu8",
+      "url": "https://www.youtube.com/watch?v=175dTbSTMu8",
+      "title": "A serious talk between a dad and his one-year-old son!!!",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "bFzNE0U1fcA",
+      "url": "https://www.youtube.com/watch?v=bFzNE0U1fcA",
+      "title": "Мультфильм \"Мыкола и Иван\"",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "w6YIABCAvbQ",
+      "url": "https://www.youtube.com/watch?v=w6YIABCAvbQ",
+      "title": "Продаётся частный дом у моря в Новороссийске (село Мысхако). Жизнь на юге. Земля. Купить выгодно.",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "kMNplt_xq1M",
+      "url": "https://www.youtube.com/watch?v=kMNplt_xq1M",
+      "title": "О станице Раевской.  Лучшее место для переезда на Юге России.",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "YvedmDOVx7k",
+      "url": "https://www.youtube.com/watch?v=YvedmDOVx7k",
+      "title": "Primorsko-Akhtarsk: a small town with no future, real estate selection with Arbolit Yug",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "Q8ZpGxytink",
+      "url": "https://www.youtube.com/watch?v=Q8ZpGxytink",
+      "title": "Куда Переехать жить на ЮГ России в 2022 ?",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "Y5IyGxwYRdE",
+      "url": "https://www.youtube.com/watch?v=Y5IyGxwYRdE",
+      "title": "Переезд на юг в ЖК \"Просторный\" станица Раевская.#shorts",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    }
+  ]
+}

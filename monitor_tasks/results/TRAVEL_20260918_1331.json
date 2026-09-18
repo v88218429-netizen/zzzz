@@ -1,0 +1,118 @@
+{
+  "task_id": "TRAVEL",
+  "request": "TRAVEL_20260918_1331.json",
+  "query": "как путешествовать с семьей и управлять бизнесом удаленно",
+  "knowledge_tag": "TRAVEL",
+  "generated_at": "2026-09-18T11:07:40.383252+00:00",
+  "videos": [],
+  "errors": [
+    {
+      "video_id": "pqbnypFX3h8",
+      "url": "https://www.youtube.com/watch?v=pqbnypFX3h8",
+      "title": "БИЗНЕС ИНСАЙТ: Сергей Разживин. Как удаленно развивать и управлять бизнесом?",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "p5-1EMoV7XI",
+      "url": "https://www.youtube.com/watch?v=p5-1EMoV7XI",
+      "title": "Как сделать путешествия своей работой и при этом вести бизнес удаленно?",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "PuB4qZ5IRbg",
+      "url": "https://www.youtube.com/watch?v=PuB4qZ5IRbg",
+      "title": "Бизнес и путешествия. Алексей Верютин",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "Or_WPKMFwhw",
+      "url": "https://www.youtube.com/watch?v=Or_WPKMFwhw",
+      "title": "Автоматизация бизнеса",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "IE07at6Lar0",
+      "url": "https://www.youtube.com/watch?v=IE07at6Lar0",
+      "title": "Как управлять бизнесом эффективно? Личный помощник. Делегирование ответственности и полномочий 16+",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "8nJvoUNhEBg",
+      "url": "https://www.youtube.com/watch?v=8nJvoUNhEBg",
+      "title": "Как удаленно управлять IT-компанией, жить в Польше и развивать 5+ направлений бизнеса",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "2jUVDYuEYO4",
+      "url": "https://www.youtube.com/watch?v=2jUVDYuEYO4",
+      "title": "Работа удаленно в путешествиях - Как заработать в интернете новичку?",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "v2q6SvSddGo",
+      "url": "https://www.youtube.com/watch?v=v2q6SvSddGo",
+      "title": "Финансовые привычки миллионеров, которые я хотела бы знать в 20",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "xao0XAnzzdY",
+      "url": "https://www.youtube.com/watch?v=xao0XAnzzdY",
+      "title": "Как мы вели свой бизнес по краткосрочной аренде жилья, путешествуя по всем 50 штатам.",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "REfae_C9JoA",
+      "url": "https://www.youtube.com/watch?v=REfae_C9JoA",
+      "title": "Открыть бизнес в Панаме",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "CYDX4AwQJ4w",
+      "url": "https://www.youtube.com/watch?v=CYDX4AwQJ4w",
+      "title": "Как переехать на #Маврикий | Образование | Бизнес и работа | ВНЖ и ПМЖ | Переезжаем с детьми на море",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "muQV1vBg02I",
+      "url": "https://www.youtube.com/watch?v=muQV1vBg02I",
+      "title": "The Craftiest and Most Shameless Neighbor in the World / Con Artist Neighbor / How to Make Money?...",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "ye2IDyUVS1g",
+      "url": "https://www.youtube.com/watch?v=ye2IDyUVS1g",
+      "title": "ЕдуЕм. Выпуск Акселератора Techno Skolkovo Community",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "6k6iJWmlW-0",
+      "url": "https://www.youtube.com/watch?v=6k6iJWmlW-0",
+      "title": "Turning Your Culture Into a Travel Business” (inspired by Kids of the Colony & Tayo Aina)",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "JhyhgQLnLcE",
+      "url": "https://www.youtube.com/watch?v=JhyhgQLnLcE",
+      "title": "Business trip with kids",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "GtEEFSY8EZ8",
+      "url": "https://www.youtube.com/watch?v=GtEEFSY8EZ8",
+      "title": "Traveling Business Class with Kids — Is It Actually Worth It?",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "7Q1JHjWWyHU",
+      "url": "https://www.youtube.com/watch?v=7Q1JHjWWyHU",
+      "title": "Traveling with kids- Digital business owner",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "fdDnL3nvB2k",
+      "url": "https://www.youtube.com/watch?v=fdDnL3nvB2k",
+      "title": "Preparing Your Kids To Take Over The Family Business | Straight Talk with Lou Mosca",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    }
+  ]
+}

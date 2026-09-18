@@ -1,0 +1,142 @@
+{
+  "task_id": "HOME",
+  "request": "HOME_20260918_1331.json",
+  "query": "современные дома для семьи обзор планировок 150 200 м2",
+  "knowledge_tag": "HOME",
+  "generated_at": "2026-09-18T11:04:18.566803+00:00",
+  "videos": [],
+  "errors": [
+    {
+      "video_id": "PsUlXrl84p0",
+      "url": "https://www.youtube.com/watch?v=PsUlXrl84p0",
+      "title": "ПЛАНИРОВКА ДОМА 150-200м2 // Главные правила // ДВУХЭТАЖНЫЕ ДОМА // Дома сложной формы",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "cPqNOWC63mI",
+      "url": "https://www.youtube.com/watch?v=cPqNOWC63mI",
+      "title": "Одноэтажный дом 200 м2 с бассейном и спа | Обзор дома с Заказчиком",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "8r-z4FZmM_s",
+      "url": "https://www.youtube.com/watch?v=8r-z4FZmM_s",
+      "title": "New Project Review: Single-Story 150 sqm Prairie-Style House with a Large Terrace",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "Bcyw5dCja6k",
+      "url": "https://www.youtube.com/watch?v=Bcyw5dCja6k",
+      "title": "СОВРЕМЕННЫЙ ДОМ ДЛЯ МОЛОДОЙ СЕМЬИ 150 м² | Дизайн интерьера, обзор дома",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "Mk-c0A98p5Q",
+      "url": "https://www.youtube.com/watch?v=Mk-c0A98p5Q",
+      "title": "A review of a one-story house for a large family, in which everything has been thought of / MIKEA...",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "5urv1gX7-n0",
+      "url": "https://www.youtube.com/watch?v=5urv1gX7-n0",
+      "title": "Дом 150 кв.м. 🏡 Обзор внешнего вида и планировки.",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "8zj_PnrJJrA",
+      "url": "https://www.youtube.com/watch?v=8zj_PnrJJrA",
+      "title": "A review of a stylish two-story house where people live. Roomtour.",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "hbLgS6ny08I",
+      "url": "https://www.youtube.com/watch?v=hbLgS6ny08I",
+      "title": "REVIEW of a two-story HOUSE of 144 sq. m at an affordable PRICE",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "Eat1GXtOCg8",
+      "url": "https://www.youtube.com/watch?v=Eat1GXtOCg8",
+      "title": "How to Build a House in the Region? | A Review of a Modern 200-Sq.-M House",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "YDfRJdXP3kk",
+      "url": "https://www.youtube.com/watch?v=YDfRJdXP3kk",
+      "title": "ОДНОЭТАЖНЫЙ ДОМ С ГАРАЖОМ 150М2 ИЗ ГАЗОБЕТОНА ОБЗОР! ИДЕАЛЬНЫЙ ДОМ ЛУЧШАЯ ПЛАНИРОВКА #одноэтажныйдом",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "iqZ9ZJVE0pI",
+      "url": "https://www.youtube.com/watch?v=iqZ9ZJVE0pI",
+      "title": "Как грамотно выбирать проекты домов 150 200 кв м",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "6W53qbR7fsI",
+      "url": "https://www.youtube.com/watch?v=6W53qbR7fsI",
+      "title": "Проект одноэтажного дома",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "Y4OR4GF5hjE",
+      "url": "https://www.youtube.com/watch?v=Y4OR4GF5hjE",
+      "title": "💥ПРОЕКТ СОВРЕМЕННОГО ДОМА 150 КВ.М.",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "EzNgyrVOgv4",
+      "url": "https://www.youtube.com/watch?v=EzNgyrVOgv4",
+      "title": "Двухэтажный загородный дом с очень удобной планировкой/Дом площадью 150 м2 для большой семьи",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "BlkqLJ5MBFw",
+      "url": "https://www.youtube.com/watch?v=BlkqLJ5MBFw",
+      "title": "200 m² House Tour. Two-Story Stone House.",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "am_FbbS23VU",
+      "url": "https://www.youtube.com/watch?v=am_FbbS23VU",
+      "title": "Проект одноэтажного дома 200 м2 с гаражом на 2 авто. Ссылка на проект в описании",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "DXGS6ejRiSI",
+      "url": "https://www.youtube.com/watch?v=DXGS6ejRiSI",
+      "title": "Уютный дом 150 кв м во 2-м Иркутске",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "i4n0r-SC4rs",
+      "url": "https://www.youtube.com/watch?v=i4n0r-SC4rs",
+      "title": "Современный двухэтажный дом с 6 спальнями 200 м.кв. #строительстводомов #загородныйдом #коттедж",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "4aO9y5CIjaM",
+      "url": "https://www.youtube.com/watch?v=4aO9y5CIjaM",
+      "title": "Уютный дом за живой изгородью🏠 | Обзор дома и Рум Тур",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "gpO7vbLiEiY",
+      "url": "https://www.youtube.com/watch?v=gpO7vbLiEiY",
+      "title": "Проект одноэтажного дома 200 м2 с потолками в уровнях и 3 спальнями",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "l0bl1C06WDs",
+      "url": "https://www.youtube.com/watch?v=l0bl1C06WDs",
+      "title": "Проект загородного дома в стиле барнхаус 150 кв.м. | Стильный коттедж, продуманный до мелочей",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "RXPXit_pous",
+      "url": "https://www.youtube.com/watch?v=RXPXit_pous",
+      "title": "💥 ПРОЕКТ ДВУХЭТАЖНОГО ДОМА С САУНОЙ💥 Готовый проект 177 кв.м.",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    }
+  ]
+}

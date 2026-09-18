@@ -1,0 +1,160 @@
+{
+  "task_id": "INCOME",
+  "request": "INCOME_20260918_1331.json",
+  "query": "как выйти на 1 миллион чистой прибыли в месяц бизнес реальные кейсы",
+  "knowledge_tag": "INCOME",
+  "generated_at": "2026-09-18T11:05:22.291372+00:00",
+  "videos": [],
+  "errors": [
+    {
+      "video_id": "BN_EZVAC4Y8",
+      "url": "https://www.youtube.com/watch?v=BN_EZVAC4Y8",
+      "title": "Разбор бюти-бизнеса! / Как зарабатывать 5 000 000 на САЛОНЕ КРАСОТЫ? / РЕАЛЬНЫЙ кейс!",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "7ZUtQuZi7pU",
+      "url": "https://www.youtube.com/watch?v=7ZUtQuZi7pU",
+      "title": "От 100 тысяч до 1,1 миллиона прибыли за 10 месяцев | Кейс по развитию бизнеса на маркетплейсах",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "uqsurljwxqM",
+      "url": "https://www.youtube.com/watch?v=uqsurljwxqM",
+      "title": "Партнерство и рост прибыли. Реальный кейс. Приглашение на бизнес-встречу",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "WbNb1qDz3T8",
+      "url": "https://www.youtube.com/watch?v=WbNb1qDz3T8",
+      "title": "КАК открыть бизнес и выйти на прибыль 50 МЛН рублей? / СОВЕТЫ как БЫСТРО развить дело",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "eTzT9Ukt9R0",
+      "url": "https://www.youtube.com/watch?v=eTzT9Ukt9R0",
+      "title": "Как зарабатывать МИЛЛИОНЫ и освободить время для себя? / СЕКРЕТ МИЛЛИАРДЕРА",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "ltdmsOD1eLA",
+      "url": "https://www.youtube.com/watch?v=ltdmsOD1eLA",
+      "title": "КАК зарабатывать 1 МИЛЛИОН в месяц на ОНЛАЙН-ШКОЛЕ? Бизнес тренер Валерий Морозов",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "ZK3Al5lqwrw",
+      "url": "https://www.youtube.com/watch?v=ZK3Al5lqwrw",
+      "title": "5 СКУЧНЫХ БИЗНЕСОВ на миллион чистыми в месяц",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "J2dLdlxhsII",
+      "url": "https://www.youtube.com/watch?v=J2dLdlxhsII",
+      "title": "От БЕЗДОННЫХ ДОЛГОВ к БЕЗГРАНИЧНОЙ ПРИБЫЛИ за 3 месяца! Как масштабировать бизнес ИЗ КРИЗИСА?",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "LW2Dv2hFsQI",
+      "url": "https://www.youtube.com/watch?v=LW2Dv2hFsQI",
+      "title": "Как зарабатывать на ИИ без миллиардов: модель «продавай лопаты»",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "khoavWf-CTI",
+      "url": "https://www.youtube.com/watch?v=khoavWf-CTI",
+      "title": "С 1,1 до 4 млн: как стоматология в Чите выросла втрое и открыла второй филиал",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "pHSpBRH_brs",
+      "url": "https://www.youtube.com/watch?v=pHSpBRH_brs",
+      "title": "Как заработать ЛЯМ. Шоу: ТОЧКА Б",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "tWFX7-Yr0qk",
+      "url": "https://www.youtube.com/watch?v=tWFX7-Yr0qk",
+      "title": "Зарабатывает 300 тысяч в месяц",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "p4aRIHsh1fo",
+      "url": "https://www.youtube.com/watch?v=p4aRIHsh1fo",
+      "title": "Как зарабатывать 300 тысяч в месяц",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "KzTa7iXYfJ0",
+      "url": "https://www.youtube.com/watch?v=KzTa7iXYfJ0",
+      "title": "5 причин купить франшизу \"Эксперт клининг\" прямо сейчас! Клининговый бизнес. Клининг обучение.",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "lyvViRP-SuM",
+      "url": "https://www.youtube.com/watch?v=lyvViRP-SuM",
+      "title": "С 150т.р. до МИЛЛИОНЕРА за 4 встречи",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "JGJU4d-9aXg",
+      "url": "https://www.youtube.com/watch?v=JGJU4d-9aXg",
+      "title": "Как из 1 000 000 сделать 3 000 000?🍋 #пассивныйдоход #недвижимость #субаренда",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "M8hfMLKkgAE",
+      "url": "https://www.youtube.com/watch?v=M8hfMLKkgAE",
+      "title": "где заработать миллион рублей за короткий срок",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "JIyPoD3pjkk",
+      "url": "https://www.youtube.com/watch?v=JIyPoD3pjkk",
+      "title": "Как создать пассивный доход от 100 000 вложив 1.5 млн.? Окупаемость инвестиций до 12 месяцев",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "Bf7lkhk8NWc",
+      "url": "https://www.youtube.com/watch?v=Bf7lkhk8NWc",
+      "title": "Сколько можно заработать на изготовлении садовых стульев? Мини бизнес в гараже",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "Fe0fRI3-2zA",
+      "url": "https://www.youtube.com/watch?v=Fe0fRI3-2zA",
+      "title": "Хостел преткновения: предпринимательница из Березников потеряла свободу и бизнес",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "_wPv-CtaK64",
+      "url": "https://www.youtube.com/watch?v=_wPv-CtaK64",
+      "title": "СКОЛЬКО ЗАРАБАТЫВАЕТ РИЕЛТОР?",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "6FSuUEQX1n8",
+      "url": "https://www.youtube.com/watch?v=6FSuUEQX1n8",
+      "title": "Франшиза Masloman - бизнес на отработанном масле",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "NcOKWAmESMY",
+      "url": "https://www.youtube.com/watch?v=NcOKWAmESMY",
+      "title": "Получай стабильный доход с надежным фермером из ОФ \"Наполеон\"",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "epPHLhk5vTs",
+      "url": "https://www.youtube.com/watch?v=epPHLhk5vTs",
+      "title": "Бизнес на 3д моделях! Меднение",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "NvAAMc4dw68",
+      "url": "https://www.youtube.com/watch?v=NvAAMc4dw68",
+      "title": "✅238 тысяч рублей за 1 месяц: Инвестиции для начинающих. Как начать инвестировать в акции 2022?",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    }
+  ]
+}

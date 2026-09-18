@@ -1,0 +1,142 @@
+{
+  "task_id": "OWNER_FREEDOM",
+  "request": "OWNER_FREEDOM_20260918_1331.json",
+  "query": "как собственнику выйти из операционки бизнес работает без владельца",
+  "knowledge_tag": "FREEDOM",
+  "generated_at": "2026-09-18T11:07:13.313700+00:00",
+  "videos": [],
+  "errors": [
+    {
+      "video_id": "u8-TPQhVG_M",
+      "url": "https://www.youtube.com/watch?v=u8-TPQhVG_M",
+      "title": "Когда бизнес бесит! Как выйти из операционки и успевать все?",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "TmIY553DRbo",
+      "url": "https://www.youtube.com/watch?v=TmIY553DRbo",
+      "title": "Как выйти из операционки и перестать всё контролировать",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "ObR55c9nFYA",
+      "url": "https://www.youtube.com/watch?v=ObR55c9nFYA",
+      "title": "Выход из операционки за 21 день: система, которая освобождает владельца",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "ZydTcm1peMw",
+      "url": "https://www.youtube.com/watch?v=ZydTcm1peMw",
+      "title": "Как предпринимателю выйти из операционки? Пошаговый план с Евгением Маёровым / Без прикрас",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "eCypOqrPqfY",
+      "url": "https://www.youtube.com/watch?v=eCypOqrPqfY",
+      "title": "Как выйти из операционки и не потерять бизнес",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "QJ-Sl46d0k8",
+      "url": "https://www.youtube.com/watch?v=QJ-Sl46d0k8",
+      "title": "Владелец устал тащить бизнес на себе: как выйти из операционки",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "Ey-13M3BNY0",
+      "url": "https://www.youtube.com/watch?v=Ey-13M3BNY0",
+      "title": "Как стать лидером IT-рынка, выйти из операционки и повысить прибыльность бизнеса в 100 раз? / Отзыв",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "ciG9eZHYfAM",
+      "url": "https://www.youtube.com/watch?v=ciG9eZHYfAM",
+      "title": "Бизнес занимает 1 день в неделю: пошаговый план выхода из операционки | Татьяна Кузнецова",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "ywtX4Swrz7E",
+      "url": "https://www.youtube.com/watch?v=ywtX4Swrz7E",
+      "title": "Выйти из операционки о чем на самом деле мечтают собственники",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "CeC-iBYuZ7k",
+      "url": "https://www.youtube.com/watch?v=CeC-iBYuZ7k",
+      "title": "19 СОТРУДНИКОВ ЧУТЬ НЕ УБИЛИ БИЗНЕС  Почему собственник вернулся в операционку",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "pW_PZj7qcws",
+      "url": "https://www.youtube.com/watch?v=pW_PZj7qcws",
+      "title": "Как не развалить бизнес?",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "ks6sbSQ_TX8",
+      "url": "https://www.youtube.com/watch?v=ks6sbSQ_TX8",
+      "title": "Магистраль штата Нью-Йорк — исторический киноролик Ford 1953 года",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "RuMO1gjaEm8",
+      "url": "https://www.youtube.com/watch?v=RuMO1gjaEm8",
+      "title": "🔥穿書手握劇本，開局我卻是炮灰？我用［上帝視角］撩翻禁慾總裁，反手撕碎心機女主的劇本 —— 她跪地求饒那天，總裁紅著眼把我圈進懷裡：我的女人，你也敢動？#drama #穿越#shorts #love",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "32n4z-eQ-sU",
+      "url": "https://www.youtube.com/watch?v=32n4z-eQ-sU",
+      "title": "8 ЛЕТ БЕЗ ОТПУСКА: как мы за 4 месяца освободили директора с помощью Битрикс24",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "vMiXWjtnZD8",
+      "url": "https://www.youtube.com/watch?v=vMiXWjtnZD8",
+      "title": "От хаоса к системе: мой путь развития бизнеса",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "NX4efKFwkik",
+      "url": "https://www.youtube.com/watch?v=NX4efKFwkik",
+      "title": "Бизнес без вас не работает? Пора внедрять Битрикс24 и делегировать по системе",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "y7CPoJ-kXaA",
+      "url": "https://www.youtube.com/watch?v=y7CPoJ-kXaA",
+      "title": "Как чат бот продаёт услуги юриста на автомате. Отзыв владельца юридической компании об автоматизации",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "Kcqcxk62L6M",
+      "url": "https://www.youtube.com/watch?v=Kcqcxk62L6M",
+      "title": "Школа ресторатора.  Ресторанный бизнес , где обучаться и развиваться #shorts",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "GAUeLD6W1lI",
+      "url": "https://www.youtube.com/watch?v=GAUeLD6W1lI",
+      "title": "Как продать больше… не продавая? #shortsvideo #shorts #фитнесбизнес #спортивныйбизнес",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "nosxGOFtXBA",
+      "url": "https://www.youtube.com/watch?v=nosxGOFtXBA",
+      "title": "Двухконтурная система управления пневмоподвеской на пневмоклавишах",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "1Lg2GO04IJw",
+      "url": "https://www.youtube.com/watch?v=1Lg2GO04IJw",
+      "title": "Бесплатный консалтинг. Как предприниматель и владелец бизнеса может получить консалтинговые услуги?",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "sQpEckBEEbU",
+      "url": "https://www.youtube.com/watch?v=sQpEckBEEbU",
+      "title": "Типичная шибка, которую допускают владельцы ресторанов.",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    }
+  ]
+}
