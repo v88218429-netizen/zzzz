@@ -1,5 +1,5 @@
 /**
- * WB OS / WB Public Customer Price Engine v0.1.0
+ * WB OS / WB Public Customer Price Engine v0.1.1
  *
  * Purpose:
  * - read WB nmID values from "Сводная";
@@ -15,7 +15,7 @@
  */
 
 var WB_PUBLIC_PRICE_V4 = {
-  VERSION: '0.1.0',
+  VERSION: '0.1.1',
   SUMMARY_SHEET: 'Сводная',
   SOURCE_SHEET: '_WB_PUBLIC_PRICE_V4',
   FIRST_DATA_ROW: 12,
@@ -94,6 +94,18 @@ function syncWbPublicCustomerPricesV4_(force) {
   wbPriceV4WriteShadow_(ss, data, fetched, calibration);
 
   if (!calibration.ok) {
+    wbPriceV4Diagnostics_({
+      ok: false,
+      fetched: Object.keys(fetched).length,
+      changed: 0,
+      preservedMissing: 0,
+      mode: calibration.mode,
+      calibrationRows: calibration.rows,
+      medianRelativeError: calibration.medianRelativeError,
+      goodShare: calibration.goodShare,
+      message: 'SHADOW_FAIL'
+    });
+
     throw new Error(
       'WB_PRICE_V4_SHADOW_FAIL: calibration=' +
       JSON.stringify(calibration)
@@ -158,6 +170,18 @@ function syncWbPublicCustomerPricesV4_(force) {
     WB_PUBLIC_PRICE_V4.LAST_MODE_KEY,
     calibration.mode
   );
+
+  wbPriceV4Diagnostics_({
+    ok: true,
+    fetched: Object.keys(fetched).length,
+    changed: changed,
+    preservedMissing: preservedMissing,
+    mode: calibration.mode,
+    calibrationRows: calibration.rows,
+    medianRelativeError: calibration.medianRelativeError,
+    goodShare: calibration.goodShare,
+    message: 'OK'
+  });
 
   return {
     ok: true,
@@ -601,4 +625,77 @@ function wbPriceV4Number_(value) {
   );
 
   return isFinite(n) ? n : 0;
+}
+
+
+function wbPriceV4RecordFailure_(error) {
+  wbPriceV4Diagnostics_({
+    ok: false,
+    fetched: 0,
+    changed: 0,
+    preservedMissing: 0,
+    mode: '',
+    calibrationRows: 0,
+    medianRelativeError: '',
+    goodShare: '',
+    message: String(
+      error && error.message
+        ? error.message
+        : error || 'ERROR'
+    ).substring(0, 500)
+  });
+}
+
+
+function wbPriceV4Diagnostics_(data) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('Автоматизация');
+
+  if (!sheet) {
+    return;
+  }
+
+  sheet.getRange('F27:F35').setValues([
+    ['WB public price · status'],
+    ['WB public price · version'],
+    ['WB public price · fetched'],
+    ['WB public price · changed K'],
+    ['WB public price · preserved missing'],
+    ['WB public price · mode'],
+    ['WB public price · calibration rows'],
+    ['WB public price · median error'],
+    ['WB public price · good share']
+  ]);
+
+  sheet.getRange('G27:G35').setValues([
+    [data.ok ? '✅ OK' : '❌ ERROR'],
+    [WB_PUBLIC_PRICE_V4.VERSION + ' · LIVE / MASTER'],
+    [data.fetched || 0],
+    [data.changed || 0],
+    [data.preservedMissing || 0],
+    [data.mode || '—'],
+    [data.calibrationRows || 0],
+    [
+      data.medianRelativeError === ''
+        ? ''
+        : data.medianRelativeError
+    ],
+    [
+      data.goodShare === ''
+        ? ''
+        : data.goodShare
+    ]
+  ]);
+
+  sheet.getRange('F27:G35').setWrap(true);
+
+  if (!data.ok && data.message) {
+    sheet.getRange('F36:G36').setValues([[
+      'WB public price · last error',
+      String(data.message).substring(0, 500)
+    ]]);
+    sheet.getRange('F36:G36').setWrap(true);
+  } else {
+    sheet.getRange('F36:G36').clearContent();
+  }
 }
