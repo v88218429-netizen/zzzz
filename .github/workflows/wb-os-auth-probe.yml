@@ -1,0 +1,66 @@
+name: WB OS auth capability probe
+
+on:
+  push:
+    branches: [mainggg]
+    paths:
+      - ".github/workflows/wb-os-auth-probe.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Record presence only
+        shell: bash
+        env:
+          HAS_CLASP_TOKEN: ${{ secrets.CLASP_TOKEN != '' }}
+          HAS_CLASP_CREDENTIALS: ${{ secrets.CLASP_CREDENTIALS != '' }}
+          HAS_CLASPRC_JSON: ${{ secrets.CLASPRC_JSON != '' }}
+          HAS_GOOGLE_CLASP_CREDENTIALS: ${{ secrets.GOOGLE_CLASP_CREDENTIALS != '' }}
+          HAS_GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS != '' }}
+          HAS_GOOGLE_SERVICE_ACCOUNT: ${{ secrets.GOOGLE_SERVICE_ACCOUNT != '' }}
+          HAS_GCP_SERVICE_ACCOUNT_KEY: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY != '' }}
+          HAS_GOOGLE_APPLICATION_CREDENTIALS_JSON: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON != '' }}
+          HAS_SCRIPT_ID_SECRET: ${{ secrets.SCRIPT_ID != '' }}
+          HAS_APPS_SCRIPT_ID_SECRET: ${{ secrets.APPS_SCRIPT_ID != '' }}
+          HAS_APPS_SCRIPT_SCRIPT_ID_SECRET: ${{ secrets.APPS_SCRIPT_SCRIPT_ID != '' }}
+          HAS_SCRIPT_ID_VAR: ${{ vars.SCRIPT_ID != '' }}
+          HAS_APPS_SCRIPT_ID_VAR: ${{ vars.APPS_SCRIPT_ID != '' }}
+          HAS_APPS_SCRIPT_SCRIPT_ID_VAR: ${{ vars.APPS_SCRIPT_SCRIPT_ID != '' }}
+        run: |
+          set -euo pipefail
+          mkdir -p wb_os/runtime
+          {
+            echo "CLASP_TOKEN=$HAS_CLASP_TOKEN"
+            echo "CLASP_CREDENTIALS=$HAS_CLASP_CREDENTIALS"
+            echo "CLASPRC_JSON=$HAS_CLASPRC_JSON"
+            echo "GOOGLE_CLASP_CREDENTIALS=$HAS_GOOGLE_CLASP_CREDENTIALS"
+            echo "GOOGLE_CREDENTIALS=$HAS_GOOGLE_CREDENTIALS"
+            echo "GOOGLE_SERVICE_ACCOUNT=$HAS_GOOGLE_SERVICE_ACCOUNT"
+            echo "GCP_SERVICE_ACCOUNT_KEY=$HAS_GCP_SERVICE_ACCOUNT_KEY"
+            echo "GOOGLE_APPLICATION_CREDENTIALS_JSON=$HAS_GOOGLE_APPLICATION_CREDENTIALS_JSON"
+            echo "SCRIPT_ID_SECRET=$HAS_SCRIPT_ID_SECRET"
+            echo "APPS_SCRIPT_ID_SECRET=$HAS_APPS_SCRIPT_ID_SECRET"
+            echo "APPS_SCRIPT_SCRIPT_ID_SECRET=$HAS_APPS_SCRIPT_SCRIPT_ID_SECRET"
+            echo "SCRIPT_ID_VAR=$HAS_SCRIPT_ID_VAR"
+            echo "APPS_SCRIPT_ID_VAR=$HAS_APPS_SCRIPT_ID_VAR"
+            echo "APPS_SCRIPT_SCRIPT_ID_VAR=$HAS_APPS_SCRIPT_SCRIPT_ID_VAR"
+          } > wb_os/runtime/auth-capabilities.txt
+
+      - name: Commit capability result
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "wb-os-bot"
+          git config user.email "wb-os-bot@users.noreply.github.com"
+          git add wb_os/runtime/auth-capabilities.txt
+          git diff --cached --quiet && exit 0
+          git commit -m "wb-os: record auth capability presence"
+          git push
