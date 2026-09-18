@@ -130,30 +130,6 @@ if "k2EvolutionWatchdogNotify_();" not in func:
         )
     func = func.replace(needle, watchdog, 1)
 
-new_text = before + func + after
-
-# Session-aware getMasterConfigurationState_ for already-working K2 sessions.
-old_ready = """k2Ready: Boolean(
-      String(props.getProperty('K2_USERNAME') || '').trim() &&
-      String(props.getProperty('K2_PASSWORD') || '')
-    ),"""
-new_ready = """k2Ready: Boolean(
-      (
-        String(props.getProperty('K2_USERNAME') || '').trim() &&
-        String(props.getProperty('K2_PASSWORD') || '')
-      ) || (
-        String(props.getProperty('K2_SESSION_COOKIE') || '').trim() &&
-        String(props.getProperty('K2_CLIENT_ID') || '').trim()
-      )
-    ),"""
-if old_ready in new_text:
-    new_text = new_text.replace(old_ready, new_ready, 1)
-elif (
-    "function getMasterConfigurationState_" in new_text
-    and new_ready not in new_text
-):
-    raise SystemExit("PATCH_FAIL: K2 readiness block not found")
-
 # Step 2c: add WB public customer prices v4 to the master.
 price_marker = "syncWbPublicCustomerPricesV4_(forceAll);"
 if price_marker not in func:
@@ -196,6 +172,29 @@ if price_marker not in func:
 # Rebuild after all master-function migrations.
 new_text = before + func + after
 
+
+# Step 2d: make K2 readiness session-aware after final rebuild.
+# This affects status/UI only. The master no longer blocks K2 on k2Ready;
+# getK2WarehouseItems_ itself owns session reuse / relogin behavior.
+old_ready = """k2Ready: Boolean(
+      String(props.getProperty('K2_USERNAME') || '').trim() &&
+      String(props.getProperty('K2_PASSWORD') || '')
+    ),"""
+new_ready = """k2Ready: Boolean(
+      (
+        String(props.getProperty('K2_USERNAME') || '').trim() &&
+        String(props.getProperty('K2_PASSWORD') || '')
+      ) || (
+        String(props.getProperty('K2_SESSION_COOKIE') || '').trim() &&
+        String(props.getProperty('K2_CLIENT_ID') || '').trim()
+      )
+    ),"""
+if old_ready in new_text:
+    new_text = new_text.replace(old_ready, new_ready, 1)
+# If the function already differs from this exact historical form, do not fail
+# the deploy. The hard safety property is that the master does not gate K2 on
+# getMasterConfigurationState_().k2Ready anymore.
+
 # Step 3: independently migrate history heartbeat self-healing.
 old_history = "buildAutomationStatusRow_('История остатков', props.getProperty('FF_STOCK_HISTORY_LAST_AT'), 1560)"
 new_history = "buildAutomationStatusRow_('История остатков', k2EvolutionHistoryLastAt_(props), 1560)"
@@ -217,14 +216,18 @@ missing = [marker for marker in required if marker not in new_text]
 if missing:
     raise SystemExit("PATCH_FAIL: post-condition missing: " + ", ".join(missing))
 
-# When the real project exposes getMasterConfigurationState_, it must be
-# session-aware after migration. Minimal test fixtures may omit that function.
-if (
-    "function getMasterConfigurationState_" in new_text
-    and "K2_SESSION_COOKIE" not in new_text
-):
+# Hard safety rule: the master must never block a valid saved K2 session
+# just because username/password are not persisted.
+master_start = new_text.find("function runFinalAutomationCycle_")
+master_end = new_text.find("\nfunction shouldRunByProperty_", master_start)
+master_text = (
+    new_text[master_start:master_end]
+    if master_start >= 0 and master_end > master_start
+    else ""
+)
+if "getMasterConfigurationState_().k2Ready" in master_text:
     raise SystemExit(
-        "PATCH_FAIL: session-aware readiness post-condition missing"
+        "PATCH_FAIL: legacy K2 readiness guard still present in master"
     )
 
 path.write_text(new_text, encoding="utf-8")
