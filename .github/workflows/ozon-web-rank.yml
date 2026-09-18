@@ -29,7 +29,7 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install -r ozon_web/requirements.txt
-      - name: Read Ozon web JSON search
+      - name: Read Ozon web search
         env:
           OZON_COOKIES_JSON: ${{ secrets.OZON_COOKIES_JSON }}
         run: python ozon_web/probe.py
@@ -39,7 +39,7 @@ jobs:
           git config user.name "ozon-web-bot"
           git config user.email "actions@users.noreply.github.com"
           test -f ozon_web/results/latest.json || exit 0
-          git add ozon_web/results/latest.json
+          git add ozon_web/results/latest.json ozon_web/results/latest.csv ozon_web/results/history.csv
           git diff --cached --quiet && exit 0
           git commit -m "Ozon web position snapshot [skip ci]"
           git pull --rebase origin mainggg
