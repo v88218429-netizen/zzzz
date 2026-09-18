@@ -15,6 +15,12 @@ on:
 permissions:
   contents: write
 
+# One Mac runner should work only on the newest rank scan. Older queued/running
+# scans are stale the moment a newer config/code push arrives.
+concurrency:
+  group: ozon-live-rank
+  cancel-in-progress: true
+
 jobs:
   scan:
     runs-on: ubuntu-latest
