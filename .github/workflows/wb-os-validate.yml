@@ -26,6 +26,18 @@ jobs:
             cp "$f" /tmp/check.js
             node --check /tmp/check.js
           done
+      - name: Python compile
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile wb_os/tools/*.py wb_os/tests/*.py
+
+      - name: Patcher regression tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 wb_os/tests/test_patch_live_master.py
+
       - name: Secret scan
         shell: bash
         run: |
