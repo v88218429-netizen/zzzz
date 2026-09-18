@@ -1,6 +1,6 @@
 {
-  "version": 1,
-  "updated_at": "2026-09-18T18:16:00+03:00",
+  "version": 2,
+  "updated_at": "2026-09-18T18:40:00+03:00",
   "description": "Удалённые правила WB AI Manager. Запущенный агент подхватывает изменения автоматически; изменения кабинета WB остаются запрещены.",
   "advertising": {
     "strategy_mode": "balanced",
@@ -31,7 +31,12 @@
     "buyouts_and_profit_are_lagging_outcomes": true,
     "stock_does_not_directly_set_bid": true,
     "one_advertising_controller_owns_bid_decisions": true,
-    "read_only": true
+    "read_only": true,
+    "cohort_maturity_required_for_buyout_judgement": true,
+    "never_compare_fresh_orders_to_same_calendar_week_buyouts": true,
+    "realised_profit_is_lagging_control_not_current_order_attribution": true,
+    "use_srid_lifecycle_for_maturity": true,
+    "fresh_orders_can_scale_if_unit_economics_ads_and_stock_allow": true
   },
   "group_overrides": {},
   "sku_overrides": {}
