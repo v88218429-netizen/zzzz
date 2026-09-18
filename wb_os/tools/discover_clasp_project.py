@@ -4,12 +4,11 @@ import os
 import pathlib
 import sys
 
-TARGET_SHEET = "1VQwf-QPeSjexrEculDjWt_hpuCKu7PLzLZhMFjP2VZM"
 MARKERS = [
-    TARGET_SHEET,
     "function runFinalAutomationCycle_",
     "function getK2WarehouseItems_",
     "refreshAutomationStatusSheet_",
+    "MASTER_AUTOMATION_CFG",
 ]
 
 HOME = pathlib.Path.home()
