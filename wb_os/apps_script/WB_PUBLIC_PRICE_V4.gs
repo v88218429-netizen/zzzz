@@ -1,0 +1,604 @@
+/**
+ * WB OS / WB Public Customer Price Engine v0.1.0
+ *
+ * Purpose:
+ * - read WB nmID values from "Сводная";
+ * - fetch public card data from cards/v4/detail in batches;
+ * - calibrate public customer price against already-known "Цена для клиента";
+ * - only after calibration passes, refresh customer prices in column K;
+ * - never overwrite a known customer price with zero/missing data;
+ * - write a hidden shadow/source sheet for diagnostics.
+ *
+ * Seller discounted price in column J continues to come from the official
+ * seller Prices API sheet "Цены". This module is only for the public buyer
+ * price / SPP layer.
+ */
+
+var WB_PUBLIC_PRICE_V4 = {
+  VERSION: '0.1.0',
+  SUMMARY_SHEET: 'Сводная',
+  SOURCE_SHEET: '_WB_PUBLIC_PRICE_V4',
+  FIRST_DATA_ROW: 12,
+  NMID_COL: 3,
+  SELLER_PRICE_COL: 10,
+  CLIENT_PRICE_COL: 11,
+  INTERVAL_MINUTES: 30,
+  BATCH_SIZE: 80,
+  DEST: '-1257786',
+  LAST_SUCCESS_KEY: 'WB_PUBLIC_PRICE_V4_LAST_SUCCESS_AT',
+  LAST_MODE_KEY: 'WB_PUBLIC_PRICE_V4_MODE',
+  MIN_CALIBRATION_ROWS: 10,
+  MAX_MEDIAN_REL_ERROR: 0.03,
+  MIN_GOOD_SHARE: 0.80,
+  GOOD_REL_ERROR: 0.05
+};
+
+
+function syncWbPublicCustomerPricesV4_(force) {
+  var props = PropertiesService.getScriptProperties();
+
+  if (!force && !wbPriceV4Due_(props)) {
+    return {
+      ok: true,
+      skipped: true,
+      reason: 'not_due'
+    };
+  }
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var summary = ss.getSheetByName(WB_PUBLIC_PRICE_V4.SUMMARY_SHEET);
+
+  if (!summary) {
+    throw new Error('WB_PRICE_V4: не найден лист «Сводная».');
+  }
+
+  var lastRow = summary.getLastRow();
+
+  if (lastRow < WB_PUBLIC_PRICE_V4.FIRST_DATA_ROW) {
+    return { ok: true, skipped: true, reason: 'no_rows' };
+  }
+
+  var numRows =
+    lastRow - WB_PUBLIC_PRICE_V4.FIRST_DATA_ROW + 1;
+
+  var data = summary
+    .getRange(
+      WB_PUBLIC_PRICE_V4.FIRST_DATA_ROW,
+      1,
+      numRows,
+      WB_PUBLIC_PRICE_V4.CLIENT_PRICE_COL
+    )
+    .getValues();
+
+  var ids = [];
+  var seen = {};
+
+  for (var i = 0; i < data.length; i++) {
+    var nm = String(data[i][WB_PUBLIC_PRICE_V4.NMID_COL - 1] || '').trim();
+
+    if (!/^\d+$/.test(nm) || seen[nm]) {
+      continue;
+    }
+
+    seen[nm] = true;
+    ids.push(nm);
+  }
+
+  if (!ids.length) {
+    return { ok: true, skipped: true, reason: 'no_nmids' };
+  }
+
+  var fetched = wbPriceV4FetchAll_(ids);
+  var calibration = wbPriceV4Calibrate_(data, fetched);
+
+  wbPriceV4WriteShadow_(ss, data, fetched, calibration);
+
+  if (!calibration.ok) {
+    throw new Error(
+      'WB_PRICE_V4_SHADOW_FAIL: calibration=' +
+      JSON.stringify(calibration)
+    );
+  }
+
+  var output = [];
+  var changed = 0;
+  var preservedMissing = 0;
+
+  for (var r = 0; r < data.length; r++) {
+    var row = data[r];
+    var nmId = String(
+      row[WB_PUBLIC_PRICE_V4.NMID_COL - 1] || ''
+    ).trim();
+
+    var currentClient = wbPriceV4Number_(
+      row[WB_PUBLIC_PRICE_V4.CLIENT_PRICE_COL - 1]
+    );
+
+    if (!nmId || !fetched[nmId]) {
+      output.push([currentClient || '']);
+      continue;
+    }
+
+    var candidate = wbPriceV4Candidate_(
+      fetched[nmId],
+      calibration.mode
+    );
+
+    if (!(candidate > 0)) {
+      output.push([currentClient || '']);
+      preservedMissing++;
+      continue;
+    }
+
+    output.push([candidate]);
+
+    if (
+      !currentClient ||
+      Math.abs(candidate - currentClient) > 0.009
+    ) {
+      changed++;
+    }
+  }
+
+  summary
+    .getRange(
+      WB_PUBLIC_PRICE_V4.FIRST_DATA_ROW,
+      WB_PUBLIC_PRICE_V4.CLIENT_PRICE_COL,
+      output.length,
+      1
+    )
+    .setValues(output);
+
+  props.setProperty(
+    WB_PUBLIC_PRICE_V4.LAST_SUCCESS_KEY,
+    new Date().toISOString()
+  );
+
+  props.setProperty(
+    WB_PUBLIC_PRICE_V4.LAST_MODE_KEY,
+    calibration.mode
+  );
+
+  return {
+    ok: true,
+    skipped: false,
+    fetched: Object.keys(fetched).length,
+    changed: changed,
+    preservedMissing: preservedMissing,
+    mode: calibration.mode,
+    calibrationRows: calibration.rows,
+    medianRelativeError: calibration.medianRelativeError,
+    goodShare: calibration.goodShare
+  };
+}
+
+
+function forceSyncWbPublicCustomerPricesV4() {
+  var result = syncWbPublicCustomerPricesV4_(true);
+
+  SpreadsheetApp
+    .getActiveSpreadsheet()
+    .toast(
+      'WB public prices v4: ' + JSON.stringify(result),
+      'WB OS',
+      10
+    );
+
+  return result;
+}
+
+
+function wbPriceV4Due_(props) {
+  var raw = String(
+    props.getProperty(WB_PUBLIC_PRICE_V4.LAST_SUCCESS_KEY) || ''
+  ).trim();
+
+  if (!raw) {
+    return true;
+  }
+
+  var date = new Date(raw);
+
+  if (isNaN(date.getTime())) {
+    return true;
+  }
+
+  return (
+    (Date.now() - date.getTime()) / 60000 >=
+    WB_PUBLIC_PRICE_V4.INTERVAL_MINUTES
+  );
+}
+
+
+function wbPriceV4FetchAll_(ids) {
+  var requests = [];
+  var batches = [];
+
+  for (
+    var i = 0;
+    i < ids.length;
+    i += WB_PUBLIC_PRICE_V4.BATCH_SIZE
+  ) {
+    var batch = ids.slice(
+      i,
+      i + WB_PUBLIC_PRICE_V4.BATCH_SIZE
+    );
+
+    batches.push(batch);
+
+    requests.push({
+      url:
+        'https://card.wb.ru/cards/v4/detail' +
+        '?appType=1' +
+        '&curr=rub' +
+        '&dest=' + encodeURIComponent(WB_PUBLIC_PRICE_V4.DEST) +
+        '&spp=30' +
+        '&lang=ru' +
+        '&nm=' + encodeURIComponent(batch.join(';')),
+      method: 'get',
+      muteHttpExceptions: true,
+      followRedirects: true,
+      headers: {
+        Accept: 'application/json',
+        'User-Agent':
+          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) ' +
+          'AppleWebKit/537.36 Chrome/153 Safari/537.36'
+      }
+    });
+  }
+
+  var responses = UrlFetchApp.fetchAll(requests);
+  var out = {};
+
+  for (var j = 0; j < responses.length; j++) {
+    var response = responses[j];
+    var code = response.getResponseCode();
+
+    if (code !== 200) {
+      throw new Error(
+        'WB_PRICE_V4_HTTP_' + code +
+        ': batch=' + j +
+        '; body=' +
+        response.getContentText().substring(0, 300)
+      );
+    }
+
+    var json;
+
+    try {
+      json = JSON.parse(response.getContentText());
+    } catch (error) {
+      throw new Error(
+        'WB_PRICE_V4_BAD_JSON: batch=' + j
+      );
+    }
+
+    var products =
+      (json && json.products) ||
+      (json && json.data && json.data.products) ||
+      [];
+
+    if (!Array.isArray(products)) {
+      throw new Error(
+        'WB_PRICE_V4_BAD_SHAPE: batch=' + j
+      );
+    }
+
+    for (var p = 0; p < products.length; p++) {
+      var product = products[p] || {};
+      var id = String(product.id || product.nmId || '').trim();
+
+      if (!id) {
+        continue;
+      }
+
+      var price = wbPriceV4ExtractPrice_(product);
+
+      out[id] = {
+        id: id,
+        name: String(product.name || ''),
+        basic: price.basic,
+        product: price.product,
+        logistics: price.logistics,
+        totalField: price.totalField,
+        quantity:
+          Number(product.totalQuantity || 0) || 0
+      };
+    }
+  }
+
+  return out;
+}
+
+
+function wbPriceV4ExtractPrice_(product) {
+  var sizes = Array.isArray(product.sizes)
+    ? product.sizes
+    : [];
+
+  for (var i = 0; i < sizes.length; i++) {
+    var p = sizes[i] && sizes[i].price;
+
+    if (!p) {
+      continue;
+    }
+
+    var productPrice = wbPriceV4Kopecks_(p.product);
+    var basic = wbPriceV4Kopecks_(p.basic);
+    var logistics = wbPriceV4Kopecks_(p.logistics);
+    var totalField = wbPriceV4Kopecks_(p.total);
+
+    if (
+      productPrice > 0 ||
+      totalField > 0 ||
+      basic > 0
+    ) {
+      return {
+        product: productPrice,
+        basic: basic,
+        logistics: logistics,
+        totalField: totalField
+      };
+    }
+  }
+
+  return {
+    product: 0,
+    basic: 0,
+    logistics: 0,
+    totalField: 0
+  };
+}
+
+
+function wbPriceV4Kopecks_(value) {
+  var n = Number(value);
+
+  if (!isFinite(n) || n <= 0) {
+    return 0;
+  }
+
+  return n / 100;
+}
+
+
+function wbPriceV4Candidate_(item, mode) {
+  if (!item) {
+    return 0;
+  }
+
+  if (mode === 'total_field') {
+    return item.totalField || 0;
+  }
+
+  if (mode === 'product_plus_logistics') {
+    return (item.product || 0) + (item.logistics || 0);
+  }
+
+  return item.product || 0;
+}
+
+
+function wbPriceV4Calibrate_(summaryData, fetched) {
+  var modes = [
+    'product',
+    'product_plus_logistics',
+    'total_field'
+  ];
+
+  var scored = [];
+
+  for (var m = 0; m < modes.length; m++) {
+    var mode = modes[m];
+    var errors = [];
+    var good = 0;
+
+    for (var i = 0; i < summaryData.length; i++) {
+      var row = summaryData[i];
+
+      var nmId = String(
+        row[WB_PUBLIC_PRICE_V4.NMID_COL - 1] || ''
+      ).trim();
+
+      var known = wbPriceV4Number_(
+        row[WB_PUBLIC_PRICE_V4.CLIENT_PRICE_COL - 1]
+      );
+
+      if (!(known > 0) || !fetched[nmId]) {
+        continue;
+      }
+
+      var candidate = wbPriceV4Candidate_(
+        fetched[nmId],
+        mode
+      );
+
+      if (!(candidate > 0)) {
+        continue;
+      }
+
+      var rel = Math.abs(candidate - known) / known;
+      errors.push(rel);
+
+      if (rel <= WB_PUBLIC_PRICE_V4.GOOD_REL_ERROR) {
+        good++;
+      }
+    }
+
+    errors.sort(function(a, b) {
+      return a - b;
+    });
+
+    var median = errors.length
+      ? errors[Math.floor(errors.length / 2)]
+      : 999;
+
+    var goodShare = errors.length
+      ? good / errors.length
+      : 0;
+
+    scored.push({
+      mode: mode,
+      rows: errors.length,
+      medianRelativeError: median,
+      goodShare: goodShare
+    });
+  }
+
+  scored.sort(function(a, b) {
+    if (a.rows !== b.rows) {
+      return b.rows - a.rows;
+    }
+
+    if (
+      a.medianRelativeError !==
+      b.medianRelativeError
+    ) {
+      return (
+        a.medianRelativeError -
+        b.medianRelativeError
+      );
+    }
+
+    return b.goodShare - a.goodShare;
+  });
+
+  // Prefer the lowest error among modes with the same useful sample size.
+  var best = scored[0];
+
+  for (var i = 1; i < scored.length; i++) {
+    if (
+      scored[i].rows >= WB_PUBLIC_PRICE_V4.MIN_CALIBRATION_ROWS &&
+      scored[i].medianRelativeError <
+        best.medianRelativeError
+    ) {
+      best = scored[i];
+    }
+  }
+
+  return {
+    ok:
+      best.rows >=
+        WB_PUBLIC_PRICE_V4.MIN_CALIBRATION_ROWS &&
+      best.medianRelativeError <=
+        WB_PUBLIC_PRICE_V4.MAX_MEDIAN_REL_ERROR &&
+      best.goodShare >=
+        WB_PUBLIC_PRICE_V4.MIN_GOOD_SHARE,
+    mode: best.mode,
+    rows: best.rows,
+    medianRelativeError: best.medianRelativeError,
+    goodShare: best.goodShare,
+    allModes: scored
+  };
+}
+
+
+function wbPriceV4WriteShadow_(
+  ss,
+  summaryData,
+  fetched,
+  calibration
+) {
+  var sheet = ss.getSheetByName(
+    WB_PUBLIC_PRICE_V4.SOURCE_SHEET
+  );
+
+  if (!sheet) {
+    sheet = ss.insertSheet(
+      WB_PUBLIC_PRICE_V4.SOURCE_SHEET
+    );
+    sheet.hideSheet();
+  }
+
+  var rows = [[
+    'timestamp',
+    'nmID',
+    'name',
+    'seller_price_J',
+    'existing_client_K',
+    'v4_product',
+    'v4_logistics',
+    'v4_total_field',
+    'selected_mode',
+    'selected_client_price',
+    'calibration_ok'
+  ]];
+
+  var now = new Date();
+
+  for (var i = 0; i < summaryData.length; i++) {
+    var row = summaryData[i];
+
+    var nmId = String(
+      row[WB_PUBLIC_PRICE_V4.NMID_COL - 1] || ''
+    ).trim();
+
+    if (!nmId || !fetched[nmId]) {
+      continue;
+    }
+
+    var item = fetched[nmId];
+
+    rows.push([
+      now,
+      nmId,
+      item.name,
+      wbPriceV4Number_(
+        row[WB_PUBLIC_PRICE_V4.SELLER_PRICE_COL - 1]
+      ),
+      wbPriceV4Number_(
+        row[WB_PUBLIC_PRICE_V4.CLIENT_PRICE_COL - 1]
+      ),
+      item.product,
+      item.logistics,
+      item.totalField,
+      calibration.mode,
+      wbPriceV4Candidate_(item, calibration.mode),
+      calibration.ok ? 'YES' : 'NO'
+    ]);
+  }
+
+  sheet.clearContents();
+
+  if (sheet.getMaxRows() < rows.length) {
+    sheet.insertRowsAfter(
+      sheet.getMaxRows(),
+      rows.length - sheet.getMaxRows()
+    );
+  }
+
+  if (sheet.getMaxColumns() < rows[0].length) {
+    sheet.insertColumnsAfter(
+      sheet.getMaxColumns(),
+      rows[0].length - sheet.getMaxColumns()
+    );
+  }
+
+  sheet
+    .getRange(1, 1, rows.length, rows[0].length)
+    .setValues(rows);
+
+  sheet
+    .getRange(2, 1, Math.max(1, rows.length - 1), 1)
+    .setNumberFormat('dd.MM.yyyy HH:mm:ss');
+}
+
+
+function wbPriceV4Number_(value) {
+  if (
+    value === null ||
+    value === undefined ||
+    value === ''
+  ) {
+    return 0;
+  }
+
+  var n = Number(
+    String(value)
+      .replace(/\u00A0/g, '')
+      .replace(/\s/g, '')
+      .replace(',', '.')
+  );
+
+  return isFinite(n) ? n : 0;
+}
