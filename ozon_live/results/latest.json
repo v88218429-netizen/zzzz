@@ -1,0 +1,44 @@
+{
+  "generated_at": "2026-09-18T11:18:22.197751+00:00",
+  "results": [
+    {
+      "captured_at": "2026-09-18T11:17:43.903670+00:00",
+      "city": "Москва",
+      "article": "Лоток_К_18шт_6",
+      "sku": "4832817032",
+      "query": "органайзер для саморезов",
+      "max_items": 300,
+      "status": "city_error",
+      "position": null,
+      "checked": 0,
+      "page": null,
+      "city_status": "location_control_not_found"
+    },
+    {
+      "captured_at": "2026-09-18T11:17:57.380734+00:00",
+      "city": "Ростов-на-Дону",
+      "article": "Лоток_К_18шт_6",
+      "sku": "4832817032",
+      "query": "органайзер для саморезов",
+      "max_items": 300,
+      "status": "city_error",
+      "position": null,
+      "checked": 0,
+      "page": null,
+      "city_status": "location_control_not_found"
+    },
+    {
+      "captured_at": "2026-09-18T11:18:13.168997+00:00",
+      "city": "Краснодар",
+      "article": "Лоток_К_18шт_6",
+      "sku": "4832817032",
+      "query": "органайзер для саморезов",
+      "max_items": 300,
+      "status": "city_error",
+      "position": null,
+      "checked": 0,
+      "page": null,
+      "city_status": "location_control_not_found"
+    }
+  ]
+}
