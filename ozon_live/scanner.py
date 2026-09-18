@@ -82,7 +82,29 @@ def set_city(driver, city):
             pass
 
     if not opened:
-        return {"ok":False,"reason":"location_control_not_found"}
+        diag_dir=Path("ozon_live/debug"); diag_dir.mkdir(parents=True,exist_ok=True)
+        safe=re.sub(r"[^0-9A-Za-zА-Яа-я_-]+","_",city)
+        try: driver.save_screenshot(str(diag_dir/f"{safe}.png"))
+        except Exception: pass
+        try:
+            body=(driver.find_element(By.TAG_NAME,"body").text or "")[:12000]
+            (diag_dir/f"{safe}_body.txt").write_text(body,encoding="utf-8")
+        except Exception: pass
+        try:
+            candidates=[]
+            for el in driver.find_elements(By.XPATH,"//button | //a | //*[@role='button']"):
+                try:
+                    if el.is_displayed():
+                        txt=(el.text or "").strip()
+                        if txt: candidates.append({"tag":el.tag_name,"text":txt[:300],"aria":el.get_attribute("aria-label") or "","testid":el.get_attribute("data-testid") or "","widget":el.get_attribute("data-widget") or ""})
+                except Exception: pass
+            (diag_dir/f"{safe}_clickables.json").write_text(json.dumps(candidates[:300],ensure_ascii=False,indent=2),encoding="utf-8")
+        except Exception: pass
+        try:
+            html=driver.page_source
+            (diag_dir/f"{safe}_page.html").write_text(html[:400000],encoding="utf-8")
+        except Exception: pass
+        return {"ok":False,"reason":"location_control_not_found","debug_prefix":str(diag_dir/f"{safe}")}
 
     inputs=[]
     for sel in ["input[placeholder*='город' i]","input[placeholder*='адрес' i]","input[placeholder*='населен' i]","input"]:
