@@ -14,7 +14,7 @@
  */
 
 var K2_EV = {
-  VERSION: '0.1.1',
+  VERSION: '0.1.2',
   AUTOMATION_SHEET: 'Автоматизация',
   LAST_HASH_KEY: 'K2_EV_LAST_SNAPSHOT_HASH',
   LAST_COUNT_KEY: 'K2_EV_LAST_COUNT',
@@ -494,4 +494,59 @@ function k2EvolutionEscapeHtml_(value) {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
+}
+
+
+/**
+ * Self-healing source for the daily stock-history heartbeat.
+ * Older deployments can have real rows in "История остатков ФФ" but miss
+ * FF_STOCK_HISTORY_LAST_AT in Script Properties. In that case we recover
+ * the latest K2 snapshot timestamp from the sheet and repair the property.
+ */
+function k2EvolutionHistoryLastAt_(props) {
+  props = props || PropertiesService.getScriptProperties();
+
+  var stored = String(
+    props.getProperty('FF_STOCK_HISTORY_LAST_AT') || ''
+  ).trim();
+
+  if (stored) {
+    var storedDate = new Date(stored);
+    if (!isNaN(storedDate.getTime())) {
+      return stored;
+    }
+  }
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('История остатков ФФ');
+
+  if (!sheet || sheet.getLastRow() < 2) {
+    return '';
+  }
+
+  var lastRow = sheet.getLastRow();
+  var scanRows = Math.min(5000, lastRow - 1);
+  var startRow = lastRow - scanRows + 1;
+
+  // B = snapshot time, C = fulfilment/source.
+  var values = sheet
+    .getRange(startRow, 2, scanRows, 2)
+    .getValues();
+
+  for (var i = values.length - 1; i >= 0; i--) {
+    if (String(values[i][1] || '').trim() !== 'K2') {
+      continue;
+    }
+
+    var raw = values[i][0];
+    var date = raw instanceof Date ? raw : new Date(raw);
+
+    if (!isNaN(date.getTime())) {
+      var iso = date.toISOString();
+      props.setProperty('FF_STOCK_HISTORY_LAST_AT', iso);
+      return iso;
+    }
+  }
+
+  return '';
 }
