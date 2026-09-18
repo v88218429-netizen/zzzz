@@ -1,33 +1,27 @@
 /**
- * WB OS / K2 Evolution Engine v0.1.0
+ * WB OS / K2 Evolution Engine v0.1.1
  *
- * This module is intentionally small and reuses the existing K2 baseline:
- *   getK2WarehouseItems_()
- *   writeK2StocksToSheet_()
- *   checkStockNeedsAndNotifyTelegram()
- *   notifyK2ApiError_()
- *   saveK2SyncSuccess_()
- *   sendTelegramMessage_()
+ * Integrated mode: NO separate time trigger.
+ * The existing finalAutomationTick master remains the only clock.
  *
- * Goal: keep the K2 sync autonomous while dramatically reducing needless
- * Google Sheets work. When the K2 snapshot did not change, the engine only
- * refreshes a compact heartbeat and health block. Heavy sheet rewrites and
- * downstream recalculation happen only on a real data change.
+ * Contract:
+ *   master -> k2EvolutionFetchAndApply_()
+ *          -> refreshAutomationStatusSheet_()
+ *          -> k2EvolutionWatchdogNotify_()
+ *
+ * Heavy Google Sheet writes happen only when the K2 business-state snapshot
+ * actually changes. Every successful API fetch still refreshes K2_LAST_SUCCESS_AT.
  */
 
 var K2_EV = {
-  VERSION: '0.1.0',
-  TRIGGER_FN: 'k2EvolutionTick',
-  INTERVAL_MINUTES: 10,
+  VERSION: '0.1.1',
   AUTOMATION_SHEET: 'Автоматизация',
-  STOCK_SHEET: 'Остатки к2',
   LAST_HASH_KEY: 'K2_EV_LAST_SNAPSHOT_HASH',
   LAST_COUNT_KEY: 'K2_EV_LAST_COUNT',
   LAST_WATCHDOG_FP_KEY: 'K2_EV_LAST_WATCHDOG_FP',
   LAST_WATCHDOG_STATUS_KEY: 'K2_EV_LAST_WATCHDOG_STATUS',
   LAST_RUN_AT_KEY: 'K2_EV_LAST_RUN_AT',
   LAST_CHANGED_AT_KEY: 'K2_EV_LAST_CHANGED_AT',
-  UI_READY_KEY: 'K2_EV_UI_READY',
   MAX_DROP_RATIO: 0.20,
   MIN_DROP_ABS: 5,
   WATCHDOG_MESSAGE_LIMIT: 3600
@@ -35,158 +29,101 @@ var K2_EV = {
 
 
 /**
- * One-time migration.
- * Replaces the old K2 periodic trigger with the evolution engine.
- * It does not clear notification state or credentials.
- */
-function setupK2Evolution() {
-  var triggers = ScriptApp.getProjectTriggers();
-
-  for (var i = 0; i < triggers.length; i++) {
-    var fn = triggers[i].getHandlerFunction();
-
-    if (
-      fn === 'syncK2StocksAndNotify' ||
-      fn === K2_EV.TRIGGER_FN ||
-      fn === 'processK2StockEmails'
-    ) {
-      ScriptApp.deleteTrigger(triggers[i]);
-    }
-  }
-
-  ScriptApp
-    .newTrigger(K2_EV.TRIGGER_FN)
-    .timeBased()
-    .everyMinutes(K2_EV.INTERVAL_MINUTES)
-    .create();
-
-  ensureK2EvolutionUi_();
-  k2EvolutionTick();
-
-  SpreadsheetApp
-    .getActiveSpreadsheet()
-    .toast(
-      'K2 Evolution v' + K2_EV.VERSION +
-      ': проверка каждые ' + K2_EV.INTERVAL_MINUTES + ' минут.',
-      'WB OS',
-      8
-    );
-}
-
-
-/**
- * Main periodic loop.
+ * Integrated K2 fetch/apply step for the existing master cycle.
  *
- * Cheap path:
- *   K2 API -> normalize -> hash -> heartbeat -> watchdog -> stop.
+ * Returns:
+ *   { itemCount, changed, hash, runtimeMs }
  *
- * Heavy path only when snapshot changed:
- *   K2 API -> validation -> sheet update -> formulas -> needs -> watchdog.
+ * Throws on empty/duplicate/suspiciously truncated snapshots.
+ * On those failures the trusted live stock sheet is NOT overwritten.
  */
-function k2EvolutionTick() {
+function k2EvolutionFetchAndApply_() {
   var startedMs = Date.now();
-  var lock = LockService.getScriptLock();
+  var props = PropertiesService.getScriptProperties();
 
-  if (!lock.tryLock(5000)) {
-    return;
+  var items = getK2WarehouseItems_();
+
+  if (!items || !items.length) {
+    throw new Error(
+      'K2_EV_EMPTY: К2 вернул пустой список. ' +
+      'Доверенные остатки оставлены без изменений.'
+    );
   }
 
-  var props = PropertiesService.getScriptProperties();
-  var changed = false;
-  var snapshotHash = '';
-  var itemCount = 0;
+  var normalized = k2EvolutionNormalizeItems_(items);
+  var validation = k2EvolutionValidateSnapshot_(normalized, props);
 
-  try {
-    ensureK2EvolutionUi_();
+  if (!validation.ok) {
+    throw new Error(validation.message);
+  }
 
-    var items = getK2WarehouseItems_();
+  var itemCount = normalized.length;
+  var snapshotHash = k2EvolutionSnapshotHash_(normalized);
+  var previousHash = props.getProperty(K2_EV.LAST_HASH_KEY) || '';
+  var changed = snapshotHash !== previousHash;
 
-    if (!items || !items.length) {
-      throw new Error(
-        'K2_EV_EMPTY: К2 вернул пустой список. ' +
-        'Старые корректные данные оставлены без изменений.'
-      );
-    }
+  if (changed) {
+    writeK2StocksToSheet_(items);
+    SpreadsheetApp.flush();
 
-    var normalized = k2EvolutionNormalizeItems_(items);
-    var validation = k2EvolutionValidateSnapshot_(normalized, props);
-
-    if (!validation.ok) {
-      throw new Error(validation.message);
-    }
-
-    itemCount = normalized.length;
-    snapshotHash = k2EvolutionSnapshotHash_(normalized);
-
-    var previousHash =
-      props.getProperty(K2_EV.LAST_HASH_KEY) || '';
-
-    changed = snapshotHash !== previousHash;
-
-    if (changed) {
-      writeK2StocksToSheet_(items);
-      SpreadsheetApp.flush();
-
-      // A short recalculation window. The old baseline waited 4 seconds on
-      // every run. We only wait after a real stock change.
-      Utilities.sleep(1200);
-
-      checkStockNeedsAndNotifyTelegram();
-
-      props.setProperty(
-        K2_EV.LAST_HASH_KEY,
-        snapshotHash
-      );
-
-      props.setProperty(
-        K2_EV.LAST_CHANGED_AT_KEY,
-        new Date().toISOString()
-      );
-    }
-
+    props.setProperty(K2_EV.LAST_HASH_KEY, snapshotHash);
     props.setProperty(
-      K2_EV.LAST_COUNT_KEY,
-      String(itemCount)
-    );
-
-    props.setProperty(
-      K2_EV.LAST_RUN_AT_KEY,
+      K2_EV.LAST_CHANGED_AT_KEY,
       new Date().toISOString()
     );
-
-    k2EvolutionHeartbeat_(true, changed, itemCount, snapshotHash, startedMs);
-
-    // Watchdog is deliberately checked on every successful fetch. It is
-    // cheap and catches freshness/status transitions even when stock itself
-    // did not change.
-    SpreadsheetApp.flush();
-    k2EvolutionWatchdogNotify_();
-
-    saveK2SyncSuccess_(itemCount);
-
-  } catch (error) {
-    k2EvolutionHeartbeat_(false, changed, itemCount, snapshotHash, startedMs, error);
-
-    try {
-      notifyK2ApiError_(error);
-    } catch (notifyError) {
-      Logger.log(
-        'K2 Evolution: не удалось отправить ошибку: ' +
-        notifyError.message
-      );
-    }
-
-    throw error;
-
-  } finally {
-    lock.releaseLock();
   }
+
+  // A successful source read is a successful sync even when business state
+  // did not change. This is what keeps freshness/watchdog semantics correct.
+  saveK2SyncSuccess_(itemCount);
+
+  props.setProperty(K2_EV.LAST_COUNT_KEY, String(itemCount));
+  props.setProperty(K2_EV.LAST_RUN_AT_KEY, new Date().toISOString());
+
+  var runtimeMs = Math.max(0, Date.now() - startedMs);
+
+  k2EvolutionDiagnostics_({
+    ok: true,
+    changed: changed,
+    itemCount: itemCount,
+    snapshotHash: snapshotHash,
+    runtimeMs: runtimeMs,
+    message: changed
+      ? 'OK · snapshot changed · sheet updated'
+      : 'OK · no business-state change · heavy write skipped'
+  });
+
+  return {
+    itemCount: itemCount,
+    changed: changed,
+    hash: snapshotHash,
+    runtimeMs: runtimeMs
+  };
 }
 
 
 /**
- * Normalize only fields that define business state.
- * Sorting makes the snapshot hash independent of API row order.
+ * Fail-closed diagnostics for a caught K2 error.
+ * Call from the master catch before/alongside notifyK2ApiError_().
+ */
+function k2EvolutionRecordFailure_(error) {
+  k2EvolutionDiagnostics_({
+    ok: false,
+    changed: false,
+    itemCount: 0,
+    snapshotHash: '',
+    runtimeMs: 0,
+    message: String(
+      error && error.message ? error.message : error || 'ERROR'
+    ).substring(0, 500)
+  });
+}
+
+
+/**
+ * Normalize business state only.
+ * updatedAt is intentionally excluded from the hash: a timestamp-only touch
+ * must not force a full sheet rewrite.
  */
 function k2EvolutionNormalizeItems_(items) {
   var out = [];
@@ -195,9 +132,7 @@ function k2EvolutionNormalizeItems_(items) {
     var item = items[i] || {};
 
     var sku = String(
-      item.sku === null || item.sku === undefined
-        ? ''
-        : item.sku
+      item.sku === null || item.sku === undefined ? '' : item.sku
     ).trim();
 
     var name = String(item.name || '').trim();
@@ -211,8 +146,7 @@ function k2EvolutionNormalizeItems_(items) {
       name: name,
       stock: k2EvolutionNumber_(item.stock),
       reserved: k2EvolutionNumber_(item.reserved),
-      minStock: k2EvolutionNumber_(item.minStock),
-      updatedAt: String(item.updatedAt || '')
+      minStock: k2EvolutionNumber_(item.minStock)
     });
   }
 
@@ -229,9 +163,6 @@ function k2EvolutionNormalizeItems_(items) {
 }
 
 
-/**
- * Fail closed on structural anomalies before overwriting the live stock tab.
- */
 function k2EvolutionValidateSnapshot_(normalized, props) {
   if (!normalized.length) {
     return {
@@ -304,8 +235,7 @@ function k2EvolutionSnapshotHash_(normalized) {
       x.name,
       x.stock,
       x.reserved,
-      x.minStock,
-      x.updatedAt
+      x.minStock
     ].join('|'));
   }
 
@@ -322,63 +252,9 @@ function k2EvolutionSnapshotHash_(normalized) {
 
 
 /**
- * Compact heartbeat. One 2x/4x write replaces many cell operations.
+ * One compact diagnostics write per actual K2 API fetch.
  */
-function k2EvolutionHeartbeat_(
-  ok,
-  changed,
-  itemCount,
-  snapshotHash,
-  startedMs,
-  error
-) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = ss.getSheetByName(K2_EV.AUTOMATION_SHEET);
-
-  if (!sheet) {
-    return;
-  }
-
-  var now = new Date();
-  var durationMs = Math.max(0, Date.now() - startedMs);
-
-  // Existing process heartbeat row for K2.
-  sheet.getRange('B2:D2').setValues([[
-    now,
-    '0 мин.',
-    ok ? '✅ работает' : '🔴 ошибка'
-  ]]);
-
-  // Evolution diagnostics.
-  sheet.getRange('G20:G25').setValues([
-    [durationMs],
-    [changed ? 'ДА' : 'НЕТ'],
-    [itemCount || 0],
-    [snapshotHash ? snapshotHash.substring(0, 16) : ''],
-    [K2_EV.VERSION],
-    [ok ? 'OK' : String(
-      error && error.message
-        ? error.message
-        : error || 'ERROR'
-    ).substring(0, 500)]
-  ]);
-
-  sheet.getRange('B2').setNumberFormat(
-    'dd.MM.yyyy HH:mm:ss'
-  );
-}
-
-
-/**
- * Adds labels once. Safe to call repeatedly.
- */
-function ensureK2EvolutionUi_() {
-  var props = PropertiesService.getScriptProperties();
-
-  if (props.getProperty(K2_EV.UI_READY_KEY) === '1') {
-    return;
-  }
-
+function k2EvolutionDiagnostics_(data) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getSheetByName(K2_EV.AUTOMATION_SHEET);
 
@@ -395,17 +271,26 @@ function ensureK2EvolutionUi_() {
     ['K2 engine · last result']
   ]);
 
-  sheet.getRange('F20:G25').setWrap(true);
+  sheet.getRange('G20:G25').setValues([
+    [data.runtimeMs || 0],
+    [data.changed ? 'ДА' : 'НЕТ'],
+    [data.itemCount || 0],
+    [data.snapshotHash
+      ? String(data.snapshotHash).substring(0, 16)
+      : ''],
+    [K2_EV.VERSION + ' · LIVE / MASTER'],
+    [data.message || (data.ok ? 'OK' : 'ERROR')]
+  ]);
 
-  props.setProperty(K2_EV.UI_READY_KEY, '1');
+  sheet.getRange('F20:G25').setWrap(true);
 }
 
 
 /**
- * Telegram state machine for the watchdog block already present in
- * Автоматизация!G9:G14.
+ * Telegram watchdog state machine.
  *
- * It sends only when the effective state changes.
+ * It consumes the visible watchdog block already present in G9:G14.
+ * Call AFTER refreshAutomationStatusSheet_(), so B2/G6 freshness is current.
  */
 function k2EvolutionWatchdogNotify_() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -432,10 +317,7 @@ function k2EvolutionWatchdogNotify_() {
   ].join('|');
 
   var props = PropertiesService.getScriptProperties();
-
-  var previous =
-    props.getProperty(K2_EV.LAST_WATCHDOG_FP_KEY) || '';
-
+  var previous = props.getProperty(K2_EV.LAST_WATCHDOG_FP_KEY) || '';
   var previousStatus =
     props.getProperty(K2_EV.LAST_WATCHDOG_STATUS_KEY) || '';
 
@@ -450,11 +332,9 @@ function k2EvolutionWatchdogNotify_() {
     previousStatus.indexOf('❌') === 0 &&
     status.indexOf('✅') === 0
   ) {
-    message +=
-      '✅ <b>K2 watchdog восстановлен</b>\n\n';
+    message += '✅ <b>K2 watchdog восстановлен</b>\n\n';
   } else {
-    message +=
-      '🚨 <b>K2 watchdog: состояние изменилось</b>\n\n';
+    message += '🚨 <b>K2 watchdog: состояние изменилось</b>\n\n';
   }
 
   message +=
@@ -512,17 +392,9 @@ function k2EvolutionWatchdogNotify_() {
 
   sendTelegramMessage_(message);
 
-  props.setProperty(
-    K2_EV.LAST_WATCHDOG_FP_KEY,
-    fingerprint
-  );
+  props.setProperty(K2_EV.LAST_WATCHDOG_FP_KEY, fingerprint);
+  props.setProperty(K2_EV.LAST_WATCHDOG_STATUS_KEY, status);
 
-  props.setProperty(
-    K2_EV.LAST_WATCHDOG_STATUS_KEY,
-    status
-  );
-
-  // Keep the visible block synchronized with the actual notification state.
   sheet.getRange('G17:G18').setValues([
     [fingerprint],
     [new Date()]
@@ -534,15 +406,55 @@ function k2EvolutionWatchdogNotify_() {
 }
 
 
-/**
- * Optional manual test without touching K2 stock values.
- */
 function testK2EvolutionWatchdogTelegram() {
   PropertiesService
     .getScriptProperties()
     .deleteProperty(K2_EV.LAST_WATCHDOG_FP_KEY);
 
   k2EvolutionWatchdogNotify_();
+}
+
+
+/**
+ * Migration helper. It deliberately creates NO K2 trigger.
+ * It removes legacy standalone K2 triggers and preserves the master clock.
+ */
+function setupK2EvolutionIntegrated() {
+  var triggers = ScriptApp.getProjectTriggers();
+  var removed = 0;
+
+  for (var i = 0; i < triggers.length; i++) {
+    var fn = triggers[i].getHandlerFunction();
+
+    if (
+      fn === 'syncK2StocksAndNotify' ||
+      fn === 'processK2StockEmails' ||
+      fn === 'k2EvolutionTick'
+    ) {
+      ScriptApp.deleteTrigger(triggers[i]);
+      removed++;
+    }
+  }
+
+  if (typeof ensureFinalAutomationTrigger_ === 'function') {
+    ensureFinalAutomationTrigger_();
+  }
+
+  SpreadsheetApp
+    .getActiveSpreadsheet()
+    .toast(
+      'K2 Evolution ' + K2_EV.VERSION +
+      ': standalone K2 triggers=' + removed +
+      '; используется master.',
+      'WB OS',
+      8
+    );
+
+  return {
+    ok: true,
+    version: K2_EV.VERSION,
+    removedStandaloneTriggers: removed
+  };
 }
 
 
