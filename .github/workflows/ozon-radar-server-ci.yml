@@ -41,6 +41,30 @@ jobs:
               print("LIVE_PROBE_ERROR", type(e).__name__, str(e))
           PY
 
+      - name: Live Ozon Chrome probe
+        shell: bash
+        run: |
+          set +e
+          google-chrome --version || true
+          URL='https://www.ozon.ru/search/?text=%D0%BB%D0%BE%D0%BF%D0%B0%D1%82%D0%B0%20%D1%81%D0%B0%D0%B4%D0%BE%D0%B2%D0%B0%D1%8F&from_global=true'
+          timeout 45s google-chrome \
+            --headless=new \
+            --no-sandbox \
+            --disable-dev-shm-usage \
+            --disable-blink-features=AutomationControlled \
+            --lang=ru-RU \
+            --user-agent='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36' \
+            --dump-dom "$URL" > /tmp/ozon-chrome.html 2>/tmp/ozon-chrome.err
+          RC=$?
+          echo "CHROME_RC=$RC"
+          echo "PRODUCT_LINKS=$(grep -o '/product/' /tmp/ozon-chrome.html | wc -l | tr -d ' ')"
+          echo "BLOCK_MARKERS=$(grep -Eio 'доступ ограничен|access denied|captcha|похоже, нет соединения' /tmp/ozon-chrome.html | head -10 | tr '\n' ' ' || true)"
+          echo '--- body sample ---'
+          sed -n '1,20p' /tmp/ozon-chrome.html | head -c 3000 || true
+          echo
+          echo '--- chrome stderr ---'
+          tail -30 /tmp/ozon-chrome.err || true
+
       - name: Start service
         env:
           RADAR_SECRET: ci-secret
