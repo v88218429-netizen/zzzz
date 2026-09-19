@@ -1,4 +1,4 @@
-name: Deploy Ozon Radar 1m
+name: Legacy Ozon Mac Radar (manual only)
 
 on:
   workflow_dispatch:
