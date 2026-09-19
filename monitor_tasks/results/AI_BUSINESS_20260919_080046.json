@@ -1,0 +1,317 @@
+{
+  "task_id": "AI_BUSINESS",
+  "request": "AI_BUSINESS_20260919_080046.json",
+  "query": "AI автоматизация бизнеса маркетплейсы кейсы 2026",
+  "knowledge_tag": "AI_BUSINESS",
+  "generated_at": "2026-09-19T06:02:04.637662+00:00",
+  "videos": [
+    {
+      "video_id": "dIqJr4M-hq4",
+      "url": "https://www.youtube.com/watch?v=dIqJr4M-hq4",
+      "title": "ИИ-агенты для бизнеса: команда 5 человек против 500 | Гайд 2026",
+      "channel": "Дмитрий Попов | COMANDOS AI – Элитные AI команды",
+      "duration": 2345,
+      "timestamp": null,
+      "query": "AI автоматизация бизнеса маркетплейсы кейсы 2026",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-19_AI_BUSINESS_video_dIqJr4M-hq4.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "noobb32Pejs",
+      "url": "https://www.youtube.com/watch?v=noobb32Pejs",
+      "title": "AI на Amazon в 2026: Rufus, алгоритм Cosmo, аналитика и автоматизация листингов без программирования",
+      "channel": "Vladyslav Mykhailenko and Dzianis Sulimchyk",
+      "duration": 5301,
+      "timestamp": null,
+      "query": "AI автоматизация бизнеса маркетплейсы кейсы 2026",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-19_AI_BUSINESS_video_noobb32Pejs.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "sfJFVmwxMXA",
+      "url": "https://www.youtube.com/watch?v=sfJFVmwxMXA",
+      "title": "Жесткая правда об n8n и AI Агенствах от айтишника",
+      "channel": "Макс Нечаев",
+      "duration": 621,
+      "timestamp": null,
+      "query": "AI автоматизация бизнеса маркетплейсы кейсы 2026",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-19_AI_BUSINESS_video_sfJFVmwxMXA.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "zo13OeFduv8",
+      "url": "https://www.youtube.com/watch?v=zo13OeFduv8",
+      "title": "How to use AI to manage a store on Wildberries",
+      "channel": "ВИТАЛИЙ ТЕИН",
+      "duration": 1522,
+      "timestamp": null,
+      "query": "AI автоматизация бизнеса маркетплейсы кейсы 2026",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-19_AI_BUSINESS_video_zo13OeFduv8.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "Lr5O-OXWgz8",
+      "url": "https://www.youtube.com/watch?v=Lr5O-OXWgz8",
+      "title": "Is N8n Dead? Claude Code vs. OpenClaw – Which to Choose for AI Automation in 2026?",
+      "channel": "Vibe Business",
+      "duration": 882,
+      "timestamp": null,
+      "query": "AI автоматизация бизнеса маркетплейсы кейсы 2026",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-19_AI_BUSINESS_video_Lr5O-OXWgz8.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "kUNn6-ONJG8",
+      "url": "https://www.youtube.com/watch?v=kUNn6-ONJG8",
+      "title": "Я СОЗДАЛ АРМИЮ ИИ агентов и они работают за меня [ШАБЛОН для N8N]",
+      "channel": "ИИздец",
+      "duration": 2291,
+      "timestamp": null,
+      "query": "AI автоматизация бизнеса маркетплейсы кейсы 2026",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-19_AI_BUSINESS_video_kUNn6-ONJG8.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "_a5cWLNp3cE",
+      "url": "https://www.youtube.com/watch?v=_a5cWLNp3cE",
+      "title": "Ditch AI! Until You Understand THIS One Thing About Automation",
+      "channel": "Данил Овчинников",
+      "duration": 1339,
+      "timestamp": null,
+      "query": "AI автоматизация бизнеса маркетплейсы кейсы 2026",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-19_AI_BUSINESS_video__a5cWLNp3cE.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "VOBIBw5gOpM",
+      "url": "https://www.youtube.com/watch?v=VOBIBw5gOpM",
+      "title": "Как использовать Claude Cowork лучше, чем 99% людей (полное руководство 2026)",
+      "channel": "Георгий Ривера",
+      "duration": 1077,
+      "timestamp": null,
+      "query": "AI автоматизация бизнеса маркетплейсы кейсы 2026",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-19_AI_BUSINESS_video_VOBIBw5gOpM.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "zpW8RX_FkcI",
+      "url": "https://www.youtube.com/watch?v=zpW8RX_FkcI",
+      "title": "Claude Cowork: собираем отдел маркетинга за 20 минут (Гайд 2026)",
+      "channel": "Дмитрий Попов | COMANDOS AI – Элитные AI команды",
+      "duration": 1505,
+      "timestamp": null,
+      "query": "AI автоматизация бизнеса маркетплейсы кейсы 2026",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-19_AI_BUSINESS_video_zpW8RX_FkcI.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "4VBTFHkYsuM",
+      "url": "https://www.youtube.com/watch?v=4VBTFHkYsuM",
+      "title": "Top 3 AI Side Hustles in 2026 | Step-by-Step Guide for Beginners | Remote Work",
+      "channel": "Марк Николаев | Сергей Нагорный | Нейросети ",
+      "duration": 1672,
+      "timestamp": null,
+      "query": "AI автоматизация бизнеса маркетплейсы кейсы 2026",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-19_AI_BUSINESS_video_4VBTFHkYsuM.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "2WDHEwDvXhs",
+      "url": "https://www.youtube.com/watch?v=2WDHEwDvXhs",
+      "title": "AI продаёт вместо менеджеров? Как мы увеличили продажи и получили лидов / Реальный кейс из Дубая",
+      "channel": "Nuria Production / Жизнь и бизнес в Дубае",
+      "duration": 2237,
+      "timestamp": null,
+      "query": "AI автоматизация бизнеса маркетплейсы кейсы 2026",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-19_AI_BUSINESS_video_2WDHEwDvXhs.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "4hIz_AyIccs",
+      "url": "https://www.youtube.com/watch?v=4hIz_AyIccs",
+      "title": "AI-менеджер продаж для b2b: обзор + реальные кейсы +30% в диалог и сделку",
+      "channel": "Антон про бизнес | Смыслы | Жизнь",
+      "duration": 166,
+      "timestamp": null,
+      "query": "AI автоматизация бизнеса маркетплейсы кейсы 2026",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-19_AI_BUSINESS_short_4hIz_AyIccs.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "AQtC5NmDPNw",
+      "url": "https://www.youtube.com/watch?v=AQtC5NmDPNw",
+      "title": "AI Agent Marketplace: Instantly Deploy 100+ Enterprise-Ready Agents",
+      "channel": "Moveworks",
+      "duration": 81,
+      "timestamp": null,
+      "query": "AI ecommerce agent marketplace seller",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-19_AI_BUSINESS_short_AQtC5NmDPNw.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "VxR5HtKvI24",
+      "url": "https://www.youtube.com/watch?v=VxR5HtKvI24",
+      "title": "Whats are AI Agents? | AI Agents Marketplace | How to discover and trade AI Agents | Gignaati.com",
+      "channel": "Gignaati - AI Agents Marketplace",
+      "duration": 51,
+      "timestamp": null,
+      "query": "AI ecommerce agent marketplace seller",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-19_AI_BUSINESS_short_VxR5HtKvI24.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "95lSi3dQW_M",
+      "url": "https://www.youtube.com/watch?v=95lSi3dQW_M",
+      "title": "Introducing Midesk",
+      "channel": "Midesk",
+      "duration": 157,
+      "timestamp": null,
+      "query": "AI SaaS для маркетплейсов shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-19_AI_BUSINESS_short_95lSi3dQW_M.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "JLkCvHrRww8",
+      "url": "https://www.youtube.com/watch?v=JLkCvHrRww8",
+      "title": "Will Prive a New startup be the Future of D2C shopping for Ecommerce",
+      "channel": "Understand",
+      "duration": 148,
+      "timestamp": null,
+      "query": "AI SaaS для маркетплейсов shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-19_AI_BUSINESS_short_JLkCvHrRww8.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "kAkiMvZwb_o",
+      "url": "https://www.youtube.com/watch?v=kAkiMvZwb_o",
+      "title": "AI-driven MAP Monitoring Software by Intelligence Node | Protect your brand(and profitability)",
+      "channel": "Intelligence Node",
+      "duration": 105,
+      "timestamp": null,
+      "query": "AI SaaS для маркетплейсов shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-19_AI_BUSINESS_short_kAkiMvZwb_o.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "xiyRxdwiCEA",
+      "url": "https://www.youtube.com/watch?v=xiyRxdwiCEA",
+      "title": "Анимационный эксплейнер для SaaS-продукта | PushOwl",
+      "channel": "Burnwe",
+      "duration": 91,
+      "timestamp": null,
+      "query": "AI SaaS для маркетплейсов shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-19_AI_BUSINESS_short_xiyRxdwiCEA.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "WZQkyVYP1B0",
+      "url": "https://www.youtube.com/watch?v=WZQkyVYP1B0",
+      "title": "SheetGPT Review | SheetGPT Lifetime Deal $49 - Use ChatGPT on Google Sheets",
+      "channel": "The SaaS Deals",
+      "duration": 48,
+      "timestamp": null,
+      "query": "AI SaaS для маркетплейсов shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-19_AI_BUSINESS_short_WZQkyVYP1B0.md",
+      "method": "FreeTranscriptAPI"
+    }
+  ],
+  "errors": [
+    {
+      "video_id": "mQe8pdoyL2w",
+      "url": "https://www.youtube.com/watch?v=mQe8pdoyL2w",
+      "title": "Что автоматизировать с помощью AI в бизнесе в 2026 году? Разбор каждого отдела для автоматизации",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "GvwYpbD0s1g",
+      "url": "https://www.youtube.com/watch?v=GvwYpbD0s1g",
+      "title": "SocialNowa Chatbot for Social Media | Create Chatbots for Facebook and Instagram",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "jYerAbb8ILY",
+      "url": "https://www.youtube.com/watch?v=jYerAbb8ILY",
+      "title": "Formula Dog Lifetime Deal $39 - Conversion Optimization tool for websites | AppSumo Lifetime Deals",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "cjLeluF8WcE",
+      "url": "https://www.youtube.com/watch?v=cjLeluF8WcE",
+      "title": "Engati Bot Marketplace - Shopping Mall Bot Template",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "9GTerfNrraU",
+      "url": "https://www.youtube.com/watch?v=9GTerfNrraU",
+      "title": "Engati Bot Marketplace - Baby Clothing Store Bot Template",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "7kqF2QIxVR0",
+      "url": "https://www.youtube.com/watch?v=7kqF2QIxVR0",
+      "title": "Engati Bot Marketplace - Recipe Book Bot Template",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "8omhSL_3LIM",
+      "url": "https://www.youtube.com/watch?v=8omhSL_3LIM",
+      "title": "Engati Bot Marketplace - Language Learner chatbot template",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "psVY2KmJPBw",
+      "url": "https://www.youtube.com/watch?v=psVY2KmJPBw",
+      "title": "YT CopyCat Review | YT CopyCat Lifetime Deal - Turn Your YouTube Video Intro Article",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "8jbz8qEAs90",
+      "url": "https://www.youtube.com/watch?v=8jbz8qEAs90",
+      "title": "ChatPion - Facebook & Instagram Chatbot,eCommerce,SMS/Email & Social Media Marketing Platform (SaaS)",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "YQDmRNLr5_E",
+      "url": "https://www.youtube.com/watch?v=YQDmRNLr5_E",
+      "title": "What is Reditus? | Explainer video",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "kztJw4xuBV8",
+      "url": "https://www.youtube.com/watch?v=kztJw4xuBV8",
+      "title": "RecapioGPT Review | RecapioGPT Lifetime Deal $39 - Summarize what you want in 1 click, using AI",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "bUysOTVX9mU",
+      "url": "https://www.youtube.com/watch?v=bUysOTVX9mU",
+      "title": "Engati chatbot platform - Education",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "8rg8o71uP64",
+      "url": "https://www.youtube.com/watch?v=8rg8o71uP64",
+      "title": "SaaSify by Spektra Systems | Transactable SaaS Offer through Cloud Marketplaces",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    }
+  ]
+}
