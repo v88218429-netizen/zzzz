@@ -341,7 +341,7 @@ def load_tasks(token):
             continue
         out.append({
             "row":i,"article":article,"sku":sku,"query":query,
-            "interval":max(60,as_int(row[4],60)),
+            "interval_min":max(1,as_int(row[4],1)),
             "drop_threshold":max(1,as_int(row[5],3)),
             "top_boundary":max(1,as_int(row[6],10)),
             "max_position":max(10,min(200,as_int(row[7],100))),
@@ -394,7 +394,7 @@ def run_once():
         now=time.time()
         for task in tasks:
             st=db_state(con,key_for(task["article"],task["sku"],task["query"]))
-            if now-(st["last_checked"] or 0)>=task["interval"]-5:
+            if now-(st["last_checked"] or 0)>=task["interval_min"]*60-5:
                 due.append((task,st))
 
         if not due:
