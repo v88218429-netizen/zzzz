@@ -17,7 +17,7 @@ from curl_cffi import requests as curl_requests
 from fastapi import FastAPI, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.1.0"
 MAX_EVENTS = 20000
 CHECK_LOOP_SECONDS = 3
 SOURCE_NAME = "Ozon storefront JSON"
@@ -64,6 +64,12 @@ class RadarTaskIn(BaseModel):
 
 class ConfigIn(BaseModel):
     tasks: list[RadarTaskIn]
+
+
+class ProbeIn(BaseModel):
+    query: str
+    sku: str
+    max_position: int = Field(default=30, ge=10, le=500)
 
 
 @dataclass
@@ -556,6 +562,42 @@ def set_config(payload: ConfigIn, authorization: str | None = Header(default=Non
         "tasks": len(runtime.tasks),
         "server_time": now_iso(),
     }
+
+
+@app.post("/probe")
+async def probe(
+    payload: ProbeIn,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    require_auth(authorization)
+    checked_at = now_iso()
+    started = time.perf_counter()
+    try:
+        result = await asyncio.to_thread(
+            ozon.position,
+            payload.query,
+            payload.sku,
+            payload.max_position,
+        )
+        return {
+            "ok": True,
+            "checked_at": checked_at,
+            "query": payload.query,
+            "sku": payload.sku,
+            "proxy_configured": bool(OZON_PROXY),
+            "result": result,
+            "total_ms": int((time.perf_counter() - started) * 1000),
+        }
+    except Exception as exc:
+        return {
+            "ok": False,
+            "checked_at": checked_at,
+            "query": payload.query,
+            "sku": payload.sku,
+            "proxy_configured": bool(OZON_PROXY),
+            "error": f"{type(exc).__name__}: {exc}",
+            "total_ms": int((time.perf_counter() - started) * 1000),
+        }
 
 
 @app.get("/events")
