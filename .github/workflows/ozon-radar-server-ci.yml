@@ -1,0 +1,45 @@
+name: Ozon Radar Server CI
+
+on:
+  push:
+    branches: [mainggg]
+    paths:
+      - "ozon_radar_server/**"
+      - ".github/workflows/ozon-radar-server-ci.yml"
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: ozon_radar_server
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Syntax check
+        run: python -m py_compile server.py
+
+      - name: Start service
+        env:
+          RADAR_SECRET: ci-secret
+          RADAR_TASKS_JSON: '{"tasks":[{"article":"test","sku":"5094364543","query":"лопата садовая","interval_min":60,"drop_threshold":3,"top_boundary":10,"max_position":20,"baseline_position":7}]}'
+        run: |
+          uvicorn server:app --host 127.0.0.1 --port 8080 > /tmp/ozon-radar.log 2>&1 &
+          echo $! > /tmp/ozon-radar.pid
+          sleep 3
+          curl -fsS http://127.0.0.1:8080/health
+          curl -fsS -H 'Authorization: Bearer ci-secret' http://127.0.0.1:8080/state
+
+      - name: Show service log
+        if: always()
+        run: cat /tmp/ozon-radar.log || true
