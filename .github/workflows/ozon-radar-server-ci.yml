@@ -65,6 +65,17 @@ jobs:
           echo '--- chrome stderr ---'
           tail -30 /tmp/ozon-chrome.err || true
 
+      - name: Live Ozon mobile-web API probe
+        shell: bash
+        run: |
+          set +e
+          cd ..
+          python ozon_web/probe.py
+          RC=$?
+          echo "MOBILE_PROBE_RC=$RC"
+          cat ozon_web/results/latest.json | head -c 12000 || true
+          echo
+
       - name: Start service
         env:
           RADAR_SECRET: ci-secret
