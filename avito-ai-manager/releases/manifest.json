@@ -1,0 +1,7 @@
+{
+  "version": "0.5.0",
+  "patch_url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/avito-ai-manager/releases/patch.py",
+  "patch_sha256": "f1f59e21c575d968ab047e43f4a5a5085045fea89ff9652fee02ec8c1e614f61",
+  "published_at": "2026-09-19",
+  "notes": "One-click bootstrap + cumulative remote hotfix channel"
+}
