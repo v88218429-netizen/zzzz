@@ -1,0 +1,31 @@
+name: Ozon radar CI
+
+on:
+  push:
+    branches: [mainggg]
+    paths:
+      - "ozon_radar/**"
+      - ".github/workflows/ozon-radar-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Shell syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n ozon_radar/install_launchd.sh
+          bash -n ozon_radar/repair_mac_runner.sh
+          bash -n ozon_radar/run_install.command
+      - name: Python syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile ozon_radar/worker.py
