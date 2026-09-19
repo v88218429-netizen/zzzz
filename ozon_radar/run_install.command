@@ -18,10 +18,11 @@ else
   exit 2
 fi
 
-echo "[1/8] Скачиваю live-пакет..."
+echo "[1/9] Скачиваю live-пакет..."
 curl -fsSL "$RAW/ozon_radar/worker.py" -o "$WORK/ozon_radar/worker.py"
 curl -fsSL "$RAW/ozon_radar/requirements.txt" -o "$WORK/ozon_radar/requirements.txt"
 curl -fsSL "$RAW/ozon_radar/install_launchd.sh" -o "$WORK/ozon_radar/install_launchd.sh"
+curl -fsSL "$RAW/ozon_radar/repair_mac_runner.sh" -o "$WORK/ozon_radar/repair_mac_runner.sh"
 curl -fsSL "$RAW/wb_os/apps_script/OZON_RADAR_TELEGRAM_RELAY.gs" -o "$WORK/wb_os/apps_script/OZON_RADAR_TELEGRAM_RELAY.gs"
 curl -fsSL "$RAW/wb_os/apps_script/K2_EVOLUTION_ENGINE.gs" -o "$WORK/wb_os/apps_script/K2_EVOLUTION_ENGINE.gs"
 curl -fsSL "$RAW/wb_os/tools/discover_clasp_project.py" -o "$WORK/wb_os/tools/discover_clasp_project.py"
