@@ -1,7 +1,7 @@
 {
-  "version": "0.5.0",
+  "version": "0.6.0",
   "patch_url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/avito-ai-manager/releases/patch.py",
-  "patch_sha256": "f1f59e21c575d968ab047e43f4a5a5085045fea89ff9652fee02ec8c1e614f61",
+  "patch_sha256": "182ad184dab6d8376382b290703f365b45ddcf2cec333bdc912beecf2ea1caa8",
   "published_at": "2026-09-19",
-  "notes": "One-click bootstrap + cumulative remote hotfix channel"
+  "notes": "Critical bootstrap fix: Python 3.14 compatibility, global-mode inheritance, UI hotfix"
 }
