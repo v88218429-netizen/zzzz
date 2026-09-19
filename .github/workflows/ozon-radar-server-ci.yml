@@ -106,6 +106,11 @@ jobs:
           sleep 3
           curl -fsS http://127.0.0.1:8080/health
           curl -fsS -H 'Authorization: Bearer ci-secret' http://127.0.0.1:8080/state
+          curl -fsS -X POST \
+            -H 'Authorization: Bearer ci-secret' \
+            -H 'Content-Type: application/json' \
+            -d '{"query":"лопата садовая","sku":"5094364543","max_position":20}' \
+            http://127.0.0.1:8080/probe
 
       - name: Show service log
         if: always()
