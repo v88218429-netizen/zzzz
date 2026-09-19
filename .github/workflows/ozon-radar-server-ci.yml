@@ -29,6 +29,18 @@ jobs:
       - name: Syntax check
         run: python -m py_compile server.py
 
+      - name: Live Ozon storefront HTTP probe
+        run: |
+          python - <<'PY'
+          from server import OzonClient
+          c = OzonClient()
+          try:
+              r = c.position("лопата садовая", "5094364543", 30)
+              print("LIVE_PROBE_OK", r)
+          except Exception as e:
+              print("LIVE_PROBE_ERROR", type(e).__name__, str(e))
+          PY
+
       - name: Start service
         env:
           RADAR_SECRET: ci-secret
