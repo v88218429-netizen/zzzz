@@ -1,4 +1,4 @@
-name: Ozon web rank 6x daily
+name: Legacy Ozon Mac web rank (manual only)
 
 on:
   workflow_dispatch:
