@@ -1,0 +1,239 @@
+{
+  "task_id": "CAR",
+  "request": "CAR_20260919_120137.json",
+  "query": "лучшие семейные автомобили 2026 Россия обзор",
+  "knowledge_tag": "CAR",
+  "generated_at": "2026-09-19T09:03:47.462288+00:00",
+  "videos": [
+    {
+      "video_id": "ysNuHkyOBlo",
+      "url": "https://www.youtube.com/watch?v=ysNuHkyOBlo",
+      "title": "THE PERFECT FAMILY CAR",
+      "channel": "Метод Смирнова ®",
+      "duration": 1227,
+      "timestamp": null,
+      "query": "лучшие семейные автомобили 2026 Россия обзор",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-19_CAR_video_ysNuHkyOBlo.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "TLPRE_9xt0A",
+      "url": "https://www.youtube.com/watch?v=TLPRE_9xt0A",
+      "title": "Я в восторге! Лучший семейный автомобиль. Chrysler Pacifica. Лиса рулит",
+      "channel": "ЛИСА РУЛИТ. ЛИСА ЖАРИТ",
+      "duration": 1254,
+      "timestamp": null,
+      "query": "лучшие семейные автомобили 2026 Россия обзор",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-19_CAR_video_TLPRE_9xt0A.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "uuMnh578InQ",
+      "url": "https://www.youtube.com/watch?v=uuMnh578InQ",
+      "title": "Powerful FAMILY CARS from Korea. Prices as of APRIL 2026.",
+      "channel": "LimCars - Автомобили из Кореи, Китая и Японии",
+      "duration": 508,
+      "timestamp": null,
+      "query": "лучшие семейные автомобили 2026 Россия обзор",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-19_CAR_video_uuMnh578InQ.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "C2mT27W4Jeg",
+      "url": "https://www.youtube.com/watch?v=C2mT27W4Jeg",
+      "title": "Минивэн - лучшая машина для жизни и семьи?! Honda Stepwgn и Toyota Alphard в 2026 году!",
+      "channel": "Ильдар Абхазия",
+      "duration": 509,
+      "timestamp": null,
+      "query": "лучшие семейные автомобили 2026 Россия обзор",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-19_CAR_video_C2mT27W4Jeg.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "jiFq3_JlDrQ",
+      "url": "https://www.youtube.com/watch?v=jiFq3_JlDrQ",
+      "title": "ЭТИ машины ВЗОРВУТ авторынок в 2026 году! / ТОП-4 новинки авто",
+      "channel": "Американ Авто | Автомобили из Америки",
+      "duration": 393,
+      "timestamp": null,
+      "query": "лучшие семейные автомобили 2026 Россия обзор",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-19_CAR_video_jiFq3_JlDrQ.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "47Kfua2pW8g",
+      "url": "https://www.youtube.com/watch?v=47Kfua2pW8g",
+      "title": "BEST HYBRID SUV AND CROSSOVER OF 2022 (TOP 10)! WHAT HYBRID TO BUY? NEW IN AUTO",
+      "channel": "Канал со сложным названием - [Daciaclubmd.Ru]",
+      "duration": 614,
+      "timestamp": null,
+      "query": "лучшие семейные автомобили 2026 Россия обзор",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-19_CAR_video_47Kfua2pW8g.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "FwxjIOd5q1s",
+      "url": "https://www.youtube.com/watch?v=FwxjIOd5q1s",
+      "title": "ТОП-10 авто на 2026 год по мнению наших клиентов!",
+      "channel": "Япония Транзит",
+      "duration": 584,
+      "timestamp": null,
+      "query": "лучшие семейные автомобили 2026 Россия обзор",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-19_CAR_video_FwxjIOd5q1s.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "foafa0T8Cc4",
+      "url": "https://www.youtube.com/watch?v=foafa0T8Cc4",
+      "title": "CARS UNDER 1 MILLION — TOP 3 IN 2026!",
+      "channel": "The Belozertsev",
+      "duration": 253,
+      "timestamp": null,
+      "query": "лучшие семейные автомобили 2026 Россия обзор",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-19_CAR_video_foafa0T8Cc4.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "eHTB-4rUKOY",
+      "url": "https://www.youtube.com/watch?v=eHTB-4rUKOY",
+      "title": "Электромобиль Changan Qiyuan Q05 забираю из порта",
+      "channel": "voltcars39",
+      "duration": 144,
+      "timestamp": null,
+      "query": "семейный электромобиль 2026 shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-19_CAR_short_eHTB-4rUKOY.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "63zvT-dlsSs",
+      "url": "https://www.youtube.com/watch?v=63zvT-dlsSs",
+      "title": "Боремся с зарослями на даче: Травоуничтожитель в действии",
+      "channel": "Дача и Пасека",
+      "duration": 17,
+      "timestamp": null,
+      "query": "семейный электромобиль 2026 shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-19_CAR_short_63zvT-dlsSs.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "Y_uBR8X40U8",
+      "url": "https://www.youtube.com/watch?v=Y_uBR8X40U8",
+      "title": "Семейный суперкар GAC ENO.146 с запасом хода 1000 км",
+      "channel": "NAZAR BIKIBI",
+      "duration": 101,
+      "timestamp": null,
+      "query": "семейный электромобиль 2026 shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-19_CAR_short_Y_uBR8X40U8.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "PTv2ztSeFDQ",
+      "url": "https://www.youtube.com/watch?v=PTv2ztSeFDQ",
+      "title": "Fuel consumption is 6.7 liters. A real family car for 1 million!!! Diesel!!!",
+      "channel": "BOBBI АВТО",
+      "duration": 122,
+      "timestamp": null,
+      "query": "премиальный семейный автомобиль реальные расходы",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-19_CAR_short_PTv2ztSeFDQ.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "84SH1zg0sXE",
+      "url": "https://www.youtube.com/watch?v=84SH1zg0sXE",
+      "title": "Семейные покатушки, проверили реальный расход газа с А/C, 4 человека в салоне и забитым багажником.",
+      "channel": "Про100Passat2.5",
+      "duration": 83,
+      "timestamp": null,
+      "query": "премиальный семейный автомобиль реальные расходы",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-19_CAR_short_84SH1zg0sXE.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "_I_UzbO3UUg",
+      "url": "https://www.youtube.com/watch?v=_I_UzbO3UUg",
+      "title": "Do we need a car like this?",
+      "channel": "BOBBI АВТО",
+      "duration": 83,
+      "timestamp": null,
+      "query": "премиальный семейный автомобиль реальные расходы shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-19_CAR_short__I_UzbO3UUg.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "4z3MPxOQP24",
+      "url": "https://www.youtube.com/watch?v=4z3MPxOQP24",
+      "title": "Неломающийся годами кроссовер!!! СЕМЕЙНЫЙ АВТО!!!",
+      "channel": "BOBBI АВТО",
+      "duration": 163,
+      "timestamp": null,
+      "query": "премиальный семейный автомобиль реальные расходы shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-19_CAR_short_4z3MPxOQP24.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "kMMiS_sLjMs",
+      "url": "https://www.youtube.com/watch?v=kMMiS_sLjMs",
+      "title": "Отличный авто -7 мест, для большой семьи вообще идеальный!!!",
+      "channel": "BOBBI АВТО",
+      "duration": 153,
+      "timestamp": null,
+      "query": "премиальный семейный автомобиль реальные расходы shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-19_CAR_short_kMMiS_sLjMs.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "jbUkafCquSU",
+      "url": "https://www.youtube.com/watch?v=jbUkafCquSU",
+      "title": "Geely Atlas, Автомобиль для семьи, четыре года эксплуатации, 80000 км пробег, лучшее",
+      "channel": "Будущее в настоящем Geely Atlas Pro",
+      "duration": 172,
+      "timestamp": null,
+      "query": "премиальный семейный автомобиль реальные расходы shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-19_CAR_short_jbUkafCquSU.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "9TWgi6N3kTc",
+      "url": "https://www.youtube.com/watch?v=9TWgi6N3kTc",
+      "title": "Nissan Serena 2019 2.0 S-HYBRID",
+      "channel": "АВТО ПОД ЗАКАЗ ИЗ КИТАЯ КОРЕИ ЯПОНИИ | AMJ AUTO",
+      "duration": 134,
+      "timestamp": null,
+      "query": "премиальный семейный автомобиль реальные расходы shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-19_CAR_short_9TWgi6N3kTc.md",
+      "method": "FreeTranscriptAPI"
+    }
+  ],
+  "errors": [
+    {
+      "video_id": "4Uro06NctWs",
+      "url": "https://www.youtube.com/watch?v=4Uro06NctWs",
+      "title": "САМЫЕ НАДЕЖНЫЕ МАЛОЛИТРАЖКИ В 2026 ГОДУ. ТОП-10 МАЛЕНЬКИХ АВТОМОБИЛЕЙ",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "e0SncTkDoRA",
+      "url": "https://www.youtube.com/watch?v=e0SncTkDoRA",
+      "title": "САМЫЕ ЭКОНОМИЧНЫЕ АВТОМОБИЛИ 2026 ГОДА. ТОП10 ЭКОНОМНЫХ АВТО ИНОМАРОК",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    }
+  ]
+}

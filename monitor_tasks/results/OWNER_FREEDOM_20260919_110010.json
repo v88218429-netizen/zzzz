@@ -1,0 +1,263 @@
+{
+  "task_id": "OWNER_FREEDOM",
+  "request": "OWNER_FREEDOM_20260919_110010.json",
+  "query": "как собственнику выйти из операционки бизнес работает без владельца",
+  "knowledge_tag": "FREEDOM",
+  "generated_at": "2026-09-19T09:06:11.293561+00:00",
+  "videos": [
+    {
+      "video_id": "CeC-iBYuZ7k",
+      "url": "https://www.youtube.com/watch?v=CeC-iBYuZ7k",
+      "title": "19 СОТРУДНИКОВ ЧУТЬ НЕ УБИЛИ БИЗНЕС  Почему собственник вернулся в операционку",
+      "channel": "Виталий Орлянд",
+      "duration": 1610,
+      "timestamp": null,
+      "query": "как собственнику выйти из операционки бизнес работает без владельца",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-19_OWNER_FREEDOM_video_CeC-iBYuZ7k.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "lmIcpBLBWoI",
+      "url": "https://www.youtube.com/watch?v=lmIcpBLBWoI",
+      "title": "Перестаньте решать всё сами: как выйти из операционки",
+      "channel": "Дархан Нурахмет",
+      "duration": 801,
+      "timestamp": null,
+      "query": "как собственнику выйти из операционки бизнес работает без владельца",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-19_OWNER_FREEDOM_video_lmIcpBLBWoI.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "vOP5L40-afI",
+      "url": "https://www.youtube.com/watch?v=vOP5L40-afI",
+      "title": "Профессия “владелец бизнеса” / Александр Высоцкий 16+",
+      "channel": "Александр Высоцкий",
+      "duration": 381,
+      "timestamp": null,
+      "query": "как собственнику выйти из операционки бизнес работает без владельца",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-19_OWNER_FREEDOM_video_vOP5L40-afI.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "cEzEowTgU5k",
+      "url": "https://www.youtube.com/watch?v=cEzEowTgU5k",
+      "title": "Как выйти из операционки и перейти на масштаб? 3 роли, которые тебя спасут",
+      "channel": "Бизнес психолог | Наумов Виталий",
+      "duration": 5716,
+      "timestamp": null,
+      "query": "как собственнику выйти из операционки бизнес работает без владельца",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-19_OWNER_FREEDOM_video_cEzEowTgU5k.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "ppP_twn971Q",
+      "url": "https://www.youtube.com/watch?v=ppP_twn971Q",
+      "title": "WHY SHOULD AN OWNER NOT STEP AWAY FROM OPERATIONS? Which management functions cannot be delegated?",
+      "channel": "Владимир Моженков",
+      "duration": 1120,
+      "timestamp": null,
+      "query": "как собственнику выйти из операционки бизнес работает без владельца",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-19_OWNER_FREEDOM_video_ppP_twn971Q.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "CwWR0JvhHEw",
+      "url": "https://www.youtube.com/watch?v=CwWR0JvhHEw",
+      "title": "Как собственнику отойти от операционки и не потерять бизнес",
+      "channel": "Виталий Королев / Время собственности",
+      "duration": 3595,
+      "timestamp": null,
+      "query": "как собственнику выйти из операционки бизнес работает без владельца",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-19_OWNER_FREEDOM_video_CwWR0JvhHEw.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "HKl98v5XURk",
+      "url": "https://www.youtube.com/watch?v=HKl98v5XURk",
+      "title": "Почему найм управленца НЕ РАБОТАЕТ? Выход из операционки",
+      "channel": "Script & Profit",
+      "duration": 396,
+      "timestamp": null,
+      "query": "как собственнику выйти из операционки бизнес работает без владельца",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-19_OWNER_FREEDOM_video_HKl98v5XURk.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "uVbKeNo09MM",
+      "url": "https://www.youtube.com/watch?v=uVbKeNo09MM",
+      "title": "Как построить бизнес, который сохраняет ценность без вашего участия | NJ Business Podcast",
+      "channel": "New Jersey Business Media",
+      "duration": 2236,
+      "timestamp": null,
+      "query": "как собственнику выйти из операционки бизнес работает без владельца",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-19_OWNER_FREEDOM_video_uVbKeNo09MM.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "Kcqcxk62L6M",
+      "url": "https://www.youtube.com/watch?v=Kcqcxk62L6M",
+      "title": "Школа ресторатора.  Ресторанный бизнес , где обучаться и развиваться #shorts",
+      "channel": "РЕСТОРАТОР OYBEK ХО | 917 РЕСТОРАНОВ ",
+      "duration": 43,
+      "timestamp": null,
+      "query": "бизнес без владельца система управления shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-19_OWNER_FREEDOM_short_Kcqcxk62L6M.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "1Lg2GO04IJw",
+      "url": "https://www.youtube.com/watch?v=1Lg2GO04IJw",
+      "title": "Бесплатный консалтинг. Как предприниматель и владелец бизнеса может получить консалтинговые услуги?",
+      "channel": "Бізнес-Конструктор",
+      "duration": 98,
+      "timestamp": null,
+      "query": "бизнес без владельца система управления shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-19_OWNER_FREEDOM_short_1Lg2GO04IJw.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "sQpEckBEEbU",
+      "url": "https://www.youtube.com/watch?v=sQpEckBEEbU",
+      "title": "Типичная шибка, которую допускают владельцы ресторанов.",
+      "channel": "РЕСТОРАТОР OYBEK ХО | 917 РЕСТОРАНОВ ",
+      "duration": 109,
+      "timestamp": null,
+      "query": "бизнес без владельца система управления shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-19_OWNER_FREEDOM_short_sQpEckBEEbU.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "y4C6tdmWM8Y",
+      "url": "https://www.youtube.com/watch?v=y4C6tdmWM8Y",
+      "title": "Петр Осипов про тренинги. Бизнес Молодость отзыв о семинаре Андрея Тысленко. Что думает Пётр Осипов?",
+      "channel": "Андрей Тысленко. Бизнес в интересах собственника",
+      "duration": 138,
+      "timestamp": null,
+      "query": "бизнес без владельца система управления shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-19_OWNER_FREEDOM_short_y4C6tdmWM8Y.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "h3BN_OSJGSw",
+      "url": "https://www.youtube.com/watch?v=h3BN_OSJGSw",
+      "title": "Курс делегирование и построение команды с 0",
+      "channel": "Nadya Larchuzhenkova",
+      "duration": 68,
+      "timestamp": null,
+      "query": "делегирование предприниматель команда",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-19_OWNER_FREEDOM_short_h3BN_OSJGSw.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "YXtkRuM5j0o",
+      "url": "https://www.youtube.com/watch?v=YXtkRuM5j0o",
+      "title": "Как перестать делать всё самому и расти быстрее? Делегирование. #еленапетрихина #бизнес #команда",
+      "channel": "Елена Петрихина | ПРО Бизнес | ПРО Команду",
+      "duration": 151,
+      "timestamp": null,
+      "query": "делегирование предприниматель команда",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-19_OWNER_FREEDOM_short_YXtkRuM5j0o.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "3xNt0EIVoHM",
+      "url": "https://www.youtube.com/watch?v=3xNt0EIVoHM",
+      "title": "Бизнес-тренинг на тему: \"Х3 в бизнесе руками команды. Делегирование\"",
+      "channel": "Рост бизнеса | Юлия Комарова",
+      "duration": 148,
+      "timestamp": null,
+      "query": "делегирование предприниматель команда",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-19_OWNER_FREEDOM_short_3xNt0EIVoHM.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "M-fUtkHjgt4",
+      "url": "https://www.youtube.com/watch?v=M-fUtkHjgt4",
+      "title": "Секреты успешного делегирования задач",
+      "channel": "Процессы и системное мышление | Вероника Чмыхова",
+      "duration": 88,
+      "timestamp": null,
+      "query": "делегирование предприниматель команда",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-19_OWNER_FREEDOM_short_M-fUtkHjgt4.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "szVjLPmRUNo",
+      "url": "https://www.youtube.com/watch?v=szVjLPmRUNo",
+      "title": "Кому делегировать Системную работу?",
+      "channel": "Практика Системного Бизнеса",
+      "duration": 95,
+      "timestamp": null,
+      "query": "делегирование предприниматель команда",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-19_OWNER_FREEDOM_short_szVjLPmRUNo.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "dm8BFv8fsfw",
+      "url": "https://www.youtube.com/watch?v=dm8BFv8fsfw",
+      "title": "HOW TO DELEGATE TASKS CORRECTLY? Advice from billionaire Margulan Seissembayev.",
+      "channel": "НОВОЕ НАЧАЛО",
+      "duration": 150,
+      "timestamp": null,
+      "query": "делегирование предприниматель команда shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-19_OWNER_FREEDOM_short_dm8BFv8fsfw.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "jMV_GhmN0Mo",
+      "url": "https://www.youtube.com/watch?v=jMV_GhmN0Mo",
+      "title": "TEAM TIP: Understanding Delegation...and How to Get it Right",
+      "channel": "Best Contractor Coach",
+      "duration": 141,
+      "timestamp": null,
+      "query": "делегирование предприниматель команда shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-19_OWNER_FREEDOM_short_jMV_GhmN0Mo.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "P6iBXJQMUfI",
+      "url": "https://www.youtube.com/watch?v=P6iBXJQMUfI",
+      "title": "Как управлять сотрудниками, как в крупной корпорации? | Kewal Kishan",
+      "channel": "Kewal Kishan - Automate Business",
+      "duration": 151,
+      "timestamp": null,
+      "query": "делегирование предприниматель команда shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-19_OWNER_FREEDOM_short_P6iBXJQMUfI.md",
+      "method": "FreeTranscriptAPI"
+    }
+  ],
+  "errors": [
+    {
+      "video_id": "SQinwwVoMEI",
+      "url": "https://www.youtube.com/watch?v=SQinwwVoMEI",
+      "title": "Внутренняя академия компании: как владельцу выйти из операционки через обучение сотрудников",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "7TtXX69qGC4",
+      "url": "https://www.youtube.com/watch?v=7TtXX69qGC4",
+      "title": "Как выйти из операционки: делегирование и управление бизнесом | Владислав Мусатов, АТМ",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 404: Not Found"
+    }
+  ]
+}
