@@ -93,15 +93,18 @@ function k2EvolutionFetchAndApply_() {
       : 'OK · no business-state change · heavy write skipped'
   });
 
-  // Ensure the independent 1-minute Ozon radar Telegram relay exists.
-  // Safe to call repeatedly: the helper creates only one trigger.
+  // Ensure the independent 1-minute Ozon radar relays exist.
+  // Safe to call repeatedly: helpers create only one trigger each.
   try {
     if (typeof ensureOzonRadarTelegramTrigger_ === 'function') {
       ensureOzonRadarTelegramTrigger_();
     }
+    if (typeof ensureOzonRadarServerTrigger_ === 'function') {
+      ensureOzonRadarServerTrigger_();
+    }
   } catch (ozonRadarTriggerError) {
     Logger.log(
-      'Ozon Radar relay trigger check failed: ' +
+      'Ozon Radar trigger check failed: ' +
       String(
         ozonRadarTriggerError && ozonRadarTriggerError.message
           ? ozonRadarTriggerError.message
