@@ -29,7 +29,10 @@ curl -fsSL "$RAW/wb_os/tools/discover_clasp_project.py" -o "$WORK/wb_os/tools/di
 curl -fsSL "$RAW/wb_os/tools/patch_live_master.py" -o "$WORK/wb_os/tools/patch_live_master.py"
 chmod +x "$WORK/ozon_radar/install_launchd.sh" "$WORK/ozon_radar/repair_mac_runner.sh"
 
-echo "[2/9] Восстанавливаю self-hosted Mac runner..."\nbash "$WORK/ozon_radar/repair_mac_runner.sh" || true\n\necho "[3/9] Проверяю Chrome и Google OAuth..."
+echo "[2/9] Восстанавливаю self-hosted Mac runner..."
+bash "$WORK/ozon_radar/repair_mac_runner.sh" || true
+
+echo "[3/9] Проверяю Chrome и Google OAuth..."
 test -x "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 if [ ! -f "$HOME/.clasprc.json" ]; then
   echo "Нужна одноразовая авторизация Google."
