@@ -2,13 +2,6 @@ name: Legacy Ozon Mac web rank (manual only)
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "10 0,4,8,12,16,20 * * *"
-  push:
-    branches: [mainggg]
-    paths:
-      - "ozon_web/**"
-      - ".github/workflows/ozon-web-rank.yml"
 
 permissions:
   contents: write
