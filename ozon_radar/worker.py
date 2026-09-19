@@ -8,6 +8,7 @@ import math
 import os
 import re
 import sqlite3
+import subprocess
 import sys
 import time
 import urllib.error
@@ -29,8 +30,10 @@ CLASP=Path.home()/".clasprc.json"
 RADAR_SHEET="06_Радар_1мин"
 HISTORY_SHEET="06_Радар_История"
 QUEUE_SHEET="06_Радар_Очередь"
-SOURCE="LIVE WEB · Chrome"
+SOURCE="LIVE WEB · Chrome CDP"
 HEARTBEAT_TO_SHEET_SEC=300
+CDP_PORT=9227
+CDP_URL=f"http://127.0.0.1:{CDP_PORT}"
 CHROME_PATHS=[
     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
     "/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary",
@@ -243,32 +246,121 @@ def extract_ids(hrefs):
 class LiveScanner:
     def __init__(self):
         PROFILE_DIR.mkdir(parents=True,exist_ok=True)
+        LOG_DIR.mkdir(parents=True,exist_ok=True)
+        self._ensure_real_chrome()
         self.pw=sync_playwright().start()
-        self.ctx=self.pw.chromium.launch_persistent_context(
-            user_data_dir=str(PROFILE_DIR),
-            executable_path=chrome_path(),
-            headless=True,
-            locale="ru-RU",
-            timezone_id="Europe/Moscow",
-            viewport={"width":1440,"height":1100},
-            args=[
-                "--disable-blink-features=AutomationControlled",
-                "--no-first-run",
-                "--no-default-browser-check",
-                "--disable-background-networking",
-            ],
-        )
-        self.ctx.add_init_script("""
-          Object.defineProperty(navigator,'webdriver',{get:()=>undefined});
-          Object.defineProperty(navigator,'languages',{get:()=>['ru-RU','ru']});
-        """)
+        self.browser=self.pw.chromium.connect_over_cdp(CDP_URL)
+        contexts=self.browser.contexts
+        if not contexts:
+            raise RuntimeError("Chrome CDP connected but no browser context exists")
+        self.ctx=contexts[0]
         self.page=self.ctx.pages[0] if self.ctx.pages else self.ctx.new_page()
+        self._warmup_if_needed()
+
+    def _cdp_ready(self):
+        try:
+            with urllib.request.urlopen(CDP_URL+"/json/version",timeout=1.5) as r:
+                return r.status==200
+        except Exception:
+            return False
+
+    def _ensure_real_chrome(self):
+        if self._cdp_ready():
+            return
+
+        chrome=chrome_path()
+        chrome_log=(LOG_DIR/"chrome.log").open("ab")
+        args=[
+            chrome,
+            f"--remote-debugging-port={CDP_PORT}",
+            f"--user-data-dir={PROFILE_DIR}",
+            "--no-first-run",
+            "--no-default-browser-check",
+            "--disable-popup-blocking",
+            "--window-size=1280,900",
+            "--window-position=40,40",
+            "https://www.ozon.ru/",
+        ]
+        subprocess.Popen(
+            args,
+            stdout=chrome_log,
+            stderr=chrome_log,
+            stdin=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+
+        deadline=time.time()+25
+        while time.time()<deadline:
+            if self._cdp_ready():
+                return
+            time.sleep(0.5)
+        raise RuntimeError("Real Chrome started but CDP port 9227 did not become ready")
+
+    def _save_diag(self,label):
+        stamp=datetime.now().strftime("%Y%m%d-%H%M%S")
+        try:
+            self.page.screenshot(path=str(LOG_DIR/f"{label}-{stamp}.png"),full_page=False)
+        except Exception:
+            pass
+        try:
+            (LOG_DIR/f"{label}-{stamp}.html").write_text(
+                self.page.content()[:500000],
+                encoding="utf-8",
+                errors="ignore",
+            )
+        except Exception:
+            pass
+
+    def _warmup_if_needed(self,force=False):
+        marker=HOME/"ozon-warmup-ok"
+        if marker.exists() and not force:
+            return
+        try:
+            response=self.page.goto("https://www.ozon.ru/",wait_until="domcontentloaded",timeout=45000)
+            status=response.status if response else 0
+            self.page.wait_for_timeout(3500)
+            if status in (401,403,429):
+                self._save_diag("warmup-blocked")
+                if force:
+                    raise BlockedError(f"Ozon home HTTP {status}")
+                return
+            marker.write_text(now_iso(),encoding="utf-8")
+        except PlaywrightTimeoutError:
+            if force:
+                raise BlockedError("Ozon home timeout")
 
     def close(self):
+        # Chrome is intentionally kept alive between 1-minute worker runs.
         try:
-            self.ctx.close()
-        finally:
             self.pw.stop()
+        except Exception:
+            pass
+
+    def _goto_search(self,url):
+        try:
+            response=self.page.goto(url,wait_until="domcontentloaded",timeout=45000)
+        except PlaywrightTimeoutError:
+            self._save_diag("search-timeout")
+            raise BlockedError("Ozon search timeout")
+
+        status=response.status if response else 0
+        if status in (401,403,429):
+            # Retry once after opening the real home page. This gives Ozon a
+            # normal browser warm-up and keeps cookies in the persistent profile.
+            self._warmup_if_needed(force=True)
+            self.page.wait_for_timeout(1800)
+            try:
+                response=self.page.goto(url,wait_until="domcontentloaded",timeout=45000)
+            except PlaywrightTimeoutError:
+                self._save_diag("search-retry-timeout")
+                raise BlockedError("Ozon search retry timeout")
+            status=response.status if response else 0
+
+        if status in (401,403,429):
+            self._save_diag(f"search-http-{status}")
+            raise BlockedError(f"Ozon real Chrome HTTP {status}")
+
+        return status
 
     def scan(self,query,sku,max_position):
         target=str(sku)
@@ -282,20 +374,12 @@ class LiveScanner:
             if page_no>1:
                 params["page"]=str(page_no)
             url="https://www.ozon.ru/search/?"+urllib.parse.urlencode(params)
+            last_http=self._goto_search(url)
 
+            self.page.wait_for_timeout(2200)
             try:
-                response=self.page.goto(url,wait_until="domcontentloaded",timeout=35000)
-            except PlaywrightTimeoutError:
-                raise BlockedError("Ozon page timeout")
-
-            last_http=response.status if response else 0
-            if last_http in (401,403,429):
-                raise BlockedError(f"Ozon HTTP {last_http}")
-
-            self.page.wait_for_timeout(1400)
-            try:
-                self.page.evaluate("window.scrollTo(0, Math.min(document.body.scrollHeight, 2600))")
-                self.page.wait_for_timeout(500)
+                self.page.evaluate("window.scrollTo(0, Math.min(document.body.scrollHeight, 3000))")
+                self.page.wait_for_timeout(800)
             except Exception:
                 pass
 
@@ -305,9 +389,10 @@ class LiveScanner:
             ids=extract_ids(hrefs)
 
             if len(ids)<3:
-                body=(self.page.locator("body").inner_text(timeout=3000) or "")[:3000].lower()
+                body=(self.page.locator("body").inner_text(timeout=3000) or "")[:5000].lower()
+                self._save_diag("too-few-cards")
                 if "доступ ограничен" in body or "access denied" in body or "captcha" in body:
-                    raise BlockedError("Ozon anti-bot page")
+                    raise BlockedError("Ozon anti-bot page in real Chrome")
                 raise BlockedError(f"Ozon returned too few product cards ({len(ids)})")
 
             for pid in ids:
