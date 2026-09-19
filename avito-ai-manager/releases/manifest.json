@@ -1,7 +1,7 @@
 {
-  "version": "0.6.0",
+  "version": "0.7.0",
   "patch_url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/avito-ai-manager/releases/patch.py",
-  "patch_sha256": "182ad184dab6d8376382b290703f365b45ddcf2cec333bdc912beecf2ea1caa8",
+  "patch_sha256": "7cf1b04410baa4145b478ef200d00ca3b02ab83c7cc5a76ba022bf65cbacfe09",
   "published_at": "2026-09-19",
-  "notes": "Critical bootstrap fix: Python 3.14 compatibility, global-mode inheritance, UI hotfix"
+  "notes": "Real agent core: live Avito sync, LLM brain, CRM, knowledge base, approval/action executor, Python 3.14 recovery, transactional update"
 }
