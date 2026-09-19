@@ -1,0 +1,371 @@
+{
+  "task_id": "WB_ADS_2026",
+  "request": "WB_ADS_2026_20260919_095829.json",
+  "query": "реклама Wildberries 2026",
+  "knowledge_tag": "WB_ADS",
+  "generated_at": "2026-09-19T07:02:40.218779+00:00",
+  "videos": [
+    {
+      "video_id": "AN11sKa5WRE",
+      "url": "https://www.youtube.com/watch?v=AN11sKa5WRE",
+      "title": "Настройка НОВОЙ РЕКЛАМЫ на Вайлдберриз / Как настроить продвижение на Wildberries 2026",
+      "channel": "Андрей Пекинский • Реклама на Вайлдберриз и Озон",
+      "duration": 948,
+      "timestamp": null,
+      "query": "реклама Wildberries 2026",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-19_WB_ADS_2026_video_AN11sKa5WRE.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "PLzKas4tvXA",
+      "url": "https://www.youtube.com/watch?v=PLzKas4tvXA",
+      "title": "Advertising WILL NOT be the same: How to set up advertising on Wildberries in 2025-2026?",
+      "channel": "MPSTATS TV – Бизнес всегда в эфире",
+      "duration": 1238,
+      "timestamp": null,
+      "query": "реклама Wildberries 2026",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-19_WB_ADS_2026_video_PLzKas4tvXA.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "Ng0i23BRD60",
+      "url": "https://www.youtube.com/watch?v=Ng0i23BRD60",
+      "title": "Кто покупает на Вайлдберриз? Портрет целевой аудитории WILDBERRIES. Как правильно выбрать товар?",
+      "channel": "MP ABOUT / ВСЕ ПРО МАРКЕТПЛЕЙСЫ",
+      "duration": 204,
+      "timestamp": null,
+      "query": "реклама Wildberries 2026 shorts",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-19_WB_ADS_2026_video_Ng0i23BRD60.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "RAaCJPt2yOc",
+      "url": "https://www.youtube.com/watch?v=RAaCJPt2yOc",
+      "title": "Can You Actually Make Money Designing Wildberries Product Listings?",
+      "channel": "Юрий Химик",
+      "duration": 625,
+      "timestamp": null,
+      "query": "реклама Wildberries 2026 shorts",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-19_WB_ADS_2026_video_RAaCJPt2yOc.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "zkLyzR6jlWk",
+      "url": "https://www.youtube.com/watch?v=zkLyzR6jlWk",
+      "title": "Как продавать на ВАЙЛДБЕРРИЗ ( WILDBERRIES ) и получать МИЛЛИОНЫ | Wildberries в Казахстане? 2022",
+      "channel": "Вадим WB",
+      "duration": 1078,
+      "timestamp": null,
+      "query": "реклама Wildberries 2026 shorts",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-19_WB_ADS_2026_video_zkLyzR6jlWk.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "DkTK8TjYLmg",
+      "url": "https://www.youtube.com/watch?v=DkTK8TjYLmg",
+      "title": "🚀 My Plan for 2026: Wildberries, Kaspi, and Merch Launch! 👕",
+      "channel": "Алексей Косых ",
+      "duration": 1675,
+      "timestamp": null,
+      "query": "реклама Wildberries 2026 shorts",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-19_WB_ADS_2026_video_DkTK8TjYLmg.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "g1_kznU_LHc",
+      "url": "https://www.youtube.com/watch?v=g1_kznU_LHc",
+      "title": "Work at the Wildberries warehouse layout",
+      "channel": "SITDIK",
+      "duration": 274,
+      "timestamp": null,
+      "query": "реклама Wildberries 2026 shorts",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-19_WB_ADS_2026_video_g1_kznU_LHc.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "5120E8nHOas",
+      "url": "https://www.youtube.com/watch?v=5120E8nHOas",
+      "title": "SOAP DISH PRODUCT ON WILDBERRIES / WILDBERRIES PRODUCT ANALYSIS / CHOOSING PRODUCTS ON MARKETPLACES!",
+      "channel": "GUTNIK VLOG",
+      "duration": 667,
+      "timestamp": null,
+      "query": "реклама Wildberries 2026 shorts",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-19_WB_ADS_2026_video_5120E8nHOas.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "2OklhFKbaXA",
+      "url": "https://www.youtube.com/watch?v=2OklhFKbaXA",
+      "title": "THE END OF WILDBERRIES? Warehouse attacks, debt, and the banking crisis",
+      "channel": "Олег Артемьев - Ленивый инвестор",
+      "duration": 921,
+      "timestamp": null,
+      "query": "реклама Wildberries 2026 shorts",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-19_WB_ADS_2026_video_2OklhFKbaXA.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "CcyGwhb4N0Y",
+      "url": "https://www.youtube.com/watch?v=CcyGwhb4N0Y",
+      "title": "Как выйти из акции на Вайлдберриз, если она уже идет?? #вайлдберриз #селлермаркетплейсов",
+      "channel": "Анна • Худеем вкусно • ПП рецепты • ЗОЖ • Обзоры",
+      "duration": 492,
+      "timestamp": null,
+      "query": "реклама Wildberries 2026 shorts",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-19_WB_ADS_2026_video_CcyGwhb4N0Y.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "HcwSdRQnAj0",
+      "url": "https://www.youtube.com/watch?v=HcwSdRQnAj0",
+      "title": "PROMO CODES FROM WILDBERRIES SELLERS? 😱😱 // Marketplace news",
+      "channel": "Анастасия Павлова",
+      "duration": 1087,
+      "timestamp": null,
+      "query": "реклама Wildberries 2026 shorts",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-19_WB_ADS_2026_video_HcwSdRQnAj0.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "1gVkaCf_9cg",
+      "url": "https://www.youtube.com/watch?v=1gVkaCf_9cg",
+      "title": "КАКОЙ ТОВАР ПРОДАВАТЬ НА WILDBERRIES (ВАЙЛДБЕРИЗ). Как протестировать нишу на ВБ",
+      "channel": "Пресняков Маркетинг",
+      "duration": 944,
+      "timestamp": null,
+      "query": "реклама Wildberries 2026 shorts",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-19_WB_ADS_2026_video_1gVkaCf_9cg.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "D9-9R9ebYAs",
+      "url": "https://www.youtube.com/watch?v=D9-9R9ebYAs",
+      "title": "ДОКУМЕНТЫ ДЛЯ WILDBERRIES/  СЕРТИФИКАТ/  ДЕКЛАРАЦИЯ/   ОТКАЗНОЕ ПИСЬМО/  ШТРАФЫ/ ВАЛДБЕРРИЗ!",
+      "channel": "GUTNIK VLOG",
+      "duration": 900,
+      "timestamp": null,
+      "query": "реклама Wildberries 2026 shorts",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-19_WB_ADS_2026_video_D9-9R9ebYAs.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "Rj-FFzzqm8w",
+      "url": "https://www.youtube.com/watch?v=Rj-FFzzqm8w",
+      "title": "Не покупай обучение по маркетплейсам, не посмотрев это видео! WILDBERRIES. Товарка. Делюсь опытом",
+      "channel": "Маркетплейс это просто",
+      "duration": 834,
+      "timestamp": null,
+      "query": "реклама Wildberries 2026 shorts",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-19_WB_ADS_2026_video_Rj-FFzzqm8w.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "nw7N4ghsMLE",
+      "url": "https://www.youtube.com/watch?v=nw7N4ghsMLE",
+      "title": "ПРОДВИЖЕНИЕ ТОВАРА НА WILDBERRIES И OZON! САМЫЕ ВЫГОДНЫЕ СПОСОБЫ!",
+      "channel": "Aleksandr Bublikov",
+      "duration": 2759,
+      "timestamp": null,
+      "query": "реклама Wildberries 2026 shorts",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-19_WB_ADS_2026_video_nw7N4ghsMLE.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "dGeyDXU9rPo",
+      "url": "https://www.youtube.com/watch?v=dGeyDXU9rPo",
+      "title": "digital marketing course | online digital marketing course | online marketing course | #shorts",
+      "channel": "Skilledge Digital Academy",
+      "duration": 73,
+      "timestamp": null,
+      "query": "реклама WB 2026 shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-19_WB_ADS_2026_short_dGeyDXU9rPo.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "po0jY4WvCIc",
+      "url": "https://www.youtube.com/watch?v=po0jY4WvCIc",
+      "title": "Michael Jackson Pepsi Generation",
+      "channel": "Giraldi Media",
+      "duration": 92,
+      "timestamp": null,
+      "query": "реклама WB 2026 shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-19_WB_ADS_2026_short_po0jY4WvCIc.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "OJU3PrHvxn4",
+      "url": "https://www.youtube.com/watch?v=OJU3PrHvxn4",
+      "title": "Epic Split // Volvo Commercial // Jean-Claude Van Damme",
+      "channel": "Jean-Claude Van Damme",
+      "duration": 77,
+      "timestamp": null,
+      "query": "реклама WB 2026 shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-19_WB_ADS_2026_short_OJU3PrHvxn4.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "Tjl9tg9smgc",
+      "url": "https://www.youtube.com/watch?v=Tjl9tg9smgc",
+      "title": "Angry Birds Presents: Summer Pignic",
+      "channel": "Angry Birds",
+      "duration": 110,
+      "timestamp": null,
+      "query": "реклама WB 2026 shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-19_WB_ADS_2026_short_Tjl9tg9smgc.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "-A-7MWwb_Y8",
+      "url": "https://www.youtube.com/watch?v=-A-7MWwb_Y8",
+      "title": "Как работает реклама на Wildberries #shorts #wildberries #реклама",
+      "channel": "МРАКЕТПЛЕЙСЫ",
+      "duration": 61,
+      "timestamp": null,
+      "query": "Wildberries реклама CPC CPM",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-19_WB_ADS_2026_short_-A-7MWwb_Y8.md",
+      "method": "FreeTranscriptAPI"
+    }
+  ],
+  "errors": [
+    {
+      "video_id": "dUndQVgTy9M",
+      "url": "https://www.youtube.com/watch?v=dUndQVgTy9M",
+      "title": "Реклама Вайлдберриз - Скидки к новому сезону",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "_OfRJrJsadM",
+      "url": "https://www.youtube.com/watch?v=_OfRJrJsadM",
+      "title": "Wildberries",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "AA6IjtsKBGI",
+      "url": "https://www.youtube.com/watch?v=AA6IjtsKBGI",
+      "title": "Beautiful Ladies ❤️on Orthodox Epiphany bathing -7 °C 🥶 2022",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "epyATqewqec",
+      "url": "https://www.youtube.com/watch?v=epyATqewqec",
+      "title": "🎥 PEPSICO ID (short) | (2026, USA) [Fanmade] ✨ | #pepsi #kfc #pizzahut #fritolay #tacobell",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "wNw7ivb52ac",
+      "url": "https://www.youtube.com/watch?v=wNw7ivb52ac",
+      "title": "Warner Bros. is DOOMED",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "HWj-3ZfEthU",
+      "url": "https://www.youtube.com/watch?v=HWj-3ZfEthU",
+      "title": "🎥 PEPSICO ID | (2026, USA) [Fanmade] ✨ | #pepsi #kfc #pizzahut #fritolay #tacobell",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "sKo-jn6p22c",
+      "url": "https://www.youtube.com/watch?v=sKo-jn6p22c",
+      "title": "2026 FIFA World Cup | Official Intro Outro and Break Bumpers",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "uupUt3qW1oU",
+      "url": "https://www.youtube.com/watch?v=uupUt3qW1oU",
+      "title": "Beetlejuice - Now on VHS (Warner Home Video commercial, October 1988)",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "wkajQMBJNbs",
+      "url": "https://www.youtube.com/watch?v=wkajQMBJNbs",
+      "title": "Batman Arkham Knight Batarang Ad  - Fan Made",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "Sm6ZBsjQwPs",
+      "url": "https://www.youtube.com/watch?v=Sm6ZBsjQwPs",
+      "title": "Как улучшить CTR карточки Wildberries?",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "O4k9fAnjBo8",
+      "url": "https://www.youtube.com/watch?v=O4k9fAnjBo8",
+      "title": "Product Testing: How Much Should You Spend on Ads When Testing a Product?",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "V9s0L7edzxE",
+      "url": "https://www.youtube.com/watch?v=V9s0L7edzxE",
+      "title": "Примеры использования формата карусель во ВКонтакте",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "DQtvjqm-xxI",
+      "url": "https://www.youtube.com/watch?v=DQtvjqm-xxI",
+      "title": "World Cup 2026 - Official Intro",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "DOY7W4rUC_o",
+      "url": "https://www.youtube.com/watch?v=DOY7W4rUC_o",
+      "title": "FIFA World Cup 2026 Official TV Intro (4K)",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "nBSc8bY8koU",
+      "url": "https://www.youtube.com/watch?v=nBSc8bY8koU",
+      "title": "#WeAre26 | FIFA World Cup 26",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "uQu6RhqcmcI",
+      "url": "https://www.youtube.com/watch?v=uQu6RhqcmcI",
+      "title": "✨️ В каких сейчас Вы энергиях ❓️ #shorts #new",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "uBJjaDfad7M",
+      "url": "https://www.youtube.com/watch?v=uBJjaDfad7M",
+      "title": "БЕСКОНЕЧНАЯ КОКА-КОЛА! не шутка!",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "NorjVQ6-xTY",
+      "url": "https://www.youtube.com/watch?v=NorjVQ6-xTY",
+      "title": "ЗАРАБОТОК НА НАРЕЗКАХ 2026 - Лучший ОФФЕР Для Заработка на Баннерах (YouTube Shorts, ВК, ТИКТОК)",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "nKhg6PGWRag",
+      "url": "https://www.youtube.com/watch?v=nKhg6PGWRag",
+      "title": "❓️ Что происходит у человека о котором думаешь ты ❓️ #ясновидящая #shorts",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "OMzTSI4VGxQ",
+      "url": "https://www.youtube.com/watch?v=OMzTSI4VGxQ",
+      "title": "Adidas 2026 World Cup Kits Advert | La Preparación Americana",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    }
+  ]
+}
