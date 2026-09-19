@@ -29,6 +29,26 @@ jobs:
       - name: Syntax check
         run: python -m py_compile server.py
 
+      - name: Check residential proxy channel
+        shell: bash
+        env:
+          OZON_PROXY_PROVIDER: decodo
+          OZON_PROXY_HOST: gate.decodo.com
+          OZON_PROXY_PORT: "7000"
+          OZON_PROXY_USER: ${{ secrets.OZON_PROXY_USER }}
+          OZON_PROXY_PASS: ${{ secrets.OZON_PROXY_PASS }}
+        run: |
+          set +e
+          if [ -z "$OZON_PROXY_USER" ] || [ -z "$OZON_PROXY_PASS" ]; then
+            echo "PROXY_SECRETS_PRESENT=no"
+            exit 0
+          fi
+          echo "PROXY_SECRETS_PRESENT=yes"
+          cd ..
+          pip install -q -r ozon_live/requirements.txt
+          python ozon_live/proxy_preflight.py
+          echo "PROXY_PREFLIGHT_RC=$?"
+
       - name: Live Ozon storefront HTTP probe
         run: |
           python - <<'PY'
