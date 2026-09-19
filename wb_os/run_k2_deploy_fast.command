@@ -30,6 +30,12 @@ curl --connect-timeout 10 --max-time 30 -fsSL \
 curl --connect-timeout 10 --max-time 30 -fsSL \
   "$REPO_RAW/wb_os/apps_script/WB_PUBLIC_PRICE_V4.gs" \
   -o "$WORK/WB_PUBLIC_PRICE_V4.gs"
+curl --connect-timeout 10 --max-time 30 -fsSL \
+  "$REPO_RAW/wb_os/apps_script/OZON_RADAR_SERVER_BRIDGE.gs" \
+  -o "$WORK/OZON_RADAR_SERVER_BRIDGE.gs"
+curl --connect-timeout 10 --max-time 30 -fsSL \
+  "$REPO_RAW/wb_os/apps_script/OZON_RADAR_TELEGRAM_RELAY.gs" \
+  -o "$WORK/OZON_RADAR_TELEGRAM_RELAY.gs"
 
 echo "[3/8] Определяю Apps Script проект."
 SCRIPT_URL="${1:-}"
@@ -95,6 +101,8 @@ rsync -a "$PROJECT_DIR/" "$BACKUP/"
 
 cp "$WORK/K2_EVOLUTION_ENGINE.gs" "$PROJECT_DIR/K2_EVOLUTION_ENGINE.gs"
 cp "$WORK/WB_PUBLIC_PRICE_V4.gs" "$PROJECT_DIR/WB_PUBLIC_PRICE_V4.gs"
+cp "$WORK/OZON_RADAR_SERVER_BRIDGE.gs" "$PROJECT_DIR/OZON_RADAR_SERVER_BRIDGE.gs"
+cp "$WORK/OZON_RADAR_TELEGRAM_RELAY.gs" "$PROJECT_DIR/OZON_RADAR_TELEGRAM_RELAY.gs"
 python3 "$WORK/patch_live_master.py" "$PROJECT_DIR"
 
 echo "[7/8] Проверяю синтаксис..."
