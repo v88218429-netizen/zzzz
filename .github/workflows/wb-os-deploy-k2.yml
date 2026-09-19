@@ -7,6 +7,7 @@ on:
     paths:
       - "wb_os/apps_script/K2_EVOLUTION_ENGINE.gs"
       - "wb_os/apps_script/OZON_RADAR_TELEGRAM_RELAY.gs"
+      - "wb_os/apps_script/OZON_RADAR_SERVER_BRIDGE.gs"
       - "wb_os/tools/discover_clasp_project.py"
       - "wb_os/tools/patch_live_master.py"
       - ".github/workflows/wb-os-deploy-k2.yml"
@@ -96,6 +97,7 @@ jobs:
           set -euo pipefail
           cp wb_os/apps_script/K2_EVOLUTION_ENGINE.gs "$SOURCE_ROOT/K2_EVOLUTION_ENGINE.gs"
           cp wb_os/apps_script/OZON_RADAR_TELEGRAM_RELAY.gs "$SOURCE_ROOT/OZON_RADAR_TELEGRAM_RELAY.gs"
+          cp wb_os/apps_script/OZON_RADAR_SERVER_BRIDGE.gs "$SOURCE_ROOT/OZON_RADAR_SERVER_BRIDGE.gs"
           python3 wb_os/tools/patch_live_master.py "$SOURCE_ROOT"
 
       - name: Syntax check patched Apps Script
