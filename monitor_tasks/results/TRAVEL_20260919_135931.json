@@ -1,0 +1,221 @@
+{
+  "task_id": "TRAVEL",
+  "request": "TRAVEL_20260919_135931.json",
+  "query": "как путешествовать с семьей и управлять бизнесом удаленно",
+  "knowledge_tag": "TRAVEL",
+  "generated_at": "2026-09-19T11:01:06.269352+00:00",
+  "videos": [
+    {
+      "video_id": "pqbnypFX3h8",
+      "url": "https://www.youtube.com/watch?v=pqbnypFX3h8",
+      "title": "БИЗНЕС ИНСАЙТ: Сергей Разживин. Как удаленно развивать и управлять бизнесом?",
+      "channel": "Бизнес-школа БИЗНЕС ИНСАЙТ",
+      "duration": 4733,
+      "timestamp": null,
+      "query": "как путешествовать с семьей и управлять бизнесом удаленно",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-19_TRAVEL_video_pqbnypFX3h8.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "p5-1EMoV7XI",
+      "url": "https://www.youtube.com/watch?v=p5-1EMoV7XI",
+      "title": "Как сделать путешествия своей работой и при этом вести бизнес удаленно?",
+      "channel": "КИРИЛЛ КОВЯЗИН | KIRILL KOVIAZIN",
+      "duration": 528,
+      "timestamp": null,
+      "query": "как путешествовать с семьей и управлять бизнесом удаленно",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-19_TRAVEL_video_p5-1EMoV7XI.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "8nJvoUNhEBg",
+      "url": "https://www.youtube.com/watch?v=8nJvoUNhEBg",
+      "title": "Как удаленно управлять IT-компанией, жить в Польше и развивать 5+ направлений бизнеса",
+      "channel": "Бизнес и недвижимость в Польше | эбаут польша",
+      "duration": 3432,
+      "timestamp": null,
+      "query": "как путешествовать с семьей и управлять бизнесом удаленно",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-19_TRAVEL_video_8nJvoUNhEBg.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "Or_WPKMFwhw",
+      "url": "https://www.youtube.com/watch?v=Or_WPKMFwhw",
+      "title": "Автоматизация бизнеса",
+      "channel": "Кирилл Рыбасов",
+      "duration": 140,
+      "timestamp": null,
+      "query": "как путешествовать с семьей и управлять бизнесом удаленно",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-19_TRAVEL_short_Or_WPKMFwhw.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "PuB4qZ5IRbg",
+      "url": "https://www.youtube.com/watch?v=PuB4qZ5IRbg",
+      "title": "Бизнес и путешествия. Алексей Верютин",
+      "channel": "Алексей Верютин",
+      "duration": 5066,
+      "timestamp": null,
+      "query": "как путешествовать с семьей и управлять бизнесом удаленно",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-19_TRAVEL_video_PuB4qZ5IRbg.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "IE07at6Lar0",
+      "url": "https://www.youtube.com/watch?v=IE07at6Lar0",
+      "title": "Как управлять бизнесом эффективно? Личный помощник. Делегирование ответственности и полномочий 16+",
+      "channel": "Анна Всехсвятская",
+      "duration": 661,
+      "timestamp": null,
+      "query": "как путешествовать с семьей и управлять бизнесом удаленно",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-19_TRAVEL_video_IE07at6Lar0.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "2jUVDYuEYO4",
+      "url": "https://www.youtube.com/watch?v=2jUVDYuEYO4",
+      "title": "Работа удаленно в путешествиях - Как заработать в интернете новичку?",
+      "channel": "Лайфхаки",
+      "duration": 247,
+      "timestamp": null,
+      "query": "как путешествовать с семьей и управлять бизнесом удаленно",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-19_TRAVEL_video_2jUVDYuEYO4.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "v2q6SvSddGo",
+      "url": "https://www.youtube.com/watch?v=v2q6SvSddGo",
+      "title": "Финансовые привычки миллионеров, которые я хотела бы знать в 20",
+      "channel": "Marina Mogilko",
+      "duration": 1048,
+      "timestamp": null,
+      "query": "как путешествовать с семьей и управлять бизнесом удаленно",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-19_TRAVEL_video_v2q6SvSddGo.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "xao0XAnzzdY",
+      "url": "https://www.youtube.com/watch?v=xao0XAnzzdY",
+      "title": "Как мы вели свой бизнес по краткосрочной аренде жилья, путешествуя по всем 50 штатам.",
+      "channel": "Kylee & Steven - Short Term Rental Experts",
+      "duration": 609,
+      "timestamp": null,
+      "query": "как путешествовать с семьей и управлять бизнесом удаленно",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-19_TRAVEL_video_xao0XAnzzdY.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "CYDX4AwQJ4w",
+      "url": "https://www.youtube.com/watch?v=CYDX4AwQJ4w",
+      "title": "Как переехать на #Маврикий | Образование | Бизнес и работа | ВНЖ и ПМЖ | Переезжаем с детьми на море",
+      "channel": "Недвижимость на Маврикии | Heritage Island Estates",
+      "duration": 173,
+      "timestamp": null,
+      "query": "как путешествовать с семьей и управлять бизнесом удаленно shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-19_TRAVEL_short_CYDX4AwQJ4w.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "cem25d8cY_k",
+      "url": "https://www.youtube.com/watch?v=cem25d8cY_k",
+      "title": "We Need to Build Psychologically Safe Cultures - Jeff Riseley",
+      "channel": "EnableMinutes",
+      "duration": 112,
+      "timestamp": null,
+      "query": "как путешествовать с семьей и управлять бизнесом удаленно shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-19_TRAVEL_short_cem25d8cY_k.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "ye2IDyUVS1g",
+      "url": "https://www.youtube.com/watch?v=ye2IDyUVS1g",
+      "title": "ЕдуЕм. Выпуск Акселератора Techno Skolkovo Community",
+      "channel": "Венчурный Акселератор",
+      "duration": 163,
+      "timestamp": null,
+      "query": "предприниматель путешествия семья удаленное управление бизнесом shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-19_TRAVEL_short_ye2IDyUVS1g.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "JdnwjGD8s6k",
+      "url": "https://www.youtube.com/watch?v=JdnwjGD8s6k",
+      "title": "Arctic Today: \"Arctic Hectare\", Northern Sea Route, science",
+      "channel": "GoArctic | ПОРА в Арктику!",
+      "duration": 180,
+      "timestamp": null,
+      "query": "предприниматель путешествия семья удаленное управление бизнесом shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-19_TRAVEL_short_JdnwjGD8s6k.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "bfG02hiTwEs",
+      "url": "https://www.youtube.com/watch?v=bfG02hiTwEs",
+      "title": "A phone scammer showed police how he scams people.",
+      "channel": "EANews",
+      "duration": 128,
+      "timestamp": null,
+      "query": "предприниматель путешествия семья удаленное управление бизнесом shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-19_TRAVEL_short_bfG02hiTwEs.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "6k6iJWmlW-0",
+      "url": "https://www.youtube.com/watch?v=6k6iJWmlW-0",
+      "title": "Turning Your Culture Into a Travel Business” (inspired by Kids of the Colony & Tayo Aina)",
+      "channel": "Beast Uncovered",
+      "duration": 37,
+      "timestamp": null,
+      "query": "travel with kids entrepreneur",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-19_TRAVEL_short_6k6iJWmlW-0.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "JhyhgQLnLcE",
+      "url": "https://www.youtube.com/watch?v=JhyhgQLnLcE",
+      "title": "Business trip with kids",
+      "channel": "Stay Easy Apartments",
+      "duration": 25,
+      "timestamp": null,
+      "query": "travel with kids entrepreneur",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-19_TRAVEL_short_JhyhgQLnLcE.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "fdDnL3nvB2k",
+      "url": "https://www.youtube.com/watch?v=fdDnL3nvB2k",
+      "title": "Preparing Your Kids To Take Over The Family Business | Straight Talk with Lou Mosca",
+      "channel": "American Management Services",
+      "duration": 118,
+      "timestamp": null,
+      "query": "travel with kids entrepreneur shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-19_TRAVEL_short_fdDnL3nvB2k.md",
+      "method": "youtube-transcript.ai"
+    }
+  ],
+  "errors": [
+    {
+      "video_id": "REfae_C9JoA",
+      "url": "https://www.youtube.com/watch?v=REfae_C9JoA",
+      "title": "Открыть бизнес в Панаме",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    }
+  ]
+}
