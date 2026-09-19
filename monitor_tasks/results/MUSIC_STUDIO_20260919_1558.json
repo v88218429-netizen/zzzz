@@ -1,0 +1,65 @@
+{
+  "task_id": "MUSIC_STUDIO",
+  "request": "MUSIC_STUDIO_20260919_1558.json",
+  "query": "домашняя музыкальная студия в частном доме обзор",
+  "knowledge_tag": "MUSIC",
+  "generated_at": "2026-09-19T13:00:12.729537+00:00",
+  "videos": [
+    {
+      "video_id": "3H6HF_uDaRc",
+      "url": "https://www.youtube.com/watch?v=3H6HF_uDaRc",
+      "title": "ЧТО КУПИТЬ В ДОМАШНЮЮ СТУДИЮ ЗВУКОЗАПИСИ В 2025 ГОДУ?",
+      "channel": "АЙТИМЕЙК",
+      "duration": 1927,
+      "timestamp": null,
+      "query": "домашняя музыкальная студия в частном доме обзор",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-19_MUSIC_STUDIO_video_3H6HF_uDaRc.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "ZO0_WrB_UtI",
+      "url": "https://www.youtube.com/watch?v=ZO0_WrB_UtI",
+      "title": "МОЯ ДОМАШНЯЯ СТУДИЯ / СКОЛЬКО ОНА СТОИТ?",
+      "channel": "MORGENSHTERN",
+      "duration": 613,
+      "timestamp": null,
+      "query": "домашняя музыкальная студия в частном доме обзор",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-19_MUSIC_STUDIO_video_ZO0_WrB_UtI.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "cciFHC7Ul8U",
+      "url": "https://www.youtube.com/watch?v=cciFHC7Ul8U",
+      "title": "Как я пишу музыку дома",
+      "channel": "Rabea Massaad",
+      "duration": 717,
+      "timestamp": null,
+      "query": "домашняя музыкальная студия в частном доме обзор",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-19_MUSIC_STUDIO_video_cciFHC7Ul8U.md",
+      "method": "youtube-transcript.ai"
+    }
+  ],
+  "errors": [
+    {
+      "video_id": "yWeLVZTE4cc",
+      "url": "https://www.youtube.com/watch?v=yWeLVZTE4cc",
+      "title": "Домашняя музыкальная студия. Часть 1: Звукоизоляция",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "_zH6E6EQ6bg",
+      "url": "https://www.youtube.com/watch?v=_zH6E6EQ6bg",
+      "title": "МОЯ СТУДИЯ ЗВУКОЗАПИСИ за 500000 РУБЛЕЙ / МОНИТОРЫ ADAM Audio T8V, НАУШНИКИ, МИКРОФОН",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "QMJqxbaGL9E",
+      "url": "https://www.youtube.com/watch?v=QMJqxbaGL9E",
+      "title": "Алёна Свиридова: звукоизоляция студии в жилом доме",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    }
+  ]
+}

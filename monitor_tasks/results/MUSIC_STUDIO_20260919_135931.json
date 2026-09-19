@@ -1,0 +1,82 @@
+{
+  "task_id": "MUSIC_STUDIO",
+  "request": "MUSIC_STUDIO_20260919_135931.json",
+  "query": "домашняя музыкальная студия в частном доме обзор",
+  "knowledge_tag": "MUSIC",
+  "generated_at": "2026-09-19T12:59:49.461721+00:00",
+  "videos": [
+    {
+      "video_id": "KbatTVAV3sY",
+      "url": "https://www.youtube.com/watch?v=KbatTVAV3sY",
+      "title": "Budget Home Recording Studio: Building a Minimal Setup",
+      "channel": "Dr. Head",
+      "duration": 739,
+      "timestamp": null,
+      "query": "домашняя музыкальная студия в частном доме обзор",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-19_MUSIC_STUDIO_video_KbatTVAV3sY.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "Lu3hRYFoJe4",
+      "url": "https://www.youtube.com/watch?v=Lu3hRYFoJe4",
+      "title": "СТУДИЯ ЗВУКОЗАПИСИ ДОМА // ЧТО КУПИТЬ В 2026?",
+      "channel": "СЭЙМ MUSIC",
+      "duration": 804,
+      "timestamp": null,
+      "query": "домашняя музыкальная студия в частном доме обзор",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-19_MUSIC_STUDIO_video_Lu3hRYFoJe4.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "GAbN1Ydaj-s",
+      "url": "https://www.youtube.com/watch?v=GAbN1Ydaj-s",
+      "title": "Что купить для домашней студии в 2024?",
+      "channel": "Carameleen's Cave",
+      "duration": 678,
+      "timestamp": null,
+      "query": "домашняя музыкальная студия в частном доме обзор",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-19_MUSIC_STUDIO_video_GAbN1Ydaj-s.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "HjhUsM-u4zU",
+      "url": "https://www.youtube.com/watch?v=HjhUsM-u4zU",
+      "title": "СТУДИЯ ЗВУКОЗАПИСИ ДОМА/ЧТО КУПИТЬ В 2025?",
+      "channel": "BREAKBOY",
+      "duration": 516,
+      "timestamp": null,
+      "query": "домашняя музыкальная студия в частном доме обзор",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-19_MUSIC_STUDIO_video_HjhUsM-u4zU.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "BiTuSxEmhs0",
+      "url": "https://www.youtube.com/watch?v=BiTuSxEmhs0",
+      "title": "СВОЯ музыкальная СТУДИЯ. Обзор дома для гостиничного бизнеса. Рум-тур по ДВУМ гостевым коттеджам.",
+      "channel": "Квадратный Метр",
+      "duration": 369,
+      "timestamp": null,
+      "query": "домашняя музыкальная студия в частном доме обзор",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-19_MUSIC_STUDIO_video_BiTuSxEmhs0.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "KZ8_fOhPLJk",
+      "url": "https://www.youtube.com/watch?v=KZ8_fOhPLJk",
+      "title": "Home Studio Setup: Choosing a Music Production Computer and More",
+      "channel": "Дмитрий Сайбер",
+      "duration": 487,
+      "timestamp": null,
+      "query": "домашняя музыкальная студия в частном доме обзор",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-19_MUSIC_STUDIO_video_KZ8_fOhPLJk.md",
+      "method": "youtube-transcript.ai"
+    }
+  ],
+  "errors": []
+}
