@@ -47,6 +47,7 @@ RADAR_SECRET = env("RADAR_SECRET")
 TELEGRAM_BOT_TOKEN = env("TELEGRAM_BOT_TOKEN", "BOT_TOKEN")
 TELEGRAM_CHAT_ID = env("TELEGRAM_CHAT_ID", "OWNER_CHAT_ID")
 OZON_PROXY = env("OZON_PROXY")
+RADAR_TASKS_JSON = env("RADAR_TASKS_JSON")
 
 
 class RadarTaskIn(BaseModel):
@@ -449,8 +450,32 @@ async def scheduler() -> None:
         await asyncio.sleep(CHECK_LOOP_SECONDS)
 
 
+def load_env_tasks() -> None:
+    if not RADAR_TASKS_JSON:
+        return
+    try:
+        raw = json.loads(RADAR_TASKS_JSON)
+        items = raw.get("tasks", raw) if isinstance(raw, dict) else raw
+        if not isinstance(items, list):
+            raise ValueError("RADAR_TASKS_JSON must be a list or {tasks:[...]}")
+        now = time.time()
+        for item in items:
+            task = RadarTaskIn.model_validate(item)
+            if not task.enabled:
+                continue
+            key = task_key(task)
+            runtime.tasks[key] = TaskState(
+                task=task,
+                last_position=task.baseline_position,
+                next_due_ts=now,
+            )
+    except Exception as exc:
+        runtime.last_error = f"RADAR_TASKS_JSON error: {type(exc).__name__}: {exc}"
+
+
 @app.on_event("startup")
 async def startup() -> None:
+    load_env_tasks()
     asyncio.create_task(scheduler())
 
 
