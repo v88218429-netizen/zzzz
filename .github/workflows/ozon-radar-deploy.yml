@@ -2,11 +2,6 @@ name: Legacy Ozon Mac Radar (manual only)
 
 on:
   workflow_dispatch:
-  push:
-    branches: [mainggg]
-    paths:
-      - "ozon_radar/**"
-      - ".github/workflows/ozon-radar-deploy.yml"
 
 permissions:
   contents: read
