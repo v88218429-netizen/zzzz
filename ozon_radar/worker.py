@@ -31,7 +31,7 @@ RADAR_SHEET="06_Радар_1мин"
 HISTORY_SHEET="06_Радар_История"
 QUEUE_SHEET="06_Радар_Очередь"
 SOURCE="LIVE WEB · Chrome CDP"
-HEARTBEAT_TO_SHEET_SEC=300
+HEARTBEAT_TO_SHEET_SEC=60
 CDP_PORT=9227
 CDP_URL=f"http://127.0.0.1:{CDP_PORT}"
 CHROME_PATHS=[
@@ -430,6 +430,7 @@ def load_tasks(token):
             "drop_threshold":max(1,as_int(row[5],3)),
             "top_boundary":max(1,as_int(row[6],10)),
             "max_position":max(10,min(200,as_int(row[7],100))),
+            "sheet_position":as_int(row[8],0) or None,
         })
     return out
 
@@ -499,6 +500,8 @@ def run_once():
                 key=key_for(task["article"],task["sku"],task["query"])
                 checked_at=time.time()
                 prev=st["last_position"]
+                if prev is None and task.get("sheet_position") is not None:
+                    prev=task["sheet_position"]
                 last_sheet_at=st["last_sheet_at"]
                 last_alert_at=st["last_alert_at"]
                 alert_active=int(st["alert_active"] or 0)
