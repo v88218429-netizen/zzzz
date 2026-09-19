@@ -26,16 +26,16 @@ curl -fsSL "$RAW/wb_os/apps_script/OZON_RADAR_TELEGRAM_RELAY.gs" -o "$WORK/wb_os
 curl -fsSL "$RAW/wb_os/apps_script/K2_EVOLUTION_ENGINE.gs" -o "$WORK/wb_os/apps_script/K2_EVOLUTION_ENGINE.gs"
 curl -fsSL "$RAW/wb_os/tools/discover_clasp_project.py" -o "$WORK/wb_os/tools/discover_clasp_project.py"
 curl -fsSL "$RAW/wb_os/tools/patch_live_master.py" -o "$WORK/wb_os/tools/patch_live_master.py"
-chmod +x "$WORK/ozon_radar/install_launchd.sh"
+chmod +x "$WORK/ozon_radar/install_launchd.sh" "$WORK/ozon_radar/repair_mac_runner.sh"
 
-echo "[2/8] Проверяю Chrome и Google OAuth..."
+echo "[2/9] Восстанавливаю self-hosted Mac runner..."\nbash "$WORK/ozon_radar/repair_mac_runner.sh" || true\n\necho "[3/9] Проверяю Chrome и Google OAuth..."
 test -x "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 if [ ! -f "$HOME/.clasprc.json" ]; then
   echo "Нужна одноразовая авторизация Google."
   run_clasp login
 fi
 
-echo "[3/8] Проверяю реальную выдачу Ozon..."
+echo "[4/9] Проверяю реальную выдачу Ozon..."
 PROBE="$WORK/probe-venv"
 rm -rf "$PROBE"
 python3 -m venv "$PROBE"
@@ -44,10 +44,10 @@ python3 -m venv "$PROBE"
 "$PROBE/bin/python" "$WORK/ozon_radar/worker.py" \
   --probe "лопата садовая" "5094364543" --max-position 30
 
-echo "[4/8] Ставлю минутный worker..."
+echo "[5/9] Ставлю минутный worker..."
 bash "$WORK/ozon_radar/install_launchd.sh"
 
-echo "[5/8] Нахожу текущий WB OS Apps Script..."
+echo "[6/9] Нахожу текущий WB OS Apps Script..."
 PROJECT_DIR="$(python3 "$WORK/wb_os/tools/discover_clasp_project.py")"
 test -f "$PROJECT_DIR/.clasp.json"
 cd "$PROJECT_DIR"
@@ -63,7 +63,7 @@ PY
 )"
 test -d "$SOURCE_ROOT"
 
-echo "[6/8] Backup + Telegram relay..."
+echo "[7/9] Backup + Telegram relay..."
 TS="$(date +%Y%m%d-%H%M%S)"
 BACKUP="$BACKUPS/ozon-radar-live-$TS"
 mkdir -p "$BACKUP"
@@ -73,7 +73,7 @@ cp "$WORK/wb_os/apps_script/K2_EVOLUTION_ENGINE.gs" "$SOURCE_ROOT/K2_EVOLUTION_E
 cp "$WORK/wb_os/apps_script/OZON_RADAR_TELEGRAM_RELAY.gs" "$SOURCE_ROOT/OZON_RADAR_TELEGRAM_RELAY.gs"
 python3 "$WORK/wb_os/tools/patch_live_master.py" "$SOURCE_ROOT"
 
-echo "[7/8] Проверяю синтаксис и отправляю Apps Script..."
+echo "[8/9] Проверяю синтаксис и отправляю Apps Script..."
 while IFS= read -r -d '' f; do
   TMPDIR_CHECK="$(mktemp -d -t ozon-radar-js.XXXXXX)"
   cp "$f" "$TMPDIR_CHECK/check.js"
@@ -88,7 +88,7 @@ run_clasp push -f
 # Otherwise WB OS master will call ensureOzonRadarTelegramTrigger_ automatically.
 run_clasp run setupOzonRadarTelegramRelay >/dev/null 2>&1 || true
 
-echo "[8/8] Проверяю worker..."
+echo "[9/9] Проверяю worker..."
 sleep 12
 if [ -f "$HOME/.ozon-radar/health.json" ]; then
   cat "$HOME/.ozon-radar/health.json"
