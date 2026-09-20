@@ -1,0 +1,11 @@
+{
+  "task_id": "LIFE_DESIGN",
+  "query": "идеальная жизнь предпринимателя семья свобода образ жизни",
+  "extra_queries": ["lifestyle design entrepreneur family freedom", "идеальная неделя предпринимателя", "day in the life entrepreneur family freedom"],
+  "content": "Оба",
+  "limit_video": 8,
+  "limit_shorts": 12,
+  "depth_days": 30,
+  "knowledge_tag": "LIFE",
+  "language": "ru"
+}
