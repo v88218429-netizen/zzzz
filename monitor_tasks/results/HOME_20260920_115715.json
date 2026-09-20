@@ -1,0 +1,233 @@
+{
+  "task_id": "HOME",
+  "request": "HOME_20260920_115715.json",
+  "query": "современные дома для семьи обзор планировок 150 200 м2",
+  "knowledge_tag": "HOME",
+  "generated_at": "2026-09-20T09:01:08.699406+00:00",
+  "videos": [
+    {
+      "video_id": "PsUlXrl84p0",
+      "url": "https://www.youtube.com/watch?v=PsUlXrl84p0",
+      "title": "ПЛАНИРОВКА ДОМА 150-200м2 // Главные правила // ДВУХЭТАЖНЫЕ ДОМА // Дома сложной формы",
+      "channel": "Архитектор Виталий Злобин",
+      "duration": 1057,
+      "timestamp": null,
+      "query": "современные дома для семьи обзор планировок 150 200 м2",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-20_HOME_video_PsUlXrl84p0.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "kTgDTnC3D0g",
+      "url": "https://www.youtube.com/watch?v=kTgDTnC3D0g",
+      "title": "Потрясающий двухэтажный дом 150 м² \\ Планировка + проект",
+      "channel": "TOPDOM",
+      "duration": 602,
+      "timestamp": null,
+      "query": "современные дома для семьи обзор планировок 150 200 м2",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-20_HOME_video_kTgDTnC3D0g.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "EoTuijMTds8",
+      "url": "https://www.youtube.com/watch?v=EoTuijMTds8",
+      "title": "Двухэтажный дом ТВОЕЙ МЕЧТЫ / Обзор, стоимость, планировка.",
+      "channel": "ИнвестСтрой",
+      "duration": 864,
+      "timestamp": null,
+      "query": "современные дома для семьи обзор планировок 150 200 м2",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-20_HOME_video_EoTuijMTds8.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "Eat1GXtOCg8",
+      "url": "https://www.youtube.com/watch?v=Eat1GXtOCg8",
+      "title": "How to Build a House in the Region? | A Review of a Modern 200-Sq.-M House",
+      "channel": "Архитектор Денис Шибанов",
+      "duration": 715,
+      "timestamp": null,
+      "query": "современные дома для семьи обзор планировок 150 200 м2",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-20_HOME_video_Eat1GXtOCg8.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "5urv1gX7-n0",
+      "url": "https://www.youtube.com/watch?v=5urv1gX7-n0",
+      "title": "Дом 150 кв.м. 🏡 Обзор внешнего вида и планировки.",
+      "channel": "BDD GROUP",
+      "duration": 1129,
+      "timestamp": null,
+      "query": "современные дома для семьи обзор планировок 150 200 м2",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-20_HOME_video_5urv1gX7-n0.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "Bcyw5dCja6k",
+      "url": "https://www.youtube.com/watch?v=Bcyw5dCja6k",
+      "title": "СОВРЕМЕННЫЙ ДОМ ДЛЯ МОЛОДОЙ СЕМЬИ 150 м² | Дизайн интерьера, обзор дома",
+      "channel": "Fjorden Строительство домов",
+      "duration": 324,
+      "timestamp": null,
+      "query": "современные дома для семьи обзор планировок 150 200 м2",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-20_HOME_video_Bcyw5dCja6k.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "8r-z4FZmM_s",
+      "url": "https://www.youtube.com/watch?v=8r-z4FZmM_s",
+      "title": "New Project Review: Single-Story 150 sqm Prairie-Style House with a Large Terrace",
+      "channel": "КЛМ ДОМ",
+      "duration": 222,
+      "timestamp": null,
+      "query": "современные дома для семьи обзор планировок 150 200 м2",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-20_HOME_video_8r-z4FZmM_s.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "tYXFU2KouRY",
+      "url": "https://www.youtube.com/watch?v=tYXFU2KouRY",
+      "title": "Обзор двухэтажного дома 150 кв.м",
+      "channel": "Победа. Малоэтажные дома заводского изготовления",
+      "duration": 232,
+      "timestamp": null,
+      "query": "современные дома для семьи обзор планировок 150 200 м2",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-20_HOME_video_tYXFU2KouRY.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "mow_XMnaJO4",
+      "url": "https://www.youtube.com/watch?v=mow_XMnaJO4",
+      "title": "15 вещей, о которых жалеют после строительства дома. Не повторяйте эти ошибки!",
+      "channel": "GOOD WOOD Строительство домов",
+      "duration": 783,
+      "timestamp": null,
+      "query": "современные дома для семьи обзор планировок 150 200 м2",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-20_HOME_video_mow_XMnaJO4.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "iqZ9ZJVE0pI",
+      "url": "https://www.youtube.com/watch?v=iqZ9ZJVE0pI",
+      "title": "Как грамотно выбирать проекты домов 150 200 кв м",
+      "channel": "Красивые загородные проекты",
+      "duration": 104,
+      "timestamp": null,
+      "query": "современные дома для семьи обзор планировок 150 200 м2",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-20_HOME_short_iqZ9ZJVE0pI.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "Y4OR4GF5hjE",
+      "url": "https://www.youtube.com/watch?v=Y4OR4GF5hjE",
+      "title": "💥ПРОЕКТ СОВРЕМЕННОГО ДОМА 150 КВ.М.",
+      "channel": "ПРОЕКТЫ КРАСИВЫХ ДОМОВ",
+      "duration": 122,
+      "timestamp": null,
+      "query": "современные дома для семьи обзор планировок 150 200 м2",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-20_HOME_short_Y4OR4GF5hjE.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "BlkqLJ5MBFw",
+      "url": "https://www.youtube.com/watch?v=BlkqLJ5MBFw",
+      "title": "200 m² House Tour. Two-Story Stone House.",
+      "channel": "Home Строительство и Ремонт",
+      "duration": 156,
+      "timestamp": null,
+      "query": "современные дома для семьи обзор планировок 150 200 м2 shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-20_HOME_short_BlkqLJ5MBFw.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "4aO9y5CIjaM",
+      "url": "https://www.youtube.com/watch?v=4aO9y5CIjaM",
+      "title": "Уютный дом за живой изгородью🏠 | Обзор дома и Рум Тур",
+      "channel": "Наталья Щурова - Риэлтор загород",
+      "duration": 116,
+      "timestamp": null,
+      "query": "современные дома для семьи обзор планировок 150 200 м2 shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-20_HOME_short_4aO9y5CIjaM.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "gpO7vbLiEiY",
+      "url": "https://www.youtube.com/watch?v=gpO7vbLiEiY",
+      "title": "Проект одноэтажного дома 200 м2 с потолками в уровнях и 3 спальнями",
+      "channel": "Николай Ершов_ПРОЕКТЫ и ДИЗАЙН",
+      "duration": 17,
+      "timestamp": null,
+      "query": "современные дома для семьи обзор планировок 150 200 м2 shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-20_HOME_short_gpO7vbLiEiY.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "CAPsGVDWeD0",
+      "url": "https://www.youtube.com/watch?v=CAPsGVDWeD0",
+      "title": "Стильный барнхаус \"Austria 150-S\" с панорамными окнами",
+      "channel": "Земля МО Девелопмент Групп",
+      "duration": 75,
+      "timestamp": null,
+      "query": "современные дома для семьи обзор планировок 150 200 м2 shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-20_HOME_short_CAPsGVDWeD0.md",
+      "method": "FreeTranscriptAPI"
+    }
+  ],
+  "errors": [
+    {
+      "video_id": "cPqNOWC63mI",
+      "url": "https://www.youtube.com/watch?v=cPqNOWC63mI",
+      "title": "Одноэтажный дом 200 м2 с бассейном и спа | Обзор дома с Заказчиком",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 500: Internal Server Error"
+    },
+    {
+      "video_id": "EzNgyrVOgv4",
+      "url": "https://www.youtube.com/watch?v=EzNgyrVOgv4",
+      "title": "Двухэтажный загородный дом с очень удобной планировкой/Дом площадью 150 м2 для большой семьи",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "i4n0r-SC4rs",
+      "url": "https://www.youtube.com/watch?v=i4n0r-SC4rs",
+      "title": "Современный двухэтажный дом с 6 спальнями 200 м.кв. #строительстводомов #загородныйдом #коттедж",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "DXGS6ejRiSI",
+      "url": "https://www.youtube.com/watch?v=DXGS6ejRiSI",
+      "title": "Уютный дом 150 кв м во 2-м Иркутске",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "am_FbbS23VU",
+      "url": "https://www.youtube.com/watch?v=am_FbbS23VU",
+      "title": "Проект одноэтажного дома 200 м2 с гаражом на 2 авто. Ссылка на проект в описании",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "RXPXit_pous",
+      "url": "https://www.youtube.com/watch?v=RXPXit_pous",
+      "title": "💥 ПРОЕКТ ДВУХЭТАЖНОГО ДОМА С САУНОЙ💥 Готовый проект 177 кв.м.",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "hx2YRAcfqlQ",
+      "url": "https://www.youtube.com/watch?v=hx2YRAcfqlQ",
+      "title": "Проект дома ГРАФ 200 м2 с гаражом и проработанными планировками. Ссылка о доме в описании",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    }
+  ]
+}
