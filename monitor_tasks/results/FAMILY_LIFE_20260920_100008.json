@@ -1,0 +1,179 @@
+{
+  "task_id": "FAMILY_LIFE",
+  "request": "FAMILY_LIFE_20260920_100008.json",
+  "query": "семейная жизнь предпринимателя как совмещать бизнес и семью",
+  "knowledge_tag": "FAMILY",
+  "generated_at": "2026-09-20T07:03:12.869523+00:00",
+  "videos": [
+    {
+      "video_id": "PGfgPh3cwgA",
+      "url": "https://www.youtube.com/watch?v=PGfgPh3cwgA",
+      "title": "Как совмещать бизнес и семью?",
+      "channel": "БОГАТЫЙ ГОЛОС с Любовью",
+      "duration": 2035,
+      "timestamp": null,
+      "query": "семейная жизнь предпринимателя как совмещать бизнес и семью",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-20_FAMILY_LIFE_video_PGfgPh3cwgA.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "wXbnO21UBF8",
+      "url": "https://www.youtube.com/watch?v=wXbnO21UBF8",
+      "title": "Владимир Тарасов  Как совмещать бизнес и семью",
+      "channel": "nl inter (BM W Promo)",
+      "duration": 386,
+      "timestamp": null,
+      "query": "семейная жизнь предпринимателя как совмещать бизнес и семью",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-20_FAMILY_LIFE_video_wXbnO21UBF8.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "kC2o2_glgKc",
+      "url": "https://www.youtube.com/watch?v=kC2o2_glgKc",
+      "title": "Как совмещать семью и бизнес?",
+      "channel": "Alina Malinina",
+      "duration": 237,
+      "timestamp": null,
+      "query": "семейная жизнь предпринимателя как совмещать бизнес и семью",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-20_FAMILY_LIFE_video_kC2o2_glgKc.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "ThXkJCZq5rc",
+      "url": "https://www.youtube.com/watch?v=ThXkJCZq5rc",
+      "title": "Как Совмещать Бизнес, Путешествия и Семью? Никита Ануфриев",
+      "channel": "Илья Прусенко | Думать Масштабно",
+      "duration": 226,
+      "timestamp": null,
+      "query": "семейная жизнь предпринимателя как совмещать бизнес и семью",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-20_FAMILY_LIFE_video_ThXkJCZq5rc.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "WSnOQcitnGg",
+      "url": "https://www.youtube.com/watch?v=WSnOQcitnGg",
+      "title": "Как совмещать любовь и бизнес   Интервью",
+      "channel": "Сергей Сергианн",
+      "duration": 1376,
+      "timestamp": null,
+      "query": "семейная жизнь предпринимателя как совмещать бизнес и семью",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-20_FAMILY_LIFE_video_WSnOQcitnGg.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "TNjDwuSfQs0",
+      "url": "https://www.youtube.com/watch?v=TNjDwuSfQs0",
+      "title": "Как совмещать бизнес, спорт и семью?",
+      "channel": "Шереметов Александр",
+      "duration": 54,
+      "timestamp": null,
+      "query": "семейная жизнь предпринимателя как совмещать бизнес и семью",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-20_FAMILY_LIFE_short_TNjDwuSfQs0.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "3QieeNbO6lI",
+      "url": "https://www.youtube.com/watch?v=3QieeNbO6lI",
+      "title": "Каневской предприниматель построил спортплощадку для детей",
+      "channel": "Каневская Телевизионная Cтудия",
+      "duration": 168,
+      "timestamp": null,
+      "query": "предприниматель семья дети образ жизни",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-20_FAMILY_LIFE_short_3QieeNbO6lI.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "PFrFX15x9IQ",
+      "url": "https://www.youtube.com/watch?v=PFrFX15x9IQ",
+      "title": "Блогеры и предприниматели из Пензы объединились, чтобы выполнить желания детей",
+      "channel": "Телеканал \"ТВ-Экспресс\"",
+      "duration": 121,
+      "timestamp": null,
+      "query": "предприниматель семья дети образ жизни",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-20_FAMILY_LIFE_short_PFrFX15x9IQ.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "YYA1LL-5mk4",
+      "url": "https://www.youtube.com/watch?v=YYA1LL-5mk4",
+      "title": "«Моя счастливая семья!»",
+      "channel": "ТТК - Новости Темиртау",
+      "duration": 162,
+      "timestamp": null,
+      "query": "предприниматель семья дети образ жизни shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-20_FAMILY_LIFE_short_YYA1LL-5mk4.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "kJ5c6qUeTKw",
+      "url": "https://www.youtube.com/watch?v=kJ5c6qUeTKw",
+      "title": "The Pantry",
+      "channel": "Новости Ямала",
+      "duration": 159,
+      "timestamp": null,
+      "query": "предприниматель семья дети образ жизни shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-20_FAMILY_LIFE_short_kJ5c6qUeTKw.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "hvOQJlnS8zc",
+      "url": "https://www.youtube.com/watch?v=hvOQJlnS8zc",
+      "title": "Сын Валерии Арсений Шульгин показал, как выросла его дочка малышка Селинка",
+      "channel": "Чужое Мнение",
+      "duration": 115,
+      "timestamp": null,
+      "query": "предприниматель семья дети образ жизни shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-20_FAMILY_LIFE_short_hvOQJlnS8zc.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "RoEROEXto74",
+      "url": "https://www.youtube.com/watch?v=RoEROEXto74",
+      "title": "Young mom of 4 and entrepreneur (short intro video)",
+      "channel": "Nelly's Family Bunch",
+      "duration": 66,
+      "timestamp": null,
+      "query": "family entrepreneur lifestyle shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-20_FAMILY_LIFE_short_RoEROEXto74.md",
+      "method": "youtube-transcript.ai"
+    }
+  ],
+  "errors": [
+    {
+      "video_id": "VEdS1mMONpI",
+      "url": "https://www.youtube.com/watch?v=VEdS1mMONpI",
+      "title": "СЕМЬЯ И БИЗНЕС! Как Совмещать? Зарабатываю Больше Мужа!",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "bVKmfF7KRqY",
+      "url": "https://www.youtube.com/watch?v=bVKmfF7KRqY",
+      "title": "«Семейный бизнес»: Вовочка о ритме своей жизни",
+      "error": "transcript_ai: HTTP Error 502: Bad Gateway | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "i6SXSrnK7Gc",
+      "url": "https://www.youtube.com/watch?v=i6SXSrnK7Gc",
+      "title": "Совету предпринимательства Видео поздравление от нашего центра Семья и детей приюта 🙏",
+      "error": "transcript_ai: HTTP Error 502: Bad Gateway | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "HuI8SZAnIBE",
+      "url": "https://www.youtube.com/watch?v=HuI8SZAnIBE",
+      "title": "Ника 5 лет. Интервью маленького предпринимателя. Благотворительного семейного фестиваля ДЕТКИ",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    }
+  ]
+}
