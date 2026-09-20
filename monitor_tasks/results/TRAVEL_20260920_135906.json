@@ -1,0 +1,167 @@
+{
+  "task_id": "TRAVEL",
+  "request": "TRAVEL_20260920_135906.json",
+  "query": "как путешествовать с семьей и управлять бизнесом удаленно",
+  "knowledge_tag": "TRAVEL",
+  "generated_at": "2026-09-20T11:59:58.568173+00:00",
+  "videos": [
+    {
+      "video_id": "jQ0RRBACiV8",
+      "url": "https://www.youtube.com/watch?v=jQ0RRBACiV8",
+      "title": "Проект  'Валим из офиса' Партнерство в интернете",
+      "channel": "IT portal PRO",
+      "duration": 238,
+      "timestamp": null,
+      "query": "как путешествовать с семьей и управлять бизнесом удаленно",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-20_TRAVEL_video_jQ0RRBACiV8.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "iJ28DIsLrk0",
+      "url": "https://www.youtube.com/watch?v=iJ28DIsLrk0",
+      "title": "Удаленная работа.  Вебинар Андрея Трунова и Сергея Крыласова.",
+      "channel": "YouTube канал семьи Труновых",
+      "duration": 6824,
+      "timestamp": null,
+      "query": "как путешествовать с семьей и управлять бизнесом удаленно",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-20_TRAVEL_video_iJ28DIsLrk0.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "SxXN7oaoMq8",
+      "url": "https://www.youtube.com/watch?v=SxXN7oaoMq8",
+      "title": "Этого вы про Африку не знали! Бизнес в ЮАР: инвестиции в землю и туризм",
+      "channel": "Дмитрий Демчук",
+      "duration": 431,
+      "timestamp": null,
+      "query": "как путешествовать с семьей и управлять бизнесом удаленно",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-20_TRAVEL_video_SxXN7oaoMq8.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "pX10d05uXts",
+      "url": "https://www.youtube.com/watch?v=pX10d05uXts",
+      "title": "🎯 Курсы бухгалтеров с нуля дистанционно",
+      "channel": "Daniel Allen",
+      "duration": 320,
+      "timestamp": null,
+      "query": "как путешествовать с семьей и управлять бизнесом удаленно",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-20_TRAVEL_video_pX10d05uXts.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "Y4rYGcp49v8",
+      "url": "https://www.youtube.com/watch?v=Y4rYGcp49v8",
+      "title": "📐Организация удаленной работы Переходим в remote быстро, чек лист",
+      "channel": "Mike Pritula Academy",
+      "duration": 3161,
+      "timestamp": null,
+      "query": "как путешествовать с семьей и управлять бизнесом удаленно",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-20_TRAVEL_video_Y4rYGcp49v8.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "5LqZFdxIsSY",
+      "url": "https://www.youtube.com/watch?v=5LqZFdxIsSY",
+      "title": "Интервью с Александрой Левановой \"Как вырасти из преподавателя в руководителя и путешествовать?\"",
+      "channel": "BIG BEN CRM ",
+      "duration": 2343,
+      "timestamp": null,
+      "query": "как путешествовать с семьей и управлять бизнесом удаленно",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-20_TRAVEL_video_5LqZFdxIsSY.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "9bpLsfqkpLs",
+      "url": "https://www.youtube.com/watch?v=9bpLsfqkpLs",
+      "title": "⛔ ДИСТАНЦИОННЫЕ КУРСЫ БУХГАЛТЕРИИ ❌ КУРСЫ БУХГАЛТЕР ПО ЗАРАБОТНОЙ ПЛАТЕ ДИСТАНЦИОННО ⚪",
+      "channel": "Tommy Thompson",
+      "duration": 320,
+      "timestamp": null,
+      "query": "как путешествовать с семьей и управлять бизнесом удаленно",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-20_TRAVEL_video_9bpLsfqkpLs.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "Eu2QQhF12gk",
+      "url": "https://www.youtube.com/watch?v=Eu2QQhF12gk",
+      "title": "Как удаленно управлять арендой жилья в среднесрочной перспективе (из Южной Кореи!)",
+      "channel": "Bailey Kramer",
+      "duration": 2843,
+      "timestamp": null,
+      "query": "как путешествовать с семьей и управлять бизнесом удаленно",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-20_TRAVEL_video_Eu2QQhF12gk.md",
+      "method": "FreeTranscriptAPI"
+    }
+  ],
+  "errors": [
+    {
+      "video_id": "REfae_C9JoA",
+      "url": "https://www.youtube.com/watch?v=REfae_C9JoA",
+      "title": "Открыть бизнес в Панаме",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "muQV1vBg02I",
+      "url": "https://www.youtube.com/watch?v=muQV1vBg02I",
+      "title": "The Craftiest and Most Shameless Neighbor in the World / Con Artist Neighbor / How to Make Money?...",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "7Q1JHjWWyHU",
+      "url": "https://www.youtube.com/watch?v=7Q1JHjWWyHU",
+      "title": "Traveling with kids- Digital business owner",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "xO5glp_XRww",
+      "url": "https://www.youtube.com/watch?v=xO5glp_XRww",
+      "title": "Flying in Business Class with 3 kids on points ✈️",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "B_3tbOBtnQU",
+      "url": "https://www.youtube.com/watch?v=B_3tbOBtnQU",
+      "title": "Digital Nomad Family: How We Built a Remote Business While Traveling the World",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "L1Oz9Szu73M",
+      "url": "https://www.youtube.com/watch?v=L1Oz9Szu73M",
+      "title": "Work from Home and Spend Time with Family: Become a Travel Agent with Tawana the Queen of Travel",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "Q4aQ8NLfZjk",
+      "url": "https://www.youtube.com/watch?v=Q4aQ8NLfZjk",
+      "title": "Become an Independent Travel Agent working from Home",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "rV7w7zRl0ZE",
+      "url": "https://www.youtube.com/watch?v=rV7w7zRl0ZE",
+      "title": "What You Need To Know About Traveling For Business Post-Lockdown",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "Ib95auhlNdM",
+      "url": "https://www.youtube.com/watch?v=Ib95auhlNdM",
+      "title": "Challenges For Remote Workers & Families With Boundless Life  @ VanHackCON2022 #shorts",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "369-iJxz2XA",
+      "url": "https://www.youtube.com/watch?v=369-iJxz2XA",
+      "title": "A Day in Danish's Life as a Travel Consultant",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    }
+  ]
+}
