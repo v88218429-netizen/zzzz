@@ -1,0 +1,257 @@
+{
+  "task_id": "LOCATION",
+  "request": "LOCATION_20260920_125900.json",
+  "query": "лучшие места для жизни с семьей предпринимателю Россия 2026",
+  "knowledge_tag": "LOCATION",
+  "generated_at": "2026-09-20T10:00:55.910999+00:00",
+  "videos": [
+    {
+      "video_id": "JLmoMec-I1A",
+      "url": "https://www.youtube.com/watch?v=JLmoMec-I1A",
+      "title": "Куда переехать в 2026? Топ-страны для жизни",
+      "channel": "Andrey Burenok",
+      "duration": 7958,
+      "timestamp": null,
+      "query": "лучшие места для жизни с семьей предпринимателю Россия 2026",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-20_LOCATION_video_JLmoMec-I1A.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "iipEe0I6_cw",
+      "url": "https://www.youtube.com/watch?v=iipEe0I6_cw",
+      "title": "ТОП-6 СТРАН ДЛЯ ПЕРЕЕЗДА ИЗ РОССИИ В 2026 / Куда переехать жить?",
+      "channel": "Международная стратегия для предпринимателей ",
+      "duration": 820,
+      "timestamp": null,
+      "query": "лучшие места для жизни с семьей предпринимателю Россия 2026",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-20_LOCATION_video_iipEe0I6_cw.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "7dKP1k8QUUU",
+      "url": "https://www.youtube.com/watch?v=7dKP1k8QUUU",
+      "title": "Куда уехать, чтобы не пожалеть. Лучшие страны для жизни и эмиграции в 2026",
+      "channel": "DENIS ZATS",
+      "duration": 1420,
+      "timestamp": null,
+      "query": "лучшие места для жизни с семьей предпринимателю Россия 2026",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-20_LOCATION_video_7dKP1k8QUUU.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "Qviw-eoPheY",
+      "url": "https://www.youtube.com/watch?v=Qviw-eoPheY",
+      "title": "Куда УЕХАТЬ из России в 2026",
+      "channel": "Иван Скляренко",
+      "duration": 2488,
+      "timestamp": null,
+      "query": "лучшие места для жизни с семьей предпринимателю Россия 2026",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-20_LOCATION_video_Qviw-eoPheY.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "7z5BLSRjL48",
+      "url": "https://www.youtube.com/watch?v=7z5BLSRjL48",
+      "title": "Как и куда уехать из России в 2026 | Необычные визы и программы для переезда (English sub) @Max_Katz",
+      "channel": "Максим Кац",
+      "duration": 1215,
+      "timestamp": null,
+      "query": "лучшие места для жизни с семьей предпринимателю Россия 2026",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-20_LOCATION_video_7z5BLSRjL48.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "BAJhujEeZVE",
+      "url": "https://www.youtube.com/watch?v=BAJhujEeZVE",
+      "title": "WHERE TO GO FROM RUSSIA? The Best Countries to Move to in 2026",
+      "channel": "musqat",
+      "duration": 485,
+      "timestamp": null,
+      "query": "лучшие места для жизни с семьей предпринимателю Россия 2026",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-20_LOCATION_video_BAJhujEeZVE.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "P39TjwUFPXE",
+      "url": "https://www.youtube.com/watch?v=P39TjwUFPXE",
+      "title": "TOP 5 VISA-FREE COUNTRIES TO MOVE TO IN 2026 | Complete Legalization Guide",
+      "channel": "Сергей | Жизнь за границей",
+      "duration": 934,
+      "timestamp": null,
+      "query": "лучшие места для жизни с семьей предпринимателю Россия 2026",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-20_LOCATION_video_P39TjwUFPXE.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "EQTwoM2HrUA",
+      "url": "https://www.youtube.com/watch?v=EQTwoM2HrUA",
+      "title": "ЛУЧШИЕ СТРАНЫ ЕВРОПЫ ДЛЯ ЭМИГРАЦИИ в 2026 году",
+      "channel": "Lost in Budapest",
+      "duration": 415,
+      "timestamp": null,
+      "query": "лучшие места для жизни с семьей предпринимателю Россия 2026",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-20_LOCATION_video_EQTwoM2HrUA.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "vxTI8npe6YI",
+      "url": "https://www.youtube.com/watch?v=vxTI8npe6YI",
+      "title": "Как выбрать страну для переезда в 2026 году | Личный опыт и советы по эмиграции.",
+      "channel": "FENIKA",
+      "duration": 1134,
+      "timestamp": null,
+      "query": "лучшие места для жизни с семьей предпринимателю Россия 2026",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-20_LOCATION_video_vxTI8npe6YI.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "XxRec8d1rj8",
+      "url": "https://www.youtube.com/watch?v=XxRec8d1rj8",
+      "title": "Топ стран для жизни и эмиграции в 2026. Ты будешь удивлен",
+      "channel": "Andrey Burenok",
+      "duration": 5726,
+      "timestamp": null,
+      "query": "лучшие места для жизни с семьей предпринимателю Россия 2026",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-20_LOCATION_video_XxRec8d1rj8.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "tvF1JWHhphI",
+      "url": "https://www.youtube.com/watch?v=tvF1JWHhphI",
+      "title": "Экстренная иммиграция без заграничного паспорта",
+      "channel": "Relocode",
+      "duration": 180,
+      "timestamp": null,
+      "query": "лучшие места для жизни с семьей предпринимателю Россия 2026 shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-20_LOCATION_short_tvF1JWHhphI.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "RXII0YCAwvg",
+      "url": "https://www.youtube.com/watch?v=RXII0YCAwvg",
+      "title": "ТОП-5 уникальных мест России, которые стоит посетить в 2025 году",
+      "channel": "Egor Eremeev",
+      "duration": 163,
+      "timestamp": null,
+      "query": "лучшие города России для жизни с семьей 2026",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-20_LOCATION_short_RXII0YCAwvg.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "175dTbSTMu8",
+      "url": "https://www.youtube.com/watch?v=175dTbSTMu8",
+      "title": "A serious talk between a dad and his one-year-old son!!!",
+      "channel": "Ванда Головина",
+      "duration": 65,
+      "timestamp": null,
+      "query": "лучшие города России для жизни с семьей 2026 shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-20_LOCATION_short_175dTbSTMu8.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "bFzNE0U1fcA",
+      "url": "https://www.youtube.com/watch?v=bFzNE0U1fcA",
+      "title": "Мультфильм \"Мыкола и Иван\"",
+      "channel": "Телеканал 1+1",
+      "duration": 153,
+      "timestamp": null,
+      "query": "лучшие города России для жизни с семьей 2026 shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-20_LOCATION_short_bFzNE0U1fcA.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "lNdPiH4JmJ4",
+      "url": "https://www.youtube.com/watch?v=lNdPiH4JmJ4",
+      "title": "Одиссея  — Русский трейлер #2 (Дубляж, 4К, 2026)",
+      "channel": "Kinoman",
+      "duration": 156,
+      "timestamp": null,
+      "query": "лучшие города России для жизни с семьей 2026 shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-20_LOCATION_short_lNdPiH4JmJ4.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "w6YIABCAvbQ",
+      "url": "https://www.youtube.com/watch?v=w6YIABCAvbQ",
+      "title": "Продаётся частный дом у моря в Новороссийске (село Мысхако). Жизнь на юге. Земля. Купить выгодно.",
+      "channel": "Капитал Гарант Недвижимость",
+      "duration": 79,
+      "timestamp": null,
+      "query": "юг России где жить частный дом",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-20_LOCATION_short_w6YIABCAvbQ.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "kMNplt_xq1M",
+      "url": "https://www.youtube.com/watch?v=kMNplt_xq1M",
+      "title": "О станице Раевской.  Лучшее место для переезда на Юге России.",
+      "channel": "Свой Дом",
+      "duration": 165,
+      "timestamp": null,
+      "query": "юг России где жить частный дом",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-20_LOCATION_short_kMNplt_xq1M.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "Q8ZpGxytink",
+      "url": "https://www.youtube.com/watch?v=Q8ZpGxytink",
+      "title": "Куда Переехать жить на ЮГ России в 2022 ?",
+      "channel": "СтройГарантАнапа",
+      "duration": 159,
+      "timestamp": null,
+      "query": "юг России где жить частный дом shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-20_LOCATION_short_Q8ZpGxytink.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "Y5IyGxwYRdE",
+      "url": "https://www.youtube.com/watch?v=Y5IyGxwYRdE",
+      "title": "Переезд на юг в ЖК \"Просторный\" станица Раевская.#shorts",
+      "channel": "Свой Дом",
+      "duration": 60,
+      "timestamp": null,
+      "query": "юг России где жить частный дом shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-20_LOCATION_short_Y5IyGxwYRdE.md",
+      "method": "FreeTranscriptAPI"
+    }
+  ],
+  "errors": [
+    {
+      "video_id": "LfHyhITToMc",
+      "url": "https://www.youtube.com/watch?v=LfHyhITToMc",
+      "title": "ОЧИЩЕНИЕ | 1 ПРИШЕСТВИЕ НА ДИКИЙ ЗАПАД | WILD WEST Z CITY | Z CITY.",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "oQkLiIT6NNM",
+      "url": "https://www.youtube.com/watch?v=oQkLiIT6NNM",
+      "title": "New Berezkini and 1000 Rubles - Teaser",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "SYsTDKjF8u8",
+      "url": "https://www.youtube.com/watch?v=SYsTDKjF8u8",
+      "title": "Дом в хуторе Семигорский/80м2 на 4,5 сотках /т. 8 966 767 6868 Максим/🔽🔽🔽НИЖЕ ПОЛЕЗНАЯ ИНФОРМАЦИЯ🔽🔽🔽",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    }
+  ]
+}
