@@ -1,0 +1,227 @@
+{
+  "task_id": "LIFE_DESIGN",
+  "request": "LIFE_DESIGN_20260920_100008.json",
+  "query": "идеальная жизнь предпринимателя семья свобода образ жизни",
+  "knowledge_tag": "LIFE",
+  "generated_at": "2026-09-20T08:08:15.295355+00:00",
+  "videos": [
+    {
+      "video_id": "ZJZrYM816oQ",
+      "url": "https://www.youtube.com/watch?v=ZJZrYM816oQ",
+      "title": "Осси «Монарх» Кетола: основатель Duel и миллиардер в 28 лет",
+      "channel": "On My Way",
+      "duration": 2063,
+      "timestamp": null,
+      "query": "идеальная жизнь предпринимателя семья свобода образ жизни",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-20_LIFE_DESIGN_video_ZJZrYM816oQ.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "csPw9Dn_wMc",
+      "url": "https://www.youtube.com/watch?v=csPw9Dn_wMc",
+      "title": "От ночлега в прачечной до владения 10 точками | Подкаст Fireside, эп. 127",
+      "channel": "Ryan Robbins",
+      "duration": 3945,
+      "timestamp": null,
+      "query": "идеальная жизнь предпринимателя семья свобода образ жизни",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-20_LIFE_DESIGN_video_csPw9Dn_wMc.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "0ogwENr7q74",
+      "url": "https://www.youtube.com/watch?v=0ogwENr7q74",
+      "title": "How Minimalism Made Me Rich: 10 Simple Rules",
+      "channel": "KRAMARTY TV - Гейб Балт на русском",
+      "duration": 931,
+      "timestamp": null,
+      "query": "идеальная жизнь предпринимателя семья свобода образ жизни",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-20_LIFE_DESIGN_video_0ogwENr7q74.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "qdaQeyHfd7w",
+      "url": "https://www.youtube.com/watch?v=qdaQeyHfd7w",
+      "title": "\"I traded a big city in the U.S. for a small one...\" Djamila's story from North Carolina.",
+      "channel": "Kyrgyzka v amerike",
+      "duration": 5490,
+      "timestamp": null,
+      "query": "идеальная жизнь предпринимателя семья свобода образ жизни",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-20_LIFE_DESIGN_video_qdaQeyHfd7w.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "ZLfY7BRbWco",
+      "url": "https://www.youtube.com/watch?v=ZLfY7BRbWco",
+      "title": "Солнечный ЭкоДом каждой семье.  Жизнь в достатке. Семья Балакиных. НА ЗЕМЛЕ 24",
+      "channel": "АЛЕКСЕЙ БАЛАКИН | ПРЕМИАЛЬНЫЙ БИЗНЕС",
+      "duration": 87,
+      "timestamp": null,
+      "query": "идеальная жизнь предпринимателя семья свобода образ жизни",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-20_LIFE_DESIGN_short_ZLfY7BRbWco.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "BAXklN92jwQ",
+      "url": "https://www.youtube.com/watch?v=BAXklN92jwQ",
+      "title": "Imposed Motivation: Why Someone Else's Goals Destroy Entrepreneurs",
+      "channel": "Бизнес-психолог | Анастасия Федорова | Коуч ICF",
+      "duration": 1184,
+      "timestamp": null,
+      "query": "идеальная жизнь предпринимателя семья свобода образ жизни",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-20_LIFE_DESIGN_video_BAXklN92jwQ.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "AWd8JjJazqs",
+      "url": "https://www.youtube.com/watch?v=AWd8JjJazqs",
+      "title": "Идеальный бизнес-партнер: отдыхаем семьями на Бали! Как франшиза ФЦБ дает свободу",
+      "channel": " Светлана Яурова. Шагая из Крыма ☀️",
+      "duration": 1354,
+      "timestamp": null,
+      "query": "идеальная жизнь предпринимателя семья свобода образ жизни",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-20_LIFE_DESIGN_video_AWd8JjJazqs.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "wjqEodazfPw",
+      "url": "https://www.youtube.com/watch?v=wjqEodazfPw",
+      "title": "5 детей, 150 бизнес-проектов. Как все успевать?",
+      "channel": "Не мамкай!",
+      "duration": 3909,
+      "timestamp": null,
+      "query": "идеальная жизнь предпринимателя семья свобода образ жизни",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-20_LIFE_DESIGN_video_wjqEodazfPw.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "bLHwwqWTKXs",
+      "url": "https://www.youtube.com/watch?v=bLHwwqWTKXs",
+      "title": "Карл Юнг: Жизнь по-настоящему НАЧИНАЕТСЯ в 40 лет",
+      "channel": "Карл Юнг Мудрость",
+      "duration": 2126,
+      "timestamp": null,
+      "query": "идеальная жизнь предпринимателя семья свобода образ жизни",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-20_LIFE_DESIGN_video_bLHwwqWTKXs.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "YJAP9b2vnh8",
+      "url": "https://www.youtube.com/watch?v=YJAP9b2vnh8",
+      "title": "Алексей Бабаянц. В чем истинный смысл жизненных трудностей?",
+      "channel": "Родительский Университет",
+      "duration": 97,
+      "timestamp": null,
+      "query": "идеальная жизнь предпринимателя семья свобода образ жизни shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-20_LIFE_DESIGN_short_YJAP9b2vnh8.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "6A0psbkkIEc",
+      "url": "https://www.youtube.com/watch?v=6A0psbkkIEc",
+      "title": "«Изгнание майонеза»: Елизавета Боярская вместе с мужем посетила горнолыжный курорт",
+      "channel": "Info News",
+      "duration": 87,
+      "timestamp": null,
+      "query": "идеальная жизнь предпринимателя семья свобода образ жизни shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-20_LIFE_DESIGN_short_6A0psbkkIEc.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "UPFaDyP1_iU",
+      "url": "https://www.youtube.com/watch?v=UPFaDyP1_iU",
+      "title": "DreamTrips Success Story | Mom Entrepreneur Builds Freedom for Her Family",
+      "channel": "Shush Arya",
+      "duration": 63,
+      "timestamp": null,
+      "query": "lifestyle design entrepreneur family freedom",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-20_LIFE_DESIGN_short_UPFaDyP1_iU.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "MzypHhn3U2A",
+      "url": "https://www.youtube.com/watch?v=MzypHhn3U2A",
+      "title": "Run Your Business From A Mountain? #shorts",
+      "channel": "Brandon Schoen",
+      "duration": 41,
+      "timestamp": null,
+      "query": "lifestyle design entrepreneur family freedom shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-20_LIFE_DESIGN_short_MzypHhn3U2A.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "Ib9X2A3BHKI",
+      "url": "https://www.youtube.com/watch?v=Ib9X2A3BHKI",
+      "title": "The great Lifestyle Design Myth",
+      "channel": "jenniehk2",
+      "duration": 115,
+      "timestamp": null,
+      "query": "lifestyle design entrepreneur family freedom shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-20_LIFE_DESIGN_short_Ib9X2A3BHKI.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "2HNRrqldW_A",
+      "url": "https://www.youtube.com/watch?v=2HNRrqldW_A",
+      "title": "Laptop Lifestyle?  Freedom??",
+      "channel": "Your Digital Mindset",
+      "duration": 153,
+      "timestamp": null,
+      "query": "lifestyle design entrepreneur family freedom shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-20_LIFE_DESIGN_short_2HNRrqldW_A.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "jjV1_E2SbuM",
+      "url": "https://www.youtube.com/watch?v=jjV1_E2SbuM",
+      "title": "REPTAILHAWKE fashion design",
+      "channel": "REPTAILHAWKE DESIGN AND FASHION",
+      "duration": 76,
+      "timestamp": null,
+      "query": "lifestyle design entrepreneur family freedom shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-20_LIFE_DESIGN_short_jjV1_E2SbuM.md",
+      "method": "youtube-transcript.ai"
+    }
+  ],
+  "errors": [
+    {
+      "video_id": "C-fy5f808Yk",
+      "url": "https://www.youtube.com/watch?v=C-fy5f808Yk",
+      "title": "Карелия - Жизнь Время ⌛ и Свобода - Бесценны ⚠ Помните об этом ⚠ Живите здесь и сейчас",
+      "error": "transcript_ai: no valid transcript | free_api: The read operation timed out"
+    },
+    {
+      "video_id": "Bcild-5fvEg",
+      "url": "https://www.youtube.com/watch?v=Bcild-5fvEg",
+      "title": "Спорт. Бизнес. Семья. В здоровом теле - здоровый дух!",
+      "error": "transcript_ai: no valid transcript | free_api: The read operation timed out"
+    },
+    {
+      "video_id": "4hUcavVOUP4",
+      "url": "https://www.youtube.com/watch?v=4hUcavVOUP4",
+      "title": "841ade6c024c4eafaf45e525467bd44d",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "VrHWogb4vgA",
+      "url": "https://www.youtube.com/watch?v=VrHWogb4vgA",
+      "title": "\"i finally made it.\" | highest level of SUCCESS.",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    }
+  ]
+}
