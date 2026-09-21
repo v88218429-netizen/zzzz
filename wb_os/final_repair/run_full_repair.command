@@ -33,8 +33,25 @@ from pathlib import Path
 import sys
 
 src = Path(sys.argv[1]).read_bytes()
-Path(sys.argv[2]).write_bytes(base64.b64decode(src))
+try:
+    raw = base64.b64decode(src, validate=True)
+except Exception as exc:
+    raise SystemExit(
+        f"REPAIR_FAIL: повреждён bundle base64: {exc}"
+    )
+Path(sys.argv[2]).write_bytes(raw)
+print(
+    "      bundle base64 OK:",
+    len(src),
+    "chars ->",
+    len(raw),
+    "bytes"
+)
 PY
+tar -tzf "$WORK/final_repair_bundle.tar.gz" >/dev/null || {
+  echo 'REPAIR_FAIL: архив repair package повреждён'
+  exit 1
+}
 tar -xzf "$WORK/final_repair_bundle.tar.gz" -C "$PAYLOAD"
 
 printf '[2/7] Скачиваю точный LIVE Apps Script...\n'
