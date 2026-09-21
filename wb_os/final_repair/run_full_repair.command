@@ -27,7 +27,14 @@ for part in bundle.part00 bundle.part01 bundle.part02 bundle.part03; do
   curl --connect-timeout 10 --max-time 30 -fsSL \
     "$REPO_RAW/$part" >> "$WORK/final_repair_bundle.b64"
 done
-base64 --decode "$WORK/final_repair_bundle.b64" > "$WORK/final_repair_bundle.tar.gz"
+python3 - "$WORK/final_repair_bundle.b64" "$WORK/final_repair_bundle.tar.gz" <<'PY'
+import base64
+from pathlib import Path
+import sys
+
+src = Path(sys.argv[1]).read_bytes()
+Path(sys.argv[2]).write_bytes(base64.b64decode(src))
+PY
 tar -xzf "$WORK/final_repair_bundle.tar.gz" -C "$PAYLOAD"
 
 printf '[2/7] Скачиваю точный LIVE Apps Script...\n'
