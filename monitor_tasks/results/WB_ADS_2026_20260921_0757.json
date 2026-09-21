@@ -1,0 +1,335 @@
+{
+  "task_id": "WB_ADS_2026",
+  "request": "WB_ADS_2026_20260921_0757.json",
+  "query": "реклама Wildberries 2026",
+  "knowledge_tag": "WB_ADS",
+  "generated_at": "2026-09-21T05:01:13.525973+00:00",
+  "videos": [
+    {
+      "video_id": "EfLLptQUUg8",
+      "url": "https://www.youtube.com/watch?v=EfLLptQUUg8",
+      "title": "КАК работать с селлерами на WB в 2026 году? Пошаговый план",
+      "channel": "Юлия Покоева | Менеджер Wildberries",
+      "duration": 676,
+      "timestamp": null,
+      "query": "реклама Wildberries 2026",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-21_WB_ADS_2026_video_EfLLptQUUg8.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "Nad_6YjYq7I",
+      "url": "https://www.youtube.com/watch?v=Nad_6YjYq7I",
+      "title": "Реклама у блогеров для маркетплейсов. Реклама на Ozon и Wildberries через блогеров - урок 3",
+      "channel": "Кирилл Васильев",
+      "duration": 830,
+      "timestamp": null,
+      "query": "реклама Wildberries 2026 shorts",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-21_WB_ADS_2026_video_Nad_6YjYq7I.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "_pbsdMt52Uo",
+      "url": "https://www.youtube.com/watch?v=_pbsdMt52Uo",
+      "title": "Реклама товаров на Wildberries или Ozon через Яндекс.Директ. Дешево и сердито.",
+      "channel": "СВОЯ РЕКЛАМА",
+      "duration": 2313,
+      "timestamp": null,
+      "query": "реклама Wildberries 2026 shorts",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-21_WB_ADS_2026_video__pbsdMt52Uo.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "v-OKq711KDs",
+      "url": "https://www.youtube.com/watch?v=v-OKq711KDs",
+      "title": "How to avoid going into the red on Wildberries! Sales on Wildberries! Commodity business! Commodi...",
+      "channel": "Николай Шапкин | Бизнес на Амазоне",
+      "duration": 1402,
+      "timestamp": null,
+      "query": "реклама Wildberries 2026 shorts",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-21_WB_ADS_2026_video_v-OKq711KDs.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "6ZthZnqZDDY",
+      "url": "https://www.youtube.com/watch?v=6ZthZnqZDDY",
+      "title": "10 МОЩНЫХ ЛАЙФХАКОВ НА WILDBERRIES / КАК ДЕЛАТЬ КРУТЫЕ РЕЗУЛЬТАТЫ НА МАРКЕТПЛЕЙС",
+      "channel": "Никита Романов",
+      "duration": 633,
+      "timestamp": null,
+      "query": "реклама Wildberries 2026 shorts",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-21_WB_ADS_2026_video_6ZthZnqZDDY.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "P2T_Ay_BDLw",
+      "url": "https://www.youtube.com/watch?v=P2T_Ay_BDLw",
+      "title": "ВОРОНКА ПРОДАЖ в карточке товара на Wildberries",
+      "channel": "Лисавета • ИИ визуал для товаров",
+      "duration": 999,
+      "timestamp": null,
+      "query": "реклама Wildberries 2026 shorts",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-21_WB_ADS_2026_video_P2T_Ay_BDLw.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "tuQ3ny5oUR0",
+      "url": "https://www.youtube.com/watch?v=tuQ3ny5oUR0",
+      "title": "Как я вышла на wildberries? | Как продавать свечи на маркетплейсах?| Продаю свечи на ВБ",
+      "channel": "Ната AromaRules",
+      "duration": 1111,
+      "timestamp": null,
+      "query": "реклама Wildberries 2026 shorts",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-21_WB_ADS_2026_video_tuQ3ny5oUR0.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "_1vziDViM0k",
+      "url": "https://www.youtube.com/watch?v=_1vziDViM0k",
+      "title": "Дайджест - Сентябрь: Директ обновил интерфейс. Ретаргетинг на Поиске. Реклама Ozon и Wildberries",
+      "channel": "Вадим Муравьев",
+      "duration": 940,
+      "timestamp": null,
+      "query": "реклама Wildberries 2026 shorts",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-21_WB_ADS_2026_video__1vziDViM0k.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "r8MwHMsfM3E",
+      "url": "https://www.youtube.com/watch?v=r8MwHMsfM3E",
+      "title": "На Wildberries будет сложнее продавать товары. Свежие новости Wildberries",
+      "channel": "Александр Федяев - Маркетплейсы от практика",
+      "duration": 534,
+      "timestamp": null,
+      "query": "реклама Wildberries 2026 shorts",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-21_WB_ADS_2026_video_r8MwHMsfM3E.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "pYGDXPlJgW8",
+      "url": "https://www.youtube.com/watch?v=pYGDXPlJgW8",
+      "title": "Сколько зарабатывают на заполнении карточек wildberries,Как заработать в интернете",
+      "channel": "Business - Бизнес - Business",
+      "duration": 241,
+      "timestamp": null,
+      "query": "реклама Wildberries 2026 shorts",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-21_WB_ADS_2026_video_pYGDXPlJgW8.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "Qjpm8SQ3r_c",
+      "url": "https://www.youtube.com/watch?v=Qjpm8SQ3r_c",
+      "title": "Minions & Monsters | Mbappé",
+      "channel": "Universal Pictures UK",
+      "duration": 31,
+      "timestamp": null,
+      "query": "реклама WB 2026 shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-21_WB_ADS_2026_short_Qjpm8SQ3r_c.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "pBk4NYhWNMM",
+      "url": "https://www.youtube.com/watch?v=pBk4NYhWNMM",
+      "title": "Barbie | Main Trailer",
+      "channel": "Warner Bros.",
+      "duration": 162,
+      "timestamp": null,
+      "query": "реклама WB 2026 shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-21_WB_ADS_2026_short_pBk4NYhWNMM.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "6KeG_i8CWE8",
+      "url": "https://www.youtube.com/watch?v=6KeG_i8CWE8",
+      "title": "An American Coach in London: NBC Sports Premier League Film featuring Jason Sudeikis",
+      "channel": "NBCSportsNetwork",
+      "duration": 282,
+      "timestamp": null,
+      "query": "реклама WB 2026 shorts",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-21_WB_ADS_2026_video_6KeG_i8CWE8.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "Kk1KdTMhFs8",
+      "url": "https://www.youtube.com/watch?v=Kk1KdTMhFs8",
+      "title": "Ted Lasso — Season 4 Official Trailer (Trust the Process) | Apple TV",
+      "channel": "Apple TV",
+      "duration": 79,
+      "timestamp": null,
+      "query": "реклама WB 2026 shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-21_WB_ADS_2026_short_Kk1KdTMhFs8.md",
+      "method": "FreeTranscriptAPI"
+    }
+  ],
+  "errors": [
+    {
+      "video_id": "dUndQVgTy9M",
+      "url": "https://www.youtube.com/watch?v=dUndQVgTy9M",
+      "title": "Реклама Вайлдберриз - Скидки к новому сезону",
+      "error": "transcript_ai: HTTP Error 502: Bad Gateway | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "SIEXdhwKJ_s",
+      "url": "https://www.youtube.com/watch?v=SIEXdhwKJ_s",
+      "title": "Wildberries - Скидки к новому сезону (2026)",
+      "error": "transcript_ai: HTTP Error 502: Bad Gateway | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "_OfRJrJsadM",
+      "url": "https://www.youtube.com/watch?v=_OfRJrJsadM",
+      "title": "Wildberries",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "AA6IjtsKBGI",
+      "url": "https://www.youtube.com/watch?v=AA6IjtsKBGI",
+      "title": "Beautiful Ladies ❤️on Orthodox Epiphany bathing -7 °C 🥶 2022",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "9GboNGVgRtU",
+      "url": "https://www.youtube.com/watch?v=9GboNGVgRtU",
+      "title": "Nike 2022 World Cup Commercial (Ronaldo, Ronaldinho, C.Ronaldo, Mbappe, Alex Morgan + More!)",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "epyATqewqec",
+      "url": "https://www.youtube.com/watch?v=epyATqewqec",
+      "title": "🎥 PEPSICO ID (short) | (2026, USA) [Fanmade] ✨ | #pepsi #kfc #pizzahut #fritolay #tacobell",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "wNw7ivb52ac",
+      "url": "https://www.youtube.com/watch?v=wNw7ivb52ac",
+      "title": "Warner Bros. is DOOMED",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "sKo-jn6p22c",
+      "url": "https://www.youtube.com/watch?v=sKo-jn6p22c",
+      "title": "2026 FIFA World Cup | Official Intro Outro and Break Bumpers",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "HWj-3ZfEthU",
+      "url": "https://www.youtube.com/watch?v=HWj-3ZfEthU",
+      "title": "🎥 PEPSICO ID | (2026, USA) [Fanmade] ✨ | #pepsi #kfc #pizzahut #fritolay #tacobell",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "bNJW113tbKk",
+      "url": "https://www.youtube.com/watch?v=bNJW113tbKk",
+      "title": "Universal Centennial Logo",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "uupUt3qW1oU",
+      "url": "https://www.youtube.com/watch?v=uupUt3qW1oU",
+      "title": "Beetlejuice - Now on VHS (Warner Home Video commercial, October 1988)",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "IZHsJ-v2MYQ",
+      "url": "https://www.youtube.com/watch?v=IZHsJ-v2MYQ",
+      "title": "70 Years of Godzilla: A New Roar in Southeast Asia",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "nvmM5V_-M2s",
+      "url": "https://www.youtube.com/watch?v=nvmM5V_-M2s",
+      "title": "Official Shadow of War: \"Not Today, Brian\" TV Spot",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "wkajQMBJNbs",
+      "url": "https://www.youtube.com/watch?v=wkajQMBJNbs",
+      "title": "Batman Arkham Knight Batarang Ad  - Fan Made",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "MMmeEPP4hak",
+      "url": "https://www.youtube.com/watch?v=MMmeEPP4hak",
+      "title": "SHIRIBOM COMMERCIAL (2016)",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "M3gRnpI8ne4",
+      "url": "https://www.youtube.com/watch?v=M3gRnpI8ne4",
+      "title": "RFI NYC - A quick sizzle! Work from our favorite directors! RFI is \"creativity in motion.\"",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "863rTle6CKY",
+      "url": "https://www.youtube.com/watch?v=863rTle6CKY",
+      "title": "FIFA World Cup USA 1994 Intro",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "PiSPYPvDHnY",
+      "url": "https://www.youtube.com/watch?v=PiSPYPvDHnY",
+      "title": "The chosen one",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "u0Nhu3dc5aQ",
+      "url": "https://www.youtube.com/watch?v=u0Nhu3dc5aQ",
+      "title": "SHAZAM - Unicorn Scene | #shazam #scene #unicorn",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "gd20j2Hb-0Y",
+      "url": "https://www.youtube.com/watch?v=gd20j2Hb-0Y",
+      "title": "Gremlins | Trailer | Warner Bros. Entertainment",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "7UfiCa244XE",
+      "url": "https://www.youtube.com/watch?v=7UfiCa244XE",
+      "title": "🥪 👜 Ma’amalade sandwich Your Majesty?",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "YKGYgFPAP14",
+      "url": "https://www.youtube.com/watch?v=YKGYgFPAP14",
+      "title": "The NeverEnding Story | Original Trailer | Netflix",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "tZj89W-OL7g",
+      "url": "https://www.youtube.com/watch?v=tZj89W-OL7g",
+      "title": "Все метрики рекламы WB: CTR, CPC, CPM, CPO, ДРР и конверсии | Как анализировать рекламу на ВБ",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "kJ45bn6_VEY",
+      "url": "https://www.youtube.com/watch?v=kJ45bn6_VEY",
+      "title": "WHY IS PAY-PER-CLICK (CPC) ADVERTISING INEFFECTIVE ON WILDBERRIES?",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "rFYpS00HEgI",
+      "url": "https://www.youtube.com/watch?v=rFYpS00HEgI",
+      "title": "Как оптимизировать рекламу на Wildberries | Реальный разбор кампаний (Серия 3)",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "DQtvjqm-xxI",
+      "url": "https://www.youtube.com/watch?v=DQtvjqm-xxI",
+      "title": "World Cup 2026 - Official Intro",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    }
+  ]
+}
