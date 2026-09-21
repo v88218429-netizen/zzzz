@@ -1,0 +1,209 @@
+{
+  "task_id": "TRAVEL",
+  "request": "TRAVEL_20260920_145727.json",
+  "query": "как путешествовать с семьей и управлять бизнесом удаленно",
+  "knowledge_tag": "TRAVEL",
+  "generated_at": "2026-09-21T04:00:15.712571+00:00",
+  "videos": [
+    {
+      "video_id": "hcn2cwfviLo",
+      "url": "https://www.youtube.com/watch?v=hcn2cwfviLo",
+      "title": "Как выехать предпринимателю в Европу на авто в 2022 | Личный опыт",
+      "channel": "Off Group",
+      "duration": 648,
+      "timestamp": null,
+      "query": "как путешествовать с семьей и управлять бизнесом удаленно",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-21_TRAVEL_video_hcn2cwfviLo.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "pw_MUUXv-zs",
+      "url": "https://www.youtube.com/watch?v=pw_MUUXv-zs",
+      "title": "Демчук и Рыбаков: бизнес-разбор. Умения предпринимателя использовать обстоятельства",
+      "channel": "Дмитрий Демчук",
+      "duration": 812,
+      "timestamp": null,
+      "query": "как путешествовать с семьей и управлять бизнесом удаленно",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-21_TRAVEL_video_pw_MUUXv-zs.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "zoJjnsDmTLw",
+      "url": "https://www.youtube.com/watch?v=zoJjnsDmTLw",
+      "title": "Как правильно вести бизнес? Как выстроить самостоятельную систему и обрести свободу? // 16+",
+      "channel": "Анна Всехсвятская",
+      "duration": 636,
+      "timestamp": null,
+      "query": "как путешествовать с семьей и управлять бизнесом удаленно",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-21_TRAVEL_video_zoJjnsDmTLw.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "YP9vHOx6Ezs",
+      "url": "https://www.youtube.com/watch?v=YP9vHOx6Ezs",
+      "title": "СПИСОК УДАЛЕННОЙ РАБОТЫ ПРОФЕССИИ ❗",
+      "channel": "Daniel Allen",
+      "duration": 320,
+      "timestamp": null,
+      "query": "как путешествовать с семьей и управлять бизнесом удаленно",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-21_TRAVEL_video_YP9vHOx6Ezs.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "fr1wY16k28M",
+      "url": "https://www.youtube.com/watch?v=fr1wY16k28M",
+      "title": "Проект  'Валим из офиса' Как монетизировать любое дело",
+      "channel": "IT portal PRO",
+      "duration": 423,
+      "timestamp": null,
+      "query": "как путешествовать с семьей и управлять бизнесом удаленно",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-21_TRAVEL_video_fr1wY16k28M.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "Bcnt-JhtbCE",
+      "url": "https://www.youtube.com/watch?v=Bcnt-JhtbCE",
+      "title": "Как построить международный бизнес на ДНК-тестах? Артём Елмуратов",
+      "channel": "Мастридер",
+      "duration": 3547,
+      "timestamp": null,
+      "query": "как путешествовать с семьей и управлять бизнесом удаленно",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-21_TRAVEL_video_Bcnt-JhtbCE.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "k8_F7_pdH3c",
+      "url": "https://www.youtube.com/watch?v=k8_F7_pdH3c",
+      "title": "От экономии к пентхаусам. Пять поездок в Лас-Вегас // 16+",
+      "channel": "Максим Темченко",
+      "duration": 494,
+      "timestamp": null,
+      "query": "как путешествовать с семьей и управлять бизнесом удаленно",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-21_TRAVEL_video_k8_F7_pdH3c.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "HrLsUPU1gyQ",
+      "url": "https://www.youtube.com/watch?v=HrLsUPU1gyQ",
+      "title": "Мы бросили работу нотариусами и агентами по оформлению кредитов, но мы скучаем по ней | Семья Смит",
+      "channel": "With The Smiths",
+      "duration": 593,
+      "timestamp": null,
+      "query": "как путешествовать с семьей и управлять бизнесом удаленно shorts",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-21_TRAVEL_video_HrLsUPU1gyQ.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "muQV1vBg02I",
+      "url": "https://www.youtube.com/watch?v=muQV1vBg02I",
+      "title": "The Craftiest and Most Shameless Neighbor in the World / Con Artist Neighbor / How to Make Money?...",
+      "channel": "AISHAEV TRAVEL",
+      "duration": 114,
+      "timestamp": null,
+      "query": "предприниматель путешествия семья удаленное управление бизнесом shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-21_TRAVEL_short_muQV1vBg02I.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "xO5glp_XRww",
+      "url": "https://www.youtube.com/watch?v=xO5glp_XRww",
+      "title": "Flying in Business Class with 3 kids on points ✈️",
+      "channel": "The Cucos Family ",
+      "duration": 148,
+      "timestamp": null,
+      "query": "travel with kids entrepreneur shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-21_TRAVEL_short_xO5glp_XRww.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "B_3tbOBtnQU",
+      "url": "https://www.youtube.com/watch?v=B_3tbOBtnQU",
+      "title": "Digital Nomad Family: How We Built a Remote Business While Traveling the World",
+      "channel": "Digital Nomad Family Life",
+      "duration": 155,
+      "timestamp": null,
+      "query": "remote business travel family",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-21_TRAVEL_short_B_3tbOBtnQU.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "Q4aQ8NLfZjk",
+      "url": "https://www.youtube.com/watch?v=Q4aQ8NLfZjk",
+      "title": "Become an Independent Travel Agent working from Home",
+      "channel": "Trip Savvy Traveller",
+      "duration": 62,
+      "timestamp": null,
+      "query": "remote business travel family",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-21_TRAVEL_short_Q4aQ8NLfZjk.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "mLQ1O3jFiSQ",
+      "url": "https://www.youtube.com/watch?v=mLQ1O3jFiSQ",
+      "title": "Carolyn Leibowitz – Mom and Work from Home Travel Agent",
+      "channel": "Cruise Planners Franchise",
+      "duration": 46,
+      "timestamp": null,
+      "query": "remote business travel family",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-21_TRAVEL_short_mLQ1O3jFiSQ.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "Ib95auhlNdM",
+      "url": "https://www.youtube.com/watch?v=Ib95auhlNdM",
+      "title": "Challenges For Remote Workers & Families With Boundless Life  @ VanHackCON2022 #shorts",
+      "channel": "VanHack",
+      "duration": 61,
+      "timestamp": null,
+      "query": "remote business travel family shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-21_TRAVEL_short_Ib95auhlNdM.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "369-iJxz2XA",
+      "url": "https://www.youtube.com/watch?v=369-iJxz2XA",
+      "title": "A Day in Danish's Life as a Travel Consultant",
+      "channel": "American Express Global Business Travel",
+      "duration": 63,
+      "timestamp": null,
+      "query": "remote business travel family shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-21_TRAVEL_short_369-iJxz2XA.md",
+      "method": "youtube-transcript.ai"
+    }
+  ],
+  "errors": [
+    {
+      "video_id": "REfae_C9JoA",
+      "url": "https://www.youtube.com/watch?v=REfae_C9JoA",
+      "title": "Открыть бизнес в Панаме",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "7Q1JHjWWyHU",
+      "url": "https://www.youtube.com/watch?v=7Q1JHjWWyHU",
+      "title": "Traveling with kids- Digital business owner",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "L1Oz9Szu73M",
+      "url": "https://www.youtube.com/watch?v=L1Oz9Szu73M",
+      "title": "Work from Home and Spend Time with Family: Become a Travel Agent with Tawana the Queen of Travel",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    }
+  ]
+}
