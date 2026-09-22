@@ -1,5 +1,5 @@
 /**
- * WB OS / WB Public Customer Price Engine v0.1.18
+ * WB OS / WB Public Customer Price Engine v0.1.19
  *
  * Purpose:
  * - read WB nmID values from "Сводная";
@@ -16,7 +16,7 @@
  */
 
 var WB_PUBLIC_PRICE_V4 = {
-  VERSION: '0.1.18',
+  VERSION: '0.1.19',
   SUMMARY_SHEET: 'Сводная',
   SOURCE_SHEET: '_WB_PUBLIC_PRICE_V4',
   SELLER_PRICE_SOURCE_SHEET: 'Цены',
@@ -329,6 +329,31 @@ function wbPriceV4RepairMissingSellerPrices_(
     return {
       repaired: 0,
       skipped: 'source_missing'
+    };
+  }
+
+  if (
+    typeof wbSellerPriceIsFreshForRepair_ !==
+      'function'
+  ) {
+    Logger.log(
+      'WB Public Price: seller-price freshness guard missing; J repair skipped.'
+    );
+
+    return {
+      repaired: 0,
+      skipped: 'freshness_guard_missing'
+    };
+  }
+
+  if (!wbSellerPriceIsFreshForRepair_(source)) {
+    Logger.log(
+      'WB Public Price: лист «Цены» устарел; J repair skipped until safe refresh succeeds.'
+    );
+
+    return {
+      repaired: 0,
+      skipped: 'source_stale'
     };
   }
 
