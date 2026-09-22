@@ -128,3 +128,4 @@ jobs:
 
           raise SystemExit(3)
           PY
+# probe-trigger: 2026-09-22T15:21+03:00
