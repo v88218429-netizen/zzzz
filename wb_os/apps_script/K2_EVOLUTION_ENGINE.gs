@@ -1,5 +1,5 @@
 /**
- * WB OS / K2 Evolution Engine v0.1.10
+ * WB OS / K2 Evolution Engine v0.1.11
  *
  * Integrated mode: NO separate time trigger.
  * The existing finalAutomationTick master remains the only clock.
@@ -14,7 +14,7 @@
  */
 
 var K2_EV = {
-  VERSION: '0.1.10',
+  VERSION: '0.1.11',
   AUTOMATION_SHEET: 'Автоматизация',
   LAST_HASH_KEY: 'K2_EV_LAST_SNAPSHOT_HASH',
   LAST_COUNT_KEY: 'K2_EV_LAST_COUNT',
@@ -192,12 +192,35 @@ function k2EvolutionNormalizeItems_(items) {
       continue;
     }
 
+    if (
+      !Object.prototype.hasOwnProperty.call(item, 'stock')
+    ) {
+      throw new Error(
+        'K2_EV_SCHEMA: у позиции «' +
+        (sku || name || ('#' + i)) +
+        '» отсутствует поле stock. ' +
+        'Запись в доверенный лист запрещена.'
+      );
+    }
+
     out.push({
       sku: sku,
       name: name,
-      stock: k2EvolutionNumber_(item.stock),
-      reserved: k2EvolutionNumber_(item.reserved),
-      minStock: k2EvolutionNumber_(item.minStock)
+      stock: k2EvolutionStrictNumber_(
+        item.stock,
+        'stock',
+        sku || name || ('#' + i)
+      ),
+      reserved: k2EvolutionStrictNumber_(
+        item.reserved,
+        'reserved',
+        sku || name || ('#' + i)
+      ),
+      minStock: k2EvolutionStrictNumber_(
+        item.minStock,
+        'minStock',
+        sku || name || ('#' + i)
+      )
     });
   }
 
@@ -228,7 +251,7 @@ function k2EvolutionValidateSnapshot_(normalized, props) {
     };
   }
 
-  var seen = {};
+  var seen = Object.create(null);
   var duplicateKeys = [];
 
   for (var i = 0; i < normalized.length; i++) {
@@ -601,6 +624,38 @@ function setupK2EvolutionIntegrated() {
     version: K2_EV.VERSION,
     removedStandaloneTriggers: removed
   };
+}
+
+
+function k2EvolutionStrictNumber_(value, field, itemKey) {
+  if (
+    value === null ||
+    value === undefined ||
+    value === ''
+  ) {
+    return 0;
+  }
+
+  var normalized = String(value)
+    .replace(/\u00A0/g, '')
+    .replace(/\s/g, '')
+    .replace(',', '.');
+
+  var n = Number(normalized);
+
+  if (!isFinite(n)) {
+    throw new Error(
+      'K2_EV_BAD_NUMBER: поле ' +
+      field +
+      ' у позиции «' +
+      itemKey +
+      '» содержит некорректное значение «' +
+      String(value).substring(0, 120) +
+      '». Доверенный лист не перезаписан.'
+    );
+  }
+
+  return n;
 }
 
 
