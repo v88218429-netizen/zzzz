@@ -105,6 +105,42 @@ def main():
         assert p.returncode != 0
         assert "canonical core is ambiguous" in (p.stdout + p.stderr)
 
+    # A duplicate K2 file with unique behavior must not be erased.
+    with tempfile.TemporaryDirectory() as td:
+        root = pathlib.Path(td)
+        (root / "Master.js").write_text(MASTER, encoding="utf-8")
+        (root / "K2_stable.js").write_text(K2_STABLE, encoding="utf-8")
+        (root / "K2_old.js").write_text(
+            K2_OLD + "\nfunction uniqueLegacyOnly_() {}\n",
+            encoding="utf-8",
+        )
+        (root / "Evolution.js").write_text(EVOLUTION, encoding="utf-8")
+        (root / "Price.js").write_text(PRICE, encoding="utf-8")
+
+        p = run(root)
+        assert p.returncode != 0
+        assert "cannot be disabled safely" in (p.stdout + p.stderr)
+        assert "uniqueLegacyOnly_" in (p.stdout + p.stderr)
+
+    # Duplicate top-level config/global variables must also fail closed.
+    with tempfile.TemporaryDirectory() as td:
+        root = pathlib.Path(td)
+        (root / "Master.js").write_text(
+            MASTER + "\nvar SAME_CFG = {};\n",
+            encoding="utf-8",
+        )
+        (root / "K2_stable.js").write_text(K2_STABLE, encoding="utf-8")
+        (root / "Evolution.js").write_text(EVOLUTION, encoding="utf-8")
+        (root / "Price.js").write_text(
+            PRICE + "\nvar SAME_CFG = {};\n",
+            encoding="utf-8",
+        )
+
+        p = run(root)
+        assert p.returncode != 0
+        assert "duplicate top-level globals remain" in (p.stdout + p.stderr)
+        assert "SAME_CFG" in (p.stdout + p.stderr)
+
     print("WB OS whole-project audit tests: OK")
 
 if __name__ == "__main__":
