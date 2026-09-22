@@ -33,8 +33,9 @@ class Perf:
             return r.json()
         r.raise_for_status()
     def campaigns(self):
-        j=self.get("/api/client/campaign",{"page":1,"pageSize":100,"state":"CAMPAIGN_STATE_RUNNING"})
-        return j.get("list") or []
+        j=self.get("/api/client/campaign",{"page":1,"pageSize":100,"state":"CAMPAIGN_STATE_RUNNING","advObjectType":"SKU"})
+        arr=j.get("list") or []
+        return [c for c in arr if str(c.get("paymentType","")).upper()=="CPC"]
     def products(self,cid):
         out=[]; page=1
         while True:
