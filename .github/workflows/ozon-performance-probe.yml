@@ -1,0 +1,35 @@
+name: Ozon Performance API probe
+on:
+  push:
+    branches: [mainggg]
+    paths:
+      - "ozon_performance_radar/**"
+      - ".github/workflows/ozon-performance-probe.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      OZON_PERF_CLIENT_ID: ${{ secrets.OZON_PERF_CLIENT_ID }}
+      OZON_PERF_CLIENT_SECRET: ${{ secrets.OZON_PERF_CLIENT_SECRET }}
+      OZON_PERFORMANCE_CLIENT_ID: ${{ secrets.OZON_PERFORMANCE_CLIENT_ID }}
+      OZON_PERFORMANCE_CLIENT_SECRET: ${{ secrets.OZON_PERFORMANCE_CLIENT_SECRET }}
+      PERFORMANCE_CLIENT_ID: ${{ secrets.PERFORMANCE_CLIENT_ID }}
+      PERFORMANCE_CLIENT_SECRET: ${{ secrets.PERFORMANCE_CLIENT_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - name: Credential capability
+        run: |
+          python - <<'PY'
+          import os
+          names=["OZON_PERF_CLIENT_ID","OZON_PERF_CLIENT_SECRET","OZON_PERFORMANCE_CLIENT_ID","OZON_PERFORMANCE_CLIENT_SECRET","PERFORMANCE_CLIENT_ID","PERFORMANCE_CLIENT_SECRET"]
+          for n in names: print(n+"="+("present" if os.getenv(n) else "missing"))
+          PY
+      - run: pip install requests
+      - name: Live Performance probe
+        run: python ozon_performance_radar/worker.py
