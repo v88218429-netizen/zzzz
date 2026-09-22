@@ -1,5 +1,5 @@
 /**
- * WB OS / K2 Evolution Engine v0.1.6
+ * WB OS / K2 Evolution Engine v0.1.7
  *
  * Integrated mode: NO separate time trigger.
  * The existing finalAutomationTick master remains the only clock.
@@ -14,7 +14,7 @@
  */
 
 var K2_EV = {
-  VERSION: '0.1.6',
+  VERSION: '0.1.7',
   AUTOMATION_SHEET: 'Автоматизация',
   LAST_HASH_KEY: 'K2_EV_LAST_SNAPSHOT_HASH',
   LAST_COUNT_KEY: 'K2_EV_LAST_COUNT',
@@ -590,6 +590,10 @@ function k2EvolutionHistoryLastAt_(props) {
 
 
 function k2EvolutionCleanupLegacyTriggers_() {
+  if (typeof ensureFinalAutomationTrigger_ === 'function') {
+    ensureFinalAutomationTrigger_();
+  }
+
   var legacy = {
     processK2StockEmails: true,
     syncK2StocksAndNotify: true,
@@ -604,7 +608,17 @@ function k2EvolutionCleanupLegacyTriggers_() {
     UO_supplierSummaryOnChange_: true,
     UO_supplierFfOnEdit_: true,
     UO_supplierFfOnChange_: true,
-    UO_supplierFullScheduledSync_: true
+    UO_supplierFullScheduledSync_: true,
+
+    // Other periodic jobs already owned by the master.
+    ivanovoScheduledRefresh: true,
+    domExportOrders: true,
+    domExportSales: true,
+    domExportOzonOrders: true,
+    domExportOzonSales: true,
+    syncSupplierDebtsToSummary: true,
+    supplierOrdersScheduledSync_: true,
+    supplierDebtScheduledSync_: true
   };
 
   var triggers = ScriptApp.getProjectTriggers();
