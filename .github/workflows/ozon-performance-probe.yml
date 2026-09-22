@@ -13,22 +13,28 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
-      OZON_PERF_CLIENT_ID: ${{ secrets.OZON_PERF_CLIENT_ID }}
-      OZON_PERF_CLIENT_SECRET: ${{ secrets.OZON_PERF_CLIENT_SECRET }}
-      OZON_PERFORMANCE_CLIENT_ID: ${{ secrets.OZON_PERFORMANCE_CLIENT_ID }}
-      OZON_PERFORMANCE_CLIENT_SECRET: ${{ secrets.OZON_PERFORMANCE_CLIENT_SECRET }}
-      PERFORMANCE_CLIENT_ID: ${{ secrets.PERFORMANCE_CLIENT_ID }}
-      PERFORMANCE_CLIENT_SECRET: ${{ secrets.PERFORMANCE_CLIENT_SECRET }}
+      OZON_PERFORMANCE_CREDENTIALS: ${{ secrets.OZON_PERFORMANCE_CREDENTIALS }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: "3.12"}
-      - name: Credential capability
+      - name: Materialize Performance credentials safely
+        shell: bash
         run: |
+          test -n "$OZON_PERFORMANCE_CREDENTIALS" || { echo "PERFORMANCE_CREDENTIALS=missing"; exit 2; }
           python - <<'PY'
-          import os
-          names=["OZON_PERF_CLIENT_ID","OZON_PERF_CLIENT_SECRET","OZON_PERFORMANCE_CLIENT_ID","OZON_PERFORMANCE_CLIENT_SECRET","PERFORMANCE_CLIENT_ID","PERFORMANCE_CLIENT_SECRET"]
-          for n in names: print(n+"="+("present" if os.getenv(n) else "missing"))
+          import json, os
+          obj=json.loads(os.environ["OZON_PERFORMANCE_CREDENTIALS"])
+          cid=str(obj.get("client_id","")).strip()
+          sec=str(obj.get("client_secret","")).strip()
+          if not cid or not sec:
+              raise SystemExit("invalid OZON_PERFORMANCE_CREDENTIALS")
+          print("::add-mask::"+cid)
+          print("::add-mask::"+sec)
+          with open(os.environ["GITHUB_ENV"],"a") as f:
+              f.write("OZON_PERF_CLIENT_ID="+cid+"\n")
+              f.write("OZON_PERF_CLIENT_SECRET="+sec+"\n")
+          print("PERFORMANCE_CREDENTIALS=present")
           PY
       - run: pip install requests
       - name: Live Performance probe
