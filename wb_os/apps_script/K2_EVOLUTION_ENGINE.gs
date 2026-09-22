@@ -1,5 +1,5 @@
 /**
- * WB OS / K2 Evolution Engine v0.1.8
+ * WB OS / K2 Evolution Engine v0.1.9
  *
  * Integrated mode: NO separate time trigger.
  * The existing finalAutomationTick master remains the only clock.
@@ -14,7 +14,7 @@
  */
 
 var K2_EV = {
-  VERSION: '0.1.8',
+  VERSION: '0.1.9',
   AUTOMATION_SHEET: 'Автоматизация',
   LAST_HASH_KEY: 'K2_EV_LAST_SNAPSHOT_HASH',
   LAST_COUNT_KEY: 'K2_EV_LAST_COUNT',
@@ -596,9 +596,14 @@ function k2EvolutionHistoryLastAt_(props) {
 
 
 function k2EvolutionCleanupLegacyTriggers_() {
-  if (typeof ensureFinalAutomationTrigger_ === 'function') {
-    ensureFinalAutomationTrigger_();
+  if (typeof ensureFinalAutomationTrigger_ !== 'function') {
+    Logger.log(
+      'K2 Evolution: master trigger helper отсутствует; legacy K2 triggers сохранены.'
+    );
+    return 0;
   }
+
+  ensureFinalAutomationTrigger_();
 
   var legacy = {
     processK2StockEmails: true,
