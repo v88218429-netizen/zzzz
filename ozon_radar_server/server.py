@@ -17,7 +17,7 @@ from curl_cffi import requests as curl_requests
 from fastapi import FastAPI, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 
-APP_VERSION = "1.1.0"
+APP_VERSION = "1.1.1"
 MAX_EVENTS = 20000
 CHECK_LOOP_SECONDS = 3
 SOURCE_NAME = "LIVE SERP · Ozon storefront JSON"
@@ -628,8 +628,12 @@ def health() -> dict[str, Any]:
                 "last_error": state.last_error,
             }
         )
+    source_ready = bool(runtime.last_success_iso) and not runtime.last_error
     return {
         "ok": True,
+        "backend_ok": True,
+        "live_ready": source_ready,
+        "live_status": "LIVE" if source_ready else "LIVE_NЕТ",
         "version": APP_VERSION,
         "configured_tasks": len(runtime.tasks),
         "event_seq": runtime.seq,
