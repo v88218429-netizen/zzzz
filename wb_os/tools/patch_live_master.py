@@ -230,6 +230,33 @@ if "getMasterConfigurationState_().k2Ready" in master_text:
         "PATCH_FAIL: legacy K2 readiness guard still present in master"
     )
 
+
+# The status/UI readiness function itself must explicitly accept a saved K2
+# session. Checking for K2_SESSION_COOKIE somewhere in the master file is not
+# enough: another helper could contain the same string and give a false pass.
+cfg_match = re.search(
+    r"function\s+getMasterConfigurationState_\s*\(\)\s*\{(.*?)\n\}",
+    new_text,
+    re.S,
+)
+if not cfg_match:
+    raise SystemExit(
+        "PATCH_FAIL: getMasterConfigurationState_ function not found"
+    )
+
+cfg_text = cfg_match.group(1)
+for marker in (
+    "K2_USERNAME",
+    "K2_PASSWORD",
+    "K2_SESSION_COOKIE",
+    "K2_CLIENT_ID",
+):
+    if marker not in cfg_text:
+        raise SystemExit(
+            "PATCH_FAIL: session-aware readiness missing inside "
+            "getMasterConfigurationState_: " + marker
+        )
+
 path.write_text(new_text, encoding="utf-8")
 
 print("PATCH_OK:", path.relative_to(root))
