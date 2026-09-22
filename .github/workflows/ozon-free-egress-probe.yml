@@ -99,7 +99,7 @@ jobs:
 
       - name: Probe Ozon SERP through current RU volunteer exits
         run: |
-          sudo python - <<'PY'
+          python - <<'PY'
           import json, os, signal, subprocess, sys, time, urllib.request
           sys.path.insert(0,'.')
           import server
@@ -110,7 +110,7 @@ jobs:
               log=f'/tmp/openvpn-{idx}.log'
               fp=open(log,'w')
               p=subprocess.Popen(
-                  ['openvpn','--config',item['path'],'--auth-user-pass','/tmp/vpngate-auth','--connect-retry-max','1','--connect-timeout','15'],
+                  ['sudo','openvpn','--config',item['path'],'--auth-user-pass','/tmp/vpngate-auth','--connect-retry-max','1','--connect-timeout','15'],
                   stdout=fp,stderr=subprocess.STDOUT,
               )
               connected=False
@@ -163,6 +163,142 @@ jobs:
 
           print('VPNGATE_SUMMARY',json.dumps(results,ensure_ascii=False))
           if any(r.get('serp_cards_extracted') for r in results):
+              raise SystemExit(0)
+          raise SystemExit(3)
+          PY
+
+
+  tor-ru:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    defaults:
+      run:
+        working-directory: ozon_radar_server
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Tor and Python dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends tor curl
+          pip install -r requirements.txt
+
+      - name: Force Tor to Russian exits and probe Ozon SERP
+        run: |
+          sudo tee /etc/tor/torrc >/dev/null <<'EOF'
+          SocksPort 9050
+          ExitNodes {ru}
+          StrictNodes 1
+          Log notice stdout
+          EOF
+          sudo pkill tor || true
+          sudo tor -f /etc/tor/torrc >/tmp/tor.log 2>&1 &
+          for i in $(seq 1 45); do
+            grep -q "Bootstrapped 100%" /tmp/tor.log && break
+            sleep 1
+          done
+          tail -30 /tmp/tor.log
+          python - <<'PY'
+          import json, os, urllib.request
+          import server
+
+          proxy='socks5h://127.0.0.1:9050'
+          try:
+              import curl_cffi.requests as cr
+              ipr=cr.get('https://ipinfo.io/json', proxies={'http':proxy,'https':proxy}, timeout=20)
+              print('TOR_IPINFO',ipr.text[:1000])
+          except Exception as e:
+              print('TOR_IPINFO_ERROR',type(e).__name__,str(e))
+
+          server.OZON_PROXY=proxy
+          try:
+              out=server.OzonClient().position('лопата садовая','5094364543',100)
+              print('TOR_OZON_RESULT',json.dumps(out,ensure_ascii=False))
+              if out.get('checked_depth',0)>0:
+                  raise SystemExit(0)
+          except Exception as e:
+              print('TOR_OZON_ERROR',type(e).__name__,str(e))
+          raise SystemExit(3)
+          PY
+
+  public-ru-http-proxy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    defaults:
+      run:
+        working-directory: ozon_radar_server
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Probe current public RU HTTP proxy pool against Ozon SERP
+        run: |
+          python - <<'PY'
+          import json, urllib.request
+          import curl_cffi.requests as cr
+          import server
+
+          urls=[
+            'https://api.proxyscrape.com/v2/?request=getproxies&protocol=http&timeout=5000&country=ru&ssl=all&anonymity=all',
+            'https://raw.githubusercontent.com/proxifly/free-proxy-list/main/proxies/countries/RU/data.txt',
+          ]
+          pool=[]
+          for url in urls:
+              try:
+                  raw=urllib.request.urlopen(url,timeout=20).read().decode('utf-8','replace')
+              except Exception as e:
+                  print('PROXY_SOURCE_ERROR',url,type(e).__name__,str(e))
+                  continue
+              for line in raw.splitlines():
+                  line=line.strip()
+                  if not line or ':' not in line:
+                      continue
+                  if '://' not in line:
+                      line='http://'+line
+                  if line not in pool:
+                      pool.append(line)
+
+          print('PUBLIC_RU_PROXY_COUNT',len(pool))
+          results=[]
+          for proxy in pool[:30]:
+              rec={'proxy':proxy}
+              try:
+                  rr=cr.get('https://ipinfo.io/json',proxies={'http':proxy,'https':proxy},timeout=7)
+                  ipj=rr.json()
+                  rec['exit_ip']=ipj.get('ip')
+                  rec['exit_country']=ipj.get('country')
+                  rec['exit_region']=ipj.get('region')
+                  rec['exit_org']=ipj.get('org')
+              except Exception as e:
+                  rec['ipinfo_error']=f'{type(e).__name__}: {e}'
+                  print('PUBLIC_PROXY_RESULT',json.dumps(rec,ensure_ascii=False),flush=True)
+                  results.append(rec)
+                  continue
+
+              server.OZON_PROXY=proxy
+              try:
+                  out=server.OzonClient().position('лопата садовая','5094364543',100)
+                  rec['ozon']=out
+                  rec['serp_cards_extracted']=out.get('checked_depth',0)>0
+              except Exception as e:
+                  rec['ozon_error']=f'{type(e).__name__}: {e}'
+              print('PUBLIC_PROXY_RESULT',json.dumps(rec,ensure_ascii=False),flush=True)
+              results.append(rec)
+              if rec.get('serp_cards_extracted'):
+                  break
+
+          print('PUBLIC_PROXY_SUMMARY',json.dumps(results,ensure_ascii=False))
+          if any(x.get('serp_cards_extracted') for x in results):
               raise SystemExit(0)
           raise SystemExit(3)
           PY
