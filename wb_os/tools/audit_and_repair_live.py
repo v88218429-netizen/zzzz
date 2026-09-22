@@ -88,7 +88,7 @@ else:
 
 def inject_master_trigger_bootstrap(text, function_name, marker):
     if marker in text:
-        return text, False
+        return text, "already"
 
     pattern = re.compile(
         r"(function\s+"
@@ -116,7 +116,10 @@ def inject_master_trigger_bootstrap(text, function_name, marker):
     )
 
     out, count = pattern.subn(block, text, count=1)
-    return out, count == 1
+    if count != 1:
+        return text, "missing"
+
+    return out, "changed"
 
 
 # Existing K2 timers are a safe bootstrap path if the master trigger is absent.
@@ -124,12 +127,19 @@ def inject_master_trigger_bootstrap(text, function_name, marker):
 k2_text = read(keeper)
 for fn in ("syncK2StocksOnly", "syncK2StocksAndNotify"):
     marker = "WB_OS_MASTER_TRIGGER_BOOTSTRAP_" + fn
-    k2_text, changed = inject_master_trigger_bootstrap(
+    k2_text, status = inject_master_trigger_bootstrap(
         k2_text,
         fn,
         marker,
     )
-    if changed:
+
+    if status == "missing":
+        raise SystemExit(
+            "AUDIT_FAIL: cannot patch master-trigger bootstrap into K2 function: "
+            + fn
+        )
+
+    if status == "changed":
         print("MASTER_BOOTSTRAP_K2:", fn)
 
 keeper.write_text(k2_text, encoding="utf-8")
@@ -151,12 +161,18 @@ if len(spp_modules) > 1:
 if spp_modules:
     p = spp_modules[0]
     text = read(p)
-    text, changed = inject_master_trigger_bootstrap(
+    text, status = inject_master_trigger_bootstrap(
         text,
         "sppMonitorScheduledTick",
         "WB_OS_MASTER_TRIGGER_BOOTSTRAP_sppMonitorScheduledTick",
     )
-    if changed:
+
+    if status == "missing":
+        raise SystemExit(
+            "AUDIT_FAIL: cannot patch master-trigger bootstrap into SPP scheduled tick"
+        )
+
+    if status == "changed":
         p.write_text(text, encoding="utf-8")
         print("MASTER_BOOTSTRAP_SPP:", p.relative_to(root))
 
