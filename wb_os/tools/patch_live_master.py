@@ -125,6 +125,11 @@ if "K2_EV_LAST_RUN_AT" not in func:
           .getScriptProperties()
           .getProperty('K2_EV_LAST_RUN_AT') || ''
       ).trim() ||
+      !String(
+        PropertiesService
+          .getScriptProperties()
+          .getProperty('K2_EV_CUTOVER_DONE') || ''
+      ).trim() ||
       shouldRunByProperty_(
         'K2_LAST_SUCCESS_AT',
         MASTER_AUTOMATION_CFG.K2_EVERY_MINUTES
@@ -143,7 +148,42 @@ if "K2_EV_LAST_RUN_AT" not in func:
     )
 
 
+# Step 1c: upgrade an intermediate Evolution condition that already has
+# LAST_RUN_AT but not the cutover-completion marker.
+if "K2_EV_CUTOVER_DONE" not in func:
+    last_run_clause = """      !String(
+        PropertiesService
+          .getScriptProperties()
+          .getProperty('K2_EV_LAST_RUN_AT') || ''
+      ).trim() ||
+      shouldRunByProperty_("""
+
+    upgraded_clause = """      !String(
+        PropertiesService
+          .getScriptProperties()
+          .getProperty('K2_EV_LAST_RUN_AT') || ''
+      ).trim() ||
+      !String(
+        PropertiesService
+          .getScriptProperties()
+          .getProperty('K2_EV_CUTOVER_DONE') || ''
+      ).trim() ||
+      shouldRunByProperty_("""
+
+    if last_run_clause not in func:
+        raise SystemExit(
+            "PATCH_FAIL: cannot add K2 cutover completion gate"
+        )
+
+    func = func.replace(
+        last_run_clause,
+        upgraded_clause,
+        1,
+    )
+
+
 # Step 2a: repair K2 readiness semantics.
+
 
 # A saved K2 session (cookie + client id) is enough to continue syncing even
 # when username/password were never persisted in Script Properties.
