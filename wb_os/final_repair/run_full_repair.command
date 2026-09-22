@@ -1,6 +1,9 @@
 #!/bin/bash
 set -euo pipefail
 
+echo "DEPLOY_DISABLED_BUNDLE_INTEGRITY: repair package is quarantined because CI detected a tar/gzip integrity failure. Nothing will be changed in Apps Script."
+exit 2
+
 REPO_RAW='https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_os/final_repair'
 DEFAULT_SCRIPT_URL='https://script.google.com/u/0/home/projects/15tH3jwOa5hKJFahIyPX5AIXO7KRf1O4jusfDfPIdX6KeH_GqMUC71hNT/edit'
 SCRIPT_URL="${1:-$DEFAULT_SCRIPT_URL}"
