@@ -137,16 +137,29 @@ if "historyK2Fresh = true;" not in func:
     )
 
 if "historyIvanovoFresh = true;" not in func:
-    iv_success = "        exportFulfilmentStocks();"
-    if func.count(iv_success) != 1:
+    iv_pattern = re.compile(
+        r"(?m)^(\s*)exportFulfilmentStocks\(\);\s*$"
+    )
+    iv_matches = list(iv_pattern.finditer(func))
+
+    if len(iv_matches) != 1:
         raise SystemExit(
             "PATCH_FAIL: Ivanovo success point not found exactly once"
         )
 
-    func = func.replace(
-        iv_success,
-        iv_success + "\n        historyIvanovoFresh = true;",
-        1,
+    match = iv_matches[0]
+    indent = match.group(1)
+    replacement = (
+        indent
+        + "exportFulfilmentStocks();\n"
+        + indent
+        + "historyIvanovoFresh = true;"
+    )
+
+    func = (
+        func[:match.start()]
+        + replacement
+        + func[match.end():]
     )
 
 safe_history_guard = (
