@@ -59,7 +59,19 @@ if "k2EvolutionFetchAndApply_()" not in func:
 
     replacement = r'''
     /* 1. K2 · WB OS delta engine */
-    if (forceAll || historyDue || shouldRunByProperty_('K2_LAST_SUCCESS_AT', MASTER_AUTOMATION_CFG.K2_EVERY_MINUTES)) {
+    if (
+      forceAll ||
+      historyDue ||
+      !String(
+        PropertiesService
+          .getScriptProperties()
+          .getProperty('K2_EV_LAST_RUN_AT') || ''
+      ).trim() ||
+      shouldRunByProperty_(
+        'K2_LAST_SUCCESS_AT',
+        MASTER_AUTOMATION_CFG.K2_EVERY_MINUTES
+      )
+    ) {
       try {
         var k2Result = k2EvolutionFetchAndApply_();
         k2Updated = Boolean(k2Result && k2Result.changed);
@@ -91,7 +103,43 @@ if "k2EvolutionFetchAndApply_()" not in func:
     if count != 1:
         raise SystemExit(f"PATCH_FAIL: K2 block replacements={count}")
 
+# Step 1b: guarantee one Evolution run during migration even while a legacy
+# 10-minute K2 trigger keeps K2_LAST_SUCCESS_AT fresh.
+if "K2_EV_LAST_RUN_AT" not in func:
+    old_condition = (
+        "if (forceAll || historyDue || "
+        "shouldRunByProperty_('K2_LAST_SUCCESS_AT', "
+        "MASTER_AUTOMATION_CFG.K2_EVERY_MINUTES)) {"
+    )
+
+    new_condition = """if (
+      forceAll ||
+      historyDue ||
+      !String(
+        PropertiesService
+          .getScriptProperties()
+          .getProperty('K2_EV_LAST_RUN_AT') || ''
+      ).trim() ||
+      shouldRunByProperty_(
+        'K2_LAST_SUCCESS_AT',
+        MASTER_AUTOMATION_CFG.K2_EVERY_MINUTES
+      )
+    ) {"""
+
+    if old_condition not in func:
+        raise SystemExit(
+            "PATCH_FAIL: cannot make K2 Evolution migration self-starting"
+        )
+
+    func = func.replace(
+        old_condition,
+        new_condition,
+        1,
+    )
+
+
 # Step 2a: repair K2 readiness semantics.
+
 # A saved K2 session (cookie + client id) is enough to continue syncing even
 # when username/password were never persisted in Script Properties.
 guard_pattern = re.compile(
@@ -322,6 +370,7 @@ required = [
     "syncWbPublicCustomerPricesV4_(forceAll);",
     "wbPriceV4RecordFailure_(priceError)",
     "function wbOsEnsureMasterTrigger()",
+    "K2_EV_LAST_RUN_AT",
     "historyK2Fresh = true;",
     "historyIvanovoFresh = true;",
     "if (historyDue && historyK2Fresh && historyIvanovoFresh) {",
