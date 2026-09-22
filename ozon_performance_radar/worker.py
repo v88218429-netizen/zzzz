@@ -33,9 +33,11 @@ class Perf:
             return r.json()
         r.raise_for_status()
     def campaigns(self):
-        j=self.get("/api/client/campaign",{"page":1,"pageSize":100,"state":"CAMPAIGN_STATE_RUNNING","advObjectType":"SKU"})
+        j=self.get("/api/client/campaign",{"page":1,"pageSize":100,"advObjectType":"SKU"})
         arr=j.get("list") or []
-        return [c for c in arr if str(c.get("paymentType","")).upper()=="CPC"]
+        for c in arr:
+            print("CAMPAIGN_META",STORE,json.dumps({k:c.get(k) for k in ["id","title","state","paymentType","placement","productAutopilotStrategy","productCampaignMode"]},ensure_ascii=False))
+        return arr
     def products(self,cid):
         out=[]; page=1
         while True:
@@ -65,7 +67,11 @@ def main():
     found=[]
     for c in camps:
         cid=str(c.get("id"))
-        prods=p.products(cid)
+        try:
+            prods=p.products(cid)
+        except requests.HTTPError as e:
+            print("CAMPAIGN_SKIP",STORE,cid,str(e))
+            continue
         skus=[str(x.get("sku")) for x in prods if x.get("sku") is not None]
         cb=p.competitive(cid,skus)
         for x in prods:
