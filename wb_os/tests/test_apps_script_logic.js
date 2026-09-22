@@ -114,6 +114,14 @@ load('apps_script/K2_EVOLUTION_ENGINE.gs');
   assert.strictEqual(result.ok, true);
   assert.strictEqual(result.mode, 'product_plus_logistics');
   assert.strictEqual(result.rows, 12);
+
+  assert.strictEqual(
+    ctx.wbPriceV4Candidate_(
+      { product: 100.6 },
+      'product'
+    ),
+    101
+  );
 }
 
 // V4 must mirror the known-working legacy endpoint rather than forcing an
@@ -124,6 +132,24 @@ load('apps_script/K2_EVOLUTION_ENGINE.gs');
     'utf8'
   );
   assert.ok(!priceSource.includes("'&spp=30'"));
+}
+
+// Missing/malformed K2 stock data must fail closed instead of silently
+// becoming zero stock.
+{
+  assert.throws(
+    () => ctx.k2EvolutionNormalizeItems_([
+      { sku: 'A', name: 'one', reserved: 0, minStock: 0 }
+    ]),
+    /K2_EV_SCHEMA/
+  );
+
+  assert.throws(
+    () => ctx.k2EvolutionNormalizeItems_([
+      { sku: 'A', name: 'one', stock: 'not-a-number', reserved: 0, minStock: 0 }
+    ]),
+    /K2_EV_BAD_NUMBER/
+  );
 }
 
 // K2 duplicate snapshots fail closed.
@@ -200,6 +226,50 @@ load('apps_script/K2_EVOLUTION_ENGINE.gs');
   assert.strictEqual(ctx.k2EvolutionCurrentSheetHash_(), expected);
 }
 
+// Public-price writer must fail closed if the Summary columns moved.
+{
+  assert.doesNotThrow(() => {
+    ctx.wbPriceV4AssertSummaryLayout_({
+      getRange: () => ({
+        getDisplayValues: () => [[
+          'Артикул продавца WB',
+          'Предмет WB',
+          'Артикул WB',
+          'Ссылка WB',
+          'Баркод WB',
+          'Артикул продавца Ozon',
+          'Ozon артикул',
+          '',
+          'n',
+          'Цена',
+          'Цена для клиента'
+        ]]
+      })
+    });
+  });
+
+  assert.throws(
+    () => ctx.wbPriceV4AssertSummaryLayout_({
+      getRange: () => ({
+        getDisplayValues: () => [[
+          'Артикул продавца WB',
+          'Предмет WB',
+          'WRONG',
+          'Ссылка WB',
+          'Баркод WB',
+          'Артикул продавца Ozon',
+          'Ozon артикул',
+          '',
+          'n',
+          'Цена',
+          'Цена для клиента'
+        ]]
+      })
+    }),
+    /WB_PRICE_V4_LAYOUT_MISMATCH/
+  );
+}
+
 // Legacy trigger cleanup must happen only after the new engine has succeeded.
 {
   const k2Source = fs.readFileSync(
@@ -245,6 +315,8 @@ load('apps_script/K2_EVOLUTION_ENGINE.gs');
   assert.ok(priceSource.includes('ensureFinalAutomationTrigger_'));
   assert.ok(priceSource.includes('старый SPP trigger сохранён'));
   assert.ok(priceSource.includes('hasLegacyAlertLayer'));
+  assert.ok(priceSource.includes('price_lock_busy'));
+  assert.ok(priceSource.includes('WB_PRICE_V4_SHADOW_NAME_COLLISION'));
 }
 
 console.log('WB OS Apps Script logic tests: OK');
