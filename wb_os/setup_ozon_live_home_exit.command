@@ -76,10 +76,10 @@ else
 fi
 
 # Persistent Tailscale state means only one browser authorization is needed.
-VOLUMES="$(railway volume list --json -s "$RAILWAY_SERVICE" 2>/dev/null || echo '[]')"
+VOLUMES="$(railway volume list --json 2>/dev/null || echo '[]')"
 if ! printf '%s' "$VOLUMES" | grep -q '/var/lib/tailscale'; then
   say "Creating persistent Tailscale volume"
-  railway volume add --mount-path /var/lib/tailscale -s "$RAILWAY_SERVICE" --json >/tmp/ozon-volume.json
+  railway volume add --mount-path /var/lib/tailscale --json >/tmp/ozon-volume.json
 else
   say "Persistent Tailscale volume already exists"
 fi
@@ -241,6 +241,38 @@ for _ in $(seq 1 90); do
   fi
   sleep 2
 done
+
+say "Waiting for the approved HOME exit node"
+echo "On the always-on home Android/Android TV device:"
+echo "  Tailscale -> Exit Node -> Run as exit node"
+echo "Then approve 'Use as exit node' in the Tailscale Machines page."
+echo "This setup will detect it automatically; no Railway redeploy is needed."
+
+EXIT_READY=0
+for _ in $(seq 1 180); do
+  HEALTH="$(curl -fsS --max-time 5 "$SERVER_URL/health" 2>/dev/null || true)"
+  if [ -n "$HEALTH" ]; then
+    if HEALTH_JSON="$HEALTH" python3 - <<'PY'
+import json, os
+try:
+    h=json.loads(os.environ.get("HEALTH_JSON","{}"))
+except Exception:
+    raise SystemExit(1)
+raise SystemExit(0 if h.get("tailscale_active") and h.get("tailscale_exit_node") else 1)
+PY
+    then
+      EXIT_READY=1
+      echo "$HEALTH"
+      break
+    fi
+  fi
+  sleep 5
+done
+
+if [ "$EXIT_READY" -ne 1 ]; then
+  echo "HOME_EXIT_PENDING=yes"
+  echo "The cloud service is installed, but an approved home Tailscale exit node is not online yet."
+fi
 
 say "LIVE probe: $TEST_QUERY / $TEST_SKU"
 PROBE="$(curl -sS --max-time 90 \
