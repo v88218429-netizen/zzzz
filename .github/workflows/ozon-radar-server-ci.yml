@@ -10,6 +10,7 @@ on:
     paths:
       - "ozon_radar_server/**"
       - "ozon_live/**"
+      - "wb_os/setup_ozon_live_home_exit.command"
       - ".github/workflows/ozon-radar-server-ci.yml"
   workflow_dispatch:
 
@@ -37,6 +38,7 @@ jobs:
         run: |
           python -m py_compile server.py test_server.py
           sh -n start.sh
+          bash -n ../wb_os/setup_ozon_live_home_exit.command
 
       - name: Deployment capability report
         env:
