@@ -1,5 +1,5 @@
 /**
- * WB OS / K2 Evolution Engine v0.1.3
+ * WB OS / K2 Evolution Engine v0.1.4
  *
  * Integrated mode: NO separate time trigger.
  * The existing finalAutomationTick master remains the only clock.
@@ -14,7 +14,7 @@
  */
 
 var K2_EV = {
-  VERSION: '0.1.3',
+  VERSION: '0.1.4',
   AUTOMATION_SHEET: 'Автоматизация',
   LAST_HASH_KEY: 'K2_EV_LAST_SNAPSHOT_HASH',
   LAST_COUNT_KEY: 'K2_EV_LAST_COUNT',
@@ -38,6 +38,8 @@ var K2_EV = {
  * On those failures the trusted live stock sheet is NOT overwritten.
  */
 function k2EvolutionFetchAndApply_() {
+  k2EvolutionCleanupLegacyTriggers_();
+
   var startedMs = Date.now();
   var props = PropertiesService.getScriptProperties();
 
@@ -569,4 +571,33 @@ function k2EvolutionHistoryLastAt_(props) {
   }
 
   return '';
+}
+
+
+function k2EvolutionCleanupLegacyTriggers_() {
+  var legacy = {
+    processK2StockEmails: true,
+    syncK2StocksAndNotify: true,
+    syncK2StocksOnly: true
+  };
+
+  var triggers = ScriptApp.getProjectTriggers();
+  var deleted = 0;
+
+  for (var i = 0; i < triggers.length; i++) {
+    var handler = triggers[i].getHandlerFunction();
+
+    if (legacy[handler]) {
+      ScriptApp.deleteTrigger(triggers[i]);
+      deleted++;
+    }
+  }
+
+  if (deleted) {
+    Logger.log(
+      'K2 Evolution: удалено legacy-триггеров K2: ' + deleted
+    );
+  }
+
+  return deleted;
 }
