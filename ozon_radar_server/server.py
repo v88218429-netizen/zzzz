@@ -11,6 +11,7 @@ import urllib.request
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from curl_cffi import requests as curl_requests
@@ -18,7 +19,7 @@ from fastapi import FastAPI, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 from playwright.async_api import async_playwright
 
-APP_VERSION = "1.3.0"
+APP_VERSION = "1.3.1"
 MAX_EVENTS = 20000
 CHECK_LOOP_SECONDS = 3
 SOURCE_NAME = "LIVE SERP · Ozon storefront JSON"
@@ -883,6 +884,16 @@ def root() -> dict[str, Any]:
     }
 
 
+def runtime_tailscale_exit_node() -> str:
+    try:
+        path = Path("/tmp/ozon-tailscale-exit-node")
+        if path.exists():
+            return path.read_text(encoding="utf-8").strip()
+    except Exception:
+        pass
+    return OZON_TAILSCALE_EXIT_NODE
+
+
 @app.get("/health")
 def health() -> dict[str, Any]:
     statuses = []
@@ -915,8 +926,8 @@ def health() -> dict[str, Any]:
         "proxy_configured": bool(OZON_PROXY),
         "browser_mode": OZON_BROWSER_MODE,
         "browser_ready": bool(getattr(ozon, "_page", None)),
-        "tailscale_active": OZON_TAILSCALE_ACTIVE,
-        "tailscale_exit_node": OZON_TAILSCALE_EXIT_NODE,
+        "tailscale_active": bool(runtime_tailscale_exit_node()) or OZON_TAILSCALE_ACTIVE,
+        "tailscale_exit_node": runtime_tailscale_exit_node(),
         "force_live_offline": OZON_FORCE_LIVE_OFFLINE,
         "telegram_configured": bool(TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID),
         "tasks": statuses,
