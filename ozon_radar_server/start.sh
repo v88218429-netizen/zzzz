@@ -23,22 +23,20 @@ except Exception:
 peers=st.get("Peer") or {}
 vals=list(peers.values()) if isinstance(peers,dict) else (peers if isinstance(peers,list) else [])
 online=[]
-fallback=[]
 for peer in vals:
     if not isinstance(peer,dict) or not peer.get("ExitNodeOption"):
         continue
+    # Never select an offline exit node. Returning an offline fallback can make
+    # the service look LIVE while traffic is no longer leaving via the home ISP.
+    if peer.get("Online") is False:
+        continue
     ips=peer.get("TailscaleIPs") or []
     name=(ips[0] if ips else "") or peer.get("DNSName") or peer.get("HostName") or ""
-    if not name:
-        continue
-    fallback.append(name)
-    if peer.get("Online") is not False:
+    if name:
         online.append(name)
 
 if online:
     print(online[0])
-elif fallback:
-    print(fallback[0])
 else:
     raise SystemExit(2)
 PY
@@ -120,17 +118,30 @@ select_exit_forever() {
       TS_EXIT="$(find_exit_node 2>/dev/null || true)"
     fi
 
-    if [ -n "$TS_EXIT" ]; then
+    if [ -z "$TS_EXIT" ]; then
+      # The marker is authoritative for the Python worker. Clearing it makes
+      # every Ozon check fail closed instead of leaking through cloud egress.
+      printf '%s' "" > /tmp/ozon-tailscale-exit-node
+      sleep 5
+      continue
+    fi
+
+    CURRENT_EXIT="$(cat /tmp/ozon-tailscale-exit-node 2>/dev/null || true)"
+    if [ "$CURRENT_EXIT" != "$TS_EXIT" ]; then
       log "TAILSCALE: selecting exit node $TS_EXIT"
       if tailscale --socket="$TS_SOCK" set --exit-node="$TS_EXIT" >/tmp/tailscale-exit.log 2>&1; then
         printf '%s' "$TS_EXIT" > /tmp/ozon-tailscale-exit-node
         log "TAILSCALE: LIVE Ozon traffic now routes through home exit node $TS_EXIT"
-        return 0
+      else
+        printf '%s' "" > /tmp/ozon-tailscale-exit-node
+        cat /tmp/tailscale-exit.log 2>/dev/null || true
       fi
     fi
 
-    printf '%s' "" > /tmp/ozon-tailscale-exit-node
-    sleep 5
+    # Keep supervising the exit node for the lifetime of the container. If the
+    # home device disappears, find_exit_node stops returning it and the marker
+    # is cleared on the next loop.
+    sleep 10
   done
 }
 
