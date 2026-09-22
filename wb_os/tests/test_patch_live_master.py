@@ -70,6 +70,11 @@ function getMasterConfigurationState_() {
   };
 }
 
+function domExportPrices() {
+  runDomLib_('exportPricesToSheet');
+  updateWbPricesFromLinks();
+}
+
 function shouldRunByProperty_(propertyName, intervalMinutes) {
   return true;
 }
@@ -126,6 +131,8 @@ REQUIRED = [
     "function wbOsEnsureFinalAutomationTriggerAtomic_()",
     "MASTER_RUN_GUARD_DOCUMENT_LOCK",
     "wbSellerPriceRefreshIfDue_(forceAll);",
+    "SAFE_MANUAL_WB_PRICE_ENTRYPOINT",
+    "forceSyncWbPublicCustomerPricesV4();",
 ]
 
 def run_patch(root: pathlib.Path):
@@ -159,6 +166,11 @@ def main():
         master_text = once[master_start:master_end]
         assert "getMasterConfigurationState_().k2Ready" not in master_text
         assert "MASTER_TRIGGER_OK" in once
+        manual_start = once.index("function domExportPrices()")
+        manual_end = once.index("\n}", manual_start)
+        manual_block = once[manual_start:manual_end + 2]
+        assert "SAFE_MANUAL_WB_PRICE_ENTRYPOINT" in manual_block
+        assert "runDomLib_('exportPricesToSheet')" not in manual_block
 
         # Second migration must be a true no-op, not a failure or duplicate.
         run_patch(root)
