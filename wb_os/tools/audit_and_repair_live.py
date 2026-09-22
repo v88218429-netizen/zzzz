@@ -42,7 +42,7 @@ if len(k2) > 1:
     keeper = preferred[0]
 
     function_pattern = re.compile(
-        r"(?m)^\\s*function\\s+([A-Za-z_$][\\w$]*)\\s*\\("
+        r"(?m)^\s*function\s+([A-Za-z_$][\w$]*)\s*\("
     )
     keeper_functions = set(function_pattern.findall(read(keeper)))
 
@@ -139,7 +139,7 @@ if duplicates:
 global_defs = {}
 global_dups = {}
 global_pattern = re.compile(
-    r"(?m)^(?:var|let|const)\\s+([A-Za-z_$][\\w$]*)\\s*(?:=|;)"
+    r"(?m)^(?:var|let|const)\s+([A-Za-z_$][\w$]*)\s*(?:=|;)"
 )
 
 for p in sources():
