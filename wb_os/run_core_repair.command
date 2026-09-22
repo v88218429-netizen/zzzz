@@ -294,20 +294,22 @@ rollback_live_() {
   return 0
 }
 
-echo "[1/9] Скачиваю 4 source-файла из зафиксированного commit..."
+echo "[1/9] Скачиваю 5 source-файлов из зафиксированного commit..."
 curl --connect-timeout 10 --max-time 30 -fsSL   "$REPO_RAW/wb_os/apps_script/K2_EVOLUTION_ENGINE.gs"   -o "$WORK/K2_EVOLUTION_ENGINE.gs"
 curl --connect-timeout 10 --max-time 30 -fsSL   "$REPO_RAW/wb_os/apps_script/WB_PUBLIC_PRICE_V4.gs"   -o "$WORK/WB_PUBLIC_PRICE_V4.gs"
+curl --connect-timeout 10 --max-time 30 -fsSL   "$REPO_RAW/wb_os/apps_script/WB_SELLER_PRICE_SAFE.gs"   -o "$WORK/WB_SELLER_PRICE_SAFE.gs"
 curl --connect-timeout 10 --max-time 30 -fsSL   "$REPO_RAW/wb_os/tools/patch_live_master.py"   -o "$WORK/patch_live_master.py"
 curl --connect-timeout 10 --max-time 30 -fsSL   "$REPO_RAW/wb_os/tools/audit_and_repair_live.py"   -o "$WORK/audit_and_repair_live.py"
 
 grep -q "K2 Evolution Engine v0.1.17" "$WORK/K2_EVOLUTION_ENGINE.gs"
-grep -q "WB Public Customer Price Engine v0.1.18" "$WORK/WB_PUBLIC_PRICE_V4.gs"
+grep -q "WB Public Customer Price Engine v0.1.19" "$WORK/WB_PUBLIC_PRICE_V4.gs"
+grep -q "WB Seller Price Safe Refresh v0.1.0" "$WORK/WB_SELLER_PRICE_SAFE.gs"
 grep -q "session-aware readiness missing inside" "$WORK/patch_live_master.py"
 grep -q "duplicate top-level globals remain" "$WORK/audit_and_repair_live.py"
 
 python3 -m py_compile   "$WORK/patch_live_master.py"   "$WORK/audit_and_repair_live.py"
 
-for f in "$WORK/K2_EVOLUTION_ENGINE.gs" "$WORK/WB_PUBLIC_PRICE_V4.gs"; do
+for f in "$WORK/K2_EVOLUTION_ENGINE.gs" "$WORK/WB_PUBLIC_PRICE_V4.gs" "$WORK/WB_SELLER_PRICE_SAFE.gs"; do
   cp "$f" "$WORK/payload-check.js"
   node --check "$WORK/payload-check.js" >/dev/null
 done
@@ -352,8 +354,11 @@ echo "[5/9] Патчу master/K2/price и проверяю единый global n
 TARGET_K2_EV="$(replace_or_create_   "$PROJECT"   "function k2EvolutionFetchAndApply_"   "$WORK/K2_EVOLUTION_ENGINE.gs"   "K2_EVOLUTION_ENGINE.js")"
 echo "      K2 Evolution: $TARGET_K2_EV"
 
-TARGET_PRICE="$(replace_or_create_   "$PROJECT"   "function syncWbPublicCustomerPricesV4_"   "$WORK/WB_PUBLIC_PRICE_V4.gs"   "WB_PUBLIC_PRICE_V4.js")"
+TARGET_PRICE="$(replace_or_create_   "$PROJECT"   "function syncWbPublicCustomerPricesV4_"   "function wbSellerPriceRefreshIfDue_"   "$WORK/WB_PUBLIC_PRICE_V4.gs"   "WB_PUBLIC_PRICE_V4.js")"
 echo "      WB Public Price: $TARGET_PRICE"
+
+TARGET_SELLER_PRICE_SAFE="$(replace_or_create_   "$PROJECT"   "function wbSellerPriceRefreshIfDue_"   "$WORK/WB_SELLER_PRICE_SAFE.gs"   "WB_SELLER_PRICE_SAFE.js")"
+echo "      WB Seller Price Safe: $TARGET_SELLER_PRICE_SAFE"
 
 python3 "$WORK/patch_live_master.py" "$PROJECT"
 python3 "$WORK/audit_and_repair_live.py" "$PROJECT"
@@ -457,8 +462,13 @@ if ! grep -Rqs "K2 Evolution Engine v0.1.17" "$VERIFY"; then
   VERIFY_OK=0
 fi
 
-if ! grep -Rqs "WB Public Customer Price Engine v0.1.18" "$VERIFY"; then
+if ! grep -Rqs "WB Public Customer Price Engine v0.1.19" "$VERIFY"; then
   echo "❌ Remote WB Public Price version mismatch."
+  VERIFY_OK=0
+fi
+
+if ! grep -Rqs "WB Seller Price Safe Refresh v0.1.0" "$VERIFY"; then
+  echo "❌ Remote WB Seller Price Safe version mismatch."
   VERIFY_OK=0
 fi
 
