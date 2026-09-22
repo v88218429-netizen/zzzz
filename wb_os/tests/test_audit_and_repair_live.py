@@ -61,6 +61,11 @@ function columnToIndex_(col) {
 }
 """
 
+UO_SUPPLIER = r"""
+var UO_CFG = {};
+function UO_syncAllSupplierOrdersNow() {}
+"""
+
 SUPPLIER = r"""
 var SUPPLIER_ORDERS_CFG = {};
 function syncAllSupplierOrdersNow() {
@@ -91,6 +96,7 @@ def main():
         (root / "Price.js").write_text(PRICE, encoding="utf-8")
         (root / "Spp.js").write_text(SPP, encoding="utf-8")
         (root / "Supplier.js").write_text(SUPPLIER, encoding="utf-8")
+        (root / "UoSupplier.js").write_text(UO_SUPPLIER, encoding="utf-8")
         (root / "LegacyPrice.js").write_text(LEGACY_PRICE, encoding="utf-8")
 
         p = run(root)
@@ -100,6 +106,7 @@ def main():
             )
 
         assert "AUDIT_OK" in p.stdout
+        assert "AUDIT_WARN_PARALLEL_SUPPLIER_MODULES" in p.stdout
         assert "legacy duplicate K2 core disabled" in (
             root / "K2_old.js"
         ).read_text(encoding="utf-8")
