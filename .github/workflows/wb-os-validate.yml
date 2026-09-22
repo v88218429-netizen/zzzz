@@ -71,15 +71,16 @@ jobs:
         run: |
           set -euo pipefail
           test -s wb_os/run_core_repair.command
-          grep -q "K2 Evolution Engine v0.1.5" wb_os/apps_script/K2_EVOLUTION_ENGINE.gs
+          grep -q "K2 Evolution Engine v0.1.7" wb_os/apps_script/K2_EVOLUTION_ENGINE.gs
           grep -q "function k2EvolutionCleanupLegacyTriggers_" wb_os/apps_script/K2_EVOLUTION_ENGINE.gs
           grep -q "syncK2StocksOnly" wb_os/apps_script/K2_EVOLUTION_ENGINE.gs
-          grep -q "WB Public Customer Price Engine v0.1.3" wb_os/apps_script/WB_PUBLIC_PRICE_V4.gs
+          grep -q "WB Public Customer Price Engine v0.1.4" wb_os/apps_script/WB_PUBLIC_PRICE_V4.gs
           grep -q "function wbPriceV4CleanupLegacyTriggers_" wb_os/apps_script/WB_PUBLIC_PRICE_V4.gs
           grep -q "sppMonitorScheduledTick" wb_os/apps_script/WB_PUBLIC_PRICE_V4.gs
           grep -q "K2_EVOLUTION_ENGINE.gs" wb_os/run_core_repair.command
           grep -q "WB_PUBLIC_PRICE_V4.gs" wb_os/run_core_repair.command
           grep -q "patch_live_master.py" wb_os/run_core_repair.command
+          grep -q "SOURCE_REF" wb_os/run_core_repair.command
           ! grep -q "bundle.part" wb_os/run_core_repair.command
           echo "Core repair direct-file contract: OK"
 
