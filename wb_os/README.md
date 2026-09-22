@@ -70,3 +70,5 @@ Validation: GitHub Actions runs only when `wb_os/**` changes or by manual dispat
 ## Deployment safety
 
 CI validates the `wb_os/final_repair` deployment package end-to-end before it can be treated as green: recursive shell syntax, concatenation of all bundle parts, strict base64 decode, `tar.gz` integrity, extraction, and JavaScript syntax of the extracted Apps Script files. A green syntax-only check is not sufficient for a deploy package.
+
+- Core repair preflight also audits the pulled live Apps Script as one global namespace, disables an older duplicate K2 core when the stable core is unambiguous, namespaces Supplier private helpers, and fails closed if any duplicate global function remains.
