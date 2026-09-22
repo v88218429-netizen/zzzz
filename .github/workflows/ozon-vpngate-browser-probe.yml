@@ -1,0 +1,154 @@
+name: Ozon VPNGate browser SERP probe
+
+on:
+  push:
+    branches: [mainggg]
+    paths:
+      - ".github/workflows/ozon-vpngate-browser-probe.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install browser/VPN dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends openvpn xvfb
+          pip install -r ozon_live/requirements.txt
+          google-chrome --version || chromium --version
+
+      - name: Probe visible Ozon SERP via current RU ISP relays
+        shell: bash
+        run: |
+          export DISPLAY=:99
+          Xvfb :99 -screen 0 1920x1080x24 >/tmp/xvfb.log 2>&1 &
+          sleep 2
+          printf 'vpn\nvpn\n' | sudo tee /tmp/vpngate-auth >/dev/null
+          sudo chmod 600 /tmp/vpngate-auth
+          python - <<'PY'
+          import base64, csv, io, json, os, signal, subprocess, sys, time, urllib.request
+          from pathlib import Path
+
+          sys.path.insert(0,'.')
+          from ozon_live.scanner import driver_new, scan
+
+          raw=urllib.request.urlopen('https://www.vpngate.net/api/iphone/',timeout=30).read().decode('utf-8','replace')
+          lines=[x for x in raw.splitlines() if x and not x.startswith('*')]
+          rows=[]
+          for r in csv.DictReader(lines):
+              if (r.get('CountryShort') or '').upper()!='RU':
+                  continue
+              b64=(r.get('OpenVPN_ConfigData_Base64') or '').strip()
+              if not b64:
+                  continue
+              try: speed=int(r.get('Speed') or 0)
+              except Exception: speed=0
+              rows.append((speed,r))
+          rows.sort(key=lambda x:x[0], reverse=True)
+          rows=rows[:8]
+          print('RU_RELAY_COUNT',len(rows),flush=True)
+
+          results=[]
+          for idx,(_,r) in enumerate(rows,1):
+              cfg=base64.b64decode(r['OpenVPN_ConfigData_Base64']).decode('utf-8','replace')
+              cfg=cfg.replace('auth-user-pass\r\n','').replace('auth-user-pass\n','')
+              cfg += '\nauth-user-pass /tmp/vpngate-auth\nauth-nocache\n'
+              cfg_path=f'/tmp/ru-{idx}.ovpn'
+              Path(cfg_path).write_text(cfg)
+              log=f'/tmp/ru-{idx}.log'
+              fp=open(log,'w')
+              p=subprocess.Popen(
+                  ['sudo','openvpn','--config',cfg_path,'--auth-user-pass','/tmp/vpngate-auth',
+                   '--connect-retry-max','1','--connect-timeout','15'],
+                  stdout=fp,stderr=subprocess.STDOUT
+              )
+              connected=False
+              deadline=time.time()+28
+              while time.time()<deadline:
+                  if p.poll() is not None: break
+                  try:
+                      txt=Path(log).read_text(errors='ignore')
+                      if 'Initialization Sequence Completed' in txt:
+                          connected=True
+                          time.sleep(2)
+                          break
+                  except Exception:
+                      pass
+                  time.sleep(1)
+
+              rec={
+                  'relay_ip':r.get('IP'),
+                  'host':r.get('#HostName'),
+                  'connected':connected,
+              }
+              if not connected:
+                  try: rec['vpn_log']='\n'.join(Path(log).read_text(errors='ignore').splitlines()[-20:])
+                  except Exception: pass
+              else:
+                  try:
+                      ipj=json.loads(urllib.request.urlopen('https://ipinfo.io/json',timeout=15).read().decode())
+                      rec.update({
+                          'exit_ip':ipj.get('ip'),
+                          'exit_country':ipj.get('country'),
+                          'exit_region':ipj.get('region'),
+                          'exit_org':ipj.get('org'),
+                      })
+                  except Exception as e:
+                      rec['ipinfo_error']=f'{type(e).__name__}: {e}'
+
+                  d=None
+                  try:
+                      d=driver_new(None)
+                      # Do not use Ozon's city selector in this proof. The ISP
+                      # exit itself fixes the control region for this measurement.
+                      out=scan(d,'лопата садовая','5094364543',100)
+                      rec['browser_scan']=out
+                      try:
+                          rec['title']=d.title
+                          rec['url']=d.current_url
+                          body=(d.find_element('tag name','body').text or '')[:3000]
+                          rec['block_marker']=(
+                              'Похоже, нет соединения' if 'Похоже, нет соединения' in body
+                              else 'Доступ ограничен' if 'Доступ ограничен' in body
+                              else 'captcha' if 'captcha' in body.lower()
+                              else ''
+                          )
+                      except Exception:
+                          pass
+                  except Exception as e:
+                      rec['browser_error']=f'{type(e).__name__}: {e}'
+                  finally:
+                      if d:
+                          try: d.quit()
+                          except Exception: pass
+
+              results.append(rec)
+              print('BROWSER_RU_RESULT',json.dumps(rec,ensure_ascii=False),flush=True)
+
+              try:
+                  p.send_signal(signal.SIGTERM); p.wait(timeout=6)
+              except Exception:
+                  try: p.kill()
+                  except Exception: pass
+              fp.close()
+              subprocess.run(['sudo','pkill','-9','openvpn'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+              time.sleep(2)
+
+              bs=rec.get('browser_scan') or {}
+              if bs.get('status') in ('ok','not_found') and bs.get('checked',0)>0:
+                  print('LIVE_SERP_PROOF',json.dumps(rec,ensure_ascii=False),flush=True)
+                  raise SystemExit(0)
+
+          print('BROWSER_RU_SUMMARY',json.dumps(results,ensure_ascii=False),flush=True)
+          raise SystemExit(3)
+          PY
