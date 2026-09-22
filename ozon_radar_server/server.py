@@ -18,7 +18,7 @@ from fastapi import FastAPI, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 from playwright.async_api import async_playwright
 
-APP_VERSION = "1.2.1"
+APP_VERSION = "1.2.2"
 MAX_EVENTS = 20000
 CHECK_LOOP_SECONDS = 3
 SOURCE_NAME = "LIVE SERP · Ozon storefront JSON"
@@ -159,18 +159,20 @@ def extract_skus_from_widget_states(data: dict[str, Any]) -> list[str]:
     if not isinstance(states, dict):
         return []
 
+    # Ozon changes widget keys frequently; in current responses the product
+    # grid may be tileGridDesktop-*, tileGrid2-*, searchResultsV2-* or even
+    # an empty key. Detect the product grid by its content, not the widget name.
     found: list[str] = []
     seen: set[str] = set()
 
-    for name, raw in states.items():
-        if not any(token in name for token in ("tileGridDesktop", "tileGrid2", "searchResultsV2")):
-            continue
+    for _, raw in states.items():
         try:
             state = json.loads(raw) if isinstance(raw, str) else raw
         except Exception:
             continue
         if not isinstance(state, dict):
             continue
+
         items = state.get("items")
         if not isinstance(items, list):
             continue
@@ -178,12 +180,23 @@ def extract_skus_from_widget_states(data: dict[str, Any]) -> list[str]:
         for item in items:
             if not isinstance(item, dict):
                 continue
-            sku = item.get("sku") or item.get("skuId") or item.get("id")
+            sku = item.get("sku") or item.get("id") or item.get("skuId")
             sku_text = str(sku) if sku is not None else ""
-            if not sku_text.isdigit():
+
+            # Ignore navigation/separator items. Real product items normally
+            # have sku/id and an action link or product-like state.
+            if sku_text and sku_text.isdigit():
+                action = item.get("action")
+                has_product_shape = bool(
+                    isinstance(action, dict) and action.get("link")
+                ) or bool(item.get("mainState")) or bool(item.get("tileState"))
+                if not has_product_shape:
+                    continue
+            else:
                 blob = json.dumps(item, ensure_ascii=False)
-                m = re.search(r"/product/[a-zA-Z0-9\-_]+-(\d{6,})/", blob)
+                m = re.search(r"/product/[a-zA-Z0-9\\-_]+-(\\d{6,})/", blob)
                 sku_text = m.group(1) if m else ""
+
             if sku_text and sku_text not in seen:
                 seen.add(sku_text)
                 found.append(sku_text)
@@ -291,8 +304,16 @@ class OzonClient:
         launch_kwargs: dict[str, Any] = {
             "headless": True,
             "args": [
+                "--disable-blink-features=AutomationControlled",
                 "--no-sandbox",
+                "--disable-setuid-sandbox",
                 "--disable-dev-shm-usage",
+                "--disable-gpu",
+                "--mute-audio",
+                "--no-first-run",
+                "--no-default-browser-check",
+                "--disable-extensions",
+                "--disable-background-networking",
                 "--lang=ru-RU",
             ],
         }
@@ -306,7 +327,12 @@ class OzonClient:
         context_kwargs: dict[str, Any] = {
             "locale": "ru-RU",
             "timezone_id": "Europe/Moscow",
-            "viewport": {"width": 1365, "height": 900},
+            "viewport": {"width": 1920, "height": 1080},
+            "user_agent": (
+                "Mozilla/5.0 (X11; Linux x86_64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/120.0.0.0 Safari/537.36"
+            ),
         }
         if OZON_PROXY:
             parsed = urllib.parse.urlsplit(OZON_PROXY)
