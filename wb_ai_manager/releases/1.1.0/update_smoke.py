@@ -10,7 +10,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 BUNDLE_B64 = ROOT / "scripts" / ".v11_bundle.b64"
-BUNDLE_SHA256 = "ff00a04cacc69ef8de99beaa9948d7d43db555cd46b22ceed7e6c6b1fe91698b"
+BUNDLE_SHA256 = "1aa4666105d8cff30aa1d59c505938422db66b3c1686b92b37f5bd061a9afd9f"
 
 
 def safe_extract(zf: zipfile.ZipFile, dest: Path) -> None:
@@ -51,7 +51,6 @@ def bootstrap() -> None:
     if py.exists():
         run([python, "-m", "pip", "install", "-e", "."])
     run([python, "-m", "compileall", "-q", str(ROOT / "src"), str(ROOT / "scripts")])
-    # The bundle has now replaced this bootstrap on disk with the final v1.1 smoke file.
     run([python, str(ROOT / "scripts" / "update_smoke.py")])
 
 
