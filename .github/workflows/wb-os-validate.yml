@@ -78,15 +78,18 @@ jobs:
         run: |
           set -euo pipefail
           test -s wb_os/run_core_repair.command
-          grep -q "K2 Evolution Engine v0.1.9" wb_os/apps_script/K2_EVOLUTION_ENGINE.gs
+          grep -q "K2 Evolution Engine v0.1.10" wb_os/apps_script/K2_EVOLUTION_ENGINE.gs
           grep -q "function k2EvolutionCleanupLegacyTriggers_" wb_os/apps_script/K2_EVOLUTION_ENGINE.gs
           grep -q "syncK2StocksOnly" wb_os/apps_script/K2_EVOLUTION_ENGINE.gs
-          grep -q "WB Public Customer Price Engine v0.1.8" wb_os/apps_script/WB_PUBLIC_PRICE_V4.gs
+          grep -q "WB Public Customer Price Engine v0.1.9" wb_os/apps_script/WB_PUBLIC_PRICE_V4.gs
           grep -q "function wbPriceV4CleanupLegacyTriggers_" wb_os/apps_script/WB_PUBLIC_PRICE_V4.gs
           grep -q "sppMonitorScheduledTick" wb_os/apps_script/WB_PUBLIC_PRICE_V4.gs
           grep -q "K2_EVOLUTION_ENGINE.gs" wb_os/run_core_repair.command
           grep -q "WB_PUBLIC_PRICE_V4.gs" wb_os/run_core_repair.command
           grep -q "patch_live_master.py" wb_os/run_core_repair.command
+          grep -q "audit_and_repair_live.py" wb_os/run_core_repair.command
+          grep -q "setupFinalAutomation" wb_os/run_core_repair.command
+          grep -q "MASTER_TRIGGER_BOOTSTRAP" wb_os/tools/audit_and_repair_live.py
           grep -q "SOURCE_REF" wb_os/run_core_repair.command
           grep -q "40-символьный commit SHA" wb_os/run_core_repair.command
           grep -q "remote-verify" wb_os/run_core_repair.command
