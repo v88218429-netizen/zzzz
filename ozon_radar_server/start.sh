@@ -83,11 +83,14 @@ else
   BACKEND_STATE="$(tailscale --socket="$TS_SOCK" status --json 2>/dev/null | python -c 'import json,sys; print((json.load(sys.stdin).get("BackendState") or ""))' 2>/dev/null || true)"
   if [ "$BACKEND_STATE" != "Running" ]; then
     log "TAILSCALE: FIRST LOGIN REQUIRED. Open the authorization URL printed below."
-    # This prints the one-time login URL into Railway runtime logs and waits
-    # until the owner authorizes the node.
-    tailscale --socket="$TS_SOCK" up \
-      --hostname="${TAILSCALE_HOSTNAME:-ozon-radar-cloud}" \
-      --accept-dns=false
+    # Keep Railway healthy while the owner performs the one-time browser login.
+    # tailscale up prints the authorization URL to service logs and waits in
+    # the background; persistent state remembers the login on later restarts.
+    (
+      tailscale --socket="$TS_SOCK" up \
+        --hostname="${TAILSCALE_HOSTNAME:-ozon-radar-cloud}" \
+        --accept-dns=false
+    ) &
   else
     log "TAILSCALE: persistent node authentication reused"
   fi
@@ -104,6 +107,13 @@ export OZON_TAILSCALE_ACTIVE=0
 
 select_exit_forever() {
   while true; do
+    BACKEND_STATE="$(tailscale --socket="$TS_SOCK" status --json 2>/dev/null | python -c 'import json,sys; print((json.load(sys.stdin).get("BackendState") or ""))' 2>/dev/null || true)"
+    if [ "$BACKEND_STATE" != "Running" ]; then
+      printf '%s' "" > /tmp/ozon-tailscale-exit-node
+      sleep 3
+      continue
+    fi
+
     if [ -n "${TAILSCALE_EXIT_NODE:-}" ]; then
       TS_EXIT="$TAILSCALE_EXIT_NODE"
     else
