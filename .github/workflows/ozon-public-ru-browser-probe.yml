@@ -67,7 +67,10 @@ jobs:
                       o.add_argument(arg)
                   o.add_experimental_option('excludeSwitches',['enable-automation'])
                   o.add_experimental_option('useAutomationExtension',False)
+                  o.page_load_strategy='eager'
                   d=webdriver.Chrome(options=o)
+                  d.set_page_load_timeout(25)
+                  d.set_script_timeout(15)
                   try:
                       d.execute_cdp_cmd('Page.addScriptToEvaluateOnNewDocument',{
                           'source':"Object.defineProperty(navigator,'webdriver',{get:()=>undefined});"
