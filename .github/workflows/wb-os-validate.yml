@@ -78,12 +78,16 @@ jobs:
         run: |
           set -euo pipefail
           test -s wb_os/run_core_repair.command
-          grep -q "K2 Evolution Engine v0.1.13" wb_os/apps_script/K2_EVOLUTION_ENGINE.gs
+          grep -q "K2 Evolution Engine v0.1.16" wb_os/apps_script/K2_EVOLUTION_ENGINE.gs
           grep -q "function k2EvolutionCleanupLegacyTriggers_" wb_os/apps_script/K2_EVOLUTION_ENGINE.gs
           grep -q "syncK2StocksOnly" wb_os/apps_script/K2_EVOLUTION_ENGINE.gs
-          grep -q "WB Public Customer Price Engine v0.1.13" wb_os/apps_script/WB_PUBLIC_PRICE_V4.gs
+          grep -q "K2_EV_CUTOVER_DONE" wb_os/apps_script/K2_EVOLUTION_ENGINE.gs
+          grep -q "K2_EV_LOCK_BUSY" wb_os/apps_script/K2_EVOLUTION_ENGINE.gs
+          grep -q "WB Public Customer Price Engine v0.1.16" wb_os/apps_script/WB_PUBLIC_PRICE_V4.gs
           grep -q "function wbPriceV4CleanupLegacyTriggers_" wb_os/apps_script/WB_PUBLIC_PRICE_V4.gs
           grep -q "sppMonitorScheduledTick" wb_os/apps_script/WB_PUBLIC_PRICE_V4.gs
+          grep -q "WB_PRICE_V4_LEGACY_MODE_CONFLICT" wb_os/apps_script/WB_PUBLIC_PRICE_V4.gs
+          grep -q "WB_PRICE_V4_LAYOUT_MISMATCH" wb_os/apps_script/WB_PUBLIC_PRICE_V4.gs
           grep -q "K2_EVOLUTION_ENGINE.gs" wb_os/run_core_repair.command
           grep -q "WB_PUBLIC_PRICE_V4.gs" wb_os/run_core_repair.command
           grep -q "patch_live_master.py" wb_os/run_core_repair.command
@@ -93,6 +97,7 @@ jobs:
           grep -q "SOURCE_REF" wb_os/run_core_repair.command
           grep -q "40-символьный commit SHA" wb_os/run_core_repair.command
           grep -q "remote-verify" wb_os/run_core_repair.command
+          grep -q "project_semantic_fingerprint_" wb_os/run_core_repair.command
           grep -q "rollback_live_" wb_os/run_core_repair.command
           grep -q "CORE REPAIR DEPLOYED + REMOTE VERIFIED" wb_os/run_core_repair.command
           ! grep -q "bundle.part" wb_os/run_core_repair.command
