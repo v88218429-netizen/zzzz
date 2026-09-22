@@ -105,7 +105,79 @@ guard_pattern = re.compile(
 )
 func = guard_pattern.sub("\n", func)
 
-# Step 2b: independently migrate the post-refresh watchdog.
+# Step 2b: make the daily K2/Ivanovo snapshot fail closed on source errors.
+# When the history window opens, the master already forces both source reads.
+# A failed source must not let stale sheet data become today's "fresh" history.
+if "var historyK2Fresh = false;" not in func:
+    history_decl = "  var historyDue = shouldTakeDailyStockSnapshot_();"
+    if func.count(history_decl) != 1:
+        raise SystemExit(
+            "PATCH_FAIL: historyDue declaration not found exactly once"
+        )
+
+    func = func.replace(
+        history_decl,
+        history_decl
+        + "\n  var historyK2Fresh = false;"
+        + "\n  var historyIvanovoFresh = false;",
+        1,
+    )
+
+if "historyK2Fresh = true;" not in func:
+    k2_success = "        k2Updated = Boolean(k2Result && k2Result.changed);"
+    if func.count(k2_success) != 1:
+        raise SystemExit(
+            "PATCH_FAIL: K2 success point not found exactly once"
+        )
+
+    func = func.replace(
+        k2_success,
+        k2_success + "\n        historyK2Fresh = true;",
+        1,
+    )
+
+if "historyIvanovoFresh = true;" not in func:
+    iv_success = "        exportFulfilmentStocks();"
+    if func.count(iv_success) != 1:
+        raise SystemExit(
+            "PATCH_FAIL: Ivanovo success point not found exactly once"
+        )
+
+    func = func.replace(
+        iv_success,
+        iv_success + "\n        historyIvanovoFresh = true;",
+        1,
+    )
+
+safe_history_guard = (
+    "if (historyDue && historyK2Fresh && historyIvanovoFresh) {"
+)
+
+if safe_history_guard not in func:
+    history_comment = (
+        "/* 5. Один дневной снимок остатков К2 + Иваново около 12:00 МСК. */"
+    )
+    pos = func.find(history_comment)
+    if pos < 0:
+        raise SystemExit(
+            "PATCH_FAIL: daily history block marker not found"
+        )
+
+    guard_pos = func.find("if (historyDue) {", pos)
+    if guard_pos < 0:
+        raise SystemExit(
+            "PATCH_FAIL: daily history guard not found"
+        )
+
+    func = (
+        func[:guard_pos]
+        + safe_history_guard
+        + func[guard_pos + len("if (historyDue) {"):]
+    )
+
+
+# Step 2c: independently migrate the post-refresh watchdog.
+
 needle = "    refreshAutomationStatusSheet_();"
 watchdog = """    refreshAutomationStatusSheet_();
 
@@ -130,7 +202,7 @@ if "k2EvolutionWatchdogNotify_();" not in func:
         )
     func = func.replace(needle, watchdog, 1)
 
-# Step 2c: add WB public customer prices v4 to the master.
+# Step 2d: add WB public customer prices v4 to the master.
 price_marker = "syncWbPublicCustomerPricesV4_(forceAll);"
 if price_marker not in func:
     save_marker = "    saveMasterCycleResult_(cycleErrors);"
@@ -173,7 +245,7 @@ if price_marker not in func:
 new_text = before + func + after
 
 
-# Step 2d: add a public, side-effect-minimal bootstrap for deployment.
+# Step 2e: add a public, side-effect-minimal bootstrap for deployment.
 # Unlike setupFinalAutomation(), this only ensures the single master clock and
 # does NOT force Ivanovo/Supplier/WB/Ozon/K2 jobs during deploy.
 bootstrap_fn = """
@@ -197,7 +269,7 @@ if "function wbOsEnsureMasterTrigger()" not in new_text:
     )
 
 
-# Step 2e: make K2 readiness session-aware after final rebuild.
+# Step 2f: make K2 readiness session-aware after final rebuild.
 
 # This affects status/UI only. The master no longer blocks K2 on k2Ready;
 # getK2WarehouseItems_ itself owns session reuse / relogin behavior.
@@ -237,6 +309,9 @@ required = [
     "syncWbPublicCustomerPricesV4_(forceAll);",
     "wbPriceV4RecordFailure_(priceError)",
     "function wbOsEnsureMasterTrigger()",
+    "historyK2Fresh = true;",
+    "historyIvanovoFresh = true;",
+    "if (historyDue && historyK2Fresh && historyIvanovoFresh) {",
 ]
 missing = [marker for marker in required if marker not in new_text]
 if missing:
