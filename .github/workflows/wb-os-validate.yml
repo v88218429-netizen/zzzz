@@ -78,7 +78,7 @@ jobs:
         run: |
           set -euo pipefail
           test -s wb_os/run_core_repair.command
-          grep -q "K2 Evolution Engine v0.1.16" wb_os/apps_script/K2_EVOLUTION_ENGINE.gs
+          grep -q "K2 Evolution Engine v0.1.17" wb_os/apps_script/K2_EVOLUTION_ENGINE.gs
           grep -q "function k2EvolutionCleanupLegacyTriggers_" wb_os/apps_script/K2_EVOLUTION_ENGINE.gs
           grep -q "syncK2StocksOnly" wb_os/apps_script/K2_EVOLUTION_ENGINE.gs
           grep -q "K2_EV_CUTOVER_DONE" wb_os/apps_script/K2_EVOLUTION_ENGINE.gs
