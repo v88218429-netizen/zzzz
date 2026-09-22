@@ -23,6 +23,8 @@ K2_STABLE = r"""
 function getK2WarehouseItems_() { return []; }
 function getK2CredentialsWithFallback_() { return {}; }
 function updateK2AutomationStatus_() {}
+function syncK2StocksOnly() { return 'legacy-only'; }
+function syncK2StocksAndNotify() { return 'legacy-notify'; }
 function parseNumber_() { return 1; }
 """
 
@@ -37,6 +39,15 @@ function k2EvolutionFetchAndApply_() {}
 
 PRICE = r"""
 function syncWbPublicCustomerPricesV4_() {}
+"""
+
+SPP = r"""
+function sppMonitorScheduledTick() {
+  sppRunMonitor_(true);
+}
+function sppRunMonitor_(sendNotifications) {
+  return sendNotifications;
+}
 """
 
 LEGACY_PRICE = r"""
@@ -78,6 +89,7 @@ def main():
         (root / "K2_old.js").write_text(K2_OLD, encoding="utf-8")
         (root / "Evolution.js").write_text(EVOLUTION, encoding="utf-8")
         (root / "Price.js").write_text(PRICE, encoding="utf-8")
+        (root / "Spp.js").write_text(SPP, encoding="utf-8")
         (root / "Supplier.js").write_text(SUPPLIER, encoding="utf-8")
         (root / "LegacyPrice.js").write_text(LEGACY_PRICE, encoding="utf-8")
 
@@ -91,6 +103,16 @@ def main():
         assert "legacy duplicate K2 core disabled" in (
             root / "K2_old.js"
         ).read_text(encoding="utf-8")
+
+        k2_stable = (root / "K2_stable.js").read_text(encoding="utf-8")
+        assert "WB_OS_MASTER_TRIGGER_BOOTSTRAP_syncK2StocksOnly" in k2_stable
+        assert "WB_OS_MASTER_TRIGGER_BOOTSTRAP_syncK2StocksAndNotify" in k2_stable
+        assert "ensureFinalAutomationTrigger_();" in k2_stable
+
+        spp = (root / "Spp.js").read_text(encoding="utf-8")
+        assert "WB_OS_MASTER_TRIGGER_BOOTSTRAP_sppMonitorScheduledTick" in spp
+        assert "ensureFinalAutomationTrigger_();" in spp
+        assert "sppRunMonitor_(true);" in spp
 
         supplier = (root / "Supplier.js").read_text(encoding="utf-8")
         legacy_price = (root / "LegacyPrice.js").read_text(encoding="utf-8")
