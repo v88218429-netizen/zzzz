@@ -1,0 +1,61 @@
+import os, time, json, requests, math
+BASE="https://api-performance.ozon.ru"
+CID=os.getenv("OZON_PERF_CLIENT_ID") or os.getenv("OZON_PERFORMANCE_CLIENT_ID") or os.getenv("PERFORMANCE_CLIENT_ID")
+SECRET=os.getenv("OZON_PERF_CLIENT_SECRET") or os.getenv("OZON_PERFORMANCE_CLIENT_SECRET") or os.getenv("PERFORMANCE_CLIENT_SECRET")
+TARGET=os.getenv("TEST_SKU","5094364543")
+LOW=float(os.getenv("LOW_RESERVE_PCT","5"))
+SPIKE=float(os.getenv("COMPETITION_SPIKE_PCT","20"))
+
+class Perf:
+    def __init__(self):
+        self.token=None
+    def auth(self):
+        r=requests.post(BASE+"/api/client/token",json={"client_id":CID,"client_secret":SECRET,"grant_type":"client_credentials"},timeout=20)
+        r.raise_for_status(); self.token=r.json()["access_token"]
+    def get(self,path,params=None):
+        if not self.token:self.auth()
+        r=requests.get(BASE+path,headers={"Authorization":"Bearer "+self.token,"Accept":"application/json"},params=params,timeout=30)
+        if r.status_code==401:self.auth(); r=requests.get(BASE+path,headers={"Authorization":"Bearer "+self.token,"Accept":"application/json"},params=params,timeout=30)
+        r.raise_for_status(); return r.json()
+    def campaigns(self):
+        out=[]; page=1
+        while True:
+            j=self.get("/api/client/campaign",{"page":page,"pageSize":100,"state":"CAMPAIGN_STATE_RUNNING"})
+            arr=j.get("list") or []
+            out+=arr
+            if len(arr)<100:break
+            page+=1
+        return out
+    def products(self,cid):
+        return self.get(f"/api/client/campaign/{cid}/v2/products").get("products") or []
+    def competitive(self,cid,skus):
+        if not skus:return {}
+        out={}
+        for i in range(0,len(skus),200):
+            j=self.get(f"/api/client/campaign/{cid}/products/bids/competitive",[("skus",x) for x in skus[i:i+200]])
+            for x in j.get("bids") or []: out[str(x.get("sku"))]=num(x.get("bid"))
+        return out
+
+def num(v):
+    try:return float(str(v).replace(",","."))
+    except:return None
+
+def main():
+    if not CID or not SECRET:
+        print("PERFORMANCE_CREDENTIALS=missing"); return 2
+    p=Perf(); camps=p.campaigns(); print("ACTIVE_CAMPAIGNS",len(camps))
+    found=[]
+    for c in camps:
+        cid=str(c.get("id"))
+        prods=p.products(cid)
+        skus=[str(x.get("sku")) for x in prods if x.get("sku") is not None]
+        cb=p.competitive(cid,skus)
+        for x in prods:
+            sku=str(x.get("sku"))
+            if sku==TARGET:
+                rec={"campaignId":cid,"campaign":c.get("title"),"sku":sku,"title":x.get("title"),"bid":num(x.get("bid")),"competitiveBid":cb.get(sku),"topPosition":x.get("topPosition"),"targetCir":x.get("targetCir"),"ts":time.strftime("%Y-%m-%dT%H:%M:%SZ",time.gmtime())}
+                found.append(rec)
+    print("TARGET_FOUND",len(found))
+    for r in found: print("PERF_RESULT",json.dumps(r,ensure_ascii=False))
+    return 0 if found else 3
+if __name__=="__main__": raise SystemExit(main())
