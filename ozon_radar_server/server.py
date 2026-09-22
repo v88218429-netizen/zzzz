@@ -18,7 +18,7 @@ from fastapi import FastAPI, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 from playwright.async_api import async_playwright
 
-APP_VERSION = "1.2.0"
+APP_VERSION = "1.2.1"
 MAX_EVENTS = 20000
 CHECK_LOOP_SECONDS = 3
 SOURCE_NAME = "LIVE SERP · Ozon storefront JSON"
@@ -163,7 +163,7 @@ def extract_skus_from_widget_states(data: dict[str, Any]) -> list[str]:
     seen: set[str] = set()
 
     for name, raw in states.items():
-        if "tileGridDesktop" not in name and "searchResultsV2" not in name:
+        if not any(token in name for token in ("tileGridDesktop", "tileGrid2", "searchResultsV2")):
             continue
         try:
             state = json.loads(raw) if isinstance(raw, str) else raw
@@ -409,8 +409,9 @@ class OzonClient:
         last_http = 0
 
         for page in range(1, pages + 1):
-            encoded_query = urllib.parse.quote(query, safe="")
-            path = f"/search/?text={encoded_query}"
+            # Keep the inner search URL unescaped here. The outer composer
+            # request encodes the whole `url` parameter exactly once.
+            path = f"/search/?text={query}"
             if page > 1:
                 path += f"&page={page}"
 
@@ -487,8 +488,9 @@ class OzonClient:
         last_http = 0
 
         for page in range(1, pages + 1):
-            encoded_query = urllib.parse.quote(query, safe="")
-            path = f"/search/?text={encoded_query}"
+            # Keep the inner search URL unescaped here. The outer composer
+            # request encodes the whole `url` parameter exactly once.
+            path = f"/search/?text={query}"
             if page > 1:
                 path += f"&page={page}"
 
