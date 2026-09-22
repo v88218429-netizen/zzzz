@@ -42,10 +42,60 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for f in wb_os/*.command wb_os/**/*.sh; do
-            [ -e "$f" ] || continue
+          while IFS= read -r -d '' f; do
+            echo "bash -n $f"
             bash -n "$f"
-          done
+          done < <(find wb_os -type f \( -name '*.command' -o -name '*.sh' \) -print0)
+
+      - name: Full-repair bundle integrity
+        shell: bash
+        run: |
+          set -euo pipefail
+          PART_DIR="wb_os/final_repair"
+          OUT="/tmp/wb-os-final-repair"
+          mkdir -p "$OUT"
+
+          test -s "$PART_DIR/bundle.part00"
+          test -s "$PART_DIR/bundle.part01"
+          test -s "$PART_DIR/bundle.part02"
+          test -s "$PART_DIR/bundle.part03"
+
+          cat             "$PART_DIR/bundle.part00"             "$PART_DIR/bundle.part01"             "$PART_DIR/bundle.part02"             "$PART_DIR/bundle.part03"             > "$OUT/bundle.b64"
+
+          python3 - "$OUT/bundle.b64" "$OUT/bundle.tar.gz" <<'PY'
+          import base64
+          from pathlib import Path
+          import sys
+
+          src = Path(sys.argv[1]).read_bytes()
+          if len(src) % 4:
+              raise SystemExit(
+                  f"bundle base64 length is not divisible by 4: {len(src)}"
+              )
+
+          try:
+              raw = base64.b64decode(src, validate=True)
+          except Exception as exc:
+              raise SystemExit(f"bundle base64 decode failed: {exc}")
+
+          Path(sys.argv[2]).write_bytes(raw)
+          print(f"bundle base64 OK: {len(src)} chars -> {len(raw)} bytes")
+          PY
+
+          tar -tzf "$OUT/bundle.tar.gz" >/dev/null
+          mkdir -p "$OUT/extracted"
+          tar -xzf "$OUT/bundle.tar.gz" -C "$OUT/extracted"
+
+          count=0
+          while IFS= read -r -d '' f; do
+            tmp="$OUT/check-$count.js"
+            cp "$f" "$tmp"
+            node --check "$tmp"
+            count=$((count + 1))
+          done < <(find "$OUT/extracted" -type f \( -name '*.gs' -o -name '*.js' \) -print0)
+
+          test "$count" -gt 0
+          echo "Extracted Apps Script syntax OK: $count files"
 
       - name: Secret scan
         shell: bash
