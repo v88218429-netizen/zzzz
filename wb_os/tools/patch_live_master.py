@@ -173,7 +173,32 @@ if price_marker not in func:
 new_text = before + func + after
 
 
-# Step 2d: make K2 readiness session-aware after final rebuild.
+# Step 2d: add a public, side-effect-minimal bootstrap for deployment.
+# Unlike setupFinalAutomation(), this only ensures the single master clock and
+# does NOT force Ivanovo/Supplier/WB/Ozon/K2 jobs during deploy.
+bootstrap_fn = """
+function wbOsEnsureMasterTrigger() {
+  ensureFinalAutomationTrigger_();
+  return 'MASTER_TRIGGER_OK';
+}
+"""
+
+if "function wbOsEnsureMasterTrigger()" not in new_text:
+    insertion = "\nfunction shouldRunByProperty_"
+    if insertion not in new_text:
+        raise SystemExit(
+            "PATCH_FAIL: cannot place wbOsEnsureMasterTrigger bootstrap"
+        )
+
+    new_text = new_text.replace(
+        insertion,
+        "\n" + bootstrap_fn + insertion,
+        1,
+    )
+
+
+# Step 2e: make K2 readiness session-aware after final rebuild.
+
 # This affects status/UI only. The master no longer blocks K2 on k2Ready;
 # getK2WarehouseItems_ itself owns session reuse / relogin behavior.
 old_ready = """k2Ready: Boolean(
@@ -195,7 +220,7 @@ if old_ready in new_text:
 # the deploy. The hard safety property is that the master does not gate K2 on
 # getMasterConfigurationState_().k2Ready anymore.
 
-# Step 3: independently migrate history heartbeat self-healing.
+# Step 4: independently migrate history heartbeat self-healing.
 old_history = "buildAutomationStatusRow_('История остатков', props.getProperty('FF_STOCK_HISTORY_LAST_AT'), 1560)"
 new_history = "buildAutomationStatusRow_('История остатков', k2EvolutionHistoryLastAt_(props), 1560)"
 if old_history in new_text:
@@ -211,6 +236,7 @@ required = [
     "k2EvolutionHistoryLastAt_(props)",
     "syncWbPublicCustomerPricesV4_(forceAll);",
     "wbPriceV4RecordFailure_(priceError)",
+    "function wbOsEnsureMasterTrigger()",
 ]
 missing = [marker for marker in required if marker not in new_text]
 if missing:
