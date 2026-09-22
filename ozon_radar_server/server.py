@@ -18,7 +18,7 @@ from fastapi import FastAPI, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 from playwright.async_api import async_playwright
 
-APP_VERSION = "1.2.4"
+APP_VERSION = "1.3.0"
 MAX_EVENTS = 20000
 CHECK_LOOP_SECONDS = 3
 SOURCE_NAME = "LIVE SERP · Ozon storefront JSON"
@@ -83,6 +83,9 @@ OZON_PROXY = build_ozon_proxy()
 RADAR_TASKS_JSON = env("RADAR_TASKS_JSON")
 OZON_BROWSER_MODE = (env("OZON_BROWSER_MODE") or "auto").lower()
 OZON_BROWSER_WARMUP_MS = max(5000, min(30000, int(env("OZON_BROWSER_WARMUP_MS") or "12000")))
+OZON_TAILSCALE_ACTIVE = env("OZON_TAILSCALE_ACTIVE") == "1"
+OZON_TAILSCALE_EXIT_NODE = env("OZON_TAILSCALE_EXIT_NODE")
+OZON_FORCE_LIVE_OFFLINE = env("OZON_FORCE_LIVE_OFFLINE") == "1"
 CONFIRM_SECONDS = max(15, min(30, int(env("OZON_CONFIRM_SECONDS") or "20")))
 
 
@@ -432,6 +435,8 @@ class OzonClient:
         raise RuntimeError(last_error or "browser Ozon source failed")
 
     async def position_async(self, query: str, sku: str, max_position: int) -> dict[str, Any]:
+        if OZON_FORCE_LIVE_OFFLINE:
+            raise RuntimeError("LIVE egress is fail-closed: no approved Tailscale exit node")
         target = str(sku)
         seen: list[str] = []
         seen_set: set[str] = set()
@@ -910,6 +915,9 @@ def health() -> dict[str, Any]:
         "proxy_configured": bool(OZON_PROXY),
         "browser_mode": OZON_BROWSER_MODE,
         "browser_ready": bool(getattr(ozon, "_page", None)),
+        "tailscale_active": OZON_TAILSCALE_ACTIVE,
+        "tailscale_exit_node": OZON_TAILSCALE_EXIT_NODE,
+        "force_live_offline": OZON_FORCE_LIVE_OFFLINE,
         "telegram_configured": bool(TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID),
         "tasks": statuses,
     }
