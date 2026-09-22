@@ -124,6 +124,40 @@ load('apps_script/K2_EVOLUTION_ENGINE.gs');
   );
 }
 
+// Duplicate nmIDs must count only once in calibration, and conflicting known
+// K values for one nmID must fail closed.
+{
+  const fetched = {};
+  const rows = [];
+
+  for (let i = 0; i < 10; i++) {
+    const id = String(200000 + i);
+    fetched[id] = {
+      product: 100,
+      productPlusLogistics: 105,
+      totalField: 125
+    };
+
+    const row = Array(11).fill('');
+    row[2] = id;
+    row[10] = 105;
+    rows.push(row);
+  }
+
+  rows.push([...rows[0]]);
+  rows.push([...rows[1]]);
+
+  let result = ctx.wbPriceV4Calibrate_(rows, fetched);
+  assert.strictEqual(result.ok, true);
+  assert.strictEqual(result.rows, 10);
+
+  const conflicting = rows.map(x => [...x]);
+  conflicting[10][10] = 106;
+  result = ctx.wbPriceV4Calibrate_(conflicting, fetched);
+  assert.strictEqual(result.ok, false);
+  assert.ok(result.conflictNmIds.includes('200000'));
+}
+
 // V4 must mirror the known-working legacy endpoint rather than forcing an
 // arbitrary spp query parameter that could change buyer-price semantics.
 {
@@ -310,6 +344,9 @@ load('apps_script/K2_EVOLUTION_ENGINE.gs');
     priceFn.indexOf('.setValues(output)')
   );
 
+  assert.ok(k2Source.includes('LockService.getScriptLock()'));
+  assert.ok(k2Source.includes('K2_EV_LOCK_BUSY'));
+  assert.ok(k2Source.includes('K2_EV_CUTOVER_DONE'));
   assert.ok(k2Source.includes('ensureFinalAutomationTrigger_'));
   assert.ok(k2Source.includes('master trigger helper отсутствует'));
   assert.ok(priceSource.includes('ensureFinalAutomationTrigger_'));
