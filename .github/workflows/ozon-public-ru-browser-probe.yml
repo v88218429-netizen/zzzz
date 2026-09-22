@@ -1,0 +1,122 @@
+name: Ozon public RU SOCKS browser probe
+
+on:
+  push:
+    branches: [mainggg]
+    paths:
+      - ".github/workflows/ozon-public-ru-browser-probe.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install browser dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends xvfb
+          pip install selenium==4.35.0 requests==2.34.2
+          google-chrome --version || chromium --version
+
+      - name: Probe Ozon visible SERP through verified RU ISP SOCKS exits
+        shell: bash
+        run: |
+          export DISPLAY=:99
+          Xvfb :99 -screen 0 1920x1080x24 >/tmp/xvfb.log 2>&1 &
+          sleep 2
+          python - <<'PY'
+          import json, re, time
+          import requests
+          from selenium import webdriver
+          from selenium.webdriver.common.by import By
+          from selenium.webdriver.support.ui import WebDriverWait
+          from selenium.webdriver.support import expected_conditions as EC
+          from selenium.common.exceptions import TimeoutException
+
+          proxies=[
+              'socks5://83.221.222.194:1080',   # Rostov, Rostelecom in previous live probe
+              'socks5://195.19.50.226:1080',    # Moscow, GTNT
+              'socks5://94.233.120.194:1080',   # Volgograd, Rostelecom
+              'socks5://93.90.231.101:1080',    # Sverdlovsk, MTS
+          ]
+          target='5094364543'
+          query='лопата садовая'
+          url='https://www.ozon.ru/search/?text=%D0%BB%D0%BE%D0%BF%D0%B0%D1%82%D0%B0%20%D1%81%D0%B0%D0%B4%D0%BE%D0%B2%D0%B0%D1%8F&from_global=true'
+
+          for proxy in proxies:
+              rec={'proxy':proxy}
+              d=None
+              try:
+                  o=webdriver.ChromeOptions()
+                  for arg in [
+                      '--no-sandbox','--disable-dev-shm-usage','--disable-infobars',
+                      '--lang=ru-RU','--window-size=1920,1080',
+                      '--disable-blink-features=AutomationControlled',
+                      '--proxy-server='+proxy,
+                      '--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36',
+                  ]:
+                      o.add_argument(arg)
+                  o.add_experimental_option('excludeSwitches',['enable-automation'])
+                  o.add_experimental_option('useAutomationExtension',False)
+                  d=webdriver.Chrome(options=o)
+                  try:
+                      d.execute_cdp_cmd('Page.addScriptToEvaluateOnNewDocument',{
+                          'source':"Object.defineProperty(navigator,'webdriver',{get:()=>undefined});"
+                      })
+                  except Exception:
+                      pass
+
+                  d.get(url)
+                  time.sleep(5)
+                  for _ in range(5):
+                      try:
+                          d.execute_script('window.scrollBy(0, 1400)')
+                      except Exception:
+                          pass
+                      time.sleep(1)
+
+                  hrefs=[e.get_attribute('href') or '' for e in d.find_elements(By.CSS_SELECTOR,"a[href*='/product/']")]
+                  ids=[]; seen=set()
+                  for href in hrefs:
+                      m=re.search(r'/product/(?:[^/?#]+-)?(\d{6,})(?:[/?#]|$)',href)
+                      if m and m.group(1) not in seen:
+                          seen.add(m.group(1)); ids.append(m.group(1))
+
+                  body=(d.find_element(By.TAG_NAME,'body').text or '')[:6000]
+                  rec.update({
+                      'title':d.title,
+                      'current_url':d.current_url,
+                      'product_count':len(ids),
+                      'target_position':ids.index(target)+1 if target in ids else None,
+                      'first_ids':ids[:30],
+                      'block_marker':(
+                          'Похоже, нет соединения' if 'Похоже, нет соединения' in body
+                          else 'Доступ ограничен' if 'Доступ ограничен' in body
+                          else 'captcha' if 'captcha' in body.lower()
+                          else ''
+                      ),
+                      'body_head':body[:500].replace('\n',' | '),
+                  })
+              except Exception as e:
+                  rec['error']=f'{type(e).__name__}: {e}'
+              finally:
+                  if d:
+                      try: d.quit()
+                      except Exception: pass
+
+              print('SOCKS_BROWSER_RESULT',json.dumps(rec,ensure_ascii=False),flush=True)
+              if rec.get('product_count',0)>0:
+                  print('LIVE_SERP_PROOF',json.dumps(rec,ensure_ascii=False),flush=True)
+                  raise SystemExit(0)
+
+          raise SystemExit(3)
+          PY
