@@ -50,16 +50,20 @@ say "Linking existing Railway project"
 railway link --project "$RAILWAY_PROJECT" --environment "$RAILWAY_ENV" --json >/tmp/ozon-railway-link.json
 
 SERVICES="$(railway service list --json 2>/dev/null || echo '[]')"
-if ! python3 - "$RAILWAY_SERVICE" <<<"$SERVICES" <<'PY'
-import json,sys
+if ! SERVICES_JSON="$SERVICES" python3 - "$RAILWAY_SERVICE" <<'PY'
+import json, os, sys
 name=sys.argv[1]
-try: obj=json.load(sys.stdin)
-except Exception: raise SystemExit(1)
+try:
+    obj=json.loads(os.environ.get("SERVICES_JSON","[]"))
+except Exception:
+    raise SystemExit(1)
 def walk(x):
     if isinstance(x,dict):
-        if str(x.get("name",""))==name: return True
+        if str(x.get("name",""))==name:
+            return True
         return any(walk(v) for v in x.values())
-    if isinstance(x,list): return any(walk(v) for v in x)
+    if isinstance(x,list):
+        return any(walk(v) for v in x)
     return False
 raise SystemExit(0 if walk(obj) else 1)
 PY
@@ -80,11 +84,32 @@ else
   say "Persistent Tailscale volume already exists"
 fi
 
-RADAR_SECRET="$(python3 - <<'PY'
+EXISTING_VARS="$(railway variable list --json -s "$RAILWAY_SERVICE" 2>/dev/null || echo '{}')"
+RADAR_SECRET="$(VARS_JSON="$EXISTING_VARS" python3 - <<'PY'
+import json, os
+raw=os.environ.get("VARS_JSON","{}")
+try:
+    obj=json.loads(raw)
+except Exception:
+    obj={}
+value=""
+if isinstance(obj,dict):
+    value=str(obj.get("RADAR_SECRET") or "")
+elif isinstance(obj,list):
+    for item in obj:
+        if isinstance(item,dict) and str(item.get("name") or item.get("key") or "")=="RADAR_SECRET":
+            value=str(item.get("value") or "")
+            break
+print(value)
+PY
+)"
+if [ -z "$RADAR_SECRET" ]; then
+  RADAR_SECRET="$(python3 - <<'PY'
 import secrets
 print(secrets.token_urlsafe(36))
 PY
 )"
+fi
 
 say "Configuring Railway service"
 printf '%s' "$RADAR_SECRET" | railway variable set RADAR_SECRET --stdin -s "$RAILWAY_SERVICE" --skip-deploys >/dev/null
@@ -102,46 +127,58 @@ railway up "$TMP/repo/ozon_radar_server" \
 
 # Ensure public HTTPS domain.
 DOMAINS="$(railway domain list -s "$RAILWAY_SERVICE" --json 2>/dev/null || echo '[]')"
-SERVER_URL="$(python3 - <<'PY' <<<"$DOMAINS"
-import json,re,sys
-raw=sys.stdin.read()
-try: obj=json.loads(raw)
-except Exception: obj=raw
+SERVER_URL="$(DOMAINS_JSON="$DOMAINS" python3 - <<'PY'
+import json, os, re
+raw=os.environ.get("DOMAINS_JSON","[]")
+try:
+    obj=json.loads(raw)
+except Exception:
+    obj=raw
 strings=[]
 def walk(x):
-    if isinstance(x,str): strings.append(x)
+    if isinstance(x,str):
+        strings.append(x)
     elif isinstance(x,dict):
-        for v in x.values(): walk(v)
+        for v in x.values():
+            walk(v)
     elif isinstance(x,list):
-        for v in x: walk(v)
+        for v in x:
+            walk(v)
 walk(obj)
 for s in strings:
     m=re.search(r'(?:https://)?([a-zA-Z0-9.-]+\.up\.railway\.app)',s)
     if m:
-        print('https://'+m.group(1)); break
+        print('https://'+m.group(1))
+        break
 PY
 )"
 
 if [ -z "$SERVER_URL" ]; then
   say "Generating Railway public domain"
   NEW_DOMAIN="$(railway domain -s "$RAILWAY_SERVICE" --json)"
-  SERVER_URL="$(python3 - <<'PY' <<<"$NEW_DOMAIN"
-import json,re,sys
-raw=sys.stdin.read()
-try: obj=json.loads(raw)
-except Exception: obj=raw
+  SERVER_URL="$(DOMAIN_JSON="$NEW_DOMAIN" python3 - <<'PY'
+import json, os, re
+raw=os.environ.get("DOMAIN_JSON","")
+try:
+    obj=json.loads(raw)
+except Exception:
+    obj=raw
 strings=[]
 def walk(x):
-    if isinstance(x,str): strings.append(x)
+    if isinstance(x,str):
+        strings.append(x)
     elif isinstance(x,dict):
-        for v in x.values(): walk(v)
+        for v in x.values():
+            walk(v)
     elif isinstance(x,list):
-        for v in x: walk(v)
+        for v in x:
+            walk(v)
 walk(obj)
 for s in strings:
     m=re.search(r'(?:https://)?([a-zA-Z0-9.-]+\.up\.railway\.app)',s)
     if m:
-        print('https://'+m.group(1)); break
+        print('https://'+m.group(1))
+        break
 PY
 )"
 fi
