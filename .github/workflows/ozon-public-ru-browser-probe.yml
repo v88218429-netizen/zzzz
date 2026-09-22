@@ -78,8 +78,13 @@ jobs:
                   except Exception:
                       pass
 
-                  d.get(url)
-                  time.sleep(5)
+                  try:
+                      d.get(url)
+                  except TimeoutException:
+                      rec['page_load_timeout']=True
+                      try: d.execute_script('window.stop()')
+                      except Exception: pass
+                  time.sleep(4)
                   for _ in range(5):
                       try:
                           d.execute_script('window.scrollBy(0, 1400)')
