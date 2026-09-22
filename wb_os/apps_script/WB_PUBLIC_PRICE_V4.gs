@@ -1,5 +1,5 @@
 /**
- * WB OS / WB Public Customer Price Engine v0.1.8
+ * WB OS / WB Public Customer Price Engine v0.1.9
  *
  * Purpose:
  * - read WB nmID values from "Сводная";
@@ -15,7 +15,7 @@
  */
 
 var WB_PUBLIC_PRICE_V4 = {
-  VERSION: '0.1.8',
+  VERSION: '0.1.9',
   SUMMARY_SHEET: 'Сводная',
   SOURCE_SHEET: '_WB_PUBLIC_PRICE_V4',
   FIRST_DATA_ROW: 12,
@@ -301,7 +301,6 @@ function wbPriceV4FetchAll_(ids) {
         '?appType=1' +
         '&curr=rub' +
         '&dest=' + encodeURIComponent(WB_PUBLIC_PRICE_V4.DEST) +
-        '&spp=30' +
         '&lang=ru' +
         '&nm=' + encodeURIComponent(batch.join(';')),
       method: 'get',
@@ -369,6 +368,7 @@ function wbPriceV4FetchAll_(ids) {
         basic: price.basic,
         product: price.product,
         logistics: price.logistics,
+        productPlusLogistics: price.productPlusLogistics,
         totalField: price.totalField,
         quantity:
           Number(product.totalQuantity || 0) || 0
@@ -455,33 +455,59 @@ function wbPriceV4ExtractPrice_(product) {
       product: fallbackProduct,
       basic: fallbackBasic,
       logistics: 0,
+      productPlusLogistics: fallbackProduct,
       totalField: fallbackProduct
     };
   }
 
-  var best = pool[0];
+  function minPositive_(getter) {
+    var best = 0;
 
-  function primaryPrice_(item) {
-    return (
-      item.product ||
-      item.totalField ||
-      item.basic ||
-      Number.MAX_VALUE
-    );
-  }
+    for (var j = 0; j < pool.length; j++) {
+      var value = Number(getter(pool[j])) || 0;
 
-  for (var j = 1; j < pool.length; j++) {
-    if (
-      primaryPrice_(pool[j]) <
-      primaryPrice_(best)
-    ) {
-      best = pool[j];
+      if (value > 0 && (!(best > 0) || value < best)) {
+        best = value;
+      }
     }
+
+    return best;
   }
 
-  return best;
-}
+  var minProduct = minPositive_(function(item) {
+    return item.product;
+  });
 
+  var minBasic = minPositive_(function(item) {
+    return item.basic;
+  });
+
+  var minLogistics = minPositive_(function(item) {
+    return item.logistics;
+  });
+
+  var minProductPlusLogistics = minPositive_(function(item) {
+    if (!(item.product > 0)) {
+      return 0;
+    }
+
+    return item.product + (item.logistics || 0);
+  });
+
+  var minTotalField = minPositive_(function(item) {
+    return item.totalField;
+  });
+
+  return {
+    product: minProduct,
+    basic: minBasic,
+    logistics: minLogistics,
+    productPlusLogistics:
+      minProductPlusLogistics || minProduct,
+    totalField:
+      minTotalField || minProduct
+  };
+}
 function wbPriceV4Kopecks_(value) {
   var n = Number(value);
 
@@ -503,7 +529,7 @@ function wbPriceV4Candidate_(item, mode) {
   }
 
   if (mode === 'product_plus_logistics') {
-    return (item.product || 0) + (item.logistics || 0);
+    return item.productPlusLogistics || item.product || 0;
   }
 
   return item.product || 0;
@@ -645,9 +671,10 @@ function wbPriceV4WriteShadow_(
     'name',
     'seller_price_J',
     'existing_client_K',
-    'v4_product',
-    'v4_logistics',
-    'v4_total_field',
+    'v4_product_min',
+    'v4_logistics_min',
+    'v4_product_plus_logistics_min',
+    'v4_total_field_min',
     'selected_mode',
     'selected_client_price',
     'calibration_ok'
@@ -680,6 +707,7 @@ function wbPriceV4WriteShadow_(
       ),
       item.product,
       item.logistics,
+      item.productPlusLogistics,
       item.totalField,
       calibration.mode,
       wbPriceV4Candidate_(item, calibration.mode),
