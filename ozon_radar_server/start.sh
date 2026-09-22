@@ -93,36 +93,37 @@ else
   fi
 fi
 
-if [ -n "${TAILSCALE_EXIT_NODE:-}" ]; then
-  TS_EXIT="$TAILSCALE_EXIT_NODE"
-else
-  log "TAILSCALE: looking for an approved home exit node"
-  j=0
-  while [ "$j" -lt 60 ]; do
-    TS_EXIT="$(find_exit_node 2>/dev/null || true)"
-    [ -n "$TS_EXIT" ] && break
-    j=$((j+1))
-    sleep 2
-  done
-fi
+# From this point the app always talks to the local Tailscale SOCKS proxy.
+# Before an exit node is selected, public Ozon requests fail closed. As soon as
+# an approved home exit node appears, the background selector enables it and
+# subsequent requests automatically leave through the home ISP without an app
+# restart.
+export OZON_PROXY="$TS_PROXY"
+export OZON_FORCE_LIVE_OFFLINE=0
+export OZON_TAILSCALE_ACTIVE=0
 
-if [ -n "$TS_EXIT" ]; then
-  log "TAILSCALE: selecting exit node $TS_EXIT"
-  if tailscale --socket="$TS_SOCK" set --exit-node="$TS_EXIT"; then
-    export OZON_PROXY="$TS_PROXY"
-    export OZON_TAILSCALE_ACTIVE=1
-    export OZON_TAILSCALE_EXIT_NODE="$TS_EXIT"
-    export OZON_FORCE_LIVE_OFFLINE=0
-    log "TAILSCALE: LIVE Ozon traffic routed through home exit node"
-  else
-    log "TAILSCALE: exit node selection failed; LIVE is fail-closed"
-    export OZON_TAILSCALE_ACTIVE=0
-    export OZON_FORCE_LIVE_OFFLINE=1
-  fi
-else
-  log "TAILSCALE: no approved exit node visible; LIVE is fail-closed"
-  export OZON_TAILSCALE_ACTIVE=0
-  export OZON_FORCE_LIVE_OFFLINE=1
-fi
+select_exit_forever() {
+  while true; do
+    if [ -n "${TAILSCALE_EXIT_NODE:-}" ]; then
+      TS_EXIT="$TAILSCALE_EXIT_NODE"
+    else
+      TS_EXIT="$(find_exit_node 2>/dev/null || true)"
+    fi
+
+    if [ -n "$TS_EXIT" ]; then
+      log "TAILSCALE: selecting exit node $TS_EXIT"
+      if tailscale --socket="$TS_SOCK" set --exit-node="$TS_EXIT" >/tmp/tailscale-exit.log 2>&1; then
+        printf '%s' "$TS_EXIT" > /tmp/ozon-tailscale-exit-node
+        log "TAILSCALE: LIVE Ozon traffic now routes through home exit node $TS_EXIT"
+        return 0
+      fi
+    fi
+
+    printf '%s' "" > /tmp/ozon-tailscale-exit-node
+    sleep 5
+  done
+}
+
+select_exit_forever &
 
 exec uvicorn server:app --host 0.0.0.0 --port "${PORT:-8080}"
