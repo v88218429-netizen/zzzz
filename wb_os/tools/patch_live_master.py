@@ -172,9 +172,27 @@ if "var historyK2Fresh = false;" not in func:
         history_decl,
         history_decl
         + "\n  var historyK2Fresh = false;"
-        + "\n  var historyIvanovoFresh = false;",
+        + "\n  var historyIvanovoFresh = false;"
+        + "\n  var k2FailedThisCycle = false;"
+        + "\n  var ivanovoFailedThisCycle = false;",
         1,
     )
+
+if "var k2FailedThisCycle = false;" not in func:
+    history_decl = "  var historyIvanovoFresh = false;"
+    if func.count(history_decl) != 1:
+        raise SystemExit(
+            "PATCH_FAIL: history safety declaration point not found"
+        )
+
+    func = func.replace(
+        history_decl,
+        history_decl
+        + "\n  var k2FailedThisCycle = false;"
+        + "\n  var ivanovoFailedThisCycle = false;",
+        1,
+    )
+
 
 if "historyK2Fresh = true;" not in func:
     k2_success = "        k2Updated = Boolean(k2Result && k2Result.changed);"
@@ -239,6 +257,49 @@ if safe_history_guard not in func:
         func[:guard_pos]
         + safe_history_guard
         + func[guard_pos + len("if (historyDue) {"):]
+    )
+
+
+# Needs/Telegram must never run from a source that failed in this cycle.
+if "k2FailedThisCycle = true;" not in func:
+    marker = "        cycleErrors.push('K2: ' + error.message);"
+    if func.count(marker) != 1:
+        raise SystemExit(
+            "PATCH_FAIL: K2 catch marker not found exactly once"
+        )
+    func = func.replace(
+        marker,
+        marker + "\n        k2FailedThisCycle = true;",
+        1,
+    )
+
+if "ivanovoFailedThisCycle = true;" not in func:
+    marker = "        cycleErrors.push('Иваново: ' + error.message);"
+    if func.count(marker) != 1:
+        raise SystemExit(
+            "PATCH_FAIL: Ivanovo catch marker not found exactly once"
+        )
+    func = func.replace(
+        marker,
+        marker + "\n        ivanovoFailedThisCycle = true;",
+        1,
+    )
+
+if "wbOsAssertTrustedNeedsSources_(" not in func:
+    marker = "      waitForStableNeedsSnapshot_();"
+    if func.count(marker) != 1:
+        raise SystemExit(
+            "PATCH_FAIL: needs snapshot marker not found exactly once"
+        )
+
+    func = func.replace(
+        marker,
+        """      wbOsAssertTrustedNeedsSources_(
+        k2FailedThisCycle,
+        ivanovoFailedThisCycle
+      );
+      waitForStableNeedsSnapshot_();""",
+        1,
     )
 
 
@@ -335,7 +396,101 @@ if "function wbOsEnsureMasterTrigger()" not in new_text:
     )
 
 
-# Step 2f: make K2 readiness session-aware after final rebuild.
+# Step 2f: add the fail-closed source-freshness gate used before
+# needs calculation / Telegram notifications.
+trusted_needs_fn = """
+function wbOsAssertTrustedNeedsSources_(
+  k2FailedThisCycle,
+  ivanovoFailedThisCycle
+) {
+  if (k2FailedThisCycle) {
+    throw new Error(
+      'NEEDS_BLOCKED_K2_ERROR: K2 упал в текущем master-цикле. ' +
+      'Потребность/Telegram по старым остаткам запрещены.'
+    );
+  }
+
+  if (ivanovoFailedThisCycle) {
+    throw new Error(
+      'NEEDS_BLOCKED_IVANOVO_ERROR: Иваново упало в текущем master-цикле. ' +
+      'Потребность/Telegram по старым остаткам запрещены.'
+    );
+  }
+
+  var props = PropertiesService.getScriptProperties();
+  var checks = [
+    {
+      name: 'K2',
+      key: 'K2_LAST_SUCCESS_AT',
+      maxAgeMinutes: 30
+    },
+    {
+      name: 'Иваново',
+      key: 'IVANOVO_LAST_SUCCESS_AT',
+      maxAgeMinutes: 240
+    }
+  ];
+
+  for (var i = 0; i < checks.length; i++) {
+    var cfg = checks[i];
+    var raw = String(
+      props.getProperty(cfg.key) || ''
+    ).trim();
+
+    if (!raw) {
+      throw new Error(
+        'NEEDS_BLOCKED_NO_SUCCESS: нет успешного heartbeat источника ' +
+        cfg.name + '.'
+      );
+    }
+
+    var date = new Date(raw);
+
+    if (isNaN(date.getTime())) {
+      throw new Error(
+        'NEEDS_BLOCKED_BAD_HEARTBEAT: некорректный heartbeat источника ' +
+        cfg.name + '.'
+      );
+    }
+
+    var ageMinutes =
+      (Date.now() - date.getTime()) /
+      60000;
+
+    if (
+      ageMinutes < -5 ||
+      ageMinutes > cfg.maxAgeMinutes
+    ) {
+      throw new Error(
+        'NEEDS_BLOCKED_STALE_SOURCE: ' +
+        cfg.name +
+        ' age=' +
+        Math.round(ageMinutes) +
+        ' min; max=' +
+        cfg.maxAgeMinutes +
+        '.'
+      );
+    }
+  }
+}
+"""
+
+if "function wbOsAssertTrustedNeedsSources_(" not in new_text:
+    insertion = "\nfunction shouldRunByProperty_"
+    if insertion not in new_text:
+        raise SystemExit(
+            "PATCH_FAIL: cannot place trusted-needs source gate"
+        )
+
+    new_text = new_text.replace(
+        insertion,
+        "\n" + trusted_needs_fn + insertion,
+        1,
+    )
+
+
+# Step 2g: make K2 readiness session-aware after final rebuild.
+
 
 # This affects status/UI only. The master no longer blocks K2 on k2Ready;
 # getK2WarehouseItems_ itself owns session reuse / relogin behavior.
@@ -380,6 +535,10 @@ required = [
     "historyK2Fresh = true;",
     "historyIvanovoFresh = true;",
     "if (historyDue && historyK2Fresh && historyIvanovoFresh) {",
+    "k2FailedThisCycle = true;",
+    "ivanovoFailedThisCycle = true;",
+    "function wbOsAssertTrustedNeedsSources_",
+    "NEEDS_BLOCKED_STALE_SOURCE",
 ]
 missing = [marker for marker in required if marker not in new_text]
 if missing:
