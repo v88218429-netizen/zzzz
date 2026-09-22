@@ -1,5 +1,5 @@
 /**
- * WB OS / WB Public Customer Price Engine v0.1.1
+ * WB OS / WB Public Customer Price Engine v0.1.2
  *
  * Purpose:
  * - read WB nmID values from "Сводная";
@@ -15,7 +15,7 @@
  */
 
 var WB_PUBLIC_PRICE_V4 = {
-  VERSION: '0.1.1',
+  VERSION: '0.1.2',
   SUMMARY_SHEET: 'Сводная',
   SOURCE_SHEET: '_WB_PUBLIC_PRICE_V4',
   FIRST_DATA_ROW: 12,
@@ -35,6 +35,8 @@ var WB_PUBLIC_PRICE_V4 = {
 
 
 function syncWbPublicCustomerPricesV4_(force) {
+  wbPriceV4CleanupLegacyTriggers_();
+
   var props = PropertiesService.getScriptProperties();
 
   if (!force && !wbPriceV4Due_(props)) {
@@ -698,4 +700,31 @@ function wbPriceV4Diagnostics_(data) {
   } else {
     sheet.getRange('F36:G36').clearContent();
   }
+}
+
+
+function wbPriceV4CleanupLegacyTriggers_() {
+  var legacy = {
+    sppMonitorScheduledTick: true
+  };
+
+  var triggers = ScriptApp.getProjectTriggers();
+  var deleted = 0;
+
+  for (var i = 0; i < triggers.length; i++) {
+    var handler = triggers[i].getHandlerFunction();
+
+    if (legacy[handler]) {
+      ScriptApp.deleteTrigger(triggers[i]);
+      deleted++;
+    }
+  }
+
+  if (deleted) {
+    Logger.log(
+      'WB Public Price v4: удалено legacy price-триггеров: ' + deleted
+    );
+  }
+
+  return deleted;
 }
