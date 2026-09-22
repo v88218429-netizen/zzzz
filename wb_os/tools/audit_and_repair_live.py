@@ -40,9 +40,31 @@ if len(k2) > 1:
         )
 
     keeper = preferred[0]
+
+    function_pattern = re.compile(
+        r"(?m)^\\s*function\\s+([A-Za-z_$][\\w$]*)\\s*\\("
+    )
+    keeper_functions = set(function_pattern.findall(read(keeper)))
+
     for p in k2:
         if p == keeper:
             continue
+
+        legacy_functions = set(function_pattern.findall(read(p)))
+        unique_legacy = sorted(legacy_functions - keeper_functions)
+
+        # Never erase a K2 file that contains behavior not present in the
+        # selected canonical implementation. In that case fail closed and
+        # require a manual merge instead of guessing.
+        if unique_legacy:
+            raise SystemExit(
+                "AUDIT_FAIL: duplicate K2 core has unique functions and "
+                "cannot be disabled safely: "
+                + str(p.relative_to(root))
+                + " unique="
+                + repr(unique_legacy)
+            )
+
         p.write_text(
             "// WB OS: legacy duplicate K2 core disabled by audited deploy.\n"
             "// Canonical K2 core: " + keeper.name + "\n",
@@ -111,7 +133,35 @@ if duplicates:
         "AUDIT_FAIL: duplicate global functions remain: " + "; ".join(parts)
     )
 
-# 4) Critical modules must exist exactly once.
+# 4) Top-level global variables/config objects must not be declared in
+# multiple files. Apps Script joins all source files into one global namespace,
+# so duplicate config variables can silently overwrite each other.
+global_defs = {}
+global_dups = {}
+global_pattern = re.compile(
+    r"(?m)^(?:var|let|const)\\s+([A-Za-z_$][\\w$]*)\\s*(?:=|;)"
+)
+
+for p in sources():
+    text = read(p)
+    for match in global_pattern.finditer(text):
+        name = match.group(1)
+        if name in global_defs:
+            global_dups.setdefault(name, [global_defs[name]]).append(p)
+        else:
+            global_defs[name] = p
+
+if global_dups:
+    parts = []
+    for name in sorted(global_dups):
+        names = [str(p.relative_to(root)) for p in global_dups[name]]
+        parts.append(name + "=" + ",".join(names))
+    raise SystemExit(
+        "AUDIT_FAIL: duplicate top-level globals remain: "
+        + "; ".join(parts)
+    )
+
+# 5) Critical modules must exist exactly once.
 critical = [
     "function runFinalAutomationCycle_",
     "function getK2WarehouseItems_",
@@ -126,4 +176,4 @@ for marker in critical:
             + marker + " = " + str(len(hits))
         )
 
-print("AUDIT_OK: global function namespace is collision-free")
+print("AUDIT_OK: global function/config namespace is collision-free")
