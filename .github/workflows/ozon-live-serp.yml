@@ -1,0 +1,39 @@
+name: Ozon LIVE SERP fact
+on:
+  push:
+    branches: [mainggg]
+    paths:
+      - "ozon_live_serp/**"
+      - ".github/workflows/ozon-live-serp.yml"
+  workflow_dispatch:
+    inputs:
+      query:
+        description: "Ozon search query"
+        required: true
+        default: "5094364543"
+      sku:
+        description: "Target Ozon SKU"
+        required: true
+        default: "5094364543"
+      max_pages:
+        description: "Max search pages"
+        required: true
+        default: "20"
+permissions:
+  contents: read
+jobs:
+  live-serp:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      OZON_SERP_QUERY: ${{ github.event_name == 'workflow_dispatch' && inputs.query || '5094364543' }}
+      OZON_SERP_SKU: ${{ github.event_name == 'workflow_dispatch' && inputs.sku || '5094364543' }}
+      OZON_SERP_MAX_PAGES: ${{ github.event_name == 'workflow_dispatch' && inputs.max_pages || '20' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install curl_cffi
+      - name: Read factual Ozon search position
+        run: python ozon_live_serp/live_serp.py
