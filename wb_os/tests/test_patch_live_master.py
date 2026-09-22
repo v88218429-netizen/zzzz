@@ -125,6 +125,7 @@ REQUIRED = [
     "NEEDS_BLOCKED_STALE_SOURCE",
     "function wbOsEnsureFinalAutomationTriggerAtomic_()",
     "MASTER_RUN_GUARD_DOCUMENT_LOCK",
+    "wbSellerPriceRefreshIfDue_(forceAll);",
 ]
 
 def run_patch(root: pathlib.Path):
