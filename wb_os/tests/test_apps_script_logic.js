@@ -354,6 +354,9 @@ load('apps_script/K2_EVOLUTION_ENGINE.gs');
   assert.ok(priceSource.includes('hasLegacyAlertLayer'));
   assert.ok(priceSource.includes('price_lock_busy'));
   assert.ok(priceSource.includes('WB_PRICE_V4_SHADOW_NAME_COLLISION'));
+  assert.ok(priceSource.includes('function wbPriceV4RepairMissingSellerPrices_'));
+  assert.ok(priceSource.includes("'Цены'!$C:$C"));
+  assert.ok(priceSource.includes('currentSeller > 0'));
 }
 
 console.log('WB OS Apps Script logic tests: OK');
