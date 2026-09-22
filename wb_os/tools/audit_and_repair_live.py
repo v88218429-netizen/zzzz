@@ -233,6 +233,20 @@ if len(supplier) > 1:
         + repr([str(p.relative_to(root)) for p in supplier])
     )
 
+uo_supplier = [
+    p for p in sources()
+    if "var UO_CFG" in read(p)
+    and "function UO_syncAllSupplierOrdersNow" in read(p)
+]
+
+if supplier and uo_supplier:
+    print(
+        "AUDIT_WARN_PARALLEL_SUPPLIER_MODULES: "
+        "canonical Supplier + UO Supplier both exist; "
+        "their behavior is not identical, so deploy leaves both modules "
+        "and their triggers untouched."
+    )
+
 if supplier:
     p = supplier[0]
     text = read(p)
