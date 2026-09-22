@@ -74,6 +74,33 @@ function shouldRunByProperty_(propertyName, intervalMinutes) {
   return true;
 }
 
+function acquireMasterRunGuard_() {
+  var props = PropertiesService.getScriptProperties();
+  var key = 'MASTER_AUTOMATION_RUNNING_AT';
+  var existing = props.getProperty(key);
+
+  if (existing) {
+    var startedAt = new Date(existing);
+
+    if (!isNaN(startedAt.getTime())) {
+      var ageMinutes = (Date.now() - startedAt.getTime()) / 60000;
+
+      if (ageMinutes < MASTER_AUTOMATION_CFG.BUSY_TTL_MINUTES) {
+        return false;
+      }
+    }
+  }
+
+  props.setProperty(key, new Date().toISOString());
+  return true;
+}
+
+function releaseMasterRunGuard_() {
+  PropertiesService
+    .getScriptProperties()
+    .deleteProperty('MASTER_AUTOMATION_RUNNING_AT');
+}
+
 function refreshAutomationStatusSheet_() {
   var props = PropertiesService.getScriptProperties();
   var row = buildAutomationStatusRow_('История остатков', props.getProperty('FF_STOCK_HISTORY_LAST_AT'), 1560);
@@ -96,6 +123,8 @@ REQUIRED = [
     "ivanovoFailedThisCycle = true;",
     "function wbOsAssertTrustedNeedsSources_",
     "NEEDS_BLOCKED_STALE_SOURCE",
+    "function wbOsEnsureFinalAutomationTriggerAtomic_()",
+    "MASTER_RUN_GUARD_DOCUMENT_LOCK",
 ]
 
 def run_patch(root: pathlib.Path):
