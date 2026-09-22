@@ -36,6 +36,11 @@ function runFinalAutomationCycle_(forceTelegram, forceAll) {
       exportFulfilmentStocks();
     }
 
+    /* 5. Один дневной снимок остатков К2 + Иваново около 12:00 МСК. */
+    if (historyDue) {
+      appendDailyStockHistory_(false);
+    }
+
     saveMasterCycleResult_(cycleErrors);
     refreshAutomationStatusSheet_();
   } finally {
@@ -72,6 +77,7 @@ REQUIRED = [
     "syncWbPublicCustomerPricesV4_(forceAll);",
     "wbPriceV4RecordFailure_(priceError)",
     "function wbOsEnsureMasterTrigger()",
+    "historyK2Fresh = true;",
 ]
 
 def run_patch(root: pathlib.Path):
