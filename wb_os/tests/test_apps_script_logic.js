@@ -105,4 +105,35 @@ load('apps_script/K2_EVOLUTION_ENGINE.gs');
   assert.ok(result.message.includes('K2_EV_QUARANTINE'));
 }
 
+// Legacy trigger cleanup must happen only after the new engine has succeeded.
+{
+  const k2Source = fs.readFileSync(
+    path.join(root, 'apps_script/K2_EVOLUTION_ENGINE.gs'),
+    'utf8'
+  );
+  const k2FnStart = k2Source.indexOf('function k2EvolutionFetchAndApply_');
+  const k2FnEnd = k2Source.indexOf('\nfunction k2EvolutionRecordFailure_', k2FnStart);
+  const k2Fn = k2Source.slice(k2FnStart, k2FnEnd);
+  assert.ok(k2Fn.indexOf('saveK2SyncSuccess_') >= 0);
+  assert.ok(k2Fn.indexOf('k2EvolutionCleanupLegacyTriggers_') >= 0);
+  assert.ok(
+    k2Fn.indexOf('k2EvolutionCleanupLegacyTriggers_') >
+    k2Fn.indexOf('saveK2SyncSuccess_')
+  );
+
+  const priceSource = fs.readFileSync(
+    path.join(root, 'apps_script/WB_PUBLIC_PRICE_V4.gs'),
+    'utf8'
+  );
+  const priceFnStart = priceSource.indexOf('function syncWbPublicCustomerPricesV4_');
+  const priceFnEnd = priceSource.indexOf('\nfunction forceSyncWbPublicCustomerPricesV4', priceFnStart);
+  const priceFn = priceSource.slice(priceFnStart, priceFnEnd);
+  assert.ok(priceFn.indexOf('.setValues(output)') >= 0);
+  assert.ok(priceFn.indexOf('wbPriceV4CleanupLegacyTriggers_') >= 0);
+  assert.ok(
+    priceFn.indexOf('wbPriceV4CleanupLegacyTriggers_') >
+    priceFn.indexOf('.setValues(output)')
+  );
+}
+
 console.log('WB OS Apps Script logic tests: OK');
