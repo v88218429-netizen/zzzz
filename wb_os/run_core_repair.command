@@ -451,10 +451,10 @@ RUN_LOG="$WORK/clasp-run.log"
 
 if (
   cd "$PROJECT"
-  clasp run setupFinalAutomation
+  clasp run wbOsEnsureMasterTrigger
 ) >"$RUN_LOG" 2>&1; then
   cat "$RUN_LOG"
-  echo "      setupFinalAutomation: OK"
+  echo "      wbOsEnsureMasterTrigger: OK"
 else
   echo "      clasp run недоступен или Execution API не настроен."
   echo "      Это не отменяет deploy: push + pull-back verify уже прошли."
