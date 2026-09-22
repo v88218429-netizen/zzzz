@@ -205,8 +205,8 @@ curl --connect-timeout 10 --max-time 30 -fsSL   "$REPO_RAW/wb_os/apps_script/WB_
 curl --connect-timeout 10 --max-time 30 -fsSL   "$REPO_RAW/wb_os/tools/patch_live_master.py"   -o "$WORK/patch_live_master.py"
 curl --connect-timeout 10 --max-time 30 -fsSL   "$REPO_RAW/wb_os/tools/audit_and_repair_live.py"   -o "$WORK/audit_and_repair_live.py"
 
-grep -q "K2 Evolution Engine v0.1.9" "$WORK/K2_EVOLUTION_ENGINE.gs"
-grep -q "WB Public Customer Price Engine v0.1.8" "$WORK/WB_PUBLIC_PRICE_V4.gs"
+grep -q "K2 Evolution Engine v0.1.10" "$WORK/K2_EVOLUTION_ENGINE.gs"
+grep -q "WB Public Customer Price Engine v0.1.9" "$WORK/WB_PUBLIC_PRICE_V4.gs"
 grep -q "session-aware readiness missing inside" "$WORK/patch_live_master.py"
 grep -q "duplicate top-level globals remain" "$WORK/audit_and_repair_live.py"
 
@@ -346,12 +346,12 @@ do
   fi
 done
 
-if ! grep -Rqs "K2 Evolution Engine v0.1.9" "$VERIFY"; then
+if ! grep -Rqs "K2 Evolution Engine v0.1.10" "$VERIFY"; then
   echo "❌ Remote K2 Evolution version mismatch."
   VERIFY_OK=0
 fi
 
-if ! grep -Rqs "WB Public Customer Price Engine v0.1.8" "$VERIFY"; then
+if ! grep -Rqs "WB Public Customer Price Engine v0.1.9" "$VERIFY"; then
   echo "❌ Remote WB Public Price version mismatch."
   VERIFY_OK=0
 fi
@@ -370,14 +370,15 @@ RUN_LOG="$WORK/clasp-run.log"
 
 if (
   cd "$PROJECT"
-  clasp run runFinalAutomationNow
+  clasp run setupFinalAutomation
 ) >"$RUN_LOG" 2>&1; then
   cat "$RUN_LOG"
-  echo "      master run: OK"
+  echo "      setupFinalAutomation: OK"
 else
   echo "      clasp run недоступен или Execution API не настроен."
   echo "      Это не отменяет deploy: push + pull-back verify уже прошли."
   echo "      Существующий finalAutomationTick запустит master."
+  echo "      Если master-trigger отсутствует, активный legacy K2/SPP trigger теперь восстановит его автоматически."
 fi
 
 echo
