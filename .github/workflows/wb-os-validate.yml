@@ -5,15 +5,14 @@ on:
     paths:
       - "wb_os/**"
       - ".github/workflows/wb-os-validate.yml"
-      - ".github/workflows/wb-os-validate.yml"
   push:
     branches:
       - "mainggg"
       - "wb-os-v0.1"
     paths:
       - "wb_os/**"
+      - ".github/workflows/wb-os-validate.yml"
   workflow_dispatch:
-
 jobs:
   validate:
     runs-on: ubuntu-latest
