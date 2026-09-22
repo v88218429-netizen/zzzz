@@ -1,0 +1,84 @@
+name: Ozon RU ISP HTML SERP probe
+
+on:
+  push:
+    branches: [mainggg]
+    paths:
+      - ".github/workflows/ozon-ru-html-probe.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: ozon_radar_server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: Probe Ozon HTML search through known responsive RU ISP SOCKS
+        run: |
+          python - <<'PY'
+          import json,re,urllib.parse
+          from curl_cffi import requests
+
+          proxies=[
+              'socks5://83.221.222.194:1080',
+              'socks5://195.19.50.226:1080',
+              'socks5://94.233.120.194:1080',
+              'socks5://93.90.231.101:1080',
+          ]
+          query='лопата садовая'
+          target='5094364543'
+          url='https://www.ozon.ru/search/?text='+urllib.parse.quote(query)+'&from_global=true'
+          headers={
+              'accept':'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+              'accept-language':'ru-RU,ru;q=0.9,en;q=0.7',
+              'cache-control':'no-cache',
+              'pragma':'no-cache',
+              'upgrade-insecure-requests':'1',
+              'user-agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36',
+          }
+
+          for proxy in proxies:
+              rec={'proxy':proxy}
+              try:
+                  s=requests.Session(impersonate='chrome124')
+                  r=s.get(url,headers=headers,proxies={'http':proxy,'https':proxy},timeout=25,allow_redirects=True)
+                  text=r.text or ''
+                  ids=[];seen=set()
+                  for m in re.finditer(r'/product/(?:[^/?#"\\]+-)?(\d{6,})(?:[/?#"\\]|$)',text):
+                      x=m.group(1)
+                      if x not in seen:
+                          seen.add(x);ids.append(x)
+                  rec.update({
+                      'http':r.status_code,
+                      'url':str(r.url),
+                      'length':len(text),
+                      'product_count':len(ids),
+                      'target_position':ids.index(target)+1 if target in ids else None,
+                      'first_ids':ids[:30],
+                      'has_target_raw':target in text,
+                      'block_marker':(
+                          'Похоже, нет соединения' if 'Похоже, нет соединения' in text
+                          else 'Доступ ограничен' if 'Доступ ограничен' in text
+                          else 'captcha' if 'captcha' in text.lower()
+                          else ''
+                      ),
+                      'head':re.sub(r'\s+',' ',text[:300]),
+                  })
+              except Exception as e:
+                  rec['error']=f'{type(e).__name__}: {e}'
+              print('HTML_RU_RESULT',json.dumps(rec,ensure_ascii=False),flush=True)
+              if rec.get('product_count',0)>0:
+                  print('LIVE_SERP_PROOF',json.dumps(rec,ensure_ascii=False),flush=True)
+                  raise SystemExit(0)
+          raise SystemExit(3)
+          PY
