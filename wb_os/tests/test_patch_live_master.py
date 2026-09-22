@@ -120,6 +120,38 @@ def main():
         assert p.returncode != 0
         assert "expected exactly one master source" in (p.stderr + p.stdout)
 
+    # A K2_SESSION_COOKIE string elsewhere in the file must NOT satisfy
+    # the readiness post-condition when getMasterConfigurationState_ itself
+    # is not session-aware.
+    with tempfile.TemporaryDirectory() as td:
+        root = pathlib.Path(td)
+        bad = LEGACY.replace(
+            """k2Ready: Boolean(
+      String(props.getProperty('K2_USERNAME') || '').trim() &&
+      String(props.getProperty('K2_PASSWORD') || '')
+    ),""",
+            """k2Ready: Boolean(
+      String(props.getProperty('K2_USERNAME') || '').trim()
+    ),"""
+        )
+        bad += """
+function unrelatedHelper_() {
+  return 'K2_SESSION_COOKIE K2_CLIENT_ID';
+}
+"""
+        master = root / "Master.gs"
+        master.write_text(bad, encoding="utf-8")
+
+        p = subprocess.run(
+            [sys.executable, str(PATCHER), str(root)],
+            text=True,
+            capture_output=True,
+        )
+        assert p.returncode != 0
+        assert "session-aware readiness missing inside" in (
+            p.stderr + p.stdout
+        )
+
     print("WB OS patcher tests: OK")
 
 if __name__ == "__main__":
