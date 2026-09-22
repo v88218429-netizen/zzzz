@@ -1,0 +1,123 @@
+name: Ozon Apps Script hosted deploy
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [mainggg]
+    paths:
+      - "wb_os/apps_script/OZON_RADAR_SERVER_BRIDGE.gs"
+      - "wb_os/apps_script/OZON_RADAR_TELEGRAM_RELAY.gs"
+      - "wb_os/tools/patch_live_master.py"
+      - ".github/workflows/ozon-appscript-hosted-deploy.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SCRIPT_ID: "15tH3jwOa5hKJFahIyPX5AIXO7KRf1O4jusfDfPIdX6KeH_GqMUC71hNT"
+      CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Auth capability gate
+        id: auth
+        shell: bash
+        run: |
+          if [ -n "$CLASPRC_JSON" ]; then
+            echo "ready=1" >> "$GITHUB_OUTPUT"
+            echo "HOSTED_CLASP_AUTH=present"
+          else
+            echo "ready=0" >> "$GITHUB_OUTPUT"
+            echo "HOSTED_CLASP_AUTH=missing"
+          fi
+
+      - name: Install clasp
+        if: steps.auth.outputs.ready == '1'
+        run: npm install -g @google/clasp
+
+      - name: Materialize clasp credentials
+        if: steps.auth.outputs.ready == '1'
+        shell: bash
+        run: |
+          umask 077
+          printf '%s' "$CLASPRC_JSON" > "$HOME/.clasprc.json"
+          python - <<'PY'
+          import json, pathlib
+          p=pathlib.Path.home()/'.clasprc.json'
+          obj=json.loads(p.read_text())
+          if not isinstance(obj,dict) or not obj:
+              raise SystemExit('invalid CLASPRC_JSON')
+          print('CLASPRC_JSON_VALID=yes')
+          PY
+
+      - name: Pull exact live Apps Script project
+        if: steps.auth.outputs.ready == '1'
+        shell: bash
+        run: |
+          rm -rf /tmp/ozon-appscript-live
+          mkdir -p /tmp/ozon-appscript-live
+          cat > /tmp/ozon-appscript-live/.clasp.json <<EOF
+          {"scriptId":"$SCRIPT_ID","rootDir":"."}
+          EOF
+          cd /tmp/ozon-appscript-live
+          clasp pull
+          test -f appsscript.json
+          echo "LIVE_PULL_OK=yes"
+
+      - name: Create rollback artifact
+        if: steps.auth.outputs.ready == '1'
+        shell: bash
+        run: |
+          tar -C /tmp -czf /tmp/ozon-appscript-before.tgz ozon-appscript-live
+
+      - uses: actions/upload-artifact@v4
+        if: steps.auth.outputs.ready == '1'
+        with:
+          name: ozon-appscript-before-${{ github.run_id }}
+          path: /tmp/ozon-appscript-before.tgz
+          retention-days: 14
+
+      - name: Patch radar bridge into exact live project
+        if: steps.auth.outputs.ready == '1'
+        shell: bash
+        run: |
+          cp wb_os/apps_script/OZON_RADAR_SERVER_BRIDGE.gs /tmp/ozon-appscript-live/OZON_RADAR_SERVER_BRIDGE.gs
+          cp wb_os/apps_script/OZON_RADAR_TELEGRAM_RELAY.gs /tmp/ozon-appscript-live/OZON_RADAR_TELEGRAM_RELAY.gs
+          python wb_os/tools/patch_live_master.py /tmp/ozon-appscript-live
+
+      - name: Syntax check complete live project
+        if: steps.auth.outputs.ready == '1'
+        shell: bash
+        run: |
+          COUNT=0
+          while IFS= read -r -d '' f; do
+            TMP="$(mktemp --suffix=.js)"
+            cp "$f" "$TMP"
+            node --check "$TMP"
+            rm -f "$TMP"
+            COUNT=$((COUNT+1))
+          done < <(find /tmp/ozon-appscript-live -type f \( -name '*.gs' -o -name '*.js' \) -print0)
+          test "$COUNT" -gt 0
+          echo "LIVE_SCRIPT_SYNTAX_OK=$COUNT"
+
+      - name: Push exact live project
+        if: steps.auth.outputs.ready == '1'
+        shell: bash
+        run: |
+          cd /tmp/ozon-appscript-live
+          clasp push -f
+          echo "HOSTED_APPS_SCRIPT_DEPLOY=success"
+
+      - name: Explain blocked deploy
+        if: steps.auth.outputs.ready != '1'
+        run: |
+          echo "HOSTED_APPS_SCRIPT_DEPLOY=blocked_missing_CLASPRC_JSON"
