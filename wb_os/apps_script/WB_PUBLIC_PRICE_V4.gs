@@ -1,5 +1,5 @@
 /**
- * WB OS / WB Public Customer Price Engine v0.1.7
+ * WB OS / WB Public Customer Price Engine v0.1.8
  *
  * Purpose:
  * - read WB nmID values from "Сводная";
@@ -15,7 +15,7 @@
  */
 
 var WB_PUBLIC_PRICE_V4 = {
-  VERSION: '0.1.7',
+  VERSION: '0.1.8',
   SUMMARY_SHEET: 'Сводная',
   SOURCE_SHEET: '_WB_PUBLIC_PRICE_V4',
   FIRST_DATA_ROW: 12,
@@ -807,6 +807,25 @@ function wbPriceV4Diagnostics_(data) {
 
 
 function wbPriceV4CleanupLegacyTriggers_() {
+  /*
+   * The legacy SPP monitor also owns Telegram change alerts and _SPP_HISTORY.
+   * Until that alert layer is migrated into v4, keep its scheduled trigger.
+   * It only writes cells for prices it successfully fetches, so it does not
+   * erase v4-only fills for products it cannot parse.
+   */
+  var hasLegacyAlertLayer =
+    typeof sppBuildAlerts_ === 'function' &&
+    typeof sppSendAlerts_ === 'function' &&
+    typeof sppReadHistoryMap_ === 'function' &&
+    typeof sppWriteHistory_ === 'function';
+
+  if (hasLegacyAlertLayer) {
+    Logger.log(
+      'WB Public Price: старый SPP trigger сохранён ради Telegram/history alerts.'
+    );
+    return 0;
+  }
+
   if (typeof ensureFinalAutomationTrigger_ !== 'function') {
     Logger.log(
       'WB Public Price: master trigger helper отсутствует; старый SPP trigger сохранён.'
