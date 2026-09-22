@@ -163,6 +163,76 @@ print(h.hexdigest())
 PY
 }
 
+project_semantic_fingerprint_() {
+  local dir="$1"
+
+  python3 - "$dir" <<'PY'
+from pathlib import Path
+import hashlib
+import json
+import sys
+
+root = Path(sys.argv[1])
+entries = []
+
+# Apps Script source identity is the project file name, not whether clasp
+# happened to represent server-side source as .gs or .js locally.
+by_key = {}
+for p in root.rglob("*"):
+    if not p.is_file():
+        continue
+
+    suffix = p.suffix.lower()
+    rel = p.relative_to(root)
+
+    if suffix in {".js", ".gs"}:
+        key = rel.with_suffix("").as_posix()
+        kind = "server"
+        data = p.read_text(
+            encoding="utf-8",
+            errors="strict",
+        ).replace("\r\n", "\n").replace("\r", "\n")
+    elif suffix == ".html":
+        key = rel.as_posix()
+        kind = "html"
+        data = p.read_text(
+            encoding="utf-8",
+            errors="strict",
+        ).replace("\r\n", "\n").replace("\r", "\n")
+    elif rel.as_posix() == "appsscript.json":
+        key = "appsscript.json"
+        kind = "manifest"
+        obj = json.loads(p.read_text(encoding="utf-8"))
+        data = json.dumps(
+            obj,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+    else:
+        continue
+
+    compound = kind + ":" + key
+    if compound in by_key:
+        raise SystemExit(
+            "duplicate semantic project key: " + compound
+        )
+
+    by_key[compound] = data
+
+h = hashlib.sha256()
+for key in sorted(by_key):
+    kb = key.encode("utf-8")
+    db = by_key[key].encode("utf-8")
+    h.update(len(kb).to_bytes(4, "big"))
+    h.update(kb)
+    h.update(len(db).to_bytes(8, "big"))
+    h.update(db)
+
+print(h.hexdigest())
+PY
+}
+
 syntax_check_project_() {
   local dir="$1"
   local count=0
@@ -205,8 +275,8 @@ curl --connect-timeout 10 --max-time 30 -fsSL   "$REPO_RAW/wb_os/apps_script/WB_
 curl --connect-timeout 10 --max-time 30 -fsSL   "$REPO_RAW/wb_os/tools/patch_live_master.py"   -o "$WORK/patch_live_master.py"
 curl --connect-timeout 10 --max-time 30 -fsSL   "$REPO_RAW/wb_os/tools/audit_and_repair_live.py"   -o "$WORK/audit_and_repair_live.py"
 
-grep -q "K2 Evolution Engine v0.1.10" "$WORK/K2_EVOLUTION_ENGINE.gs"
-grep -q "WB Public Customer Price Engine v0.1.9" "$WORK/WB_PUBLIC_PRICE_V4.gs"
+grep -q "K2 Evolution Engine v0.1.11" "$WORK/K2_EVOLUTION_ENGINE.gs"
+grep -q "WB Public Customer Price Engine v0.1.11" "$WORK/WB_PUBLIC_PRICE_V4.gs"
 grep -q "session-aware readiness missing inside" "$WORK/patch_live_master.py"
 grep -q "duplicate top-level globals remain" "$WORK/audit_and_repair_live.py"
 
@@ -293,9 +363,12 @@ if [ "$BEFORE_IDEMPOTENCE" != "$AFTER_IDEMPOTENCE" ]; then
   exit 5
 fi
 
+LOCAL_PROJECT_FINGERPRINT="$(project_semantic_fingerprint_ "$PROJECT")"
+
 echo "      syntax OK: $SOURCE_COUNT source files"
 echo "      critical functions: exactly 1 each"
 echo "      repair second pass: no-op"
+echo "      full project fingerprint captured"
 
 echo "[7/9] Push в LIVE..."
 if ! (
@@ -321,8 +394,15 @@ if ! (
 fi
 
 rsync -a "$VERIFY/" "$VERIFY_CHECK/"
+REMOTE_PROJECT_FINGERPRINT="$(project_semantic_fingerprint_ "$VERIFY")"
 BEFORE_VERIFY="$(project_fingerprint_ "$VERIFY_CHECK")"
 VERIFY_OK=1
+
+if [ "$REMOTE_PROJECT_FINGERPRINT" != "$LOCAL_PROJECT_FINGERPRINT" ]; then
+  echo "❌ Pull-back отличается от полного проекта, который был отправлен."
+  echo "   Это может означать потерю/изменение НЕцелевого модуля."
+  VERIFY_OK=0
+fi
 
 python3 "$WORK/patch_live_master.py" "$VERIFY_CHECK" >/dev/null || VERIFY_OK=0
 python3 "$WORK/audit_and_repair_live.py" "$VERIFY_CHECK" >/dev/null || VERIFY_OK=0
@@ -346,12 +426,12 @@ do
   fi
 done
 
-if ! grep -Rqs "K2 Evolution Engine v0.1.10" "$VERIFY"; then
+if ! grep -Rqs "K2 Evolution Engine v0.1.11" "$VERIFY"; then
   echo "❌ Remote K2 Evolution version mismatch."
   VERIFY_OK=0
 fi
 
-if ! grep -Rqs "WB Public Customer Price Engine v0.1.9" "$VERIFY"; then
+if ! grep -Rqs "WB Public Customer Price Engine v0.1.11" "$VERIFY"; then
   echo "❌ Remote WB Public Price version mismatch."
   VERIFY_OK=0
 fi
@@ -363,6 +443,7 @@ if [ "$VERIFY_OK" != "1" ]; then
 fi
 
 echo "      remote project: verified"
+echo "      full project pull-back: exact semantic match"
 echo "      patcher/auditor second pass: no-op"
 
 echo "[9/9] Мягкая попытка запустить master сейчас..."
