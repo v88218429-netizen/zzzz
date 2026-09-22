@@ -1,5 +1,5 @@
 /**
- * WB OS / WB Public Customer Price Engine v0.1.15
+ * WB OS / WB Public Customer Price Engine v0.1.16
  *
  * Purpose:
  * - read WB nmID values from "Сводная";
@@ -15,7 +15,7 @@
  */
 
 var WB_PUBLIC_PRICE_V4 = {
-  VERSION: '0.1.15',
+  VERSION: '0.1.16',
   SUMMARY_SHEET: 'Сводная',
   SOURCE_SHEET: '_WB_PUBLIC_PRICE_V4',
   HEADER_ROW: 11,
@@ -967,6 +967,9 @@ function wbPriceV4RecordFailure_(error) {
   if (
     message.indexOf(
       'WB_PRICE_V4_SHADOW_FAIL:'
+    ) === 0 ||
+    message.indexOf(
+      'WB_PRICE_V4_LEGACY_MODE_CONFLICT:'
     ) === 0
   ) {
     return;
