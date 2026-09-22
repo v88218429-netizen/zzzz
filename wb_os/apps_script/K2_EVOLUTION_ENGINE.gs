@@ -1,5 +1,5 @@
 /**
- * WB OS / K2 Evolution Engine v0.1.15
+ * WB OS / K2 Evolution Engine v0.1.16
  *
  * Integrated mode: NO separate time trigger.
  * The existing finalAutomationTick master remains the only clock.
@@ -14,7 +14,7 @@
  */
 
 var K2_EV = {
-  VERSION: '0.1.15',
+  VERSION: '0.1.16',
   AUTOMATION_SHEET: 'Автоматизация',
   LAST_HASH_KEY: 'K2_EV_LAST_SNAPSHOT_HASH',
   LAST_COUNT_KEY: 'K2_EV_LAST_COUNT',
@@ -477,6 +477,7 @@ function k2EvolutionWatchdogNotify_() {
     status,
     'MISS=' + missingList,
     'ZERO=' + zeroList,
+    'OLD=' + oldSourceCount,
     'MIN=' + belowMinCount + ':' + belowMinList
   ].join('|');
 
