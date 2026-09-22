@@ -408,6 +408,36 @@ if price_marker not in func:
         1,
     )
 
+# Step 2i: bootstrap the dedicated Ozon radar minute trigger from the existing
+# master cycle. This is idempotent and avoids any manual Apps Script run after
+# hosted deployment.
+if "ensureOzonRadarServerTrigger_();" not in func:
+    save_marker = "    saveMasterCycleResult_(cycleErrors);"
+    if func.count(save_marker) != 1:
+        raise SystemExit(
+            "PATCH_FAIL: cannot place Ozon radar trigger bootstrap"
+        )
+
+    ozon_trigger_block = """    /* Ozon LIVE radar · ensure dedicated 1-minute trigger */
+    try {
+      ensureOzonRadarServerTrigger_();
+    } catch (ozonRadarTriggerError) {
+      cycleErrors.push(
+        'Ozon radar trigger: ' + ozonRadarTriggerError.message
+      );
+      Logger.log(
+        'Ozon radar trigger: ' +
+        (ozonRadarTriggerError.stack || ozonRadarTriggerError.message)
+      );
+    }
+
+"""
+    func = func.replace(
+        save_marker,
+        ozon_trigger_block + save_marker,
+        1,
+    )
+
 # Rebuild after all master-function migrations.
 new_text = before + func + after
 
@@ -669,6 +699,7 @@ required = [
     "ivanovoFailedThisCycle = true;",
     "function wbOsAssertTrustedNeedsSources_",
     "NEEDS_BLOCKED_STALE_SOURCE",
+    "ensureOzonRadarServerTrigger_();",
 ]
 missing = [marker for marker in required if marker not in new_text]
 if missing:
