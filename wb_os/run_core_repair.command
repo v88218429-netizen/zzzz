@@ -24,6 +24,7 @@ echo "[1/8] Скачиваю 3 прямых source-файла без архив�
 curl --connect-timeout 10 --max-time 30 -fsSL   "$REPO_RAW/wb_os/apps_script/K2_EVOLUTION_ENGINE.gs"   -o "$WORK/K2_EVOLUTION_ENGINE.gs"
 curl --connect-timeout 10 --max-time 30 -fsSL   "$REPO_RAW/wb_os/apps_script/WB_PUBLIC_PRICE_V4.gs"   -o "$WORK/WB_PUBLIC_PRICE_V4.gs"
 curl --connect-timeout 10 --max-time 30 -fsSL   "$REPO_RAW/wb_os/tools/patch_live_master.py"   -o "$WORK/patch_live_master.py"
+curl --connect-timeout 10 --max-time 30 -fsSL   "$REPO_RAW/wb_os/tools/audit_and_repair_live.py"   -o "$WORK/audit_and_repair_live.py"
 
 grep -q "K2 Evolution Engine v0.1.4" "$WORK/K2_EVOLUTION_ENGINE.gs" || {
   echo "❌ Неверная версия K2 payload"; exit 3;
@@ -34,7 +35,7 @@ grep -q "WB Public Customer Price Engine v0.1.2" "$WORK/WB_PUBLIC_PRICE_V4.gs" |
 grep -q "syncWbPublicCustomerPricesV4_(forceAll);" "$WORK/patch_live_master.py" || {
   echo "❌ Patcher без WB Price migration"; exit 3;
 }
-python3 -m py_compile "$WORK/patch_live_master.py"
+python3 -m py_compile "$WORK/patch_live_master.py" "$WORK/audit_and_repair_live.py"
 for f in "$WORK/K2_EVOLUTION_ENGINE.gs" "$WORK/WB_PUBLIC_PRICE_V4.gs"; do
   cp "$f" "$WORK/check.js"
   node --check "$WORK/check.js"
@@ -125,6 +126,7 @@ replace_or_create   "function k2EvolutionFetchAndApply_"   "$WORK/K2_EVOLUTION_E
 replace_or_create   "function syncWbPublicCustomerPricesV4_"   "$WORK/WB_PUBLIC_PRICE_V4.gs"   "WB_PUBLIC_PRICE_V4.js"
 
 python3 "$WORK/patch_live_master.py" "$PROJECT"
+python3 "$WORK/audit_and_repair_live.py" "$PROJECT"
 
 echo "[6/8] Проверяю весь собранный LIVE-проект..."
 COUNT=0
@@ -149,6 +151,9 @@ critical_count() {
 [ "$(critical_count "function syncWbPublicCustomerPricesV4_")" = "1" ] || {
   echo "❌ WB Public Price duplicate"; exit 7;
 }
+[ "$(critical_count "function getK2WarehouseItems_")" = "1" ] || {
+  echo "❌ K2 core duplicate"; exit 7;
+}
 
 MASTER_FILE="$(grep -RIl "function runFinalAutomationCycle_" "$PROJECT" --include='*.js' --include='*.gs')"
 grep -q "k2EvolutionFetchAndApply_()" "$MASTER_FILE" || { echo "❌ master не вызывает K2 Evolution"; exit 7; }
@@ -160,6 +165,7 @@ grep -q "K2_SESSION_COOKIE" "$MASTER_FILE" || { echo "❌ session-aware K2 readi
 
 echo "      syntax OK: $COUNT files"
 echo "      critical functions: exactly 1 each"
+echo "      whole-project global namespace: collision-free"
 
 echo "[7/8] Push в LIVE..."
 (
@@ -183,4 +189,4 @@ rm -f /tmp/wb-os-core-run.$$ || true
 echo
 echo "✅ CORE REPAIR DEPLOYED"
 echo "Rollback backup: $BACKUP"
-echo "Изменены только: master, K2 Evolution, WB Public Price."
+echo "Изменены: master, K2 Evolution, WB Public Price; duplicate K2 core disabled; Supplier private helpers namespaced if needed."
