@@ -1,5 +1,5 @@
 /**
- * WB OS / WB Public Customer Price Engine v0.1.13
+ * WB OS / WB Public Customer Price Engine v0.1.14
  *
  * Purpose:
  * - read WB nmID values from "Сводная";
@@ -15,7 +15,7 @@
  */
 
 var WB_PUBLIC_PRICE_V4 = {
-  VERSION: '0.1.13',
+  VERSION: '0.1.14',
   SUMMARY_SHEET: 'Сводная',
   SOURCE_SHEET: '_WB_PUBLIC_PRICE_V4',
   HEADER_ROW: 11,
@@ -1024,14 +1024,22 @@ function wbPriceV4CleanupLegacyTriggers_() {
     return 0;
   }
 
-  if (typeof ensureFinalAutomationTrigger_ !== 'function') {
+  if (
+    typeof wbOsEnsureFinalAutomationTriggerAtomic_ ===
+      'function'
+  ) {
+    wbOsEnsureFinalAutomationTriggerAtomic_();
+  } else if (
+    typeof ensureFinalAutomationTrigger_ ===
+      'function'
+  ) {
+    ensureFinalAutomationTrigger_();
+  } else {
     Logger.log(
       'WB Public Price: master trigger helper отсутствует; старый SPP trigger сохранён.'
     );
     return 0;
   }
-
-  ensureFinalAutomationTrigger_();
 
   var legacy = {
     sppMonitorScheduledTick: true
