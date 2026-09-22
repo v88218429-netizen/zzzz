@@ -44,25 +44,37 @@ if len(k2) > 1:
     function_pattern = re.compile(
         r"(?m)^function\s+([A-Za-z_$][\w$]*)\s*\("
     )
-    keeper_functions = set(function_pattern.findall(read(keeper)))
+    global_decl_pattern = re.compile(
+        r"(?m)^(?:var|let|const)\s+([A-Za-z_$][\w$]*)\s*(?:=|;)"
+    )
+
+    keeper_text = read(keeper)
+    keeper_functions = set(function_pattern.findall(keeper_text))
+    keeper_globals = set(global_decl_pattern.findall(keeper_text))
 
     for p in k2:
         if p == keeper:
             continue
 
-        legacy_functions = set(function_pattern.findall(read(p)))
-        unique_legacy = sorted(legacy_functions - keeper_functions)
+        legacy_text = read(p)
+        legacy_functions = set(function_pattern.findall(legacy_text))
+        legacy_globals = set(global_decl_pattern.findall(legacy_text))
 
-        # Never erase a K2 file that contains behavior not present in the
-        # selected canonical implementation. In that case fail closed and
+        unique_legacy = sorted(legacy_functions - keeper_functions)
+        unique_legacy_globals = sorted(legacy_globals - keeper_globals)
+
+        # Never erase a K2 file that contains behavior/state not present in
+        # the selected canonical implementation. In that case fail closed and
         # require a manual merge instead of guessing.
-        if unique_legacy:
+        if unique_legacy or unique_legacy_globals:
             raise SystemExit(
-                "AUDIT_FAIL: duplicate K2 core has unique functions and "
+                "AUDIT_FAIL: duplicate K2 core has unique declarations and "
                 "cannot be disabled safely: "
                 + str(p.relative_to(root))
-                + " unique="
+                + " unique_functions="
                 + repr(unique_legacy)
+                + " unique_globals="
+                + repr(unique_legacy_globals)
             )
 
         p.write_text(
