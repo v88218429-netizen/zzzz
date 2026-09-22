@@ -18,7 +18,7 @@ from fastapi import FastAPI, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 from playwright.async_api import async_playwright
 
-APP_VERSION = "1.2.2"
+APP_VERSION = "1.2.3"
 MAX_EVENTS = 20000
 CHECK_LOOP_SECONDS = 3
 SOURCE_NAME = "LIVE SERP · Ozon storefront JSON"
@@ -352,12 +352,19 @@ class OzonClient:
         )
         # Do not block images/fonts/styles: Variti challenge uses normal page resources.
         await self._page.wait_for_timeout(OZON_BROWSER_WARMUP_MS)
+        title = (await self._page.title()).lower()
+        if any(marker in title for marker in ("antibot", "ограничен", "нет соединения", "access denied", "challenge")):
+            # Give Variti one extra window before declaring this egress blocked.
+            await self._page.wait_for_timeout(8000)
+            title = (await self._page.title()).lower()
+            if any(marker in title for marker in ("antibot", "ограничен", "нет соединения", "access denied", "challenge")):
+                raise RuntimeError(f"Variti challenge not passed: title={title[:120]}")
 
     async def _browser_request_page(self, path: str) -> tuple[dict[str, Any], str, int, int]:
         last_error = ""
         endpoints = [
-            "/api/entrypoint-api.bx/page/json/v2",
             "/api/composer-api.bx/page/json/v2",
+            "/api/entrypoint-api.bx/page/json/v2",
         ]
 
         async with self._browser_lock:
@@ -373,8 +380,7 @@ class OzonClient:
                                 method: "GET",
                                 credentials: "include",
                                 headers: {
-                                  "accept": "application/json, text/plain, */*",
-                                  "x-requested-with": "XMLHttpRequest"
+                                  "accept": "application/json"
                                 }
                               });
                               return {
