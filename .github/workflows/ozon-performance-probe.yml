@@ -10,32 +10,34 @@ permissions:
   contents: read
 jobs:
   probe:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - store: DOM
+            client_id: "104833953-1790097620618@advertising.performance.ozon.ru"
+            secret_name: OZON_PERF_DOM_SECRET
+          - store: HOZYAIKA
+            client_id: "104833980-1790097716038@advertising.performance.ozon.ru"
+            secret_name: OZON_PERF_HOZYAIKA_SECRET
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 8
     env:
-      OZON_PERFORMANCE_CREDENTIALS: ${{ secrets.OZON_PERFORMANCE_CREDENTIALS }}
+      OZON_STORE: ${{ matrix.store }}
+      OZON_PERF_CLIENT_ID: ${{ matrix.client_id }}
+      OZON_PERF_CLIENT_SECRET: ${{ matrix.secret_name == 'OZON_PERF_DOM_SECRET' && secrets.OZON_PERF_DOM_SECRET || secrets.OZON_PERF_HOZYAIKA_SECRET }}
+      TEST_SKU: "5094364543"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with: {python-version: "3.12"}
-      - name: Materialize Performance credentials safely
+        with:
+          python-version: "3.12"
+      - name: Credential capability
         shell: bash
         run: |
-          test -n "$OZON_PERFORMANCE_CREDENTIALS" || { echo "PERFORMANCE_CREDENTIALS=missing"; exit 2; }
-          python - <<'PY'
-          import json, os
-          obj=json.loads(os.environ["OZON_PERFORMANCE_CREDENTIALS"])
-          cid=str(obj.get("client_id","")).strip()
-          sec=str(obj.get("client_secret","")).strip()
-          if not cid or not sec:
-              raise SystemExit("invalid OZON_PERFORMANCE_CREDENTIALS")
-          print("::add-mask::"+cid)
-          print("::add-mask::"+sec)
-          with open(os.environ["GITHUB_ENV"],"a") as f:
-              f.write("OZON_PERF_CLIENT_ID="+cid+"\n")
-              f.write("OZON_PERF_CLIENT_SECRET="+sec+"\n")
-          print("PERFORMANCE_CREDENTIALS=present")
-          PY
+          test -n "$OZON_PERF_CLIENT_SECRET" || { echo "STORE=$OZON_STORE PERFORMANCE_CREDENTIALS=missing"; exit 2; }
+          echo "::add-mask::$OZON_PERF_CLIENT_SECRET"
+          echo "STORE=$OZON_STORE PERFORMANCE_CREDENTIALS=present"
       - run: pip install requests
       - name: Live Performance probe
         run: python ozon_performance_radar/worker.py
