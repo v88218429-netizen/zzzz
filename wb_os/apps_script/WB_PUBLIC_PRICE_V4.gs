@@ -1,5 +1,5 @@
 /**
- * WB OS / WB Public Customer Price Engine v0.1.10
+ * WB OS / WB Public Customer Price Engine v0.1.11
  *
  * Purpose:
  * - read WB nmID values from "Сводная";
@@ -15,7 +15,7 @@
  */
 
 var WB_PUBLIC_PRICE_V4 = {
-  VERSION: '0.1.10',
+  VERSION: '0.1.11',
   SUMMARY_SHEET: 'Сводная',
   SOURCE_SHEET: '_WB_PUBLIC_PRICE_V4',
   HEADER_ROW: 11,
@@ -595,15 +595,27 @@ function wbPriceV4Candidate_(item, mode) {
     return 0;
   }
 
+  var value = 0;
+
   if (mode === 'total_field') {
-    return item.totalField || 0;
+    value = item.totalField || 0;
+  } else if (mode === 'product_plus_logistics') {
+    value =
+      item.productPlusLogistics ||
+      item.product ||
+      0;
+  } else {
+    value = item.product || 0;
   }
 
-  if (mode === 'product_plus_logistics') {
-    return item.productPlusLogistics || item.product || 0;
-  }
-
-  return item.product || 0;
+  /*
+   * The proven legacy SPP parser writes Math.round(clientPrice) to column K.
+   * Keep the exact same cell semantics so v4 cannot introduce fractional
+   * rubles and artificial SPP deltas.
+   */
+  return value > 0
+    ? Math.round(value)
+    : 0;
 }
 
 
