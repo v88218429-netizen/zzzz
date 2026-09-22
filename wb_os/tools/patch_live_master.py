@@ -408,6 +408,39 @@ if price_marker not in func:
         1,
     )
 
+# Step 2e: refresh the official seller-price source transactionally before
+# public buyer-price calibration. The helper snapshots/restores "Цены" if the
+# legacy DOM exporter fails after clearing that sheet.
+if "wbSellerPriceRefreshIfDue_(forceAll);" not in func:
+    price_comment = "    /* WB OS · WB public customer prices v4 */"
+
+    if func.count(price_comment) != 1:
+        raise SystemExit(
+            "PATCH_FAIL: cannot place safe WB seller-price refresh"
+        )
+
+    seller_price_block = """    /* WB OS · official seller prices · transactional refresh */
+    try {
+      wbSellerPriceRefreshIfDue_(forceAll);
+    } catch (sellerPriceError) {
+      cycleErrors.push(
+        'WB seller prices: ' + sellerPriceError.message
+      );
+      Logger.log(
+        'WB seller prices: ' +
+        (sellerPriceError.stack || sellerPriceError.message)
+      );
+    }
+
+"""
+
+    func = func.replace(
+        price_comment,
+        seller_price_block + price_comment,
+        1,
+    )
+
+
 # Step 2i: bootstrap the dedicated Ozon radar minute trigger from the existing
 # master cycle. This is idempotent and avoids any manual Apps Script run after
 # hosted deployment.
