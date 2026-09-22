@@ -1,5 +1,5 @@
 /**
- * WB OS / WB Public Customer Price Engine v0.1.2
+ * WB OS / WB Public Customer Price Engine v0.1.3
  *
  * Purpose:
  * - read WB nmID values from "Сводная";
@@ -15,7 +15,7 @@
  */
 
 var WB_PUBLIC_PRICE_V4 = {
-  VERSION: '0.1.2',
+  VERSION: '0.1.3',
   SUMMARY_SHEET: 'Сводная',
   SOURCE_SHEET: '_WB_PUBLIC_PRICE_V4',
   FIRST_DATA_ROW: 12,
@@ -71,6 +71,15 @@ function syncWbPublicCustomerPricesV4_(force) {
       WB_PUBLIC_PRICE_V4.CLIENT_PRICE_COL
     )
     .getValues();
+
+  var clientRange = summary.getRange(
+    WB_PUBLIC_PRICE_V4.FIRST_DATA_ROW,
+    WB_PUBLIC_PRICE_V4.CLIENT_PRICE_COL,
+    numRows,
+    1
+  );
+
+  var clientFormulas = clientRange.getFormulas();
 
   var ids = [];
   var seen = {};
@@ -128,8 +137,19 @@ function syncWbPublicCustomerPricesV4_(force) {
       row[WB_PUBLIC_PRICE_V4.CLIENT_PRICE_COL - 1]
     );
 
+    var existingFormula = String(
+      clientFormulas[r] && clientFormulas[r][0]
+        ? clientFormulas[r][0]
+        : ''
+    );
+
+    var preservedValue =
+      existingFormula ||
+      currentClient ||
+      '';
+
     if (!nmId || !fetched[nmId]) {
-      output.push([currentClient || '']);
+      output.push([preservedValue]);
       continue;
     }
 
@@ -139,7 +159,7 @@ function syncWbPublicCustomerPricesV4_(force) {
     );
 
     if (!(candidate > 0)) {
-      output.push([currentClient || '']);
+      output.push([preservedValue]);
       preservedMissing++;
       continue;
     }
@@ -342,40 +362,102 @@ function wbPriceV4ExtractPrice_(product) {
     ? product.sizes
     : [];
 
+  var all = [];
+  var withStock = [];
+
   for (var i = 0; i < sizes.length; i++) {
-    var p = sizes[i] && sizes[i].price;
+    var size = sizes[i] || {};
+    var p = size.price;
 
     if (!p) {
       continue;
     }
 
-    var productPrice = wbPriceV4Kopecks_(p.product);
-    var basic = wbPriceV4Kopecks_(p.basic);
-    var logistics = wbPriceV4Kopecks_(p.logistics);
-    var totalField = wbPriceV4Kopecks_(p.total);
+    var candidate = {
+      product: wbPriceV4Kopecks_(p.product),
+      basic: wbPriceV4Kopecks_(p.basic),
+      logistics: wbPriceV4Kopecks_(p.logistics),
+      totalField: wbPriceV4Kopecks_(p.total)
+    };
 
     if (
-      productPrice > 0 ||
-      totalField > 0 ||
-      basic > 0
+      !(candidate.product > 0) &&
+      !(candidate.totalField > 0) &&
+      !(candidate.basic > 0)
     ) {
-      return {
-        product: productPrice,
-        basic: basic,
-        logistics: logistics,
-        totalField: totalField
-      };
+      continue;
+    }
+
+    all.push(candidate);
+
+    var stocks = Array.isArray(size.stocks)
+      ? size.stocks
+      : [];
+
+    var qty = 0;
+
+    for (var s = 0; s < stocks.length; s++) {
+      qty += Number(
+        stocks[s].qty ||
+        stocks[s].quantity ||
+        0
+      ) || 0;
+    }
+
+    if (
+      qty > 0 ||
+      (
+        sizes.length === 1 &&
+        Number(product.totalQuantity || 0) > 0
+      )
+    ) {
+      withStock.push(candidate);
     }
   }
 
-  return {
-    product: 0,
-    basic: 0,
-    logistics: 0,
-    totalField: 0
-  };
-}
+  var pool = withStock.length
+    ? withStock
+    : all;
 
+  if (!pool.length) {
+    var fallbackProduct = wbPriceV4Kopecks_(
+      product.salePriceU
+    );
+
+    var fallbackBasic = wbPriceV4Kopecks_(
+      product.priceU
+    );
+
+    return {
+      product: fallbackProduct,
+      basic: fallbackBasic,
+      logistics: 0,
+      totalField: fallbackProduct
+    };
+  }
+
+  var best = pool[0];
+
+  function primaryPrice_(item) {
+    return (
+      item.product ||
+      item.totalField ||
+      item.basic ||
+      Number.MAX_VALUE
+    );
+  }
+
+  for (var j = 1; j < pool.length; j++) {
+    if (
+      primaryPrice_(pool[j]) <
+      primaryPrice_(best)
+    ) {
+      best = pool[j];
+    }
+  }
+
+  return best;
+}
 
 function wbPriceV4Kopecks_(value) {
   var n = Number(value);
@@ -471,9 +553,24 @@ function wbPriceV4Calibrate_(summaryData, fetched) {
     });
   }
 
-  scored.sort(function(a, b) {
-    if (a.rows !== b.rows) {
-      return b.rows - a.rows;
+  var passing = scored.filter(function(item) {
+    return (
+      item.rows >=
+        WB_PUBLIC_PRICE_V4.MIN_CALIBRATION_ROWS &&
+      item.medianRelativeError <=
+        WB_PUBLIC_PRICE_V4.MAX_MEDIAN_REL_ERROR &&
+      item.goodShare >=
+        WB_PUBLIC_PRICE_V4.MIN_GOOD_SHARE
+    );
+  });
+
+  var pool = passing.length
+    ? passing
+    : scored;
+
+  pool.sort(function(a, b) {
+    if (a.goodShare !== b.goodShare) {
+      return b.goodShare - a.goodShare;
     }
 
     if (
@@ -486,30 +583,13 @@ function wbPriceV4Calibrate_(summaryData, fetched) {
       );
     }
 
-    return b.goodShare - a.goodShare;
+    return b.rows - a.rows;
   });
 
-  // Prefer the lowest error among modes with the same useful sample size.
-  var best = scored[0];
-
-  for (var i = 1; i < scored.length; i++) {
-    if (
-      scored[i].rows >= WB_PUBLIC_PRICE_V4.MIN_CALIBRATION_ROWS &&
-      scored[i].medianRelativeError <
-        best.medianRelativeError
-    ) {
-      best = scored[i];
-    }
-  }
+  var best = pool[0];
 
   return {
-    ok:
-      best.rows >=
-        WB_PUBLIC_PRICE_V4.MIN_CALIBRATION_ROWS &&
-      best.medianRelativeError <=
-        WB_PUBLIC_PRICE_V4.MAX_MEDIAN_REL_ERROR &&
-      best.goodShare >=
-        WB_PUBLIC_PRICE_V4.MIN_GOOD_SHARE,
+    ok: passing.length > 0,
     mode: best.mode,
     rows: best.rows,
     medianRelativeError: best.medianRelativeError,
