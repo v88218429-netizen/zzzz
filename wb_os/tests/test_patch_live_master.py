@@ -78,6 +78,8 @@ REQUIRED = [
     "wbPriceV4RecordFailure_(priceError)",
     "function wbOsEnsureMasterTrigger()",
     "historyK2Fresh = true;",
+    "historyIvanovoFresh = true;",
+    "if (historyDue && historyK2Fresh && historyIvanovoFresh) {",
 ]
 
 def run_patch(root: pathlib.Path):
