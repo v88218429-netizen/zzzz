@@ -43,6 +43,17 @@ function runFinalAutomationCycle_(forceTelegram, forceAll) {
   }
 }
 
+function getMasterConfigurationState_() {
+  var props = PropertiesService.getScriptProperties();
+  return {
+    k2Ready: Boolean(
+      String(props.getProperty('K2_USERNAME') || '').trim() &&
+      String(props.getProperty('K2_PASSWORD') || '')
+    ),
+    telegramReady: true
+  };
+}
+
 function shouldRunByProperty_(propertyName, intervalMinutes) {
   return true;
 }
@@ -58,6 +69,8 @@ REQUIRED = [
     "k2EvolutionRecordFailure_(error)",
     "k2EvolutionWatchdogNotify_();",
     "k2EvolutionHistoryLastAt_(props)",
+    "syncWbPublicCustomerPricesV4_(forceAll);",
+    "wbPriceV4RecordFailure_(priceError)",
 ]
 
 def run_patch(root: pathlib.Path):
@@ -84,6 +97,12 @@ def main():
             assert marker in once, marker
         assert "writeK2StocksToSheet_(items);" not in once
         assert once.count("k2EvolutionWatchdogNotify_();") == 1
+        assert "K2_SESSION_COOKIE" in once
+        assert "K2_CLIENT_ID" in once
+        master_start = once.index("function runFinalAutomationCycle_")
+        master_end = once.index("\nfunction getMasterConfigurationState_", master_start)
+        master_text = once[master_start:master_end]
+        assert "getMasterConfigurationState_().k2Ready" not in master_text
 
         # Second migration must be a true no-op, not a failure or duplicate.
         run_patch(root)
