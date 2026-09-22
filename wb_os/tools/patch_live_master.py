@@ -475,7 +475,35 @@ if "ensureOzonRadarServerTrigger_();" not in func:
 new_text = before + func + after
 
 
-# Step 2e: add a public, side-effect-minimal bootstrap for deployment.
+# Step 2e: route the manual "WB Цены" menu action through the same
+# transactional seller-price guard. The old entrypoint called the DOM exporter
+# directly, and that exporter clears "Цены" before its API calls.
+if "function domExportPrices()" in new_text and "SAFE_MANUAL_WB_PRICE_ENTRYPOINT" not in new_text:
+    manual_price_pattern = re.compile(
+        r"function\s+domExportPrices\s*\(\)\s*\{.*?\n\}",
+        re.S,
+    )
+
+    manual_price_replacement = """function domExportPrices() {
+  /* SAFE_MANUAL_WB_PRICE_ENTRYPOINT */
+  wbSellerPriceRefreshIfDue_(true);
+  return forceSyncWbPublicCustomerPricesV4();
+}"""
+
+    new_text, count = manual_price_pattern.subn(
+        manual_price_replacement,
+        new_text,
+        count=1,
+    )
+
+    if count != 1:
+        raise SystemExit(
+            "PATCH_FAIL: cannot safely migrate domExportPrices"
+        )
+
+
+# Step 2f: add a public, side-effect-minimal bootstrap for deployment.
+
 # Unlike setupFinalAutomation(), this only ensures the single master clock and
 # does NOT force Ivanovo/Supplier/WB/Ozon/K2 jobs during deploy.
 bootstrap_fn = """
@@ -711,6 +739,18 @@ if old_history in new_text:
     new_text = new_text.replace(old_history, new_history, 1)
 elif new_history not in new_text:
     raise SystemExit("PATCH_FAIL: history status source not found")
+
+# Manual price menu entrypoint must never bypass the transactional guard.
+if "function domExportPrices()" in new_text:
+    manual_start = new_text.find("function domExportPrices()")
+    manual_end = new_text.find("\n}", manual_start)
+    manual_block = new_text[manual_start:manual_end + 2]
+
+    if "SAFE_MANUAL_WB_PRICE_ENTRYPOINT" not in manual_block:
+        raise SystemExit(
+            "PATCH_FAIL: domExportPrices remains unsafe"
+        )
+
 
 # Hard post-conditions. A successful patch is fully migrated, not half-done.
 required = [
