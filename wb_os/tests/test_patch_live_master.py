@@ -32,13 +32,24 @@ function runFinalAutomationCycle_(forceTelegram, forceAll) {
     }
 
     /* 2. Иваново */
-    if (forceAll) {
-      exportFulfilmentStocks();
+    if (forceAll || historyDue || shouldRunByProperty_('IVANOVO_LAST_SUCCESS_AT', MASTER_AUTOMATION_CFG.IVANOVO_EVERY_MINUTES)) {
+      try {
+        exportFulfilmentStocks();
+      } catch (error) {
+        cycleErrors.push('Иваново: ' + error.message);
+      }
     }
 
     /* 5. Один дневной снимок остатков К2 + Иваново около 12:00 МСК. */
     if (historyDue) {
       appendDailyStockHistory_(false);
+    }
+
+    try {
+      waitForStableNeedsSnapshot_();
+      notifySimpleCurrentNeeds_(forceTelegram);
+    } catch (error) {
+      cycleErrors.push('Потребность/Telegram: ' + error.message);
     }
 
     saveMasterCycleResult_(cycleErrors);
@@ -80,6 +91,11 @@ REQUIRED = [
     "historyK2Fresh = true;",
     "historyIvanovoFresh = true;",
     "if (historyDue && historyK2Fresh && historyIvanovoFresh) {",
+    "K2_EV_CUTOVER_DONE",
+    "k2FailedThisCycle = true;",
+    "ivanovoFailedThisCycle = true;",
+    "function wbOsAssertTrustedNeedsSources_",
+    "NEEDS_BLOCKED_STALE_SOURCE",
 ]
 
 def run_patch(root: pathlib.Path):
