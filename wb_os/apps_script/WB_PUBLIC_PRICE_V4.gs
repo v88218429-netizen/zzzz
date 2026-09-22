@@ -1,5 +1,5 @@
 /**
- * WB OS / WB Public Customer Price Engine v0.1.9
+ * WB OS / WB Public Customer Price Engine v0.1.10
  *
  * Purpose:
  * - read WB nmID values from "Сводная";
@@ -15,9 +15,10 @@
  */
 
 var WB_PUBLIC_PRICE_V4 = {
-  VERSION: '0.1.9',
+  VERSION: '0.1.10',
   SUMMARY_SHEET: 'Сводная',
   SOURCE_SHEET: '_WB_PUBLIC_PRICE_V4',
+  HEADER_ROW: 11,
   FIRST_DATA_ROW: 12,
   NMID_COL: 3,
   SELLER_PRICE_COL: 10,
@@ -35,6 +36,29 @@ var WB_PUBLIC_PRICE_V4 = {
 
 
 function syncWbPublicCustomerPricesV4_(force) {
+  var lock = LockService.getScriptLock();
+
+  if (!lock.tryLock(5000)) {
+    Logger.log(
+      'WB Public Price v4: price lock busy, запуск пропущен.'
+    );
+
+    return {
+      ok: true,
+      skipped: true,
+      reason: 'price_lock_busy'
+    };
+  }
+
+  try {
+    return wbPriceV4SyncUnlocked_(force);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+
+function wbPriceV4SyncUnlocked_(force) {
   var props = PropertiesService.getScriptProperties();
 
   if (!force && !wbPriceV4Due_(props)) {
@@ -51,6 +75,8 @@ function syncWbPublicCustomerPricesV4_(force) {
   if (!summary) {
     throw new Error('WB_PRICE_V4: не найден лист «Сводная».');
   }
+
+  wbPriceV4AssertSummaryLayout_(summary);
 
   var lastRow = summary.getLastRow();
 
@@ -239,6 +265,51 @@ function syncWbPublicCustomerPricesV4_(force) {
     medianRelativeError: calibration.medianRelativeError,
     goodShare: calibration.goodShare
   };
+}
+
+
+function wbPriceV4AssertSummaryLayout_(sheet) {
+  var headers = sheet
+    .getRange(
+      WB_PUBLIC_PRICE_V4.HEADER_ROW,
+      1,
+      1,
+      WB_PUBLIC_PRICE_V4.CLIENT_PRICE_COL
+    )
+    .getDisplayValues()[0];
+
+  var expected = [
+    {
+      col: WB_PUBLIC_PRICE_V4.NMID_COL,
+      names: ['Артикул WB']
+    },
+    {
+      col: WB_PUBLIC_PRICE_V4.SELLER_PRICE_COL,
+      names: ['Цена']
+    },
+    {
+      col: WB_PUBLIC_PRICE_V4.CLIENT_PRICE_COL,
+      names: ['Цена для клиента']
+    }
+  ];
+
+  for (var i = 0; i < expected.length; i++) {
+    var actual = String(
+      headers[expected[i].col - 1] || ''
+    ).trim();
+
+    if (expected[i].names.indexOf(actual) === -1) {
+      throw new Error(
+        'WB_PRICE_V4_LAYOUT_MISMATCH: колонка ' +
+        expected[i].col +
+        ' ожидалась как «' +
+        expected[i].names.join(' / ') +
+        '», получено «' +
+        actual +
+        '». Запись в Сводную запрещена.'
+      );
+    }
+  }
 }
 
 
@@ -713,6 +784,27 @@ function wbPriceV4WriteShadow_(
       wbPriceV4Candidate_(item, calibration.mode),
       calibration.ok ? 'YES' : 'NO'
     ]);
+  }
+
+  if (sheet.getLastRow() > 0) {
+    var signature = sheet
+      .getRange(1, 1, 1, 2)
+      .getDisplayValues()[0];
+
+    var first = String(signature[0] || '').trim();
+    var second = String(signature[1] || '').trim();
+
+    if (
+      (first || second) &&
+      (first !== 'timestamp' || second !== 'nmID')
+    ) {
+      throw new Error(
+        'WB_PRICE_V4_SHADOW_NAME_COLLISION: лист «' +
+        WB_PUBLIC_PRICE_V4.SOURCE_SHEET +
+        '» уже существует и не похож на shadow-лист WB OS. ' +
+        'Очистка запрещена.'
+      );
+    }
   }
 
   sheet.clearContents();
