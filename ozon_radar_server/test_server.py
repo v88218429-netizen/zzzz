@@ -123,6 +123,27 @@ class RadarBehaviorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(check["alert_type"], "RECOVERY")
         self.assertFalse(state.alert_active)
 
+    def test_embedded_tailscale_requires_online_exit_marker(self):
+        old_proxy = server.OZON_PROXY
+        old_force = server.OZON_FORCE_LIVE_OFFLINE
+        old_runtime_exit = server.runtime_tailscale_exit_node
+        try:
+            server.OZON_PROXY = "socks5://127.0.0.1:1055"
+            server.OZON_FORCE_LIVE_OFFLINE = False
+            server.runtime_tailscale_exit_node = lambda: ""
+            ready, reason = server.live_egress_status()
+            self.assertFalse(ready)
+            self.assertIn("no approved online home", reason)
+
+            server.runtime_tailscale_exit_node = lambda: "100.64.0.10"
+            ready, reason = server.live_egress_status()
+            self.assertTrue(ready)
+            self.assertIn("100.64.0.10", reason)
+        finally:
+            server.OZON_PROXY = old_proxy
+            server.OZON_FORCE_LIVE_OFFLINE = old_force
+            server.runtime_tailscale_exit_node = old_runtime_exit
+
     async def test_source_error_never_becomes_position(self):
         task = self.task()
         state = server.TaskState(task=task, last_position=7)
