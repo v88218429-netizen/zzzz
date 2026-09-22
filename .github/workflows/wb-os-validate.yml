@@ -73,6 +73,12 @@ jobs:
             echo "Legacy archive deploy is quarantined: OK"
           fi
 
+      - name: Core repair end-to-end fake-live deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash wb_os/tests/test_run_core_repair.sh
+
       - name: Core repair deploy contract
         shell: bash
         run: |
