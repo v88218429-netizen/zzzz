@@ -4,7 +4,7 @@
     "stable": {
       "version": "1.1.0",
       "channel": "stable",
-      "notes": "Управляющее ядро v1.1: точная связь кампания+nmID, когортная аналитика, расследование, независимый критик, контроль риска, история фактических действий и оценка результата.",
+      "notes": "Управляющее ядро v1.1: точная связь кампания+nmID, когортная аналитика, расследование, независимый критик, контроль риска, история фактических действий, оценка результата, обучение на подтверждённом бездействии и защита от последующих вмешательств.",
       "minimum_current_version": "1.0.0",
       "files": [
         {
@@ -15,12 +15,12 @@
         {
           "path": "scripts/update_smoke.py",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/releases/1.1.0/update_smoke.py",
-          "sha256": "bba890496988034d43a15e80ea539cea4084bad6303e046bb12425fcffcc4c25"
+          "sha256": "f69f791f38db9e93d0e4cd634d01c0be06f12ae3a2b0a981b94e7393eb50a81c"
         },
         {
           "path": "scripts/.v11_bundle.b64",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/releases/1.1.0/bundle.b64",
-          "sha256": "8d9cac4e96a7ed800ca998f58314842bb377cbbb1973f5340c8381facde4fcc8"
+          "sha256": "b08d8c64bbb1f2c18cad4981248fe30b59018b2e66e0527d2a7413e0bc3c013b"
         }
       ]
     }
