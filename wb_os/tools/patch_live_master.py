@@ -416,8 +416,29 @@ new_text = before + func + after
 # Unlike setupFinalAutomation(), this only ensures the single master clock and
 # does NOT force Ivanovo/Supplier/WB/Ozon/K2 jobs during deploy.
 bootstrap_fn = """
+function wbOsEnsureFinalAutomationTriggerAtomic_() {
+  var lock = LockService.getDocumentLock();
+
+  if (!lock) {
+    ensureFinalAutomationTrigger_();
+    return;
+  }
+
+  if (!lock.tryLock(10000)) {
+    throw new Error(
+      'MASTER_TRIGGER_LOCK_BUSY: не удалось атомарно проверить master-триггер.'
+    );
+  }
+
+  try {
+    ensureFinalAutomationTrigger_();
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 function wbOsEnsureMasterTrigger() {
-  ensureFinalAutomationTrigger_();
+  wbOsEnsureFinalAutomationTriggerAtomic_();
   return 'MASTER_TRIGGER_OK';
 }
 """
@@ -436,7 +457,74 @@ if "function wbOsEnsureMasterTrigger()" not in new_text:
     )
 
 
-# Step 2f: add the fail-closed source-freshness gate used before
+# Step 2f: make the property-based master guard atomic without taking the
+# ScriptLock that Ivanovo/Supplier/K2/price writers legitimately use inside the
+# master cycle.
+if "MASTER_RUN_GUARD_DOCUMENT_LOCK" not in new_text:
+    guard_pattern = re.compile(
+        r"function\s+acquireMasterRunGuard_\s*\(\)\s*\{.*?\n\}\n\nfunction\s+releaseMasterRunGuard_",
+        re.S,
+    )
+
+    guard_replacement = """function acquireMasterRunGuard_() {
+  /* MASTER_RUN_GUARD_DOCUMENT_LOCK */
+  var lock = LockService.getDocumentLock();
+
+  if (lock && !lock.tryLock(5000)) {
+    return false;
+  }
+
+  try {
+    var props = PropertiesService.getScriptProperties();
+    var key = 'MASTER_AUTOMATION_RUNNING_AT';
+    var existing = props.getProperty(key);
+
+    if (existing) {
+      var startedAt = new Date(existing);
+
+      if (!isNaN(startedAt.getTime())) {
+        var ageMinutes =
+          (Date.now() - startedAt.getTime()) /
+          60000;
+
+        if (
+          ageMinutes <
+          MASTER_AUTOMATION_CFG.BUSY_TTL_MINUTES
+        ) {
+          return false;
+        }
+      }
+    }
+
+    props.setProperty(
+      key,
+      new Date().toISOString()
+    );
+
+    return true;
+  } finally {
+    if (lock) {
+      lock.releaseLock();
+    }
+  }
+}
+
+function releaseMasterRunGuard_"""
+
+    new_text, count = guard_pattern.subn(
+        guard_replacement,
+        new_text,
+        count=1,
+    )
+
+    if count != 1:
+        raise SystemExit(
+            "PATCH_FAIL: cannot atomically migrate master run guard"
+        )
+
+
+# Step 2g: add the fail-closed source-freshness gate used before
+
 # needs calculation / Telegram notifications.
 trusted_needs_fn = """
 function wbOsAssertTrustedNeedsSources_(
@@ -529,7 +617,7 @@ if "function wbOsAssertTrustedNeedsSources_(" not in new_text:
     )
 
 
-# Step 2g: make K2 readiness session-aware after final rebuild.
+# Step 2h: make K2 readiness session-aware after final rebuild.
 
 
 # This affects status/UI only. The master no longer blocks K2 on k2Ready;
@@ -570,6 +658,8 @@ required = [
     "syncWbPublicCustomerPricesV4_(forceAll);",
     "wbPriceV4RecordFailure_(priceError)",
     "function wbOsEnsureMasterTrigger()",
+    "function wbOsEnsureFinalAutomationTriggerAtomic_()",
+    "MASTER_RUN_GUARD_DOCUMENT_LOCK",
     "K2_EV_LAST_RUN_AT",
     "K2_EV_CUTOVER_DONE",
     "historyK2Fresh = true;",
