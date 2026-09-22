@@ -149,6 +149,48 @@ jobs:
                       rec['serp_cards_extracted']=out.get('checked_depth',0)>0
                   except Exception as e:
                       rec['ozon_error']=f'{type(e).__name__}: {e}'
+
+                  # JSON composer can be stricter than the real storefront.
+                  # Verify the visible browser SERP over the same RU ISP tunnel.
+                  try:
+                      import re, shutil
+                      from urllib.parse import quote
+                      chrome=(
+                          shutil.which('google-chrome')
+                          or shutil.which('google-chrome-stable')
+                          or shutil.which('chromium')
+                          or shutil.which('chromium-browser')
+                      )
+                      if not chrome:
+                          rec['browser_error']='Chrome/Chromium not found on runner'
+                      else:
+                          url='https://www.ozon.ru/search/?text='+quote('лопата садовая')+'&from_global=true'
+                          cp=subprocess.run(
+                              [chrome,'--headless=new','--no-sandbox','--disable-gpu',
+                               '--lang=ru-RU','--virtual-time-budget=15000','--dump-dom',url],
+                              stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,timeout=45
+                          )
+                          html=cp.stdout or ''
+                          ids=[]
+                          seen=set()
+                          for m in re.finditer(r'/product/(?:[^/?#]+-)?(\\d{6,})(?:[/?#]|$)',html):
+                              x=m.group(1)
+                              if x not in seen:
+                                  seen.add(x); ids.append(x)
+                          rec['browser_rc']=cp.returncode
+                          rec['browser_product_count']=len(ids)
+                          rec['browser_target_position']=(ids.index('5094364543')+1) if '5094364543' in ids else None
+                          rec['browser_block_marker']=(
+                              'Похоже, нет соединения' if 'Похоже, нет соединения' in html
+                              else 'Доступ ограничен' if 'Доступ ограничен' in html
+                              else 'captcha' if 'captcha' in html.lower()
+                              else ''
+                          )
+                          if ids:
+                              rec['serp_cards_extracted']=True
+                              rec['browser_first_ids']=ids[:20]
+                  except Exception as e:
+                      rec['browser_error']=f'{type(e).__name__}: {e}'
               results.append(rec)
               print('VPNGATE_RESULT',json.dumps(rec,ensure_ascii=False),flush=True)
 
@@ -188,7 +230,7 @@ jobs:
       - name: Install Tor and Python dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends tor curl
+          sudo apt-get install -y --no-install-recommends tor tor-geoipdb curl
           pip install -r requirements.txt
 
       - name: Force Tor to Russian exits and probe Ozon SERP
@@ -197,12 +239,14 @@ jobs:
           SocksPort 19050
           ExitNodes {ru}
           StrictNodes 1
+          GeoIPFile /usr/share/tor/geoip
+          GeoIPv6File /usr/share/tor/geoip6
           Log notice stdout
           EOF
           sudo systemctl stop tor tor@default 2>/dev/null || true
           sudo pkill -9 tor || true
           sudo tor -f /etc/tor/torrc >/tmp/tor.log 2>&1 &
-          for i in $(seq 1 45); do
+          for i in $(seq 1 90); do
             grep -q "Bootstrapped 100%" /tmp/tor.log && break
             sleep 1
           done
