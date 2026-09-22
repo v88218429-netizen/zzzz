@@ -1,5 +1,5 @@
 /**
- * WB OS / WB Public Customer Price Engine v0.1.11
+ * WB OS / WB Public Customer Price Engine v0.1.12
  *
  * Purpose:
  * - read WB nmID values from "Сводная";
@@ -15,7 +15,7 @@
  */
 
 var WB_PUBLIC_PRICE_V4 = {
-  VERSION: '0.1.11',
+  VERSION: '0.1.12',
   SUMMARY_SHEET: 'Сводная',
   SOURCE_SHEET: '_WB_PUBLIC_PRICE_V4',
   HEADER_ROW: 11,
@@ -866,6 +866,25 @@ function wbPriceV4Number_(value) {
 
 
 function wbPriceV4RecordFailure_(error) {
+  var message = String(
+    error && error.message
+      ? error.message
+      : error || 'ERROR'
+  ).substring(0, 500);
+
+  /*
+   * A calibration failure has already written richer diagnostics (fetched,
+   * mode, sample size, median error, good share). Do not immediately erase
+   * that evidence from the master catch.
+   */
+  if (
+    message.indexOf(
+      'WB_PRICE_V4_SHADOW_FAIL:'
+    ) === 0
+  ) {
+    return;
+  }
+
   wbPriceV4Diagnostics_({
     ok: false,
     fetched: 0,
@@ -875,11 +894,7 @@ function wbPriceV4RecordFailure_(error) {
     calibrationRows: 0,
     medianRelativeError: '',
     goodShare: '',
-    message: String(
-      error && error.message
-        ? error.message
-        : error || 'ERROR'
-    ).substring(0, 500)
+    message: message
   });
 }
 
