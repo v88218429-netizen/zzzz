@@ -20,6 +20,8 @@ jobs:
     env:
       SCRIPT_ID: "15tH3jwOa5hKJFahIyPX5AIXO7KRf1O4jusfDfPIdX6KeH_GqMUC71hNT"
       CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+      OZON_RADAR_SERVER_URL: ${{ secrets.OZON_RADAR_SERVER_URL }}
+      OZON_RADAR_SERVER_SECRET: ${{ secrets.OZON_RADAR_SERVER_SECRET }}
 
     steps:
       - uses: actions/checkout@v4
@@ -92,6 +94,27 @@ jobs:
         run: |
           cp wb_os/apps_script/OZON_RADAR_SERVER_BRIDGE.gs /tmp/ozon-appscript-live/OZON_RADAR_SERVER_BRIDGE.gs
           cp wb_os/apps_script/OZON_RADAR_TELEGRAM_RELAY.gs /tmp/ozon-appscript-live/OZON_RADAR_TELEGRAM_RELAY.gs
+
+          python - <<'PY'
+          import os, pathlib
+          path=pathlib.Path('/tmp/ozon-appscript-live/OZON_RADAR_SERVER_BRIDGE.gs')
+          text=path.read_text(encoding='utf-8')
+          url=os.environ.get('OZON_RADAR_SERVER_URL','').strip().rstrip('/')
+          secret=os.environ.get('OZON_RADAR_SERVER_SECRET','').strip()
+
+          if url and secret:
+              if not url.startswith('https://'):
+                  raise SystemExit('OZON_RADAR_SERVER_URL must be HTTPS')
+              if len(secret) < 16:
+                  raise SystemExit('OZON_RADAR_SERVER_SECRET too short')
+              text=text.replace('__OZON_RADAR_SERVER_URL__', url.replace("\\","\\\\").replace("'","\\'"))
+              text=text.replace('__OZON_RADAR_SERVER_SECRET__', secret.replace("\\","\\\\").replace("'","\\'"))
+              path.write_text(text,encoding='utf-8')
+              print('RADAR_CONNECTION_INJECTED=yes')
+          else:
+              print('RADAR_CONNECTION_INJECTED=no')
+          PY
+
           python wb_os/tools/patch_live_master.py /tmp/ozon-appscript-live
 
       - name: Syntax check complete live project
