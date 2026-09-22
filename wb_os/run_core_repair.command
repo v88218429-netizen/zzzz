@@ -1,4 +1,5 @@
 #!/bin/bash
+# CI trigger: direct-file repair; archive deploy is quarantined.
 set -euo pipefail
 
 REPO_RAW="https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg"
