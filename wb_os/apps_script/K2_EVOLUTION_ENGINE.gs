@@ -1,5 +1,5 @@
 /**
- * WB OS / K2 Evolution Engine v0.1.4
+ * WB OS / K2 Evolution Engine v0.1.5
  *
  * Integrated mode: NO separate time trigger.
  * The existing finalAutomationTick master remains the only clock.
@@ -14,7 +14,7 @@
  */
 
 var K2_EV = {
-  VERSION: '0.1.4',
+  VERSION: '0.1.5',
   AUTOMATION_SHEET: 'Автоматизация',
   LAST_HASH_KEY: 'K2_EV_LAST_SNAPSHOT_HASH',
   LAST_COUNT_KEY: 'K2_EV_LAST_COUNT',
@@ -417,8 +417,12 @@ function k2EvolutionWatchdogNotify_() {
   props.setProperty(K2_EV.LAST_WATCHDOG_FP_KEY, fingerprint);
   props.setProperty(K2_EV.LAST_WATCHDOG_STATUS_KEY, status);
 
+  var visibleFingerprint = String(
+    sheet.getRange('G16').getDisplayValue() || ''
+  ).trim();
+
   sheet.getRange('G17:G18').setValues([
-    [fingerprint],
+    [visibleFingerprint || fingerprint],
     [new Date()]
   ]);
 
@@ -578,7 +582,18 @@ function k2EvolutionCleanupLegacyTriggers_() {
   var legacy = {
     processK2StockEmails: true,
     syncK2StocksAndNotify: true,
-    syncK2StocksOnly: true
+    syncK2StocksOnly: true,
+
+    // The master owns the periodic Supplier Orders sync.
+    supplierFullScheduledSync_: true,
+
+    // Old parallel Supplier Orders module (UO_*) must not run beside
+    // the canonical Supplier_Orders module.
+    UO_supplierSummaryOnEdit_: true,
+    UO_supplierSummaryOnChange_: true,
+    UO_supplierFfOnEdit_: true,
+    UO_supplierFfOnChange_: true,
+    UO_supplierFullScheduledSync_: true
   };
 
   var triggers = ScriptApp.getProjectTriggers();
