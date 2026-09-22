@@ -28,7 +28,7 @@ curl --connect-timeout 10 --max-time 30 -fsSL   "$REPO_RAW/wb_os/apps_script/WB_
 curl --connect-timeout 10 --max-time 30 -fsSL   "$REPO_RAW/wb_os/tools/patch_live_master.py"   -o "$WORK/patch_live_master.py"
 curl --connect-timeout 10 --max-time 30 -fsSL   "$REPO_RAW/wb_os/tools/audit_and_repair_live.py"   -o "$WORK/audit_and_repair_live.py"
 
-grep -q "K2 Evolution Engine v0.1.6" "$WORK/K2_EVOLUTION_ENGINE.gs" || {
+grep -q "K2 Evolution Engine v0.1.7" "$WORK/K2_EVOLUTION_ENGINE.gs" || {
   echo "❌ Неверная версия K2 payload"; exit 3;
 }
 grep -q "WB Public Customer Price Engine v0.1.4" "$WORK/WB_PUBLIC_PRICE_V4.gs" || {
