@@ -159,6 +159,66 @@ load('apps_script/K2_EVOLUTION_ENGINE.gs');
   assert.ok(result.conflictNmIds.includes('200000'));
 }
 
+// If the multi-nm batch response is incomplete, v4 must fall back to the
+// proven one-nm request shape used by the legacy SPP monitor.
+{
+  let calls = 0;
+
+  function response(code, payload) {
+    return {
+      getResponseCode: () => code,
+      getContentText: () => JSON.stringify(payload)
+    };
+  }
+
+  ctx.UrlFetchApp = {
+    fetchAll: (requests) => {
+      calls++;
+
+      if (calls === 1) {
+        assert.strictEqual(requests.length, 1);
+        assert.ok(requests[0].url.includes('1%3B2'));
+
+        return [
+          response(200, {
+            products: [{
+              id: 1,
+              name: 'one',
+              totalQuantity: 1,
+              sizes: [{
+                price: { product: 10000 },
+                stocks: [{ qty: 1 }]
+              }]
+            }]
+          })
+        ];
+      }
+
+      assert.strictEqual(requests.length, 1);
+      assert.ok(requests[0].url.includes('&nm=2'));
+
+      return [
+        response(200, {
+          products: [{
+            id: 2,
+            name: 'two',
+            totalQuantity: 1,
+            sizes: [{
+              price: { product: 20000 },
+              stocks: [{ qty: 1 }]
+            }]
+          }]
+        })
+      ];
+    }
+  };
+
+  const fetched = ctx.wbPriceV4FetchAll_(['1', '2']);
+  assert.strictEqual(calls, 2);
+  assert.strictEqual(fetched['1'].product, 100);
+  assert.strictEqual(fetched['2'].product, 200);
+}
+
 // V4 must mirror the known-working legacy endpoint rather than forcing an
 // arbitrary spp query parameter that could change buyer-price semantics.
 {
