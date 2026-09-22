@@ -38,6 +38,12 @@ jobs:
           set -euo pipefail
           python3 wb_os/tests/test_patch_live_master.py
 
+      - name: Apps Script semantic logic tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          node wb_os/tests/test_apps_script_logic.js
+
       - name: Whole-project collision repair tests
         shell: bash
         run: |
