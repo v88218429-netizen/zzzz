@@ -1,5 +1,5 @@
 /**
- * WB OS / WB Public Customer Price Engine v0.1.5
+ * WB OS / WB Public Customer Price Engine v0.1.6
  *
  * Purpose:
  * - read WB nmID values from "Сводная";
@@ -15,7 +15,7 @@
  */
 
 var WB_PUBLIC_PRICE_V4 = {
-  VERSION: '0.1.5',
+  VERSION: '0.1.6',
   SUMMARY_SHEET: 'Сводная',
   SOURCE_SHEET: '_WB_PUBLIC_PRICE_V4',
   FIRST_DATA_ROW: 12,
@@ -35,19 +35,6 @@ var WB_PUBLIC_PRICE_V4 = {
 
 
 function syncWbPublicCustomerPricesV4_(force) {
-  try {
-    wbPriceV4CleanupLegacyTriggers_();
-  } catch (cleanupError) {
-    Logger.log(
-      'WB Public Price trigger cleanup skipped: ' +
-      String(
-        cleanupError && cleanupError.message
-          ? cleanupError.message
-          : cleanupError
-      )
-    );
-  }
-
   var props = PropertiesService.getScriptProperties();
 
   if (!force && !wbPriceV4Due_(props)) {
@@ -222,6 +209,24 @@ function syncWbPublicCustomerPricesV4_(force) {
     goodShare: calibration.goodShare,
     message: 'OK'
   });
+
+  /*
+   * Keep the previous SPP monitor alive until v4 has actually fetched,
+   * calibrated and written successfully. Only then is it safe to remove the
+   * old periodic price trigger.
+   */
+  try {
+    wbPriceV4CleanupLegacyTriggers_();
+  } catch (cleanupError) {
+    Logger.log(
+      'WB Public Price trigger cleanup skipped: ' +
+      String(
+        cleanupError && cleanupError.message
+          ? cleanupError.message
+          : cleanupError
+      )
+    );
+  }
 
   return {
     ok: true,
