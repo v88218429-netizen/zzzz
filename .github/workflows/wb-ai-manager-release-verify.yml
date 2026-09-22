@@ -1,0 +1,125 @@
+name: WB AI Manager v1.1 release verification
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [mainggg]
+    paths:
+      - "wb_ai_manager/**"
+      - ".github/workflows/wb-ai-manager-release-verify.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  verify-and-package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Verify stable manifest and release hashes
+        shell: bash
+        run: |
+          python - <<'PY'
+          import hashlib, json
+          from pathlib import Path
+
+          root = Path("wb_ai_manager")
+          release = root / "releases" / "1.1.0"
+          manifest = json.loads((root / "update-manifest.json").read_text(encoding="utf-8"))
+          stable = manifest["channels"]["stable"]
+          assert stable["version"] == "1.1.0", stable
+          assert stable["channel"] == "stable", stable
+          assert stable["minimum_current_version"] == "1.0.0", stable
+
+          mapping = {
+              "VERSION": release / "VERSION",
+              "scripts/update_smoke.py": release / "update_smoke.py",
+              "scripts/.v11_bundle.b64": release / "bundle.b64",
+          }
+          for item in stable["files"]:
+              path = item["path"]
+              local = mapping[path]
+              got = hashlib.sha256(local.read_bytes()).hexdigest()
+              if got != item["sha256"]:
+                  raise SystemExit(f"manifest sha mismatch for {path}: {got} != {item['sha256']}")
+              print(f"manifest sha ok: {path} {got}")
+
+          assert (release / "VERSION").read_text(encoding="utf-8").strip() == "1.1.0"
+          print("stable manifest: ok")
+          PY
+
+      - name: Fresh bootstrap exactly from published stable payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="$RUNNER_TEMP/wb-ai-manager-v1.1.0"
+          rm -rf "$ROOT"
+          mkdir -p "$ROOT/scripts"
+          python -m venv "$ROOT/.venv"
+          cp wb_ai_manager/releases/1.1.0/VERSION "$ROOT/VERSION"
+          cp wb_ai_manager/releases/1.1.0/update_smoke.py "$ROOT/scripts/update_smoke.py"
+          cp wb_ai_manager/releases/1.1.0/bundle.b64 "$ROOT/scripts/.v11_bundle.b64"
+          cd "$ROOT"
+          .venv/bin/python scripts/update_smoke.py
+          test "$(cat VERSION)" = "1.1.0"
+          test ! -e scripts/.v11_bundle.b64
+          echo "fresh bootstrap: ok"
+
+      - name: Full test discovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="$RUNNER_TEMP/wb-ai-manager-v1.1.0"
+          cd "$ROOT"
+          PY=".venv/bin/python"
+          "$PY" -m compileall -q src scripts
+          if [ -d tests ]; then
+            echo "Running unittest discovery..."
+            "$PY" -m unittest discover -s tests -v
+          else
+            echo "No tests directory present in final bundle; bootstrap smoke remains authoritative."
+          fi
+
+      - name: Inspect final package and agent surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="$RUNNER_TEMP/wb-ai-manager-v1.1.0"
+          cd "$ROOT"
+          echo "VERSION=$(cat VERSION)"
+          echo "Top-level files:"
+          find . -maxdepth 2 -type f -not -path "./.venv/*" | sort | sed -n '1,240p'
+          echo "Agent-related files:"
+          find . -type f -not -path "./.venv/*" \( -iname "*agent*" -o -iname "*critic*" -o -iname "*risk*" \) | sort | sed -n '1,240p'
+
+      - name: Build clean final archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="$RUNNER_TEMP/wb-ai-manager-v1.1.0"
+          PKG="$RUNNER_TEMP/WB-AI-Manager-v1.1.0-FINAL"
+          rm -rf "$PKG"
+          mkdir -p "$PKG"
+          rsync -a "$ROOT/" "$PKG/"             --exclude ".venv/"             --exclude "__pycache__/"             --exclude "*.pyc"             --exclude ".pytest_cache/"             --exclude ".DS_Store"
+          cd "$RUNNER_TEMP"
+          zip -qr WB-AI-Manager-v1.1.0-FINAL.zip WB-AI-Manager-v1.1.0-FINAL
+          sha256sum WB-AI-Manager-v1.1.0-FINAL.zip | tee WB-AI-Manager-v1.1.0-FINAL.zip.sha256
+
+      - name: Upload verified final package
+        uses: actions/upload-artifact@v4
+        with:
+          name: WB-AI-Manager-v1.1.0-FINAL
+          path: |
+            ${{ runner.temp }}/WB-AI-Manager-v1.1.0-FINAL.zip
+            ${{ runner.temp }}/WB-AI-Manager-v1.1.0-FINAL.zip.sha256
+          if-no-files-found: error
+          retention-days: 30
