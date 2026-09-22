@@ -1,5 +1,5 @@
 /**
- * WB OS / WB Public Customer Price Engine v0.1.17
+ * WB OS / WB Public Customer Price Engine v0.1.18
  *
  * Purpose:
  * - read WB nmID values from "Сводная";
@@ -16,7 +16,7 @@
  */
 
 var WB_PUBLIC_PRICE_V4 = {
-  VERSION: '0.1.17',
+  VERSION: '0.1.18',
   SUMMARY_SHEET: 'Сводная',
   SOURCE_SHEET: '_WB_PUBLIC_PRICE_V4',
   SELLER_PRICE_SOURCE_SHEET: 'Цены',
@@ -27,6 +27,7 @@ var WB_PUBLIC_PRICE_V4 = {
   CLIENT_PRICE_COL: 11,
   INTERVAL_MINUTES: 30,
   BATCH_SIZE: 80,
+  FALLBACK_BATCH_SIZE: 15,
   DEST: '-1257786',
   LAST_SUCCESS_KEY: 'WB_PUBLIC_PRICE_V4_LAST_SUCCESS_AT',
   LAST_MODE_KEY: 'WB_PUBLIC_PRICE_V4_MODE',
@@ -571,12 +572,14 @@ function wbPriceV4FetchAll_(ids) {
     var code = response.getResponseCode();
 
     if (code !== 200) {
-      throw new Error(
-        'WB_PRICE_V4_HTTP_' + code +
-        ': batch=' + j +
-        '; body=' +
-        response.getContentText().substring(0, 300)
+      Logger.log(
+        'WB Public Price v4 batch HTTP ' +
+        code +
+        ' · batch=' +
+        j +
+        ' · fallback to proven single-nm requests.'
       );
+      continue;
     }
 
     var json;
@@ -584,9 +587,12 @@ function wbPriceV4FetchAll_(ids) {
     try {
       json = JSON.parse(response.getContentText());
     } catch (error) {
-      throw new Error(
-        'WB_PRICE_V4_BAD_JSON: batch=' + j
+      Logger.log(
+        'WB Public Price v4 bad JSON · batch=' +
+        j +
+        ' · fallback to proven single-nm requests.'
       );
+      continue;
     }
 
     var products =
@@ -595,9 +601,12 @@ function wbPriceV4FetchAll_(ids) {
       [];
 
     if (!Array.isArray(products)) {
-      throw new Error(
-        'WB_PRICE_V4_BAD_SHAPE: batch=' + j
+      Logger.log(
+        'WB Public Price v4 bad shape · batch=' +
+        j +
+        ' · fallback to proven single-nm requests.'
       );
+      continue;
     }
 
     for (var p = 0; p < products.length; p++) {
@@ -624,7 +633,192 @@ function wbPriceV4FetchAll_(ids) {
     }
   }
 
+  var missing = [];
+
+  for (var m = 0; m < ids.length; m++) {
+    var requestedId = String(ids[m] || '').trim();
+
+    if (requestedId && !out[requestedId]) {
+      missing.push(requestedId);
+    }
+  }
+
+  if (missing.length) {
+    wbPriceV4FetchMissingIndividually_(
+      missing,
+      out
+    );
+  }
+
+  if (!Object.keys(out).length) {
+    throw new Error(
+      'WB_PRICE_V4_NO_PRODUCTS: batch + single-nm fallback returned 0 products.'
+    );
+  }
+
   return out;
+}
+
+
+function wbPriceV4FetchMissingIndividually_(
+  ids,
+  out
+) {
+  var batchSize = Math.max(
+    1,
+    Number(
+      WB_PUBLIC_PRICE_V4.FALLBACK_BATCH_SIZE
+    ) || 15
+  );
+
+  for (
+    var b = 0;
+    b < ids.length;
+    b += batchSize
+  ) {
+    var batch = ids.slice(
+      b,
+      b + batchSize
+    );
+
+    var requests = [];
+
+    for (var i = 0; i < batch.length; i++) {
+      requests.push({
+        url:
+          'https://card.wb.ru/cards/v4/detail' +
+          '?appType=1' +
+          '&curr=rub' +
+          '&dest=' +
+          encodeURIComponent(
+            WB_PUBLIC_PRICE_V4.DEST
+          ) +
+          '&nm=' +
+          encodeURIComponent(batch[i]),
+        method: 'get',
+        muteHttpExceptions: true,
+        followRedirects: true,
+        headers: {
+          Accept: 'application/json',
+          'User-Agent':
+            'Mozilla/5.0 (compatible; GoogleAppsScript; WBPriceV4Fallback)'
+        }
+      });
+    }
+
+    var responses;
+
+    try {
+      responses =
+        UrlFetchApp.fetchAll(requests);
+    } catch (fetchError) {
+      Logger.log(
+        'WB Public Price v4 single-nm fallback fetchAll failed: ' +
+        String(
+          fetchError && fetchError.message
+            ? fetchError.message
+            : fetchError
+        )
+      );
+      continue;
+    }
+
+    for (
+      var r = 0;
+      r < responses.length;
+      r++
+    ) {
+      var response = responses[r];
+
+      if (response.getResponseCode() !== 200) {
+        continue;
+      }
+
+      var json;
+
+      try {
+        json = JSON.parse(
+          response.getContentText()
+        );
+      } catch (parseError) {
+        continue;
+      }
+
+      var products =
+        (json && json.products) ||
+        (
+          json &&
+          json.data &&
+          json.data.products
+        ) ||
+        [];
+
+      if (
+        !Array.isArray(products) ||
+        !products.length
+      ) {
+        continue;
+      }
+
+      var requested = String(
+        batch[r] || ''
+      ).trim();
+
+      var product = null;
+
+      for (
+        var p = 0;
+        p < products.length;
+        p++
+      ) {
+        var candidateId = String(
+          products[p] &&
+          (
+            products[p].id ||
+            products[p].nmId
+          ) ||
+          ''
+        ).trim();
+
+        if (candidateId === requested) {
+          product = products[p];
+          break;
+        }
+      }
+
+      if (!product) {
+        product = products[0];
+      }
+
+      var id = String(
+        product.id ||
+        product.nmId ||
+        requested
+      ).trim();
+
+      if (!id) {
+        continue;
+      }
+
+      var price =
+        wbPriceV4ExtractPrice_(product);
+
+      out[id] = {
+        id: id,
+        name: String(product.name || ''),
+        basic: price.basic,
+        product: price.product,
+        logistics: price.logistics,
+        productPlusLogistics:
+          price.productPlusLogistics,
+        totalField: price.totalField,
+        quantity:
+          Number(
+            product.totalQuantity || 0
+          ) || 0
+      };
+    }
+  }
 }
 
 
