@@ -18,7 +18,7 @@ from fastapi import FastAPI, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 from playwright.async_api import async_playwright
 
-APP_VERSION = "1.2.3"
+APP_VERSION = "1.2.4"
 MAX_EVENTS = 20000
 CHECK_LOOP_SECONDS = 3
 SOURCE_NAME = "LIVE SERP · Ozon storefront JSON"
@@ -443,7 +443,7 @@ class OzonClient:
         for page in range(1, pages + 1):
             # Keep the inner search URL unescaped here. The outer composer
             # request encodes the whole `url` parameter exactly once.
-            path = f"/search/?text={query}"
+            path = f"/search/?text={query}&from_global=true"
             if page > 1:
                 path += f"&page={page}"
 
@@ -522,7 +522,7 @@ class OzonClient:
         for page in range(1, pages + 1):
             # Keep the inner search URL unescaped here. The outer composer
             # request encodes the whole `url` parameter exactly once.
-            path = f"/search/?text={query}"
+            path = f"/search/?text={query}&from_global=true"
             if page > 1:
                 path += f"&page={page}"
 
