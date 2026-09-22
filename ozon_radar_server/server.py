@@ -336,7 +336,9 @@ def telegram_send(text: str) -> None:
 
 
 def position_text(position: int | None, max_position: int) -> str:
-    return str(position) if position is not None else f">{max_position}"
+    if position is None or position > max_position:
+        return f">{max_position}"
+    return str(position)
 
 
 def make_alert(task: RadarTaskIn, prev: int, current: int | None, event_type: str) -> str:
