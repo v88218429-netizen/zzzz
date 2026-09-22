@@ -2,10 +2,27 @@
   "schema": 1,
   "channels": {
     "stable": {
-      "version": "1.0.0",
+      "version": "1.1.0",
       "channel": "stable",
-      "notes": "Базовая самообновляемая версия: горячие правила, файловые патчи, резервная копия, проверка и откат.",
-      "files": []
+      "notes": "Управляющее ядро v1.1: точная связь кампания+nmID, когортная аналитика, расследование, независимый критик, контроль риска, история фактических действий и оценка результата.",
+      "minimum_current_version": "1.0.0",
+      "files": [
+        {
+          "path": "VERSION",
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/releases/1.1.0/VERSION",
+          "sha256": "1575e1af4a95f12f70b4ee6a6adce8160953d93ea17dc2611b90883ccc3ad3b8"
+        },
+        {
+          "path": "scripts/update_smoke.py",
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/releases/1.1.0/update_smoke.py",
+          "sha256": "bba890496988034d43a15e80ea539cea4084bad6303e046bb12425fcffcc4c25"
+        },
+        {
+          "path": "scripts/.v11_bundle.b64",
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/releases/1.1.0/bundle.b64",
+          "sha256": "8d9cac4e96a7ed800ca998f58314842bb377cbbb1973f5340c8381facde4fcc8"
+        }
+      ]
     }
   }
 }
