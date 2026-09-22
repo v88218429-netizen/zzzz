@@ -1,5 +1,5 @@
 /**
- * WB OS / K2 Evolution Engine v0.1.5
+ * WB OS / K2 Evolution Engine v0.1.6
  *
  * Integrated mode: NO separate time trigger.
  * The existing finalAutomationTick master remains the only clock.
@@ -14,7 +14,7 @@
  */
 
 var K2_EV = {
-  VERSION: '0.1.5',
+  VERSION: '0.1.6',
   AUTOMATION_SHEET: 'Автоматизация',
   LAST_HASH_KEY: 'K2_EV_LAST_SNAPSHOT_HASH',
   LAST_COUNT_KEY: 'K2_EV_LAST_COUNT',
@@ -38,7 +38,18 @@ var K2_EV = {
  * On those failures the trusted live stock sheet is NOT overwritten.
  */
 function k2EvolutionFetchAndApply_() {
-  k2EvolutionCleanupLegacyTriggers_();
+  try {
+    k2EvolutionCleanupLegacyTriggers_();
+  } catch (cleanupError) {
+    Logger.log(
+      'K2 Evolution trigger cleanup skipped: ' +
+      String(
+        cleanupError && cleanupError.message
+          ? cleanupError.message
+          : cleanupError
+      )
+    );
+  }
 
   var startedMs = Date.now();
   var props = PropertiesService.getScriptProperties();
