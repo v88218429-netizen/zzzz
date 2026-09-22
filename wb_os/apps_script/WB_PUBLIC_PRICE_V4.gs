@@ -1,5 +1,5 @@
 /**
- * WB OS / WB Public Customer Price Engine v0.1.12
+ * WB OS / WB Public Customer Price Engine v0.1.13
  *
  * Purpose:
  * - read WB nmID values from "Сводная";
@@ -15,7 +15,7 @@
  */
 
 var WB_PUBLIC_PRICE_V4 = {
-  VERSION: '0.1.12',
+  VERSION: '0.1.13',
   SUMMARY_SHEET: 'Сводная',
   SOURCE_SHEET: '_WB_PUBLIC_PRICE_V4',
   HEADER_ROW: 11,
@@ -626,6 +626,63 @@ function wbPriceV4Calibrate_(summaryData, fetched) {
     'total_field'
   ];
 
+  /*
+   * Сводная can contain the same nmID on more than one row. One product must
+   * contribute only one calibration observation; otherwise duplicated rows
+   * silently overweight that product. Conflicting known K values for one nmID
+   * are a data-integrity error and calibration fails closed.
+   */
+  var knownByNm = Object.create(null);
+  var conflicts = [];
+
+  for (var i = 0; i < summaryData.length; i++) {
+    var row = summaryData[i];
+
+    var nmId = String(
+      row[WB_PUBLIC_PRICE_V4.NMID_COL - 1] || ''
+    ).trim();
+
+    var known = wbPriceV4Number_(
+      row[WB_PUBLIC_PRICE_V4.CLIENT_PRICE_COL - 1]
+    );
+
+    if (!(known > 0) || !fetched[nmId]) {
+      continue;
+    }
+
+    if (
+      Object.prototype.hasOwnProperty.call(
+        knownByNm,
+        nmId
+      )
+    ) {
+      if (
+        Math.abs(
+          knownByNm[nmId] - known
+        ) > 0.009
+      ) {
+        conflicts.push(nmId);
+      }
+
+      continue;
+    }
+
+    knownByNm[nmId] = known;
+  }
+
+  if (conflicts.length) {
+    return {
+      ok: false,
+      mode: '',
+      rows: 0,
+      medianRelativeError: 999,
+      goodShare: 0,
+      allModes: [],
+      conflictNmIds: conflicts.slice(0, 20)
+    };
+  }
+
+  var calibrationIds = Object.keys(knownByNm);
   var scored = [];
 
   for (var m = 0; m < modes.length; m++) {
@@ -633,23 +690,10 @@ function wbPriceV4Calibrate_(summaryData, fetched) {
     var errors = [];
     var good = 0;
 
-    for (var i = 0; i < summaryData.length; i++) {
-      var row = summaryData[i];
-
-      var nmId = String(
-        row[WB_PUBLIC_PRICE_V4.NMID_COL - 1] || ''
-      ).trim();
-
-      var known = wbPriceV4Number_(
-        row[WB_PUBLIC_PRICE_V4.CLIENT_PRICE_COL - 1]
-      );
-
-      if (!(known > 0) || !fetched[nmId]) {
-        continue;
-      }
-
+    for (var k = 0; k < calibrationIds.length; k++) {
+      var id = calibrationIds[k];
       var candidate = wbPriceV4Candidate_(
-        fetched[nmId],
+        fetched[id],
         mode
       );
 
@@ -657,10 +701,17 @@ function wbPriceV4Calibrate_(summaryData, fetched) {
         continue;
       }
 
-      var rel = Math.abs(candidate - known) / known;
+      var knownValue = knownByNm[id];
+      var rel =
+        Math.abs(candidate - knownValue) /
+        knownValue;
+
       errors.push(rel);
 
-      if (rel <= WB_PUBLIC_PRICE_V4.GOOD_REL_ERROR) {
+      if (
+        rel <=
+        WB_PUBLIC_PRICE_V4.GOOD_REL_ERROR
+      ) {
         good++;
       }
     }
@@ -726,10 +777,10 @@ function wbPriceV4Calibrate_(summaryData, fetched) {
     rows: best.rows,
     medianRelativeError: best.medianRelativeError,
     goodShare: best.goodShare,
-    allModes: scored
+    allModes: scored,
+    conflictNmIds: []
   };
 }
-
 
 function wbPriceV4WriteShadow_(
   ss,
