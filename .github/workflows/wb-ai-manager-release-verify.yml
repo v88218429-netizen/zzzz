@@ -80,6 +80,30 @@ jobs:
                       print("--- end pyproject.toml ---")
           PY
 
+      - name: Extract decoded bundle diagnostic
+        shell: bash
+        run: |
+          rm -rf "$RUNNER_TEMP/wb-ai-manager-decoded-bundle"
+          mkdir -p "$RUNNER_TEMP/wb-ai-manager-decoded-bundle"
+          python - <<'PY'
+          import base64, zipfile
+          from io import BytesIO
+          from pathlib import Path
+          src = Path("wb_ai_manager/releases/1.1.0/bundle.b64")
+          dest = Path(__import__("os").environ["RUNNER_TEMP"]) / "wb-ai-manager-decoded-bundle"
+          raw = base64.b64decode(src.read_text(encoding="ascii"), validate=True)
+          with zipfile.ZipFile(BytesIO(raw)) as zf:
+              zf.extractall(dest)
+          PY
+
+      - name: Upload decoded bundle diagnostic
+        uses: actions/upload-artifact@v4
+        with:
+          name: wb-ai-manager-decoded-bundle
+          path: ${{ runner.temp }}/wb-ai-manager-decoded-bundle
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Fresh bootstrap exactly from published stable payload
         shell: bash
         run: |
