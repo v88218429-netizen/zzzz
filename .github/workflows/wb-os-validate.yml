@@ -83,11 +83,12 @@ jobs:
           grep -q "syncK2StocksOnly" wb_os/apps_script/K2_EVOLUTION_ENGINE.gs
           grep -q "K2_EV_CUTOVER_DONE" wb_os/apps_script/K2_EVOLUTION_ENGINE.gs
           grep -q "K2_EV_LOCK_BUSY" wb_os/apps_script/K2_EVOLUTION_ENGINE.gs
-          grep -q "WB Public Customer Price Engine v0.1.16" wb_os/apps_script/WB_PUBLIC_PRICE_V4.gs
+          grep -q "WB Public Customer Price Engine v0.1.17" wb_os/apps_script/WB_PUBLIC_PRICE_V4.gs
           grep -q "function wbPriceV4CleanupLegacyTriggers_" wb_os/apps_script/WB_PUBLIC_PRICE_V4.gs
           grep -q "sppMonitorScheduledTick" wb_os/apps_script/WB_PUBLIC_PRICE_V4.gs
           grep -q "WB_PRICE_V4_LEGACY_MODE_CONFLICT" wb_os/apps_script/WB_PUBLIC_PRICE_V4.gs
           grep -q "WB_PRICE_V4_LAYOUT_MISMATCH" wb_os/apps_script/WB_PUBLIC_PRICE_V4.gs
+          grep -q "wbPriceV4RepairMissingSellerPrices_" wb_os/apps_script/WB_PUBLIC_PRICE_V4.gs
           grep -q "K2_EVOLUTION_ENGINE.gs" wb_os/run_core_repair.command
           grep -q "WB_PUBLIC_PRICE_V4.gs" wb_os/run_core_repair.command
           grep -q "patch_live_master.py" wb_os/run_core_repair.command
