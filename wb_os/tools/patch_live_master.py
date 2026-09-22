@@ -67,6 +67,11 @@ if "k2EvolutionFetchAndApply_()" not in func:
           .getScriptProperties()
           .getProperty('K2_EV_LAST_RUN_AT') || ''
       ).trim() ||
+      !String(
+        PropertiesService
+          .getScriptProperties()
+          .getProperty('K2_EV_CUTOVER_DONE') || ''
+      ).trim() ||
       shouldRunByProperty_(
         'K2_LAST_SUCCESS_AT',
         MASTER_AUTOMATION_CFG.K2_EVERY_MINUTES
@@ -371,6 +376,7 @@ required = [
     "wbPriceV4RecordFailure_(priceError)",
     "function wbOsEnsureMasterTrigger()",
     "K2_EV_LAST_RUN_AT",
+    "K2_EV_CUTOVER_DONE",
     "historyK2Fresh = true;",
     "historyIvanovoFresh = true;",
     "if (historyDue && historyK2Fresh && historyIvanovoFresh) {",
