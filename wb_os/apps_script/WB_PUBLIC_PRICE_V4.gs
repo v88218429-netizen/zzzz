@@ -1,5 +1,5 @@
 /**
- * WB OS / WB Public Customer Price Engine v0.1.14
+ * WB OS / WB Public Customer Price Engine v0.1.15
  *
  * Purpose:
  * - read WB nmID values from "Сводная";
@@ -15,7 +15,7 @@
  */
 
 var WB_PUBLIC_PRICE_V4 = {
-  VERSION: '0.1.14',
+  VERSION: '0.1.15',
   SUMMARY_SHEET: 'Сводная',
   SOURCE_SHEET: '_WB_PUBLIC_PRICE_V4',
   HEADER_ROW: 11,
@@ -127,6 +127,42 @@ function wbPriceV4SyncUnlocked_(force) {
   var calibration = wbPriceV4Calibrate_(data, fetched);
 
   wbPriceV4WriteShadow_(ss, data, fetched, calibration);
+
+  var legacySppWriterPresent =
+    typeof sppUpdatePricesAndCollectItems_ ===
+      'function';
+
+  /*
+   * While the legacy SPP monitor is still present for Telegram/history, it can
+   * also write K manually or from its own trigger. That writer uses
+   * price.product. If calibration chooses another semantic, two valid writers
+   * would oscillate the same cells. Fail closed until the alert/history layer
+   * is migrated rather than letting them fight.
+   */
+  if (
+    calibration.ok &&
+    legacySppWriterPresent &&
+    calibration.mode !== 'product'
+  ) {
+    wbPriceV4Diagnostics_({
+      ok: false,
+      fetched: Object.keys(fetched).length,
+      changed: 0,
+      preservedMissing: 0,
+      mode: calibration.mode,
+      calibrationRows: calibration.rows,
+      medianRelativeError: calibration.medianRelativeError,
+      goodShare: calibration.goodShare,
+      message: 'LEGACY_WRITER_MODE_CONFLICT'
+    });
+
+    throw new Error(
+      'WB_PRICE_V4_LEGACY_MODE_CONFLICT: mode=' +
+      calibration.mode +
+      '; старый SPP writer использует product. ' +
+      'Колонка K не изменена.'
+    );
+  }
 
   if (!calibration.ok) {
     wbPriceV4Diagnostics_({
