@@ -16,8 +16,9 @@ from typing import Any
 from curl_cffi import requests as curl_requests
 from fastapi import FastAPI, Header, HTTPException, Query
 from pydantic import BaseModel, Field
+from playwright.async_api import async_playwright
 
-APP_VERSION = "1.1.1"
+APP_VERSION = "1.2.0"
 MAX_EVENTS = 20000
 CHECK_LOOP_SECONDS = 3
 SOURCE_NAME = "LIVE SERP · Ozon storefront JSON"
@@ -80,6 +81,8 @@ TELEGRAM_BOT_TOKEN = env("TELEGRAM_BOT_TOKEN", "BOT_TOKEN")
 TELEGRAM_CHAT_ID = env("TELEGRAM_CHAT_ID", "OWNER_CHAT_ID")
 OZON_PROXY = build_ozon_proxy()
 RADAR_TASKS_JSON = env("RADAR_TASKS_JSON")
+OZON_BROWSER_MODE = (env("OZON_BROWSER_MODE") or "auto").lower()
+OZON_BROWSER_WARMUP_MS = max(5000, min(30000, int(env("OZON_BROWSER_WARMUP_MS") or "12000")))
 CONFIRM_SECONDS = max(15, min(30, int(env("OZON_CONFIRM_SECONDS") or "20")))
 
 
@@ -191,6 +194,11 @@ def extract_skus_from_widget_states(data: dict[str, Any]) -> list[str]:
 class OzonClient:
     def __init__(self) -> None:
         self.session = curl_requests.Session(impersonate="chrome124")
+        self._playwright = None
+        self._browser = None
+        self._context = None
+        self._page = None
+        self._browser_lock = asyncio.Lock()
         self.headers = {
             "accept": "application/json, text/plain, */*",
             "accept-language": "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7",
@@ -251,6 +259,224 @@ class OzonClient:
 
         raise RuntimeError(last_error or "all Ozon endpoints failed")
 
+
+    async def _reset_browser(self) -> None:
+        page, context, browser, pw = self._page, self._context, self._browser, self._playwright
+        self._page = None
+        self._context = None
+        self._browser = None
+        self._playwright = None
+        for obj in (page, context, browser):
+            if obj is not None:
+                try:
+                    await obj.close()
+                except Exception:
+                    pass
+        if pw is not None:
+            try:
+                await pw.stop()
+            except Exception:
+                pass
+
+    async def _ensure_browser(self) -> None:
+        if self._page is not None:
+            try:
+                if not self._page.is_closed():
+                    return
+            except Exception:
+                pass
+        await self._reset_browser()
+
+        self._playwright = await async_playwright().start()
+        launch_kwargs: dict[str, Any] = {
+            "headless": True,
+            "args": [
+                "--no-sandbox",
+                "--disable-dev-shm-usage",
+                "--lang=ru-RU",
+            ],
+        }
+        # Playwright's chromium channel opts into the full Chromium/new-headless
+        # path instead of the lightweight headless shell that Variti often detects.
+        try:
+            self._browser = await self._playwright.chromium.launch(channel="chromium", **launch_kwargs)
+        except Exception:
+            self._browser = await self._playwright.chromium.launch(**launch_kwargs)
+
+        context_kwargs: dict[str, Any] = {
+            "locale": "ru-RU",
+            "timezone_id": "Europe/Moscow",
+            "viewport": {"width": 1365, "height": 900},
+        }
+        if OZON_PROXY:
+            parsed = urllib.parse.urlsplit(OZON_PROXY)
+            if parsed.hostname:
+                context_kwargs["proxy"] = {
+                    "server": f"{parsed.scheme or 'http'}://{parsed.hostname}:{parsed.port or 80}",
+                    **({"username": urllib.parse.unquote(parsed.username)} if parsed.username else {}),
+                    **({"password": urllib.parse.unquote(parsed.password)} if parsed.password else {}),
+                }
+
+        self._context = await self._browser.new_context(**context_kwargs)
+        self._page = await self._context.new_page()
+        await self._page.goto(
+            "https://www.ozon.ru/",
+            wait_until="domcontentloaded",
+            timeout=45000,
+        )
+        # Do not block images/fonts/styles: Variti challenge uses normal page resources.
+        await self._page.wait_for_timeout(OZON_BROWSER_WARMUP_MS)
+
+    async def _browser_request_page(self, path: str) -> tuple[dict[str, Any], str, int, int]:
+        last_error = ""
+        endpoints = [
+            "/api/entrypoint-api.bx/page/json/v2",
+            "/api/composer-api.bx/page/json/v2",
+        ]
+
+        async with self._browser_lock:
+            for browser_attempt in range(2):
+                await self._ensure_browser()
+                for endpoint in endpoints:
+                    started = time.perf_counter()
+                    try:
+                        payload = await self._page.evaluate(
+                            """async ({endpoint, path}) => {
+                              const url = endpoint + "?url=" + encodeURIComponent(path);
+                              const response = await fetch(url, {
+                                method: "GET",
+                                credentials: "include",
+                                headers: {
+                                  "accept": "application/json, text/plain, */*",
+                                  "x-requested-with": "XMLHttpRequest"
+                                }
+                              });
+                              return {
+                                status: response.status,
+                                url: response.url,
+                                text: await response.text()
+                              };
+                            }""",
+                            {"endpoint": endpoint, "path": path},
+                        )
+                    except Exception as exc:
+                        last_error = f"browser {endpoint}: {type(exc).__name__}: {exc}"
+                        continue
+
+                    elapsed_ms = int((time.perf_counter() - started) * 1000)
+                    status = int((payload or {}).get("status") or 0)
+                    body = str((payload or {}).get("text") or "")
+                    final_url = str((payload or {}).get("url") or endpoint)
+
+                    lower = body.lower()
+                    if status in (307, 401, 403, 429) or any(
+                        marker in lower
+                        for marker in (
+                            "antibot",
+                            "captcha",
+                            "похоже, нет соединения",
+                            "доступ ограничен",
+                            "access denied",
+                        )
+                    ):
+                        last_error = f"browser {endpoint}: HTTP {status or 'blocked'}"
+                        continue
+                    if status != 200:
+                        last_error = f"browser {endpoint}: HTTP {status}"
+                        continue
+                    try:
+                        data = json.loads(body)
+                    except Exception:
+                        last_error = f"browser {endpoint}: invalid JSON"
+                        continue
+                    if not isinstance(data, dict):
+                        last_error = f"browser {endpoint}: non-object JSON"
+                        continue
+                    return data, final_url, status, elapsed_ms
+
+                # Session/challenge may have expired. Rebuild one time only.
+                await self._reset_browser()
+
+        raise RuntimeError(last_error or "browser Ozon source failed")
+
+    async def position_async(self, query: str, sku: str, max_position: int) -> dict[str, Any]:
+        target = str(sku)
+        seen: list[str] = []
+        seen_set: set[str] = set()
+        pages = max(1, min(10, (max_position + 35) // 36))
+        total_ms = 0
+        last_endpoint = ""
+        last_http = 0
+
+        for page in range(1, pages + 1):
+            encoded_query = urllib.parse.quote(query, safe="")
+            path = f"/search/?text={encoded_query}"
+            if page > 1:
+                path += f"&page={page}"
+
+            browser_error = ""
+            data = None
+            endpoint = ""
+            http_status = 0
+            elapsed_ms = 0
+
+            if OZON_BROWSER_MODE in ("auto", "browser", "playwright"):
+                try:
+                    data, endpoint, http_status, elapsed_ms = await self._browser_request_page(path)
+                except Exception as exc:
+                    browser_error = f"{type(exc).__name__}: {exc}"
+                    if OZON_BROWSER_MODE in ("browser", "playwright"):
+                        raise
+
+            if data is None:
+                try:
+                    data, endpoint, http_status, elapsed_ms = await asyncio.to_thread(
+                        self._request_page, path
+                    )
+                except Exception as exc:
+                    if browser_error:
+                        raise RuntimeError(
+                            f"browser={browser_error}; direct={type(exc).__name__}: {exc}"
+                        ) from exc
+                    raise
+
+            total_ms += elapsed_ms
+            last_endpoint = endpoint
+            last_http = http_status
+            page_skus = extract_skus_from_widget_states(data)
+
+            if not page_skus:
+                raise RuntimeError(f"Ozon JSON has no search tiles on page {page}")
+
+            for item_sku in page_skus:
+                if item_sku in seen_set:
+                    continue
+                seen_set.add(item_sku)
+                seen.append(item_sku)
+                if item_sku == target:
+                    return {
+                        "position": len(seen),
+                        "status": "OK",
+                        "endpoint": endpoint,
+                        "http_status": http_status,
+                        "response_ms": total_ms,
+                        "checked_depth": len(seen),
+                    }
+                if len(seen) >= max_position:
+                    break
+
+            if len(seen) >= max_position:
+                break
+
+        return {
+            "position": None,
+            "status": f"NOT_FOUND_TOP_{max_position}",
+            "endpoint": last_endpoint,
+            "http_status": last_http,
+            "response_ms": total_ms,
+            "checked_depth": len(seen),
+        }
+
     def position(self, query: str, sku: str, max_position: int) -> dict[str, Any]:
         target = str(sku)
         seen: list[str] = []
@@ -306,6 +532,13 @@ class OzonClient:
 
 
 ozon = OzonClient()
+
+
+async def ozon_position(client: Any, query: str, sku: str, max_position: int) -> dict[str, Any]:
+    async_method = getattr(client, "position_async", None)
+    if callable(async_method):
+        return await async_method(query, sku, max_position)
+    return await asyncio.to_thread(client.position, query, sku, max_position)
 
 
 def add_event(payload: dict[str, Any]) -> dict[str, Any]:
@@ -365,7 +598,7 @@ def make_alert(task: RadarTaskIn, prev: int, current: int | None, event_type: st
 
 
 async def _measure_confirmed(task: RadarTaskIn, previous: int | None) -> dict[str, Any]:
-    first = await asyncio.to_thread(ozon.position, task.query, task.sku, task.max_position)
+    first = await ozon_position(ozon, task.query, task.sku, task.max_position)
     first_pos = first["position"]
     first_eff = first_pos if first_pos is not None else task.max_position + 1
 
@@ -381,7 +614,7 @@ async def _measure_confirmed(task: RadarTaskIn, previous: int | None) -> dict[st
         return first
 
     await asyncio.sleep(CONFIRM_SECONDS)
-    second = await asyncio.to_thread(ozon.position, task.query, task.sku, task.max_position)
+    second = await ozon_position(ozon, task.query, task.sku, task.max_position)
     second_pos = second["position"]
 
     if first_pos is None and second_pos is None:
@@ -396,7 +629,7 @@ async def _measure_confirmed(task: RadarTaskIn, previous: int | None) -> dict[st
         # A sudden drop followed by one miss is not enough evidence to convert
         # the measurement to max_position+1. Confirm the miss one more time.
         await asyncio.sleep(CONFIRM_SECONDS)
-        third = await asyncio.to_thread(ozon.position, task.query, task.sku, task.max_position)
+        third = await ozon_position(ozon, task.query, task.sku, task.max_position)
         if third["position"] is None:
             third["position"] = task.max_position + 1
             third["position_effective"] = task.max_position + 1
@@ -641,6 +874,8 @@ def health() -> dict[str, Any]:
         "last_success": runtime.last_success_iso,
         "last_error": runtime.last_error,
         "proxy_configured": bool(OZON_PROXY),
+        "browser_mode": OZON_BROWSER_MODE,
+        "browser_ready": bool(getattr(ozon, "_page", None)),
         "telegram_configured": bool(TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID),
         "tasks": statuses,
     }
@@ -694,8 +929,8 @@ async def probe(
     checked_at = now_iso()
     started = time.perf_counter()
     try:
-        result = await asyncio.to_thread(
-            ozon.position,
+        result = await ozon_position(
+            ozon,
             payload.query,
             payload.sku,
             payload.max_position,
