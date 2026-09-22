@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - "wb_os/**"
+      - ".github/workflows/wb-os-validate.yml"
+      - ".github/workflows/wb-os-validate.yml"
   push:
     branches:
       - "mainggg"
