@@ -78,10 +78,10 @@ jobs:
         run: |
           set -euo pipefail
           test -s wb_os/run_core_repair.command
-          grep -q "K2 Evolution Engine v0.1.8" wb_os/apps_script/K2_EVOLUTION_ENGINE.gs
+          grep -q "K2 Evolution Engine v0.1.9" wb_os/apps_script/K2_EVOLUTION_ENGINE.gs
           grep -q "function k2EvolutionCleanupLegacyTriggers_" wb_os/apps_script/K2_EVOLUTION_ENGINE.gs
           grep -q "syncK2StocksOnly" wb_os/apps_script/K2_EVOLUTION_ENGINE.gs
-          grep -q "WB Public Customer Price Engine v0.1.6" wb_os/apps_script/WB_PUBLIC_PRICE_V4.gs
+          grep -q "WB Public Customer Price Engine v0.1.7" wb_os/apps_script/WB_PUBLIC_PRICE_V4.gs
           grep -q "function wbPriceV4CleanupLegacyTriggers_" wb_os/apps_script/WB_PUBLIC_PRICE_V4.gs
           grep -q "sppMonitorScheduledTick" wb_os/apps_script/WB_PUBLIC_PRICE_V4.gs
           grep -q "K2_EVOLUTION_ENGINE.gs" wb_os/run_core_repair.command
