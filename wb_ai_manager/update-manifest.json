@@ -15,7 +15,7 @@
         {
           "path": "scripts/update_smoke.py",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/releases/1.1.0/update_smoke.py",
-          "sha256": "f69f791f38db9e93d0e4cd634d01c0be06f12ae3a2b0a981b94e7393eb50a81c"
+          "sha256": "e1f3ad434945bd4d4ce9877ba041922cafd3e7b958628826c84a859509688f7d"
         },
         {
           "path": "scripts/.v11_bundle.b64",
