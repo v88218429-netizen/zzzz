@@ -42,7 +42,8 @@ def _proxy_credentials(city: str):
     if not provider or not base or not password or not host or not port:
         return None
     city_slug=PROXY_CITY.get(city, re.sub(r"[^a-z0-9]+","_",city.lower()).strip("_"))
-    session=re.sub(r"[^a-z0-9]","",f"{city_slug}{int(time.time())}")[-24:]
+    session_base=(os.getenv("OZON_PROXY_SESSION") or "ozonradar").strip().lower()
+    session=re.sub(r"[^a-z0-9]","",f"{session_base}{city_slug}")[-24:]
     if provider=="decodo":
         prefix=base if base.startswith("user-") else "user-"+base
         username=f"{prefix}-country-ru-city-{city_slug}-session-{session}"
