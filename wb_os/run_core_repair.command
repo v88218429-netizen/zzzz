@@ -26,10 +26,10 @@ curl --connect-timeout 10 --max-time 30 -fsSL   "$REPO_RAW/wb_os/apps_script/WB_
 curl --connect-timeout 10 --max-time 30 -fsSL   "$REPO_RAW/wb_os/tools/patch_live_master.py"   -o "$WORK/patch_live_master.py"
 curl --connect-timeout 10 --max-time 30 -fsSL   "$REPO_RAW/wb_os/tools/audit_and_repair_live.py"   -o "$WORK/audit_and_repair_live.py"
 
-grep -q "K2 Evolution Engine v0.1.4" "$WORK/K2_EVOLUTION_ENGINE.gs" || {
+grep -q "K2 Evolution Engine v0.1.5" "$WORK/K2_EVOLUTION_ENGINE.gs" || {
   echo "❌ Неверная версия K2 payload"; exit 3;
 }
-grep -q "WB Public Customer Price Engine v0.1.2" "$WORK/WB_PUBLIC_PRICE_V4.gs" || {
+grep -q "WB Public Customer Price Engine v0.1.3" "$WORK/WB_PUBLIC_PRICE_V4.gs" || {
   echo "❌ Неверная версия WB Price payload"; exit 3;
 }
 grep -q "syncWbPublicCustomerPricesV4_(forceAll);" "$WORK/patch_live_master.py" || {
@@ -91,7 +91,7 @@ mkdir -p "$BACKUP"
 rsync -a "$PROJECT/" "$BACKUP/"
 echo "      $BACKUP"
 
-echo "[5/8] Заменяю только K2 Evolution + WB Public Price и патчу master..."
+echo "[5/8] Патчу master, K2/price и устраняю конфликты global namespace..."
 replace_or_create() {
   local marker="$1"
   local source="$2"
