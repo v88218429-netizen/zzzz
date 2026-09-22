@@ -354,7 +354,7 @@ echo "[5/9] Патчу master/K2/price и проверяю единый global n
 TARGET_K2_EV="$(replace_or_create_   "$PROJECT"   "function k2EvolutionFetchAndApply_"   "$WORK/K2_EVOLUTION_ENGINE.gs"   "K2_EVOLUTION_ENGINE.js")"
 echo "      K2 Evolution: $TARGET_K2_EV"
 
-TARGET_PRICE="$(replace_or_create_   "$PROJECT"   "function syncWbPublicCustomerPricesV4_"   "function wbSellerPriceRefreshIfDue_"   "$WORK/WB_PUBLIC_PRICE_V4.gs"   "WB_PUBLIC_PRICE_V4.js")"
+TARGET_PRICE="$(replace_or_create_   "$PROJECT"   "function syncWbPublicCustomerPricesV4_"   "$WORK/WB_PUBLIC_PRICE_V4.gs"   "WB_PUBLIC_PRICE_V4.js")"
 echo "      WB Public Price: $TARGET_PRICE"
 
 TARGET_SELLER_PRICE_SAFE="$(replace_or_create_   "$PROJECT"   "function wbSellerPriceRefreshIfDue_"   "$WORK/WB_SELLER_PRICE_SAFE.gs"   "WB_SELLER_PRICE_SAFE.js")"
@@ -366,7 +366,7 @@ python3 "$WORK/audit_and_repair_live.py" "$PROJECT"
 echo "[6/9] Проверяю полностью собранный проект ДО push..."
 SOURCE_COUNT="$(syntax_check_project_ "$PROJECT")"
 
-for marker in   "function runFinalAutomationCycle_"   "function getK2WarehouseItems_"   "function k2EvolutionFetchAndApply_"   "function syncWbPublicCustomerPricesV4_"
+for marker in   "function runFinalAutomationCycle_"   "function getK2WarehouseItems_"   "function k2EvolutionFetchAndApply_"   "function syncWbPublicCustomerPricesV4_"   "function wbSellerPriceRefreshIfDue_"
 do
   COUNT="$(count_marker_ "$PROJECT" "$marker")"
   if [ "$COUNT" != "1" ]; then
@@ -448,7 +448,7 @@ if ! syntax_check_project_ "$VERIFY" >/dev/null; then
   VERIFY_OK=0
 fi
 
-for marker in   "function runFinalAutomationCycle_"   "function getK2WarehouseItems_"   "function k2EvolutionFetchAndApply_"   "function syncWbPublicCustomerPricesV4_"
+for marker in   "function runFinalAutomationCycle_"   "function getK2WarehouseItems_"   "function k2EvolutionFetchAndApply_"   "function syncWbPublicCustomerPricesV4_"   "function wbSellerPriceRefreshIfDue_"
 do
   COUNT="$(count_marker_ "$VERIFY" "$marker")"
   if [ "$COUNT" != "1" ]; then
