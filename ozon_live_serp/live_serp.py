@@ -2,7 +2,7 @@ import os, re, json, uuid, time
 from urllib.parse import quote
 from curl_cffi import requests
 
-API_URL="https://www.ozon.ru/api/entrypoint-api.bx/page/json/v2"
+API_URLS=["https://api.ozon.ru/composer-api.bx/page/json/v2","https://www.ozon.ru/api/entrypoint-api.bx/page/json/v2"]
 BASE_URL="https://www.ozon.ru"
 QUERY=os.getenv("OZON_SERP_QUERY","5094364543")
 TARGET=str(os.getenv("OZON_SERP_SKU","5094364543"))
@@ -30,13 +30,16 @@ def headers(ref=None):
     return h
 
 def api_get(session,path,ref=None):
-    url=API_URL+"?url="+quote(path,safe="")
-    r=session.get(url,headers=headers(ref),timeout=30)
-    print("HTTP",r.status_code,"PATH",path[:180])
-    if r.status_code!=200:
-        print("BODY",r.text[:800])
-    r.raise_for_status()
-    return r.json()
+    last=None
+    for base in API_URLS:
+        url=base+"?url="+quote(path,safe="")
+        r=session.get(url,headers=headers(ref),timeout=30)
+        print("ENDPOINT",base,"HTTP",r.status_code,"PATH",path[:180])
+        if r.status_code==200:
+            return r.json()
+        print("BODY",r.text[:500])
+        last=r
+    last.raise_for_status()
 
 def extract_items(data):
     for key,val in (data.get("widgetStates") or {}).items():
