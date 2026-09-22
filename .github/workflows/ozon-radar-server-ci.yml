@@ -50,6 +50,14 @@ jobs:
           echo "PROXY_PREFLIGHT_RC=$?"
 
       - name: Live Ozon storefront HTTP probe
+        env:
+          OZON_PROXY_PROVIDER: decodo
+          OZON_PROXY_HOST: gate.decodo.com
+          OZON_PROXY_PORT: "7000"
+          OZON_PROXY_CITY: rostov_on_don
+          OZON_PROXY_SESSION: ozonradar-ci
+          OZON_PROXY_USER: ${{ secrets.OZON_PROXY_USER }}
+          OZON_PROXY_PASS: ${{ secrets.OZON_PROXY_PASS }}
         run: |
           python - <<'PY'
           from server import OzonClient
@@ -99,6 +107,13 @@ jobs:
       - name: Start service
         env:
           RADAR_SECRET: ci-secret
+          OZON_PROXY_PROVIDER: decodo
+          OZON_PROXY_HOST: gate.decodo.com
+          OZON_PROXY_PORT: "7000"
+          OZON_PROXY_CITY: rostov_on_don
+          OZON_PROXY_SESSION: ozonradar-ci
+          OZON_PROXY_USER: ${{ secrets.OZON_PROXY_USER }}
+          OZON_PROXY_PASS: ${{ secrets.OZON_PROXY_PASS }}
           RADAR_TASKS_JSON: '{"tasks":[{"article":"test","sku":"5094364543","query":"лопата садовая","interval_min":60,"drop_threshold":3,"top_boundary":10,"max_position":20,"baseline_position":7}]}'
         run: |
           uvicorn server:app --host 127.0.0.1 --port 8080 > /tmp/ozon-radar.log 2>&1 &
