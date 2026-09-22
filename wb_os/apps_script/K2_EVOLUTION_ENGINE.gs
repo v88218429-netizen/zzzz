@@ -1,5 +1,5 @@
 /**
- * WB OS / K2 Evolution Engine v0.1.9
+ * WB OS / K2 Evolution Engine v0.1.10
  *
  * Integrated mode: NO separate time trigger.
  * The existing finalAutomationTick master remains the only clock.
@@ -14,7 +14,7 @@
  */
 
 var K2_EV = {
-  VERSION: '0.1.9',
+  VERSION: '0.1.10',
   AUTOMATION_SHEET: 'Автоматизация',
   LAST_HASH_KEY: 'K2_EV_LAST_SNAPSHOT_HASH',
   LAST_COUNT_KEY: 'K2_EV_LAST_COUNT',
@@ -60,17 +60,24 @@ function k2EvolutionFetchAndApply_() {
   var itemCount = normalized.length;
   var snapshotHash = k2EvolutionSnapshotHash_(normalized);
   var previousHash = props.getProperty(K2_EV.LAST_HASH_KEY) || '';
-  var changed = snapshotHash !== previousHash;
+  var sheetHash = k2EvolutionCurrentSheetHash_();
+
+  var sourceChanged = snapshotHash !== previousHash;
+  var sheetDrift = sheetHash !== snapshotHash;
+  var changed = sourceChanged || sheetDrift;
 
   if (changed) {
     writeK2StocksToSheet_(items);
     SpreadsheetApp.flush();
 
     props.setProperty(K2_EV.LAST_HASH_KEY, snapshotHash);
-    props.setProperty(
-      K2_EV.LAST_CHANGED_AT_KEY,
-      new Date().toISOString()
-    );
+
+    if (sourceChanged) {
+      props.setProperty(
+        K2_EV.LAST_CHANGED_AT_KEY,
+        new Date().toISOString()
+      );
+    }
   }
 
   // A successful source read is a successful sync even when business state
@@ -88,9 +95,13 @@ function k2EvolutionFetchAndApply_() {
     itemCount: itemCount,
     snapshotHash: snapshotHash,
     runtimeMs: runtimeMs,
-    message: changed
+    message: sourceChanged
       ? 'OK · snapshot changed · sheet updated'
-      : 'OK · no business-state change · heavy write skipped'
+      : (
+          sheetDrift
+            ? 'OK · trusted sheet drift repaired'
+            : 'OK · no business-state change · heavy write skipped'
+        )
   });
 
   /*
@@ -134,6 +145,8 @@ function k2EvolutionFetchAndApply_() {
   return {
     itemCount: itemCount,
     changed: changed,
+    sourceChanged: sourceChanged,
+    sheetDrift: sheetDrift,
     hash: snapshotHash,
     runtimeMs: runtimeMs
   };
@@ -189,8 +202,13 @@ function k2EvolutionNormalizeItems_(items) {
   }
 
   out.sort(function(a, b) {
-    var ak = a.sku || ('NAME:' + a.name);
-    var bk = b.sku || ('NAME:' + b.name);
+    var ak = a.sku
+      ? ('SKU:' + a.sku)
+      : ('NAME:' + a.name);
+
+    var bk = b.sku
+      ? ('SKU:' + b.sku)
+      : ('NAME:' + b.name);
 
     if (ak < bk) return -1;
     if (ak > bk) return 1;
@@ -274,18 +292,103 @@ function k2EvolutionSnapshotHash_(normalized) {
       x.stock,
       x.reserved,
       x.minStock
-    ].join('|'));
+    ]);
   }
 
+  /*
+   * JSON encoding avoids delimiter collisions when a SKU/name itself contains
+   * "|" or a newline. Only business-state fields participate in the hash.
+   */
   var digest = Utilities.computeDigest(
     Utilities.DigestAlgorithm.SHA_256,
-    compact.join('\n'),
+    JSON.stringify(compact),
     Utilities.Charset.UTF_8
   );
 
   return Utilities
     .base64EncodeWebSafe(digest)
     .replace(/=+$/, '');
+}
+
+
+function k2EvolutionCurrentSheetHash_() {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheetName =
+      typeof K2_CFG !== 'undefined' &&
+      K2_CFG &&
+      K2_CFG.STOCK_SHEET
+        ? K2_CFG.STOCK_SHEET
+        : 'Остатки к2';
+
+    var sheet = ss.getSheetByName(sheetName);
+
+    if (!sheet || sheet.getLastRow() < 2) {
+      return '';
+    }
+
+    var rowCount = sheet.getLastRow() - 1;
+    var values = sheet
+      .getRange(2, 1, rowCount, 5)
+      .getValues();
+
+    var normalized = [];
+
+    for (var i = 0; i < values.length; i++) {
+      var row = values[i];
+
+      var sku = String(
+        row[0] === null || row[0] === undefined
+          ? ''
+          : row[0]
+      ).trim();
+
+      var name = String(row[1] || '').trim();
+
+      if (!sku && !name) {
+        continue;
+      }
+
+      normalized.push({
+        sku: sku,
+        name: name,
+        stock: k2EvolutionNumber_(row[2]),
+        reserved: k2EvolutionNumber_(row[3]),
+        minStock: k2EvolutionNumber_(row[4])
+      });
+    }
+
+    normalized.sort(function(a, b) {
+      var ak = a.sku
+        ? ('SKU:' + a.sku)
+        : ('NAME:' + a.name);
+
+      var bk = b.sku
+        ? ('SKU:' + b.sku)
+        : ('NAME:' + b.name);
+
+      if (ak < bk) return -1;
+      if (ak > bk) return 1;
+      return 0;
+    });
+
+    return k2EvolutionSnapshotHash_(normalized);
+  } catch (error) {
+    Logger.log(
+      'K2 Evolution sheet-hash check failed: ' +
+      String(
+        error && error.message
+          ? error.message
+          : error
+      )
+    );
+
+    /*
+     * Unknown sheet state must not be treated as trusted. Returning an empty
+     * hash makes the next successful K2 fetch rewrite/self-heal the sheet.
+     */
+    return '';
+  }
 }
 
 
