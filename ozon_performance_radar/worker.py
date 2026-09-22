@@ -2,7 +2,8 @@ import os, time, json, requests, math
 BASE="https://api-performance.ozon.ru"
 CID=os.getenv("OZON_PERF_CLIENT_ID") or os.getenv("OZON_PERFORMANCE_CLIENT_ID") or os.getenv("PERFORMANCE_CLIENT_ID")
 SECRET=os.getenv("OZON_PERF_CLIENT_SECRET") or os.getenv("OZON_PERFORMANCE_CLIENT_SECRET") or os.getenv("PERFORMANCE_CLIENT_SECRET")
-STORE=os.getenv("OZON_STORE","UNKNOWN")\nTARGET=os.getenv("TEST_SKU","5094364543")
+STORE=os.getenv("OZON_STORE","UNKNOWN")
+TARGET=os.getenv("TEST_SKU","5094364543")
 LOW=float(os.getenv("LOW_RESERVE_PCT","5"))
 SPIKE=float(os.getenv("COMPETITION_SPIKE_PCT","20"))
 
