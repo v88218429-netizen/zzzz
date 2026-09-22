@@ -119,9 +119,8 @@ jobs:
                   if p.poll() is not None:
                       break
                   try:
-                      links=subprocess.check_output(['ip','link'],text=True,stderr=subprocess.DEVNULL)
-                      routes=subprocess.check_output(['ip','route'],text=True,stderr=subprocess.DEVNULL)
-                      if ('tun0' in links or 'tap0' in links) and ('0.0.0.0/1' in routes or 'default' in routes):
+                      text=open(log,'r',errors='ignore').read()
+                      if 'Initialization Sequence Completed' in text:
                           time.sleep(2)
                           connected=True
                           break
@@ -129,6 +128,11 @@ jobs:
                       pass
                   time.sleep(1)
               rec={**item,'connected':connected}
+              if not connected:
+                  try:
+                      rec['openvpn_log_tail']='\\n'.join(open(log,'r',errors='ignore').read().splitlines()[-35:])
+                  except Exception:
+                      pass
               if connected:
                   try:
                       ipj=json.loads(urllib.request.urlopen('https://ipinfo.io/json',timeout=15).read().decode())
@@ -190,12 +194,13 @@ jobs:
       - name: Force Tor to Russian exits and probe Ozon SERP
         run: |
           sudo tee /etc/tor/torrc >/dev/null <<'EOF'
-          SocksPort 9050
+          SocksPort 19050
           ExitNodes {ru}
           StrictNodes 1
           Log notice stdout
           EOF
-          sudo pkill tor || true
+          sudo systemctl stop tor tor@default 2>/dev/null || true
+          sudo pkill -9 tor || true
           sudo tor -f /etc/tor/torrc >/tmp/tor.log 2>&1 &
           for i in $(seq 1 45); do
             grep -q "Bootstrapped 100%" /tmp/tor.log && break
@@ -206,7 +211,7 @@ jobs:
           import json, os, urllib.request
           import server
 
-          proxy='socks5h://127.0.0.1:9050'
+          proxy='socks5h://127.0.0.1:19050'
           try:
               import curl_cffi.requests as cr
               ipr=cr.get('https://ipinfo.io/json', proxies={'http':proxy,'https':proxy}, timeout=20)
