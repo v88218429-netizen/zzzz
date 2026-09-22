@@ -18,6 +18,7 @@ var OZON_RADAR_SERVER = {
   SHEET_ID: '1SHY1rz7XZeqOGkJSkitfSPlKs4cshS_5U63NSv0TO4c',
   RADAR_SHEET: '06_Радар_1мин',
   HISTORY_SHEET: '06_Радар_История',
+  QUEUE_SHEET: '06_Радар_Очередь',
   SETTINGS_SHEET: '99_Настройки',
   TRIGGER_FN: 'ozonRadarServerTick',
   PROP_URL: 'OZON_RADAR_SERVER_URL',
@@ -94,8 +95,9 @@ function ozonRadarServerTick() {
     var ss = SpreadsheetApp.openById(OZON_RADAR_SERVER.SHEET_ID);
     var radar = ss.getSheetByName(OZON_RADAR_SERVER.RADAR_SHEET);
     var history = ss.getSheetByName(OZON_RADAR_SERVER.HISTORY_SHEET);
+    var queue = ss.getSheetByName(OZON_RADAR_SERVER.QUEUE_SHEET);
 
-    if (!radar || !history) {
+    if (!radar || !history || !queue) {
       throw new Error('Не найдены листы Ozon Radar.');
     }
 
@@ -160,6 +162,8 @@ function ozonRadarServerTick() {
 
     var events = Array.isArray(eventsResp.events) ? eventsResp.events : [];
     var historyRows = [];
+    var queueRows = [];
+    var sourceErrors = 0;
     var nextCursor = Number(eventsResp.next_cursor || cursor) || cursor;
 
     for (var e = 0; e < events.length; e++) {
@@ -171,46 +175,51 @@ function ozonRadarServerTick() {
       );
       var targetRow = rowByKey[eventKey];
 
-      if (targetRow) {
-        var currentValue = event.position;
-        if (currentValue === null || currentValue === undefined || currentValue === '') {
-          currentValue = event.position_text || '';
-        }
-
-        radar.getRange(targetRow, 9, 1, 7).setValues([[
-          currentValue,
-          event.previous === null || event.previous === undefined ? '' : event.previous,
-          event.delta === null || event.delta === undefined ? '' : event.delta,
-          radarBridgeDisplayTime_(event.checked_at),
-          String(event.status || ''),
-          event.alert_type ? radarBridgeDisplayTime_(event.checked_at) : '',
-          String(event.source || 'Railway 24/7')
-        ]]);
-      }
-
       if (String(event.kind || '') === 'CHECK') {
+        // The visible radar I:O contains protective formulas. Never overwrite
+        // those cells from Apps Script. A valid LIVE measurement is appended
+        // to history and the formulas derive current/previous/delta from it.
         historyRows.push([
           String(event.checked_at || ''),
           String(event.article || ''),
           String(event.sku || ''),
           String(event.query || ''),
-          event.position === null || event.position === undefined
-            ? String(event.position_text || '')
-            : event.position,
+          event.position === null || event.position === undefined ? '' : event.position,
           event.previous === null || event.previous === undefined ? '' : event.previous,
           event.delta === null || event.delta === undefined ? '' : event.delta,
           String(event.status || ''),
-          String(event.source || 'Railway 24/7'),
+          String(event.source || 'LIVE SERP'),
           Number(event.http_status || 0) || '',
           Number(event.response_ms || 0) || '',
           'srv-' + String(event.seq || '')
         ]);
-      } else if (String(event.kind || '') === 'ERROR') {
-        if (targetRow) {
-          radar.getRange(targetRow, 13).setValue(
-            'ОШИБКА ИСТОЧНИКА · ' + String(event.error || event.status || '')
-          );
+
+        if (
+          String(event.alert_message || '').trim() &&
+          event.telegram_sent !== true
+        ) {
+          queueRows.push([
+            'srv-alert-' + String(event.seq || ''),
+            String(event.checked_at || ''),
+            String(event.article || ''),
+            String(event.sku || ''),
+            String(event.query || ''),
+            event.previous === null || event.previous === undefined ? '' : event.previous,
+            event.position === null || event.position === undefined ? '' : event.position,
+            event.delta === null || event.delta === undefined ? '' : event.delta,
+            String(event.alert_type || 'ALERT'),
+            String(event.alert_message || ''),
+            'PENDING',
+            '',
+            0,
+            ''
+          ]);
         }
+      } else if (String(event.kind || '') === 'ERROR') {
+        // A source failure is deliberately not written as a measurement and
+        // does not touch the visible radar formulas. They will age naturally
+        // into LIVE НЕТ / LIVE УСТАРЕЛ.
+        sourceErrors++;
       }
     }
 
@@ -223,16 +232,29 @@ function ozonRadarServerTick() {
       ).setValues(historyRows);
     }
 
+    if (queueRows.length) {
+      queue.getRange(
+        queue.getLastRow() + 1,
+        1,
+        queueRows.length,
+        14
+      ).setValues(queueRows);
+    }
+
     props.setProperty(
       OZON_RADAR_SERVER.PROP_CURSOR,
       String(nextCursor)
     );
 
     radarBridgeWriteStatus_(ss, {
-      status: 'LIVE · RAILWAY 24/7',
+      status: sourceErrors > 0 && historyRows.length === 0
+        ? 'SOURCE ERROR · LIVE НЕТ'
+        : 'LIVE · SERVER BRIDGE',
       detail:
         'tasks=' + tasks.length +
-        '; events=' + events.length +
+        '; checks=' + historyRows.length +
+        '; sourceErrors=' + sourceErrors +
+        '; alertsQueued=' + queueRows.length +
         '; cursor=' + nextCursor +
         '; ' + Utilities.formatDate(
           new Date(),
