@@ -37,7 +37,7 @@ jobs:
         run: |
           test -n "$OZON_PERF_CLIENT_SECRET" || { echo "STORE=$OZON_STORE PERFORMANCE_CREDENTIALS=missing"; exit 2; }
           echo "::add-mask::$OZON_PERF_CLIENT_SECRET"
-          echo "STORE=$OZON_STORE PERFORMANCE_CREDENTIALS=present"
+          echo "STORE=$OZON_STORE PERFORMANCE_CREDENTIALS=present"\n          echo "STORE=$OZON_STORE SECRET_LENGTH=${#OZON_PERF_CLIENT_SECRET}"
       - run: pip install requests
       - name: Live Performance probe
         run: python ozon_performance_radar/worker.py
