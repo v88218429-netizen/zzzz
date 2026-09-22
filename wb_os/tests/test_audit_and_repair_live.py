@@ -39,6 +39,17 @@ PRICE = r"""
 function syncWbPublicCustomerPricesV4_() {}
 """
 
+LEGACY_PRICE = r"""
+function updateWbPricesFromLinks() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  sheet.getRange(1, 11).setValue(123);
+}
+
+function columnToIndex_(col) {
+  return 11;
+}
+"""
+
 SUPPLIER = r"""
 var SUPPLIER_ORDERS_CFG = {};
 function syncAllSupplierOrdersNow() {
@@ -68,6 +79,7 @@ def main():
         (root / "Evolution.js").write_text(EVOLUTION, encoding="utf-8")
         (root / "Price.js").write_text(PRICE, encoding="utf-8")
         (root / "Supplier.js").write_text(SUPPLIER, encoding="utf-8")
+        (root / "LegacyPrice.js").write_text(LEGACY_PRICE, encoding="utf-8")
 
         p = run(root)
         if p.returncode != 0:
@@ -79,6 +91,11 @@ def main():
         assert "legacy duplicate K2 core disabled" in (
             root / "K2_old.js"
         ).read_text(encoding="utf-8")
+
+        supplier = (root / "Supplier.js").read_text(encoding="utf-8")
+        legacy_price = (root / "LegacyPrice.js").read_text(encoding="utf-8")
+        assert "return forceSyncWbPublicCustomerPricesV4();" in legacy_price
+        assert "getActiveSheet()" not in legacy_price
 
         supplier = (root / "Supplier.js").read_text(encoding="utf-8")
         assert "function supplierFindSummaryHeaderRow_" in supplier
