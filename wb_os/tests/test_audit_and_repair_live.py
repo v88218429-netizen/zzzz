@@ -105,6 +105,8 @@ def main():
         ).read_text(encoding="utf-8")
 
         k2_stable = (root / "K2_stable.js").read_text(encoding="utf-8")
+        assert "function syncK2StocksOnlyLegacy_()" in k2_stable
+        assert "LockService.getScriptLock()" in k2_stable
         assert "WB_OS_MASTER_TRIGGER_BOOTSTRAP_syncK2StocksOnly" in k2_stable
         assert "WB_OS_MASTER_TRIGGER_BOOTSTRAP_syncK2StocksAndNotify" in k2_stable
         assert "ensureFinalAutomationTrigger_();" in k2_stable
@@ -160,6 +162,23 @@ def main():
         assert p.returncode != 0
         assert "cannot be disabled safely" in (p.stdout + p.stderr)
         assert "uniqueLegacyOnly_" in (p.stdout + p.stderr)
+
+    # A duplicate K2 module with a unique top-level global must not be erased.
+    with tempfile.TemporaryDirectory() as td:
+        root = pathlib.Path(td)
+        (root / "Master.js").write_text(MASTER, encoding="utf-8")
+        (root / "K2_stable.js").write_text(K2_STABLE, encoding="utf-8")
+        (root / "K2_old.js").write_text(
+            K2_OLD + "\nvar UNIQUE_LEGACY_CFG = {};\n",
+            encoding="utf-8",
+        )
+        (root / "Evolution.js").write_text(EVOLUTION, encoding="utf-8")
+        (root / "Price.js").write_text(PRICE, encoding="utf-8")
+
+        p = run(root)
+        assert p.returncode != 0
+        assert "unique_globals" in (p.stdout + p.stderr)
+        assert "UNIQUE_LEGACY_CFG" in (p.stdout + p.stderr)
 
     # Duplicate top-level config/global variables must also fail closed.
     with tempfile.TemporaryDirectory() as td:
