@@ -10,6 +10,9 @@ trap 'rm -rf "$WORK"' EXIT
 
 export REPO_ROOT="$ROOT"
 export FAKE_REMOTE="$REMOTE"
+export HOME="$WORK/home"
+mkdir -p "$HOME"
+printf '{}\n' > "$HOME/.clasprc.json"
 
 python3 - "$ROOT" "$REMOTE" <<'PY'
 from pathlib import Path
