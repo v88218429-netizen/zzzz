@@ -1,5 +1,5 @@
 /**
- * WB OS / K2 Evolution Engine v0.1.14
+ * WB OS / K2 Evolution Engine v0.1.15
  *
  * Integrated mode: NO separate time trigger.
  * The existing finalAutomationTick master remains the only clock.
@@ -14,7 +14,7 @@
  */
 
 var K2_EV = {
-  VERSION: '0.1.14',
+  VERSION: '0.1.15',
   AUTOMATION_SHEET: 'Автоматизация',
   LAST_HASH_KEY: 'K2_EV_LAST_SNAPSHOT_HASH',
   LAST_COUNT_KEY: 'K2_EV_LAST_COUNT',
@@ -141,25 +141,6 @@ function k2EvolutionFetchAndApplyUnlocked_() {
     );
   }
 
-  // Ensure the independent 1-minute Ozon radar relays exist.
-  // Safe to call repeatedly: helpers create only one trigger each.
-  try {
-    if (typeof ensureOzonRadarTelegramTrigger_ === 'function') {
-      ensureOzonRadarTelegramTrigger_();
-    }
-    if (typeof ensureOzonRadarServerTrigger_ === 'function') {
-      ensureOzonRadarServerTrigger_();
-    }
-  } catch (ozonRadarTriggerError) {
-    Logger.log(
-      'Ozon Radar trigger check failed: ' +
-      String(
-        ozonRadarTriggerError && ozonRadarTriggerError.message
-          ? ozonRadarTriggerError.message
-          : ozonRadarTriggerError
-      )
-    );
-  }
 
   return {
     itemCount: itemCount,
