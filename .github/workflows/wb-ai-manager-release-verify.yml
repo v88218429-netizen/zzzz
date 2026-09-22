@@ -57,6 +57,29 @@ jobs:
           print("stable manifest: ok")
           PY
 
+      - name: Inspect decoded bundle structure
+        shell: bash
+        run: |
+          python - <<'PY'
+          import base64, zipfile
+          from io import BytesIO
+          from pathlib import Path
+          p = Path("wb_ai_manager/releases/1.1.0/bundle.b64")
+          raw = base64.b64decode(p.read_text(encoding="ascii"), validate=True)
+          with zipfile.ZipFile(BytesIO(raw)) as zf:
+              names = zf.namelist()
+              print("bundle entries:", len(names))
+              for name in names:
+                  if name == "pyproject.toml" or "wb_control_center" in name or name.startswith("tests/") or name.startswith("scripts/"):
+                      print(name)
+              for target in ["pyproject.toml", "src/wb_control_center/__init__.py", "src/wb_control_center/config.py", "scripts/update_smoke.py"]:
+                  print(target, "present=", target in names)
+                  if target in names and target == "pyproject.toml":
+                      print("--- pyproject.toml ---")
+                      print(zf.read(target).decode("utf-8", errors="replace"))
+                      print("--- end pyproject.toml ---")
+          PY
+
       - name: Fresh bootstrap exactly from published stable payload
         shell: bash
         run: |
