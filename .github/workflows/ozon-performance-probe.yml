@@ -41,3 +41,5 @@ jobs:
       - run: pip install requests
       - name: Live Performance probe
         run: python ozon_performance_radar/worker.py
+
+# manual trigger 2026-09-22
