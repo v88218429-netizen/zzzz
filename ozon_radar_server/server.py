@@ -19,7 +19,7 @@ from fastapi import FastAPI, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 from playwright.async_api import async_playwright
 
-APP_VERSION = "1.3.1"
+APP_VERSION = "1.3.2"
 MAX_EVENTS = 20000
 CHECK_LOOP_SECONDS = 3
 SOURCE_NAME = "LIVE SERP · Ozon storefront JSON"
@@ -436,8 +436,9 @@ class OzonClient:
         raise RuntimeError(last_error or "browser Ozon source failed")
 
     async def position_async(self, query: str, sku: str, max_position: int) -> dict[str, Any]:
-        if OZON_FORCE_LIVE_OFFLINE:
-            raise RuntimeError("LIVE egress is fail-closed: no approved Tailscale exit node")
+        egress_ready, egress_reason = live_egress_status()
+        if not egress_ready:
+            raise RuntimeError("LIVE egress is fail-closed: " + egress_reason)
         target = str(sku)
         seen: list[str] = []
         seen_set: set[str] = set()
@@ -894,6 +895,33 @@ def runtime_tailscale_exit_node() -> str:
     return OZON_TAILSCALE_EXIT_NODE
 
 
+def live_egress_status() -> tuple[bool, str]:
+    """Return whether LIVE Ozon traffic is allowed to leave this process.
+
+    The embedded Railway Tailscale SOCKS proxy is only considered ready after
+    start.sh has selected an online approved exit node and written its marker.
+    This prevents accidental fallback to cloud/data-centre egress while the
+    home exit node is still logging in or temporarily offline.
+    """
+    if OZON_FORCE_LIVE_OFFLINE:
+        return False, "forced offline"
+
+    proxy = (OZON_PROXY or "").strip().lower().rstrip("/")
+    embedded_tailscale = proxy in {
+        "socks5://127.0.0.1:1055",
+        "socks5h://127.0.0.1:1055",
+    }
+    if embedded_tailscale:
+        node = runtime_tailscale_exit_node()
+        if not node:
+            return False, "no approved online home Tailscale exit node"
+        return True, "home Tailscale exit " + node
+
+    if OZON_PROXY:
+        return True, "configured proxy"
+    return True, "direct egress"
+
+
 @app.get("/health")
 def health() -> dict[str, Any]:
     statuses = []
@@ -911,10 +939,13 @@ def health() -> dict[str, Any]:
                 "last_error": state.last_error,
             }
         )
-    source_ready = bool(runtime.last_success_iso) and not runtime.last_error
+    egress_ready, egress_reason = live_egress_status()
+    source_ready = egress_ready and bool(runtime.last_success_iso) and not runtime.last_error
     return {
         "ok": True,
         "backend_ok": True,
+        "egress_ready": egress_ready,
+        "egress_status": egress_reason,
         "live_ready": source_ready,
         "live_status": "LIVE" if source_ready else "LIVE_NЕТ",
         "version": APP_VERSION,
