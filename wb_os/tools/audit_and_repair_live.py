@@ -79,13 +79,13 @@ def inject_master_trigger_bootstrap(text, function_name, marker):
         return text, False
 
     pattern = re.compile(
-        r"(function\\s+"
+        r"(function\s+"
         + re.escape(function_name)
-        + r"\\s*\\([^)]*\\)\\s*\\{\\s*)"
+        + r"\s*\([^)]*\)\s*\{\s*)"
     )
 
     block = (
-        r"\\1"
+        r"\1"
         + "\n  /* " + marker + " */\n"
         + "  try {\n"
         + "    if (typeof ensureFinalAutomationTrigger_ === 'function') {\n"
