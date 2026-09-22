@@ -9,6 +9,7 @@ const root = path.resolve(__dirname, '..');
 
 const ctx = vm.createContext({
   console,
+  Logger: { log: () => {} },
   Utilities: {
     DigestAlgorithm: { SHA_256: 'SHA_256' },
     Charset: { UTF_8: 'UTF_8' },
@@ -258,6 +259,25 @@ load('apps_script/K2_EVOLUTION_ENGINE.gs');
   ]);
 
   assert.strictEqual(ctx.k2EvolutionCurrentSheetHash_(), expected);
+
+  // A non-numeric value in the trusted sheet must NOT hash as zero. Returning
+  // an empty hash forces the next successful source fetch to rewrite/self-heal
+  // the trusted sheet.
+  ctx.SpreadsheetApp = {
+    getActiveSpreadsheet: () => ({
+      getSheetByName: () => ({
+        getLastRow: () => 2,
+        getRange: () => ({
+          getValues: () => [['A', 'one', 'BROKEN', 0, 0]]
+        })
+      })
+    })
+  };
+
+  assert.strictEqual(
+    ctx.k2EvolutionCurrentSheetHash_(),
+    ''
+  );
 }
 
 // Public-price writer must fail closed if the Summary columns moved.
