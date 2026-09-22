@@ -122,9 +122,49 @@ def inject_master_trigger_bootstrap(text, function_name, marker):
     return out, "changed"
 
 
+# The live K2 installer currently schedules syncK2StocksOnly every 10 min,
+# and that legacy function did not use ScriptLock. Wrap it instead of rewriting
+# its proven API/write logic, so the legacy writer and K2 Evolution cannot race.
+k2_text = read(keeper)
+
+if "function syncK2StocksOnlyLegacy_()" not in k2_text:
+    sync_only_marker = "function syncK2StocksOnly() {"
+
+    if k2_text.count(sync_only_marker) != 1:
+        raise SystemExit(
+            "AUDIT_FAIL: syncK2StocksOnly definition not found exactly once"
+        )
+
+    wrapper = """function syncK2StocksOnly() {
+  var lock = LockService.getScriptLock();
+
+  if (!lock.tryLock(30000)) {
+    Logger.log(
+      'K2 legacy sync пропущен: другой K2/FF writer уже выполняется.'
+    );
+    return;
+  }
+
+  try {
+    return syncK2StocksOnlyLegacy_();
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+
+function syncK2StocksOnlyLegacy_() {"""
+
+    k2_text = k2_text.replace(
+        sync_only_marker,
+        wrapper,
+        1,
+    )
+
+    print("LOCKED_LEGACY_K2_SYNC_ONLY:", keeper.relative_to(root))
+
 # Existing K2 timers are a safe bootstrap path if the master trigger is absent.
 # They keep their legacy K2 behavior, but first ensure the single master clock.
-k2_text = read(keeper)
 for fn in ("syncK2StocksOnly", "syncK2StocksAndNotify"):
     marker = "WB_OS_MASTER_TRIGGER_BOOTSTRAP_" + fn
     k2_text, status = inject_master_trigger_bootstrap(
