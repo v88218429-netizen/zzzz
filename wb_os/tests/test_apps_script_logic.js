@@ -29,8 +29,69 @@ function load(rel) {
   vm.runInContext(code, ctx, { filename: rel });
 }
 
+load('apps_script/WB_SELLER_PRICE_SAFE.gs');
 load('apps_script/WB_PUBLIC_PRICE_V4.gs');
 load('apps_script/K2_EVOLUTION_ENGINE.gs');
+
+// Seller-price source snapshot/validation must fail closed on stale or
+// suspiciously incomplete refreshes.
+{
+  const parsed = ctx.wbSellerPriceToMillis_(
+    '2026-09-22 12:00:00'
+  );
+  assert.ok(Number.isFinite(parsed));
+  assert.ok(parsed > 0);
+
+  assert.doesNotThrow(() => {
+    ctx.wbSellerPriceValidateRefresh_(
+      {
+        dataRows: 284,
+        cabinetCount: 3
+      },
+      {
+        ok: true,
+        reason: '',
+        dataRows: 280,
+        cabinetCount: 3,
+        ageMinutes: 2
+      }
+    );
+  });
+
+  assert.throws(
+    () => ctx.wbSellerPriceValidateRefresh_(
+      {
+        dataRows: 284,
+        cabinetCount: 3
+      },
+      {
+        ok: true,
+        reason: '',
+        dataRows: 120,
+        cabinetCount: 3,
+        ageMinutes: 2
+      }
+    ),
+    /WB_SELLER_PRICE_SUSPICIOUS_DROP/
+  );
+
+  assert.throws(
+    () => ctx.wbSellerPriceValidateRefresh_(
+      {
+        dataRows: 284,
+        cabinetCount: 3
+      },
+      {
+        ok: true,
+        reason: '',
+        dataRows: 280,
+        cabinetCount: 2,
+        ageMinutes: 2
+      }
+    ),
+    /WB_SELLER_PRICE_CABINET_DROP/
+  );
+}
 
 // WB price: choose the cheapest AVAILABLE size, not simply sizes[0].
 {
@@ -435,6 +496,7 @@ load('apps_script/K2_EVOLUTION_ENGINE.gs');
   assert.ok(priceSource.includes('price_lock_busy'));
   assert.ok(priceSource.includes('WB_PRICE_V4_SHADOW_NAME_COLLISION'));
   assert.ok(priceSource.includes('function wbPriceV4RepairMissingSellerPrices_'));
+  assert.ok(priceSource.includes('wbSellerPriceIsFreshForRepair_'));
   assert.ok(priceSource.includes("'Цены'!$C:$C"));
   assert.ok(priceSource.includes('currentSeller > 0'));
 }
