@@ -1,5 +1,5 @@
 /**
- * WB OS / K2 Evolution Engine v0.1.7
+ * WB OS / K2 Evolution Engine v0.1.8
  *
  * Integrated mode: NO separate time trigger.
  * The existing finalAutomationTick master remains the only clock.
@@ -14,7 +14,7 @@
  */
 
 var K2_EV = {
-  VERSION: '0.1.7',
+  VERSION: '0.1.8',
   AUTOMATION_SHEET: 'Автоматизация',
   LAST_HASH_KEY: 'K2_EV_LAST_SNAPSHOT_HASH',
   LAST_COUNT_KEY: 'K2_EV_LAST_COUNT',
@@ -38,19 +38,6 @@ var K2_EV = {
  * On those failures the trusted live stock sheet is NOT overwritten.
  */
 function k2EvolutionFetchAndApply_() {
-  try {
-    k2EvolutionCleanupLegacyTriggers_();
-  } catch (cleanupError) {
-    Logger.log(
-      'K2 Evolution trigger cleanup skipped: ' +
-      String(
-        cleanupError && cleanupError.message
-          ? cleanupError.message
-          : cleanupError
-      )
-    );
-  }
-
   var startedMs = Date.now();
   var props = PropertiesService.getScriptProperties();
 
@@ -105,6 +92,24 @@ function k2EvolutionFetchAndApply_() {
       ? 'OK · snapshot changed · sheet updated'
       : 'OK · no business-state change · heavy write skipped'
   });
+
+  /*
+   * Cut over from legacy K2 clocks only AFTER this engine has completed one
+   * successful live sync. If the new engine fails, the old K2 clock remains
+   * available as a fallback instead of being deleted pre-emptively.
+   */
+  try {
+    k2EvolutionCleanupLegacyTriggers_();
+  } catch (cleanupError) {
+    Logger.log(
+      'K2 Evolution trigger cleanup skipped: ' +
+      String(
+        cleanupError && cleanupError.message
+          ? cleanupError.message
+          : cleanupError
+      )
+    );
+  }
 
   // Ensure the independent 1-minute Ozon radar relays exist.
   // Safe to call repeatedly: helpers create only one trigger each.
@@ -465,6 +470,7 @@ function setupK2EvolutionIntegrated() {
 
     if (
       fn === 'syncK2StocksAndNotify' ||
+      fn === 'syncK2StocksOnly' ||
       fn === 'processK2StockEmails' ||
       fn === 'k2EvolutionTick'
     ) {
@@ -598,27 +604,7 @@ function k2EvolutionCleanupLegacyTriggers_() {
     processK2StockEmails: true,
     syncK2StocksAndNotify: true,
     syncK2StocksOnly: true,
-
-    // The master owns the periodic Supplier Orders sync.
-    supplierFullScheduledSync_: true,
-
-    // Old parallel Supplier Orders module (UO_*) must not run beside
-    // the canonical Supplier_Orders module.
-    UO_supplierSummaryOnEdit_: true,
-    UO_supplierSummaryOnChange_: true,
-    UO_supplierFfOnEdit_: true,
-    UO_supplierFfOnChange_: true,
-    UO_supplierFullScheduledSync_: true,
-
-    // Other periodic jobs already owned by the master.
-    ivanovoScheduledRefresh: true,
-    domExportOrders: true,
-    domExportSales: true,
-    domExportOzonOrders: true,
-    domExportOzonSales: true,
-    syncSupplierDebtsToSummary: true,
-    supplierOrdersScheduledSync_: true,
-    supplierDebtScheduledSync_: true
+    k2EvolutionTick: true
   };
 
   var triggers = ScriptApp.getProjectTriggers();
@@ -635,7 +621,7 @@ function k2EvolutionCleanupLegacyTriggers_() {
 
   if (deleted) {
     Logger.log(
-      'K2 Evolution: удалено legacy-триггеров K2: ' + deleted
+      'K2 Evolution: удалено legacy K2-триггеров: ' + deleted
     );
   }
 
