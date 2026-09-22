@@ -5,6 +5,7 @@ on:
     branches: [mainggg]
     paths:
       - "ozon_radar_server/**"
+      - "ozon_live/**"
       - ".github/workflows/ozon-radar-server-ci.yml"
   workflow_dispatch:
 
@@ -32,25 +33,32 @@ jobs:
       - name: Radar behavior regression tests
         run: python -m unittest -v test_server.py
 
+      - name: Require residential proxy secrets
+        shell: bash
+        env:
+          OZON_PROXY_USER: ${{ secrets.OZON_PROXY_USER }}
+          OZON_PROXY_PASS: ${{ secrets.OZON_PROXY_PASS }}
+        run: |
+          if [ -z "$OZON_PROXY_USER" ] || [ -z "$OZON_PROXY_PASS" ]; then
+            echo "::error::LIVE egress is not configured: OZON_PROXY_USER/OZON_PROXY_PASS are missing"
+            exit 1
+          fi
+          echo "PROXY_SECRETS_PRESENT=yes"
+
       - name: Check residential proxy channel
         shell: bash
         env:
           OZON_PROXY_PROVIDER: decodo
           OZON_PROXY_HOST: gate.decodo.com
           OZON_PROXY_PORT: "7000"
+          OZON_PROXY_CITY: rostov_on_don
+          OZON_PROXY_SESSION: ozonradar-ci
           OZON_PROXY_USER: ${{ secrets.OZON_PROXY_USER }}
           OZON_PROXY_PASS: ${{ secrets.OZON_PROXY_PASS }}
         run: |
-          set +e
-          if [ -z "$OZON_PROXY_USER" ] || [ -z "$OZON_PROXY_PASS" ]; then
-            echo "PROXY_SECRETS_PRESENT=no"
-            exit 0
-          fi
-          echo "PROXY_SECRETS_PRESENT=yes"
           cd ..
           pip install -q -r ozon_live/requirements.txt
           python ozon_live/proxy_preflight.py
-          echo "PROXY_PREFLIGHT_RC=$?"
 
       - name: Live Ozon storefront HTTP probe
         env:
@@ -65,49 +73,13 @@ jobs:
           python - <<'PY'
           from server import OzonClient
           c = OzonClient()
-          try:
-              r = c.position("лопата садовая", "5094364543", 30)
-              print("LIVE_PROBE_OK", r)
-          except Exception as e:
-              print("LIVE_PROBE_ERROR", type(e).__name__, str(e))
+          r = c.position("лопата садовая", "5094364543", 30)
+          assert r.get("http_status") == 200, r
+          assert r.get("checked_depth", 0) > 0, r
+          print("LIVE_PROBE_OK", r)
           PY
 
-      - name: Live Ozon Chrome probe
-        shell: bash
-        run: |
-          set +e
-          google-chrome --version || true
-          URL='https://www.ozon.ru/search/?text=%D0%BB%D0%BE%D0%BF%D0%B0%D1%82%D0%B0%20%D1%81%D0%B0%D0%B4%D0%BE%D0%B2%D0%B0%D1%8F&from_global=true'
-          timeout 45s google-chrome \
-            --headless=new \
-            --no-sandbox \
-            --disable-dev-shm-usage \
-            --disable-blink-features=AutomationControlled \
-            --lang=ru-RU \
-            --user-agent='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36' \
-            --dump-dom "$URL" > /tmp/ozon-chrome.html 2>/tmp/ozon-chrome.err
-          RC=$?
-          echo "CHROME_RC=$RC"
-          echo "PRODUCT_LINKS=$(grep -o '/product/' /tmp/ozon-chrome.html | wc -l | tr -d ' ')"
-          echo "BLOCK_MARKERS=$(grep -Eio 'доступ ограничен|access denied|captcha|похоже, нет соединения' /tmp/ozon-chrome.html | head -10 | tr '\n' ' ' || true)"
-          echo '--- body sample ---'
-          sed -n '1,20p' /tmp/ozon-chrome.html | head -c 3000 || true
-          echo
-          echo '--- chrome stderr ---'
-          tail -30 /tmp/ozon-chrome.err || true
-
-      - name: Live Ozon mobile-web API probe
-        shell: bash
-        run: |
-          set +e
-          cd ..
-          python ozon_web/probe.py
-          RC=$?
-          echo "MOBILE_PROBE_RC=$RC"
-          cat ozon_web/results/latest.json | head -c 12000 || true
-          echo
-
-      - name: Start service
+      - name: Start service and require successful /probe
         env:
           RADAR_SECRET: ci-secret
           OZON_PROXY_PROVIDER: decodo
@@ -124,11 +96,18 @@ jobs:
           sleep 3
           curl -fsS http://127.0.0.1:8080/health
           curl -fsS -H 'Authorization: Bearer ci-secret' http://127.0.0.1:8080/state
-          curl -fsS -X POST \
-            -H 'Authorization: Bearer ci-secret' \
-            -H 'Content-Type: application/json' \
-            -d '{"query":"лопата садовая","sku":"5094364543","max_position":20}' \
-            http://127.0.0.1:8080/probe
+          curl -fsS -X POST             -H 'Authorization: Bearer ci-secret'             -H 'Content-Type: application/json'             -d '{"query":"лопата садовая","sku":"5094364543","max_position":20}'             http://127.0.0.1:8080/probe > /tmp/probe.json
+          cat /tmp/probe.json
+          python - <<'PY'
+          import json
+          with open("/tmp/probe.json", "r", encoding="utf-8") as fh:
+              data = json.load(fh)
+          assert data.get("ok") is True, data
+          result = data.get("result") or {}
+          assert result.get("http_status") == 200, data
+          assert result.get("checked_depth", 0) > 0, data
+          print("SERVICE_LIVE_PROBE_OK")
+          PY
 
       - name: Show service log
         if: always()
