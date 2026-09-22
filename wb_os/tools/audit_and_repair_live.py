@@ -110,7 +110,39 @@ if supplier:
         p.write_text(text, encoding="utf-8")
         print("NAMESPACED_SUPPLIER_HELPERS:", p.relative_to(root))
 
-# 3) No duplicate global function definitions are allowed after repair.
+# 3) Repair the old manual WB price entrypoint if it exists.
+# The legacy implementation uses getActiveSheet() and can write column K on
+# whichever tab happens to be open. Preserve the public function name, but
+# route it to the audited v4 engine.
+legacy_price = find("function updateWbPricesFromLinks()")
+if len(legacy_price) > 1:
+    raise SystemExit(
+        "AUDIT_FAIL: multiple updateWbPricesFromLinks entrypoints: "
+        + repr([str(p.relative_to(root)) for p in legacy_price])
+    )
+
+if legacy_price:
+    p = legacy_price[0]
+    text = read(p)
+    pattern = re.compile(
+        r"function\s+updateWbPricesFromLinks\s*\(\)\s*\{.*?\n\}\s*\n\s*function\s+columnToIndex_",
+        re.S,
+    )
+    replacement = """function updateWbPricesFromLinks() {
+  return forceSyncWbPublicCustomerPricesV4();
+}
+
+function columnToIndex_"""
+    text2, count = pattern.subn(replacement, text, count=1)
+    if count != 1:
+        raise SystemExit(
+            "AUDIT_FAIL: legacy updateWbPricesFromLinks structure is unknown; "
+            "refusing to patch it by guess"
+        )
+    p.write_text(text2, encoding="utf-8")
+    print("COMPAT_PRICE_ENTRYPOINT:", p.relative_to(root))
+
+# 4) No duplicate global function definitions are allowed after repair.
 defs = {}
 duplicates = {}
 pattern = re.compile(r"(?m)^\s*function\s+([A-Za-z_$][\w$]*)\s*\(")
@@ -133,7 +165,7 @@ if duplicates:
         "AUDIT_FAIL: duplicate global functions remain: " + "; ".join(parts)
     )
 
-# 4) Top-level global variables/config objects must not be declared in
+# 5) Top-level global variables/config objects must not be declared in
 # multiple files. Apps Script joins all source files into one global namespace,
 # so duplicate config variables can silently overwrite each other.
 global_defs = {}
@@ -161,7 +193,7 @@ if global_dups:
         + "; ".join(parts)
     )
 
-# 5) Critical modules must exist exactly once.
+# 6) Critical modules must exist exactly once.
 critical = [
     "function runFinalAutomationCycle_",
     "function getK2WarehouseItems_",
