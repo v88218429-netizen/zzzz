@@ -205,8 +205,8 @@ curl --connect-timeout 10 --max-time 30 -fsSL   "$REPO_RAW/wb_os/apps_script/WB_
 curl --connect-timeout 10 --max-time 30 -fsSL   "$REPO_RAW/wb_os/tools/patch_live_master.py"   -o "$WORK/patch_live_master.py"
 curl --connect-timeout 10 --max-time 30 -fsSL   "$REPO_RAW/wb_os/tools/audit_and_repair_live.py"   -o "$WORK/audit_and_repair_live.py"
 
-grep -q "K2 Evolution Engine v0.1.7" "$WORK/K2_EVOLUTION_ENGINE.gs"
-grep -q "WB Public Customer Price Engine v0.1.5" "$WORK/WB_PUBLIC_PRICE_V4.gs"
+grep -q "K2 Evolution Engine v0.1.8" "$WORK/K2_EVOLUTION_ENGINE.gs"
+grep -q "WB Public Customer Price Engine v0.1.6" "$WORK/WB_PUBLIC_PRICE_V4.gs"
 grep -q "session-aware readiness missing inside" "$WORK/patch_live_master.py"
 grep -q "duplicate top-level globals remain" "$WORK/audit_and_repair_live.py"
 
@@ -346,12 +346,12 @@ do
   fi
 done
 
-if ! grep -Rqs "K2 Evolution Engine v0.1.7" "$VERIFY"; then
+if ! grep -Rqs "K2 Evolution Engine v0.1.8" "$VERIFY"; then
   echo "❌ Remote K2 Evolution version mismatch."
   VERIFY_OK=0
 fi
 
-if ! grep -Rqs "WB Public Customer Price Engine v0.1.5" "$VERIFY"; then
+if ! grep -Rqs "WB Public Customer Price Engine v0.1.6" "$VERIFY"; then
   echo "❌ Remote WB Public Price version mismatch."
   VERIFY_OK=0
 fi
