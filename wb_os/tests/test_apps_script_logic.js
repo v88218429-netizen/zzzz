@@ -134,6 +134,11 @@ load('apps_script/K2_EVOLUTION_ENGINE.gs');
     priceFn.indexOf('wbPriceV4CleanupLegacyTriggers_') >
     priceFn.indexOf('.setValues(output)')
   );
+
+  assert.ok(k2Source.includes("ensureFinalAutomationTrigger_"));
+  assert.ok(k2Source.includes("master trigger helper отсутствует"));
+  assert.ok(priceSource.includes("ensureFinalAutomationTrigger_"));
+  assert.ok(priceSource.includes("старый SPP trigger сохранён"));
 }
 
 console.log('WB OS Apps Script logic tests: OK');
