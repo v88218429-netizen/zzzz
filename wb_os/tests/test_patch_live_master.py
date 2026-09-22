@@ -71,6 +71,7 @@ REQUIRED = [
     "k2EvolutionHistoryLastAt_(props)",
     "syncWbPublicCustomerPricesV4_(forceAll);",
     "wbPriceV4RecordFailure_(priceError)",
+    "function wbOsEnsureMasterTrigger()",
 ]
 
 def run_patch(root: pathlib.Path):
@@ -103,6 +104,7 @@ def main():
         master_end = once.index("\nfunction getMasterConfigurationState_", master_start)
         master_text = once[master_start:master_end]
         assert "getMasterConfigurationState_().k2Ready" not in master_text
+        assert "MASTER_TRIGGER_OK" in once
 
         # Second migration must be a true no-op, not a failure or duplicate.
         run_patch(root)
