@@ -876,6 +876,14 @@ async def startup() -> None:
     asyncio.create_task(scheduler())
 
 
+@app.on_event("shutdown")
+async def shutdown() -> None:
+    try:
+        await ozon._reset_browser()
+    except Exception:
+        pass
+
+
 @app.get("/")
 def root() -> dict[str, Any]:
     return {
