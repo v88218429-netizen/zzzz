@@ -34,7 +34,21 @@ jobs:
           python -m playwright install --with-deps chromium
 
       - name: Syntax check
-        run: python -m py_compile server.py test_server.py
+        run: |
+          python -m py_compile server.py test_server.py
+          sh -n start.sh
+
+      - name: Deployment capability report
+        env:
+          HAS_TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY != '' }}
+          HAS_TS_AUTHKEY: ${{ secrets.TS_AUTHKEY != '' }}
+          HAS_RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN != '' }}
+          HAS_RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN != '' }}
+          HAS_RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID != '' }}
+          HAS_RAILWAY_SERVICE_ID: ${{ secrets.RAILWAY_SERVICE_ID != '' }}
+          HAS_CLASPRC_JSON: ${{ secrets.CLASPRC_JSON != '' }}
+        run: |
+          env | grep '^HAS_' | sort
 
       - name: Radar behavior regression tests
         run: python -m unittest -v test_server.py
