@@ -27,7 +27,10 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Syntax check
-        run: python -m py_compile server.py
+        run: python -m py_compile server.py test_server.py
+
+      - name: Radar behavior regression tests
+        run: python -m unittest -v test_server.py
 
       - name: Check residential proxy channel
         shell: bash
