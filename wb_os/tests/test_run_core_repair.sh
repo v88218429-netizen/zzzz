@@ -111,6 +111,9 @@ case "$url" in
   */wb_os/apps_script/WB_PUBLIC_PRICE_V4.gs)
     src="$REPO_ROOT/wb_os/apps_script/WB_PUBLIC_PRICE_V4.gs"
     ;;
+  */wb_os/apps_script/WB_SELLER_PRICE_SAFE.gs)
+    src="$REPO_ROOT/wb_os/apps_script/WB_SELLER_PRICE_SAFE.gs"
+    ;;
   */wb_os/tools/patch_live_master.py)
     src="$REPO_ROOT/wb_os/tools/patch_live_master.py"
     ;;
@@ -172,8 +175,10 @@ grep -q "full project pull-back: exact semantic match" "$OUTPUT"
 grep -q "repair second pass: no-op" "$OUTPUT"
 
 grep -Rqs "K2 Evolution Engine v0.1.17" "$REMOTE"
-grep -Rqs "WB Public Customer Price Engine v0.1.18" "$REMOTE"
+grep -Rqs "WB Public Customer Price Engine v0.1.19" "$REMOTE"
+grep -Rqs "WB Seller Price Safe Refresh v0.1.0" "$REMOTE"
 grep -Rqs "function wbOsEnsureMasterTrigger()" "$REMOTE"
+grep -Rqs "function wbSellerPriceRefreshIfDue_" "$REMOTE"
 grep -Rqs "function wbOsAssertTrustedNeedsSources_" "$REMOTE"
 
 python3 "$ROOT/wb_os/tools/audit_and_repair_live.py" "$REMOTE" >/dev/null
