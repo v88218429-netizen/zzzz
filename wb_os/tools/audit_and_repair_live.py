@@ -42,7 +42,7 @@ if len(k2) > 1:
     keeper = preferred[0]
 
     function_pattern = re.compile(
-        r"(?m)^\s*function\s+([A-Za-z_$][\w$]*)\s*\("
+        r"(?m)^function\s+([A-Za-z_$][\w$]*)\s*\("
     )
     keeper_functions = set(function_pattern.findall(read(keeper)))
 
@@ -73,6 +73,80 @@ if len(k2) > 1:
         print("DISABLED_DUPLICATE_K2:", p.relative_to(root))
 else:
     keeper = k2[0]
+
+def inject_master_trigger_bootstrap(text, function_name, marker):
+    if marker in text:
+        return text, False
+
+    pattern = re.compile(
+        r"(function\\s+"
+        + re.escape(function_name)
+        + r"\\s*\\([^)]*\\)\\s*\\{\\s*)"
+    )
+
+    block = (
+        r"\\1"
+        + "\n  /* " + marker + " */\n"
+        + "  try {\n"
+        + "    if (typeof ensureFinalAutomationTrigger_ === 'function') {\n"
+        + "      ensureFinalAutomationTrigger_();\n"
+        + "    }\n"
+        + "  } catch (masterTriggerError) {\n"
+        + "    Logger.log(\n"
+        + "      'WB OS master-trigger bootstrap skipped: ' +\n"
+        + "      String(\n"
+        + "        masterTriggerError && masterTriggerError.message\n"
+        + "          ? masterTriggerError.message\n"
+        + "          : masterTriggerError\n"
+        + "      )\n"
+        + "    );\n"
+        + "  }\n"
+    )
+
+    out, count = pattern.subn(block, text, count=1)
+    return out, count == 1
+
+
+# Existing K2 timers are a safe bootstrap path if the master trigger is absent.
+# They keep their legacy K2 behavior, but first ensure the single master clock.
+k2_text = read(keeper)
+for fn in ("syncK2StocksOnly", "syncK2StocksAndNotify"):
+    marker = "WB_OS_MASTER_TRIGGER_BOOTSTRAP_" + fn
+    k2_text, changed = inject_master_trigger_bootstrap(
+        k2_text,
+        fn,
+        marker,
+    )
+    if changed:
+        print("MASTER_BOOTSTRAP_K2:", fn)
+
+keeper.write_text(k2_text, encoding="utf-8")
+
+# The SPP monitor is known to be actively running in this project. Preserve
+# its price/history/Telegram behavior, but let its scheduled tick also restore
+# the master trigger if that trigger is ever missing.
+spp_modules = [
+    p for p in sources()
+    if "function sppMonitorScheduledTick()" in read(p)
+    and "function sppRunMonitor_" in read(p)
+]
+if len(spp_modules) > 1:
+    raise SystemExit(
+        "AUDIT_FAIL: multiple SPP monitor modules: "
+        + repr([str(p.relative_to(root)) for p in spp_modules])
+    )
+
+if spp_modules:
+    p = spp_modules[0]
+    text = read(p)
+    text, changed = inject_master_trigger_bootstrap(
+        text,
+        "sppMonitorScheduledTick",
+        "WB_OS_MASTER_TRIGGER_BOOTSTRAP_sppMonitorScheduledTick",
+    )
+    if changed:
+        p.write_text(text, encoding="utf-8")
+        print("MASTER_BOOTSTRAP_SPP:", p.relative_to(root))
 
 print("K2_CORE:", keeper.relative_to(root))
 
@@ -145,7 +219,7 @@ function columnToIndex_"""
 # 4) No duplicate global function definitions are allowed after repair.
 defs = {}
 duplicates = {}
-pattern = re.compile(r"(?m)^\s*function\s+([A-Za-z_$][\w$]*)\s*\(")
+pattern = re.compile(r"(?m)^function\s+([A-Za-z_$][\w$]*)\s*\(")
 
 for p in sources():
     text = read(p)
