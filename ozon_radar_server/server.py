@@ -20,7 +20,7 @@ from pydantic import BaseModel, Field
 APP_VERSION = "1.1.0"
 MAX_EVENTS = 20000
 CHECK_LOOP_SECONDS = 3
-SOURCE_NAME = "Ozon storefront JSON"
+SOURCE_NAME = "LIVE SERP · Ozon storefront JSON"
 
 COMPOSER_ENDPOINTS = [
     "https://api.ozon.ru/composer-api.bx/page/json/v2",
@@ -43,11 +43,44 @@ def env(name: str, *fallbacks: str) -> str:
     return ""
 
 
+def build_ozon_proxy() -> str:
+    direct = env("OZON_PROXY")
+    if direct:
+        return direct
+
+    provider = env("OZON_PROXY_PROVIDER").lower()
+    user = env("OZON_PROXY_USER")
+    password = env("OZON_PROXY_PASS")
+    host = env("OZON_PROXY_HOST")
+    port = env("OZON_PROXY_PORT")
+    city = env("OZON_PROXY_CITY") or "rostov_on_don"
+    session_id = env("OZON_PROXY_SESSION") or "ozonradar1"
+
+    if provider == "decodo" and user and password:
+        host = host or "gate.decodo.com"
+        port = port or "7000"
+        prefix = user if user.startswith("user-") else "user-" + user
+        username = f"{prefix}-country-ru-city-{city}-session-{session_id}"
+        return (
+            "http://"
+            + urllib.parse.quote(username, safe="")
+            + ":"
+            + urllib.parse.quote(password, safe="")
+            + "@"
+            + host
+            + ":"
+            + port
+        )
+
+    return ""
+
+
 RADAR_SECRET = env("RADAR_SECRET")
 TELEGRAM_BOT_TOKEN = env("TELEGRAM_BOT_TOKEN", "BOT_TOKEN")
 TELEGRAM_CHAT_ID = env("TELEGRAM_CHAT_ID", "OWNER_CHAT_ID")
-OZON_PROXY = env("OZON_PROXY")
+OZON_PROXY = build_ozon_proxy()
 RADAR_TASKS_JSON = env("RADAR_TASKS_JSON")
+CONFIRM_SECONDS = max(15, min(30, int(env("OZON_CONFIRM_SECONDS") or "20")))
 
 
 class RadarTaskIn(BaseModel):
@@ -80,6 +113,9 @@ class TaskState:
     last_checked_iso: str = ""
     next_due_ts: float = 0.0
     alert_active: bool = False
+    alert_kind: str = ""
+    alert_origin_position: int | None = None
+    last_alert_position: int | None = None
     last_alert_iso: str = ""
     status: str = "WAITING"
     source: str = SOURCE_NAME
@@ -326,16 +362,64 @@ def make_alert(task: RadarTaskIn, prev: int, current: int | None, event_type: st
     )
 
 
+async def _measure_confirmed(task: RadarTaskIn, previous: int | None) -> dict[str, Any]:
+    first = await asyncio.to_thread(ozon.position, task.query, task.sku, task.max_position)
+    first_pos = first["position"]
+    first_eff = first_pos if first_pos is not None else task.max_position + 1
+
+    needs_confirmation = first_pos is None
+    if previous is not None:
+        drop = first_eff - previous
+        crossed = previous <= task.top_boundary and first_eff > task.top_boundary
+        needs_confirmation = needs_confirmation or crossed or drop >= task.drop_threshold
+
+    if not needs_confirmation:
+        first["position_effective"] = first_eff
+        first["confirmed"] = True
+        return first
+
+    await asyncio.sleep(CONFIRM_SECONDS)
+    second = await asyncio.to_thread(ozon.position, task.query, task.sku, task.max_position)
+    second_pos = second["position"]
+
+    if first_pos is None and second_pos is None:
+        second["position"] = task.max_position + 1
+        second["position_effective"] = task.max_position + 1
+        second["position_text"] = f">{task.max_position}"
+        second["status"] = f"OUTSIDE_TOP_{task.max_position}_CONFIRMED"
+        second["confirmed"] = True
+        return second
+
+    if first_pos is not None and second_pos is None:
+        # A sudden drop followed by one miss is not enough evidence to convert
+        # the measurement to max_position+1. Confirm the miss one more time.
+        await asyncio.sleep(CONFIRM_SECONDS)
+        third = await asyncio.to_thread(ozon.position, task.query, task.sku, task.max_position)
+        if third["position"] is None:
+            third["position"] = task.max_position + 1
+            third["position_effective"] = task.max_position + 1
+            third["position_text"] = f">{task.max_position}"
+            third["status"] = f"OUTSIDE_TOP_{task.max_position}_CONFIRMED"
+            third["confirmed"] = True
+            return third
+        third["position_effective"] = third["position"]
+        third["confirmed"] = True
+        return third
+
+    second["position_effective"] = second_pos
+    second["confirmed"] = True
+    return second
+
+
 async def check_one(key: str, state: TaskState) -> None:
     task = state.task
     previous = state.last_position
     checked_iso = now_iso()
 
     try:
-        result = await asyncio.to_thread(ozon.position, task.query, task.sku, task.max_position)
-        position = result["position"]
-        current_eff = position if position is not None else task.max_position + 1
-        previous_eff = previous
+        result = await _measure_confirmed(task, previous)
+        position = int(result["position_effective"])
+        display_position = result.get("position_text") or str(position)
 
         state.last_checked_ts = time.time()
         state.last_checked_iso = checked_iso
@@ -351,23 +435,55 @@ async def check_one(key: str, state: TaskState) -> None:
 
         alert_type = ""
         alert_message = ""
-        delta = None if previous_eff is None else previous_eff - current_eff
+        delta = None if previous is None else previous - position
 
-        if previous_eff is not None:
-            drop = current_eff - previous_eff
-            crossed = previous_eff <= task.top_boundary and current_eff > task.top_boundary
+        if previous is not None:
+            drop = position - previous
+            crossed_out = previous <= task.top_boundary and position > task.top_boundary
+            crossed_in = previous > task.top_boundary and position <= task.top_boundary
             material_drop = drop >= task.drop_threshold
 
-            if crossed or material_drop:
-                alert_type = "OUT_TOP" if crossed else "DROP"
-                alert_message = make_alert(task, previous_eff, position, alert_type)
+            if not state.alert_active and (crossed_out or material_drop):
+                alert_type = "OUT_TOP" if crossed_out else "DROP"
                 state.alert_active = True
+                state.alert_kind = alert_type
+                state.alert_origin_position = previous
+                state.last_alert_position = position
+            elif state.alert_active:
+                recovered = (
+                    (state.alert_kind == "OUT_TOP" and crossed_in)
+                    or (
+                        state.alert_kind == "DROP"
+                        and state.alert_origin_position is not None
+                        and position <= state.alert_origin_position
+                    )
+                )
+                if recovered:
+                    alert_type = "RECOVERY"
+                    state.alert_active = False
+                elif (
+                    state.last_alert_position is not None
+                    and position - state.last_alert_position >= task.drop_threshold
+                ):
+                    alert_type = "DROP"
+                    state.last_alert_position = position
+
+            if alert_type:
+                alert_message = make_alert(task, previous, position, alert_type)
                 state.last_alert_iso = checked_iso
-            elif state.alert_active and current_eff <= task.top_boundary:
-                alert_type = "RECOVERY"
-                alert_message = make_alert(task, previous_eff, position, alert_type)
-                state.alert_active = False
-                state.last_alert_iso = checked_iso
+                if alert_type == "RECOVERY":
+                    state.alert_kind = ""
+                    state.alert_origin_position = None
+                    state.last_alert_position = None
+
+        telegram_sent = False
+        telegram_error = ""
+        if alert_message and TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID:
+            try:
+                await asyncio.to_thread(telegram_send, alert_message)
+                telegram_sent = True
+            except Exception as exc:
+                telegram_error = f"{type(exc).__name__}: {exc}"
 
         add_event(
             {
@@ -378,36 +494,35 @@ async def check_one(key: str, state: TaskState) -> None:
                 "sku": task.sku,
                 "query": task.query,
                 "position": position,
-                "position_text": position_text(position, task.max_position),
-                "previous": previous_eff,
+                "position_text": display_position,
+                "previous": previous,
                 "delta": delta,
                 "status": state.status,
                 "source": state.source,
                 "endpoint": state.endpoint,
                 "http_status": state.http_status,
                 "response_ms": state.response_ms,
+                "confirmed": bool(result.get("confirmed")),
                 "alert_type": alert_type,
                 "alert_message": alert_message,
+                "telegram_sent": telegram_sent,
             }
         )
 
-        if alert_message:
-            try:
-                await asyncio.to_thread(telegram_send, alert_message)
-            except Exception as exc:
-                add_event(
-                    {
-                        "kind": "TELEGRAM_ERROR",
-                        "checked_at": checked_iso,
-                        "key": key,
-                        "article": task.article,
-                        "sku": task.sku,
-                        "query": task.query,
-                        "status": f"Telegram error: {type(exc).__name__}: {exc}",
-                    }
-                )
+        if telegram_error:
+            add_event(
+                {
+                    "kind": "TELEGRAM_ERROR",
+                    "checked_at": checked_iso,
+                    "key": key,
+                    "article": task.article,
+                    "sku": task.sku,
+                    "query": task.query,
+                    "status": "Telegram error: " + telegram_error,
+                }
+            )
 
-        state.last_position = current_eff
+        state.last_position = position
 
     except Exception as exc:
         state.last_checked_ts = time.time()
