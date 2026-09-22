@@ -256,17 +256,42 @@ rollback_live_() {
   echo "⚠️ Пытаюсь автоматически вернуть rollback-бэкап..."
   rsync -a --delete "$BACKUP/" "$PROJECT/"
 
-  if (
+  if ! (
     cd "$PROJECT"
     clasp push -f
   ); then
-    echo "✅ Rollback отправлен обратно в Apps Script."
-    return 0
+    echo "🚨 CRITICAL: автоматический rollback push не прошёл."
+    echo "   Локальный backup сохранён: $BACKUP"
+    return 1
   fi
 
-  echo "🚨 CRITICAL: автоматический rollback push не прошёл."
-  echo "   Локальный backup сохранён: $BACKUP"
-  return 1
+  local verify_dir="$WORK/rollback-verify"
+  rm -rf "$verify_dir"
+  mkdir -p "$verify_dir"
+  write_clasp_config_ "$verify_dir"
+
+  if ! (
+    cd "$verify_dir"
+    clasp pull
+  ); then
+    echo "🚨 CRITICAL: rollback push прошёл, но проверить его повторным pull не удалось."
+    echo "   Backup: $BACKUP"
+    return 1
+  fi
+
+  local expected
+  local actual
+  expected="$(project_semantic_fingerprint_ "$BACKUP")"
+  actual="$(project_semantic_fingerprint_ "$verify_dir")"
+
+  if [ "$expected" != "$actual" ]; then
+    echo "🚨 CRITICAL: remote после rollback не совпадает с исходным backup."
+    echo "   Backup: $BACKUP"
+    return 1
+  fi
+
+  echo "✅ Rollback отправлен и подтверждён повторным pull."
+  return 0
 }
 
 echo "[1/9] Скачиваю 4 source-файла из зафиксированного commit..."
@@ -320,7 +345,8 @@ TS="$(date +%Y%m%d-%H%M%S)"
 BACKUP="$BACKUPS/core-repair-$TS"
 mkdir -p "$BACKUP"
 rsync -a "$PROJECT/" "$BACKUP/"
-echo "      $BACKUP"
+chmod -R go-rwx "$BACKUP"
+echo "      $BACKUP (permissions hardened)"
 
 echo "[5/9] Патчу master/K2/price и проверяю единый global namespace..."
 TARGET_K2_EV="$(replace_or_create_   "$PROJECT"   "function k2EvolutionFetchAndApply_"   "$WORK/K2_EVOLUTION_ENGINE.gs"   "K2_EVOLUTION_ENGINE.js")"
@@ -387,9 +413,9 @@ if ! (
   cd "$VERIFY"
   clasp pull
 ); then
-  echo "⚠️ Push прошёл, но повторный pull для remote-verify не удался."
-  echo "   При сетевой ошибке проверки rollback автоматически не запускается."
-  echo "   Backup: $BACKUP"
+  echo "❌ Push прошёл, но повторный pull для remote-verify не удался."
+  echo "   Непроверенный LIVE не оставляем: запускаю rollback."
+  rollback_live_ || true
   exit 7
 fi
 
