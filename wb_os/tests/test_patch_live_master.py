@@ -10,7 +10,7 @@ LEGACY = r"""
 function runFinalAutomationCycle_(forceTelegram, forceAll) {
   var cycleErrors = [];
   var k2Updated = false;
-  var historyDue = false;
+  var historyDue = shouldTakeDailyStockSnapshot_();
 
   try {
     /* 1. K2 */
