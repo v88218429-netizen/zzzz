@@ -1,5 +1,5 @@
 /**
- * WB OS / WB Public Customer Price Engine v0.1.3
+ * WB OS / WB Public Customer Price Engine v0.1.4
  *
  * Purpose:
  * - read WB nmID values from "Сводная";
@@ -15,7 +15,7 @@
  */
 
 var WB_PUBLIC_PRICE_V4 = {
-  VERSION: '0.1.3',
+  VERSION: '0.1.4',
   SUMMARY_SHEET: 'Сводная',
   SOURCE_SHEET: '_WB_PUBLIC_PRICE_V4',
   FIRST_DATA_ROW: 12,
@@ -35,7 +35,18 @@ var WB_PUBLIC_PRICE_V4 = {
 
 
 function syncWbPublicCustomerPricesV4_(force) {
-  wbPriceV4CleanupLegacyTriggers_();
+  try {
+    wbPriceV4CleanupLegacyTriggers_();
+  } catch (cleanupError) {
+    Logger.log(
+      'WB Public Price trigger cleanup skipped: ' +
+      String(
+        cleanupError && cleanupError.message
+          ? cleanupError.message
+          : cleanupError
+      )
+    );
+  }
 
   var props = PropertiesService.getScriptProperties();
 
