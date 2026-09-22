@@ -2,7 +2,8 @@
 # CI trigger: direct-file repair; archive deploy is quarantined.
 set -euo pipefail
 
-REPO_RAW="https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg"
+SOURCE_REF="${2:-mainggg}"
+REPO_RAW="https://raw.githubusercontent.com/v88218429-netizen/zzzz/$SOURCE_REF"
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/wb-os-core-repair.XXXXXX")"
 BACKUPS="$HOME/.wb-os-backups"
 mkdir -p "$BACKUPS"
@@ -10,6 +11,7 @@ trap 'rm -rf "$WORK"' EXIT
 
 echo "WB OS · CORE REPAIR"
 echo "==================="
+echo "Source ref: $SOURCE_REF"
 
 if command -v clasp >/dev/null 2>&1; then
   run_clasp() { clasp "$@"; }
@@ -26,10 +28,10 @@ curl --connect-timeout 10 --max-time 30 -fsSL   "$REPO_RAW/wb_os/apps_script/WB_
 curl --connect-timeout 10 --max-time 30 -fsSL   "$REPO_RAW/wb_os/tools/patch_live_master.py"   -o "$WORK/patch_live_master.py"
 curl --connect-timeout 10 --max-time 30 -fsSL   "$REPO_RAW/wb_os/tools/audit_and_repair_live.py"   -o "$WORK/audit_and_repair_live.py"
 
-grep -q "K2 Evolution Engine v0.1.5" "$WORK/K2_EVOLUTION_ENGINE.gs" || {
+grep -q "K2 Evolution Engine v0.1.6" "$WORK/K2_EVOLUTION_ENGINE.gs" || {
   echo "❌ Неверная версия K2 payload"; exit 3;
 }
-grep -q "WB Public Customer Price Engine v0.1.3" "$WORK/WB_PUBLIC_PRICE_V4.gs" || {
+grep -q "WB Public Customer Price Engine v0.1.4" "$WORK/WB_PUBLIC_PRICE_V4.gs" || {
   echo "❌ Неверная версия WB Price payload"; exit 3;
 }
 grep -q "syncWbPublicCustomerPricesV4_(forceAll);" "$WORK/patch_live_master.py" || {
