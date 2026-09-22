@@ -19,20 +19,32 @@ class Perf:
         print("AUTH_OK", STORE)
     def get(self,path,params=None):
         if not self.token:self.auth()
-        r=requests.get(BASE+path,headers={"Authorization":"Bearer "+self.token,"Accept":"application/json"},params=params,timeout=30)
-        if r.status_code==401:self.auth(); r=requests.get(BASE+path,headers={"Authorization":"Bearer "+self.token,"Accept":"application/json"},params=params,timeout=30)
-        r.raise_for_status(); return r.json()
+        for attempt in range(4):
+            r=requests.get(BASE+path,headers={"Authorization":"Bearer "+self.token,"Accept":"application/json"},params=params,timeout=30)
+            if r.status_code==401:
+                self.auth()
+                continue
+            if r.status_code==429:
+                time.sleep(1.5*(attempt+1))
+                continue
+            if r.status_code>=400:
+                print("GET_FAILED",STORE,path,r.status_code,r.text[:1000])
+            r.raise_for_status()
+            return r.json()
+        r.raise_for_status()
     def campaigns(self):
+        j=self.get("/api/client/campaign",{"page":1,"pageSize":100,"state":"CAMPAIGN_STATE_RUNNING"})
+        return j.get("list") or []
+    def products(self,cid):
         out=[]; page=1
         while True:
-            j=self.get("/api/client/campaign",{"page":page,"pageSize":100,"state":"CAMPAIGN_STATE_RUNNING"})
-            arr=j.get("list") or []
+            j=self.get(f"/api/client/campaign/{cid}/v2/products",{"page":page,"pageSize":100})
+            arr=j.get("products") or []
             out+=arr
-            if len(arr)<100:break
+            if len(arr)<100: break
             page+=1
+            time.sleep(0.4)
         return out
-    def products(self,cid):
-        return self.get(f"/api/client/campaign/{cid}/v2/products").get("products") or []
     def competitive(self,cid,skus):
         if not skus:return {}
         out={}
