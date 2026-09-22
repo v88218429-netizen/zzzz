@@ -1,0 +1,167 @@
+{
+  "task_id": "BUSINESS_MODELS",
+  "request": "BUSINESS_MODELS_20260921_125905.json",
+  "query": "бизнес модели 2026 масштабируемый бизнес Россия",
+  "knowledge_tag": "BUSINESS",
+  "generated_at": "2026-09-22T04:01:41.456919+00:00",
+  "videos": [
+    {
+      "video_id": "ZkSsSwe2uyI",
+      "url": "https://www.youtube.com/watch?v=ZkSsSwe2uyI",
+      "title": "Business in 2026: What Awaits Entrepreneurs?",
+      "channel": "Артём Звёздин - обучение трейдингу",
+      "duration": 1473,
+      "timestamp": null,
+      "query": "бизнес модели 2026 масштабируемый бизнес Россия",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-22_BUSINESS_MODELS_video_ZkSsSwe2uyI.md",
+      "method": "FreeTranscriptAPI"
+    }
+  ],
+  "errors": [
+    {
+      "video_id": "0lEivh5ZXWU",
+      "url": "https://www.youtube.com/watch?v=0lEivh5ZXWU",
+      "title": "THESE IDEAS WILL BLOW UP THE MARKET IN 2026",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "oAducBMHq3M",
+      "url": "https://www.youtube.com/watch?v=oAducBMHq3M",
+      "title": "TOP 10 MACHINES FOR BUSINESS UNDER $500! Business Ideas! Business 2026!",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "_Kg2c_ZXoZ0",
+      "url": "https://www.youtube.com/watch?v=_Kg2c_ZXoZ0",
+      "title": "8 Machines That Will Make You Rich! The Most PROFITABLE Business Ideas of 2026!",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "G8UgrazOwAw",
+      "url": "https://www.youtube.com/watch?v=G8UgrazOwAw",
+      "title": "3 AI Businesses You Can Profit From in 2026! Best Business IDEAS",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "HsDmx1H_LLY",
+      "url": "https://www.youtube.com/watch?v=HsDmx1H_LLY",
+      "title": "AFFORDABLE EQUIPMENT TO START A BUSINESS FROM SCRATCH! Business ideas! Business 2026!",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "LZAJ9GMYe6Q",
+      "url": "https://www.youtube.com/watch?v=LZAJ9GMYe6Q",
+      "title": "Business in 2026: Where Will the Profits Be? An Analysis of Trends, Niches, and Strategies",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "FSsdWyseUM8",
+      "url": "https://www.youtube.com/watch?v=FSsdWyseUM8",
+      "title": "Как масштабировать бизнес в 2026? Токовинин, Курчатова, Шевченко, Виногродский, ГОРКИ",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "ERrFGaDxXE8",
+      "url": "https://www.youtube.com/watch?v=ERrFGaDxXE8",
+      "title": "Зарабатывай на продаже готового бизнеса",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "W0qhlKQ4x54",
+      "url": "https://www.youtube.com/watch?v=W0qhlKQ4x54",
+      "title": "Doing Business in Africa in 2026: Are Russian Companies Welcomed? | Market Entry, Sales, Logistics",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "jf0rptQPhb8",
+      "url": "https://www.youtube.com/watch?v=jf0rptQPhb8",
+      "title": "Продающее видео для франшизы. Видео для бизнеса",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "06MK-z3V0Zo",
+      "url": "https://www.youtube.com/watch?v=06MK-z3V0Zo",
+      "title": "ExDFS in 45 Seconds — Digital Products, Free Tools & Crypto Checkout #shorts",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "TcPz4i68F-o",
+      "url": "https://www.youtube.com/watch?v=TcPz4i68F-o",
+      "title": "Short AI Film- How to Build a Digital Product Business With AI in One Weekend",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "54N5OxScEuo",
+      "url": "https://www.youtube.com/watch?v=54N5OxScEuo",
+      "title": "Create Design & Digital Products Using AI (Short Prompts) 2026, Create Designs with AI Google Gemini",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "OYpZya1Fcbg",
+      "url": "https://www.youtube.com/watch?v=OYpZya1Fcbg",
+      "title": "High landing page digital product #shorts #shortvideo #shortsvideo #youtubeshorts",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "cATynfs8TdE",
+      "url": "https://www.youtube.com/watch?v=cATynfs8TdE",
+      "title": "How to Build a Two-Sided Marketplace App | Buyer & Seller Platform",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "-_ZYfR1QX2U",
+      "url": "https://www.youtube.com/watch?v=-_ZYfR1QX2U",
+      "title": "Single seller, multi-seller & marketplace auctions | iRostrum",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "qZ86gdAFto8",
+      "url": "https://www.youtube.com/watch?v=qZ86gdAFto8",
+      "title": "Sears Marketplace Seller Testimonial",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "MXPFUC5khKU",
+      "url": "https://www.youtube.com/watch?v=MXPFUC5khKU",
+      "title": "Social Selling: How to Sell on Facebook Marketplace in 2017",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "Ade0-DYsrto",
+      "url": "https://www.youtube.com/watch?v=Ade0-DYsrto",
+      "title": "How to Find Best Selling Products on Facebook Marketplace (2025)",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "CPw7ykD2528",
+      "url": "https://www.youtube.com/watch?v=CPw7ykD2528",
+      "title": "21 Day Challenge Selling on Facebook Marketplace Dropshipping (April 2021)",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "aBSxgpwLXQ4",
+      "url": "https://www.youtube.com/watch?v=aBSxgpwLXQ4",
+      "title": "Join Sharing Market and Expand Your Business Globally And Start Selling!",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "6ewMKQGjs_0",
+      "url": "https://www.youtube.com/watch?v=6ewMKQGjs_0",
+      "title": "Let's Grow! 2023 Walmart Marketplace Seller Summit General Session 2",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "Z1LctxzEREE",
+      "url": "https://www.youtube.com/watch?v=Z1LctxzEREE",
+      "title": "Understanding Short Selling",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "BTm23WQhVLM",
+      "url": "https://www.youtube.com/watch?v=BTm23WQhVLM",
+      "title": "Stock Market Moves: The First, Second, and What Sellers Do! #shorts",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    }
+  ]
+}

@@ -1,0 +1,148 @@
+{
+  "task_id": "IMRAM",
+  "request": "IMRAM_20260921_125905.json",
+  "query": "Имрам как правильно формулировать желание конечный результат",
+  "knowledge_tag": "IMRAM",
+  "generated_at": "2026-09-22T04:02:10.756333+00:00",
+  "videos": [],
+  "errors": [
+    {
+      "video_id": "tHEcJWaJVZY",
+      "url": "https://www.youtube.com/watch?v=tHEcJWaJVZY",
+      "title": "твои желания исполняются по щелчку пальцев | мощный саблиминал на исполнение желаний",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "nG3yeVF7nF8",
+      "url": "https://www.youtube.com/watch?v=nG3yeVF7nF8",
+      "title": "THESE austerities work 100%! Learn which ones to choose for real results!",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "aPKoUwWZwnI",
+      "url": "https://www.youtube.com/watch?v=aPKoUwWZwnI",
+      "title": "Джо Диспенза. Делайте это 7 дней и увидите невероятные результаты",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "C9HtWC4RZtw",
+      "url": "https://www.youtube.com/watch?v=C9HtWC4RZtw",
+      "title": "Как дойти до своего МАКСИМАЛЬНОГО потенциального РОСТА. Обмани свой организм",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "dcE--R7lq_Q",
+      "url": "https://www.youtube.com/watch?v=dcE--R7lq_Q",
+      "title": "The Gray Phantom's Return by Herman Landon | Mystery Full Audiobook",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "XYb8R-ogWPU",
+      "url": "https://www.youtube.com/watch?v=XYb8R-ogWPU",
+      "title": "Основы исполнения желаний – за 20 МИНУТ | Материализация мыслей | Великий Закон Вселенной",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "XByvIYkh4RE",
+      "url": "https://www.youtube.com/watch?v=XByvIYkh4RE",
+      "title": "Как начать привлекать чудеса в жизнь уже сегодня и быстро материализовать желаемое?",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "t5Pwn6HiIxg",
+      "url": "https://www.youtube.com/watch?v=t5Pwn6HiIxg",
+      "title": "Фразы с НЕМЫСЛИМОЙ силой и энергией / Как быстро материализовать желаемое?",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "rT7ne8ERjOo",
+      "url": "https://www.youtube.com/watch?v=rT7ne8ERjOo",
+      "title": "Энергизация тела. Метод Крийя. Практика с Мастером",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "zHsXR2DrAQs",
+      "url": "https://www.youtube.com/watch?v=zHsXR2DrAQs",
+      "title": "🕉️СЕКРЕТ БЫСТРОЙ ТРАНСФОРМАЦИИ #саморазвитие",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "d-u8QBWKPm4",
+      "url": "https://www.youtube.com/watch?v=d-u8QBWKPm4",
+      "title": "✨ СЕКРЕТ МОЛОДОСТИ И ДОЛГОЛЕТИЯ #секреты",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "ctuwEh7ukAA",
+      "url": "https://www.youtube.com/watch?v=ctuwEh7ukAA",
+      "title": "✨КАК ПОСТРОИТЬ КРЕПКИЕ ОТНОШЕНИЯ? #отношения",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "UP2iIYn3T4o",
+      "url": "https://www.youtube.com/watch?v=UP2iIYn3T4o",
+      "title": "🕉️ ЧТО ДЕЛАТЬ С НЕУДАЧАМИ? Новое видео скоро! #советы",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "ohI3WiMx92Q",
+      "url": "https://www.youtube.com/watch?v=ohI3WiMx92Q",
+      "title": "🕉 КАК ИЗБАВИТЬСЯ ОТ ПЛОХИХ ПРИВЫЧЕК?",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "pUdx04eIdac",
+      "url": "https://www.youtube.com/watch?v=pUdx04eIdac",
+      "title": "✨НОВОГОДНЕЕ ПОЗДРАВЛЕНИЕ МАСТЕРА ИМРАМА #нг",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "RwDxu3J_few",
+      "url": "https://www.youtube.com/watch?v=RwDxu3J_few",
+      "title": "Что такое кхечари-мудра? #мудра",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "QEqtWo3qAck",
+      "url": "https://www.youtube.com/watch?v=QEqtWo3qAck",
+      "title": "КОГДА МЫ СМОТРИМ ЧЕРЕЗ ГЛАЗА В ДУШУ",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "hNac3jn5cYI",
+      "url": "https://www.youtube.com/watch?v=hNac3jn5cYI",
+      "title": "Чтение дуа перед таслимом в молитве",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "5Y7OTgg8vrg",
+      "url": "https://www.youtube.com/watch?v=5Y7OTgg8vrg",
+      "title": "🕉 КАК ОПРЕДЕЛИТЬ СВОИ ПРОБЛЕМНЫЕ ЗОНЫ? #проблемы",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "RKtkbJMQqZo",
+      "url": "https://www.youtube.com/watch?v=RKtkbJMQqZo",
+      "title": "КАК ИЗМЕНИТЬ СУДЬБУ",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "dMxKXcVSeRE",
+      "url": "https://www.youtube.com/watch?v=dMxKXcVSeRE",
+      "title": "🕉 ПОЧЕМУ ЛЮДИ ПЛОХО ДУМАЮТ О МИРЕ? #счастье",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "-aVy0svZ1hg",
+      "url": "https://www.youtube.com/watch?v=-aVy0svZ1hg",
+      "title": "«Правильно ли я выполняю практику?» Отвечаем на частый вопрос практикующих.",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "jAoZ1fgthlY",
+      "url": "https://www.youtube.com/watch?v=jAoZ1fgthlY",
+      "title": "🕉️ КАК ПРОБУДИТЬ В СЕБЕ ЗНАНИЕ? #саморазвитие #просветление",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    }
+  ]
+}
