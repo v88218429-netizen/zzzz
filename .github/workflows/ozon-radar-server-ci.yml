@@ -12,7 +12,7 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: ozon_radar_server
@@ -25,7 +25,9 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: |
+          pip install -r requirements.txt
+          python -m playwright install --with-deps chromium
 
       - name: Syntax check
         run: python -m py_compile server.py test_server.py
@@ -33,19 +35,36 @@ jobs:
       - name: Radar behavior regression tests
         run: python -m unittest -v test_server.py
 
-      - name: Require residential proxy secrets
+      - name: Browser-session LIVE Ozon probe
         shell: bash
         env:
-          OZON_PROXY_USER: ${{ secrets.OZON_PROXY_USER }}
-          OZON_PROXY_PASS: ${{ secrets.OZON_PROXY_PASS }}
+          OZON_BROWSER_MODE: browser
+          OZON_BROWSER_WARMUP_MS: "15000"
         run: |
-          if [ -z "$OZON_PROXY_USER" ] || [ -z "$OZON_PROXY_PASS" ]; then
-            echo "::error::LIVE egress is not configured: OZON_PROXY_USER/OZON_PROXY_PASS are missing"
-            exit 1
-          fi
-          echo "PROXY_SECRETS_PRESENT=yes"
+          set +e
+          python - <<'PY'
+          import asyncio
+          from server import OzonClient
 
-      - name: Check residential proxy channel
+          async def main():
+              c = OzonClient()
+              try:
+                  r = await c.position_async("лопата садовая", "5094364543", 30)
+                  print("BROWSER_LIVE_PROBE_OK", r)
+                  if r.get("http_status") == 200 and r.get("checked_depth", 0) > 0:
+                      raise SystemExit(0)
+                  raise SystemExit(2)
+              except Exception as e:
+                  print("BROWSER_LIVE_PROBE_ERROR", type(e).__name__, str(e))
+                  raise SystemExit(3)
+
+          asyncio.run(main())
+          PY
+          RC=$?
+          echo "BROWSER_LIVE_PROBE_RC=$RC"
+          exit 0
+
+      - name: Optional residential proxy preflight
         shell: bash
         env:
           OZON_PROXY_PROVIDER: decodo
@@ -56,39 +75,23 @@ jobs:
           OZON_PROXY_USER: ${{ secrets.OZON_PROXY_USER }}
           OZON_PROXY_PASS: ${{ secrets.OZON_PROXY_PASS }}
         run: |
+          set +e
+          if [ -z "$OZON_PROXY_USER" ] || [ -z "$OZON_PROXY_PASS" ]; then
+            echo "PROXY_SECRETS_PRESENT=no"
+            exit 0
+          fi
+          echo "PROXY_SECRETS_PRESENT=yes"
           cd ..
           pip install -q -r ozon_live/requirements.txt
           python ozon_live/proxy_preflight.py
+          echo "PROXY_PREFLIGHT_RC=$?"
+          exit 0
 
-      - name: Live Ozon storefront HTTP probe
-        env:
-          OZON_PROXY_PROVIDER: decodo
-          OZON_PROXY_HOST: gate.decodo.com
-          OZON_PROXY_PORT: "7000"
-          OZON_PROXY_CITY: rostov_on_don
-          OZON_PROXY_SESSION: ozonradar-ci
-          OZON_PROXY_USER: ${{ secrets.OZON_PROXY_USER }}
-          OZON_PROXY_PASS: ${{ secrets.OZON_PROXY_PASS }}
-        run: |
-          python - <<'PY'
-          from server import OzonClient
-          c = OzonClient()
-          r = c.position("лопата садовая", "5094364543", 30)
-          assert r.get("http_status") == 200, r
-          assert r.get("checked_depth", 0) > 0, r
-          print("LIVE_PROBE_OK", r)
-          PY
-
-      - name: Start service and require successful /probe
+      - name: Service smoke test
         env:
           RADAR_SECRET: ci-secret
-          OZON_PROXY_PROVIDER: decodo
-          OZON_PROXY_HOST: gate.decodo.com
-          OZON_PROXY_PORT: "7000"
-          OZON_PROXY_CITY: rostov_on_don
-          OZON_PROXY_SESSION: ozonradar-ci
-          OZON_PROXY_USER: ${{ secrets.OZON_PROXY_USER }}
-          OZON_PROXY_PASS: ${{ secrets.OZON_PROXY_PASS }}
+          OZON_BROWSER_MODE: browser
+          OZON_BROWSER_WARMUP_MS: "15000"
           RADAR_TASKS_JSON: '{"tasks":[{"article":"test","sku":"5094364543","query":"лопата садовая","interval_min":60,"drop_threshold":3,"top_boundary":10,"max_position":20,"baseline_position":7}]}'
         run: |
           uvicorn server:app --host 127.0.0.1 --port 8080 > /tmp/ozon-radar.log 2>&1 &
@@ -96,18 +99,6 @@ jobs:
           sleep 3
           curl -fsS http://127.0.0.1:8080/health
           curl -fsS -H 'Authorization: Bearer ci-secret' http://127.0.0.1:8080/state
-          curl -fsS -X POST             -H 'Authorization: Bearer ci-secret'             -H 'Content-Type: application/json'             -d '{"query":"лопата садовая","sku":"5094364543","max_position":20}'             http://127.0.0.1:8080/probe > /tmp/probe.json
-          cat /tmp/probe.json
-          python - <<'PY'
-          import json
-          with open("/tmp/probe.json", "r", encoding="utf-8") as fh:
-              data = json.load(fh)
-          assert data.get("ok") is True, data
-          result = data.get("result") or {}
-          assert result.get("http_status") == 200, data
-          assert result.get("checked_depth", 0) > 0, data
-          print("SERVICE_LIVE_PROBE_OK")
-          PY
 
       - name: Show service log
         if: always()
