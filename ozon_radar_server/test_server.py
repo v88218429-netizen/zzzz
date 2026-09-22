@@ -54,6 +54,18 @@ class RadarBehaviorTests(unittest.IsolatedAsyncioTestCase):
             max_position=100,
         )
 
+
+    def test_extracts_search_items_even_when_widget_key_is_empty(self):
+        payload = {
+            "widgetStates": {
+                "": '{"items":[{"sku":"5094364543","action":{"link":"/product/lopata-5094364543/"}},{"id":"111111111","action":{"link":"/product/test-111111111/"}}]}'
+            }
+        }
+        self.assertEqual(
+            server.extract_skus_from_widget_states(payload),
+            ["5094364543", "111111111"],
+        )
+
     async def test_drop_is_confirmed_and_not_repeated_every_tick(self):
         task = self.task()
         state = server.TaskState(task=task, last_position=7)
