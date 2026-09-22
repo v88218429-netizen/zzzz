@@ -14,7 +14,7 @@
  * not depend on the next Apps Script tick.
  */
 var OZON_RADAR_SERVER = {
-  VERSION: '1.0.0',
+  VERSION: '1.1.0',
   SHEET_ID: '1SHY1rz7XZeqOGkJSkitfSPlKs4cshS_5U63NSv0TO4c',
   RADAR_SHEET: '06_Радар_1мин',
   HISTORY_SHEET: '06_Радар_История',
@@ -26,6 +26,17 @@ var OZON_RADAR_SERVER = {
   PROP_CURSOR: 'OZON_RADAR_SERVER_CURSOR',
   PROP_TRIGGER_READY: 'OZON_RADAR_SERVER_TRIGGER_READY'
 };
+
+var OZON_RADAR_SERVER_COMPILED = {
+  URL: '__OZON_RADAR_SERVER_URL__',
+  SECRET: '__OZON_RADAR_SERVER_SECRET__'
+};
+
+function radarBridgeCompiledValue_(value, placeholder) {
+  value = String(value || '').trim();
+  if (!value || value === placeholder) return '';
+  return value;
+}
 
 function ensureOzonRadarServerTrigger_() {
   var props = PropertiesService.getScriptProperties();
@@ -82,10 +93,20 @@ function ozonRadarServerTick() {
   try {
     var props = PropertiesService.getScriptProperties();
     var serverUrl = String(
-      props.getProperty(OZON_RADAR_SERVER.PROP_URL) || ''
+      props.getProperty(OZON_RADAR_SERVER.PROP_URL) ||
+      radarBridgeCompiledValue_(
+        OZON_RADAR_SERVER_COMPILED.URL,
+        '__OZON_RADAR_SERVER_URL__'
+      ) ||
+      ''
     ).trim().replace(/\/+$/, '');
     var secret = String(
-      props.getProperty(OZON_RADAR_SERVER.PROP_SECRET) || ''
+      props.getProperty(OZON_RADAR_SERVER.PROP_SECRET) ||
+      radarBridgeCompiledValue_(
+        OZON_RADAR_SERVER_COMPILED.SECRET,
+        '__OZON_RADAR_SERVER_SECRET__'
+      ) ||
+      ''
     ).trim();
 
     if (!serverUrl || !secret) {
