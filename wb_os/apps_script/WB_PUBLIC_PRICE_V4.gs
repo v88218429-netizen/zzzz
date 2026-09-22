@@ -1,5 +1,5 @@
 /**
- * WB OS / WB Public Customer Price Engine v0.1.16
+ * WB OS / WB Public Customer Price Engine v0.1.17
  *
  * Purpose:
  * - read WB nmID values from "Сводная";
@@ -10,14 +10,16 @@
  * - write a hidden shadow/source sheet for diagnostics.
  *
  * Seller discounted price in column J continues to come from the official
- * seller Prices API sheet "Цены". This module is only for the public buyer
- * price / SPP layer.
+ * seller Prices API sheet "Цены". If J is zero only because a seller article
+ * name changed, this module repairs that individual formula by nmID.
+ * Public buyer price / SPP remains the primary responsibility of this module.
  */
 
 var WB_PUBLIC_PRICE_V4 = {
-  VERSION: '0.1.16',
+  VERSION: '0.1.17',
   SUMMARY_SHEET: 'Сводная',
   SOURCE_SHEET: '_WB_PUBLIC_PRICE_V4',
+  SELLER_PRICE_SOURCE_SHEET: 'Цены',
   HEADER_ROW: 11,
   FIRST_DATA_ROW: 12,
   NMID_COL: 3,
@@ -95,6 +97,12 @@ function wbPriceV4SyncUnlocked_(force) {
       WB_PUBLIC_PRICE_V4.CLIENT_PRICE_COL
     )
     .getValues();
+
+  var sellerRepair = wbPriceV4RepairMissingSellerPrices_(
+    ss,
+    summary,
+    data
+  );
 
   var clientRange = summary.getRange(
     WB_PUBLIC_PRICE_V4.FIRST_DATA_ROW,
@@ -264,12 +272,15 @@ function wbPriceV4SyncUnlocked_(force) {
     ok: true,
     fetched: Object.keys(fetched).length,
     changed: changed,
+    sellerPriceRepairs: sellerRepair.repaired,
     preservedMissing: preservedMissing,
     mode: calibration.mode,
     calibrationRows: calibration.rows,
     medianRelativeError: calibration.medianRelativeError,
     goodShare: calibration.goodShare,
-    message: 'OK'
+    message:
+      'OK · seller-price repairs=' +
+      sellerRepair.repaired
   });
 
   /*
@@ -300,6 +311,136 @@ function wbPriceV4SyncUnlocked_(force) {
     calibrationRows: calibration.rows,
     medianRelativeError: calibration.medianRelativeError,
     goodShare: calibration.goodShare
+  };
+}
+
+
+function wbPriceV4RepairMissingSellerPrices_(
+  ss,
+  summary,
+  summaryData
+) {
+  var source = ss.getSheetByName(
+    WB_PUBLIC_PRICE_V4.SELLER_PRICE_SOURCE_SHEET
+  );
+
+  if (!source || source.getLastRow() < 2) {
+    return {
+      repaired: 0,
+      skipped: 'source_missing'
+    };
+  }
+
+  var headers = source
+    .getRange(1, 1, 1, 8)
+    .getDisplayValues()[0];
+
+  if (
+    String(headers[2] || '').trim() !==
+      'Артикул WB' ||
+    String(headers[7] || '').trim() !==
+      'Цена со скидкой'
+  ) {
+    Logger.log(
+      'WB Public Price: структура листа «Цены» изменилась; ' +
+      'авторемонт seller price J пропущен.'
+    );
+
+    return {
+      repaired: 0,
+      skipped: 'source_layout_mismatch'
+    };
+  }
+
+  var rows = source
+    .getRange(
+      2,
+      3,
+      source.getLastRow() - 1,
+      6
+    )
+    .getValues();
+
+  var sourceByNm = Object.create(null);
+  var duplicateNm = Object.create(null);
+
+  for (var i = 0; i < rows.length; i++) {
+    var nm = String(rows[i][0] || '').trim();
+    var price = wbPriceV4Number_(rows[i][5]);
+
+    if (!/^\d+$/.test(nm)) {
+      continue;
+    }
+
+    if (
+      Object.prototype.hasOwnProperty.call(
+        sourceByNm,
+        nm
+      )
+    ) {
+      duplicateNm[nm] = true;
+      continue;
+    }
+
+    sourceByNm[nm] = price;
+  }
+
+  var repaired = 0;
+
+  for (var r = 0; r < summaryData.length; r++) {
+    var row = summaryData[r];
+    var nmId = String(
+      row[WB_PUBLIC_PRICE_V4.NMID_COL - 1] || ''
+    ).trim();
+
+    var currentSeller = wbPriceV4Number_(
+      row[WB_PUBLIC_PRICE_V4.SELLER_PRICE_COL - 1]
+    );
+
+    var sourcePrice = wbPriceV4Number_(
+      sourceByNm[nmId]
+    );
+
+    if (
+      !nmId ||
+      currentSeller > 0 ||
+      !(sourcePrice > 0) ||
+      duplicateNm[nmId]
+    ) {
+      continue;
+    }
+
+    var rowNumber =
+      WB_PUBLIC_PRICE_V4.FIRST_DATA_ROW + r;
+
+    /*
+     * Repair only a broken/missing seller price. Existing positive J cells are
+     * left untouched. Matching by nmID avoids seller-article rename drift.
+     */
+    summary
+      .getRange(
+        rowNumber,
+        WB_PUBLIC_PRICE_V4.SELLER_PRICE_COL
+      )
+      .setFormula(
+        "=SUMIFS('Цены'!$H:$H;'Цены'!$C:$C;$C" +
+        rowNumber +
+        ')'
+      );
+
+    row[WB_PUBLIC_PRICE_V4.SELLER_PRICE_COL - 1] =
+      sourcePrice;
+
+    repaired++;
+  }
+
+  if (repaired) {
+    SpreadsheetApp.flush();
+  }
+
+  return {
+    repaired: repaired,
+    skipped: ''
   };
 }
 
