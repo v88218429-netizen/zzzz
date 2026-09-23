@@ -1,0 +1,227 @@
+{
+  "task_id": "IMRAM",
+  "request": "IMRAM_20260923_100003.json",
+  "query": "Имрам как правильно формулировать желание конечный результат",
+  "knowledge_tag": "IMRAM",
+  "generated_at": "2026-09-23T08:05:53.846108+00:00",
+  "videos": [
+    {
+      "video_id": "nG3yeVF7nF8",
+      "url": "https://www.youtube.com/watch?v=nG3yeVF7nF8",
+      "title": "THESE austerities work 100%! Learn which ones to choose for real results!",
+      "channel": "Роберт Оксузян",
+      "duration": 1059,
+      "timestamp": null,
+      "query": "Имрам как правильно формулировать желание конечный результат",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-23_IMRAM_video_nG3yeVF7nF8.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "aPKoUwWZwnI",
+      "url": "https://www.youtube.com/watch?v=aPKoUwWZwnI",
+      "title": "Джо Диспенза. Делайте это 7 дней и увидите невероятные результаты",
+      "channel": "VEDA",
+      "duration": 293,
+      "timestamp": null,
+      "query": "Имрам как правильно формулировать желание конечный результат",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-23_IMRAM_video_aPKoUwWZwnI.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "C9HtWC4RZtw",
+      "url": "https://www.youtube.com/watch?v=C9HtWC4RZtw",
+      "title": "Как дойти до своего МАКСИМАЛЬНОГО потенциального РОСТА. Обмани свой организм",
+      "channel": "Исправление кривизны ног и увеличение роста - www.ortopedia.ru",
+      "duration": 497,
+      "timestamp": null,
+      "query": "Имрам как правильно формулировать желание конечный результат",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-23_IMRAM_video_C9HtWC4RZtw.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "XYb8R-ogWPU",
+      "url": "https://www.youtube.com/watch?v=XYb8R-ogWPU",
+      "title": "Основы исполнения желаний – за 20 МИНУТ | Материализация мыслей | Великий Закон Вселенной",
+      "channel": "Имрам Крийя - Йога",
+      "duration": 1165,
+      "timestamp": null,
+      "query": "Имрам материализация мысли желания практика",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-23_IMRAM_video_XYb8R-ogWPU.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "XByvIYkh4RE",
+      "url": "https://www.youtube.com/watch?v=XByvIYkh4RE",
+      "title": "Как начать привлекать чудеса в жизнь уже сегодня и быстро материализовать желаемое?",
+      "channel": "Имрам Крийя - Йога",
+      "duration": 1603,
+      "timestamp": null,
+      "query": "Имрам материализация мысли желания практика",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-23_IMRAM_video_XByvIYkh4RE.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "t5Pwn6HiIxg",
+      "url": "https://www.youtube.com/watch?v=t5Pwn6HiIxg",
+      "title": "Фразы с НЕМЫСЛИМОЙ силой и энергией / Как быстро материализовать желаемое?",
+      "channel": "Имрам Крийя - Йога",
+      "duration": 1323,
+      "timestamp": null,
+      "query": "Имрам материализация мысли желания практика",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-23_IMRAM_video_t5Pwn6HiIxg.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "rT7ne8ERjOo",
+      "url": "https://www.youtube.com/watch?v=rT7ne8ERjOo",
+      "title": "Энергизация тела. Метод Крийя. Практика с Мастером",
+      "channel": "Имрам Крийя - Йога",
+      "duration": 2900,
+      "timestamp": null,
+      "query": "Имрам материализация мысли желания практика",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-23_IMRAM_video_rT7ne8ERjOo.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "10VNZda1YKQ",
+      "url": "https://www.youtube.com/watch?v=10VNZda1YKQ",
+      "title": "Вебинар \"Снятие оков кармы. Дегипнотизация сознания\"",
+      "channel": "Имрам Крийя - Йога",
+      "duration": 6830,
+      "timestamp": null,
+      "query": "Имрам материализация мысли желания практика",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-23_IMRAM_video_10VNZda1YKQ.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "zHsXR2DrAQs",
+      "url": "https://www.youtube.com/watch?v=zHsXR2DrAQs",
+      "title": "🕉️СЕКРЕТ БЫСТРОЙ ТРАНСФОРМАЦИИ #саморазвитие",
+      "channel": "Имрам Крийя Shorts",
+      "duration": 49,
+      "timestamp": null,
+      "query": "Имрам состояние исполненного желания",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-23_IMRAM_short_zHsXR2DrAQs.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "NMB9FK80NKM",
+      "url": "https://www.youtube.com/watch?v=NMB9FK80NKM",
+      "title": "СЕКРЕТЫ ИСПОЛНЕНИЯ ЖЕЛАНИЙ #саморазвитие  #предназначение #медитация #сознание",
+      "channel": "Makpal Karibzhanova 5 ELEMENT",
+      "duration": 65,
+      "timestamp": null,
+      "query": "Имрам состояние исполненного желания",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-23_IMRAM_short_NMB9FK80NKM.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "d-u8QBWKPm4",
+      "url": "https://www.youtube.com/watch?v=d-u8QBWKPm4",
+      "title": "✨ СЕКРЕТ МОЛОДОСТИ И ДОЛГОЛЕТИЯ #секреты",
+      "channel": "Имрам Крийя Shorts",
+      "duration": 41,
+      "timestamp": null,
+      "query": "Имрам состояние исполненного желания",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-23_IMRAM_short_d-u8QBWKPm4.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "ctuwEh7ukAA",
+      "url": "https://www.youtube.com/watch?v=ctuwEh7ukAA",
+      "title": "✨КАК ПОСТРОИТЬ КРЕПКИЕ ОТНОШЕНИЯ? #отношения",
+      "channel": "Имрам Крийя Shorts",
+      "duration": 23,
+      "timestamp": null,
+      "query": "Имрам состояние исполненного желания shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-23_IMRAM_short_ctuwEh7ukAA.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "UP2iIYn3T4o",
+      "url": "https://www.youtube.com/watch?v=UP2iIYn3T4o",
+      "title": "🕉️ ЧТО ДЕЛАТЬ С НЕУДАЧАМИ? Новое видео скоро! #советы",
+      "channel": "Имрам Крийя Shorts",
+      "duration": 60,
+      "timestamp": null,
+      "query": "Имрам состояние исполненного желания shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-23_IMRAM_short_UP2iIYn3T4o.md",
+      "method": "FreeTranscriptAPI"
+    }
+  ],
+  "errors": [
+    {
+      "video_id": "tHEcJWaJVZY",
+      "url": "https://www.youtube.com/watch?v=tHEcJWaJVZY",
+      "title": "твои желания исполняются по щелчку пальцев | мощный саблиминал на исполнение желаний",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "pUdx04eIdac",
+      "url": "https://www.youtube.com/watch?v=pUdx04eIdac",
+      "title": "✨НОВОГОДНЕЕ ПОЗДРАВЛЕНИЕ МАСТЕРА ИМРАМА #нг",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "ohI3WiMx92Q",
+      "url": "https://www.youtube.com/watch?v=ohI3WiMx92Q",
+      "title": "🕉 КАК ИЗБАВИТЬСЯ ОТ ПЛОХИХ ПРИВЫЧЕК?",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "RwDxu3J_few",
+      "url": "https://www.youtube.com/watch?v=RwDxu3J_few",
+      "title": "Что такое кхечари-мудра? #мудра",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "QEqtWo3qAck",
+      "url": "https://www.youtube.com/watch?v=QEqtWo3qAck",
+      "title": "КОГДА МЫ СМОТРИМ ЧЕРЕЗ ГЛАЗА В ДУШУ",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "-LW4q9ZuWu8",
+      "url": "https://www.youtube.com/watch?v=-LW4q9ZuWu8",
+      "title": "O.G. Torsunov: How and Why to Practice Nail Standing",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "5Y7OTgg8vrg",
+      "url": "https://www.youtube.com/watch?v=5Y7OTgg8vrg",
+      "title": "🕉 КАК ОПРЕДЕЛИТЬ СВОИ ПРОБЛЕМНЫЕ ЗОНЫ? #проблемы",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "jAoZ1fgthlY",
+      "url": "https://www.youtube.com/watch?v=jAoZ1fgthlY",
+      "title": "🕉️ КАК ПРОБУДИТЬ В СЕБЕ ЗНАНИЕ? #саморазвитие #просветление",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "RKtkbJMQqZo",
+      "url": "https://www.youtube.com/watch?v=RKtkbJMQqZo",
+      "title": "КАК ИЗМЕНИТЬ СУДЬБУ",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "dMxKXcVSeRE",
+      "url": "https://www.youtube.com/watch?v=dMxKXcVSeRE",
+      "title": "🕉 ПОЧЕМУ ЛЮДИ ПЛОХО ДУМАЮТ О МИРЕ? #счастье",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    }
+  ]
+}
