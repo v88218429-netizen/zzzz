@@ -5,6 +5,7 @@ on:
     paths:
       - "wb_os/**"
       - ".github/workflows/wb-os-validate.yml"
+      - ".github/workflows/wb-os-deploy-k2.yml"
   push:
     branches:
       - "mainggg"
@@ -12,6 +13,7 @@ on:
     paths:
       - "wb_os/**"
       - ".github/workflows/wb-os-validate.yml"
+      - ".github/workflows/wb-os-deploy-k2.yml"
   workflow_dispatch:
 jobs:
   validate:
@@ -113,6 +115,11 @@ jobs:
           grep -q "project_semantic_fingerprint_" wb_os/run_core_repair.command
           grep -q "rollback_live_" wb_os/run_core_repair.command
           grep -q "CORE REPAIR DEPLOYED + REMOTE VERIFIED" wb_os/run_core_repair.command
+          grep -q "audit_and_repair_live.py" .github/workflows/wb-os-deploy-k2.yml
+          grep -q "Pull back and verify actual LIVE" .github/workflows/wb-os-deploy-k2.yml
+          grep -q "K2 Evolution Engine v0.1.17" .github/workflows/wb-os-deploy-k2.yml
+          grep -q "getK2CredentialsWithFallback_" .github/workflows/wb-os-deploy-k2.yml
+          grep -q "wbOsEnsureMasterTrigger" .github/workflows/wb-os-deploy-k2.yml
           ! grep -q "bundle.part" wb_os/run_core_repair.command
           echo "Core repair direct-file contract: OK"
 
