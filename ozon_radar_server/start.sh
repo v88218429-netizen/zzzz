@@ -4,7 +4,7 @@ set -eu
 TS_DIR="${TAILSCALE_STATE_DIR:-/var/lib/tailscale}"
 TS_SOCK="/var/run/tailscale/tailscaled.sock"
 TS_STATE="$TS_DIR/tailscaled.state"
-TS_PROXY="socks5h://127.0.0.1:1055"
+TS_PROXY="socks5://127.0.0.1:1055"
 TS_EXIT=""
 
 log() {
