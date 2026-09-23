@@ -54,7 +54,10 @@ tailscaled \
 READY=0
 i=0
 while [ "$i" -lt 30 ]; do
-  if tailscale --socket="$TS_SOCK" status >/dev/null 2>&1; then
+  # On a fresh node, tailscaled is fully ready while BackendState=NeedsLogin.
+  # "tailscale status" exits non-zero in that state, so do not use its exit
+  # code as daemon readiness. The control socket is the readiness signal.
+  if [ -S "$TS_SOCK" ]; then
     READY=1
     break
   fi
@@ -63,7 +66,7 @@ while [ "$i" -lt 30 ]; do
 done
 
 if [ "$READY" -ne 1 ]; then
-  log "TAILSCALE: daemon did not become ready; LIVE is fail-closed"
+  log "TAILSCALE: daemon control socket did not become ready; LIVE is fail-closed"
   export OZON_TAILSCALE_ACTIVE=0
   export OZON_FORCE_LIVE_OFFLINE=1
   exec uvicorn server:app --host 0.0.0.0 --port "${PORT:-8080}"
