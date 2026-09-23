@@ -1,0 +1,203 @@
+{
+  "task_id": "INCOME",
+  "request": "INCOME_20260923_080207.json",
+  "query": "как выйти на 1 миллион чистой прибыли в месяц бизнес реальные кейсы",
+  "knowledge_tag": "INCOME",
+  "generated_at": "2026-09-23T06:02:37.294539+00:00",
+  "videos": [
+    {
+      "video_id": "JDjyUzuzHa0",
+      "url": "https://www.youtube.com/watch?v=JDjyUzuzHa0",
+      "title": "Как делать 1.000.000 ₽ на мебели без своего производства?",
+      "channel": "Мебельный Бизнес в Квадрате",
+      "duration": 1666,
+      "timestamp": null,
+      "query": "как выйти на 1 миллион чистой прибыли в месяц бизнес реальные кейсы",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-23_INCOME_video_JDjyUzuzHa0.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "9nb4LT1fkoY",
+      "url": "https://www.youtube.com/watch?v=9nb4LT1fkoY",
+      "title": "Проверенный СКРИПТ ПРОДАЖ по которому Вы сможете легко продать своё обучение с чеком от 250к рублей.",
+      "channel": "Максим Хирковский",
+      "duration": 2410,
+      "timestamp": null,
+      "query": "как выйти на 1 миллион чистой прибыли в месяц бизнес реальные кейсы",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-23_INCOME_video_9nb4LT1fkoY.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "b86eE0a3Q9k",
+      "url": "https://www.youtube.com/watch?v=b86eE0a3Q9k",
+      "title": "ПРИБЫЛЬ есть только у тех, кто НЕ БОИТСЯ ЭТОГО! Что ограничивает РОСТ В БИЗНЕСЕ?",
+      "channel": "Михаил Гребенюк",
+      "duration": 5053,
+      "timestamp": null,
+      "query": "как выйти на 1 миллион чистой прибыли в месяц бизнес реальные кейсы",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-23_INCOME_video_b86eE0a3Q9k.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "hF-QMGyHHpY",
+      "url": "https://www.youtube.com/watch?v=hF-QMGyHHpY",
+      "title": "Чем важна ОБРАТНАЯ связь и почему НУЖНО ее собирать? / Как чужое мнение поможет вырасти в доходе?",
+      "channel": "Михаил Гребенюк",
+      "duration": 8412,
+      "timestamp": null,
+      "query": "как выйти на 1 миллион чистой прибыли в месяц бизнес реальные кейсы",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-23_INCOME_video_hF-QMGyHHpY.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "VP8OFqoAbY8",
+      "url": "https://www.youtube.com/watch?v=VP8OFqoAbY8",
+      "title": "Как раз в полгода удваивать свой доход?",
+      "channel": "Михаил Гребенюк",
+      "duration": 6297,
+      "timestamp": null,
+      "query": "как выйти на 1 миллион чистой прибыли в месяц бизнес реальные кейсы",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-23_INCOME_video_VP8OFqoAbY8.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "wFYRUSf-5LA",
+      "url": "https://www.youtube.com/watch?v=wFYRUSf-5LA",
+      "title": "A Brazilian business from scratch to #1 in the real estate market in 3 years. Evgeny Shutikov",
+      "channel": "Илья Варлахов | Я БИЗНЕС and Invest to Brazil",
+      "duration": 2167,
+      "timestamp": null,
+      "query": "как выйти на 1 миллион чистой прибыли в месяц бизнес реальные кейсы",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-23_INCOME_video_wFYRUSf-5LA.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "OawxIcSSl8I",
+      "url": "https://www.youtube.com/watch?v=OawxIcSSl8I",
+      "title": "Маркетплейсы 2026: кто реально зарабатывает и почему большинство сливает деньги | Екатерина Гедзь",
+      "channel": "Психолог Дарья Миронова — По душам",
+      "duration": 3224,
+      "timestamp": null,
+      "query": "как выйти на 1 миллион чистой прибыли в месяц бизнес реальные кейсы",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-23_INCOME_video_OawxIcSSl8I.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "VBwop-EK_yA",
+      "url": "https://www.youtube.com/watch?v=VBwop-EK_yA",
+      "title": "7 Eternal Businesses That Are Profitable Even During a Crisis",
+      "channel": "Капиталифорния",
+      "duration": 818,
+      "timestamp": null,
+      "query": "как выйти на 1 миллион чистой прибыли в месяц бизнес реальные кейсы",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-23_INCOME_video_VBwop-EK_yA.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "1ImJAVKTMII",
+      "url": "https://www.youtube.com/watch?v=1ImJAVKTMII",
+      "title": "The Entrepreneur is EXHAUSTED! How to SCALE your business when you DON'T KNOW where to go?",
+      "channel": "Михаил Гребенюк",
+      "duration": 5572,
+      "timestamp": null,
+      "query": "как выйти на 1 миллион чистой прибыли в месяц бизнес реальные кейсы",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-23_INCOME_video_1ImJAVKTMII.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "RCfhxm8QDfg",
+      "url": "https://www.youtube.com/watch?v=RCfhxm8QDfg",
+      "title": "5 способов увеличить прибыль ресторана в 2026 году | Как заработать +2 млн ₽",
+      "channel": "Бизнес на тарелке ",
+      "duration": 281,
+      "timestamp": null,
+      "query": "как выйти на 1 миллион чистой прибыли в месяц бизнес реальные кейсы",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-23_INCOME_video_RCfhxm8QDfg.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "JGJU4d-9aXg",
+      "url": "https://www.youtube.com/watch?v=JGJU4d-9aXg",
+      "title": "Как из 1 000 000 сделать 3 000 000?🍋 #пассивныйдоход #недвижимость #субаренда",
+      "channel": "Владимир Якушечкин 200% годовых ",
+      "duration": 61,
+      "timestamp": null,
+      "query": "как увеличить прибыль до 1 млн в месяц предприниматель shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-23_INCOME_short_JGJU4d-9aXg.md",
+      "method": "FreeTranscriptAPI"
+    }
+  ],
+  "errors": [
+    {
+      "video_id": "M8hfMLKkgAE",
+      "url": "https://www.youtube.com/watch?v=M8hfMLKkgAE",
+      "title": "где заработать миллион рублей за короткий срок",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "JIyPoD3pjkk",
+      "url": "https://www.youtube.com/watch?v=JIyPoD3pjkk",
+      "title": "Как создать пассивный доход от 100 000 вложив 1.5 млн.? Окупаемость инвестиций до 12 месяцев",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "Bf7lkhk8NWc",
+      "url": "https://www.youtube.com/watch?v=Bf7lkhk8NWc",
+      "title": "Сколько можно заработать на изготовлении садовых стульев? Мини бизнес в гараже",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "6FSuUEQX1n8",
+      "url": "https://www.youtube.com/watch?v=6FSuUEQX1n8",
+      "title": "Франшиза Masloman - бизнес на отработанном масле",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "NcOKWAmESMY",
+      "url": "https://www.youtube.com/watch?v=NcOKWAmESMY",
+      "title": "Получай стабильный доход с надежным фермером из ОФ \"Наполеон\"",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "79pzKHybyss",
+      "url": "https://www.youtube.com/watch?v=79pzKHybyss",
+      "title": "Хостел как бизнес идея. Бизнес план. Бизнес ниша. Ресепшн. Комната. Ключ. Карта. Общежитие. Соседи.",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "epPHLhk5vTs",
+      "url": "https://www.youtube.com/watch?v=epPHLhk5vTs",
+      "title": "Бизнес на 3д моделях! Меднение",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "Fe0fRI3-2zA",
+      "url": "https://www.youtube.com/watch?v=Fe0fRI3-2zA",
+      "title": "Хостел преткновения: предпринимательница из Березников потеряла свободу и бизнес",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "NvAAMc4dw68",
+      "url": "https://www.youtube.com/watch?v=NvAAMc4dw68",
+      "title": "✅238 тысяч рублей за 1 месяц: Инвестиции для начинающих. Как начать инвестировать в акции 2022?",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "GkokhhLbT3g",
+      "url": "https://www.youtube.com/watch?v=GkokhhLbT3g",
+      "title": "Кафе самообслуживания GETHOT",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    }
+  ]
+}
