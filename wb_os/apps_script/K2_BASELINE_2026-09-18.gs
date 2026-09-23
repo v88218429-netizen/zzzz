@@ -291,24 +291,78 @@ function getK2WarehouseItems_() {
 /**
  * Авторизуется на сайте К2.
  */
+function getK2CredentialsWithFallback_() {
+  var stores = [
+    {
+      name: 'ScriptProperties',
+      store: PropertiesService.getScriptProperties()
+    },
+    {
+      name: 'UserProperties',
+      store: PropertiesService.getUserProperties()
+    }
+  ];
+
+  try {
+    stores.push({
+      name: 'DocumentProperties',
+      store: PropertiesService.getDocumentProperties()
+    });
+  } catch (ignore) {}
+
+  for (var i = 0; i < stores.length; i++) {
+    var store = stores[i].store;
+    if (!store) {
+      continue;
+    }
+
+    var username = String(
+      store.getProperty('K2_USERNAME') ||
+      store.getProperty('K2_LOGIN') ||
+      store.getProperty('K2_USER') ||
+      ''
+    ).trim();
+
+    var password = String(
+      store.getProperty('K2_PASSWORD') ||
+      store.getProperty('K2_PASS') ||
+      ''
+    );
+
+    if (username && password) {
+      PropertiesService
+        .getScriptProperties()
+        .setProperties({
+          K2_USERNAME: username,
+          K2_PASSWORD: password
+        });
+
+      return {
+        username: username,
+        password: password,
+        source: stores[i].name
+      };
+    }
+  }
+
+  return {
+    username: '',
+    password: '',
+    source: ''
+  };
+}
+
+
 function loginK2_() {
   var props =
     PropertiesService
       .getScriptProperties();
 
-  var username =
-    String(
-      props.getProperty(
-        'K2_USERNAME'
-      ) || ''
-    ).trim();
+  var credentials =
+    getK2CredentialsWithFallback_();
 
-  var password =
-    String(
-      props.getProperty(
-        'K2_PASSWORD'
-      ) || ''
-    );
+  var username = credentials.username;
+  var password = credentials.password;
 
   if (!username) {
     throw new Error(
