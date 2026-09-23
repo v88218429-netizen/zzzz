@@ -86,6 +86,142 @@ if len(k2) > 1:
 else:
     keeper = k2[0]
 
+
+def repair_k2_credentials(text):
+    """
+    Make K2 credentials resilient across older live project variants.
+
+    Older revisions could persist credentials in UserProperties while newer
+    loginK2_ implementations read ScriptProperties only. During audited deploy
+    we install a fallback reader that searches Script/User/Document properties
+    and migrates any valid pair back into ScriptProperties.
+    """
+    helper_marker = "function getK2CredentialsWithFallback_()"
+
+    if helper_marker not in text:
+        login_pos = text.find("function loginK2_()")
+        if login_pos < 0:
+            raise SystemExit(
+                "AUDIT_FAIL: K2 core has no loginK2_ credential entrypoint"
+            )
+
+        helper = r"""function getK2CredentialsWithFallback_() {
+  var stores = [
+    {
+      name: 'ScriptProperties',
+      store: PropertiesService.getScriptProperties()
+    },
+    {
+      name: 'UserProperties',
+      store: PropertiesService.getUserProperties()
+    }
+  ];
+
+  try {
+    stores.push({
+      name: 'DocumentProperties',
+      store: PropertiesService.getDocumentProperties()
+    });
+  } catch (ignore) {}
+
+  for (var i = 0; i < stores.length; i++) {
+    var store = stores[i].store;
+    if (!store) continue;
+
+    var username = String(
+      store.getProperty('K2_USERNAME') ||
+      store.getProperty('K2_LOGIN') ||
+      store.getProperty('K2_USER') ||
+      ''
+    ).trim();
+
+    var password = String(
+      store.getProperty('K2_PASSWORD') ||
+      store.getProperty('K2_PASS') ||
+      ''
+    );
+
+    if (username && password) {
+      PropertiesService
+        .getScriptProperties()
+        .setProperties({
+          K2_USERNAME: username,
+          K2_PASSWORD: password
+        });
+
+      return {
+        username: username,
+        password: password,
+        source: stores[i].name
+      };
+    }
+  }
+
+  return {
+    username: '',
+    password: '',
+    source: ''
+  };
+}
+
+
+"""
+
+        text = text[:login_pos] + helper + text[login_pos:]
+        print("K2_CREDENTIAL_FALLBACK_ADDED")
+
+    login_start = text.find("function loginK2_()")
+    if login_start < 0:
+        raise SystemExit("AUDIT_FAIL: K2 loginK2_ not found")
+
+    login_end = text.find("\nfunction ", login_start + 1)
+    if login_end < 0:
+        login_end = len(text)
+
+    login_text = text[login_start:login_end]
+
+    if "getK2CredentialsWithFallback_();" not in login_text:
+        legacy_credentials = re.compile(
+            r"""var username\s*=\s*
+            String\(\s*
+              props\.getProperty\(\s*'K2_USERNAME'\s*\)
+              \s*\|\|\s*''
+            \s*\)\.trim\(\);\s*
+            var password\s*=\s*
+            String\(\s*
+              props\.getProperty\(\s*'K2_PASSWORD'\s*\)
+              \s*\|\|\s*''
+            \s*\);""",
+            re.S | re.X,
+        )
+
+        replacement = """var credentials =
+    getK2CredentialsWithFallback_();
+
+  var username = credentials.username;
+  var password = credentials.password;"""
+
+        login_text2, count = legacy_credentials.subn(
+            replacement,
+            login_text,
+            count=1,
+        )
+
+        if count != 1:
+            raise SystemExit(
+                "AUDIT_FAIL: K2 login credential layout is unknown; "
+                "refusing to guess"
+            )
+
+        text = (
+            text[:login_start]
+            + login_text2
+            + text[login_end:]
+        )
+        print("K2_CREDENTIAL_FALLBACK_WIRED")
+
+    return text
+
 def inject_master_trigger_bootstrap(text, function_name, marker):
     if marker in text:
         return text, "already"
@@ -128,6 +264,7 @@ def inject_master_trigger_bootstrap(text, function_name, marker):
 # and that legacy function did not use ScriptLock. Wrap it instead of rewriting
 # its proven API/write logic, so the legacy writer and K2 Evolution cannot race.
 k2_text = read(keeper)
+k2_text = repair_k2_credentials(k2_text)
 
 if "function syncK2StocksOnlyLegacy_()" not in k2_text:
     sync_only_marker = "function syncK2StocksOnly() {"
