@@ -100,6 +100,24 @@ fi
 # Preferred production/test path: connect to a forward HTTP proxy running on
 # the home Mac through the tailnet itself. This avoids macOS exit-node routing
 # and lets DNS resolution happen on the residential host.
+if [ -n "${HOME_PROXY_PEER_IP:-}" ] && [ "${HOME_PROXY_MATRIX:-0}" = "1" ]; then
+  log "TAILSCALE: starting 12-candidate proxy matrix bridges"
+  # remote 8891..8896 = direct listeners on Mac
+  # remote 8991..8996 = same listeners exposed via tailscale serve
+  i=1
+  for remote in 8891 8892 8893 8894 8895 8896 8991 8992 8993 8994 8995 8996; do
+    local_port=$((18900+i))
+    socat "TCP-LISTEN:$local_port,reuseaddr,fork" "EXEC:tailscale --socket=$TS_SOCK nc $HOME_PROXY_PEER_IP $remote" \
+      >"/tmp/home-proxy-matrix-$remote.log" 2>&1 &
+    i=$((i+1))
+  done
+  export OZON_PROXY="http://127.0.0.1:18904"
+  export OZON_FORCE_LIVE_OFFLINE=0
+  export OZON_TAILSCALE_ACTIVE=1
+  printf '%s' "home-proxy-matrix:$HOME_PROXY_PEER_IP" > /tmp/ozon-tailscale-exit-node
+  exec uvicorn server:app --host 0.0.0.0 --port "${PORT:-8080}"
+fi
+
 if [ -n "${HOME_PROXY_PEER_IP:-}" ]; then
   HOME_PROXY_PEER_PORT="${HOME_PROXY_PEER_PORT:-8899}"
   LOCAL_PROXY_PORT="${HOME_PROXY_LOCAL_PORT:-18899}"
