@@ -10,6 +10,7 @@ on:
       - "wb_os/apps_script/OZON_RADAR_SERVER_BRIDGE.gs"
       - "wb_os/tools/discover_clasp_project.py"
       - "wb_os/tools/patch_live_master.py"
+      - "wb_os/tools/audit_and_repair_live.py"
       - ".github/workflows/wb-os-deploy-k2.yml"
 
 permissions:
@@ -99,6 +100,7 @@ jobs:
           cp wb_os/apps_script/OZON_RADAR_TELEGRAM_RELAY.gs "$SOURCE_ROOT/OZON_RADAR_TELEGRAM_RELAY.gs"
           cp wb_os/apps_script/OZON_RADAR_SERVER_BRIDGE.gs "$SOURCE_ROOT/OZON_RADAR_SERVER_BRIDGE.gs"
           python3 wb_os/tools/patch_live_master.py "$SOURCE_ROOT"
+          python3 wb_os/tools/audit_and_repair_live.py "$SOURCE_ROOT"
 
       - name: Syntax check patched Apps Script
         shell: bash
