@@ -1012,6 +1012,35 @@ def set_config(payload: ConfigIn, authorization: str | None = Header(default=Non
     }
 
 
+@app.get("/probe-public-test")
+async def probe_public_test() -> dict[str, Any]:
+    checked_at = now_iso()
+    started = time.perf_counter()
+    query = "лопата садовая"
+    sku = "5094364543"
+    try:
+        result = await ozon_position(ozon, query, sku, 100)
+        return {
+            "ok": True,
+            "checked_at": checked_at,
+            "query": query,
+            "sku": sku,
+            "proxy_configured": bool(OZON_PROXY),
+            "result": result,
+            "total_ms": int((time.perf_counter() - started) * 1000),
+        }
+    except Exception as exc:
+        return {
+            "ok": False,
+            "checked_at": checked_at,
+            "query": query,
+            "sku": sku,
+            "proxy_configured": bool(OZON_PROXY),
+            "error": f"{type(exc).__name__}: {exc}",
+            "total_ms": int((time.perf_counter() - started) * 1000),
+        }
+
+
 @app.post("/probe")
 async def probe(
     payload: ProbeIn,
