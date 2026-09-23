@@ -54,6 +54,14 @@ function loginK2_() {
       ) || ''
     );
 
+  if (!username) {
+    throw new Error('Не заполнено свойство K2_USERNAME.');
+  }
+
+  if (!password) {
+    throw new Error('Не заполнено свойство K2_PASSWORD.');
+  }
+
   return { username: username, password: password };
 }
 function updateK2AutomationStatus_() {}
