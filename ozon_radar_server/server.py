@@ -879,7 +879,33 @@ async def one_shot_validation_probe() -> None:
         "checked_at": now_iso(),
         "proxy": OZON_PROXY,
         "egress_marker": runtime_tailscale_exit_node() if "runtime_tailscale_exit_node" in globals() else "",
+        "diagnostics": {},
     }
+
+    proxy_map = {"http": OZON_PROXY, "https": OZON_PROXY} if OZON_PROXY else None
+    for name, url, timeout_s in [
+        ("ipify", "https://api.ipify.org?format=json", 12),
+        ("example_https", "https://example.com/", 12),
+        ("ozon_home", "https://www.ozon.ru/", 20),
+    ]:
+        try:
+            started = time.perf_counter()
+            resp = await asyncio.to_thread(
+                curl_requests.get,
+                url,
+                timeout=timeout_s,
+                proxies=proxy_map,
+                impersonate="chrome124",
+                allow_redirects=False,
+            )
+            payload["diagnostics"][name] = {
+                "status": int(resp.status_code),
+                "body_prefix": resp.text[:300],
+                "ms": int((time.perf_counter() - started) * 1000),
+            }
+        except Exception as exc:
+            payload["diagnostics"][name] = {"error": f"{type(exc).__name__}: {exc}"}
+
     try:
         result = await ozon_position(ozon, payload["query"], payload["sku"], 100)
         payload.update({"ok": True, "result": result})
