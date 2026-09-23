@@ -1,0 +1,23 @@
+name: Ozon deploy capability
+on:
+  push:
+    branches: [mainggg]
+    paths:
+      - ".github/workflows/ozon-deploy-capability.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Capability report
+        env:
+          HAS_RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN != '' }}
+          HAS_RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN != '' }}
+          HAS_RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID != '' }}
+          HAS_RAILWAY_SERVICE_ID: ${{ secrets.RAILWAY_SERVICE_ID != '' }}
+          HAS_CLASPRC_JSON: ${{ secrets.CLASPRC_JSON != '' }}
+          HAS_TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY != '' }}
+          HAS_TS_AUTHKEY: ${{ secrets.TS_AUTHKEY != '' }}
+        run: env | grep '^HAS_' | sort
