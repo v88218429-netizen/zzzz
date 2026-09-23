@@ -870,10 +870,41 @@ def load_env_tasks() -> None:
         runtime.last_error = f"RADAR_TASKS_JSON error: {type(exc).__name__}: {exc}"
 
 
+async def one_shot_validation_probe() -> None:
+    result_path = Path("/tmp/ozon-one-shot-result.json")
+    # Wait for start.sh to authenticate Tailscale and select the home exit node.
+    for _ in range(60):
+        try:
+            marker = Path("/tmp/ozon-tailscale-exit-node")
+            if marker.exists() and marker.read_text(encoding="utf-8").strip():
+                break
+        except Exception:
+            pass
+        await asyncio.sleep(1)
+
+    payload: dict[str, Any] = {
+        "query": "лопата садовая",
+        "sku": "5094364543",
+        "checked_at": now_iso(),
+        "exit_node": runtime_tailscale_exit_node() if "runtime_tailscale_exit_node" in globals() else "",
+    }
+    try:
+        result = await ozon_position(ozon, payload["query"], payload["sku"], 100)
+        payload.update({"ok": True, "result": result})
+    except Exception as exc:
+        payload.update({"ok": False, "error": f"{type(exc).__name__}: {exc}"})
+
+    try:
+        result_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+
+
 @app.on_event("startup")
 async def startup() -> None:
     load_env_tasks()
     asyncio.create_task(scheduler())
+    asyncio.create_task(one_shot_validation_probe())
 
 
 @app.on_event("shutdown")
@@ -1010,35 +1041,6 @@ def set_config(payload: ConfigIn, authorization: str | None = Header(default=Non
         "tasks": len(runtime.tasks),
         "server_time": now_iso(),
     }
-
-
-@app.get("/probe-public-test")
-async def probe_public_test() -> dict[str, Any]:
-    checked_at = now_iso()
-    started = time.perf_counter()
-    query = "лопата садовая"
-    sku = "5094364543"
-    try:
-        result = await ozon_position(ozon, query, sku, 100)
-        return {
-            "ok": True,
-            "checked_at": checked_at,
-            "query": query,
-            "sku": sku,
-            "proxy_configured": bool(OZON_PROXY),
-            "result": result,
-            "total_ms": int((time.perf_counter() - started) * 1000),
-        }
-    except Exception as exc:
-        return {
-            "ok": False,
-            "checked_at": checked_at,
-            "query": query,
-            "sku": sku,
-            "proxy_configured": bool(OZON_PROXY),
-            "error": f"{type(exc).__name__}: {exc}",
-            "total_ms": int((time.perf_counter() - started) * 1000),
-        }
 
 
 @app.post("/probe")
