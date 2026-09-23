@@ -872,7 +872,6 @@ def load_env_tasks() -> None:
 
 async def one_shot_validation_probe() -> None:
     result_path = Path("/tmp/ozon-one-shot-result.json")
-    # Wait for start.sh to authenticate Tailscale and select the home exit node.
     for _ in range(60):
         try:
             marker = Path("/tmp/ozon-tailscale-exit-node")
@@ -882,12 +881,67 @@ async def one_shot_validation_probe() -> None:
             pass
         await asyncio.sleep(1)
 
+    exit_node = runtime_tailscale_exit_node() if "runtime_tailscale_exit_node" in globals() else ""
     payload: dict[str, Any] = {
         "query": "лопата садовая",
         "sku": "5094364543",
         "checked_at": now_iso(),
-        "exit_node": runtime_tailscale_exit_node() if "runtime_tailscale_exit_node" in globals() else "",
+        "exit_node": exit_node,
+        "proxy": OZON_PROXY,
+        "diagnostics": {},
     }
+
+    # 1) Tailscale peer reachability.
+    try:
+        import subprocess
+        ping = subprocess.run(
+            ["tailscale", "--socket=/var/run/tailscale/tailscaled.sock", "ping", "--c=2", exit_node],
+            capture_output=True, text=True, timeout=20,
+        )
+        payload["diagnostics"]["tailscale_ping"] = {
+            "returncode": ping.returncode,
+            "stdout": ping.stdout[-2000:],
+            "stderr": ping.stderr[-2000:],
+        }
+    except Exception as exc:
+        payload["diagnostics"]["tailscale_ping"] = {"error": f"{type(exc).__name__}: {exc}"}
+
+    # 2) Generic internet through the same SOCKS proxy.
+    try:
+        started = time.perf_counter()
+        resp = curl_requests.get(
+            "https://api.ipify.org?format=json",
+            timeout=20,
+            proxies={"http": OZON_PROXY, "https": OZON_PROXY} if OZON_PROXY else None,
+            impersonate="chrome124",
+        )
+        payload["diagnostics"]["ipify"] = {
+            "status": int(resp.status_code),
+            "body": resp.text[:500],
+            "ms": int((time.perf_counter() - started) * 1000),
+        }
+    except Exception as exc:
+        payload["diagnostics"]["ipify"] = {"error": f"{type(exc).__name__}: {exc}"}
+
+    # 3) Ozon homepage through the same proxy.
+    try:
+        started = time.perf_counter()
+        resp = curl_requests.get(
+            "https://www.ozon.ru/",
+            timeout=25,
+            proxies={"http": OZON_PROXY, "https": OZON_PROXY} if OZON_PROXY else None,
+            impersonate="chrome124",
+            allow_redirects=False,
+        )
+        payload["diagnostics"]["ozon_home"] = {
+            "status": int(resp.status_code),
+            "body_prefix": resp.text[:500],
+            "ms": int((time.perf_counter() - started) * 1000),
+        }
+    except Exception as exc:
+        payload["diagnostics"]["ozon_home"] = {"error": f"{type(exc).__name__}: {exc}"}
+
+    # 4) Actual rank probe.
     try:
         result = await ozon_position(ozon, payload["query"], payload["sku"], 100)
         payload.update({"ok": True, "result": result})
