@@ -132,3 +132,51 @@ jobs:
             npx --yes @google/clasp push -f
           fi
           echo "Live Apps Script push completed."
+
+      - name: Pull back and verify actual LIVE
+        shell: bash
+        env:
+          PROJECT_DIR: ${{ steps.discover.outputs.project_dir }}
+        run: |
+          set -euo pipefail
+          VERIFY_DIR="$(mktemp -d "${TMPDIR:-/tmp}/wb-os-live-verify.XXXXXX")"
+          trap 'rm -rf "$VERIFY_DIR"' EXIT
+          cp "$PROJECT_DIR/.clasp.json" "$VERIFY_DIR/.clasp.json"
+
+          cd "$VERIFY_DIR"
+          if command -v clasp >/dev/null 2>&1; then
+            clasp pull
+          else
+            npx --yes @google/clasp pull
+          fi
+
+          grep -Rqs "K2 Evolution Engine v0.1.17" "$VERIFY_DIR"
+          grep -Rqs "function getK2CredentialsWithFallback_()" "$VERIFY_DIR"
+          grep -Rqs "getK2CredentialsWithFallback_();" "$VERIFY_DIR"
+          grep -Rqs "function runFinalAutomationCycle_" "$VERIFY_DIR"
+
+          COUNT=0
+          while IFS= read -r -d '' f; do
+            TMP_CHECK="$(mktemp -t wb-os-live-check.XXXXXX)"
+            cp "$f" "$TMP_CHECK"
+            node --check "$TMP_CHECK"
+            rm -f "$TMP_CHECK"
+            COUNT=$((COUNT+1))
+          done < <(find "$VERIFY_DIR" -type f \( -name '*.gs' -o -name '*.js' \) -print0)
+
+          test "$COUNT" -gt 0
+          echo "LIVE pull-back verified: K2 v0.1.17 + credential fallback + master."
+
+      - name: Ensure master trigger if Execution API is available
+        shell: bash
+        env:
+          PROJECT_DIR: ${{ steps.discover.outputs.project_dir }}
+        run: |
+          set -euo pipefail
+          cd "$PROJECT_DIR"
+          if command -v clasp >/dev/null 2>&1; then
+            clasp run wbOsEnsureMasterTrigger || true
+          else
+            npx --yes @google/clasp run wbOsEnsureMasterTrigger || true
+          fi
+          echo "Master-trigger ensure attempted; legacy bootstrap remains fallback."
