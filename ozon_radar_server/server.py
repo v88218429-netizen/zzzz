@@ -1090,3 +1090,5 @@ def state(authorization: str | None = Header(default=None)) -> dict[str, Any]:
             }
         )
     return {"ok": True, "tasks": result}
+
+# capability probe trigger 2026-09-23
