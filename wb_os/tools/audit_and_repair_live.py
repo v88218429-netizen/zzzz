@@ -181,37 +181,40 @@ def repair_k2_credentials(text):
     login_text = text[login_start:login_end]
 
     if "getK2CredentialsWithFallback_();" not in login_text:
-        legacy_credentials = re.compile(
-            r"""var username\s*=\s*
-            String\(\s*
-              props\.getProperty\(\s*'K2_USERNAME'\s*\)
-              \s*\|\|\s*''
-            \s*\)\.trim\(\);\s*
-            var password\s*=\s*
-            String\(\s*
-              props\.getProperty\(\s*'K2_PASSWORD'\s*\)
-              \s*\|\|\s*''
-            \s*\);""",
-            re.S | re.X,
-        )
+        username_pos = login_text.find("var username")
+        guard_pos = login_text.find("if (!username)")
+
+        if username_pos < 0 or guard_pos < 0 or guard_pos <= username_pos:
+            raise SystemExit(
+                "AUDIT_FAIL: K2 login credential layout is unknown; "
+                "refusing to guess"
+            )
+
+        legacy_chunk = login_text[username_pos:guard_pos]
+
+        if (
+            "K2_USERNAME" not in legacy_chunk
+            or "K2_PASSWORD" not in legacy_chunk
+            or "var password" not in legacy_chunk
+        ):
+            raise SystemExit(
+                "AUDIT_FAIL: K2 login credential block is not the expected "
+                "username/password reader"
+            )
 
         replacement = """var credentials =
     getK2CredentialsWithFallback_();
 
   var username = credentials.username;
-  var password = credentials.password;"""
+  var password = credentials.password;
 
-        login_text2, count = legacy_credentials.subn(
-            replacement,
-            login_text,
-            count=1,
+  """
+
+        login_text2 = (
+            login_text[:username_pos]
+            + replacement
+            + login_text[guard_pos:]
         )
-
-        if count != 1:
-            raise SystemExit(
-                "AUDIT_FAIL: K2 login credential layout is unknown; "
-                "refusing to guess"
-            )
 
         text = (
             text[:login_start]
