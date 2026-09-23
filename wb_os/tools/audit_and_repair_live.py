@@ -225,6 +225,138 @@ def repair_k2_credentials(text):
 
     return text
 
+
+def repair_k2_refresh_metadata(text):
+    """
+    Keep two different K2 timestamps in the live stock sheet:
+    - source change time from K2;
+    - time when Google Sheets actually received the snapshot.
+
+    Also make the manual sync path record a successful K2 run, so watchdog
+    status reflects a real successful fetch/write instead of remaining red.
+    """
+    write_marker = "function writeK2StocksToSheet_(items)"
+    if write_marker in text:
+        write_start = text.find(write_marker)
+        write_end = text.find("\nfunction ", write_start + 1)
+        if write_end < 0:
+            write_end = len(text)
+
+        write_text = text[write_start:write_end]
+
+        if "'Обновлено в таблице'" not in write_text:
+            old_header = """    'Мин. остаток',
+    'Дата обновления К2'
+  ];"""
+            new_header = """    'Мин. остаток',
+    'Изменено в K2',
+    'Обновлено в таблице'
+  ];"""
+            if old_header not in write_text:
+                raise SystemExit(
+                    "AUDIT_FAIL: K2 stock header layout is unknown; "
+                    "cannot add table refresh timestamp safely"
+                )
+            write_text = write_text.replace(old_header, new_header, 1)
+
+            if "var tableUpdatedAt = new Date();" not in write_text:
+                if "  var output = [];" not in write_text:
+                    raise SystemExit(
+                        "AUDIT_FAIL: K2 output buffer layout is unknown; "
+                        "cannot stamp table refresh time safely"
+                    )
+                write_text = write_text.replace(
+                    "  var output = [];",
+                    "  var tableUpdatedAt = new Date();\n  var output = [];",
+                    1,
+                )
+
+            old_value = """      String(
+        item.updatedAt || ''
+      )
+    ]);"""
+            new_value = """      String(
+        item.updatedAt || ''
+      ),
+      tableUpdatedAt
+    ]);"""
+            if old_value not in write_text:
+                raise SystemExit(
+                    "AUDIT_FAIL: K2 output row layout is unknown; "
+                    "cannot append table refresh timestamp safely"
+                )
+            write_text = write_text.replace(old_value, new_value, 1)
+
+            if "setNumberFormat('yyyy-mm-dd hh:mm:ss')" not in write_text:
+                numeric_format = """  sheet
+    .getRange(
+      2,
+      3,
+      output.length,
+      3
+    )
+    .setNumberFormat('0');
+
+  sheet.setFrozenRows(1);"""
+                date_format = """  sheet
+    .getRange(
+      2,
+      3,
+      output.length,
+      3
+    )
+    .setNumberFormat('0');
+
+  sheet
+    .getRange(
+      2,
+      6,
+      output.length,
+      2
+    )
+    .setNumberFormat('yyyy-mm-dd hh:mm:ss');
+
+  sheet.setFrozenRows(1);"""
+                if numeric_format not in write_text:
+                    raise SystemExit(
+                        "AUDIT_FAIL: K2 number-format layout is unknown; "
+                        "cannot format dual timestamps safely"
+                    )
+                write_text = write_text.replace(
+                    numeric_format,
+                    date_format,
+                    1,
+                )
+
+            text = text[:write_start] + write_text + text[write_end:]
+            print("K2_DUAL_TIMESTAMPS_ADDED")
+
+    sync_marker = "function syncK2StocksOnly()"
+    sync_start = text.find(sync_marker)
+    if sync_start >= 0:
+        sync_end = text.find("\nfunction ", sync_start + 1)
+        if sync_end < 0:
+            sync_end = len(text)
+
+        sync_text = text[sync_start:sync_end]
+
+        if (
+            "writeK2StocksToSheet_(items);" in sync_text
+            and "SpreadsheetApp.flush();" in sync_text
+            and "saveK2SyncSuccess_(items.length);" not in sync_text
+        ):
+            sync_text = sync_text.replace(
+                "  SpreadsheetApp.flush();",
+                "  SpreadsheetApp.flush();\n\n"
+                "  saveK2SyncSuccess_(items.length);",
+                1,
+            )
+            text = text[:sync_start] + sync_text + text[sync_end:]
+            print("K2_MANUAL_SUCCESS_STATUS_ADDED")
+
+    return text
+
+
 def inject_master_trigger_bootstrap(text, function_name, marker):
     if marker in text:
         return text, "already"
@@ -268,6 +400,7 @@ def inject_master_trigger_bootstrap(text, function_name, marker):
 # its proven API/write logic, so the legacy writer and K2 Evolution cannot race.
 k2_text = read(keeper)
 k2_text = repair_k2_credentials(k2_text)
+k2_text = repair_k2_refresh_metadata(k2_text)
 
 if "function syncK2StocksOnlyLegacy_()" not in k2_text:
     sync_only_marker = "function syncK2StocksOnly() {"
