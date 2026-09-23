@@ -891,7 +891,17 @@ async def one_shot_validation_probe() -> None:
         "diagnostics": {},
     }
 
-    # 1) Tailscale peer reachability.
+    try:
+        import socket
+        railway_ips = sorted({
+            item[4][0]
+            for item in socket.getaddrinfo("www.ozon.ru", 443, type=socket.SOCK_STREAM)
+            if item and item[4]
+        })
+        payload["diagnostics"]["railway_dns_ozon"] = railway_ips
+    except Exception as exc:
+        payload["diagnostics"]["railway_dns_ozon"] = {"error": f"{type(exc).__name__}: {exc}"}
+
     try:
         import subprocess
         ping = subprocess.run(
@@ -906,7 +916,6 @@ async def one_shot_validation_probe() -> None:
     except Exception as exc:
         payload["diagnostics"]["tailscale_ping"] = {"error": f"{type(exc).__name__}: {exc}"}
 
-    # 2) Generic internet through the same SOCKS proxy.
     try:
         started = time.perf_counter()
         resp = curl_requests.get(
@@ -923,7 +932,31 @@ async def one_shot_validation_probe() -> None:
     except Exception as exc:
         payload["diagnostics"]["ipify"] = {"error": f"{type(exc).__name__}: {exc}"}
 
-    # 3) Ozon homepage through the same proxy.
+    home_dns_ips: list[str] = []
+    try:
+        started = time.perf_counter()
+        resp = curl_requests.get(
+            "https://cloudflare-dns.com/dns-query",
+            params={"name": "www.ozon.ru", "type": "A"},
+            headers={"accept": "application/dns-json"},
+            timeout=20,
+            proxies={"http": OZON_PROXY, "https": OZON_PROXY} if OZON_PROXY else None,
+            impersonate="chrome124",
+        )
+        body = resp.json()
+        for row in body.get("Answer") or []:
+            data = str(row.get("data") or "")
+            if re.fullmatch(r"\\d{1,3}(?:\\.\\d{1,3}){3}", data):
+                home_dns_ips.append(data)
+        home_dns_ips = sorted(set(home_dns_ips))
+        payload["diagnostics"]["home_path_dns_ozon"] = {
+            "status": int(resp.status_code),
+            "ips": home_dns_ips,
+            "ms": int((time.perf_counter() - started) * 1000),
+        }
+    except Exception as exc:
+        payload["diagnostics"]["home_path_dns_ozon"] = {"error": f"{type(exc).__name__}: {exc}"}
+
     try:
         started = time.perf_counter()
         resp = curl_requests.get(
@@ -933,15 +966,35 @@ async def one_shot_validation_probe() -> None:
             impersonate="chrome124",
             allow_redirects=False,
         )
-        payload["diagnostics"]["ozon_home"] = {
+        payload["diagnostics"]["ozon_home_default_dns"] = {
             "status": int(resp.status_code),
             "body_prefix": resp.text[:500],
             "ms": int((time.perf_counter() - started) * 1000),
         }
     except Exception as exc:
-        payload["diagnostics"]["ozon_home"] = {"error": f"{type(exc).__name__}: {exc}"}
+        payload["diagnostics"]["ozon_home_default_dns"] = {"error": f"{type(exc).__name__}: {exc}"}
 
-    # 4) Actual rank probe.
+    if home_dns_ips:
+        try:
+            import subprocess
+            cmd = [
+                "curl", "-sS", "-o", "/tmp/ozon-forced-body.txt",
+                "-w", "%{http_code} %{time_total}",
+                "--max-time", "25",
+                "--socks5", "127.0.0.1:1055",
+                "--resolve", f"www.ozon.ru:443:{home_dns_ips[0]}",
+                "https://www.ozon.ru/",
+            ]
+            forced = subprocess.run(cmd, capture_output=True, text=True, timeout=35)
+            payload["diagnostics"]["ozon_home_forced_home_dns_ip"] = {
+                "ip": home_dns_ips[0],
+                "returncode": forced.returncode,
+                "stdout": forced.stdout[-1000:],
+                "stderr": forced.stderr[-2000:],
+            }
+        except Exception as exc:
+            payload["diagnostics"]["ozon_home_forced_home_dns_ip"] = {"error": f"{type(exc).__name__}: {exc}"}
+
     try:
         result = await ozon_position(ozon, payload["query"], payload["sku"], 100)
         payload.update({"ok": True, "result": result})
