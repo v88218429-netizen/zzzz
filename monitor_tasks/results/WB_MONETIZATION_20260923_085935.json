@@ -1,0 +1,184 @@
+{
+  "task_id": "WB_MONETIZATION",
+  "request": "WB_MONETIZATION_20260923_085935.json",
+  "query": "как монетизировать экспертизу Wildberries кроме ведения кабинетов",
+  "knowledge_tag": "WB_MONETIZATION",
+  "generated_at": "2026-09-23T07:03:20.090706+00:00",
+  "videos": [],
+  "errors": [
+    {
+      "video_id": "8Z9Coks2pCc",
+      "url": "https://www.youtube.com/watch?v=8Z9Coks2pCc",
+      "title": "Как начать продавать на Вайлдберриз в 2025 году? Пошаговый ПЛАН выхода на Wildberries с нуля",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "Ay69Zjveu30",
+      "url": "https://www.youtube.com/watch?v=Ay69Zjveu30",
+      "title": "ОШИБКИ на WILDBERRIES | 90% селлеров УЙДУТ | Как не потерять деньги в 2026?",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "BNeNC-p6wpc",
+      "url": "https://www.youtube.com/watch?v=BNeNC-p6wpc",
+      "title": "Как начать продавать на Вайлдберриз в 2026 году? Пошаговый ПЛАН выхода на Wildberries с нуля",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "iDTNUTNxXCI",
+      "url": "https://www.youtube.com/watch?v=iDTNUTNxXCI",
+      "title": "Бизнес на WILDBERRIES. Вайлдберриз с нуля. Товарный бизнес",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "Z0pRryHMemM",
+      "url": "https://www.youtube.com/watch?v=Z0pRryHMemM",
+      "title": "12 вопросов СЕЛЛЕРУ: Как правильно продавать на Вайлдберриз в 2026 году?",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "QcBXkc48oK0",
+      "url": "https://www.youtube.com/watch?v=QcBXkc48oK0",
+      "title": "‼️РЫНОК НЕ БУДЕТ ПРЕЖНИМ! 😱 Вайлдберриз - иноагент? / Правила возврата на Вайлдберриз #чеделать-то",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "6H5spRtP7Zg",
+      "url": "https://www.youtube.com/watch?v=6H5spRtP7Zg",
+      "title": "Китайцы продают на Вайлдберриз 2026:Как открыть компанию в Китае и ВЫГОДНО продавать на Wildberries?",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "vRBrHAJdz7g",
+      "url": "https://www.youtube.com/watch?v=vRBrHAJdz7g",
+      "title": "Как увеличить ПРОДАЖИ на Wildberries? Как влиять на КОНЕРСИИ? Главные ОШИБКИ селлеров. Часть 2",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "oo2uNEXjMuA",
+      "url": "https://www.youtube.com/watch?v=oo2uNEXjMuA",
+      "title": "Как я заработал первые деньги на Wildberries. Мой старт на маркетплейсе",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "vORUWxysNUk",
+      "url": "https://www.youtube.com/watch?v=vORUWxysNUk",
+      "title": "Сервис аналитики для селлеров торгующих на wildberries",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "QOMG86v0sJ4",
+      "url": "https://www.youtube.com/watch?v=QOMG86v0sJ4",
+      "title": "Обзор сервисов аналитики для маркетплейсов! Плюсы и минусы популярных сервисов",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "hksIPTykmNc",
+      "url": "https://www.youtube.com/watch?v=hksIPTykmNc",
+      "title": "😱КАК ТЕПЕРЬ ЗАКУПАТЬ ТОВАР? / Wildberries блокирует селлеров НАВСЕГДА / Новости маркетплейсов",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "yy4K7hM54ic",
+      "url": "https://www.youtube.com/watch?v=yy4K7hM54ic",
+      "title": "Как начать зарабатывать на Wildberries?",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "zfpSo9BCVLc",
+      "url": "https://www.youtube.com/watch?v=zfpSo9BCVLc",
+      "title": "Анализ ниш на WB 2023 #shorts",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "n8GuJ2ULNLw",
+      "url": "https://www.youtube.com/watch?v=n8GuJ2ULNLw",
+      "title": "Закрытый мастермайнд для действующих поставщиков маркетплейса Wildberries",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "7eY7iW9prfE",
+      "url": "https://www.youtube.com/watch?v=7eY7iW9prfE",
+      "title": "Откуда товар? Пришла проверка- полное видео",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "HWyAogPdrTU",
+      "url": "https://www.youtube.com/watch?v=HWyAogPdrTU",
+      "title": "Что делать, если вы уперлись в потолок в бизнесе? Алексей Гузанов. Бизнес-консультант, траблшутер.",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "ZlmI15hwDCQ",
+      "url": "https://www.youtube.com/watch?v=ZlmI15hwDCQ",
+      "title": "МОЖНО ЛИ ПРОДАВАТЬ НА WILDBERRIES ТОВАРЫ РУЧНОЙ РАБОТЫ?",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "-A-7MWwb_Y8",
+      "url": "https://www.youtube.com/watch?v=-A-7MWwb_Y8",
+      "title": "Как работает реклама на Wildberries #shorts #wildberries #реклама",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "0jKPGhJ2DEs",
+      "url": "https://www.youtube.com/watch?v=0jKPGhJ2DEs",
+      "title": "Масштабирование торговли на маркетплейсах #маркетплейс #ecommerce #вайлбериз #ozon #селлер",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "jKbp98ScKEI",
+      "url": "https://www.youtube.com/watch?v=jKbp98ScKEI",
+      "title": "AGI Labs SmartReply: Как ИИ Автоматизирует Ответы и Повышает Продажи на Ozon, WB, YM (2025)",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "gFZm0puuJcA",
+      "url": "https://www.youtube.com/watch?v=gFZm0puuJcA",
+      "title": "TOPSELLER - Промо",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "c3skCYjpH3k",
+      "url": "https://www.youtube.com/watch?v=c3skCYjpH3k",
+      "title": "Как оформить возврат товара со склада Wildberries | Как вернуть свой товар со склада Вайлдберриз",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "4bSXenq2eOI",
+      "url": "https://www.youtube.com/watch?v=4bSXenq2eOI",
+      "title": "Как начать торговать на валберис телефон 💯 Как начать в вайлдберриз продавать товар",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "3lcHEFYLaCQ",
+      "url": "https://www.youtube.com/watch?v=3lcHEFYLaCQ",
+      "title": "🤘 Бизнес wildberries екатеринбург 🚫 Как продавать на валберис ип кфх",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "Lyjg-HWP7gE",
+      "url": "https://www.youtube.com/watch?v=Lyjg-HWP7gE",
+      "title": "КАК ПРОДАВАТЬ НА ВАЙЛДБЕРРИЗ С НУЛЯ ФОРУМ ОТЗЫВЫ 🔴 КАК ЗАРАБАТЫВАТЬ НА ВАЙЛДБЕРРИЗ С НУЛЯ",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "0V0GEQrZ7I8",
+      "url": "https://www.youtube.com/watch?v=0V0GEQrZ7I8",
+      "title": "КАК НАЧАТЬ ПРОДАВАТЬ НА ВАЙЛДБЕРРИЗ В КАЗАХСТАНЕ 🔥 ВАЛБЕРИС КУПИТЬ БИЗНЕС",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "ZIX2Wc7nlYc",
+      "url": "https://www.youtube.com/watch?v=ZIX2Wc7nlYc",
+      "title": "Пункт выдачи “Вайлдберриз». Обучение новых сотрудников. Для поиска: Вайберис,Вайдберис,Вайлдбериз",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "dry84yHZsu4",
+      "url": "https://www.youtube.com/watch?v=dry84yHZsu4",
+      "title": "Как создать привлекательную карточку товара",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    }
+  ]
+}
