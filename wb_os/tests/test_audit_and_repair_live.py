@@ -22,6 +22,40 @@ function columnIndexToLetter_() { return 'A'; }
 K2_STABLE = r"""
 function getK2WarehouseItems_() { return []; }
 function getK2CredentialsWithFallback_() { return {}; }
+function loginK2_() {
+  var props = PropertiesService.getScriptProperties();
+  var credentials = getK2CredentialsWithFallback_();
+  var username = credentials.username;
+  var password = credentials.password;
+  return { username: username, password: password };
+}
+function updateK2AutomationStatus_() {}
+function syncK2StocksOnly() { return 'legacy-only'; }
+function syncK2StocksAndNotify() { return 'legacy-notify'; }
+function parseNumber_() { return 1; }
+"""
+
+K2_LEGACY_CREDENTIALS = r"""
+function getK2WarehouseItems_() { return []; }
+function loginK2_() {
+  var props = PropertiesService.getScriptProperties();
+
+  var username =
+    String(
+      props.getProperty(
+        'K2_USERNAME'
+      ) || ''
+    ).trim();
+
+  var password =
+    String(
+      props.getProperty(
+        'K2_PASSWORD'
+      ) || ''
+    );
+
+  return { username: username, password: password };
+}
 function updateK2AutomationStatus_() {}
 function syncK2StocksOnly() { return 'legacy-only'; }
 function syncK2StocksAndNotify() { return 'legacy-notify'; }
@@ -139,6 +173,32 @@ def main():
             raise AssertionError(
                 f"second audit failed\nstdout={p2.stdout}\nstderr={p2.stderr}"
             )
+
+    # A single legacy K2 core must gain resilient credential fallback and
+    # wire loginK2_ through it without storing any secret in source.
+    with tempfile.TemporaryDirectory() as td:
+        root = pathlib.Path(td)
+        (root / "Master.js").write_text(MASTER, encoding="utf-8")
+        (root / "K2_legacy.js").write_text(
+            K2_LEGACY_CREDENTIALS,
+            encoding="utf-8",
+        )
+        (root / "Evolution.js").write_text(EVOLUTION, encoding="utf-8")
+        (root / "Price.js").write_text(PRICE, encoding="utf-8")
+
+        p = run(root)
+        if p.returncode != 0:
+            raise AssertionError(
+                f"credential repair failed\nstdout={p.stdout}\nstderr={p.stderr}"
+            )
+
+        repaired = (root / "K2_legacy.js").read_text(encoding="utf-8")
+        assert "function getK2CredentialsWithFallback_()" in repaired
+        assert "getK2CredentialsWithFallback_();" in repaired
+        assert "UserProperties" in repaired
+        assert "DocumentProperties" in repaired
+        assert "K2_CREDENTIAL_FALLBACK_ADDED" in p.stdout
+        assert "K2_CREDENTIAL_FALLBACK_WIRED" in p.stdout
 
     # Ambiguous multiple "stable" K2 cores must fail closed.
     with tempfile.TemporaryDirectory() as td:
