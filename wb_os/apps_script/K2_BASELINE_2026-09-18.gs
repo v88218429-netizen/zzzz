@@ -186,6 +186,8 @@ function syncK2StocksOnly() {
 
   SpreadsheetApp.flush();
 
+  saveK2SyncSuccess_(items.length);
+
   SpreadsheetApp
     .getActiveSpreadsheet()
     .toast(
@@ -697,7 +699,8 @@ function resetK2ApiSession() {
  * C — Остаток
  * D — Резерв
  * E — Мин. остаток
- * F — Дата обновления К2
+ * F — Изменено в K2
+ * G — Обновлено в таблице
  */
 function writeK2StocksToSheet_(items) {
   var ss =
@@ -722,9 +725,11 @@ function writeK2StocksToSheet_(items) {
     'Остаток',
     'Резерв',
     'Мин. остаток',
-    'Дата обновления К2'
+    'Изменено в K2',
+    'Обновлено в таблице'
   ];
 
+  var tableUpdatedAt = new Date();
   var output = [];
 
   for (
@@ -760,7 +765,8 @@ function writeK2StocksToSheet_(items) {
       apiNumber_(item.minStock),
       String(
         item.updatedAt || ''
-      )
+      ),
+      tableUpdatedAt
     ]);
   }
 
@@ -778,7 +784,7 @@ function writeK2StocksToSheet_(items) {
     );
 
   /*
-   * Очищаем только A:F.
+   * Очищаем только A:G.
    */
   if (rowsToClear > 0) {
     sheet
@@ -833,6 +839,15 @@ function writeK2StocksToSheet_(items) {
       3
     )
     .setNumberFormat('0');
+
+  sheet
+    .getRange(
+      2,
+      6,
+      output.length,
+      2
+    )
+    .setNumberFormat('yyyy-mm-dd hh:mm:ss');
 
   sheet.setFrozenRows(1);
 
