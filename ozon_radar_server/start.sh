@@ -97,11 +97,22 @@ else
   fi
 fi
 
-# From this point the app always talks to the local Tailscale SOCKS proxy.
-# Before an exit node is selected, public Ozon requests fail closed. As soon as
-# an approved home exit node appears, the background selector enables it and
-# subsequent requests automatically leave through the home ISP without an app
-# restart.
+# Preferred production/test path: connect to a forward HTTP proxy running on
+# the home Mac through the tailnet itself. This avoids macOS exit-node routing
+# and lets DNS resolution happen on the residential host.
+if [ -n "${HOME_PROXY_PEER_IP:-}" ]; then
+  HOME_PROXY_PEER_PORT="${HOME_PROXY_PEER_PORT:-8899}"
+  LOCAL_PROXY_PORT="${HOME_PROXY_LOCAL_PORT:-18899}"
+  log "TAILSCALE: bridging local HTTP proxy 127.0.0.1:$LOCAL_PROXY_PORT -> $HOME_PROXY_PEER_IP:$HOME_PROXY_PEER_PORT"
+  socat "TCP-LISTEN:$LOCAL_PROXY_PORT,reuseaddr,fork" "EXEC:tailscale --socket=$TS_SOCK nc $HOME_PROXY_PEER_IP $HOME_PROXY_PEER_PORT"     >/tmp/home-proxy-bridge.log 2>&1 &
+  export OZON_PROXY="http://127.0.0.1:$LOCAL_PROXY_PORT"
+  export OZON_FORCE_LIVE_OFFLINE=0
+  export OZON_TAILSCALE_ACTIVE=1
+  printf '%s' "home-proxy:$HOME_PROXY_PEER_IP:$HOME_PROXY_PEER_PORT" > /tmp/ozon-tailscale-exit-node
+  exec uvicorn server:app --host 0.0.0.0 --port "${PORT:-8080}"
+fi
+
+# Fallback path: use a Tailscale exit node.
 export OZON_PROXY="$TS_PROXY"
 export OZON_FORCE_LIVE_OFFLINE=0
 export OZON_TAILSCALE_ACTIVE=0
