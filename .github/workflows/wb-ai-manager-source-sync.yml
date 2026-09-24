@@ -48,6 +48,18 @@ jobs:
           print(f"extracted={len(list(dst.rglob('*')))}")
           PY
 
+      - name: Commit canonical extracted source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "wb-ai-manager-bot"
+          git config user.email "wb-ai-manager-bot@users.noreply.github.com"
+          git add wb_ai_manager/source
+          if ! git diff --cached --quiet; then
+            git commit -m "wb-ai-manager: materialize v1.1 source for EA integration"
+            git push
+          fi
+
       - name: Install package and test dependencies
         shell: bash
         run: |
@@ -65,13 +77,3 @@ jobs:
           python -m compileall -q src scripts
           pytest -q
 
-      - name: Commit canonical extracted source
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config user.name "wb-ai-manager-bot"
-          git config user.email "wb-ai-manager-bot@users.noreply.github.com"
-          git add wb_ai_manager/source
-          git diff --cached --quiet && exit 0
-          git commit -m "wb-ai-manager: materialize v1.1 source for EA integration"
-          git push
