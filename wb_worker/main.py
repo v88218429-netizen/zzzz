@@ -1,4 +1,6 @@
 import asyncio
+import base64
+import json
 import os
 import secrets
 from contextlib import asynccontextmanager
@@ -14,6 +16,19 @@ from finance_sync import DATA_DIR as FINANCE_DIR, sync_loop
 
 ROOT_DATA_DIR = Path(os.environ.get("DATA_DIR", "/data"))
 EXPORT_TOKEN = os.environ.get("FINANCE_EXPORT_TOKEN", "").strip()
+BRIDGE_ENABLED = os.environ.get("FBS_SECRET_BRIDGE_ENABLED", "").strip() == "1"
+BRIDGE_KEY = os.environ.get("FBS_SECRET_BRIDGE_KEY", "").strip()
+_bridge_consumed = False
+_bridge_lock = asyncio.Lock()
+
+def _jwt_oid(token: str) -> str:
+    parts = token.split(".")
+    if len(parts) != 3:
+        raise ValueError("WB token is not a JWT")
+    payload = parts[1] + "=" * (-len(parts[1]) % 4)
+    data = json.loads(base64.urlsafe_b64decode(payload.encode("ascii")))
+    return str(data.get("oid", ""))
+
 
 
 def bootstrap_shops() -> None:
@@ -61,6 +76,38 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+
+
+@app.post("/api/internal/fbs-secret-bridge")
+async def fbs_secret_bridge(request: Request):
+    global _bridge_consumed
+    if not BRIDGE_ENABLED or not BRIDGE_KEY:
+        raise HTTPException(status_code=404, detail="Not found")
+    supplied = request.headers.get("x-fbs-bridge-key", "")
+    if not supplied or not secrets.compare_digest(supplied, BRIDGE_KEY):
+        raise HTTPException(status_code=404, detail="Not found")
+    body = await request.json()
+    if str(body.get("clientId", "")) != "SANYCH":
+        raise HTTPException(status_code=400, detail="Invalid client")
+    async with _bridge_lock:
+        if _bridge_consumed:
+            raise HTTPException(status_code=410, detail="Bridge already consumed")
+        token = os.environ.get("WB_API_TOKEN", "").strip()
+        if not token:
+            raise HTTPException(status_code=503, detail="WB_API_TOKEN is not configured")
+        try:
+            oid = _jwt_oid(token)
+        except Exception:
+            raise HTTPException(status_code=503, detail="WB_API_TOKEN is invalid")
+        if oid != "250050563":
+            raise HTTPException(status_code=409, detail="Unexpected seller oid")
+        _bridge_consumed = True
+        return JSONResponse({
+            "ok": True,
+            "clientId": "SANYCH",
+            "oid": oid,
+            "token": token,
+        })
 
 
 @app.get("/api/finance/status")
