@@ -10,8 +10,8 @@ import threading
 
 HOST = "0.0.0.0"
 PORT = 8900
-WINDOW_ID: int | None = None
-WINDOW_LOCK = threading.Lock()
+BOUND_WINDOW_ID: int | None = None
+BOUND_TAB_INDEX: int | None = None
 REQUEST_LOCK = threading.Lock()
 
 def run_osascript(script: str, timeout: int = 120) -> str:
@@ -25,39 +25,52 @@ def run_osascript(script: str, timeout: int = 120) -> str:
         raise RuntimeError((p.stderr or p.stdout or "osascript failed").strip())
     return (p.stdout or "").strip()
 
-def find_agent_tab() -> tuple[int, int]:
-    # SAFETY: Never create windows or tabs. The user must manually open exactly
-    # one dedicated tab whose URL contains #ozon-radar.
+def bind_active_tab() -> tuple[int, int]:
+    global BOUND_WINDOW_ID, BOUND_TAB_INDEX
     script = '''
 tell application "Google Chrome"
-  repeat with w in windows
-    set wi to id of w
-    set ti to 0
-    repeat with t in tabs of w
-      set ti to ti + 1
-      set u to URL of t
-      if u contains "#ozon-radar" then
-        return (wi as text) & "||" & (ti as text)
-      end if
-    end repeat
-  end repeat
+  if (count of windows) = 0 then return "0||0"
+  set w to front window
+  set wi to id of w
+  set ti to active tab index of w
+  return (wi as text) & "||" & (ti as text)
 end tell
-return "0||0"
 '''
     out = run_osascript(script, timeout=20)
     parts = out.split("||", 1)
     wi = int(parts[0] or "0")
     ti = int(parts[1] or "0")
     if wi <= 0 or ti <= 0:
-        raise RuntimeError(
-            "Dedicated Ozon radar tab not found. Open one tab manually at "
-            "https://www.ozon.ru/#ozon-radar and leave it open."
-        )
+        raise RuntimeError("No active Google Chrome tab to bind")
+    BOUND_WINDOW_ID = wi
+    BOUND_TAB_INDEX = ti
     return wi, ti
 
 
+def get_bound_tab() -> tuple[int, int]:
+    if BOUND_WINDOW_ID is None or BOUND_TAB_INDEX is None:
+        return bind_active_tab()
+
+    script = f'''
+tell application "Google Chrome"
+  repeat with w in windows
+    if (id of w) is {BOUND_WINDOW_ID} then
+      if (count of tabs of w) >= {BOUND_TAB_INDEX} then
+        return "{BOUND_WINDOW_ID}||{BOUND_TAB_INDEX}"
+      end if
+    end if
+  end repeat
+end tell
+return "0||0"
+'''
+    out = run_osascript(script, timeout=20)
+    if out == "0||0":
+        raise RuntimeError("Bound Chrome tab was closed. Restart agent while the dedicated Ozon tab is active.")
+    return BOUND_WINDOW_ID, BOUND_TAB_INDEX
+
+
 def js(expr: str) -> str:
-    wi, ti = find_agent_tab()
+    wi, ti = get_bound_tab()
     escaped = expr.replace("\\", "\\\\").replace('"', '\\"')
     script = f'''
 tell application "Google Chrome"
@@ -70,11 +83,8 @@ end tell
 
 
 def navigate(url: str) -> None:
-    wi, ti = find_agent_tab()
-    # Keep the marker in the fragment so the same dedicated tab can always be
-    # rediscovered after navigation.
-    marked = url + ("&" if "#" in url else "#") + "ozon-radar"
-    safe = marked.replace("\\", "\\\\").replace('"', '\\"')
+    wi, ti = get_bound_tab()
+    safe = url.replace("\\", "\\\\").replace('"', '\\"')
     script = f'''
 tell application "Google Chrome"
   set w to first window whose id is {wi}
@@ -85,7 +95,7 @@ end tell
 
 
 def title_and_url() -> tuple[str, str]:
-    wi, ti = find_agent_tab()
+    wi, ti = get_bound_tab()
     script = f'''
 tell application "Google Chrome"
   set w to first window whose id is {wi}
@@ -213,5 +223,7 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(raw)
 
 if __name__ == "__main__":
-    print(f"Ozon Native Chrome Agent listening on http://127.0.0.1:{PORT}")
+    wi, ti = bind_active_tab()
+    print(f"Ozon Native Chrome Agent bound to Chrome window {wi}, tab {ti}")
+    print(f"Listening on http://127.0.0.1:{PORT}")
     HTTPServer((HOST, PORT), Handler).serve_forever()
