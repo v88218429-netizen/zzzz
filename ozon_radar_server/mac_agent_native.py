@@ -10,7 +10,6 @@ import threading
 
 HOST = "0.0.0.0"
 PORT = 8900
-BOUND_WINDOW_ID: int | None = None
 REQUEST_LOCK = threading.Lock()
 
 def run_osascript(script: str, timeout: int = 120) -> str:
@@ -24,91 +23,45 @@ def run_osascript(script: str, timeout: int = 120) -> str:
         raise RuntimeError((p.stderr or p.stdout or "osascript failed").strip())
     return (p.stdout or "").strip()
 
-def bind_active_window() -> int:
-    global BOUND_WINDOW_ID
+def ensure_front_tab() -> None:
     script = '''
 tell application "Google Chrome"
-  if (count of windows) = 0 then return "0||0"
-  set w to front window
-  set wi to id of w
-  set tc to count of tabs of w
-  return (wi as text) & "||" & (tc as text)
+  if (count of windows) = 0 then error "No Chrome windows"
+  if (count of tabs of front window) = 0 then error "No tabs in front Chrome window"
+  return "ok"
 end tell
 '''
-    out = run_osascript(script, timeout=20)
-    parts = out.split("||", 1)
-    wi = int(parts[0] or "0")
-    tc = int(parts[1] or "0")
-    if wi <= 0:
-        raise RuntimeError("No active Google Chrome window to bind")
-    if tc != 1:
-        raise RuntimeError(
-            f"Dedicated Chrome window must contain exactly 1 tab; found {tc}. "
-            "Agent will not create, close, or switch tabs."
-        )
-    BOUND_WINDOW_ID = wi
-    return wi
-
-
-def get_bound_window() -> int:
-    if BOUND_WINDOW_ID is None:
-        return bind_active_window()
-
-    script = f'''
-tell application "Google Chrome"
-  repeat with w in windows
-    if (id of w) is {BOUND_WINDOW_ID} then
-      return ((count of tabs of w) as text)
-    end if
-  end repeat
-end tell
-return "0"
-'''
-    out = run_osascript(script, timeout=20)
-    tc = int(out or "0")
-    if tc == 0:
-        raise RuntimeError("Bound Chrome window was closed. Restart agent with the dedicated one-tab window active.")
-    if tc != 1:
-        raise RuntimeError(
-            f"Bound Chrome window must stay at exactly 1 tab; found {tc}. "
-            "Agent refuses to create, close, or switch tabs."
-        )
-    return BOUND_WINDOW_ID
+    run_osascript(script, timeout=20)
 
 
 def js(expr: str) -> str:
-    wi = get_bound_window()
+    ensure_front_tab()
     escaped = expr.replace("\\", "\\\\").replace('"', '\\"')
-    # Use the exact Chrome AppleScript form that is known to work:
-    # execute active tab of <window> javascript "..."
     script = f'''
 tell application "Google Chrome"
-  set w to first window whose id is {wi}
-  execute active tab of w javascript "{escaped}"
+  execute active tab of front window javascript "{escaped}"
 end tell
 '''
     return run_osascript(script, timeout=60)
 
 
 def navigate(url: str) -> None:
-    wi = get_bound_window()
+    ensure_front_tab()
     safe = url.replace("\\", "\\\\").replace('"', '\\"')
     script = f'''
 tell application "Google Chrome"
-  set w to first window whose id is {wi}
-  set URL of active tab of w to "{safe}"
+  set URL of active tab of front window to "{safe}"
 end tell
 '''
     run_osascript(script, timeout=30)
 
 
 def title_and_url() -> tuple[str, str]:
-    wi = get_bound_window()
-    script = f'''
+    ensure_front_tab()
+    script = '''
 tell application "Google Chrome"
-  set w to first window whose id is {wi}
-  set t to title of active tab of w
-  set u to URL of active tab of w
+  set t to title of active tab of front window
+  set u to URL of active tab of front window
   return t & "||" & u
 end tell
 '''
@@ -231,7 +184,6 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(raw)
 
 if __name__ == "__main__":
-    wi = bind_active_window()
-    print(f"Ozon Native Chrome Agent bound to Chrome window {wi} (exactly one tab)")
+    print("Ozon Native Chrome Agent: uses active tab of front Chrome window only; never creates windows/tabs")
     print(f"Listening on http://127.0.0.1:{PORT}")
     HTTPServer((HOST, PORT), Handler).serve_forever()
