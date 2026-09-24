@@ -66,7 +66,7 @@ async def run_all(settings: Settings) -> int:
 
 
 async def run_demo() -> int:
-    settings = Settings(wb_mode="demo", llm_provider="rules", data_dir="./data/demo")
+    settings = Settings(wb_mode="demo", llm_provider="rules", data_dir="./data/demo", enable_public_wb_search=False, remote_policy_url="", auto_update_enabled=False)
     # Each demo is clean and deterministic. It never touches the live database.
     demo_db = settings.data_path / "control_center.sqlite3"
     for suffix in ("", "-wal", "-shm"):

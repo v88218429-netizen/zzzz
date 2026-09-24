@@ -26,10 +26,38 @@ PERSISTENT_RELATIVE = {
 
 UPDATABLE_TOP_LEVEL = {
     'src','scripts','tests','docs','skills','plugin','google_apps_script','config',
-    'START_WB_AI_MANAGER.command','START_HERE.md','README.md','CLAUDE.md','VERSION',
+    'START_WB_AI_MANAGER.command','START_HERE.md','README.md','RELEASE_NOTES.md','VERIFICATION.txt','CLAUDE.md','VERSION',
     'pyproject.toml','plugin.json','mcp.json','.mcp.json.example','.env.example',
     'Dockerfile','docker-compose.yml','.gitignore',
 }
+
+
+def _atomic_write_text(path: Path, text: str) -> None:
+    """Durably replace a small control file without exposing a truncated JSON state."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=str(path.parent))
+    tmp = Path(tmp_name)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(text)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+def _atomic_copy(src: Path, dst: Path) -> None:
+    """Copy through a sibling temp file, then atomically publish the finished bytes."""
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(prefix=f".{dst.name}.", suffix=".update", dir=str(dst.parent))
+    os.close(fd)
+    tmp = Path(tmp_name)
+    try:
+        shutil.copy2(src, tmp)
+        os.replace(tmp, dst)
+    finally:
+        tmp.unlink(missing_ok=True)
 
 
 def _version_tuple(value: str) -> tuple[int, ...]:
@@ -87,7 +115,7 @@ class UpdateManager:
         old.update(fields)
         old['current_version']=current_version(self.root)
         old['updated_at_epoch']=time.time()
-        self.status_path.write_text(json.dumps(old,ensure_ascii=False,indent=2),encoding='utf-8')
+        _atomic_write_text(self.status_path, json.dumps(old,ensure_ascii=False,indent=2))
         return old
 
     def status(self) -> dict[str, Any]:
@@ -141,11 +169,23 @@ class UpdateManager:
     @staticmethod
     def _safe_extract(zf: zipfile.ZipFile, dest: Path) -> None:
         base=dest.resolve()
-        for info in zf.infolist():
+        infos=zf.infolist()
+        for info in infos:
             p=(dest / info.filename).resolve()
             if base not in p.parents and p != base:
                 raise ValueError('unsafe path in update archive')
         zf.extractall(dest)
+        # Python's zipfile.extractall() does not restore Unix/macOS mode bits.
+        # Preserve only ordinary rwx permissions from trusted archive metadata;
+        # never propagate suid/sgid/sticky bits. This keeps .command/.sh launchers
+        # executable after a full archive update and after rollback restore.
+        for info in infos:
+            mode=(info.external_attr >> 16) & 0o777
+            if not mode:
+                continue
+            target=dest / info.filename
+            if target.exists() and not target.is_symlink():
+                target.chmod(mode)
 
     @staticmethod
     def _payload_root(extracted: Path) -> Path:
@@ -206,30 +246,39 @@ class UpdateManager:
             self._safe_extract(z,self.root)
 
     def _overlay(self, payload: Path) -> None:
+        # Publish complete files atomically. Never rmtree src/scripts before their
+        # replacements exist: a power loss must still leave an importable updater.
         for top in UPDATABLE_TOP_LEVEL:
             src=payload/top
             if not src.exists():
                 continue
             dst=self.root/top
-            if top=='config' and src.is_dir():
-                dst.mkdir(parents=True,exist_ok=True)
-                for f in src.rglob('*'):
-                    if not f.is_file():
-                        continue
-                    rel=Path('config')/f.relative_to(src)
-                    if rel in PERSISTENT_RELATIVE:
-                        continue
-                    target=self.root/rel
-                    target.parent.mkdir(parents=True,exist_ok=True)
-                    shutil.copy2(f,target)
+            if src.is_file():
+                _atomic_copy(src,dst)
                 continue
-            if dst.exists():
-                if dst.is_dir(): shutil.rmtree(dst)
-                else: dst.unlink()
-            if src.is_dir(): shutil.copytree(src,dst)
-            else:
-                dst.parent.mkdir(parents=True,exist_ok=True)
-                shutil.copy2(src,dst)
+            if dst.exists() and not dst.is_dir():
+                dst.unlink()
+            dst.mkdir(parents=True,exist_ok=True)
+            source_files:set[Path]=set()
+            for f in src.rglob('*'):
+                if not f.is_file():
+                    continue
+                rel=Path(top)/f.relative_to(src)
+                if rel in PERSISTENT_RELATIVE:
+                    continue
+                source_files.add(rel)
+                _atomic_copy(f,self.root/rel)
+            # Remove obsolete files only after all new files are safely published.
+            # Persistent tenant files are never removed.
+            for old in sorted(dst.rglob('*'), key=lambda x: len(x.parts), reverse=True):
+                if old.is_file() or old.is_symlink():
+                    rel=old.relative_to(self.root)
+                    if rel in PERSISTENT_RELATIVE or rel in source_files or '__pycache__' in rel.parts:
+                        continue
+                    old.unlink(missing_ok=True)
+                elif old.is_dir():
+                    try: old.rmdir()
+                    except OSError: pass
 
     def _smoke(self) -> tuple[bool,str]:
         py=self.root/'.venv/bin/python'
@@ -268,9 +317,53 @@ class UpdateManager:
             if got != expected:
                 raise ValueError(f'checksum mismatch for {rel}: expected {expected}, got {got}')
             target.parent.mkdir(parents=True,exist_ok=True)
-            shutil.copy2(local,target)
+            _atomic_copy(local,target)
             if item.get('executable'):
                 target.chmod(target.stat().st_mode | 0o111)
+
+    def _refresh_editable_install(self, context: str) -> None:
+        py=self.root/'.venv/bin/python'
+        if not py.exists():
+            return
+        p=subprocess.run([str(py),'-m','pip','install','-e','.'],cwd=self.root,text=True,capture_output=True,timeout=300)
+        if p.returncode!=0:
+            raise RuntimeError(f'dependency refresh {context} failed: '+(p.stdout+'\n'+p.stderr)[-5000:])
+
+    def _restore_and_verify(self, backup: Path, context: str) -> None:
+        self._restore(backup)
+        self._refresh_editable_install(context)
+        ok,why=self._smoke()
+        if not ok:
+            raise RuntimeError(f'rollback smoke {context} failed: '+why)
+
+    def recover_interrupted_update(self) -> dict[str, Any]:
+        """Rollback an update that died outside normal exception handling.
+
+        The backup path is persisted before any release bytes are changed. On the next
+        supervisor start, an `applying=true` state is therefore treated as a failed
+        transaction and restored before the web process can start.
+        """
+        status=self.status()
+        if not status.get('applying'):
+            return status | {'recovered_interrupted_update': False}
+        raw=status.get('backup')
+        backup=Path(str(raw)).expanduser() if raw else None
+        if backup is not None and not backup.is_absolute():
+            backup=(self.root/backup).resolve()
+        if backup is None or not backup.exists():
+            candidates=sorted((self.state_dir/'backups').glob('*.zip'), key=lambda p:p.stat().st_mtime, reverse=True)
+            backup=candidates[0] if candidates else None
+        if backup is None or not backup.exists():
+            raise RuntimeError('interrupted update detected but no rollback backup is available')
+        self._restore_and_verify(backup, 'after interrupted update')
+        return self._write_status(
+            applying=False,
+            last_result='recovered_interrupted_update',
+            rollback='ok',
+            backup=str(backup),
+            recovered_interrupted_update=True,
+            last_error='previous update was interrupted; restored backup before startup',
+        )
 
     def apply(self, manifest: UpdateManifest | None = None) -> dict[str, Any]:
         manifest=manifest or self.fetch_manifest()
@@ -279,8 +372,8 @@ class UpdateManager:
             return self._write_status(available=False,latest_version=manifest.version,last_result='already_current',last_error=None)
         if manifest.minimum_current_version and _version_tuple(cur) < _version_tuple(manifest.minimum_current_version):
             raise RuntimeError(f'current version {cur} is below minimum {manifest.minimum_current_version}')
-        self._write_status(applying=True,target_version=manifest.version,last_error=None)
         backup=self._backup()
+        self._write_status(applying=True,target_version=manifest.version,previous_version=cur,backup=str(backup),last_error=None)
         try:
             with tempfile.TemporaryDirectory(prefix='wb-ai-update-') as td:
                 td=Path(td)
@@ -303,11 +396,7 @@ class UpdateManager:
                     if current_version(payload)!=manifest.version:
                         raise ValueError('archive VERSION does not match manifest')
                     self._overlay(payload)
-            py=self.root/'.venv/bin/python'
-            if py.exists():
-                p=subprocess.run([str(py),'-m','pip','install','-e','.'],cwd=self.root,text=True,capture_output=True,timeout=300)
-                if p.returncode!=0:
-                    raise RuntimeError('dependency refresh failed: '+(p.stdout+'\n'+p.stderr)[-5000:])
+            self._refresh_editable_install('after update')
             ok,why=self._smoke()
             if not ok:
                 raise RuntimeError('post-update smoke failed: '+why)
@@ -315,9 +404,7 @@ class UpdateManager:
             return self.status()
         except Exception as exc:
             try:
-                self._restore(backup)
-                py=self.root/'.venv/bin/python'
-                if py.exists(): subprocess.run([str(py),'-m','pip','install','-e','.'],cwd=self.root,capture_output=True,timeout=300)
+                self._restore_and_verify(backup, 'after failed update')
                 rollback='ok'
             except Exception as rex:
                 rollback=f'failed: {rex}'

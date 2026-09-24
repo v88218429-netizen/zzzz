@@ -1,0 +1,10 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+data/*
+!data/.gitkeep
+config/catalog.csv
+config/watch_queries.yaml
+.DS_Store

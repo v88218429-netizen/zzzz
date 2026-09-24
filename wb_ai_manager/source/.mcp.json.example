@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "wb-ai-manager": {
+      "type": "stdio",
+      "command": "./scripts/plugin_mcp_stdio.sh"
+    }
+  }
+}

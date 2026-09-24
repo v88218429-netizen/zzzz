@@ -1,0 +1,3 @@
+[console_scripts]
+wb-ai-manager-mcp = wb_control_center.plugin_gateway:main
+wb-control = wb_control_center.cli:main

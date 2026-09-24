@@ -147,6 +147,7 @@ function renderConnections(){
   if($('sheets-connection-status')){ $('sheets-connection-status').className=`status-tag ${gs.configured?'ok':'warn'}`; $('sheets-connection-status').textContent=gs.configured?'ПОДКЛЮЧЕН':'СОХРАНЁННЫЙ СРЕЗ'; }
   if($('sheets-connection-note')) $('sheets-connection-note').textContent=gs.configured?`Автоисточник: ${gs.mode||'таблицы Google'}${gs.last_live_snapshot?' · '+time(gs.last_live_snapshot):''}.`:'Агент сам попробует получить разрешённые таблицы через текущий вход в Google в браузере. Ссылки и идентификаторы вводить не нужно.';
   const up=state.data?.health?.auto_update||{}, ver=state.data?.health?.app_version||up.current_version||'—';
+  if($('app-version-banner')) $('app-version-banner').textContent=`v${ver}`;
   if($('update-version')) $('update-version').textContent=`Версия ${ver}`;
   if($('update-connection-status')){ const bad=!!up.last_error; const available=!!up.available; $('update-connection-status').className=`status-tag ${bad?'warn':available?'warn':'ok'}`; $('update-connection-status').textContent=bad?'ОШИБКА':available?'ЕСТЬ ОБНОВЛЕНИЕ':'АКТУАЛЬНО'; }
   if($('update-connection-note')) $('update-connection-note').textContent=up.last_error?`Последняя проверка не удалась: ${up.last_error}. Агент продолжает работать на текущей версии.`:up.last_result==='updated'?`Обновлено автоматически до версии ${up.installed_version||ver}. Перед установкой создана резервная копия.`:`Код проверяется автоматически примерно раз в минуту. Новая версия ставится только после проверки и с автоматическим откатом при ошибке.`;

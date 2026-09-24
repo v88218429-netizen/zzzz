@@ -1,0 +1,67 @@
+WB AI Manager v1.1.4 — iterative verification record
+Date: 2026-09-22
+
+Audit rule:
+- run the complete verification battery;
+- if any new defect is found, fix it, add/strengthen a regression test where practical, and reset the clean-pass counter to 0;
+- accept the release only after two consecutive independent full passes find zero new defects.
+
+Additional defects found and fixed during this iterative audit:
+1. runtime configuration could theoretically disable the advertised read-only boundary;
+2. the external MCP example exposed raw wb-mcp instead of the guarded gateway;
+3. the MCP setup error referenced a nonexistent SETUP.command;
+4. launcher credential replacement could corrupt secrets containing backslash replacement sequences;
+5. AUTO first launch did not surface missing WB credentials clearly;
+6. blocking Sheets/browser/source-discovery work could block the FastAPI event loop;
+7. unrelated .crdownload files could prevent successful browser export detection;
+8. DEMO still performed optional public-network calls and could hang offline;
+9. optional competitor search could spend too long on repeated public-search failures;
+10. AUTO ignored a configured Apps Script bridge and went straight to browser export;
+11. duplicate supervisor launches handled occupied ports poorly;
+12. duplicate-instance detection originally occurred after startup update checks, allowing a second launcher to touch files underneath a running instance;
+13. DEMO -> legacy live launcher did not restore ENABLE_PUBLIC_WB_SEARCH=true.
+
+The final test count and consecutive-clean-pass result are recorded after final packaging verification.
+
+Environment note:
+A completely empty virtual environment cannot download dependencies from PyPI in this execution environment because outbound package-network access is unavailable. Offline wheel construction and the fully installed runtime are verified separately; normal bootstrap remains responsible for dependency installation on an internet-connected Mac.
+
+Deep layered audit resumed after the previous clean passes. Clean-pass counter reset to 0 because new defects were found:
+14. dashboard release banner was stale (v1.1.2 in a v1.1.3 package);
+15. updater status was non-atomic and an interrupted update had no startup rollback path;
+16. MCP calls and whole-agent runs had no hard runtime deadline;
+17. supervisor's startup /run-all request timed out before a 19-agent pass could finish;
+18. update-check and remote-policy refresh performed blocking network I/O on the FastAPI event loop.
+
+Candidate 1.1.4 adds regression coverage for these defects. Acceptance still requires two fresh consecutive full passes after all layered checks complete.
+19. non-finite numeric values (NaN/Infinity) could bypass some hard money caps because IEEE comparisons return false;
+20. a caller-provided shop_id could override the configured tenant scope in the MCP client.
+21. full-audit calls had no single-flight guard, so startup/manual/scheduled requests could overlap into partial skipped passes;
+22. action execution had a check-then-act race that could execute a future write twice under concurrent approvals.
+23. two status surfaces reported only FORCE_READ_ONLY and could misleadingly show writes enabled even though the code-level READ_ONLY_BUILD fuse still blocked them.
+
+24. Public competitor search silently hardcoded a geo destination (`dest=-1257786`) without provenance.
+    FIX: destination is now a Settings value (`PUBLIC_WB_DEST`) and every competitor snapshot records `search_dest`.
+    Default behavior is preserved rather than changing marketplace geography during an audit.
+
+25. Browser-based Sheets launcher used an unbounded `subprocess.run(open ...)`.
+    FIX: 10-second process deadline; a stuck OS launcher degrades to no refresh instead of hanging the agent.
+
+26. Normal exception rollback could report `rollback=ok` without checking pip refresh return code or post-restore smoke.
+    FIX: rollback is now successful only after restore + dependency refresh + smoke verification; failures are recorded as rollback failures.
+
+27. Background full-audit tasks were not explicitly drained before runtime shutdown.
+    FIX: lifespan shutdown now cancels/awaits tracked audit tasks before closing the ControlCenter/WB connector.
+
+FINAL DEEP-AUDIT ACCEPTANCE — 2026-09-22
+- Regression/unit suite: 104/104 PASS.
+- Clean full pass #1 (fresh copy): PASS.
+- Clean full pass #2 (independent fresh copy): PASS.
+- Internal imports: 0 missing.
+- Release identity: VERSION / package / pyproject / plugin = 1.1.4.
+- API smoke + background audit lifecycle: PASS.
+- SQLite concurrency: 20 workers, 1600 snapshots, 0 errors, WAL, busy_timeout=30000.
+- Agent integration: 19/19 PASS; Decision Engine PASS (26 decisions in demo fixture).
+- Read-only build fuse: PASS.
+- Acceptance rule satisfied: two consecutive independent clean full passes after the last product defect/fix.
+- GitHub stable channel is NOT part of this acceptance; it still needs a separate republish from these verified bytes.

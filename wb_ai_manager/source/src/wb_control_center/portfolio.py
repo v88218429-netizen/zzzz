@@ -10,6 +10,7 @@ import httpx
 import yaml
 
 from .config import Settings, project_root
+from .policy import READ_ONLY_BUILD
 from .cohort import analyze_order_lifecycle
 
 
@@ -67,7 +68,7 @@ class PortfolioService:
             "wb": {
                 "configured": bool(self.settings.wb_api_token),
                 "mode": self.settings.wb_mode,
-                "read_only": bool(self.settings.force_read_only),
+                "read_only": bool(READ_ONLY_BUILD or self.settings.force_read_only),
             },
             "google_sheets": {
                 "configured": bool((self.settings.google_sheets_bridge_url and self.settings.google_sheets_bridge_key) or self.live_path.exists()),

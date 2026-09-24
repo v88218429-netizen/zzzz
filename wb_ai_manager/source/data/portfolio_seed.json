@@ -1,0 +1,580 @@
+{
+  "generated_at": "2026-09-18T15:45:00+03:00",
+  "mode": "seeded_real_facts",
+  "period": "09.09–16.09.2026",
+  "portfolio": {
+    "orders_rub": 4027468,
+    "buyouts_rub": 2751967,
+    "profit_rub": 485257,
+    "margin_pct": 17.6,
+    "roi_pct": 21.7,
+    "orders_qty": 3612,
+    "buyouts_qty": 2628,
+    "ad_spend_rub": 136487,
+    "drr_pct": 5.0,
+    "orders_change_pct": 26.1,
+    "profit_change_pct": 4.8,
+    "buyouts_change_pct": 5.1,
+    "ad_spend_change_pct": 20.5,
+    "buyouts_qty_change_pct": 7.7,
+    "drr_change_pct": 14.7
+  },
+  "stores": [
+    {
+      "id": "sanych",
+      "name": "Саныч",
+      "orders_rub": 2112987,
+      "buyouts_rub": 1611030,
+      "profit_rub": 294509,
+      "margin_pct": 18.3,
+      "roi_pct": 22.5,
+      "orders_qty": 2368,
+      "buyouts_qty": 1934,
+      "ad_spend_rub": 77692,
+      "drr_pct": 4.8,
+      "status": "good",
+      "freshness": "2026-09-16",
+      "source": "weekly_summary + sanych_sellmonitor",
+      "note": "Exact Sellmonitor подтверждён до 16.09. Рекламный Promotion token в таблице Саныча ранее попадал в карантин WRONG_STORE_TOKEN; для рекламы использовать trusted finance/WB token после проверки.",
+      "groups": [
+        {
+          "name": "Ведро пластиковое 12 л",
+          "margin_pct": -7.1,
+          "roi_pct": -6.7,
+          "buyout_pct": 56.8,
+          "orders_rub": 119462,
+          "orders_qty": 183,
+          "buyouts_rub": 53995,
+          "buyouts_qty": 104,
+          "profit_rub": -3819
+        },
+        {
+          "name": "Ведро оцинкованное 12 л",
+          "margin_pct": -2.1,
+          "roi_pct": -2.1,
+          "buyout_pct": 30.0,
+          "orders_rub": 48930,
+          "orders_qty": 40,
+          "buyouts_rub": 10443,
+          "buyouts_qty": 12,
+          "profit_rub": -222
+        },
+        {
+          "name": "Лотки №2 без планок",
+          "margin_pct": -22.0,
+          "roi_pct": -18.5,
+          "buyout_pct": 68.4,
+          "orders_rub": 27986,
+          "orders_qty": 19,
+          "buyouts_rub": 22261,
+          "buyouts_qty": 13,
+          "profit_rub": -4886
+        },
+        {
+          "name": "Кашпо подвесное 5 л",
+          "margin_pct": -4.9,
+          "roi_pct": -4.7,
+          "buyout_pct": 31.3,
+          "orders_rub": 40208,
+          "orders_qty": 32,
+          "buyouts_rub": 10371,
+          "buyouts_qty": 10,
+          "profit_rub": -512
+        }
+      ],
+      "orders_change_pct": 17.54,
+      "buyouts_change_pct": 16.5,
+      "profit_change_pct": 18.3,
+      "ad_spend_change_pct": 15.33,
+      "drr_change_pct": -2.04
+    },
+    {
+      "id": "air",
+      "name": "AIR",
+      "orders_rub": 1326822,
+      "buyouts_rub": 998975,
+      "profit_rub": 174960,
+      "margin_pct": 17.5,
+      "roi_pct": 21.6,
+      "orders_qty": 802,
+      "buyouts_qty": 592,
+      "ad_spend_rub": 34221,
+      "drr_pct": 3.4,
+      "status": "watch",
+      "freshness": "2026-09-16",
+      "source": "weekly_summary",
+      "note": "Недельная экономика свежая до 16.09. FBS-дашборд AIR имеет более старую синхронизацию и не должен перебивать сводку.",
+      "groups": [
+        {
+          "name": "Вазон 12 л",
+          "margin_pct": 10.6,
+          "roi_pct": 12.4,
+          "buyout_pct": 54.8,
+          "orders_rub": 232523,
+          "orders_qty": 115,
+          "buyouts_rub": 126013,
+          "buyouts_qty": 63,
+          "profit_rub": 13321
+        },
+        {
+          "name": "Ветошь ХПП",
+          "margin_pct": 20.3,
+          "roi_pct": 25.5,
+          "buyout_pct": 84.6,
+          "orders_rub": 404015,
+          "orders_qty": 156,
+          "buyouts_rub": 330678,
+          "buyouts_qty": 132,
+          "profit_rub": 67196
+        },
+        {
+          "name": "Вазон 5 л",
+          "margin_pct": 11.8,
+          "roi_pct": 13.4,
+          "buyout_pct": 61.1,
+          "orders_rub": 105634,
+          "orders_qty": 144,
+          "buyouts_rub": 65080,
+          "buyouts_qty": 88,
+          "profit_rub": 7650
+        }
+      ],
+      "orders_change_pct": 9.2,
+      "buyouts_change_pct": -18.2,
+      "profit_change_pct": -18.9,
+      "ad_spend_change_pct": -13.9,
+      "drr_change_pct": 5.2
+    },
+    {
+      "id": "hozyushka",
+      "name": "Хозяюшка",
+      "orders_rub": 587659,
+      "buyouts_rub": 141962,
+      "profit_rub": 15788,
+      "margin_pct": 11.12,
+      "roi_pct": 12.51,
+      "orders_qty": 442,
+      "buyouts_qty": 102,
+      "ad_spend_rub": 24574,
+      "drr_pct": 17.31,
+      "status": "critical",
+      "freshness": "2026-09-16",
+      "source": "weekly_summary",
+      "note": "Низкий выкуп и высокая доля рекламы относительно выкупов. Новый FBS PRO-лист сейчас имеет нулевой/сломанный срез и используется только как операционный источник после проверки свежести.",
+      "groups": [
+        {
+          "name": "Цемент",
+          "margin_pct": -35.9,
+          "roi_pct": -26.4,
+          "buyout_pct": 9.5,
+          "orders_rub": 177735,
+          "orders_qty": 137,
+          "buyouts_rub": 9375,
+          "buyouts_qty": 13,
+          "profit_rub": -3364
+        },
+        {
+          "name": "Гипс",
+          "margin_pct": -335.6,
+          "roi_pct": -77.0,
+          "buyout_pct": 17.6,
+          "orders_rub": 15171,
+          "orders_qty": 17,
+          "buyouts_rub": 1071,
+          "buyouts_qty": 3,
+          "profit_rub": -3594
+        },
+        {
+          "name": "Ведро с крышкой 8 л",
+          "margin_pct": -1.0,
+          "roi_pct": -1.0,
+          "buyout_pct": 40.0,
+          "orders_rub": 14951,
+          "orders_qty": 15,
+          "buyouts_rub": 4698,
+          "buyouts_qty": 6,
+          "profit_rub": -47
+        },
+        {
+          "name": "Ведро с крышкой 5 л",
+          "margin_pct": 13.6,
+          "roi_pct": 15.8,
+          "buyout_pct": 19.5,
+          "orders_rub": 146588,
+          "orders_qty": 113,
+          "buyouts_rub": 26094,
+          "buyouts_qty": 22,
+          "profit_rub": 3552
+        }
+      ]
+    }
+  ],
+  "own_27": {
+    "source": "Остатки v.1 27июля",
+    "source_updated_at": "2026-09-18T12:34:01+03:00",
+    "fbs_debt_orders": 39901,
+    "ff_stock": 26317,
+    "k2_safe_stock": 198,
+    "fbw_stock": 52,
+    "in_way_to_client": 4803,
+    "in_way_from_client": 683,
+    "wb_fbs_stock": 167634,
+    "ozon_fbs_stock": 158744,
+    "sales_qty": 12899,
+    "orders_qty": 29571,
+    "orders_rub": 3535099,
+    "ff_snapshot_date": "2026-09-17",
+    "economy_examples": [
+      {
+        "sku": "566189857",
+        "name": "Известь 2 кг",
+        "cost_rub": 94.82,
+        "price_rub": 375,
+        "profit_rub": 43.21,
+        "margin_pct": 11.52,
+        "roi_pct": 45.57,
+        "drr_pct": 15.6
+      },
+      {
+        "sku": "566189858",
+        "name": "Известь 4 кг",
+        "cost_rub": 157.64,
+        "price_rub": 495,
+        "profit_rub": 91.53,
+        "margin_pct": 18.49,
+        "roi_pct": 58.06,
+        "drr_pct": 5.3
+      },
+      {
+        "sku": "769654698",
+        "name": "Мел 2 кг",
+        "cost_rub": 78.92,
+        "price_rub": 333.5,
+        "profit_rub": -4.8,
+        "margin_pct": -1.44,
+        "roi_pct": -6.08,
+        "drr_pct": 29.23
+      }
+    ],
+    "ff_examples": [
+      {
+        "sku": "6338",
+        "name": "Бидон 10л",
+        "available": 768
+      },
+      {
+        "sku": "6336",
+        "name": "Бидон 5л",
+        "available": 1008
+      },
+      {
+        "sku": "6337",
+        "name": "Бидон 8л",
+        "available": 37
+      },
+      {
+        "sku": "1196",
+        "name": "Бидон 15л Голубой",
+        "available": 16
+      }
+    ],
+    "products": [
+      {
+        "sku": "566189857",
+        "name": "Известь 2 кг",
+        "price_client_rub": 281,
+        "safe_stock": 527,
+        "safe_stock_source": "WB FBS stock",
+        "wb_fbs_stock": 527,
+        "sales_qty": 131,
+        "orders_qty": 251,
+        "orders_per_day": 36,
+        "orders_rub": 61125,
+        "cost_rub": 94.82,
+        "price_rub": 375,
+        "profit_rub": 43.21,
+        "margin_pct": 11.52,
+        "roi_pct": 45.57,
+        "drr_pct": 15.6,
+        "cohort": {
+          "sku": "566189857",
+          "buyout_lag": {
+            "p50_days": 7.71,
+            "p90_days": 12.17
+          },
+          "recent_7d": {
+            "orders": 146,
+            "open_orders": 126,
+            "buyouts_observed": 17,
+            "cancels_observed": 3,
+            "maturity_pct": 12.63,
+            "quality_ready": false
+          },
+          "note": "Свежие заказы оцениваются как спрос; качество оценивается после поправки на фактический лаг выкупа."
+        },
+        "buyout_lag_p50_days": 7.71,
+        "buyout_lag_p90_days": 12.17,
+        "recent_cohort_maturity_pct": 12.63,
+        "recent_cohort_quality_ready": false,
+        "recent_cohort_orders_7d": 146,
+        "recent_cohort_open_7d": 126
+      },
+      {
+        "sku": "566189858",
+        "name": "Известь 4 кг",
+        "price_client_rub": 371,
+        "safe_stock": 999,
+        "safe_stock_source": "WB FBS stock",
+        "wb_fbs_stock": 999,
+        "sales_qty": 414,
+        "orders_qty": 1278,
+        "orders_per_day": 183,
+        "orders_rub": 173745,
+        "cost_rub": 157.64,
+        "price_rub": 495,
+        "profit_rub": 91.53,
+        "margin_pct": 18.49,
+        "roi_pct": 58.06,
+        "drr_pct": 5.3,
+        "cohort": {
+          "sku": "566189858",
+          "buyout_lag": {
+            "p50_days": 7.78,
+            "p90_days": 12.91
+          },
+          "recent_7d": {
+            "orders": 311,
+            "open_orders": 263,
+            "buyouts_observed": 46,
+            "cancels_observed": 2,
+            "maturity_pct": 10.36,
+            "quality_ready": false
+          },
+          "note": "Свежие заказы оцениваются как спрос; качество оценивается после поправки на фактический лаг выкупа."
+        },
+        "buyout_lag_p50_days": 7.78,
+        "buyout_lag_p90_days": 12.91,
+        "recent_cohort_maturity_pct": 10.36,
+        "recent_cohort_quality_ready": false,
+        "recent_cohort_orders_7d": 311,
+        "recent_cohort_open_7d": 263
+      },
+      {
+        "sku": "566189859",
+        "name": "Известь 6 кг",
+        "price_client_rub": 515,
+        "safe_stock": 646,
+        "safe_stock_source": "WB FBS stock",
+        "wb_fbs_stock": 646,
+        "sales_qty": 216,
+        "orders_qty": 936,
+        "orders_per_day": 134,
+        "orders_rub": 114894,
+        "cohort": {
+          "sku": "566189859",
+          "buyout_lag": {
+            "p50_days": 8.05,
+            "p90_days": 14.25
+          },
+          "recent_7d": {
+            "orders": 153,
+            "open_orders": 142,
+            "buyouts_observed": 11,
+            "cancels_observed": 0,
+            "maturity_pct": 7.24,
+            "quality_ready": false
+          },
+          "note": "Свежие заказы оцениваются как спрос; качество оценивается после поправки на фактический лаг выкупа."
+        },
+        "buyout_lag_p50_days": 8.05,
+        "buyout_lag_p90_days": 14.25,
+        "recent_cohort_maturity_pct": 7.24,
+        "recent_cohort_quality_ready": false,
+        "recent_cohort_orders_7d": 153,
+        "recent_cohort_open_7d": 142
+      },
+      {
+        "sku": "566189860",
+        "name": "Известь 10 кг",
+        "price_client_rub": 749,
+        "safe_stock": 647,
+        "safe_stock_source": "WB FBS stock",
+        "wb_fbs_stock": 647,
+        "sales_qty": 330,
+        "orders_qty": 1185,
+        "orders_per_day": 169,
+        "orders_rub": 112999,
+        "cohort": {
+          "sku": "566189860",
+          "buyout_lag": {
+            "p50_days": 7.75,
+            "p90_days": 12.87
+          },
+          "recent_7d": {
+            "orders": 81,
+            "open_orders": 68,
+            "buyouts_observed": 13,
+            "cancels_observed": 0,
+            "maturity_pct": 6.52,
+            "quality_ready": false
+          },
+          "note": "Свежие заказы оцениваются как спрос; качество оценивается после поправки на фактический лаг выкупа."
+        },
+        "buyout_lag_p50_days": 7.75,
+        "buyout_lag_p90_days": 12.87,
+        "recent_cohort_maturity_pct": 6.52,
+        "recent_cohort_quality_ready": false,
+        "recent_cohort_orders_7d": 81,
+        "recent_cohort_open_7d": 68
+      },
+      {
+        "sku": "566189861",
+        "name": "Известь 20 кг",
+        "price_client_rub": 1287,
+        "safe_stock": 894,
+        "safe_stock_source": "WB FBS stock",
+        "wb_fbs_stock": 894,
+        "sales_qty": 470,
+        "orders_qty": 1380,
+        "orders_per_day": 197,
+        "orders_rub": 142430,
+        "cohort": {
+          "sku": "566189861",
+          "buyout_lag": {
+            "p50_days": 6.9,
+            "p90_days": 13.21
+          },
+          "recent_7d": {
+            "orders": 59,
+            "open_orders": 51,
+            "buyouts_observed": 8,
+            "cancels_observed": 0,
+            "maturity_pct": 15.36,
+            "quality_ready": false
+          },
+          "note": "Свежие заказы оцениваются как спрос; качество оценивается после поправки на фактический лаг выкупа."
+        },
+        "buyout_lag_p50_days": 6.9,
+        "buyout_lag_p90_days": 13.21,
+        "recent_cohort_maturity_pct": 15.36,
+        "recent_cohort_quality_ready": false,
+        "recent_cohort_orders_7d": 59,
+        "recent_cohort_open_7d": 51
+      },
+      {
+        "sku": "769654698",
+        "name": "Мел 2 кг",
+        "price_client_rub": 250,
+        "safe_stock": 871,
+        "safe_stock_source": "WB FBS stock",
+        "wb_fbs_stock": 871,
+        "sales_qty": 42,
+        "orders_qty": 106,
+        "orders_per_day": 15,
+        "orders_rub": 20374,
+        "cost_rub": 78.92,
+        "price_rub": 333.5,
+        "profit_rub": -4.8,
+        "margin_pct": -1.44,
+        "roi_pct": -6.08,
+        "drr_pct": 29.23,
+        "cohort": {
+          "sku": "769654698",
+          "buyout_lag": {
+            "p50_days": 6.7,
+            "p90_days": 10.09
+          },
+          "recent_7d": {
+            "orders": 57,
+            "open_orders": 51,
+            "buyouts_observed": 6,
+            "cancels_observed": 0,
+            "maturity_pct": 10.63,
+            "quality_ready": false
+          },
+          "note": "Свежие заказы оцениваются как спрос; качество оценивается после поправки на фактический лаг выкупа."
+        },
+        "buyout_lag_p50_days": 6.7,
+        "buyout_lag_p90_days": 10.09,
+        "recent_cohort_maturity_pct": 10.63,
+        "recent_cohort_quality_ready": false,
+        "recent_cohort_orders_7d": 57,
+        "recent_cohort_open_7d": 51
+      }
+    ],
+    "cohort_lifecycle": {
+      "as_of": "2026-09-18T18:40:03+00:00",
+      "rows": 6818,
+      "global": {
+        "buyout_lag": {
+          "count": 2591,
+          "p25_days": 5.12,
+          "p50_days": 6.89,
+          "p75_days": 9.19,
+          "p90_days": 13.15,
+          "p95_days": 17.21,
+          "mean_days": 8.01
+        },
+        "cancel_lag": {
+          "count": 576,
+          "p25_days": 5.11,
+          "p50_days": 7.2,
+          "p75_days": 13.65,
+          "p90_days": 21.23,
+          "p95_days": 27.01,
+          "mean_days": 10.67
+        }
+      }
+    }
+  },
+  "source_health": [
+    {
+      "id": "own_27",
+      "name": "Остатки v.1 27июля",
+      "status": "fresh",
+      "trust": "high",
+      "freshness": "18.09.2026",
+      "used_for": "остатки, FBS/FBW, FF, юнитка, товары"
+    },
+    {
+      "id": "weekly_summary",
+      "name": "Сводка AIR + Саныч + Хозяюшка",
+      "status": "fresh",
+      "trust": "high",
+      "freshness": "16.09.2026",
+      "used_for": "недельная экономика, реклама, сравнение магазинов"
+    },
+    {
+      "id": "sanych_sellmonitor",
+      "name": "Sellmonitor — Саныч",
+      "status": "fresh",
+      "trust": "high",
+      "freshness": "16.09.2026",
+      "used_for": "exact-дни, товары, история; реклама только после проверки токена"
+    },
+    {
+      "id": "air_fbs",
+      "name": "WB FBS — AIR",
+      "status": "stale",
+      "trust": "medium",
+      "freshness": "21.08.2026",
+      "used_for": "операционные FBS-сигналы, только если свежее недельной сводки"
+    },
+    {
+      "id": "hozyushka_fbs",
+      "name": "WB FBS — Хозяюшка",
+      "status": "broken",
+      "trust": "low",
+      "freshness": "нулевой срез",
+      "used_for": "не использовать как финансовый факт до восстановления"
+    },
+    {
+      "id": "dublinsky_legacy",
+      "name": "ИП Дублинский 1",
+      "status": "stale",
+      "trust": "low",
+      "freshness": "06.07.2026",
+      "used_for": "история/справка; решения берём из 27 и Юнитки"
+    }
+  ]
+}

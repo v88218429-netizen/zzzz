@@ -8,6 +8,7 @@ an unrestricted bid/price endpoint.
 """
 
 from datetime import datetime, timedelta, timezone
+import os
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
@@ -158,7 +159,11 @@ async def validate_bid_proposal(current_bid_rub: float, proposed_bid_rub: float)
 
 
 def main() -> None:
-    mcp.run(transport="streamable-http")
+    transport = os.getenv("WB_AI_MCP_TRANSPORT", "stdio").strip().lower()
+    if transport in {"http", "streamable-http"}:
+        mcp.run(transport="streamable-http")
+    else:
+        mcp.run(transport="stdio")
 
 
 if __name__ == "__main__":

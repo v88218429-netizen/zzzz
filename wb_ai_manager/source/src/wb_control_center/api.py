@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+import asyncio
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -22,13 +24,25 @@ discovery = SourceDiscovery()
 UI_DIR = Path(__file__).resolve().parent / "ui"
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 update_manager = UpdateManager(PROJECT_ROOT, settings.auto_update_manifest_url, settings.auto_update_channel)
+log = logging.getLogger(__name__)
+_background_tasks: set[asyncio.Task] = set()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await center.start()
-    yield
-    await center.stop()
+    try:
+        yield
+    finally:
+        # Stop background full-audit tasks before closing the WB connector/DB-facing
+        # runtime. Otherwise shutdown can tear resources out from under a live audit.
+        tasks=list(_background_tasks)
+        for task in tasks:
+            task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+        _background_tasks.clear()
+        await center.stop()
 
 
 app = FastAPI(title="Менеджер WB", version=current_version(PROJECT_ROOT), lifespan=lifespan)
@@ -44,9 +58,9 @@ def _health_payload() -> dict[str, Any]:
         "reasoning": center.llm.label,
         "wb_mode": settings.wb_mode,
         "telegram": center.notifier.enabled,
-        "auto_actions": False,
-        "operation_mode": "shadow",
-        "read_only": True,
+        "auto_actions": bool(settings.auto_actions),
+        "operation_mode": center.policy_engine.operation_mode,
+        "read_only": not center.policy_engine.execution_allowed()[0],
         "sheets_connected": bool(portfolio.live_path.exists() or (settings.google_sheets_bridge_url and settings.google_sheets_bridge_key)),
         "app_version": current_version(PROJECT_ROOT),
         "auto_update": update_manager.status(),
@@ -65,7 +79,7 @@ async def update_status() -> dict[str, Any]:
 
 @app.post("/api/update-check")
 async def update_check() -> dict[str, Any]:
-    result = update_manager.check()
+    result = await asyncio.to_thread(update_manager.check)
     result.pop("manifest", None)
     return result
 
@@ -88,9 +102,21 @@ async def run_agent(name: str):
     return await center.run_agent(name)
 
 
+async def _run_all_background() -> None:
+    try:
+        await center.run_all_once()
+    except Exception:
+        log.exception("background run-all failed")
+
+
 @app.post("/run-all")
-async def run_all():
-    # Safe in v0.4 preview: operation mode is shadow/read-only and no writes execute.
+async def run_all(background: bool = False):
+    # Read-only release: the build fuse blocks WB writes regardless of runtime settings.
+    if background:
+        task=asyncio.create_task(_run_all_background())
+        _background_tasks.add(task)
+        task.add_done_callback(_background_tasks.discard)
+        return {"status": "started", "background": True}
     return await center.run_all_once()
 
 
@@ -177,6 +203,7 @@ async def dashboard_data() -> dict[str, Any]:
     decisions = center.db.current_decisions(limit=200) or center.refresh_decisions()
     completed_runs = [r for r in runs.values() if r.get("finished_at")]
     last_run_at = max((str(r["finished_at"]) for r in completed_runs), default=None)
+    runtime_policy = await asyncio.to_thread(center.runtime_policy.get)
     return {
         "health": _health_payload(),
         "store": {"name": _store_name(snapshots), "mode": settings.wb_mode},
@@ -211,7 +238,7 @@ async def dashboard_data() -> dict[str, Any]:
             "policy_version": center.policy.raw.get("version"),
             "source_priority": ["live_wb", "trusted_sheets", "store_history", "official_wb", "tenant_policy", "generic_heuristics"],
         },
-        "runtime_policy": center.runtime_policy.get(),
+        "runtime_policy": runtime_policy,
         "runtime_policy_history": center.runtime_policy.history()[:10],
         "remote_policy": center.runtime_policy.remote_status(),
         "policy_safety": {"hard_max_bid_change_pct": center.policy.safety.get("limits",{}).get("max_bid_change_pct"), "absolute_bid_cap_rub": center.policy.safety.get("limits",{}).get("absolute_bid_cap_rub")},
@@ -246,7 +273,7 @@ async def decision_control() -> dict[str, Any]:
 
 @app.get("/api/source-discovery")
 async def source_discovery() -> dict[str, Any]:
-    return discovery.discover()
+    return await asyncio.to_thread(discovery.discover)
 
 @app.get("/api/connections")
 async def connections() -> dict[str, Any]:
@@ -262,10 +289,10 @@ async def portfolio_data() -> dict[str, Any]:
 async def refresh_sheets() -> dict[str, Any]:
     try:
         if settings.google_sheets_bridge_url and settings.google_sheets_bridge_key:
-            data = portfolio.refresh()
+            data = await asyncio.to_thread(portfolio.refresh)
             mode = "apps_script_bridge"
         else:
-            payload = AutoSheets().refresh_core_via_browser()
+            payload = await asyncio.to_thread(AutoSheets().refresh_core_via_browser)
             if not payload.get("sources"):
                 raise RuntimeError("Не удалось получить Google Sheets через текущую браузерную сессию. Если Google попросил вход — войди один раз и нажми обновить снова.")
             data = portfolio.merge_payload(payload, "auto_browser_sheets")
@@ -279,12 +306,13 @@ async def refresh_sheets() -> dict[str, Any]:
 
 @app.get("/api/policy-studio")
 async def policy_studio() -> dict[str, Any]:
+    policy = await asyncio.to_thread(center.runtime_policy.get)
     return {
-        "policy": center.runtime_policy.get(),
+        "policy": policy,
         "history": center.runtime_policy.history()[:20],
         "remote_policy": center.runtime_policy.remote_status(),
         "safety": {
-            "read_only": bool(settings.force_read_only),
+            "read_only": not center.policy_engine.execution_allowed()[0],
             "hard_max_bid_change_pct": center.policy.safety.get("limits", {}).get("max_bid_change_pct"),
             "absolute_bid_cap_rub": center.policy.safety.get("limits", {}).get("absolute_bid_cap_rub"),
         },
@@ -293,8 +321,8 @@ async def policy_studio() -> dict[str, Any]:
 
 @app.post("/api/policy-studio/remote-refresh")
 async def refresh_remote_policy() -> dict[str, Any]:
-    center.remote_policy.get(force=True)
-    policy = center.runtime_policy.get()
+    await asyncio.to_thread(center.remote_policy.get, True)
+    policy = await asyncio.to_thread(center.runtime_policy.get)
     decisions = center.refresh_decisions()
     return {"ok": True, "remote_policy": center.runtime_policy.remote_status(), "policy": policy, "decisions": len(decisions)}
 
@@ -302,7 +330,7 @@ async def refresh_remote_policy() -> dict[str, Any]:
 @app.post("/api/policy-studio/advertising")
 async def update_policy_studio(payload: dict[str, Any]) -> dict[str, Any]:
     try:
-        result = center.runtime_policy.update_advertising(payload, updated_by="dashboard")
+        result = await asyncio.to_thread(center.runtime_policy.update_advertising, payload, "dashboard")
         decisions = center.refresh_decisions()
         return {"ok": True, "policy": result, "decisions": len(decisions)}
     except ValueError as exc:
@@ -312,7 +340,7 @@ async def update_policy_studio(payload: dict[str, Any]) -> dict[str, Any]:
 @app.post("/api/policy-studio/rollback/{index}")
 async def rollback_policy_studio(index: int) -> dict[str, Any]:
     try:
-        result = center.runtime_policy.rollback(index)
+        result = await asyncio.to_thread(center.runtime_policy.rollback, index)
         decisions = center.refresh_decisions()
         return {"ok": True, "policy": result, "decisions": len(decisions)}
     except ValueError as exc:

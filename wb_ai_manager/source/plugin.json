@@ -1,0 +1,18 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "wb-ai-manager",
+  "version": "1.1.4",
+  "description": "AI operating layer for Wildberries sellers: monitoring, evidence-backed diagnostics, staged changes, guardrails and audit trail.",
+  "author": {
+    "name": "WB AI Manager"
+  },
+  "license": "Proprietary",
+  "keywords": [
+    "wildberries",
+    "seller",
+    "advertising",
+    "marketplace",
+    "analytics",
+    "operations"
+  ]
+}
