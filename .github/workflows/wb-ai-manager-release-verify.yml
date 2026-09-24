@@ -1,172 +1,71 @@
-name: WB AI Manager v1.1 release verification
+name: WB AI Manager v1.1.4 verification
 
 on:
   workflow_dispatch:
   push:
     branches: [mainggg]
     paths:
-      - "wb_ai_manager/**"
+      - "wb_ai_manager/source/**"
       - ".github/workflows/wb-ai-manager-release-verify.yml"
 
 permissions:
   contents: read
 
 jobs:
-  verify-and-package:
+  verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-
+    timeout-minutes: 20
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-
-      - name: Verify stable manifest and release hashes
+      - name: Install
         shell: bash
         run: |
-          python - <<'PY'
-          import hashlib, json
-          from pathlib import Path
-
-          root = Path("wb_ai_manager")
-          release = root / "releases" / "1.1.0"
-          manifest = json.loads((root / "update-manifest.json").read_text(encoding="utf-8"))
-          stable = manifest["channels"]["stable"]
-          assert stable["version"] == "1.1.0", stable
-          assert stable["channel"] == "stable", stable
-          assert stable["minimum_current_version"] == "1.0.0", stable
-
-          mapping = {
-              "VERSION": release / "VERSION",
-              "scripts/update_smoke.py": release / "update_smoke.py",
-              "scripts/.v11_bundle.b64": release / "bundle.b64",
-          }
-          for item in stable["files"]:
-              path = item["path"]
-              local = mapping[path]
-              got = hashlib.sha256(local.read_bytes()).hexdigest()
-              if got != item["sha256"]:
-                  raise SystemExit(f"manifest sha mismatch for {path}: {got} != {item['sha256']}")
-              print(f"manifest sha ok: {path} {got}")
-
-          assert (release / "VERSION").read_text(encoding="utf-8").strip() == "1.1.0"
-          print("stable manifest: ok")
-          PY
-
-      - name: Inspect decoded bundle structure
+          set -euo pipefail
+          cd wb_ai_manager/source
+          test "$(cat VERSION)" = "1.1.4"
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+          python -m pip install pytest
+      - name: Clean run 1
         shell: bash
         run: |
-          python - <<'PY'
-          import base64, zipfile
-          from io import BytesIO
-          from pathlib import Path
-          p = Path("wb_ai_manager/releases/1.1.0/bundle.b64")
-          raw = base64.b64decode(p.read_text(encoding="ascii"), validate=True)
-          with zipfile.ZipFile(BytesIO(raw)) as zf:
-              names = zf.namelist()
-              print("bundle entries:", len(names))
-              for name in names:
-                  if name == "pyproject.toml" or "wb_control_center" in name or name.startswith("tests/") or name.startswith("scripts/"):
-                      print(name)
-              for target in ["pyproject.toml", "src/wb_control_center/__init__.py", "src/wb_control_center/config.py", "scripts/update_smoke.py"]:
-                  print(target, "present=", target in names)
-                  if target in names and target == "pyproject.toml":
-                      print("--- pyproject.toml ---")
-                      print(zf.read(target).decode("utf-8", errors="replace"))
-                      print("--- end pyproject.toml ---")
-          PY
-
-      - name: Extract decoded bundle diagnostic
+          set -euo pipefail
+          cp -a wb_ai_manager/source "$RUNNER_TEMP/wb-ai-run1"
+          cd "$RUNNER_TEMP/wb-ai-run1"
+          python -m compileall -q src scripts
+          pytest -q
+      - name: Clean run 2
         shell: bash
         run: |
-          rm -rf "$RUNNER_TEMP/wb-ai-manager-decoded-bundle"
-          mkdir -p "$RUNNER_TEMP/wb-ai-manager-decoded-bundle"
+          set -euo pipefail
+          cp -a wb_ai_manager/source "$RUNNER_TEMP/wb-ai-run2"
+          cd "$RUNNER_TEMP/wb-ai-run2"
+          python -m compileall -q src scripts
+          pytest -q
+      - name: Agent surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd wb_ai_manager/source
           python - <<'PY'
-          import base64, zipfile
-          from io import BytesIO
-          from pathlib import Path
-          src = Path("wb_ai_manager/releases/1.1.0/bundle.b64")
-          dest = Path(__import__("os").environ["RUNNER_TEMP"]) / "wb-ai-manager-decoded-bundle"
-          raw = base64.b64decode(src.read_text(encoding="ascii"), validate=True)
-          with zipfile.ZipFile(BytesIO(raw)) as zf:
-              zf.extractall(dest)
+          from wb_control_center.agents import AGENT_CLASSES
+          assert len(AGENT_CLASSES) == 19, sorted(AGENT_CLASSES)
+          print("agents=19")
           PY
-
-      - name: Upload decoded bundle diagnostic
-        uses: actions/upload-artifact@v4
+      - name: Build final archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd wb_ai_manager/source
+          zip -qr "$RUNNER_TEMP/WB_AI_Manager_v1.1.4_CANONICAL.zip" . -x ".venv/*" "__pycache__/*" "*.pyc" ".pytest_cache/*"
+          sha256sum "$RUNNER_TEMP/WB_AI_Manager_v1.1.4_CANONICAL.zip" > "$RUNNER_TEMP/WB_AI_Manager_v1.1.4_CANONICAL.zip.sha256"
+      - uses: actions/upload-artifact@v4
         with:
-          name: wb-ai-manager-decoded-bundle
-          path: ${{ runner.temp }}/wb-ai-manager-decoded-bundle
-          if-no-files-found: error
-          retention-days: 7
-
-      - name: Fresh bootstrap exactly from published stable payload
-        shell: bash
-        run: |
-          set -euo pipefail
-          ROOT="$RUNNER_TEMP/wb-ai-manager-v1.1.0"
-          rm -rf "$ROOT"
-          mkdir -p "$ROOT/scripts"
-          python -m venv "$ROOT/.venv"
-          cp wb_ai_manager/releases/1.1.0/VERSION "$ROOT/VERSION"
-          cp wb_ai_manager/releases/1.1.0/update_smoke.py "$ROOT/scripts/update_smoke.py"
-          cp wb_ai_manager/releases/1.1.0/bundle.b64 "$ROOT/scripts/.v11_bundle.b64"
-          cd "$ROOT"
-          .venv/bin/python scripts/update_smoke.py
-          test "$(cat VERSION)" = "1.1.0"
-          test ! -e scripts/.v11_bundle.b64
-          echo "fresh bootstrap: ok"
-
-      - name: Full test discovery
-        shell: bash
-        run: |
-          set -euo pipefail
-          ROOT="$RUNNER_TEMP/wb-ai-manager-v1.1.0"
-          cd "$ROOT"
-          PY=".venv/bin/python"
-          "$PY" -m compileall -q src scripts
-          if [ -d tests ]; then
-            echo "Running unittest discovery..."
-            "$PY" -m unittest discover -s tests -v
-          else
-            echo "No tests directory present in final bundle; bootstrap smoke remains authoritative."
-          fi
-
-      - name: Inspect final package and agent surface
-        shell: bash
-        run: |
-          set -euo pipefail
-          ROOT="$RUNNER_TEMP/wb-ai-manager-v1.1.0"
-          cd "$ROOT"
-          echo "VERSION=$(cat VERSION)"
-          echo "Top-level files:"
-          find . -maxdepth 2 -type f -not -path "./.venv/*" | sort | sed -n '1,240p'
-          echo "Agent-related files:"
-          find . -type f -not -path "./.venv/*" \( -iname "*agent*" -o -iname "*critic*" -o -iname "*risk*" \) | sort | sed -n '1,240p'
-
-      - name: Build clean final archive
-        shell: bash
-        run: |
-          set -euo pipefail
-          ROOT="$RUNNER_TEMP/wb-ai-manager-v1.1.0"
-          PKG="$RUNNER_TEMP/WB-AI-Manager-v1.1.0-FINAL"
-          rm -rf "$PKG"
-          mkdir -p "$PKG"
-          rsync -a "$ROOT/" "$PKG/"             --exclude ".venv/"             --exclude "__pycache__/"             --exclude "*.pyc"             --exclude ".pytest_cache/"             --exclude ".DS_Store"
-          cd "$RUNNER_TEMP"
-          zip -qr WB-AI-Manager-v1.1.0-FINAL.zip WB-AI-Manager-v1.1.0-FINAL
-          sha256sum WB-AI-Manager-v1.1.0-FINAL.zip | tee WB-AI-Manager-v1.1.0-FINAL.zip.sha256
-
-      - name: Upload verified final package
-        uses: actions/upload-artifact@v4
-        with:
-          name: WB-AI-Manager-v1.1.0-FINAL
+          name: WB_AI_Manager_v1.1.4_CANONICAL
           path: |
-            ${{ runner.temp }}/WB-AI-Manager-v1.1.0-FINAL.zip
-            ${{ runner.temp }}/WB-AI-Manager-v1.1.0-FINAL.zip.sha256
-          if-no-files-found: error
+            ${{ runner.temp }}/WB_AI_Manager_v1.1.4_CANONICAL.zip
+            ${{ runner.temp }}/WB_AI_Manager_v1.1.4_CANONICAL.zip.sha256
           retention-days: 30
