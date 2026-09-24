@@ -11,6 +11,19 @@ log() {
   printf '%s %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$*"
 }
 
+start_watchdog() {
+  if [ "${RADAR_WATCHDOG_ENABLED:-1}" != "1" ]; then
+    return
+  fi
+  (
+    while true; do
+      python radar_watchdog.py >>/tmp/radar-watchdog.log 2>&1 || true
+      sleep "${RADAR_WATCHDOG_INTERVAL_SECONDS:-60}"
+    done
+  ) &
+  log "WATCHDOG: started"
+}
+
 find_exit_node() {
   tailscale --socket="$TS_SOCK" status --json > /tmp/tailscale-status.json 2>/dev/null || return 1
   python - /tmp/tailscale-status.json <<'PY'
@@ -76,6 +89,7 @@ if [ "$READY" -ne 1 ]; then
   log "TAILSCALE: daemon control socket did not become ready; LIVE is fail-closed"
   export OZON_TAILSCALE_ACTIVE=0
   export OZON_FORCE_LIVE_OFFLINE=1
+  start_watchdog
   exec uvicorn server:app --host 0.0.0.0 --port "${PORT:-8080}"
 fi
 
@@ -122,6 +136,7 @@ if [ -n "${HOME_PROXY_PEER_IP:-}" ] && [ "${HOME_PROXY_MATRIX:-0}" = "1" ]; then
   export OZON_FORCE_LIVE_OFFLINE=0
   export OZON_TAILSCALE_ACTIVE=1
   printf '%s' "home-proxy-matrix:$HOME_PROXY_PEER_IP" > /tmp/ozon-tailscale-exit-node
+  start_watchdog
   exec uvicorn server:app --host 0.0.0.0 --port "${PORT:-8080}"
 fi
 
@@ -144,6 +159,7 @@ if [ -n "${HOME_PROXY_PEER_IP:-}" ]; then
   export OZON_FORCE_LIVE_OFFLINE=0
   export OZON_TAILSCALE_ACTIVE=1
   printf '%s' "home-proxy:$HOME_PROXY_PEER_IP:$HOME_PROXY_PEER_PORT" > /tmp/ozon-tailscale-exit-node
+  start_watchdog
   exec uvicorn server:app --host 0.0.0.0 --port "${PORT:-8080}"
 fi
 
@@ -196,4 +212,5 @@ select_exit_forever() {
 
 select_exit_forever &
 
-exec uvicorn server:app --host 0.0.0.0 --port "${PORT:-8080}"
+start_watchdog
+  exec uvicorn server:app --host 0.0.0.0 --port "${PORT:-8080}"
