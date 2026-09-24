@@ -5,11 +5,14 @@ import re
 import subprocess
 import time
 import urllib.parse
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler, HTTPServer
+import threading
 
 HOST = "0.0.0.0"
 PORT = 8900
 WINDOW_ID: int | None = None
+WINDOW_LOCK = threading.Lock()
+REQUEST_LOCK = threading.Lock()
 
 def run_osascript(script: str, timeout: int = 120) -> str:
     p = subprocess.run(
@@ -25,8 +28,9 @@ def run_osascript(script: str, timeout: int = 120) -> str:
 def ensure_agent_window() -> int:
     global WINDOW_ID
 
-    if WINDOW_ID is not None:
-        script = f'''
+    with WINDOW_LOCK:
+        if WINDOW_ID is not None:
+            script = f'''
 tell application "Google Chrome"
   repeat with w in windows
     if (id of w) is {WINDOW_ID} then return id of w
@@ -34,14 +38,15 @@ tell application "Google Chrome"
 end tell
 return 0
 '''
-        try:
-            existing = int(run_osascript(script, timeout=15) or "0")
-            if existing:
-                return existing
-        except Exception:
-            pass
+            try:
+                existing = int(run_osascript(script, timeout=15) or "0")
+                if existing:
+                    return existing
+            except Exception:
+                pass
 
-    script = '''
+        # Exactly one dedicated window is created for the lifetime of this agent.
+        script = '''
 tell application "Google Chrome"
   set w to make new window
   set URL of active tab of w to "about:blank"
@@ -49,9 +54,8 @@ tell application "Google Chrome"
   return id of w
 end tell
 '''
-    WINDOW_ID = int(run_osascript(script, timeout=30))
-    return WINDOW_ID
-
+        WINDOW_ID = int(run_osascript(script, timeout=30))
+        return WINDOW_ID
 
 def js(expr: str) -> str:
     wid = ensure_agent_window()
@@ -188,7 +192,8 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         try:
-            result = get_position(query, sku, max_position)
+            with REQUEST_LOCK:
+                result = get_position(query, sku, max_position)
             self._send(result, 200 if result.get("ok") else 502)
         except Exception as exc:
             self._send({"ok": False, "error": f"{type(exc).__name__}: {exc}"}, 500)
@@ -206,4 +211,4 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     print(f"Ozon Native Chrome Agent listening on http://127.0.0.1:{PORT}")
-    ThreadingHTTPServer((HOST, PORT), Handler).serve_forever()
+    HTTPServer((HOST, PORT), Handler).serve_forever()
