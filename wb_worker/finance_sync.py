@@ -176,14 +176,32 @@ def _write_json(path: Path, value: Any) -> None:
     tmp.replace(path)
 
 
-def _write_combined_csv(all_rows: list[list[Any]]) -> None:
-    path = DATA_DIR / "finance_all.csv"
-    tmp = DATA_DIR / "finance_all.csv.tmp"
+def _write_csv(path: Path, columns: list[str], rows: list[list[Any]]) -> None:
+    tmp = path.with_suffix(path.suffix + ".tmp")
     with tmp.open("w", encoding="utf-8-sig", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow(CSV_COLUMNS)
-        writer.writerows(all_rows)
+        writer.writerow(columns)
+        writer.writerows(rows)
     tmp.replace(path)
+
+
+def _write_combined_csv(all_rows: list[list[Any]]) -> None:
+    _write_csv(DATA_DIR / "finance_all.csv", CSV_COLUMNS, all_rows)
+
+
+def _is_financial_charge(row: list[Any]) -> bool:
+    # K:N = penalty, deduction, storage, acceptance in the normalized 32-col schema.
+    return any(abs(_money(row[idx])) > 0 for idx in (10, 11, 12, 13))
+
+
+def _emit_export_batches(tag: str, rows: list[list[Any]], batch_size: int = 20) -> None:
+    total = (len(rows) + batch_size - 1) // batch_size
+    print(f"FINANCE_EXPORT_META tag={tag} rows={len(rows)} batches={total} batch_size={batch_size}", flush=True)
+    for i in range(total):
+        chunk = rows[i * batch_size:(i + 1) * batch_size]
+        group = i // 400
+        payload = json.dumps(chunk, ensure_ascii=False, separators=(",", ":"))
+        print(f"FINANCE_EXPORT_{tag}_G{group} batch={i} data={payload}", flush=True)
 
 
 async def sync_all() -> dict:
@@ -247,6 +265,8 @@ async def sync_all() -> dict:
     )
 
     _write_combined_csv(combined)
+    charge_rows = [row for row in combined if _is_financial_charge(row)]
+    _write_csv(DATA_DIR / "charges_all.csv", CSV_COLUMNS, charge_rows)
 
     report_columns = [
         "Магазин", "Report ID", "Период", "Отчет с", "Отчет по", "Дата создания",
@@ -279,17 +299,15 @@ async def sync_all() -> dict:
                     "авто",
                     "WB Finance API",
                 ])
-    reports_tmp = DATA_DIR / "reports_all.csv.tmp"
-    with reports_tmp.open("w", encoding="utf-8-sig", newline="") as f:
-        writer = csv.writer(f)
-        writer.writerow(report_columns)
-        writer.writerows(report_rows)
-    reports_tmp.replace(DATA_DIR / "reports_all.csv")
+    _write_csv(DATA_DIR / "reports_all.csv", report_columns, report_rows)
 
     status["rows"] = len(combined)
+    status["chargeRows"] = len(charge_rows)
     status["reportRows"] = len(report_rows)
     status["finishedAt"] = datetime.now().astimezone().isoformat()
     _write_json(DATA_DIR / "status.json", status)
+    _emit_export_batches("CHARGES", charge_rows)
+    _emit_export_batches("REPORTS", report_rows)
     print("FINANCE_SYNC_DONE " + json.dumps(status, ensure_ascii=False, separators=(",", ":")), flush=True)
     return status
 
