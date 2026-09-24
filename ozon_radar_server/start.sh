@@ -163,6 +163,16 @@ if [ -n "${HOME_PROXY_PEER_IP:-}" ]; then
   exec uvicorn server:app --host 0.0.0.0 --port "${PORT:-8080}"
 fi
 
+# Forced-offline mode is authoritative. Do not silently reactivate an old
+# Tailscale exit node; run the watchdog/proxy scout only.
+if [ "${OZON_FORCE_LIVE_OFFLINE:-0}" = "1" ]; then
+  export OZON_PROXY=""
+  export OZON_TAILSCALE_ACTIVE=0
+  printf '%s' "" > /tmp/ozon-tailscale-exit-node
+  start_watchdog
+  exec uvicorn server:app --host 0.0.0.0 --port "${PORT:-8080}"
+fi
+
 # Fallback path: use a Tailscale exit node.
 export OZON_PROXY="$TS_PROXY"
 export OZON_FORCE_LIVE_OFFLINE=0
@@ -213,4 +223,4 @@ select_exit_forever() {
 select_exit_forever &
 
 start_watchdog
-  exec uvicorn server:app --host 0.0.0.0 --port "${PORT:-8080}"
+exec uvicorn server:app --host 0.0.0.0 --port "${PORT:-8080}"
