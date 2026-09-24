@@ -213,35 +213,72 @@ async def sync_all() -> dict:
         "dateTo": date_to,
         "shops": {},
     }
-    combined: list[list[Any]] = []
+
+    # Only one large detailed response is held in memory at a time.
+    detail_sem = asyncio.Semaphore(1)
 
     async with httpx.AsyncClient(timeout=180.0) as client:
         async def one(shop_id: str, shop_name: str, env_name: str):
             token = os.environ.get(env_name, "").strip()
             if not token:
-                return shop_id, [], {"ok": False, "error": f"{env_name} is empty"}
+                return shop_id, [], [], {"ok": False, "error": f"{env_name} is empty"}
 
             try:
-                details = await _detailed(client, token, DATE_FROM, date_to)
-                print(f"FINANCE_DETAIL shop={shop_id} rows={len(details)}", flush=True)
+                async with detail_sem:
+                    details = await _detailed(client, token, DATE_FROM, date_to)
+                    print(f"FINANCE_DETAIL shop={shop_id} rows={len(details)}", flush=True)
+
+                    shop_path = DATA_DIR / f"{shop_id.lower()}_all.csv"
+                    shop_tmp = DATA_DIR / f"{shop_id.lower()}_all.csv.tmp"
+                    charge_rows: list[list[Any]] = []
+                    with shop_tmp.open("w", encoding="utf-8-sig", newline="") as fh:
+                        writer = csv.writer(fh)
+                        writer.writerow(CSV_COLUMNS)
+                        for item in details:
+                            row = _normalize(shop_name, item)
+                            writer.writerow(row)
+                            if _is_financial_charge(row):
+                                charge_rows.append(row)
+                    shop_tmp.replace(shop_path)
+                    del details
+
                 daily = await _reports_list(client, token, DATE_FROM, date_to, "daily")
                 print(f"FINANCE_REPORTS shop={shop_id} period=daily rows={len(daily)}", flush=True)
                 weekly = await _reports_list(client, token, DATE_FROM, date_to, "weekly")
                 print(f"FINANCE_REPORTS shop={shop_id} period=weekly rows={len(weekly)}", flush=True)
 
-                _write_json(DATA_DIR / f"{shop_id.lower()}_details.json", details)
                 _write_json(DATA_DIR / f"{shop_id.lower()}_reports_daily.json", daily)
                 _write_json(DATA_DIR / f"{shop_id.lower()}_reports_weekly.json", weekly)
-                normalized = [_normalize(shop_name, row) for row in details]
-                return shop_id, normalized, {
+
+                report_rows: list[list[Any]] = []
+                for period, reports in (("daily", daily), ("weekly", weekly)):
+                    for report in reports:
+                        report_rows.append([
+                            shop_name,
+                            report.get("reportId", ""),
+                            period,
+                            report.get("dateFrom", ""),
+                            report.get("dateTo", ""),
+                            report.get("createDate", ""),
+                            _money(report.get("penaltySum")),
+                            _money(report.get("deductionSum")),
+                            _money(report.get("paidStorageSum")),
+                            _money(report.get("paidAcceptanceSum")),
+                            _money(report.get("forPaySum")),
+                            "авто",
+                            "WB Finance API",
+                        ])
+
+                return shop_id, charge_rows, report_rows, {
                     "ok": True,
-                    "detailRows": len(details),
+                    "detailRows": sum(1 for _ in open(shop_path, encoding="utf-8-sig")) - 1,
+                    "chargeRows": len(charge_rows),
                     "dailyReports": len(daily),
                     "weeklyReports": len(weekly),
                 }
             except Exception as exc:
                 print(f"FINANCE_ERROR shop={shop_id} error={type(exc).__name__}:{exc}", flush=True)
-                return shop_id, [], {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+                return shop_id, [], [], {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
 
         tasks = [
             one(shop_id, shop_name, env_name)
@@ -249,23 +286,32 @@ async def sync_all() -> dict:
         ]
         results = await asyncio.gather(*tasks)
 
-    for shop_id, rows, shop_status in results:
-        combined.extend(rows)
+    charge_rows: list[list[Any]] = []
+    report_rows: list[list[Any]] = []
+    total_detail_rows = 0
+    for shop_id, shop_charges, shop_reports, shop_status in results:
+        charge_rows.extend(shop_charges)
+        report_rows.extend(shop_reports)
         status["shops"][shop_id] = shop_status
+        total_detail_rows += int(shop_status.get("detailRows", 0) or 0)
 
-    # Stable de-duplication by shop + rrdId, then newest rrDate/reportId.
-    dedup: dict[tuple[str, str], list[Any]] = {}
-    for row in combined:
-        key = (str(row[0]), str(row[6]))
-        dedup[key] = row
-    combined = sorted(
-        dedup.values(),
-        key=lambda r: (str(r[5]), str(r[0]), str(r[6])),
-        reverse=True,
-    )
+    # Keep the complete normalized detail archive on Railway without loading it all in RAM.
+    finance_tmp = DATA_DIR / "finance_all.csv.tmp"
+    with finance_tmp.open("w", encoding="utf-8-sig", newline="") as out:
+        writer = csv.writer(out)
+        writer.writerow(CSV_COLUMNS)
+        for shop_id in SHOPS:
+            shop_path = DATA_DIR / f"{shop_id.lower()}_all.csv"
+            if not shop_path.exists():
+                continue
+            with shop_path.open("r", encoding="utf-8-sig", newline="") as src:
+                reader = csv.reader(src)
+                next(reader, None)
+                for row in reader:
+                    writer.writerow(row)
+    finance_tmp.replace(DATA_DIR / "finance_all.csv")
 
-    _write_combined_csv(combined)
-    charge_rows = [row for row in combined if _is_financial_charge(row)]
+    charge_rows.sort(key=lambda r: (str(r[5]), str(r[0]), str(r[6])), reverse=True)
     _write_csv(DATA_DIR / "charges_all.csv", CSV_COLUMNS, charge_rows)
 
     report_columns = [
@@ -273,35 +319,10 @@ async def sync_all() -> dict:
         "Штрафы, ₽", "Удержания, ₽", "Хранение, ₽", "Приемка, ₽", "К выплате, ₽",
         "Статус", "Источник",
     ]
-    report_rows = []
-    for shop_id, (shop_name, _env_name) in SHOPS.items():
-        for period in ("daily", "weekly"):
-            path = DATA_DIR / f"{shop_id.lower()}_reports_{period}.json"
-            if not path.exists():
-                continue
-            try:
-                reports = json.loads(path.read_text(encoding="utf-8"))
-            except Exception:
-                reports = []
-            for report in reports:
-                report_rows.append([
-                    shop_name,
-                    report.get("reportId", ""),
-                    period,
-                    report.get("dateFrom", ""),
-                    report.get("dateTo", ""),
-                    report.get("createDate", ""),
-                    _money(report.get("penaltySum")),
-                    _money(report.get("deductionSum")),
-                    _money(report.get("paidStorageSum")),
-                    _money(report.get("paidAcceptanceSum")),
-                    _money(report.get("forPaySum")),
-                    "авто",
-                    "WB Finance API",
-                ])
+    report_rows.sort(key=lambda r: (str(r[5]), str(r[0]), str(r[1])), reverse=True)
     _write_csv(DATA_DIR / "reports_all.csv", report_columns, report_rows)
 
-    status["rows"] = len(combined)
+    status["rows"] = total_detail_rows
     status["chargeRows"] = len(charge_rows)
     status["reportRows"] = len(report_rows)
     status["finishedAt"] = datetime.now().astimezone().isoformat()
@@ -319,6 +340,7 @@ async def sync_loop() -> None:
         except asyncio.CancelledError:
             raise
         except Exception as exc:
+            print(f"FINANCE_LOOP_ERROR error={type(exc).__name__}:{exc}", flush=True)
             DATA_DIR.mkdir(parents=True, exist_ok=True)
             _write_json(DATA_DIR / "status.json", {
                 "ok": False,
