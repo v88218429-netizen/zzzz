@@ -1,0 +1,208 @@
+{
+  "task_id": "WB_ADS_2026",
+  "request": "WB_ADS_2026_20260924_090000.json",
+  "query": "реклама Wildberries 2026",
+  "knowledge_tag": "WB_ADS",
+  "generated_at": "2026-09-24T06:02:36.162240+00:00",
+  "videos": [],
+  "errors": [
+    {
+      "video_id": "dUndQVgTy9M",
+      "url": "https://www.youtube.com/watch?v=dUndQVgTy9M",
+      "title": "Реклама Вайлдберриз - Скидки к новому сезону",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "SIEXdhwKJ_s",
+      "url": "https://www.youtube.com/watch?v=SIEXdhwKJ_s",
+      "title": "Wildberries - Скидки к новому сезону (2026)",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "o_PtbqkWJ1k",
+      "url": "https://www.youtube.com/watch?v=o_PtbqkWJ1k",
+      "title": "Wildberries episode with integration",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "TvWUC648DHc",
+      "url": "https://www.youtube.com/watch?v=TvWUC648DHc",
+      "title": "Камеди Клаб «Пункт выдачи» Антон Иванов, Константин Бутусов @ComedyClubRussia",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "pN8VH-hq674",
+      "url": "https://www.youtube.com/watch?v=pN8VH-hq674",
+      "title": "ВБ СЕЛЛЕРЫ АААААААА!!",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "AA6IjtsKBGI",
+      "url": "https://www.youtube.com/watch?v=AA6IjtsKBGI",
+      "title": "Beautiful Ladies ❤️on Orthodox Epiphany bathing -7 °C 🥶 2022",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "muEOV6Hifxo",
+      "url": "https://www.youtube.com/watch?v=muEOV6Hifxo",
+      "title": "VLOG. Flowers and music. Repeats from WB.",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "qoQxRVnuZwA",
+      "url": "https://www.youtube.com/watch?v=qoQxRVnuZwA",
+      "title": "Top 10 Biggest Online Stores in the World l Visual number",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "4SD3ozMXA9U",
+      "url": "https://www.youtube.com/watch?v=4SD3ozMXA9U",
+      "title": "ПОЛНОЕ ОБУЧЕНИЕ по WILDBERRIES 2026 (2,5 часа, С Нуля До Профи)",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "DQtvjqm-xxI",
+      "url": "https://www.youtube.com/watch?v=DQtvjqm-xxI",
+      "title": "World Cup 2026 - Official Intro",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "epyATqewqec",
+      "url": "https://www.youtube.com/watch?v=epyATqewqec",
+      "title": "🎥 PEPSICO ID (short) | (2026, USA) [Fanmade] ✨ | #pepsi #kfc #pizzahut #fritolay #tacobell",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "wNw7ivb52ac",
+      "url": "https://www.youtube.com/watch?v=wNw7ivb52ac",
+      "title": "Warner Bros. is DOOMED",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "HWj-3ZfEthU",
+      "url": "https://www.youtube.com/watch?v=HWj-3ZfEthU",
+      "title": "🎥 PEPSICO ID | (2026, USA) [Fanmade] ✨ | #pepsi #kfc #pizzahut #fritolay #tacobell",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "sKo-jn6p22c",
+      "url": "https://www.youtube.com/watch?v=sKo-jn6p22c",
+      "title": "2026 FIFA World Cup | Official Intro Outro and Break Bumpers",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "9GboNGVgRtU",
+      "url": "https://www.youtube.com/watch?v=9GboNGVgRtU",
+      "title": "Nike 2022 World Cup Commercial (Ronaldo, Ronaldinho, C.Ronaldo, Mbappe, Alex Morgan + More!)",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "uupUt3qW1oU",
+      "url": "https://www.youtube.com/watch?v=uupUt3qW1oU",
+      "title": "Beetlejuice - Now on VHS (Warner Home Video commercial, October 1988)",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "IZHsJ-v2MYQ",
+      "url": "https://www.youtube.com/watch?v=IZHsJ-v2MYQ",
+      "title": "70 Years of Godzilla: A New Roar in Southeast Asia",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "wkajQMBJNbs",
+      "url": "https://www.youtube.com/watch?v=wkajQMBJNbs",
+      "title": "Batman Arkham Knight Batarang Ad  - Fan Made",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "xwH4oVnuIAs",
+      "url": "https://www.youtube.com/watch?v=xwH4oVnuIAs",
+      "title": "The official rebrand introduction video for Burger King",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "M3gRnpI8ne4",
+      "url": "https://www.youtube.com/watch?v=M3gRnpI8ne4",
+      "title": "RFI NYC - A quick sizzle! Work from our favorite directors! RFI is \"creativity in motion.\"",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "JjgHJYpUZtI",
+      "url": "https://www.youtube.com/watch?v=JjgHJYpUZtI",
+      "title": "[adult swim] - Commercial Breaks & Continuity - [August 30th, 2026]",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "kJ45bn6_VEY",
+      "url": "https://www.youtube.com/watch?v=kJ45bn6_VEY",
+      "title": "WHY IS PAY-PER-CLICK (CPC) ADVERTISING INEFFECTIVE ON WILDBERRIES?",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "s3e6qWEX9V8",
+      "url": "https://www.youtube.com/watch?v=s3e6qWEX9V8",
+      "title": "CPC on Wildberries: How to Pay Per Click and Avoid Wasting Your Budget | 3 Strategies | A Detaile...",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "AR3gIOPhy-E",
+      "url": "https://www.youtube.com/watch?v=AR3gIOPhy-E",
+      "title": "CTR, CPC, ДРР, ROMI: как понять эффективность рекламы на Wildberries",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "M8ZGptp1m7A",
+      "url": "https://www.youtube.com/watch?v=M8ZGptp1m7A",
+      "title": "Что лучше - реклама, CTR, CPC или маржинальность товара на WB",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "7igerifc_EU",
+      "url": "https://www.youtube.com/watch?v=7igerifc_EU",
+      "title": "ГАЙД: Как настроить рекламу ЗА КЛИК на Вайлдберриз и НЕ СЛИТЬ бюджет",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "ES1Za675kD4",
+      "url": "https://www.youtube.com/watch?v=ES1Za675kD4",
+      "title": "Оплата за клики в рекламе на Wildberries, модель CPC",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "o3fUJh3BjQE",
+      "url": "https://www.youtube.com/watch?v=o3fUJh3BjQE",
+      "title": "Какую рекламу выбрать в поиске на WB. Ручная или CPC. Разбираемся!",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "g499X-QAPZc",
+      "url": "https://www.youtube.com/watch?v=g499X-QAPZc",
+      "title": "Is Wildberries Advertising Eating Your Profits? Part 1 for Beginners",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "DOY7W4rUC_o",
+      "url": "https://www.youtube.com/watch?v=DOY7W4rUC_o",
+      "title": "FIFA World Cup 2026 Official TV Intro (4K)",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "uQu6RhqcmcI",
+      "url": "https://www.youtube.com/watch?v=uQu6RhqcmcI",
+      "title": "✨️ В каких сейчас Вы энергиях ❓️ #shorts #new",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "nKhg6PGWRag",
+      "url": "https://www.youtube.com/watch?v=nKhg6PGWRag",
+      "title": "❓️ Что происходит у человека о котором думаешь ты ❓️ #ясновидящая #shorts",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "4nqIEUxiG50",
+      "url": "https://www.youtube.com/watch?v=4nqIEUxiG50",
+      "title": "Матушка",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    }
+  ]
+}
