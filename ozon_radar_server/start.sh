@@ -125,6 +125,14 @@ if [ -n "${HOME_PROXY_PEER_IP:-}" ] && [ "${HOME_PROXY_MATRIX:-0}" = "1" ]; then
   exec uvicorn server:app --host 0.0.0.0 --port "${PORT:-8080}"
 fi
 
+if [ -n "${HOME_PROXY_PEER_IP:-}" ] && [ -n "${MAC_AGENT_PEER_PORT:-}" ]; then
+  MAC_AGENT_LOCAL_PORT="${MAC_AGENT_LOCAL_PORT:-18990}"
+  log "MAC_AGENT: bridging 127.0.0.1:$MAC_AGENT_LOCAL_PORT -> $HOME_PROXY_PEER_IP:$MAC_AGENT_PEER_PORT"
+  socat "TCP-LISTEN:$MAC_AGENT_LOCAL_PORT,reuseaddr,fork" "EXEC:tailscale --socket=$TS_SOCK nc $HOME_PROXY_PEER_IP $MAC_AGENT_PEER_PORT" \
+    >/tmp/mac-agent-bridge.log 2>&1 &
+  export MAC_AGENT_URL="http://127.0.0.1:$MAC_AGENT_LOCAL_PORT"
+fi
+
 if [ -n "${HOME_PROXY_PEER_IP:-}" ]; then
   HOME_PROXY_PEER_PORT="${HOME_PROXY_PEER_PORT:-8899}"
   LOCAL_PROXY_PORT="${HOME_PROXY_LOCAL_PORT:-18899}"
