@@ -12,7 +12,7 @@ COPY --from=tailscale /usr/local/bin/tailscaled /usr/local/bin/tailscaled
 COPY --from=tailscale /usr/local/bin/tailscale /usr/local/bin/tailscale
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl socat \
+    && apt-get install -y --no-install-recommends ca-certificates curl socat xvfb \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
