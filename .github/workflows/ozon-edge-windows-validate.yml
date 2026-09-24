@@ -1,0 +1,57 @@
+name: Ozon Edge Windows Validate
+
+on:
+  push:
+    branches: [mainggg]
+    paths:
+      - "ozon_radar_server/edge_agent_windows.py"
+      - "ozon_radar_server/run_edge_windows.ps1"
+      - "ozon_radar_server/install_edge_windows.ps1"
+      - "ozon_radar_server/edge_updater_windows.ps1"
+      - "ozon_radar_server/edge_release_windows.json"
+      - ".github/workflows/ozon-edge-windows-validate.yml"
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: mainggg
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python dependency
+        run: python -m pip install websocket-client
+
+      - name: Compile Python agent
+        run: python -m py_compile ozon_radar_server/edge_agent_windows.py
+
+      - name: Parse PowerShell scripts
+        shell: pwsh
+        run: |
+          $files = @(
+            "ozon_radar_server/run_edge_windows.ps1",
+            "ozon_radar_server/install_edge_windows.ps1",
+            "ozon_radar_server/edge_updater_windows.ps1"
+          )
+          foreach ($file in $files) {
+            [void][scriptblock]::Create((Get-Content $file -Raw))
+            Write-Host "PARSE_OK $file"
+          }
+
+      - name: Validate release manifest
+        shell: pwsh
+        run: |
+          $m = Get-Content "ozon_radar_server/edge_release_windows.json" -Raw | ConvertFrom-Json
+          if (-not $m.version -or -not $m.ref -or -not $m.files) { throw "Invalid manifest" }
+          Write-Host "MANIFEST_OK version=$($m.version) ref=$($m.ref)"
+
+      - name: Validate exact published release
+        shell: pwsh
+        run: |
+          $base = Join-Path $env:RUNNER_TEMP "ozon-edge-validate"
+          & ".\ozon_radar_server\edge_updater_windows.ps1" -Base $base -ValidateOnly
