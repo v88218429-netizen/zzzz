@@ -25,69 +25,72 @@ def run_osascript(script: str, timeout: int = 120) -> str:
         raise RuntimeError((p.stderr or p.stdout or "osascript failed").strip())
     return (p.stdout or "").strip()
 
-def ensure_agent_window() -> int:
-    global WINDOW_ID
-
-    with WINDOW_LOCK:
-        if WINDOW_ID is not None:
-            script = f'''
+def find_agent_tab() -> tuple[int, int]:
+    # SAFETY: Never create windows or tabs. The user must manually open exactly
+    # one dedicated tab whose URL contains #ozon-radar.
+    script = '''
 tell application "Google Chrome"
   repeat with w in windows
-    if (id of w) is {WINDOW_ID} then return id of w
+    set wi to id of w
+    set ti to 0
+    repeat with t in tabs of w
+      set ti to ti + 1
+      set u to URL of t
+      if u contains "#ozon-radar" then
+        return (wi as text) & "||" & (ti as text)
+      end if
+    end repeat
   end repeat
 end tell
-return 0
+return "0||0"
 '''
-            try:
-                existing = int(run_osascript(script, timeout=15) or "0")
-                if existing:
-                    return existing
-            except Exception:
-                pass
+    out = run_osascript(script, timeout=20)
+    parts = out.split("||", 1)
+    wi = int(parts[0] or "0")
+    ti = int(parts[1] or "0")
+    if wi <= 0 or ti <= 0:
+        raise RuntimeError(
+            "Dedicated Ozon radar tab not found. Open one tab manually at "
+            "https://www.ozon.ru/#ozon-radar and leave it open."
+        )
+    return wi, ti
 
-        # Exactly one dedicated window is created for the lifetime of this agent.
-        script = '''
-tell application "Google Chrome"
-  set w to make new window
-  set URL of active tab of w to "about:blank"
-  set minimized of w to true
-  return id of w
-end tell
-'''
-        WINDOW_ID = int(run_osascript(script, timeout=30))
-        return WINDOW_ID
 
 def js(expr: str) -> str:
-    wid = ensure_agent_window()
+    wi, ti = find_agent_tab()
     escaped = expr.replace("\\", "\\\\").replace('"', '\\"')
     script = f'''
 tell application "Google Chrome"
-  set w to first window whose id is {wid}
-  execute active tab of w javascript "{escaped}"
+  set w to first window whose id is {wi}
+  set t to tab {ti} of w
+  execute t javascript "{escaped}"
 end tell
 '''
     return run_osascript(script, timeout=60)
 
 
 def navigate(url: str) -> None:
-    wid = ensure_agent_window()
-    safe = url.replace("\\", "\\\\").replace('"', '\\"')
+    wi, ti = find_agent_tab()
+    # Keep the marker in the fragment so the same dedicated tab can always be
+    # rediscovered after navigation.
+    marked = url + ("&" if "#" in url else "#") + "ozon-radar"
+    safe = marked.replace("\\", "\\\\").replace('"', '\\"')
     script = f'''
 tell application "Google Chrome"
-  set w to first window whose id is {wid}
-  set URL of active tab of w to "{safe}"
+  set w to first window whose id is {wi}
+  set URL of tab {ti} of w to "{safe}"
 end tell
 '''
     run_osascript(script, timeout=30)
 
 
 def title_and_url() -> tuple[str, str]:
-    wid = ensure_agent_window()
+    wi, ti = find_agent_tab()
     script = f'''
 tell application "Google Chrome"
-  set w to first window whose id is {wid}
-  set t to title of active tab of w
-  set u to URL of active tab of w
+  set w to first window whose id is {wi}
+  set t to title of tab {ti} of w
+  set u to URL of tab {ti} of w
   return t & "||" & u
 end tell
 '''
