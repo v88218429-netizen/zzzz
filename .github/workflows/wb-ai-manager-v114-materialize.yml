@@ -1,0 +1,57 @@
+name: WB AI Manager v1.1.4 materialize
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [mainggg]
+    paths:
+      - "wb_ai_manager/release_1_1_4/**"
+      - ".github/workflows/wb-ai-manager-v114-materialize.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Rebuild verified v1.1.4 package
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat wb_ai_manager/release_1_1_4/chunk_*.b64 | base64 -d > /tmp/wb_ai_manager_1_1_4.tgz
+          echo "e66f4b57af549306146d7c98a98709174853911622de73572036f1683da4b13d  /tmp/wb_ai_manager_1_1_4.tgz" | sha256sum -c -
+          rm -rf wb_ai_manager/source
+          mkdir -p wb_ai_manager/source
+          tar -xzf /tmp/wb_ai_manager_1_1_4.tgz -C wb_ai_manager/source
+          test "$(cat wb_ai_manager/source/VERSION)" = "1.1.4"
+          test -f wb_ai_manager/source/src/wb_control_center/config.py
+          test -f wb_ai_manager/source/src/wb_control_center/models.py
+          test -f wb_ai_manager/source/src/wb_control_center/mcp_client.py
+          test -f wb_ai_manager/source/src/wb_control_center/agents/base.py
+      - name: Install and verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd wb_ai_manager/source
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+          python -m pip install pytest
+          python -m compileall -q src scripts
+          pytest -q
+      - name: Publish canonical source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "wb-ai-manager-bot"
+          git config user.email "wb-ai-manager-bot@users.noreply.github.com"
+          git add -f wb_ai_manager/source
+          if ! git diff --cached --quiet; then
+            git commit -m "wb-ai-manager: publish canonical v1.1.4 source"
+            git push
+          fi
