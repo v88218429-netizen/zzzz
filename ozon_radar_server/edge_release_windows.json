@@ -1,6 +1,6 @@
 {
-  "version": "0.2.0",
-  "ref": "17b9b7f2ffad324f95ae29d0bca4d1775c860dc8",
+  "version": "0.2.1",
+  "ref": "9e0f5f77db8d4d19180b4aa19e0f10cc7824cab8",
   "files": [
     "edge_agent_windows.py",
     "run_edge_windows.ps1",
