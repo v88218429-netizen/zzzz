@@ -81,7 +81,7 @@ RADAR_SECRET = env("RADAR_SECRET")
 TELEGRAM_BOT_TOKEN = env("TELEGRAM_BOT_TOKEN", "BOT_TOKEN")
 TELEGRAM_CHAT_ID = env("TELEGRAM_CHAT_ID", "OWNER_CHAT_ID")
 OZON_PROXY = build_ozon_proxy()
-MAC_AGENT_URL = env("MAC_AGENT_URL")
+EDGE_AGENT_URL = env("EDGE_AGENT_URL", "MAC_AGENT_URL")
 RADAR_TASKS_JSON = env("RADAR_TASKS_JSON")
 OZON_BROWSER_MODE = (env("OZON_BROWSER_MODE") or "auto").lower()
 OZON_BROWSER_WARMUP_MS = max(5000, min(30000, int(env("OZON_BROWSER_WARMUP_MS") or "12000")))
@@ -469,12 +469,12 @@ class OzonClient:
         raise RuntimeError(last_error or "browser Ozon source failed")
 
     async def position_async(self, query: str, sku: str, max_position: int) -> dict[str, Any]:
-        if MAC_AGENT_URL:
+        if EDGE_AGENT_URL:
             try:
                 started = time.perf_counter()
                 resp = await asyncio.to_thread(
                     curl_requests.get,
-                    MAC_AGENT_URL.rstrip("/") + "/position",
+                    EDGE_AGENT_URL.rstrip("/") + "/position",
                     params={"query": query, "sku": sku, "max_position": max_position},
                     timeout=120,
                 )
@@ -484,7 +484,7 @@ class OzonClient:
                     return {
                         "position": int(position) if position is not None else None,
                         "status": data.get("status") or ("OK" if position is not None else f"NOT_FOUND_TOP_{max_position}"),
-                        "endpoint": "mac-chrome-agent",
+                        "endpoint": "edge-chrome-agent",
                         "http_status": int(resp.status_code),
                         "response_ms": int((time.perf_counter() - started) * 1000),
                         "checked_depth": int(data.get("checked_depth") or 0),
