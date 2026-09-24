@@ -19,6 +19,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
       - name: Extract published v1.1.0 source
         shell: bash
         run: |
@@ -27,12 +28,15 @@ jobs:
           import base64, shutil, zipfile
           from io import BytesIO
           from pathlib import Path
+
           src = Path("wb_ai_manager/releases/1.1.0/bundle.b64")
           dst = Path("wb_ai_manager/source")
           raw = base64.b64decode(src.read_text(encoding="ascii"), validate=True)
+
           if dst.exists():
               shutil.rmtree(dst)
           dst.mkdir(parents=True)
+
           with zipfile.ZipFile(BytesIO(raw)) as zf:
               base = dst.resolve()
               for info in zf.infolist():
@@ -40,15 +44,27 @@ jobs:
                   if target != base and base not in target.parents:
                       raise SystemExit(f"unsafe bundle path: {info.filename}")
               zf.extractall(dst)
+
           print(f"extracted={len(list(dst.rglob('*')))}")
           PY
+
+      - name: Install package and test dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd wb_ai_manager/source
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+          python -m pip install pytest
+
       - name: Verify extracted package
         shell: bash
         run: |
           set -euo pipefail
           cd wb_ai_manager/source
           python -m compileall -q src scripts
-          python -m unittest discover -s tests -v
+          pytest -q
+
       - name: Commit canonical extracted source
         shell: bash
         run: |
