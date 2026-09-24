@@ -1,0 +1,61 @@
+name: WB AI Manager source sync
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [mainggg]
+    paths:
+      - ".github/workflows/wb-ai-manager-source-sync.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  extract-and-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Extract published v1.1.0 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import base64, shutil, zipfile
+          from io import BytesIO
+          from pathlib import Path
+          src = Path("wb_ai_manager/releases/1.1.0/bundle.b64")
+          dst = Path("wb_ai_manager/source")
+          raw = base64.b64decode(src.read_text(encoding="ascii"), validate=True)
+          if dst.exists():
+              shutil.rmtree(dst)
+          dst.mkdir(parents=True)
+          with zipfile.ZipFile(BytesIO(raw)) as zf:
+              base = dst.resolve()
+              for info in zf.infolist():
+                  target = (dst / info.filename).resolve()
+                  if target != base and base not in target.parents:
+                      raise SystemExit(f"unsafe bundle path: {info.filename}")
+              zf.extractall(dst)
+          print(f"extracted={len(list(dst.rglob('*')))}")
+          PY
+      - name: Verify extracted package
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd wb_ai_manager/source
+          python -m compileall -q src scripts
+          python -m unittest discover -s tests -v
+      - name: Commit canonical extracted source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "wb-ai-manager-bot"
+          git config user.email "wb-ai-manager-bot@users.noreply.github.com"
+          git add wb_ai_manager/source
+          git diff --cached --quiet && exit 0
+          git commit -m "wb-ai-manager: materialize v1.1 source for EA integration"
+          git push
