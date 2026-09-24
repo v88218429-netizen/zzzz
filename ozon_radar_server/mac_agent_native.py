@@ -78,48 +78,20 @@ def get_position(query: str, sku: str, max_position: int = 100) -> dict:
     seen_set: set[str] = set()
     pages = max(1, min(10, (max_position + 35) // 36))
 
-    for page_no in range(1, pages + 1):
-        url = "https://www.ozon.ru/search/?text=" + urllib.parse.quote(query)
-        if page_no > 1:
-            url += f"&page={page_no}"
-
-        navigate(url)
-        time.sleep(8)
-
-        for _ in range(7):
-            try:
-                js("window.scrollBy(0, 1400); 'ok'")
-            except Exception as exc:
-                if "JavaScript from Apple Events" in str(exc) or "javascript" in str(exc).lower():
-                    raise RuntimeError(
-                        "Chrome blocks JavaScript from Apple Events. "
-                        "Enable View → Developer → Allow JavaScript from Apple Events."
-                    ) from exc
-            time.sleep(0.8)
-
-        title, current_url = title_and_url()
-        low = (title + " " + current_url).lower()
-        if any(x in low for x in ("нет соединения", "доступ ограничен", "antibot", "challenge")):
-            return {"ok": False, "error": f"ozon page blocked: {title[:120]}"}
-
+    def collect_visible() -> dict | None:
         raw = js(
-            "JSON.stringify(Array.from(document.querySelectorAll('a[href*=\\\"/product/\\\"]')).map(a=>a.href||a.getAttribute('href')||''))"
+            "JSON.stringify(Array.from(document.querySelectorAll('a[href*=\\"/product/\\"]')).map(a=>a.href||a.getAttribute('href')||''))"
         )
         try:
             hrefs = json.loads(raw)
         except Exception:
             hrefs = []
 
-        page_skus: list[str] = []
         for href in hrefs:
-            m = re.search(r"-(\d{6,})(?:/|\?|$)", str(href))
+            m = re.search(r"-(\\d{6,})(?:/|\\?|$)", str(href))
             if not m:
                 continue
             val = m.group(1)
-            if val not in page_skus:
-                page_skus.append(val)
-
-        for val in page_skus:
             if val in seen_set:
                 continue
             seen_set.add(val)
@@ -129,11 +101,54 @@ def get_position(query: str, sku: str, max_position: int = 100) -> dict:
                     "ok": True,
                     "position": len(seen),
                     "checked_depth": len(seen),
-                    "page": page_no,
                     "source": "native-chrome-applescript",
                 }
             if len(seen) >= max_position:
                 break
+        return None
+
+    for page_no in range(1, pages + 1):
+        url = "https://www.ozon.ru/search/?text=" + urllib.parse.quote(query)
+        if page_no > 1:
+            url += f"&page={page_no}"
+
+        navigate(url)
+        time.sleep(8)
+
+        # Capture products continuously while scrolling because Ozon virtualizes
+        # the search DOM and removes cards that have scrolled far out of view.
+        for step in range(12):
+            found = collect_visible()
+            if found:
+                found["page"] = page_no
+                found["scroll_step"] = step
+                return found
+            if len(seen) >= max_position:
+                break
+
+            try:
+                js("window.scrollBy(0, 1100); 'ok'")
+            except Exception as exc:
+                if "JavaScript from Apple Events" in str(exc) or "javascript" in str(exc).lower():
+                    raise RuntimeError(
+                        "Chrome blocks JavaScript from Apple Events. "
+                        "Enable View → Developer → Allow JavaScript from Apple Events."
+                    ) from exc
+                raise
+            time.sleep(1.0)
+
+        # One final capture after the last scroll.
+        found = collect_visible()
+        if found:
+            found["page"] = page_no
+            found["scroll_step"] = 12
+            return found
+
+        title, current_url = title_and_url()
+        low = (title + " " + current_url).lower()
+        if any(x in low for x in ("нет соединения", "доступ ограничен", "antibot", "challenge")):
+            return {"ok": False, "error": f"ozon page blocked: {title[:120]}"}
+
         if len(seen) >= max_position:
             break
 
