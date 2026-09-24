@@ -36,12 +36,14 @@ end tell
 
 def js(expr: str) -> str:
     ensure_front_tab()
-    escaped = expr.replace("\\", "\\\\").replace('"', '\\"')
-    script = f'''
-tell application "Google Chrome"
-  execute active tab of front window javascript "{escaped}"
-end tell
-'''
+    # Chrome Apple Events is reliable with a single-line JS payload.
+    # Collapse whitespace/newlines before embedding it in AppleScript.
+    one_line = " ".join(expr.splitlines())
+    escaped = one_line.replace("\\", "\\\\").replace('"', '\\"')
+    script = (
+        'tell application "Google Chrome" to execute active tab of front window '
+        f'javascript "{escaped}"'
+    )
     return run_osascript(script, timeout=60)
 
 
