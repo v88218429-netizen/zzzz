@@ -13,6 +13,7 @@ BASE_URL = "https://marketplace-api.wildberries.ru"
 ROOT_DIR = Path(os.environ.get("DATA_DIR", "/data"))
 DATA_DIR = ROOT_DIR / "fbs"
 FINANCE_CHARGES_PATH = ROOT_DIR / "finance" / "charges_all.csv"
+FINANCE_STATUS_PATH = ROOT_DIR / "finance" / "status.json"
 DATE_FROM = os.environ.get("FBS_EVIDENCE_DATE_FROM", "2026-09-01")
 SYNC_INTERVAL_MIN = int(os.environ.get("FBS_EVIDENCE_SYNC_INTERVAL_MIN", "60"))
 
@@ -144,8 +145,27 @@ async def _supplies(client: httpx.AsyncClient, token: str) -> list[dict]:
     return out
 
 
+async def _wait_for_finance_ready() -> None:
+    for _ in range(240):
+        if FINANCE_STATUS_PATH.exists() and FINANCE_CHARGES_PATH.exists():
+            try:
+                status = json.loads(FINANCE_STATUS_PATH.read_text(encoding="utf-8"))
+                shops = status.get("shops") or {}
+                phase = status.get("phase")
+                if (
+                    phase in {"charges_ready", "reports_syncing", "done"}
+                    and all((shops.get(key) or {}).get("ok") for key in SHOPS)
+                ):
+                    return
+            except Exception:
+                pass
+        await asyncio.sleep(5)
+    raise RuntimeError("Finance charges were not ready in time")
+
+
 async def sync_once() -> dict:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
+    await _wait_for_finance_ready()
     penalties = _penalties()
     date_to = datetime.now(timezone.utc).date().isoformat()
     all_rows = []
