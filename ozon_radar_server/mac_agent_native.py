@@ -9,6 +9,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 HOST = "0.0.0.0"
 PORT = 8900
+WINDOW_ID: int | None = None
 
 def run_osascript(script: str, timeout: int = 120) -> str:
     p = subprocess.run(
@@ -21,39 +22,75 @@ def run_osascript(script: str, timeout: int = 120) -> str:
         raise RuntimeError((p.stderr or p.stdout or "osascript failed").strip())
     return (p.stdout or "").strip()
 
+def ensure_agent_window() -> int:
+    global WINDOW_ID
+
+    if WINDOW_ID is not None:
+        script = f'''
+tell application "Google Chrome"
+  repeat with w in windows
+    if (id of w) is {WINDOW_ID} then return id of w
+  end repeat
+end tell
+return 0
+'''
+        try:
+            existing = int(run_osascript(script, timeout=15) or "0")
+            if existing:
+                return existing
+        except Exception:
+            pass
+
+    script = '''
+tell application "Google Chrome"
+  set w to make new window
+  set URL of active tab of w to "about:blank"
+  set minimized of w to true
+  return id of w
+end tell
+'''
+    WINDOW_ID = int(run_osascript(script, timeout=30))
+    return WINDOW_ID
+
+
 def js(expr: str) -> str:
+    wid = ensure_agent_window()
     escaped = expr.replace("\\", "\\\\").replace('"', '\\"')
     script = f'''
 tell application "Google Chrome"
-  if (count of windows) = 0 then make new window
-  execute active tab of front window javascript "{escaped}"
+  set w to first window whose id is {wid}
+  execute active tab of w javascript "{escaped}"
 end tell
 '''
     return run_osascript(script, timeout=60)
 
+
 def navigate(url: str) -> None:
+    wid = ensure_agent_window()
     safe = url.replace("\\", "\\\\").replace('"', '\\"')
     script = f'''
 tell application "Google Chrome"
-  activate
-  if (count of windows) = 0 then make new window
-  set URL of active tab of front window to "{safe}"
+  set w to first window whose id is {wid}
+  set URL of active tab of w to "{safe}"
 end tell
 '''
     run_osascript(script, timeout=30)
 
+
 def title_and_url() -> tuple[str, str]:
-    script = '''
+    wid = ensure_agent_window()
+    script = f'''
 tell application "Google Chrome"
-  if (count of windows) = 0 then return "||"
-  set t to title of active tab of front window
-  set u to URL of active tab of front window
+  set w to first window whose id is {wid}
+  set t to title of active tab of w
+  set u to URL of active tab of w
   return t & "||" & u
 end tell
 '''
     out = run_osascript(script, timeout=30)
     parts = out.split("||", 1)
     return (parts[0] if parts else "", parts[1] if len(parts) > 1 else "")
+
 
 def get_position(query: str, sku: str, max_position: int = 100) -> dict:
     target = str(sku)
