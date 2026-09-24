@@ -47,7 +47,12 @@ async def _post(client: httpx.AsyncClient, token: str, path: str, body: dict) ->
         if response.status_code == 204:
             return 204, []
         if response.status_code == 429 and attempt < 3:
-            await asyncio.sleep(65)
+            retry = response.headers.get("X-Ratelimit-Retry") or response.headers.get("Retry-After") or "60"
+            try:
+                delay = max(float(retry), 1.0)
+            except ValueError:
+                delay = 60.0
+            await asyncio.sleep(delay + 1)
             continue
         response.raise_for_status()
         return response.status_code, response.json()
@@ -200,11 +205,11 @@ async def sync_all() -> dict:
 
             try:
                 details = await _detailed(client, token, DATE_FROM, date_to)
-                # WB Finance limit is per seller account; keep calls for the same seller apart.
-                await asyncio.sleep(65)
+                print(f"FINANCE_DETAIL shop={shop_id} rows={len(details)}", flush=True)
                 daily = await _reports_list(client, token, DATE_FROM, date_to, "daily")
-                await asyncio.sleep(65)
+                print(f"FINANCE_REPORTS shop={shop_id} period=daily rows={len(daily)}", flush=True)
                 weekly = await _reports_list(client, token, DATE_FROM, date_to, "weekly")
+                print(f"FINANCE_REPORTS shop={shop_id} period=weekly rows={len(weekly)}", flush=True)
 
                 _write_json(DATA_DIR / f"{shop_id.lower()}_details.json", details)
                 _write_json(DATA_DIR / f"{shop_id.lower()}_reports_daily.json", daily)
@@ -217,6 +222,7 @@ async def sync_all() -> dict:
                     "weeklyReports": len(weekly),
                 }
             except Exception as exc:
+                print(f"FINANCE_ERROR shop={shop_id} error={type(exc).__name__}:{exc}", flush=True)
                 return shop_id, [], {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
 
         tasks = [
@@ -241,9 +247,50 @@ async def sync_all() -> dict:
     )
 
     _write_combined_csv(combined)
+
+    report_columns = [
+        "Магазин", "Report ID", "Период", "Отчет с", "Отчет по", "Дата создания",
+        "Штрафы, ₽", "Удержания, ₽", "Хранение, ₽", "Приемка, ₽", "К выплате, ₽",
+        "Статус", "Источник",
+    ]
+    report_rows = []
+    for shop_id, (shop_name, _env_name) in SHOPS.items():
+        for period in ("daily", "weekly"):
+            path = DATA_DIR / f"{shop_id.lower()}_reports_{period}.json"
+            if not path.exists():
+                continue
+            try:
+                reports = json.loads(path.read_text(encoding="utf-8"))
+            except Exception:
+                reports = []
+            for report in reports:
+                report_rows.append([
+                    shop_name,
+                    report.get("reportId", ""),
+                    period,
+                    report.get("dateFrom", ""),
+                    report.get("dateTo", ""),
+                    report.get("createDate", ""),
+                    _money(report.get("penaltySum")),
+                    _money(report.get("deductionSum")),
+                    _money(report.get("paidStorageSum")),
+                    _money(report.get("paidAcceptanceSum")),
+                    _money(report.get("forPaySum")),
+                    "авто",
+                    "WB Finance API",
+                ])
+    reports_tmp = DATA_DIR / "reports_all.csv.tmp"
+    with reports_tmp.open("w", encoding="utf-8-sig", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(report_columns)
+        writer.writerows(report_rows)
+    reports_tmp.replace(DATA_DIR / "reports_all.csv")
+
     status["rows"] = len(combined)
+    status["reportRows"] = len(report_rows)
     status["finishedAt"] = datetime.now().astimezone().isoformat()
     _write_json(DATA_DIR / "status.json", status)
+    print("FINANCE_SYNC_DONE " + json.dumps(status, ensure_ascii=False, separators=(",", ":")), flush=True)
     return status
 
 
