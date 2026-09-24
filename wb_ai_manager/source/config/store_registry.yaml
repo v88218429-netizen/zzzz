@@ -1,0 +1,66 @@
+version: 1
+sources:
+  weekly_summary:
+    title: "Сводка 09.09–16.09 — AIR + Саныч + Хозяюшка"
+    spreadsheet_id: "1hU24PrecF2hbeLbKfPEKRQbjXhdd8kONLTMsR4yNIug"
+    role: "portfolio_finance"
+    priority: 100
+    ranges:
+      comparison: "Сравнение!A1:AN160"
+      air: "AIR 09.09–16.09!A1:R120"
+      sanych: "Саныч 09.09–16.09!A1:R160"
+      hozyushka: "Хозяюшка 09.09–16.09!A1:R120"
+
+  own_27:
+    title: "Остатки v.1 27июля"
+    spreadsheet_id: "1VQwf-QPeSjexrEculDjWt_hpuCKu7PLzLZhMFjP2VZM"
+    role: "own_operating_system"
+    priority: 110
+    ranges:
+      summary: "Сводная!A1:Z250"
+      unit_economics: "Юнитка!A1:AQ500"
+      ff_history: "История остатков ФФ!A1:J800"
+      products: "Товары!A1:R500"
+      orders_history: "Заказы!A1:J40000"
+      order_lifecycle: "_WB_ORDER_FEED!A1:L7000"
+      supply_plan: "_ORDER_ANALYSIS_TMP!A1:L1000"
+
+  sanych_sellmonitor:
+    title: "Sellmonitor — аналитика магазина Саныча"
+    spreadsheet_id: "1-aBDZ7c5xfmVwwiNmUi9-DyfIANXmfiM5-Ti2_zg4zI"
+    role: "sanych_exact_analytics"
+    priority: 105
+    ranges:
+      dashboard: "00_Дашборд!A1:Z100"
+      ads_status: "84_Статус_реклама!A1:H300"
+      calculator: "05_Калькулятор!A1:BD300"
+      stocks: "06_Остатки!A1:Z300"
+      positions: "07_Контроль_позиций!A1:R6000"
+
+  air_fbs:
+    title: "WB FBS — АИР — клиентская таблица"
+    spreadsheet_id: "1qJvhEOIku7sOMydfrUz0PR5dkcU0sLjv433pa1MFBcM"
+    role: "air_fbs_ops"
+    priority: 60
+    ranges:
+      dashboard: "Дашборд!A1:P80"
+      orders: "FBS Заказы!A1:AJ300"
+
+  hozyushka_fbs:
+    title: "WB FBS — Хозяюшка — клиентская таблица"
+    spreadsheet_id: "1f9dxXeZxkDth8h2C9GA7L7WqAr1-Ok-Oi5YtufLYOOk"
+    role: "hozyushka_fbs_ops"
+    priority: 60
+    ranges:
+      owner: "💼 Собственник!A1:P80"
+      decisions: "🧠 Центр решений!A1:P100"
+      analytics: "📈 Аналитика 360!A1:P100"
+
+  dublinsky_legacy:
+    title: "ИП Дублинский 1"
+    spreadsheet_id: "1dG3nM93vsbmXXdrIYiCOwPDleg07sKoV0s45AYHDpB0"
+    role: "legacy_reference"
+    priority: 20
+    ranges:
+      calculator: "калькулятор!A1:P100"
+      rnp: "РНП!A1:P200"

@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="light" />
+  <title>WB AI Manager</title>
+  <link rel="stylesheet" href="/assets/dashboard.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 32 32" fill="none"><path d="M7.3 6.7 12 25.3l4-10 4 10 4.7-18.6" stroke="currentColor" stroke-width="3.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div class="brand-copy">
+          <strong>WB AI Manager</strong>
+          <span>Операционный центр</span>
+        </div>
+      </div>
+
+      <div class="store-card">
+        <div class="store-avatar">WB</div>
+        <div class="store-copy">
+          <span class="eyebrow">Магазин</span>
+          <strong id="store-name">Подключение…</strong>
+        </div>
+        <span class="connection-dot" id="connection-dot" title="Статус подключения"></span>
+      </div>
+
+      <nav class="nav" aria-label="Основная навигация">
+        <button class="nav-item active" data-page="overview">
+          <svg viewBox="0 0 24 24"><path d="M4 13h6V4H4v9Zm0 7h6v-5H4v5Zm10 0h6v-9h-6v9Zm0-16v5h6V4h-6Z"/></svg>
+          <span>Обзор</span>
+          <span class="nav-badge" id="nav-alerts">0</span>
+        </button>
+        <button class="nav-item" data-page="stores">
+          <svg viewBox="0 0 24 24"><path d="M3 20V8l4-4 4 4v12H3Zm10 0V4h8v16h-8Zm2-14v2h4V6h-4Zm0 4v2h4v-2h-4Zm0 4v2h4v-2h-4Z"/></svg>
+          <span>Магазины</span>
+        </button>
+        <button class="nav-item" data-page="decisions">
+          <svg viewBox="0 0 24 24"><path d="M4 4h16v16H4V4Zm3 4v2h7V8H7Zm0 4v2h10v-2H7Zm0 4v2h6v-2H7Zm9-8 1.4 1.4L20 6.8 18.6 5.4 16 8Z"/></svg>
+          <span>Решения</span><span class="nav-badge" id="nav-decisions">0</span>
+        </button>
+        <button class="nav-item" data-page="control">
+          <svg viewBox="0 0 24 24"><path d="M12 2 20 5v6c0 5.4-3.4 9.5-8 11-4.6-1.5-8-5.6-8-11V5l8-3Zm-1 5v6l5 3 .9-1.5-4.1-2.4V7H11Z"/></svg>
+          <span>Контроль решений</span>
+        </button>
+        <button class="nav-item" data-page="advertising">
+          <svg viewBox="0 0 24 24"><path d="M4 18V9h3v9H4Zm6 0V5h3v13h-3Zm6 0v-7h3v7h-3Z"/></svg>
+          <span>Реклама</span>
+        </button>
+        <button class="nav-item" data-page="policy">
+          <svg viewBox="0 0 24 24"><path d="M4 5h10v2H4V5Zm0 6h16v2H4v-2Zm0 6h7v2H4v-2Zm13-13h3v5h-3V4Zm-3 12h3v5h-3v-5Z"/></svg>
+          <span>Редактор правил</span>
+        </button>
+        <button class="nav-item" data-page="inventory">
+          <svg viewBox="0 0 24 24"><path d="m12 3 8 4.3v9.4L12 21l-8-4.3V7.3L12 3Zm0 2.2L6.3 8.3 12 11.4l5.7-3.1L12 5.2Zm-6 5v5.3l5 2.7v-5.3l-5-2.7Zm7 8 5-2.7v-5.3l-5 2.7v5.3Z"/></svg>
+          <span>Остатки</span>
+        </button>
+        <button class="nav-item" data-page="search">
+          <svg viewBox="0 0 24 24"><path d="M10.5 4a6.5 6.5 0 1 0 4.08 11.56L19 20l1-1-4.44-4.42A6.5 6.5 0 0 0 10.5 4Zm0 2a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9Z"/></svg>
+          <span>Поиск и карточки</span>
+        </button>
+        <button class="nav-item" data-page="finance">
+          <svg viewBox="0 0 24 24"><path d="M4 5h16v14H4V5Zm2 2v2h12V7H6Zm0 4v6h5v-6H6Zm7 0v2h5v-2h-5Zm0 4v2h5v-2h-5Z"/></svg>
+          <span>Финансы</span>
+        </button>
+        <button class="nav-item" data-page="customers">
+          <svg viewBox="0 0 24 24"><path d="M8.5 11A3.5 3.5 0 1 0 8.5 4a3.5 3.5 0 0 0 0 7Zm7-1A3 3 0 1 0 15.5 4a3 3 0 0 0 0 6ZM3 19.5C3 15.9 5.4 13 8.5 13s5.5 2.9 5.5 6.5V20H3v-.5Zm11.8.5c.1-.4.2-.8.2-1.2 0-1.9-.7-3.7-1.8-5  .7-.5 1.5-.8 2.3-.8 2.8 0 5 2.6 5 5.8V20h-5.7Z"/></svg>
+          <span>Клиенты и качество</span>
+        </button>
+        <button class="nav-item" data-page="connections">
+          <svg viewBox="0 0 24 24"><path d="M7 7h4V5H7a5 5 0 0 0 0 10h4v-2H7a3 3 0 0 1 0-6Zm10 2h-4v2h4a3 3 0 0 1 0 6h-4v2h4a5 5 0 0 0 0-10Zm-9 3h8v2H8v-2Z"/></svg>
+          <span>Подключения</span>
+        </button>
+        <button class="nav-item" data-page="knowledge">
+          <svg viewBox="0 0 24 24"><path d="M4 4.5C4 3.7 4.7 3 5.5 3H11v15H5.5A1.5 1.5 0 0 0 4 19.5v-15Zm16 0v15A1.5 1.5 0 0 0 18.5 18H13V3h5.5c.8 0 1.5.7 1.5 1.5ZM5.5 20H11v1H5.5A2.5 2.5 0 0 1 3 18.5v1A1.5 1.5 0 0 0 4.5 21h1v-1Zm13 0H13v1h5.5a2.5 2.5 0 0 0 2.5-2.5v1a1.5 1.5 0 0 1-1.5 1.5h-1v-1Z"/></svg>
+          <span>База знаний</span>
+        </button>
+        <button class="nav-item" data-page="agents">
+          <svg viewBox="0 0 24 24"><path d="M12 3 9.8 6.2l-3.8-.3-.5 3.8L2 11.5l1.8 3.4-1.8 3.4 3.5 1.8.5 3.8 3.8-.3L12 27l2.2-3.4 3.8.3.5-3.8 3.5-1.8-1.8-3.4 1.8-3.4-3.5-1.8-.5-3.8-3.8.3L12 3Zm0 7.2a4.7 4.7 0 1 1 0 9.4 4.7 4.7 0 0 1 0-9.4Z" transform="scale(.8) translate(3 0)"/></svg>
+          <span>Агенты</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="safety-mini">
+          <div class="shield-icon">
+            <svg viewBox="0 0 24 24"><path d="M12 2 20 5v6c0 5.4-3.4 9.5-8 11-4.6-1.5-8-5.6-8-11V5l8-3Zm0 3.1L6 7.3V11c0 4.1 2.4 7.2 6 8.6 3.6-1.4 6-4.5 6-8.6V7.3l-6-2.2Zm-1 9.2-2.1-2.1 1.4-1.4  .7.7 2.9-2.9 1.4 1.4-4.3 4.3Z"/></svg>
+          </div>
+          <div>
+            <strong>ТОЛЬКО ЧТЕНИЕ</strong>
+            <span>Изменения WB отключены</span>
+          </div>
+        </div>
+        <div class="version">v1.1 · управление, контроль и обучение · <a href="/docs" target="_blank" rel="noreferrer">API</a></div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="topbar-left">
+          <button class="mobile-menu" id="mobile-menu" aria-label="Открыть меню">
+            <svg viewBox="0 0 24 24"><path d="M4 6h16v2H4V6Zm0 5h16v2H4v-2Zm0 5h16v2H4v-2Z"/></svg>
+          </button>
+          <div>
+            <div class="page-kicker" id="page-kicker">Операционный центр</div>
+            <h1 id="page-title">Обзор магазина</h1>
+          </div>
+        </div>
+        <div class="topbar-actions">
+          <div class="freshness" title="Время последнего успешного запуска агента">
+            <span class="live-dot"></span>
+            <span id="last-sync">Обновление…</span>
+          </div>
+          <button class="button secondary" id="refresh-data">
+            <svg viewBox="0 0 24 24"><path d="M18.4 6.6A8 8 0 1 0 20 15h-2.1A6 6 0 1 1 16.9 8.1L14 11h7V4l-2.6 2.6Z"/></svg>
+            Обновить
+          </button>
+          <button class="button primary" id="run-audit">
+            <svg viewBox="0 0 24 24"><path d="M12 2 15 9l7 .5-5.4 4.6 1.7 6.9L12 17.2 5.7 21l1.7-6.9L2 9.5 9 9l3-7Z"/></svg>
+            Проверить сейчас
+          </button>
+        </div>
+      </header>
+
+      <div class="read-only-banner">
+        <div class="banner-icon">
+          <svg viewBox="0 0 24 24"><path d="M12 2 20 5v6c0 5.4-3.4 9.5-8 11-4.6-1.5-8-5.6-8-11V5l8-3Zm0 3.1L6 7.3V11c0 4.1 2.4 7.2 6 8.6 3.6-1.4 6-4.5 6-8.6V7.3l-6-2.2Z"/></svg>
+        </div>
+        <div class="banner-copy">
+          <strong>Защищённый режим: только чтение и анализ</strong>
+          <span>Агенты могут читать кабинет, находить проблемы и формировать рекомендации. Ставки, цены, бюджеты, остатки и карточки не изменяются.</span>
+        </div>
+        <span class="pill safe">SHADOW</span>
+      </div>
+
+      <div id="loading-state" class="loading-state">
+        <div class="spinner"></div>
+        <div><strong>Собираю состояние магазина</strong><span>Проверяю события, агентов и последние снимки данных.</span></div>
+      </div>
+
+      <section class="page active" data-page-panel="overview">
+        <div class="hero-grid">
+          <article class="card executive-card">
+            <div class="card-head">
+              <div>
+                <span class="section-label">AI DIRECTOR</span>
+                <h2 id="executive-title">Собираю сводку…</h2>
+              </div>
+              <div class="health-score" id="health-score"><span>—</span><small>health</small></div>
+            </div>
+            <p class="executive-summary" id="executive-summary">После первого аудита здесь появится короткая сводка: что критично, что изменилось и куда смотреть в первую очередь.</p>
+            <div class="priority-strip" id="priority-strip"></div>
+          </article>
+
+          <article class="card posture-card">
+            <div class="card-head compact">
+              <div>
+                <span class="section-label">КОНТУР БЕЗОПАСНОСТИ</span>
+                <h3>Никаких изменений без тебя</h3>
+              </div>
+              <span class="status-icon success">✓</span>
+            </div>
+            <div class="posture-list">
+              <div><span>Режим</span><strong>Только чтение / наблюдение</strong></div>
+              <div><span>Автодействия</span><strong>Выключены</strong></div>
+              <div><span>Изменение ставок</span><strong>Заблокировано</strong></div>
+              <div><span>Мозг</span><strong id="reasoning-mode">Rules</strong></div>
+            </div>
+          </article>
+        </div>
+
+        <div class="metric-grid" id="metric-grid">
+          <article class="metric-card"><span class="metric-icon danger">!</span><div><span>Критично</span><strong id="metric-critical">—</strong><small>за 24 часа</small></div></article>
+          <article class="metric-card"><span class="metric-icon warning">•</span><div><span>Предупреждения</span><strong id="metric-warning">—</strong><small>за 24 часа</small></div></article>
+          <article class="metric-card"><span class="metric-icon purple">↗</span><div><span>Рекомендации</span><strong id="metric-actions">—</strong><small>ничего не исполняется</small></div></article>
+          <article class="metric-card"><span class="metric-icon teal">A</span><div><span>Агенты</span><strong id="metric-agents">—</strong><small>активных модулей</small></div></article>
+          <article class="metric-card"><span class="metric-icon blue">₽</span><div><span>Расход рекламы</span><strong id="metric-ad-spend">—</strong><small>за 7 дней</small></div></article>
+          <article class="metric-card"><span class="metric-icon green">◎</span><div><span>Рейтинг</span><strong id="metric-rating">—</strong><small>магазина</small></div></article>
+        </div>
+
+        <div class="content-grid two-thirds">
+          <article class="card">
+            <div class="card-head">
+              <div><span class="section-label">ПРИОРИТЕТЫ</span><h3>Что требует внимания</h3></div>
+              <div class="segmented" id="event-filter">
+                <button class="active" data-filter="important">Важное</button><button data-filter="all">Все</button>
+              </div>
+            </div>
+            <div id="event-list" class="event-list empty-ready"></div>
+          </article>
+
+          <article class="card">
+            <div class="card-head"><div><span class="section-label">РЕКОМЕНДАЦИИ</span><h3>Что предлагает система</h3></div><span class="pill neutral">ТОЛЬКО ЧТЕНИЕ</span></div>
+            <div id="recommendation-list" class="recommendation-list"></div>
+          </article>
+        </div>
+
+        <article class="card wide-card">
+          <div class="card-head"><div><span class="section-label">СОСТОЯНИЕ НАПРАВЛЕНИЙ</span><h3>Карта магазина</h3></div><span class="muted" id="store-map-note">по последним данным</span></div>
+          <div class="domain-grid" id="domain-grid"></div>
+        </article>
+      </section>
+
+      <section class="page" data-page-panel="stores">
+        <div class="section-intro"><div><span class="section-label">ПОРТФЕЛЬ</span><h2>Все магазины в одном окне</h2><p>Свежие финансовые факты из рабочих Google-таблиц. Каждый показатель хранит источник и дату среза.</p></div><span class="pill safe" id="portfolio-origin">TRUSTED SHEETS</span></div>
+        <div class="metrics-grid portfolio-metrics">
+          <article class="metric-card"><span>Заказы</span><strong id="pf-orders">—</strong><small id="pf-orders-change">—</small></article>
+          <article class="metric-card"><span>Выкупы</span><strong id="pf-buyouts">—</strong><small>за выбранный период</small></article>
+          <article class="metric-card"><span>Прибыль</span><strong id="pf-profit">—</strong><small id="pf-profit-change">—</small></article>
+          <article class="metric-card"><span>Маржа</span><strong id="pf-margin">—</strong><small id="pf-roi">ROI —</small></article>
+          <article class="metric-card"><span>Реклама</span><strong id="pf-ads">—</strong><small id="pf-drr">ДРР —</small></article>
+        </div>
+        <article class="card"><div class="card-head"><div><span class="section-label">МАГАЗИНЫ</span><h3>Сравнение текущего периода</h3></div><span class="muted" id="portfolio-period">—</span></div><div id="stores-grid" class="stores-grid"></div></article>
+        <div class="two-col-grid">
+          <article class="card"><div class="card-head"><div><span class="section-label">27 + ЮНИТКА</span><h3>Свой операционный контур</h3></div><span class="pill neutral">ТОЛЬКО ЧТЕНИЕ</span></div><div id="own27-grid" class="fact-grid"></div><div id="unit-alerts" class="signal-stack compact-stack"></div></article>
+          <article class="card"><div class="card-head"><div><span class="section-label">ФУЛФИЛМЕНТ</span><h3>Последний снимок ФФ</h3></div><span class="muted" id="ff-snapshot-date">—</span></div><div id="ff-grid" class="mini-table-list"></div></article>
+        </div>
+      </section>
+
+      <section class="page" data-page-panel="decisions">
+        <div class="section-intro"><div><span class="section-label">УПРАВЛЯЮЩЕЕ ЯДРО</span><h2>Что конкретно делать</h2><p>Не алерты, а цепочки: причина → действие → контроль. Экономика, реклама, остатки, выкуп, поиск и рынок рассматриваются вместе.</p></div><button class="button primary" id="refresh-decisions">Пересчитать решения</button></div>
+        <div class="decision-summary" id="decision-summary"></div><div class="decision-grid" id="decision-grid"></div>
+      </section>
+
+      <section class="page" data-page-panel="control">
+        <div class="section-intro"><div><span class="section-label">ОБРАТНАЯ СВЯЗЬ</span><h2>Контроль решений и обучение</h2><p>Что агент рекомендовал, какие изменения реально произошли в WB, что показали контрольные точки и какие решения независимая проверка заблокировала.</p></div><span class="pill safe">БЕЗ ЛОЖНОЙ ПРИЧИННОСТИ</span></div>
+        <div class="metric-grid four">
+          <article class="metric-card"><span>Версий решений</span><strong id="control-history-count">—</strong><small>сохранено в истории</small></article>
+          <article class="metric-card"><span>Замечено изменений</span><strong id="control-change-count">—</strong><small>ставка / цена / медиа</small></article>
+          <article class="metric-card"><span>Проверено результатов</span><strong id="control-eval-count">—</strong><small>контрольные точки</small></article>
+          <article class="metric-card"><span>Заблокировано критиком</span><strong id="control-blocked-count">—</strong><small>не прошли проверку</small></article>
+        </div>
+        <div class="two-col-grid">
+          <article class="card"><div class="card-head"><div><span class="section-label">ФАКТИЧЕСКИЕ ИЗМЕНЕНИЯ</span><h3>Что реально изменилось</h3></div></div><div id="control-changes" class="signal-stack"></div></article>
+          <article class="card"><div class="card-head"><div><span class="section-label">НЕЗАВИСИМАЯ ПРОВЕРКА</span><h3>Возражения и блокеры</h3></div></div><div id="control-reviews" class="signal-stack"></div></article>
+        </div>
+        <article class="card"><div class="card-head"><div><span class="section-label">КОНТРОЛЬ РЕЗУЛЬТАТА</span><h3>1ч / 3ч / 24ч / 7д / 14д</h3></div></div><div id="control-evaluations" class="signal-stack"></div></article>
+        <article class="card"><div class="card-head"><div><span class="section-label">ПАМЯТЬ</span><h3>Последние версии решений</h3></div></div><div id="control-history" class="signal-stack"></div></article>
+      </section>
+
+      <section class="page" data-page-panel="advertising">
+        <div class="section-intro"><div><span class="section-label">РЕКЛАМА</span><h2>Контроль эффективности без автодействий</h2><p>Расход, заказы, ДРР, CTR и CPC. Агент только диагностирует и предлагает — ставки и бюджеты не меняются.</p></div><span class="pill safe">NO WRITES</span></div>
+        <div class="metric-grid four">
+          <article class="metric-card"><span class="metric-icon blue">₽</span><div><span>Расход 7д</span><strong id="ads-spend">—</strong><small>по активным кампаниям</small></div></article>
+          <article class="metric-card"><span class="metric-icon green">#</span><div><span>Заказы</span><strong id="ads-orders">—</strong><small>атрибутировано рекламой</small></div></article>
+          <article class="metric-card"><span class="metric-icon purple">%</span><div><span>ДРР</span><strong id="ads-drr">—</strong><small>сводный</small></div></article>
+          <article class="metric-card"><span class="metric-icon teal">↗</span><div><span>CTR</span><strong id="ads-ctr">—</strong><small>взвешенный</small></div></article>
+        </div>
+        <div class="content-grid two-thirds">
+          <article class="card"><div class="card-head"><div><span class="section-label">КАМПАНИИ</span><h3>Активная реклама</h3></div><span class="muted" id="ads-updated">—</span></div><div class="table-wrap"><table class="data-table"><thead><tr><th>Кампания</th><th>Расход</th><th>Заказы</th><th>Выручка</th><th>ДРР</th><th>CTR</th><th>CPC</th><th>Статус</th></tr></thead><tbody id="ads-table"></tbody></table></div></article>
+          <article class="card"><div class="card-head"><div><span class="section-label">ДИАГНОСТИКА</span><h3>Сигналы рекламы</h3></div></div><div id="ads-signals" class="signal-stack"></div></article>
+        </div>
+        <article class="card"><div class="card-head"><div><span class="section-label">УПРАВЛЕНИЕ РЕКЛАМОЙ</span><h3>Числовой план по каждой кампании</h3></div><span class="pill safe">ТОЛЬКО ЧТЕНИЕ</span></div><div id="ad-control-plans" class="ad-control-grid"></div></article>
+        <article class="card"><div class="card-head"><div><span class="section-label">ПРАВИЛА</span><h3>Как агент принимает решение</h3></div></div><div class="rule-grid">
+          <div class="rule"><b>01</b><strong>Не судит по одному ДРР</strong><span>Сначала смотрит расход, заказы, CR/CTR, позиции, остатки и цену.</span></div>
+          <div class="rule"><b>02</b><strong>Малые данные — не решение</strong><span>Сигнал может появиться, но действие не считается доказанным без достаточной выборки.</span></div>
+          <div class="rule"><b>03</b><strong>Ставки не меняются</strong><span>В текущем режиме агент только формирует диагностическую рекомендацию.</span></div>
+          <div class="rule"><b>04</b><strong>Каждый сигнал имеет источник</strong><span>В карточке видны фактические метрики и время чтения данных.</span></div>
+        </div></article>
+      </section>
+
+      <section class="page" data-page-panel="policy">
+        <div class="section-intro"><div><span class="section-label">БЕЗ ПЕРЕЗАПУСКА</span><h2>Редактор правил</h2><p>Меняй стратегию управления рекламой прямо здесь. Новые значения применяются к следующему пересчёту решений без перезапуска и без новой версии приложения.</p></div><span class="pill safe">ПРЕДОХРАНИТЕЛИ ЗАБЛОКИРОВАНЫ</span></div>
+        <div class="content-grid two-thirds">
+          <article class="card policy-editor-card">
+            <div class="card-head"><div><span class="section-label">СТРАТЕГИЯ</span><h3>Рекламный контроллер</h3></div><button class="button primary" id="save-policy">Сохранить и пересчитать</button></div>
+            <div class="policy-form">
+              <label><span>Режим стратегии</span><select id="policy-strategy-mode"><option value="growth">Рост</option><option value="balanced">Баланс</option><option value="profit">Прибыль</option></select><small>Влияет на приоритет роста или прибыли, но технические предохранители не меняет.</small></label>
+              <label><span>Дополнительный потолок ДРР, %</span><input id="policy-target-drr" type="number" min="0" max="100" step="0.1"><small>Главный предел считается из юнит-экономики товара. Значение 100% означает: не вводить дополнительный общий лимит.</small></label>
+              <label><span>Минимальная прибыль после рекламы, ₽/ед.</span><input id="policy-min-profit" type="number" step="10"><small>Ниже этого повышение рекламного давления запрещается.</small></label>
+              <label><span>Максимальный шаг ставки, %</span><input id="policy-bid-step" type="number" min="0" max="10" step="0.5"><small>Технический предел: не больше 10% за один пересчёт.</small></label>
+              <label><span>Максимальный шаг расхода, % / цикл</span><input id="policy-spend-step" type="number" min="0" max="50" step="1"><small>Ограничивает изменение допустимого расхода на сутки.</small></label>
+              <label><span>Мин. кликов для числового решения</span><input id="policy-min-clicks" type="number" min="1" step="1"><small>До этого только наблюдение.</small></label>
+              <label><span>Мин. заказов для повышения ставки</span><input id="policy-min-orders" type="number" min="1" step="1"><small>Не даёт масштабировать случайный успех.</small></label>
+              <label><span>Окно повторной оценки, часов</span><input id="policy-eval-hours" type="number" min="0.25" step="0.25"><small>С учётом задержки WB и накопления выборки.</small></label>
+              <label><span>Минимальный запас для повышения рекламы, дней</span><input id="policy-stock-scale" type="number" min="0" step="0.5"><small>Ниже этого повышение ставки запрещено.</small></label>
+              <label><span>Критический запас для ограничения рекламы, дней</span><input id="policy-stock-hold" type="number" min="0" step="0.5"><small>Ниже этого расход не увеличивается автоматически; точное решение всё равно проверяет экономику и спрос.</small></label>
+              <label><span>Целевой запас, дней</span><input id="policy-stock-target" type="number" min="1" step="1"><small>Используется расчётом поставки и рекламным контуром одновременно.</small></label>
+              <label><span>Рост заказов, при котором отделяем органику, %</span><input id="policy-organic-growth" type="number" min="0" step="1"><small>При сильном органическом росте ставка сначала удерживается.</small></label>
+              <label><span>Короткое окно тренда, дней</span><input id="policy-trend-short" type="number" min="1" max="30" step="1"><small>Например, последние 3 дня.</small></label>
+              <label><span>Базовое окно тренда, дней</span><input id="policy-trend-long" type="number" min="2" max="120" step="1"><small>Например, 14 дней; должно быть длиннее короткого.</small></label>
+              <label><span>Макс. рост спроса в прогнозе, %</span><input id="policy-max-trend" type="number" min="0" max="500" step="5"><small>Защита от выброса в заказах/частотности.</small></label>
+              <label><span>Внутренний потолок рекламы, ₽/24ч</span><input id="policy-max-spend24" type="number" min="0" step="100"><small>Даже рекомендация не превысит этот коридор.</small></label>
+            </div>
+          </article>
+          <article class="card"><div class="card-head"><div><span class="section-label">КОНТУР</span><h3>Что нельзя изменить из интерфейса</h3></div></div><div class="posture-list"><div><span>Изменения в WB</span><strong>Заблокированы</strong></div><div><span>Макс. шаг ставки</span><strong id="hard-bid-step">10%</strong></div><div><span>Абсолютный предел ставки</span><strong id="hard-bid-cap">—</strong></div><div><span>Режим</span><strong>Наблюдение / только чтение</strong></div><div><span>Удалённые правила</span><strong id="remote-policy-version">—</strong></div></div><button class="button secondary" id="refresh-remote-policy">Обновить правила</button><div class="policy-note" id="remote-policy-note">Правила автоматически проверяются раз в минуту. Редактор правил меняет расчёты без перезапуска, но не может отключить защиту или расширить технические лимиты.</div></article>
+        </div>
+        <article class="card"><div class="card-head"><div><span class="section-label">ИСТОРИЯ</span><h3>Последние изменения правил</h3></div><button class="button secondary" id="rollback-policy">Откатить последнее</button></div><div id="policy-history" class="policy-history"></div></article>
+      </section>
+
+      <section class="page" data-page-panel="inventory">
+        <div class="section-intro"><div><span class="section-label">ОСТАТКИ И ПОСТАВКИ</span><h2>Запасы, дефициты и окна приёмки</h2><p>Контроль дней запаса и темпа продаж. Агент заранее показывает риск дефицита или избыточного запаса.</p></div></div>
+        <div class="content-grid two-thirds">
+          <article class="card"><div class="card-head"><div><span class="section-label">ДНИ ЗАПАСА</span><h3>Покрытие продаж остатками</h3></div><span class="muted" id="inventory-updated">—</span></div><div id="inventory-grid" class="inventory-grid"></div></article>
+          <article class="card"><div class="card-head"><div><span class="section-label">ПРИЁМКА</span><h3>Доступные окна</h3></div></div><div id="acceptance-list" class="signal-stack"></div></article>
+        </div>
+      </section>
+
+      <section class="page" data-page-panel="search">
+        <div class="section-intro"><div><span class="section-label">ПОИСК И КАРТОЧКИ</span><h2>Видимость товара и здоровье контента</h2><p>Позиции по запросам, ошибки карточек, блокировки и ценовой карантин.</p></div></div>
+        <div class="content-grid half">
+          <article class="card"><div class="card-head"><div><span class="section-label">ПОЗИЦИИ</span><h3>Поисковая видимость</h3></div><span class="muted" id="search-updated">—</span></div><div class="table-wrap"><table class="data-table"><thead><tr><th>nmID</th><th>Запрос</th><th>Позиция</th><th>Оценка</th></tr></thead><tbody id="search-table"></tbody></table></div></article>
+          <article class="card"><div class="card-head"><div><span class="section-label">КАРТОЧКИ</span><h3>Проблемы контента</h3></div></div><div id="cards-signals" class="signal-stack"></div></article>
+        </div>
+      </section>
+
+      <section class="page" data-page-panel="finance">
+        <div class="section-intro"><div><span class="section-label">ФИНАНСЫ</span><h2>Деньги, удержания и скрытые расходы</h2><p>Баланс, отчёт реализации, платное хранение, штрафы и удержания.</p></div></div>
+        <div class="metric-grid four">
+          <article class="metric-card"><span class="metric-icon green">₽</span><div><span>К выводу</span><strong id="finance-withdraw">—</strong><small>по последнему балансу</small></div></article>
+          <article class="metric-card"><span class="metric-icon blue">→</span><div><span>В пути</span><strong id="finance-transit">—</strong><small>ожидаемые выплаты</small></div></article>
+          <article class="metric-card"><span class="metric-icon warning">!</span><div><span>Удержания</span><strong id="finance-deductions">—</strong><small>по доступным данным</small></div></article>
+          <article class="metric-card"><span class="metric-icon purple">□</span><div><span>Хранение</span><strong id="finance-storage">—</strong><small>платное хранение</small></div></article>
+        </div>
+        <article class="card"><div class="card-head"><div><span class="section-label">ФИНАНСОВЫЕ СИГНАЛЫ</span><h3>Что проверяет Cost Guard</h3></div></div><div id="finance-signals" class="signal-stack"></div></article>
+      </section>
+
+      <section class="page" data-page-panel="customers">
+        <div class="section-intro"><div><span class="section-label">КЛИЕНТЫ И КАЧЕСТВО</span><h2>Отзывы, вопросы, возвраты и чаты</h2><p>Агент отслеживает накопление обращений и повторяющиеся проблемы товара.</p></div></div>
+        <div class="metric-grid four">
+          <article class="metric-card"><span class="metric-icon green">★</span><div><span>Рейтинг</span><strong id="customer-rating">—</strong><small>продавца</small></div></article>
+          <article class="metric-card"><span class="metric-icon warning">Q</span><div><span>Новые обращения</span><strong id="customer-flags">—</strong><small>отзывы / вопросы</small></div></article>
+          <article class="metric-card"><span class="metric-icon danger">↩</span><div><span>Возвраты</span><strong id="customer-returns">—</strong><small>открытые заявки</small></div></article>
+          <article class="metric-card"><span class="metric-icon blue">✉</span><div><span>Чаты</span><strong id="customer-chats">—</strong><small>события последнего чтения</small></div></article>
+        </div>
+        <article class="card"><div class="card-head"><div><span class="section-label">СИГНАЛЫ КАЧЕСТВА</span><h3>Что требует реакции человека</h3></div></div><div id="customer-signals" class="signal-stack"></div></article>
+      </section>
+
+      <section class="page" data-page-panel="connections">
+        <div class="section-intro"><div><span class="section-label">ИНТЕГРАЦИИ</span><h2>Подключения и доверие к данным</h2><p>Токены не показываются в интерфейсе. Здесь видно только наличие доступа, свежесть источника и его роль.</p></div><span class="pill safe">СЕКРЕТЫ ХРАНЯТСЯ ЛОКАЛЬНО</span></div>
+        <div class="connection-hero">
+          <article class="connection-card" id="wb-connection-card"><div class="connection-logo">WB</div><div><span class="section-label">ДАННЫЕ WILDBERRIES</span><h3>API продавца WB</h3><p id="wb-connection-note">Проверяю…</p></div><span class="status-tag" id="wb-connection-status">—</span></article>
+          <article class="connection-card" id="sheets-connection-card"><div class="connection-logo sheets">GS</div><div><span class="section-label">ТАБЛИЦЫ GOOGLE</span><h3>Автоисточники</h3><p id="sheets-connection-note">Проверяю…</p></div><span class="status-tag" id="sheets-connection-status">—</span></article>
+          <article class="connection-card" id="update-connection-card"><div class="connection-logo">↻</div><div><span class="section-label">САМООБНОВЛЕНИЕ</span><h3 id="update-version">Версия —</h3><p id="update-connection-note">Проверяю…</p></div><span class="status-tag" id="update-connection-status">—</span></article>
+        </div>
+        <article class="card"><div class="card-head"><div><span class="section-label">ИСТОЧНИКИ</span><h3>Какие таблицы используются</h3></div><button class="button secondary" id="refresh-sheets">Обновить таблицы</button></div><div class="table-wrap"><table class="data-table"><thead><tr><th>Источник</th><th>Роль</th><th>Свежесть / доверие</th><th>Используется для</th></tr></thead><tbody id="sources-table"></tbody></table></div></article>
+        <article class="card"><div class="card-head"><div><span class="section-label">АВТОПОДКЛЮЧЕНИЕ</span><h3>Ссылки и идентификаторы вводить больше не нужно</h3></div></div><div class="setup-steps"><div><b>1</b><span>Запускаешь <code>START_WB_AI_MANAGER.command</code> → «АВТО». Агент уже знает канонические таблицы и сам открывает экспорт только для чтения через текущую Google-сессию.</span></div><div><b>2</b><span>Приватные Google/WB данные требуют одноразовой авторизации. После неё ссылки, идентификаторы и вкладки определяются автоматически.</span></div></div></article>
+      </section>
+
+      <section class="page" data-page-panel="knowledge">
+        <div class="section-intro"><div><span class="section-label">БАЗА ЗНАНИЙ</span><h2>Почему агент делает именно такой вывод</h2><p>WB AI Manager не должен опираться на «память модели». Решения проходят через иерархию источников и версионируемые правила.</p></div><span class="pill neutral" id="policy-version">ПРАВИЛА</span></div>
+        <div class="knowledge-grid">
+          <article class="knowledge-card top"><b>01</b><span class="knowledge-type">ЖИВЫЕ ДАННЫЕ</span><h3>Wildberries сейчас</h3><p>Реклама, заказы, цены, позиции, остатки, финансы, карточки и обращения читаются из API продавца WB конкретного магазина.</p><small>Самый высокий приоритет</small></article>
+          <article class="knowledge-card"><b>02</b><span class="knowledge-type">HISTORY</span><h3>История магазина</h3><p>Снимки показателей, прошлые инциденты, изменения и результаты экспериментов формируют собственный baseline магазина.</p><small>Приоритет выше универсальных бенчмарков</small></article>
+          <article class="knowledge-card"><b>03</b><span class="knowledge-type">ОФИЦИАЛЬНО</span><h3>Спецификации WB</h3><p>Единицы ставок, статусы кампаний, лимиты API и доступные операции должны сверяться с актуальными спецификациями.</p><small>Версионируемый источник</small></article>
+          <article class="knowledge-card"><b>04</b><span class="knowledge-type">ПРАВИЛА</span><h3>Правила бизнеса</h3><p>Целевой ДРР, экономика товара, дни запаса, минимальная выборка и допустимые сценарии задаются отдельными policies.</p><small>Настраивается под продавца</small></article>
+          <article class="knowledge-card"><b>05</b><span class="knowledge-type">HEURISTICS</span><h3>Эвристики</h3><p>Общие ориентиры CTR/CR/ДРР используются только как подсказки и сигналы, но не как основание для денежного действия.</p><small>Самый низкий приоритет</small></article>
+        </div>
+        <div class="content-grid half">
+          <article class="card"><div class="card-head"><div><span class="section-label">РЕКЛАМНАЯ ЛОГИКА</span><h3>Цепочка принятия решения</h3></div></div><div class="pipeline">
+            <div><i>1</i><strong>Собрать факты</strong><span>Расход, заказы, ДРР, CTR, CPC, позиции, остатки, цена.</span></div>
+            <div><i>2</i><strong>Проверить достаточность</strong><span>Не делать вывод на слишком малой выборке или сразу после изменения.</span></div>
+            <div><i>3</i><strong>Диагностировать причину</strong><span>Сначала цена/CR/остатки/позиции, только потом рекламная ставка.</span></div>
+            <div><i>4</i><strong>Сформировать рекомендацию</strong><span>Рекомендация содержит измеренные факты и источник.</span></div>
+            <div><i>5</i><strong>Защитный контур</strong><span>В этой сборке любое изменение WB физически заблокировано.</span></div>
+          </div></article>
+          <article class="card"><div class="card-head"><div><span class="section-label">ДОВЕРИЕ</span><h3>Что агент не имеет права делать</h3></div></div><div class="trust-list">
+            <div><span class="status-icon success">✓</span><p><strong>Не выдумывать метрики</strong><small>Нет данных — показывает «нет данных», а не оценивает из головы.</small></p></div>
+            <div><span class="status-icon success">✓</span><p><strong>Не менять ставку по одному ДРР</strong><small>Проверяет остальные факторы до рекламного вывода.</small></p></div>
+            <div><span class="status-icon success">✓</span><p><strong>Не путать единицы API</strong><small>Рубли и копейки преобразуются только в модуле связи с WB.</small></p></div>
+            <div><span class="status-icon success">✓</span><p><strong>Не выполнять изменяющие запросы</strong><small>Жёсткий режим только чтения включён независимо от остальных настроек.</small></p></div>
+          </div></article>
+        </div>
+      </section>
+
+      <section class="page" data-page-panel="agents">
+        <div class="section-intro"><div><span class="section-label">АГЕНТЫ</span><h2>19 специализированных наблюдателей</h2><p>Каждый агент имеет свою зону ответственности и расписание. В этом режиме они только читают данные и формируют сигналы.</p></div><span class="pill safe">19 MODULES</span></div>
+        <div id="agents-grid" class="agents-grid"></div>
+        <article class="card"><div class="card-head"><div><span class="section-label">ЖУРНАЛ</span><h3>Последние запуски</h3></div></div><div class="table-wrap"><table class="data-table"><thead><tr><th>Агент</th><th>Статус</th><th>Последний запуск</th><th>Интервал</th></tr></thead><tbody id="agents-table"></tbody></table></div></article>
+      </section>
+
+      <footer class="footer">
+        <span>WB AI Manager · локальный защищённый контур</span>
+        <span>Данные остаются на этом компьютере, кроме обращений к интерфейсам Wildberries.</span>
+      </footer>
+    </main>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="/assets/dashboard.js"></script>
+</body>
+</html>

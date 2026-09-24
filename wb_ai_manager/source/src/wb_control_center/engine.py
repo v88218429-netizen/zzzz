@@ -1,0 +1,317 @@
+from __future__ import annotations
+
+import asyncio
+import logging
+from datetime import datetime, timezone
+from typing import Any
+
+from .agents import AGENT_CLASSES
+from .agents.base import AgentContext
+from .config import Settings, load_policy
+from .db import Database
+from .decision_engine import DecisionEngine
+from .portfolio import PortfolioService
+from .llm import LLMClient
+from .mcp_client import WBMCPClient
+from .demo_wb import DemoWBClient
+from .models import ActionProposal, Event
+from .notifier import TelegramNotifier
+from .policy import PolicyEngine
+from .runtime_policy import RuntimePolicyStore
+from .remote_policy import RemotePolicyClient
+from .operating_model import OperatingModel
+from .decision_review import DecisionReviewBoard
+from .change_tracker import ChangeTracker
+from .outcome_evaluator import OutcomeEvaluator
+from .investigation import InvestigationEngine
+from .model_validation import DemandModelValidator
+
+log = logging.getLogger(__name__)
+
+
+class ControlCenter:
+    def __init__(self, settings: Settings):
+        self.settings = settings
+        self.policy = load_policy()
+        self.db = Database(settings.data_path / "control_center.sqlite3")
+        self.remote_policy = RemotePolicyClient(settings.remote_policy_url, settings.data_path / "remote_policy_cache.json", settings.remote_policy_refresh_seconds)
+        self.runtime_policy = RuntimePolicyStore(self.db, self.policy, self.remote_policy)
+        self.wb = DemoWBClient() if settings.wb_mode.lower() == "demo" else WBMCPClient(settings.wb_api_token, str(settings.data_path / "wb_mcp"), settings.wb_shop_id)
+        self.llm = LLMClient(settings)
+        self.notifier = TelegramNotifier(settings)
+        self.policy_engine = PolicyEngine(settings, self.policy)
+        self.portfolio = PortfolioService(settings)
+        self.decision_engine = DecisionEngine(self.policy)
+        self.operating_model = OperatingModel()
+        self.review_board = DecisionReviewBoard(self.policy)
+        self.change_tracker = ChangeTracker(self.db)
+        self.outcome_evaluator = OutcomeEvaluator(self.db)
+        self.investigation_engine = InvestigationEngine()
+        self.demand_validator = DemandModelValidator()
+        self.ctx = AgentContext(settings=settings, policy=self.policy, db=self.db, wb=self.wb, llm=self.llm)
+        self.agents = {name: cls(self.ctx) for name, cls in AGENT_CLASSES.items()}
+        self.scheduler = None
+        self._telegram_task: asyncio.Task | None = None
+        self._started = False
+        self._agent_locks = {name: asyncio.Lock() for name in self.agents}
+
+    async def start(self) -> None:
+        if self._started:
+            return
+        try:
+            await self.wb.start()
+        except Exception as exc:
+            # Degraded read-only mode: Sheets/public-web/Decision Engine continue even
+            # when Seller API is not connected yet. Individual WB agents will report
+            # their own source errors instead of killing the whole control center.
+            log.warning("WB Seller API unavailable; continuing in degraded read-only mode: %s", exc)
+        try:
+            from apscheduler.schedulers.asyncio import AsyncIOScheduler
+            scheduler_cls = AsyncIOScheduler
+        except ImportError:
+            from .simple_scheduler import SimpleAsyncScheduler
+            scheduler_cls = SimpleAsyncScheduler
+        self.scheduler = scheduler_cls(timezone=self.settings.app_timezone)
+        self._install_jobs()
+        self.scheduler.start()
+        if self.notifier.enabled:
+            self._telegram_task = asyncio.create_task(
+                self.notifier.poll_commands(self.approve_action_text, self.reject_action_text, self.status_text)
+            )
+        self._started = True
+
+    async def stop(self) -> None:
+        if self.scheduler is not None and self.scheduler.running:
+            self.scheduler.shutdown(wait=False)
+        if self._telegram_task:
+            self.notifier.stop()
+            self._telegram_task.cancel()
+            try:
+                await self._telegram_task
+            except BaseException:
+                pass
+        await self.wb.close()
+        self._started = False
+
+    def _install_jobs(self) -> None:
+        assert self.scheduler is not None
+        for name, minutes in self.policy.schedules.items():
+            if name not in self.agents:
+                continue
+            self.scheduler.add_job(
+                self.run_agent,
+                "interval",
+                minutes=int(minutes),
+                id=f"agent:{name}",
+                args=[name],
+                max_instances=1,
+                coalesce=True,
+                misfire_grace_time=max(60, int(minutes) * 60),
+            )
+        # Daily executive-style supervisor digest in the morning and evening.
+        self.scheduler.add_job(self.run_agent, "cron", hour=9, minute=5, id="supervisor:morning", args=["supervisor"], max_instances=1)
+        self.scheduler.add_job(self.run_agent, "cron", hour=19, minute=5, id="supervisor:evening", args=["supervisor"], max_instances=1)
+
+    async def run_agent(self, name: str) -> dict[str, Any]:
+        if name not in self.agents:
+            raise KeyError(name)
+        lock = self._agent_locks[name]
+        if lock.locked():
+            return {"agent": name, "status": "skipped", "reason": "already running"}
+        async with lock:
+            started = datetime.now(timezone.utc).isoformat()
+            run_id = self.db.start_run(name, started)
+            try:
+                result = await self.agents[name].run()
+                # Save snapshots before events so later agents can compare immediately.
+                for key, data in result.snapshots:
+                    self.db.save_snapshot(name, key, data, datetime.now(timezone.utc).isoformat())
+                event_ids = []
+                for event in result.events:
+                    if event.fingerprint and self.db.event_seen_recently(event.fingerprint, hours=6):
+                        continue
+                    event_ids.append(self.db.save_event(event))
+                    if event.severity in {"warning", "critical"} or name == "supervisor":
+                        try:
+                            await self.notifier.send_event(event)
+                        except Exception as e:
+                            log.warning("notification failed: %s", e)
+                action_ids = []
+                for proposal in result.actions:
+                    ok, why = self.policy_engine.validate_action(proposal)
+                    if not ok:
+                        blocked = Event(
+                            agent=name,
+                            severity="warning",
+                            key=f"blocked_action:{proposal.tool}",
+                            title="Действие заблокировано safety-policy",
+                            message=f"{proposal.tool}: {why}. Причина предложения: {proposal.reason}",
+                            payload={"arguments": proposal.arguments},
+                        )
+                        self.db.save_event(blocked)
+                        continue
+                    action_id = self.db.create_action(proposal)
+                    action_ids.append(action_id)
+                    if self.policy_engine.can_auto_execute(proposal):
+                        await self.execute_action(action_id, approved_by="policy")
+                    else:
+                        try:
+                            await self.notifier.send_action(action_id, proposal.tool, proposal.reason, proposal.risk)
+                        except Exception as e:
+                            log.warning("action notification failed: %s", e)
+                self.db.finish_run(run_id, "ok", datetime.now(timezone.utc).isoformat())
+                try:
+                    self.refresh_decisions()
+                except Exception as exc:
+                    log.warning("decision refresh after %s failed: %s", name, exc)
+                return {"agent": name, "status": "ok", "events": event_ids, "actions": action_ids, "snapshots": len(result.snapshots)}
+            except Exception as e:
+                log.exception("agent %s failed", name)
+                self.db.finish_run(run_id, "error", datetime.now(timezone.utc).isoformat(), str(e))
+                ev = Event(
+                    agent=name,
+                    severity="warning",
+                    key="agent_failed",
+                    title=f"Агент {name} завершился с ошибкой",
+                    message=str(e),
+                    payload={},
+                )
+                self.db.save_event(ev)
+                try:
+                    await self.notifier.send_event(ev)
+                except Exception:
+                    pass
+                return {"agent": name, "status": "error", "error": str(e)}
+
+    async def run_all_once(self) -> list[dict[str, Any]]:
+        # Run health first, supervisor last. Others sequentially to be kind to WB rate limits.
+        order = [
+            "api_health", "cards", "advertising_monitor", "advertising_optimizer",
+            "inventory", "supply", "funnel", "search_positions", "price_margin",
+            "finance", "cost_guard", "reviews_questions", "buyer_chats", "orders_fbs", "returns_quality",
+            "documents", "competitors", "experiments", "supervisor",
+        ]
+        results = []
+        for name in order:
+            results.append(await self.run_agent(name))
+            await asyncio.sleep(0.5)
+        decisions=self.refresh_decisions()
+        results.append({"system":"decision_engine","status":"ok","decisions":len(decisions)})
+        return results
+
+    def refresh_decisions(self) -> list[dict[str, Any]]:
+        snap = self.portfolio.snapshot()
+        # Cross-contour evidence graph: every detector can contribute facts, while
+        # only DecisionEngine is allowed to formulate the final recommendation.
+        ss: dict[str, Any] = {}
+        for source in self.agents:
+            keys = self.db.snapshot_keys(source)
+            if not keys:
+                continue
+            ss[source] = {}
+            for key in keys:
+                item = self.db.latest_snapshot(source, key)
+                if item:
+                    ss[source][key] = item
+        ss["_events"] = self.db.recent_events(hours=48, limit=500)
+        ss["_operating_findings"] = [x.to_dict() for x in self.operating_model.build(snap)]
+        cards = self.decision_engine.build(snap, ss)
+        cards, reviews = self.review_board.review(cards, snap, ss)
+        self.db.replace_decisions(cards)
+        baseline_by_key: dict[str, dict[str, Any]] = {}
+        for c in cards:
+            metrics: dict[str, Any] = {}
+            for e in c.evidence:
+                if isinstance(e, dict) and e.get("metric") is not None:
+                    metrics[str(e.get("metric"))] = e.get("value")
+            baseline_by_key[c.decision_key] = metrics
+        self.db.sync_decision_history(cards, baseline_by_key)
+        changes = self.change_tracker.sync(ss)
+        evaluations = self.outcome_evaluator.evaluate_due(cards)
+        investigations = self.investigation_engine.build(cards)
+        validation = self.demand_validator.validate(snap)
+        now = datetime.now(timezone.utc).isoformat()
+        self.db.save_snapshot("decision_review", "latest", {
+            "reviews": [x.to_dict() for x in reviews],
+            "investigations": [x.to_dict() for x in investigations],
+            "observed_changes": changes,
+            "evaluations_completed": evaluations,
+        }, now)
+        self.db.save_snapshot("model_validation", "demand", validation, now)
+        return self.db.current_decisions()
+
+    async def execute_action(self, action_id: int, approved_by: str = "user") -> dict[str, Any]:
+        action = self.db.get_action(action_id)
+        if not action:
+            raise KeyError(f"action {action_id} not found")
+        if action["status"] not in {"pending", "approved"}:
+            return {"id": action_id, "status": action["status"]}
+        proposal = ActionProposal(
+            agent=action["agent"],
+            tool=action["tool"],
+            arguments=action["arguments"],
+            reason=action["reason"],
+            risk=action["risk"],
+            status=action["status"],
+            id=action_id,
+            created_at=action["created_at"],
+        )
+        ok, why = self.policy_engine.validate_action(proposal)
+        if not ok:
+            self.db.update_action(action_id, "blocked", error=why)
+            return {"id": action_id, "status": "blocked", "reason": why}
+        allowed, why_exec = self.policy_engine.execution_allowed()
+        if not allowed:
+            self.db.update_action(action_id, "simulated", result={"reason": why_exec, "tool": proposal.tool, "arguments": proposal.arguments})
+            ev = Event(
+                agent=proposal.agent,
+                severity="info",
+                key=f"action_simulated:{action_id}",
+                title=f"Действие #{action_id} симулировано",
+                message=f"{proposal.tool}. {why_exec}. {proposal.reason}",
+                payload={"tool": proposal.tool, "arguments": proposal.arguments},
+            )
+            self.db.save_event(ev)
+            return {"id": action_id, "status": "simulated", "reason": why_exec}
+        self.db.update_action(action_id, "approved")
+        try:
+            args = {k: v for k, v in proposal.arguments.items() if not k.startswith("_")}
+            result = await self.wb.call(proposal.tool, args)
+            self.db.update_action(action_id, "executed", result=result)
+            ev = Event(
+                agent=proposal.agent,
+                severity="info",
+                key=f"action_executed:{action_id}",
+                title=f"Действие #{action_id} выполнено",
+                message=f"{proposal.tool}. Подтверждение: {approved_by}. {proposal.reason}",
+                payload={"tool": proposal.tool, "arguments": args, "result": result},
+            )
+            self.db.save_event(ev)
+            return {"id": action_id, "status": "executed", "result": result}
+        except Exception as e:
+            self.db.update_action(action_id, "error", error=str(e))
+            return {"id": action_id, "status": "error", "error": str(e)}
+
+    async def reject_action(self, action_id: int) -> dict[str, Any]:
+        action = self.db.get_action(action_id)
+        if not action:
+            raise KeyError(action_id)
+        if action["status"] != "pending":
+            return {"id": action_id, "status": action["status"]}
+        self.db.update_action(action_id, "rejected")
+        return {"id": action_id, "status": "rejected"}
+
+    async def approve_action_text(self, action_id: int) -> str:
+        r = await self.execute_action(action_id, approved_by="telegram")
+        return f"Действие #{action_id}: {r.get('status')}" + (f"\n{r.get('error')}" if r.get("error") else "")
+
+    async def reject_action_text(self, action_id: int) -> str:
+        r = await self.reject_action(action_id)
+        return f"Действие #{action_id}: {r.get('status')}"
+
+    async def status_text(self) -> str:
+        pending = self.db.pending_actions(limit=100)
+        events = self.db.recent_events(hours=24, limit=200)
+        critical = sum(1 for e in events if e.get("severity") == "critical")
+        warning = sum(1 for e in events if e.get("severity") == "warning")
+        return f"WB AI Control Center\nКритические события 24ч: {critical}\nПредупреждения 24ч: {warning}\nОжидают подтверждения: {len(pending)}"
