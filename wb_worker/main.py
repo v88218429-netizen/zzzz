@@ -89,4 +89,17 @@ async def finance_export(request: Request):
     )
 
 
+@app.get("/api/finance/reports.csv")
+async def finance_reports_export(request: Request):
+    authorize(request)
+    path = FINANCE_DIR / "reports_all.csv"
+    if not path.exists():
+        raise HTTPException(status_code=503, detail="Initial finance sync is still running")
+    return FileResponse(
+        path,
+        media_type="text/csv; charset=utf-8",
+        filename="wb_finance_reports.csv",
+    )
+
+
 app.mount("/", wb_app)
