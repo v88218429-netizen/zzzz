@@ -1,0 +1,9 @@
+{
+  "version": "0.2.0",
+  "ref": "17b9b7f2ffad324f95ae29d0bca4d1775c860dc8",
+  "files": [
+    "edge_agent_windows.py",
+    "run_edge_windows.ps1",
+    "edge_updater_windows.ps1"
+  ]
+}
