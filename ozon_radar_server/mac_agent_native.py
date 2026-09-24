@@ -80,7 +80,7 @@ def get_position(query: str, sku: str, max_position: int = 100) -> dict:
 
     def collect_visible() -> dict | None:
         raw = js(
-            "JSON.stringify(Array.from(document.querySelectorAll('a[href*=\\"/product/\\"]')).map(a=>a.href||a.getAttribute('href')||''))"
+            """JSON.stringify(Array.from(document.querySelectorAll('a[href*="/product/"]')).map(a=>a.href||a.getAttribute('href')||''))"""
         )
         try:
             hrefs = json.loads(raw)
@@ -88,7 +88,7 @@ def get_position(query: str, sku: str, max_position: int = 100) -> dict:
             hrefs = []
 
         for href in hrefs:
-            m = re.search(r"-(\\d{6,})(?:/|\\?|$)", str(href))
+            m = re.search(r"-(\d{6,})(?:/|\?|$)", str(href))
             if not m:
                 continue
             val = m.group(1)
