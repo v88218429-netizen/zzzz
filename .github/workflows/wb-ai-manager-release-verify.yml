@@ -20,6 +20,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
       - name: Install
         shell: bash
         run: |
@@ -28,23 +29,28 @@ jobs:
           test "$(cat VERSION)" = "1.1.4"
           python -m pip install --upgrade pip
           python -m pip install -e .
-          python -m pip install pytest
+          python -m pip install pytest pytest-asyncio
+
       - name: Clean run 1
         shell: bash
         run: |
           set -euo pipefail
+          rm -rf "$RUNNER_TEMP/wb-ai-run1"
           cp -a wb_ai_manager/source "$RUNNER_TEMP/wb-ai-run1"
           cd "$RUNNER_TEMP/wb-ai-run1"
           python -m compileall -q src scripts
           pytest -q
+
       - name: Clean run 2
         shell: bash
         run: |
           set -euo pipefail
+          rm -rf "$RUNNER_TEMP/wb-ai-run2"
           cp -a wb_ai_manager/source "$RUNNER_TEMP/wb-ai-run2"
           cd "$RUNNER_TEMP/wb-ai-run2"
           python -m compileall -q src scripts
           pytest -q
+
       - name: Agent surface
         shell: bash
         run: |
@@ -55,6 +61,7 @@ jobs:
           assert len(AGENT_CLASSES) == 19, sorted(AGENT_CLASSES)
           print("agents=19")
           PY
+
       - name: Build final archive
         shell: bash
         run: |
@@ -62,6 +69,7 @@ jobs:
           cd wb_ai_manager/source
           zip -qr "$RUNNER_TEMP/WB_AI_Manager_v1.1.4_CANONICAL.zip" . -x ".venv/*" "__pycache__/*" "*.pyc" ".pytest_cache/*"
           sha256sum "$RUNNER_TEMP/WB_AI_Manager_v1.1.4_CANONICAL.zip" > "$RUNNER_TEMP/WB_AI_Manager_v1.1.4_CANONICAL.zip.sha256"
+
       - uses: actions/upload-artifact@v4
         with:
           name: WB_AI_Manager_v1.1.4_CANONICAL
