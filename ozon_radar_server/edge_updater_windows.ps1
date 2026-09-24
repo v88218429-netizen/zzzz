@@ -1,6 +1,7 @@
 param(
   [string]$Base = "$env:ProgramData\OzonEdge",
-  [string]$ManifestUrl = "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/ozon_radar_server/edge_release_windows.json"
+  [string]$ManifestUrl = "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/ozon_radar_server/edge_release_windows.json",
+  [switch]$ValidateOnly
 )
 
 $ErrorActionPreference = "Stop"
@@ -42,6 +43,12 @@ try {
   foreach ($psName in @("run_edge_windows.ps1","edge_updater_windows.ps1")) {
     $p = Join-Path $Stage $psName
     if (Test-Path $p) { [void][scriptblock]::Create((Get-Content $p -Raw)) }
+  }
+
+  if ($ValidateOnly) {
+    Log "Validated release $($manifest.version) ref $($manifest.ref)"
+    Write-Host "VALIDATION_OK version=$($manifest.version) ref=$($manifest.ref)"
+    exit 0
   }
 
   Remove-Item $Backup -Recurse -Force -ErrorAction SilentlyContinue
