@@ -43,6 +43,13 @@ PY
 }
 
 mkdir -p "$TS_DIR" /var/run/tailscale /tmp
+
+if [ "${OZON_BROWSER_HEADFUL:-0}" = "1" ]; then
+  export DISPLAY="${DISPLAY:-:99}"
+  mkdir -p /tmp/.X11-unix
+  Xvfb "$DISPLAY" -screen 0 1920x1080x24 -nolisten tcp >/tmp/xvfb.log 2>&1 &
+  log "BROWSER: Xvfb started on $DISPLAY"
+fi
 log "TAILSCALE: starting userspace networking with persistent state at $TS_STATE"
 tailscaled \
   --tun=userspace-networking \
