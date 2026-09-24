@@ -48,15 +48,37 @@ jobs:
           print(f"extracted={len(list(dst.rglob('*')))}")
           PY
 
+      - name: Validate canonical source completeness
+        shell: bash
+        run: |
+          set -euo pipefail
+          REQUIRED=(
+            wb_ai_manager/source/src/wb_control_center/config.py
+            wb_ai_manager/source/src/wb_control_center/models.py
+            wb_ai_manager/source/src/wb_control_center/mcp_client.py
+            wb_ai_manager/source/src/wb_control_center/policy.py
+            wb_ai_manager/source/src/wb_control_center/agents/__init__.py
+            wb_ai_manager/source/src/wb_control_center/agents/base.py
+            wb_ai_manager/source/src/wb_control_center/source_discovery.py
+            wb_ai_manager/source/src/wb_control_center/auto_sheets.py
+          )
+          for f in "${REQUIRED[@]}"; do
+            test -f "$f" || { echo "MISSING_REQUIRED_SOURCE: $f"; exit 3; }
+          done
+          echo "Required canonical modules are present."
+
       - name: Commit canonical extracted source
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "wb-ai-manager-bot"
           git config user.email "wb-ai-manager-bot@users.noreply.github.com"
-          git add wb_ai_manager/source
+          # The release bundle contains runtime modules whose names may match
+          # broad ignore rules elsewhere in the monorepo. Canonical source must
+          # be materialized byte-for-byte, not only the non-ignored subset.
+          git add -f wb_ai_manager/source
           if ! git diff --cached --quiet; then
-            git commit -m "wb-ai-manager: materialize v1.1 source for EA integration"
+            git commit -m "wb-ai-manager: materialize complete v1.1 source"
             git push
           fi
 
