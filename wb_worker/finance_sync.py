@@ -197,6 +197,23 @@ def _write_csv(path: Path, columns: list[str], rows: list[list[Any]]) -> None:
     tmp.replace(path)
 
 
+def _write_sheet_csv(path: Path, columns: list[str], rows: list[list[Any]]) -> None:
+    """CSV for Google Sheets with ru_RU-safe decimal separators."""
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    with tmp.open("w", encoding="utf-8-sig", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(columns)
+        for row in rows:
+            localized = []
+            for value in row:
+                if isinstance(value, float):
+                    localized.append(f"{value:.2f}".replace(".", ","))
+                else:
+                    localized.append(value)
+            writer.writerow(localized)
+    tmp.replace(path)
+
+
 def _write_combined_csv(all_rows: list[list[Any]]) -> None:
     _write_csv(DATA_DIR / "finance_all.csv", CSV_COLUMNS, all_rows)
 
@@ -288,7 +305,7 @@ async def sync_all() -> dict:
                 status["rows"] = total_detail_rows
                 status["chargeRows"] = len(charge_rows)
 
-                _write_csv(DATA_DIR / "charges_all.csv", CSV_COLUMNS, charge_rows)
+                _write_sheet_csv(DATA_DIR / "charges_all.csv", CSV_COLUMNS, charge_rows)
                 rebuild_finance_csv()
                 _write_json(DATA_DIR / "status.json", status)
                 print(
@@ -303,7 +320,7 @@ async def sync_all() -> dict:
         status["phase"] = "charges_ready"
         status["rows"] = total_detail_rows
         status["chargeRows"] = len(charge_rows)
-        _write_csv(DATA_DIR / "charges_all.csv", CSV_COLUMNS, charge_rows)
+        _write_sheet_csv(DATA_DIR / "charges_all.csv", CSV_COLUMNS, charge_rows)
         rebuild_finance_csv()
         _write_json(DATA_DIR / "status.json", status)
         print(
