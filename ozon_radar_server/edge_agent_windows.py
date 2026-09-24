@@ -12,7 +12,9 @@ def _json(url):
 def _target_ws():
     pages=[t for t in _json(CDP+"/json") if t.get("type")=="page"]
     if not pages: raise RuntimeError("No browser page target")
-    return pages[0]["webSocketDebuggerUrl"]
+    ozon=[t for t in pages if "ozon.ru" in str(t.get("url",""))]
+    target=(ozon or pages)[0]
+    return target["webSocketDebuggerUrl"]
 
 def _cmd(ws, method, params=None):
     global _seq; _seq+=1; mid=_seq
@@ -29,7 +31,7 @@ def _eval(ws, expression):
 
 def get_position(query, sku, max_position=100):
     target=str(sku); seen=[]; seen_set=set(); pages=max(1,min(10,(max_position+35)//36))
-    ws=websocket.create_connection(_target_ws(), timeout=60)
+    ws=websocket.create_connection(_target_ws(), timeout=60, suppress_origin=True)
     try:
         _cmd(ws,"Runtime.enable"); _cmd(ws,"Page.enable")
         def collect():
