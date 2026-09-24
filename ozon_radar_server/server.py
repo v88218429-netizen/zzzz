@@ -877,62 +877,14 @@ async def one_shot_validation_probe() -> None:
         "query": "лопата садовая",
         "sku": "5094364543",
         "checked_at": now_iso(),
+        "proxy": OZON_PROXY,
         "egress_marker": runtime_tailscale_exit_node() if "runtime_tailscale_exit_node" in globals() else "",
-        "matrix": {},
     }
-
-    candidates = [
-        ("direct_pproxy_auto_http", "http://127.0.0.1:18901"),
-        ("direct_pproxy_http", "http://127.0.0.1:18902"),
-        ("direct_pproxy_socks5", "socks5h://127.0.0.1:18903"),
-        ("direct_gost_http", "http://127.0.0.1:18904"),
-        ("direct_gost_socks5", "socks5h://127.0.0.1:18905"),
-        ("direct_gost_auto_http", "http://127.0.0.1:18906"),
-        ("serve_pproxy_auto_http", "http://127.0.0.1:18907"),
-        ("serve_pproxy_http", "http://127.0.0.1:18908"),
-        ("serve_pproxy_socks5", "socks5h://127.0.0.1:18909"),
-        ("serve_gost_http", "http://127.0.0.1:18910"),
-        ("serve_gost_socks5", "socks5h://127.0.0.1:18911"),
-        ("serve_gost_auto_http", "http://127.0.0.1:18912"),
-    ]
-
-    async def check_candidate(name: str, proxy_url: str) -> tuple[str, dict[str, Any]]:
-        out: dict[str, Any] = {"proxy": proxy_url}
-        proxy_map = {"http": proxy_url, "https": proxy_url}
-        for key, url, timeout_s in [
-            ("ipify", "https://api.ipify.org?format=json", 8),
-            ("https", "https://example.com/", 8),
-            ("ozon", "https://www.ozon.ru/", 12),
-        ]:
-            try:
-                started = time.perf_counter()
-                resp = await asyncio.to_thread(
-                    curl_requests.get,
-                    url,
-                    timeout=timeout_s,
-                    proxies=proxy_map,
-                    impersonate="chrome124",
-                    allow_redirects=False,
-                )
-                out[key] = {
-                    "ok": True,
-                    "status": int(resp.status_code),
-                    "ms": int((time.perf_counter() - started) * 1000),
-                    "body_prefix": resp.text[:160],
-                }
-            except Exception as exc:
-                out[key] = {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
-        out["usable"] = bool(out.get("ipify", {}).get("ok") and out.get("https", {}).get("ok"))
-        out["ozon_reachable"] = bool(out.get("ozon", {}).get("ok"))
-        return name, out
-
-    results = await asyncio.gather(*(check_candidate(name, proxy) for name, proxy in candidates))
-    for name, data in results:
-        payload["matrix"][name] = data
-
-    winners = [name for name, data in payload["matrix"].items() if data.get("ozon_reachable")]
-    payload["winners"] = winners
-    payload["best"] = winners[0] if winners else None
+    try:
+        result = await ozon_position(ozon, payload["query"], payload["sku"], 100)
+        payload.update({"ok": True, "result": result})
+    except Exception as exc:
+        payload.update({"ok": False, "error": f"{type(exc).__name__}: {exc}"})
     try:
         result_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     except Exception:
