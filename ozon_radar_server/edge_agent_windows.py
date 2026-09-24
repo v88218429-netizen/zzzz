@@ -5,6 +5,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 import websocket
 
 HOST="0.0.0.0"; PORT=8900; CDP="http://127.0.0.1:9222"; _seq=0
+VERSION="win-edge-0.2.0"
 
 def _json(url):
     with urllib.request.urlopen(url, timeout=10) as r: return json.load(r)
@@ -63,7 +64,16 @@ def get_position(query, sku, max_position=100):
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         p=urllib.parse.urlsplit(self.path)
-        if p.path=="/health": self._send({"ok":True,"service":"ozon-edge-windows-agent"}); return
+        if p.path=="/health": self._send({"ok":True,"service":"ozon-edge-windows-agent","version":VERSION}); return
+        if p.path=="/version": self._send({"ok":True,"version":VERSION}); return
+        if p.path=="/diagnostics":
+            try:
+                targets=_json(CDP+"/json")
+                pages=[t for t in targets if t.get("type")=="page"]
+                self._send({"ok":True,"version":VERSION,"cdp":True,"pages":len(pages),"ozon_pages":sum(1 for t in pages if "ozon.ru" in str(t.get("url","")))})
+            except Exception as e:
+                self._send({"ok":False,"version":VERSION,"cdp":False,"error":f"{type(e).__name__}: {e}"},500)
+            return
         if p.path!="/position": self._send({"ok":False,"error":"not found"},404); return
         q=urllib.parse.parse_qs(p.query); query=(q.get('query') or [''])[0]; sku=(q.get('sku') or [''])[0]
         try: maxp=int((q.get('max_position') or ['100'])[0])
