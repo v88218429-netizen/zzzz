@@ -305,64 +305,96 @@ class OzonClient:
         await self._reset_browser()
 
         self._playwright = await async_playwright().start()
-        launch_kwargs: dict[str, Any] = {
-            "headless": True,
-            "args": [
-                "--disable-blink-features=AutomationControlled",
-                "--no-sandbox",
-                "--disable-setuid-sandbox",
-                "--disable-dev-shm-usage",
-                "--disable-gpu",
-                "--mute-audio",
-                "--no-first-run",
-                "--no-default-browser-check",
-                "--disable-extensions",
-                "--disable-background-networking",
-                "--lang=ru-RU",
-            ],
-        }
-        # Playwright's chromium channel opts into the full Chromium/new-headless
-        # path instead of the lightweight headless shell that Variti often detects.
-        try:
-            self._browser = await self._playwright.chromium.launch(channel="chromium", **launch_kwargs)
-        except Exception:
-            self._browser = await self._playwright.chromium.launch(**launch_kwargs)
+        profile_dir = os.getenv(
+            "OZON_BROWSER_PROFILE_DIR",
+            "/var/lib/tailscale/ozon-chromium-profile",
+        )
+        Path(profile_dir).mkdir(parents=True, exist_ok=True)
+        headful = os.getenv("OZON_BROWSER_HEADFUL", "0").strip().lower() in ("1", "true", "yes", "on")
 
-        context_kwargs: dict[str, Any] = {
-            "locale": "ru-RU",
-            "timezone_id": "Europe/Moscow",
-            "viewport": {"width": 1920, "height": 1080},
-            "user_agent": (
-                "Mozilla/5.0 (X11; Linux x86_64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/120.0.0.0 Safari/537.36"
-            ),
-        }
+        proxy_cfg = None
         if OZON_PROXY:
             parsed = urllib.parse.urlsplit(OZON_PROXY)
             if parsed.hostname:
-                context_kwargs["proxy"] = {
+                proxy_cfg = {
                     "server": f"{parsed.scheme or 'http'}://{parsed.hostname}:{parsed.port or 80}",
                     **({"username": urllib.parse.unquote(parsed.username)} if parsed.username else {}),
                     **({"password": urllib.parse.unquote(parsed.password)} if parsed.password else {}),
                 }
 
-        self._context = await self._browser.new_context(**context_kwargs)
-        self._page = await self._context.new_page()
+        launch_kwargs: dict[str, Any] = {
+            "headless": not headful,
+            "locale": "ru-RU",
+            "timezone_id": "Europe/Moscow",
+            "viewport": {"width": 1920, "height": 1080},
+            "args": [
+                "--no-sandbox",
+                "--disable-setuid-sandbox",
+                "--disable-dev-shm-usage",
+                "--no-first-run",
+                "--no-default-browser-check",
+                "--lang=ru-RU",
+                "--window-size=1920,1080",
+            ],
+        }
+        if proxy_cfg:
+            launch_kwargs["proxy"] = proxy_cfg
+
+        # Persistent browser profile keeps Variti/Ozon cookies, localStorage and
+        # challenge state between checks and Railway restarts (profile lives on
+        # the mounted volume).
+        try:
+            self._context = await self._playwright.chromium.launch_persistent_context(
+                user_data_dir=profile_dir,
+                channel="chromium",
+                **launch_kwargs,
+            )
+        except Exception:
+            self._context = await self._playwright.chromium.launch_persistent_context(
+                user_data_dir=profile_dir,
+                **launch_kwargs,
+            )
+
+        # A persistent context is the browser container itself; keep _browser
+        # unset so shutdown closes the context only once.
+        self._browser = None
+        pages = self._context.pages
+        self._page = pages[0] if pages else await self._context.new_page()
+
+        await self._context.add_init_script(
+            """
+            Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+            Object.defineProperty(navigator, 'languages', {get: () => ['ru-RU','ru','en-US','en']});
+            Object.defineProperty(navigator, 'platform', {get: () => 'Linux x86_64'});
+            window.chrome = window.chrome || { runtime: {} };
+            """
+        )
+
         await self._page.goto(
             "https://www.ozon.ru/",
             wait_until="domcontentloaded",
-            timeout=45000,
+            timeout=60000,
         )
-        # Do not block images/fonts/styles: Variti challenge uses normal page resources.
-        await self._page.wait_for_timeout(OZON_BROWSER_WARMUP_MS)
-        title = (await self._page.title()).lower()
-        if any(marker in title for marker in ("antibot", "ограничен", "нет соединения", "access denied", "challenge")):
-            # Give Variti one extra window before declaring this egress blocked.
-            await self._page.wait_for_timeout(8000)
+
+        # Give Variti enough time to execute JS, set cookies and reload. Keep the
+        # same browser profile instead of discarding the challenge state.
+        warmup_ms = max(OZON_BROWSER_WARMUP_MS, 20000 if headful else OZON_BROWSER_WARMUP_MS)
+        await self._page.wait_for_timeout(warmup_ms)
+
+        challenge_markers = ("antibot", "ограничен", "нет соединения", "access denied", "challenge")
+        for attempt in range(3):
             title = (await self._page.title()).lower()
-            if any(marker in title for marker in ("antibot", "ограничен", "нет соединения", "access denied", "challenge")):
-                raise RuntimeError(f"Variti challenge not passed: title={title[:120]}")
+            url = self._page.url.lower()
+            if not any(marker in title or marker in url for marker in challenge_markers):
+                break
+            await self._page.wait_for_timeout(10000)
+            try:
+                await self._page.reload(wait_until="domcontentloaded", timeout=60000)
+            except Exception:
+                pass
+        else:
+            title = (await self._page.title()).lower()
+            raise RuntimeError(f"Variti challenge not passed: title={title[:120]}")
 
     async def _browser_request_page(self, path: str) -> tuple[dict[str, Any], str, int, int]:
         last_error = ""
