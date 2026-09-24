@@ -1008,6 +1008,23 @@ def live_egress_status() -> tuple[bool, str]:
     return True, "direct egress"
 
 
+def proxy_scout_summary() -> dict[str, Any]:
+    path = Path(os.getenv("PROXY_SCOUT_RESULT", "/tmp/ozon-proxy-scout.json"))
+    if not path.exists():
+        return {"available": False}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return {
+            "available": True,
+            "checked_at": data.get("checked_at"),
+            "candidate_count": int(data.get("candidate_count") or 0),
+            "working_ozon_api": int(data.get("working_ozon_api") or 0),
+            "front_only": int(data.get("front_only") or 0),
+        }
+    except Exception as exc:
+        return {"available": False, "error": f"{type(exc).__name__}: {exc}"}
+
+
 @app.get("/health")
 def health() -> dict[str, Any]:
     statuses = []
@@ -1046,6 +1063,7 @@ def health() -> dict[str, Any]:
         "tailscale_active": bool(runtime_tailscale_exit_node()) or OZON_TAILSCALE_ACTIVE,
         "tailscale_exit_node": runtime_tailscale_exit_node(),
         "force_live_offline": OZON_FORCE_LIVE_OFFLINE,
+        "proxy_scout": proxy_scout_summary(),
         "telegram_configured": bool(TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID),
         "tasks": statuses,
     }
