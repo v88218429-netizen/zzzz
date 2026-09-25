@@ -3,12 +3,13 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 import asyncio
 import logging
+import httpx
 from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -16,6 +17,7 @@ from .config import Settings
 from .engine import ControlCenter
 from .models import PeriodContext
 from .portfolio import PortfolioService
+from .photo_analyzer import PhotoAnalyzer
 from .source_discovery import SourceDiscovery
 from .auto_sheets import AutoSheets
 from .updater import UpdateManager, current_version
@@ -23,6 +25,7 @@ from .updater import UpdateManager, current_version
 settings = Settings()
 center = ControlCenter(settings)
 portfolio = PortfolioService(settings)
+photo_analyzer = PhotoAnalyzer(settings)
 discovery = SourceDiscovery()
 UI_DIR = Path(__file__).resolve().parent / "ui"
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -103,6 +106,49 @@ def _health_payload() -> dict[str, Any]:
 @app.get("/health")
 async def health() -> dict[str, Any]:
     return _health_payload()
+
+
+@app.get("/api/photo-analysis/status")
+async def photo_analysis_status() -> dict[str, Any]:
+    return photo_analyzer.status()
+
+
+@app.post("/api/photo-analysis")
+async def photo_analysis(
+    payload: dict[str, Any],
+    x_bridge_key: str | None = Header(default=None),
+) -> dict[str, Any]:
+    expected_key = str(settings.google_sheets_bridge_key or "").strip()
+    if expected_key and x_bridge_key != expected_key:
+        raise HTTPException(status_code=401, detail="unauthorized")
+
+    photo_urls = payload.get("photo_urls") or []
+    if not isinstance(photo_urls, list):
+        raise HTTPException(status_code=400, detail="photo_urls must be an array")
+
+    try:
+        return await photo_analyzer.analyze(
+            expected=str(payload.get("expected") or ""),
+            reported_received=str(payload.get("reported_received") or ""),
+            category=str(payload.get("category") or ""),
+            shop=str(payload.get("shop") or ""),
+            sticker=str(payload.get("sticker") or ""),
+            nm_id=str(payload.get("nm_id") or ""),
+            photo_urls=[str(x) for x in photo_urls],
+        )
+    except httpx.HTTPStatusError as exc:
+        body = ""
+        try:
+            body = exc.response.text[:600]
+        except Exception:
+            pass
+        raise HTTPException(
+            status_code=502,
+            detail=f"vision provider error: {exc.response.status_code} {body}",
+        )
+    except Exception as exc:
+        log.exception("photo analysis failed")
+        raise HTTPException(status_code=502, detail=f"photo analysis failed: {exc}")
 
 
 @app.get("/api/update-status")
