@@ -287,6 +287,8 @@ function renderDomains(){
   }).join('');
 }
 
+function pf(){ return state.data?.portfolio||{}; }
+
 function renderPortfolio(){
   const p=pf(), all=p.portfolio||{}, current=!!p.current_data;
   if($('portfolio-origin')) $('portfolio-origin').textContent=current?'ЖИВЫЕ ДАННЫЕ':'АРХИВНЫЙ СРЕЗ';
