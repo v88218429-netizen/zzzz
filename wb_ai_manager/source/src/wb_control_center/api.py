@@ -317,6 +317,18 @@ async def dashboard_data(days: int = 7, from_date: str | None = None, to_date: s
         decisions = center.db.current_decisions(limit=200) or center.refresh_decisions()
     completed_runs = [r for r in runs.values() if isinstance(r, dict) and r.get("finished_at")]
     last_run_at = max((str(r["finished_at"]) for r in completed_runs), default=None)
+    if audit_ready or explicit_period:
+        period_count_events = [
+            e for e in events_period
+            if (((e.get("payload") or {}).get("_analysis") or {}).get("scope") != "current_snapshot")
+        ]
+        current_snapshot_events = [
+            e for e in events_period
+            if (((e.get("payload") or {}).get("_analysis") or {}).get("scope") == "current_snapshot")
+        ]
+    else:
+        period_count_events = events_period
+        current_snapshot_events = []
     runtime_policy = await asyncio.to_thread(center.runtime_policy.get)
     portfolio_snapshot = portfolio.snapshot()
     entity_map = _entity_map(portfolio_snapshot, snapshots)
@@ -324,9 +336,10 @@ async def dashboard_data(days: int = 7, from_date: str | None = None, to_date: s
         "health": _health_payload(),
         "store": {"name": _store_name(snapshots), "mode": settings.wb_mode},
         "summary": {
-            "critical_24h": sum(1 for e in events_period if e.get("severity") == "critical"),
-            "warning_24h": sum(1 for e in events_period if e.get("severity") == "warning"),
-            "info_24h": sum(1 for e in events_period if e.get("severity") == "info"),
+            "critical_24h": sum(1 for e in period_count_events if e.get("severity") == "critical"),
+            "warning_24h": sum(1 for e in period_count_events if e.get("severity") == "warning"),
+            "info_24h": sum(1 for e in period_count_events if e.get("severity") == "info"),
+            "current_snapshot_alerts": sum(1 for e in current_snapshot_events if e.get("severity") in {"critical", "warning"}),
             "recommendations": len(recommendations),
             "agent_errors_24h": sum(1 for r in center.db.recent_runs(hours=24, limit=1000) if r.get("status") == "error"),
             "last_run_at": last_run_at,
