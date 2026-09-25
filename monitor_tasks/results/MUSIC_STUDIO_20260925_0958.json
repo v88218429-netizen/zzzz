@@ -1,0 +1,71 @@
+{
+  "task_id": "MUSIC_STUDIO",
+  "request": "MUSIC_STUDIO_20260925_0958.json",
+  "query": "домашняя музыкальная студия в частном доме обзор",
+  "knowledge_tag": "MUSIC",
+  "generated_at": "2026-09-25T07:01:20.044273+00:00",
+  "videos": [
+    {
+      "video_id": "ScV5c5-inPQ",
+      "url": "https://www.youtube.com/watch?v=ScV5c5-inPQ",
+      "title": "ДОМАШНЯЯ СТУДИЯ ЗА 5 000, 10 000 И 20 000 РУБЛЕЙ",
+      "channel": "LAYZAN",
+      "duration": 208,
+      "timestamp": null,
+      "query": "домашняя музыкальная студия в частном доме обзор",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-25_MUSIC_STUDIO_video_ScV5c5-inPQ.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "B0_rdrNy7Lo",
+      "url": "https://www.youtube.com/watch?v=B0_rdrNy7Lo",
+      "title": "Everything You Need to Know About Home Recording Studios in 2026!",
+      "channel": "Манун",
+      "duration": 1347,
+      "timestamp": null,
+      "query": "домашняя музыкальная студия в частном доме обзор",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-25_MUSIC_STUDIO_video_B0_rdrNy7Lo.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "xKE6NV7LeSU",
+      "url": "https://www.youtube.com/watch?v=xKE6NV7LeSU",
+      "title": "Домашняя студия звукозаписи за 30 ТЫСЯЧ РУБЛЕЙ это реально!",
+      "channel": "Все мои девайсы!",
+      "duration": 404,
+      "timestamp": null,
+      "query": "домашняя музыкальная студия в частном доме обзор",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-25_MUSIC_STUDIO_video_xKE6NV7LeSU.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "pdhFVjMITBk",
+      "url": "https://www.youtube.com/watch?v=pdhFVjMITBk",
+      "title": "Записал ХИТ на Самой ДОРОГОЙ и Самой ДЕШЕВОЙ Студии",
+      "channel": "SLAVA MARLOW",
+      "duration": 1228,
+      "timestamp": null,
+      "query": "домашняя музыкальная студия в частном доме обзор",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-25_MUSIC_STUDIO_video_pdhFVjMITBk.md",
+      "method": "FreeTranscriptAPI"
+    }
+  ],
+  "errors": [
+    {
+      "video_id": "yWeLVZTE4cc",
+      "url": "https://www.youtube.com/watch?v=yWeLVZTE4cc",
+      "title": "Домашняя музыкальная студия. Часть 1: Звукоизоляция",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "_zH6E6EQ6bg",
+      "url": "https://www.youtube.com/watch?v=_zH6E6EQ6bg",
+      "title": "МОЯ СТУДИЯ ЗВУКОЗАПИСИ за 500000 РУБЛЕЙ / МОНИТОРЫ ADAM Audio T8V, НАУШНИКИ, МИКРОФОН",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    }
+  ]
+}
