@@ -91,30 +91,65 @@ function doPost(e) {
 }
 
 function readSource_(name, cfg) {
-  const ss = SpreadsheetApp.openById(cfg.spreadsheetId);
+  const token = ScriptApp.getOAuthToken();
+  const entries = Object.keys(cfg.ranges).map(key => ({key: key, a1: cfg.ranges[key]}));
+  const query = entries.map(x => 'ranges=' + encodeURIComponent(x.a1)).join('&');
+  const valuesUrl =
+    'https://sheets.googleapis.com/v4/spreadsheets/' +
+    encodeURIComponent(cfg.spreadsheetId) +
+    '/values:batchGet?valueRenderOption=FORMATTED_VALUE&majorDimension=ROWS&' + query;
+
+  const valuesResp = googleGet_(valuesUrl, token);
+  const valueRanges = valuesResp.valueRanges || [];
   const ranges = {};
-  Object.keys(cfg.ranges).forEach(key => {
-    const a1 = cfg.ranges[key];
-    try {
-      ranges[key] = {range: a1, values: readA1_(ss, a1)};
-    } catch (err) {
-      ranges[key] = {range: a1, error: String(err)};
-    }
+  entries.forEach((entry, i) => {
+    const vr = valueRanges[i] || {};
+    ranges[entry.key] = {range: entry.a1, values: vr.values || []};
   });
+
+  let title = name;
+  try {
+    const meta = googleGet_(
+      'https://sheets.googleapis.com/v4/spreadsheets/' +
+      encodeURIComponent(cfg.spreadsheetId) +
+      '?fields=properties.title',
+      token
+    );
+    title = (meta.properties && meta.properties.title) || name;
+  } catch (_) {}
+
   let modified = null;
-  try { modified = DriveApp.getFileById(cfg.spreadsheetId).getLastUpdated().toISOString(); } catch (_) {}
-  return {name: name, title: ss.getName(), spreadsheet_id: cfg.spreadsheetId, modified_at: modified, ranges: ranges};
+  try {
+    const driveMeta = googleGet_(
+      'https://www.googleapis.com/drive/v3/files/' +
+      encodeURIComponent(cfg.spreadsheetId) +
+      '?fields=modifiedTime',
+      token
+    );
+    modified = driveMeta.modifiedTime || null;
+  } catch (_) {}
+
+  return {
+    name: name,
+    title: title,
+    spreadsheet_id: cfg.spreadsheetId,
+    modified_at: modified,
+    ranges: ranges
+  };
 }
 
-function readA1_(ss, a1) {
-  const bang = a1.indexOf('!');
-  if (bang < 0) throw new Error('Range must include sheet name: ' + a1);
-  let sheetName = a1.substring(0, bang);
-  const cellRange = a1.substring(bang + 1);
-  if (sheetName.startsWith("'") && sheetName.endsWith("'")) sheetName = sheetName.slice(1, -1).replace(/''/g, "'");
-  const sh = ss.getSheetByName(sheetName);
-  if (!sh) throw new Error('Sheet not found: ' + sheetName);
-  return sh.getRange(cellRange).getDisplayValues();
+function googleGet_(url, token) {
+  const resp = UrlFetchApp.fetch(url, {
+    method: 'get',
+    headers: {Authorization: 'Bearer ' + token},
+    muteHttpExceptions: true
+  });
+  const code = resp.getResponseCode();
+  const text = resp.getContentText();
+  if (code < 200 || code >= 300) {
+    throw new Error('Google API HTTP ' + code + ': ' + text.slice(0, 500));
+  }
+  return JSON.parse(text || '{}');
 }
 
 function json_(obj) {
