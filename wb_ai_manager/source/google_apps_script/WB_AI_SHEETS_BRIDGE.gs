@@ -24,12 +24,16 @@ const SOURCES = {
   own_27: {
     spreadsheetId: '1VQwf-QPeSjexrEculDjWt_hpuCKu7PLzLZhMFjP2VZM',
     ranges: {
-      summary: 'Сводная!A1:Z250',
+      summary: 'Сводная!A1:BI1200',
       unit_economics: 'Юнитка!A1:AQ500',
       ff_history: 'История остатков ФФ!A1:J800',
       products: 'Товары!A1:R500',
       orders_history: 'Заказы!A1:J40000',
-      order_lifecycle: '_WB_ORDER_FEED!A1:L7000'
+      order_lifecycle: '_WB_ORDER_FEED!A1:L7000',
+      supply_plan: '_ORDER_ANALYSIS_TMP!A1:L1000',
+      ozon_cabinets: 'Ozon кабинеты!A1:X1200',
+      ozon_cab2_products: 'Ozon каб2 товары!A1:L200',
+      ozon_orders: 'Ozon Заказы!A1:V5000'
     }
   },
   sanych_sellmonitor: {
@@ -37,12 +41,17 @@ const SOURCES = {
     ranges: {
       dashboard: '00_Дашборд!A1:Z100',
       ads_status: '84_Статус_реклама!A1:H300',
+      calculator: '05_Калькулятор!A1:BD300',
+      stocks: '06_Остатки!A1:Z300',
       positions: '07_Контроль_позиций!A1:R6000'
     }
   },
   air_fbs: {
     spreadsheetId: '1qJvhEOIku7sOMydfrUz0PR5dkcU0sLjv433pa1MFBcM',
-    ranges: { dashboard: 'Дашборд!A1:P80' }
+    ranges: {
+      dashboard: 'Дашборд!A1:P80',
+      orders: 'FBS Заказы!A1:AJ300'
+    }
   },
   hozyushka_fbs: {
     spreadsheetId: '1f9dxXeZxkDth8h2C9GA7L7WqAr1-Ok-Oi5YtufLYOOk',
