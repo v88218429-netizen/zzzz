@@ -1,4 +1,5 @@
 from pathlib import Path
+from datetime import date
 
 import pytest
 
@@ -113,3 +114,24 @@ async def test_mcp_json_payload_survives_human_note(tmp_path):
 def test_production_image_contains_version_file():
     dockerfile = (Path(__file__).parents[1] / "Dockerfile").read_text(encoding="utf-8")
     assert "VERSION" in dockerfile
+
+
+def test_dashboard_period_defaults_to_last_completed_week_and_exposes_date_limit(monkeypatch):
+    from wb_control_center import api as api_module
+
+    period = api_module._dashboard_period(days=7)
+    start = date.fromisoformat(period["from"])
+    end = date.fromisoformat(period["to"])
+    max_day = date.fromisoformat(period["max_selectable"])
+
+    assert (end - start).days == 6
+    assert end < max_day
+    assert period["default_mode"] == "last_completed_7_days"
+
+
+def test_dashboard_js_blocks_future_periods_and_sets_calendar_max():
+    js = (Path(__file__).parents[1] / "src" / "wb_control_center" / "ui" / "dashboard.js").read_text(encoding="utf-8")
+    assert "max_selectable" in js
+    assert "Будущие даты выбрать нельзя." in js
+    assert "$('period-from').max=maxDate" in js
+    assert "$('period-to').max=maxDate" in js
