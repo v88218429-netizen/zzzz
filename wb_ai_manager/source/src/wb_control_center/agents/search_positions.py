@@ -13,10 +13,9 @@ class SearchPositionsAgent(BaseAgent):
     async def run(self) -> AgentResult:
         out = AgentResult(agent=self.name)
         cfg = self.ctx.policy.thresholds.get("search", {})
-        today = datetime.now().date()
-        start = (today - timedelta(days=1)).isoformat()
+        start, end = self.dates(2)
         try:
-            data = await self.call("wb_search_report", date_from=start, date_to=today.isoformat(), limit=1000)
+            data = await self.call("wb_search_report", date_from=start, date_to=end, limit=1000)
         except Exception as e:
             out.events.append(self.event("info", "search_unavailable", "Поисковая аналитика недоступна", f"WB search report не отработал. Частая причина — нет подписки Джем или прав токена. {e}"))
             return out
