@@ -44,10 +44,17 @@ class PortfolioService:
         live = self._read_json(self.live_path) if self.live_path.exists() else None
         if live:
             live["data_origin"] = live.get("mode") or "live_sheets"
+            live["current_data"] = True
+            live["data_status"] = "current"
+            live["historical_only"] = False
             return live
         seed = self._read_json(self.seed_path) or {}
         seed = deepcopy(seed)
         seed["data_origin"] = "seeded_real_facts"
+        seed["current_data"] = False
+        seed["data_status"] = "historical_snapshot"
+        seed["historical_only"] = True
+        seed["stale_reason"] = "Живой источник портфеля не подключён. Показан последний сохранённый исторический срез; он не используется для текущих денежных решений."
         return seed
 
     def connections(self) -> dict[str, Any]:
