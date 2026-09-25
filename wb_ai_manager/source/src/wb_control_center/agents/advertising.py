@@ -56,7 +56,7 @@ class AdvertisingMonitorAgent(BaseAgent):
         cfg = self.ctx.policy.thresholds.get("advertising", {})
         campaigns = await self.call("wb_advert_list", statuses=[9])
         out.snapshots.append(("active_campaigns", campaigns if isinstance(campaigns, dict) else {"data": campaigns}))
-        ids = extract_campaign_ids(campaigns)
+        ids = [cid for cid in (_campaign_id(row) for row in _rows(campaigns)) if cid]
         if not ids:
             return out
         start, end = self.dates(7)
