@@ -921,7 +921,7 @@ class PortfolioService:
         if not url or not key:
             raise RuntimeError("Google Sheets bridge is not configured")
         request = {"key": key, "action": "all"}
-        with httpx.Client(timeout=30.0, follow_redirects=True) as client:
+        with httpx.Client(timeout=httpx.Timeout(120.0, connect=10.0), follow_redirects=True) as client:
             resp = client.post(url, json=request)
             resp.raise_for_status()
             payload = resp.json()
