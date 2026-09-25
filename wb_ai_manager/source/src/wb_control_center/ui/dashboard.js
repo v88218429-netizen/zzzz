@@ -1,12 +1,12 @@
-const state = { data: null, eventFilter: 'important', page: location.hash.replace('#','') || 'overview' };
+const state = { data: null, eventFilter: 'important', page: location.hash.replace('#','') || 'overview', periodFrom: null, periodTo: null };
 const $ = (id) => document.getElementById(id);
 const qa = (sel, root=document) => [...root.querySelectorAll(sel)];
 
 const agentNames = {
-  api_health: 'API Health', cards: 'Карточки', advertising_monitor: 'Реклама · монитор', advertising_optimizer: 'Реклама · диагностика',
+  api_health: 'Состояние API', cards: 'Карточки', advertising_monitor: 'Реклама · монитор', advertising_optimizer: 'Реклама · диагностика',
   search_positions: 'Поисковые позиции', inventory: 'Остатки', supply: 'Поставки', funnel: 'Воронка', price_margin: 'Цена и маржа',
-  finance: 'Финансы', cost_guard: 'Cost Guard', reviews_questions: 'Отзывы и вопросы', buyer_chats: 'Чаты покупателей',
-  orders_fbs: 'FBS заказы', returns_quality: 'Возвраты и качество', documents: 'Документы', competitors: 'Конкуренты', experiments: 'Эксперименты', supervisor: 'Supervisor'
+  finance: 'Финансы', cost_guard: 'Контроль расходов', reviews_questions: 'Отзывы и вопросы', buyer_chats: 'Чаты покупателей',
+  orders_fbs: 'FBS-заказы', returns_quality: 'Возвраты и качество', documents: 'Документы', competitors: 'Конкуренты', experiments: 'Эксперименты', supervisor: 'Главный управляющий'
 };
 const agentDescriptions = {
   api_health:'Проверяет токен, доступность WB API и деградации.', cards:'Ловит ошибки, блокировки и ценовой карантин.', advertising_monitor:'Следит за расходом, заказами, ДРР, CTR и CPC.', advertising_optimizer:'Формирует рекомендации по проблемной рекламе.', search_positions:'Контролирует позиции по поисковым запросам.', inventory:'Считает дни запаса и риск дефицита.', supply:'Ищет доступные и выгодные окна приёмки.', funnel:'Следит за конверсиями карточки и заказами.', price_margin:'Контролирует цены, акции и риск потери маржи.', finance:'Читает баланс и отчёт реализации.', cost_guard:'Ищет хранение, удержания, штрафы и дорогую приёмку.', reviews_questions:'Отслеживает неотвеченные отзывы и вопросы.', buyer_chats:'Следит за новыми сообщениями покупателей.', orders_fbs:'Контролирует новые FBS-заказы и повторную отгрузку.', returns_quality:'Ищет рост возвратов и системные причины.', documents:'Контролирует появление финансовых документов.', competitors:'Наблюдает за заданными конкурентами.', experiments:'Контролирует эксперименты и периоды наблюдения.', supervisor:'Сводит сигналы всех агентов в одну картину.'
@@ -17,9 +17,10 @@ const domainAgents = {
 };
 
 function esc(v){ return String(v ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m])); }
-function num(v, digits=0){ const n=Number(v); return Number.isFinite(n) ? n.toLocaleString('ru-RU',{maximumFractionDigits:digits,minimumFractionDigits:digits}) : '—'; }
-function rub(v){ const n=Number(v); return Number.isFinite(n) ? `${n.toLocaleString('ru-RU',{maximumFractionDigits:0})} ₽` : '—'; }
-function pct(v, digits=1){ const n=Number(v); return Number.isFinite(n) ? `${n.toLocaleString('ru-RU',{maximumFractionDigits:digits,minimumFractionDigits:digits})}%` : '—'; }
+function missing(v){ return v===null || v===undefined || v==='' || (typeof v==='string' && !v.trim()); }
+function num(v, digits=0){ if(missing(v)) return '—'; const n=Number(v); return Number.isFinite(n) ? n.toLocaleString('ru-RU',{maximumFractionDigits:digits,minimumFractionDigits:digits}) : '—'; }
+function rub(v){ if(missing(v)) return '—'; const n=Number(v); return Number.isFinite(n) ? `${n.toLocaleString('ru-RU',{maximumFractionDigits:0})} ₽` : '—'; }
+function pct(v, digits=1){ if(missing(v)) return '—'; const n=Number(v); return Number.isFinite(n) ? `${n.toLocaleString('ru-RU',{maximumFractionDigits:digits,minimumFractionDigits:digits})}%` : '—'; }
 function ago(iso){
   if(!iso) return 'нет данных'; const d=new Date(iso); if(Number.isNaN(d.getTime())) return '—'; const s=Math.max(0,(Date.now()-d.getTime())/1000);
   if(s<60) return 'только что'; if(s<3600) return `${Math.floor(s/60)} мин назад`; if(s<86400) return `${Math.floor(s/3600)} ч назад`; return `${Math.floor(s/86400)} дн назад`;
@@ -40,6 +41,77 @@ function extractList(obj){
 }
 function showToast(msg, kind=''){ const t=$('toast'); t.textContent=msg; t.className=`toast show ${kind}`; clearTimeout(showToast.t); showToast.t=setTimeout(()=>t.className='toast',3200); }
 function empty(text){ return `<div class="empty">${esc(text)}</div>`; }
+function entityInfo(id){ return state.data?.entity_map?.[String(id)] || null; }
+function entityName(id){ const x=entityInfo(id); return x?.seller_article || x?.display || (missing(id)?'—':String(id)); }
+function entityMeta(id){ const x=entityInfo(id); return x ? `nmID ${esc(x.nm_id)}${x.weekly_group?` · ${esc(x.weekly_group)}`:''}` : (missing(id)?'':`nmID ${esc(id)}`); }
+function currentPeriodLabel(){ return state.data?.period?.label || 'выбранный период'; }
+function dateInSelectedRange(value){
+  if(!value) return false;
+  const raw=String(value).slice(0,10);
+  const d=new Date(raw+'T00:00:00');
+  if(Number.isNaN(d.getTime())) return false;
+  const from=state.data?.period?.from ? new Date(state.data.period.from+'T00:00:00') : null;
+  const to=state.data?.period?.to ? new Date(state.data.period.to+'T23:59:59') : null;
+  return (!from || d>=from) && (!to || d<=to);
+}
+function flattenFacts(obj, prefix='', out=[]){
+  if(out.length>=30 || obj==null) return out;
+  if(Array.isArray(obj)){ obj.slice(0,12).forEach((v,i)=>flattenFacts(v,`${prefix}[${i}]`,out)); return out; }
+  if(typeof obj==='object'){ Object.entries(obj).slice(0,30).forEach(([k,v])=>flattenFacts(v,prefix?`${prefix} · ${k}`:k,out)); return out; }
+  if(String(obj).trim()) out.push([prefix,String(obj)]);
+  return out;
+}
+function openDetail(kicker,title,body){
+  $('detail-kicker').textContent=kicker||'Подробности';
+  $('detail-title').textContent=title||'—';
+  $('detail-body').innerHTML=body||empty('Нет дополнительных данных.');
+  $('detail-modal').classList.add('open');
+  $('detail-modal').setAttribute('aria-hidden','false');
+}
+function closeDetail(){ $('detail-modal').classList.remove('open'); $('detail-modal').setAttribute('aria-hidden','true'); }
+function eventDetail(e){
+  const payload=e?.payload||{};
+  const rows=extractList(payload?.data ?? payload);
+  let body=`<div class="detail-lead"><p>${esc(e.message||'')}</p><div class="detail-meta"><span>${esc(agentNames[e.agent]||e.agent)}</span><span>${time(e.created_at)}</span></div></div>`;
+  if(e.event_key==='reshipment' && rows.length){
+    body+=`<div class="detail-section"><h3>Конкретные заказы на повторную отгрузку</h3><div class="detail-table">${rows.slice(0,100).map((r,i)=>{
+      const nm=r.nmId??r.nmID??r.nm_id; const art=r.vendorCode??r.supplierArticle??r.article??entityName(nm);
+      const order=r.orderId??r.order_id??r.id??r.srid??'—'; const supply=r.supplyId??r.supply_id??r.supply??'—'; const qty=r.quantity??r.qty??1;
+      return `<div class="detail-row"><b>${i+1}. ${esc(art||entityName(nm))}</b><span>Заказ ${esc(order)} · поставка ${esc(supply)} · ${esc(qty)} шт${nm?` · nmID ${esc(nm)}`:''}</span></div>`;
+    }).join('')}</div></div>`;
+  } else {
+    const facts=flattenFacts(payload);
+    if(facts.length) body+=`<div class="detail-section"><h3>Исходные факты</h3><div class="detail-facts">${facts.map(([k,v])=>`<div><span>${esc(k)}</span><strong>${esc(v)}</strong></div>`).join('')}</div></div>`;
+  }
+  const related=(state.data?.decisions||[]).filter(d=>{
+    const hay=JSON.stringify(d); const needle=String(e.event_key||'');
+    return (needle && hay.includes(needle)) || (e.message && hay.includes(String(e.message).slice(0,40)));
+  }).slice(0,5);
+  if(related.length) body+=`<div class="detail-section"><h3>Связанные решения</h3>${related.map(d=>`<button class="detail-link" data-decision-key="${esc(d.decision_key)}">${esc(d.title)}</button>`).join('')}</div>`;
+  return body;
+}
+function decisionDetail(d){
+  const acts=(d.recommended_actions||[]).map((a,i)=>`<div class="detail-step"><b>${i+1}</b><span>${esc(a.action)}</span></div>`).join('');
+  const ev=(d.evidence||[]).map(x=>`<div><span>${esc(x.metric)} · ${esc(x.source)}</span><strong>${esc(x.value)}</strong>${x.note?`<small>${esc(x.note)}</small>`:''}</div>`).join('');
+  const blockers=(d.blockers||[]).map(x=>`<li>${esc(x)}</li>`).join('');
+  return `<div class="detail-lead"><div class="detail-entity"><strong>${esc(entityName(d.entity_id))}</strong><span>${entityMeta(d.entity_id)}</span></div><p>${esc(d.diagnosis||'')}</p></div>
+    ${blockers?`<div class="detail-section danger-box"><h3>Почему решение ограничено</h3><ul>${blockers}</ul></div>`:''}
+    <div class="detail-section"><h3>Что делать</h3><div class="detail-steps">${acts||empty('Конкретного действия пока нет.')}</div></div>
+    <div class="detail-section"><h3>На каких фактах основано</h3><div class="detail-facts">${ev||'<div><span>Факты</span><strong>Недостаточно данных</strong></div>'}</div></div>
+    <div class="detail-section"><h3>Когда проверить результат</h3><p>${esc(d.follow_up||'—')}</p></div>`;
+}
+function productDetail(id){
+  const prod=(state.data?.portfolio?.own_27?.products||[]).find(x=>String(x.sku)===String(id))||{};
+  const decisions=(state.data?.decisions||[]).filter(d=>String(d.entity_id)===String(id)).slice(0,10);
+  const facts=[
+    ['Артикул продавца',entityName(id)],['nmID',id],['Цена клиенту',rub(prod.price_client_rub)],['Прибыль на единицу',rub(prod.profit_rub)],
+    ['Маржа',pct(prod.margin_pct)],['ДРР',pct(prod.drr_pct)],['Остаток',num(prod.safe_stock)],['Источник остатка',prod.safe_stock_source||'—'],
+    ['Заказов в день',num(prod.orders_per_day,1)],['Заказы, ₽',rub(prod.orders_rub)]
+  ];
+  let body=`<div class="detail-section"><h3>Факты по товару</h3><div class="detail-facts">${facts.map(([k,v])=>`<div><span>${esc(k)}</span><strong>${esc(v)}</strong></div>`).join('')}</div></div>`;
+  if(decisions.length) body+=`<div class="detail-section"><h3>Текущие решения</h3>${decisions.map(d=>`<button class="detail-link" data-decision-key="${esc(d.decision_key)}">${esc(d.title)}</button>`).join('')}</div>`;
+  return body;
+}
 
 function initNav(){
   qa('.nav-item').forEach(btn=>btn.addEventListener('click',()=>setPage(btn.dataset.page)));
@@ -57,7 +129,12 @@ function setPage(page){
 async function fetchData(showLoader=false){
   if(showLoader) $('loading-state').classList.remove('hidden');
   try{
-    const r=await fetch('/api/dashboard-data',{cache:'no-store'}); if(!r.ok) throw new Error(`HTTP ${r.status}`); state.data=await r.json(); renderAll(); $('loading-state').classList.add('hidden');
+    const params=new URLSearchParams(); if(state.periodFrom) params.set('from_date',state.periodFrom); if(state.periodTo) params.set('to_date',state.periodTo);
+    const r=await fetch('/api/dashboard-data'+(params.size?`?${params.toString()}`:''),{cache:'no-store'}); if(!r.ok) throw new Error(`HTTP ${r.status}`); state.data=await r.json();
+    if(!state.periodFrom && state.data?.period?.from) state.periodFrom=state.data.period.from;
+    if(!state.periodTo && state.data?.period?.to) state.periodTo=state.data.period.to;
+    if($('period-from')) $('period-from').value=state.periodFrom||''; if($('period-to')) $('period-to').value=state.periodTo||'';
+    renderAll(); $('loading-state').classList.add('hidden');
   }catch(e){ $('loading-state').classList.remove('hidden'); $('loading-state').innerHTML=`<div class="event-severity critical">!</div><div><strong>Не удалось получить данные</strong><span>${esc(e.message)}. Проверь, что WB AI Manager запущен.</span></div>`; }
 }
 
@@ -71,11 +148,14 @@ async function runAudit(){
 
 function renderAll(){
   const d=state.data; if(!d) return;
-  const health=d.health||{}; $('reasoning-mode').textContent=health.reasoning||'Rules';
+  const health=d.health||{}; $('reasoning-mode').textContent=String(health.reasoning||'').startsWith('rules')?'Правила и расчёты без LLM':(health.reasoning||'—');
   $('store-name').textContent=(d.portfolio?.stores?.length>1?'Портфель WB':(d.store?.name || (health.wb_mode==='demo'?'DEMO WB cabinet':'Wildberries'))); $('connection-dot').classList.toggle('ok',!!health.wb_connected);
   $('last-sync').textContent=d.summary?.last_run_at ? `Синхронизация ${ago(d.summary.last_run_at)}` : 'Нет запусков';
   const critical=d.summary?.critical_24h||0, warning=d.summary?.warning_24h||0, actions=(d.decisions||[]).length || d.summary?.recommendations||0;
   $('metric-critical').textContent=num(critical); $('metric-warning').textContent=num(warning); $('metric-actions').textContent=num(actions); $('metric-agents').textContent=num(Object.keys(d.agents||{}).length);
+  if($('metric-critical-period')) $('metric-critical-period').textContent=d.period?.label||'за выбранный период';
+  if($('metric-warning-period')) $('metric-warning-period').textContent=d.period?.label||'за выбранный период';
+  if($('finance-period-label')) $('finance-period-label').textContent=d.period?.label||'выбранный период';
   $('nav-alerts').textContent=critical+warning; if($('nav-decisions')) $('nav-decisions').textContent=(d.decisions||[]).filter(x=>['critical','high'].includes(x.priority)).length;
   const ad=adSummary(); $('metric-ad-spend').textContent=rub(ad.spend); const rating=snap('reviews_questions','seller_rating')?.data; const ratingVal=firstNumeric(rating,['rating']); $('metric-rating').textContent=ratingVal==null?'—':num(ratingVal,2);
   renderExecutive(); renderEvents(); renderRecommendations(); renderDecisions(); renderDecisionControl(); renderDomains(); renderPortfolio(); renderConnections(); renderAdvertising(); renderPolicyStudio(); renderInventory(); renderSearch(); renderFinance(); renderCustomers(); renderKnowledge(); renderAgents();
@@ -83,7 +163,7 @@ function renderAll(){
 function snap(source,key){ return state.data?.snapshots?.[source]?.[key] || null; }
 function firstNumeric(obj, keys){
   if(obj==null) return null; if(typeof obj==='number') return obj; if(Array.isArray(obj)){ for(const v of obj){ const n=firstNumeric(v,keys); if(n!=null) return n; } return null; }
-  if(typeof obj==='object'){ for(const k of Object.keys(obj)){ if(keys.includes(k) && Number.isFinite(Number(obj[k]))) return Number(obj[k]); } for(const v of Object.values(obj)){ const n=firstNumeric(v,keys); if(n!=null) return n; } }
+  if(typeof obj==='object'){ for(const k of Object.keys(obj)){ if(keys.includes(k) && !missing(obj[k]) && Number.isFinite(Number(obj[k]))) return Number(obj[k]); } for(const v of Object.values(obj)){ const n=firstNumeric(v,keys); if(n!=null) return n; } }
   return null;
 }
 function latestSupervisor(){ return (state.data.events||[]).find(e=>e.agent==='supervisor' && e.event_key==='supervisor_digest'); }
@@ -96,7 +176,7 @@ function renderExecutive(){
 }
 function renderEvents(){
   let events=state.data?.events||[]; if(state.eventFilter==='important') events=events.filter(e=>['critical','warning'].includes(e.severity)); events=events.slice(0,12);
-  $('event-list').innerHTML=events.length?events.map(e=>`<div class="event-item"><div class="event-severity ${esc(e.severity)}">${severityIcon(e.severity)}</div><div class="event-main"><strong>${esc(e.title)}</strong><p>${esc(e.message)}</p><div class="event-meta"><span>${esc(agentNames[e.agent]||e.agent)}</span><span>Источник: WB / ${esc(e.agent)}</span></div></div><div class="event-time">${time(e.created_at)}</div></div>`).join(''):empty('Событий этого типа пока нет.');
+  $('event-list').innerHTML=events.length?events.map(e=>`<button class="event-item interactive-card" type="button" data-event-id="${esc(e.id)}"><div class="event-severity ${esc(e.severity)}">${severityIcon(e.severity)}</div><div class="event-main"><strong>${esc(e.title)}</strong><p>${esc(e.message)}</p><div class="event-meta"><span>${esc(agentNames[e.agent]||e.agent)}</span><span>Открыть подробности</span></div></div><div class="event-time">${time(e.created_at)}</div></button>`).join(''):empty('Событий этого типа пока нет.');
 }
 function toolLabel(t){ const m={wb_advert_pause:'Разобрать и при необходимости поставить кампанию на паузу',wb_prices_set:'Проверить изменение цены',wb_advert_bids_set:'Проверить изменение ставки',wb_advert_cluster_bids:'Проверить ставку кластера'}; return m[t]||`Рекомендация: ${t}`; }
 function renderRecommendations(){
