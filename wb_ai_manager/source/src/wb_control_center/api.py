@@ -187,12 +187,19 @@ def _dashboard_snapshots(period_key: str | None = None) -> dict[str, dict[str, A
 def _dashboard_period(days: int = 7, from_date: str | None = None, to_date: str | None = None) -> dict[str, Any]:
     tz = ZoneInfo(settings.app_timezone)
     today = datetime.now(tz).date()
+    default_end = today - timedelta(days=1)
+    window_days = max(1, min(days, 90))
     try:
-        start_day = date.fromisoformat(from_date) if from_date else today - timedelta(days=max(1, min(days, 90)) - 1)
-        end_day = date.fromisoformat(to_date) if to_date else today
+        end_day = date.fromisoformat(to_date) if to_date else default_end
+        start_day = date.fromisoformat(from_date) if from_date else end_day - timedelta(days=window_days - 1)
     except ValueError:
-        start_day = today - timedelta(days=max(1, min(days, 90)) - 1)
+        end_day = default_end
+        start_day = end_day - timedelta(days=window_days - 1)
+    # The dashboard is retrospective. Never expose dates that have not happened yet.
+    if end_day > today:
         end_day = today
+    if start_day > today:
+        start_day = today
     if end_day < start_day:
         start_day, end_day = end_day, start_day
     if (end_day - start_day).days > 90:
@@ -208,6 +215,8 @@ def _dashboard_period(days: int = 7, from_date: str | None = None, to_date: str 
         "end_utc": end_utc.isoformat(),
         "days": (end_day - start_day).days + 1,
         "label": f"{start_day.strftime('%d.%m.%Y')}–{end_day.strftime('%d.%m.%Y')}",
+        "max_selectable": today.isoformat(),
+        "default_mode": "last_completed_7_days" if not from_date and not to_date else "custom",
     }
 
 
@@ -302,13 +311,12 @@ async def dashboard_data(days: int = 7, from_date: str | None = None, to_date: s
     period_ctx = PeriodContext.from_strings(period["from"], period["to"])
     audit = center.period_audit_status(period_ctx)
     audit_ready = audit.get("status") == "completed"
-    explicit_period = bool(from_date or to_date)
-    if audit_ready or explicit_period:
+    if audit_ready:
         snapshots = _dashboard_snapshots(period_ctx.key)
         events_period = list(audit.get("events") or [])
         runs = dict(audit.get("agents") or {})
         recommendations = []
-        decisions = list(audit.get("decisions") or []) if audit_ready else []
+        decisions = list(audit.get("decisions") or [])
     else:
         snapshots = _dashboard_snapshots()
         events_period = center.db.events_between(period["start_utc"], period["end_utc"], limit=1000)
@@ -317,7 +325,7 @@ async def dashboard_data(days: int = 7, from_date: str | None = None, to_date: s
         decisions = center.db.current_decisions(limit=200) or center.refresh_decisions()
     completed_runs = [r for r in runs.values() if isinstance(r, dict) and r.get("finished_at")]
     last_run_at = max((str(r["finished_at"]) for r in completed_runs), default=None)
-    if audit_ready or explicit_period:
+    if audit_ready:
         period_count_events = [
             e for e in events_period
             if (((e.get("payload") or {}).get("_analysis") or {}).get("scope") != "current_snapshot")
