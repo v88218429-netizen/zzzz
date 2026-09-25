@@ -113,3 +113,19 @@ def test_ozon_variants_are_reconciled_per_cabinet(tmp_path):
     assert by_cab["Ozon каб.2"]["feed_present"] is False
     assert by_cab["Ozon каб.2"]["orders_qty_period"] == 0
     assert by_cab["Ozon каб.2"]["operating_status"] == "mapped_but_not_in_current_feed_or_orders"
+
+
+def test_svodnaya_duplicate_orders_per_day_keeps_wb_velocity(tmp_path):
+    service = PortfolioService(Settings(data_dir=str(tmp_path), wb_api_token=""))
+    headers = [
+        "Артикул продавца WB", "Предмет WB", "Артикул WB", "Артикул продавца Ozon", "Ozon артикул",
+        "Остатки WB FBS", "Заказы, шт", "Заказов в день", "Заказы Ozon", "Заказов в день",
+    ]
+    group = ["Известь", "", "", "", "", 0, 1000, 143, 70, 10]
+    row = ["Известь 4 кг", "Смеси", "566189858", "Известь_4кг", "3474252014", 999, 1070, 153, 52, 7]
+    payload = {"sources": {"own_27": {"ranges": {"summary": {"values": [headers, group, row]}}}}}
+    out = {}
+    service._parse_own_27(payload, out)
+    product = out["own_27"]["products"][0]
+    assert product["orders_per_day"] == 153
+    assert product["ozon_orders_per_day"] == 7
