@@ -789,6 +789,62 @@ if old_history in new_text:
 elif new_history not in new_text:
     raise SystemExit("PATCH_FAIL: history status source not found")
 
+
+# Step 4b: make Master status run-aware. A cycle may complete with recoverable
+# submodule errors; that must not be displayed as "never ran".
+old_master_status = "buildAutomationStatusRow_('Master', props.getProperty('MASTER_LAST_SUCCESS_AT'), 45)"
+new_master_status = "buildMasterAutomationStatusRow_(props, 45)"
+if old_master_status in new_text:
+    new_text = new_text.replace(old_master_status, new_master_status, 1)
+
+if "function buildMasterAutomationStatusRow_(" not in new_text:
+    generic_status_marker = "function buildAutomationStatusRow_(name, isoText, staleAfterMinutes) {"
+    if generic_status_marker not in new_text:
+        raise SystemExit("PATCH_FAIL: generic automation status function not found")
+
+    master_status_helper = """function buildMasterAutomationStatusRow_(props, staleAfterMinutes) {
+  /* MASTER_STATUS_RUN_AWARE_V1 */
+  var runAt = props.getProperty('MASTER_LAST_RUN_AT');
+
+  if (!runAt) {
+    return ['Master', '', '', '🔴 нет запуска'];
+  }
+
+  var date = new Date(runAt);
+  if (isNaN(date.getTime())) {
+    return ['Master', String(runAt), '', '🔴 некорректная дата'];
+  }
+
+  var ageMinutes = Math.max(
+    0,
+    Math.floor((Date.now() - date.getTime()) / 60000)
+  );
+  var ageText = ageMinutes < 60
+    ? ageMinutes + ' мин.'
+    : Math.floor(ageMinutes / 60) + ' ч. ' + (ageMinutes % 60) + ' мин.';
+  var formatted = Utilities.formatDate(
+    date,
+    MASTER_AUTOMATION_CFG.TIMEZONE,
+    'dd.MM.yyyy HH:mm:ss'
+  );
+  var errorText = String(
+    props.getProperty('MASTER_LAST_ERROR') || ''
+  ).trim();
+
+  var status = ageMinutes > staleAfterMinutes
+    ? '⚠️ просрочено'
+    : (errorText ? '⚠️ запустился, есть ошибки' : '✅ работает');
+
+  return ['Master', formatted, ageText, status];
+}
+
+"""
+    new_text = new_text.replace(
+        generic_status_marker,
+        master_status_helper + generic_status_marker,
+        1,
+    )
+
 # Manual price menu entrypoint must never bypass the transactional guard.
 if "function domExportPrices()" in new_text:
     manual_start = new_text.find("function domExportPrices()")
@@ -815,6 +871,7 @@ required = [
     "K2_EV_LAST_RUN_AT",
     "K2_EV_CUTOVER_DONE",
     "WB_OS_HISTORY_SELF_HEAL_V2",
+    "MASTER_STATUS_RUN_AWARE_V1",
     "historyK2Fresh = true;",
     "historyIvanovoFresh = true;",
     "if (historyDue && historyK2Fresh && historyIvanovoFresh) {",
