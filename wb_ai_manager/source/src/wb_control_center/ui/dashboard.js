@@ -1,4 +1,4 @@
-const state = { data: null, eventFilter: 'important', page: location.hash.replace('#','') || 'overview', periodFrom: null, periodTo: null, periodAuditRequestedKey: null, periodPollTimer: null };
+const state = { data: null, eventFilter: 'important', inventoryFilter: 'attention', page: location.hash.replace('#','') || 'overview', periodFrom: null, periodTo: null, periodAuditRequestedKey: null, periodPollTimer: null };
 const $ = (id) => document.getElementById(id);
 const qa = (sel, root=document) => [...root.querySelectorAll(sel)];
 
@@ -616,7 +616,7 @@ function renderAdvertising(){
   $('ads-ctr').textContent=a.error&&!a.rows.length?'—':pct(a.ctr);
   const snapObj=snap('advertising_monitor','stats_7d');
   $('ads-updated').textContent=a.error&&!a.rows.length?'WB временно ограничил статистику (повторю автоматически)':snapObj?`${snapshotScopeText(snapObj)||'данные'} · обновлено ${ago(snapObj.created_at)}`:'нет данных';
-  $('ads-table').innerHTML=a.rows.length?a.rows.map(r=>{ const id=r.advertId??r.advert_id??r.id; const sp=Number(r.sum??r.spend??0)||0, or=Number(r.orders??r.ordersCount??0)||0, rev=Number(r.sum_price??r.revenue??0)||0, drr=rev>0?sp/rev*100:null, ctr=Number(r.ctr), cpc=Number(r.cpc); let st='ok',tx='Штатно'; if(or===0&&sp>=1500){st='bad';tx='Расход без заказов';} else if(drr!=null&&drr>=20){st='bad';tx='Критичный ДРР';} else if(drr!=null&&drr>=12){st='warn';tx='Повышенный ДРР';} const nms=extractList(r?.nm_settings||r?.nmSettings||[]).map(x=>x.nm_id??x.nmId??x.nmID).filter(x=>!missing(x)); const arts=[...new Set(nms.map(entityName).filter(Boolean))]; return `<tr><td><strong>${esc(names[String(id)]||`Кампания #${id??'—'}`)}</strong><br><span class="muted">${arts.length?esc(arts.join(', ')+' · '):''}кампания ID ${esc(id??'—')}</span></td><td>${rub(sp)}</td><td>${num(or)}</td><td>${rub(rev)}</td><td>${pct(drr)}</td><td>${Number.isFinite(ctr)?pct(ctr):'—'}</td><td>${Number.isFinite(cpc)?rub(cpc):'—'}</td><td><span class="status-tag ${st}">${tx}</span></td></tr>`; }).join(''):`<tr><td colspan="8">${empty(a.error?'WB временно ограничил статистику рекламы. Нули не считаются фактом; система повторит чтение автоматически.':'Нет рекламных данных. Запусти проверку.')}</td></tr>`;
+  $('ads-table').innerHTML=a.rows.length?a.rows.map(r=>{ const id=r.advertId??r.advert_id??r.id; const sp=Number(r.sum??r.spend??0)||0, or=Number(r.orders??r.ordersCount??0)||0, rev=Number(r.sum_price??r.revenue??0)||0, drr=rev>0?sp/rev*100:null, ctr=Number(r.ctr), cpc=Number(r.cpc); let st='ok',tx='Штатно'; if(or===0&&sp>=1500){st='bad';tx='Расход без заказов';} else if(drr!=null&&drr>=20){st='bad';tx='Критичный ДРР';} else if(drr!=null&&drr>=12){st='warn';tx='Повышенный ДРР';} const nms=extractList(r?.nm_settings||r?.nmSettings||[]).map(x=>x.nm_id??x.nmId??x.nmID).filter(x=>!missing(x)); const arts=[...new Set(nms.map(entityName).filter(Boolean))]; return `<tr><td><strong>${esc(campaignLabel(id))}</strong><br><span class="muted">кампания ID ${esc(id??'—')}</span></td><td>${rub(sp)}</td><td>${num(or)}</td><td>${rub(rev)}</td><td>${pct(drr)}</td><td>${Number.isFinite(ctr)?pct(ctr):'—'}</td><td>${Number.isFinite(cpc)?rub(cpc):'—'}</td><td><span class="status-tag ${st}">${tx}</span></td></tr>`; }).join(''):`<tr><td colspan="8">${empty(a.error?'WB временно ограничил статистику рекламы. Нули не считаются фактом; система повторит чтение автоматически.':'Нет рекламных данных. Запусти проверку.')}</td></tr>`;
   const ev=(state.data.events||[]).filter(e=>['advertising_monitor','advertising_optimizer'].includes(e.agent)&&['critical','warning'].includes(e.severity)).slice(0,8); $('ads-signals').innerHTML=ev.length?ev.map(signalHtml).join(''):empty('Проблемных рекламных сигналов сейчас нет.');
   const plans=(state.data.decisions||[]).filter(d=>String(d.decision_key||'').startsWith('advert:')&&(String(d.decision_key||'').includes('numeric_control')||String(d.decision_key||'').includes('zero_orders')));
   if($('ad-control-plans')) $('ad-control-plans').innerHTML=plans.length?plans.map(adPlanHtml).join(''):empty('Числовых планов пока нет. Запусти полный аудит.');
@@ -690,22 +690,42 @@ function renderInventory(){
   const s=snap('inventory','coverage'), cov=s?.data||{};
   $('inventory-updated').textContent=s?`${snapshotScopeText(s)||'данные'} · обновлено ${ago(s.created_at)}`:'нет данных';
   const allRows=Object.values(cov||{});
-  const verifiedRows=allRows.filter(r=>r.stock_verified!==false).sort((a,b)=>(a.days_cover??9999)-(b.days_cover??9999));
+  const verifiedRows=allRows.filter(r=>r.stock_verified!==false);
   const unverifiedCount=allRows.length-verifiedRows.length;
-  let inventoryHtml='';
+  const classify=(r)=>{
+    const days=missing(r.days_cover)?null:Number(r.days_cover);
+    if(!Number.isFinite(days)) return 'unknown';
+    if(days<=2) return 'critical';
+    if(days<=5) return 'low';
+    if(days>=75) return 'overstock';
+    return 'normal';
+  };
+  const counts={critical:0,low:0,overstock:0,normal:0,unknown:0};
+  verifiedRows.forEach(r=>counts[classify(r)]++);
+  const attention=verifiedRows.filter(r=>['critical','low','overstock'].includes(classify(r)));
+  const visible=(state.inventoryFilter==='all'?verifiedRows:attention).sort((a,b)=>{
+    const rank={critical:0,low:1,overstock:2,normal:3,unknown:4};
+    const ca=classify(a), cb=classify(b);
+    if(rank[ca]!==rank[cb]) return rank[ca]-rank[cb];
+    const da=Number(a.days_cover), db=Number(b.days_cover);
+    return ca==='overstock' ? db-da : da-db;
+  });
+
+  let inventoryHtml=`<div class="inventory-toolbar"><div><strong>Требуют внимания: ${num(attention.length)}</strong><span>дефицит ${num(counts.critical)} · низкий запас ${num(counts.low)} · избыток ${num(counts.overstock)} · норма ${num(counts.normal)}</span></div><div class="segmented"><button type="button" data-inventory-filter="attention" class="${state.inventoryFilter==='attention'?'active':''}">Требуют внимания</button><button type="button" data-inventory-filter="all" class="${state.inventoryFilter==='all'?'active':''}">Все товары (${num(verifiedRows.length)})</button></div></div>`;
   if(unverifiedCount){
     inventoryHtml+=`<div class="inventory-source-warning"><strong>Не показываю неподтверждённые остатки как реальные</strong><p>${num(unverifiedCount)} SKU не удалось сопоставить с текущей «Сводной» / FBS. Они скрыты из расчёта дефицита, чтобы не создавать ложные тревоги.</p><small>Нужно проверить строку товара/артикул продавца в «Сводной». Остальные карточки считаются по живым данным.</small></div>`;
   }
-  if(verifiedRows.length){
-    inventoryHtml+=verifiedRows.map(r=>{
-      const days=missing(r.days_cover)?null:Number(r.days_cover), cls=Number.isFinite(days)&&(days<=2?'critical':days<=5?'warn':'');
+  if(visible.length){
+    inventoryHtml+=visible.map(r=>{
+      const days=missing(r.days_cover)?null:Number(r.days_cover), category=classify(r);
+      const cls=category==='critical'?'critical':(['low','overstock'].includes(category)?'warn':'');
       const width=Number.isFinite(days)?Math.max(4,Math.min(100,days/30*100)):100;
       const id=r.nm_id??r.nmId??r.nmID;
-      const tag=cls==='critical'?['bad','Дефицит']:cls==='warn'?['warn','Низкий запас']:['ok','Норма'];
+      const tag=category==='critical'?['bad','Дефицит']:category==='low'?['warn','Низкий запас']:category==='overstock'?['warn','Избыток']:category==='unknown'?['neutral','Нет темпа']:['ok','Норма'];
       return `<button type="button" class="inventory-item ${cls} interactive-card" data-entity-id="${esc(id)}"><div class="inventory-top"><div><strong>${esc(entityName(id))}</strong><small>${entityMeta(id)}</small></div><span class="status-tag ${tag[0]}">${tag[1]}</span></div><div class="inventory-days">${Number.isFinite(days)?`${num(days,1)} дня`:'Нет данных о темпе'}</div><div class="inventory-meta">Остаток ${num(r.stock)} · темп ${num(r.daily_sales,1)}/день · ${esc(r.stock_source||'источник остатка не указан')}${r.velocity_source?` · темп: ${esc(r.velocity_source)}`:''}</div><div class="cover-bar"><i style="width:${width}%"></i></div></button>`;
     }).join('');
-  }else if(!unverifiedCount){
-    inventoryHtml+=empty('Нет данных по покрытию остатками.');
+  }else{
+    inventoryHtml+=empty(state.inventoryFilter==='attention'?'Нет подтверждённых дефицитов, низкого или избыточного запаса.':'Нет данных по покрытию остатками.');
   }
   $('inventory-grid').innerHTML=inventoryHtml;
   const acc=extractList(snap('supply','acceptance')?.data); $('acceptance-list').innerHTML=acc.length?acc.slice(0,8).map(x=>{const coef=missing(x.coefficient)?null:Number(x.coefficient); return `<div class="signal ${Number.isFinite(coef)&&coef<=1?'info':'warning'}"><strong>${esc(x.warehouseName||x.warehouse_name||'Склад')}</strong><p>Коэффициент приёмки: ${Number.isFinite(coef)?num(coef,0):'—'} · разгрузка ${x.allowUnload===false?'недоступна':'доступна'}</p><span class="source">Источник: коэффициенты приёмки WB</span></div>`;}).join(''):empty('Нет данных по коэффициентам приёмки.');
@@ -803,6 +823,8 @@ if($('apply-period')) $('apply-period').addEventListener('click',async()=>{
 });
 document.addEventListener('click',e=>{
   if(e.target.closest('[data-close-detail]')){ closeDetail(); return; }
+  const invFilter=e.target.closest('[data-inventory-filter]');
+  if(invFilter){ state.inventoryFilter=invFilter.dataset.inventoryFilter||'attention'; renderInventory(); return; }
   const go=e.target.closest('[data-go-page]'); if(go){ setPage(go.dataset.goPage); return; }
   const decisionEl=e.target.closest('[data-decision-key]');
   if(decisionEl){
