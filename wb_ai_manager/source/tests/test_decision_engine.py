@@ -30,6 +30,18 @@ def test_stockout_uses_fourteen_day_target_and_concrete_qty():
     assert c.confidence == "medium"
 
 
+def test_zero_forecast_does_not_recommend_supply_of_zero_units():
+    p={"source_health":[],"stores":[],"own_27":{"products":[{
+        "sku":"zero","name":"Таз","orders_per_day":3,"safe_stock":0,
+        "orders_daily_history":[{"date":f"2026-09-{d:02d}","orders":0} for d in range(18,25)],
+    }]}}
+    c=by_key(DecisionEngine(load_policy()).build(p),"sku:zero:stockout")
+    assert c is not None
+    assert "прогноз не подтверждает" in c.title
+    assert not any("Поставить/произвести" in a["action"] for a in c.recommended_actions)
+    assert any("Сверить заказы" in a["action"] for a in c.recommended_actions)
+
+
 def test_k2_stock_source_is_high_confidence():
     p={"source_health":[],"stores":[],"own_27":{"products":[{
         "sku":"3","name":"Товар","orders_per_day":50,"safe_stock":100,"safe_stock_source":"K2 SAFE",
