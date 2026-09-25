@@ -552,15 +552,27 @@ async function savePolicy(){ const b=$('save-policy'); if(!b)return; b.disabled=
 async function rollbackPolicy(){ const b=$('rollback-policy'); if(!b)return; b.disabled=true; try{const r=await fetch('/api/policy-studio/rollback/0',{method:'POST'}); const j=await r.json(); if(!r.ok)throw new Error(j.detail||`HTTP ${r.status}`); showToast('Последнее изменение откатилось.','success'); await fetchData();}catch(e){showToast(`Откат не выполнен: ${e.message}`,'error');}finally{b.disabled=false;}}
 
 function renderInventory(){
-  const s=snap('inventory','coverage'), cov=s?.data||{}; $('inventory-updated').textContent=s?`${snapshotScopeText(s)||'данные'} · обновлено ${ago(s.created_at)}`:'нет данных';
-  const rows=Object.values(cov||{}).sort((a,b)=>(a.stock_verified===false?1:0)-(b.stock_verified===false?1:0)||((a.days_cover??9999)-(b.days_cover??9999)));
-  $('inventory-grid').innerHTML=rows.length?rows.map(r=>{
-    const verified=r.stock_verified!==false, days=missing(r.days_cover)?null:Number(r.days_cover), cls=verified&&Number.isFinite(days)&&(days<=2?'critical':days<=5?'warn':'');
-    const width=verified&&Number.isFinite(days)?Math.max(4,Math.min(100,days/30*100)):100;
-    const id=r.nm_id??r.nmId??r.nmID;
-    const tag=!verified?['warn','НЕ СВЕРЕНО']:cls==='critical'?['bad','Дефицит']:cls==='warn'?['warn','Низкий запас']:['ok','Норма'];
-    return `<button type="button" class="inventory-item ${cls} interactive-card" data-entity-id="${esc(id)}"><div class="inventory-top"><div><strong>${esc(entityName(id))}</strong><small>${entityMeta(id)}</small></div><span class="status-tag ${tag[0]}">${tag[1]}</span></div><div class="inventory-days">${!verified?'Нужна сверка FBS / K2':Number.isFinite(days)?`${num(days,1)} дня`:'Нет данных о темпе'}</div><div class="inventory-meta">Остаток ${num(r.stock)} · темп ${num(r.daily_sales,1)}/день · ${esc(r.stock_source||'источник не указан')}</div><div class="cover-bar"><i style="width:${width}%"></i></div></button>`;
-  }).join(''):empty('Нет данных по покрытию остатками.');
+  const s=snap('inventory','coverage'), cov=s?.data||{};
+  $('inventory-updated').textContent=s?`${snapshotScopeText(s)||'данные'} · обновлено ${ago(s.created_at)}`:'нет данных';
+  const allRows=Object.values(cov||{});
+  const verifiedRows=allRows.filter(r=>r.stock_verified!==false).sort((a,b)=>(a.days_cover??9999)-(b.days_cover??9999));
+  const unverifiedCount=allRows.length-verifiedRows.length;
+  let inventoryHtml='';
+  if(unverifiedCount){
+    inventoryHtml+=`<div class="inventory-source-warning"><strong>Не показываю неподтверждённые остатки как реальные</strong><p>${num(unverifiedCount)} SKU пришли только из WB statistics и не сверены с «Сводной» / K2 / ФФ. Они скрыты из расчёта дефицита, чтобы не создавать ложные тревоги.</p><small>После подключения Google Sheets здесь автоматически появятся реальные FBS-остатки и дни покрытия.</small></div>`;
+  }
+  if(verifiedRows.length){
+    inventoryHtml+=verifiedRows.map(r=>{
+      const days=missing(r.days_cover)?null:Number(r.days_cover), cls=Number.isFinite(days)&&(days<=2?'critical':days<=5?'warn':'');
+      const width=Number.isFinite(days)?Math.max(4,Math.min(100,days/30*100)):100;
+      const id=r.nm_id??r.nmId??r.nmID;
+      const tag=cls==='critical'?['bad','Дефицит']:cls==='warn'?['warn','Низкий запас']:['ok','Норма'];
+      return `<button type="button" class="inventory-item ${cls} interactive-card" data-entity-id="${esc(id)}"><div class="inventory-top"><div><strong>${esc(entityName(id))}</strong><small>${entityMeta(id)}</small></div><span class="status-tag ${tag[0]}">${tag[1]}</span></div><div class="inventory-days">${Number.isFinite(days)?`${num(days,1)} дня`:'Нет данных о темпе'}</div><div class="inventory-meta">Остаток ${num(r.stock)} · темп ${num(r.daily_sales,1)}/день · ${esc(r.stock_source||'источник не указан')}</div><div class="cover-bar"><i style="width:${width}%"></i></div></button>`;
+    }).join('');
+  }else if(!unverifiedCount){
+    inventoryHtml+=empty('Нет данных по покрытию остатками.');
+  }
+  $('inventory-grid').innerHTML=inventoryHtml;
   const acc=extractList(snap('supply','acceptance')?.data); $('acceptance-list').innerHTML=acc.length?acc.slice(0,8).map(x=>{const coef=missing(x.coefficient)?null:Number(x.coefficient); return `<div class="signal ${Number.isFinite(coef)&&coef<=1?'info':'warning'}"><strong>${esc(x.warehouseName||x.warehouse_name||'Склад')}</strong><p>Коэффициент приёмки: ${Number.isFinite(coef)?num(coef,0):'—'} · разгрузка ${x.allowUnload===false?'недоступна':'доступна'}</p><span class="source">Источник: коэффициенты приёмки WB</span></div>`;}).join(''):empty('Нет данных по коэффициентам приёмки.');
 }
 
