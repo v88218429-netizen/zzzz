@@ -1,0 +1,144 @@
+name: WB AI Manager selected-period production smoke
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [mainggg]
+    paths:
+      - ".github/workflows/wb-ai-manager-period-smoke.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  period-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Run historical period through all 19 modules
+        shell: bash
+        env:
+          BASE_URL: https://wb-ai-manager-live-production.up.railway.app
+        run: |
+          python - <<'PY'
+          import json
+          import time
+          import urllib.request
+          from datetime import date, timedelta
+
+          base = __import__("os").environ["BASE_URL"].rstrip("/")
+          end = date.today() - timedelta(days=1)
+          start = end - timedelta(days=2)
+          frm, to = start.isoformat(), end.isoformat()
+
+          def get(path):
+              req = urllib.request.Request(base + path, headers={"User-Agent":"wb-period-smoke/1"})
+              with urllib.request.urlopen(req, timeout=45) as r:
+                  if r.status != 200:
+                      raise RuntimeError(f"{path}: HTTP {r.status}")
+                  return json.loads(r.read().decode("utf-8"))
+
+          def post(path, payload):
+              req = urllib.request.Request(
+                  base + path,
+                  data=json.dumps(payload).encode(),
+                  headers={"Content-Type":"application/json","User-Agent":"wb-period-smoke/1"},
+                  method="POST",
+              )
+              with urllib.request.urlopen(req, timeout=45) as r:
+                  if r.status != 200:
+                      raise RuntimeError(f"{path}: HTTP {r.status}")
+                  return json.loads(r.read().decode("utf-8"))
+
+          health = get("/health")
+          assert health.get("status") == "ok", health
+          assert health.get("app_version") == "1.1.4", health
+          assert health.get("read_only") is True, health
+
+          started = post("/api/period-audit", {"from_date":frm,"to_date":to})
+          assert started.get("status") in {"started","running"}, started
+
+          last = None
+          for attempt in range(36):
+              d = get(f"/api/dashboard-data?from_date={frm}&to_date={to}")
+              last = d
+              audit = d.get("period_audit") or {}
+              print(f"attempt={attempt+1}/36 status={audit.get('status')} agents={audit.get('agents_done')}/19")
+              if audit.get("status") == "error":
+                  raise AssertionError(audit)
+              if audit.get("ready"):
+                  break
+              time.sleep(10)
+          else:
+              raise AssertionError({"reason":"period audit timeout","period_audit":(last or {}).get("period_audit")})
+
+          d = last
+          audit = d["period_audit"]
+          assert audit["agents_done"] == 19, audit
+          assert len(d.get("runs") or {}) == 19, d.get("runs")
+          assert d.get("period",{}).get("from") == frm, d.get("period")
+          assert d.get("period",{}).get("to") == to, d.get("period")
+          assert d.get("data_quality",{}).get("period_snapshot_mode") == "selected_period", d.get("data_quality")
+
+          snaps = d.get("snapshots") or {}
+          scopes = {}
+          missing_meta = []
+          for agent, group in snaps.items():
+              for key, item in (group or {}).items():
+                  meta = ((item or {}).get("data") or {}).get("_analysis") or {}
+                  if meta.get("mode") != "period_audit":
+                      missing_meta.append(f"{agent}.{key}")
+                  scopes[f"{agent}.{key}"] = meta.get("scope")
+          assert not missing_meta, {"snapshots_without_period_meta":missing_meta}
+
+          assert scopes.get("cards.card_catalog") == "current_snapshot", scopes
+          assert scopes.get("inventory.coverage") == "current_plus_period", scopes
+          assert scopes.get("finance.worker_finance") == "period_filterable_export", scopes
+          if "advertising_monitor.stats_7d" in scopes:
+              assert scopes["advertising_monitor.stats_7d"] == "selected_period", scopes
+          if "finance.report_7d" in scopes:
+              assert scopes["finance.report_7d"] == "selected_period", scopes
+          if "search_positions.positions" in scopes:
+              assert scopes["search_positions.positions"] == "selected_period", scopes
+          if "documents.documents_7d" in scopes:
+              assert scopes["documents.documents_7d"] == "selected_period", scopes
+
+          inventory = (((snaps.get("inventory") or {}).get("coverage") or {}).get("data") or {})
+          inventory_rows = [v for k,v in inventory.items() if k != "_analysis" and isinstance(v,dict)]
+          for row in inventory_rows[:20]:
+              assert row.get("sales_period_from") == frm, row
+              assert row.get("sales_period_to") == to, row
+              assert row.get("velocity_scope") == "selected_period", row
+              assert row.get("stock_scope") == "current_snapshot", row
+
+          em = d.get("entity_map") or {}
+          live = [v for v in em.values() if isinstance(v,dict) and v.get("source")=="live_wb_cards" and v.get("seller_article")]
+          card_data = ((((snaps.get("cards") or {}).get("card_catalog") or {}).get("data")) or {})
+          card_count = int(card_data.get("count") or len(card_data.get("cards") or []))
+          assert card_count > 0, card_data
+          assert len(live) >= card_count, {"card_count":card_count,"live_seller_articles":len(live)}
+
+          period_events = []
+          current_events = []
+          for e in d.get("events") or []:
+              scope = (((e.get("payload") or {}).get("_analysis") or {}).get("scope"))
+              (current_events if scope == "current_snapshot" else period_events).append(e)
+          expected_critical = sum(1 for e in period_events if e.get("severity")=="critical")
+          expected_warning = sum(1 for e in period_events if e.get("severity")=="warning")
+          assert d.get("summary",{}).get("critical_24h") == expected_critical, d.get("summary")
+          assert d.get("summary",{}).get("warning_24h") == expected_warning, d.get("summary")
+
+          print(json.dumps({
+              "ok": True,
+              "period": d.get("period"),
+              "agents": audit.get("agents_done"),
+              "snapshot_groups": sorted(snaps),
+              "scope_counts": {s:list(scopes.values()).count(s) for s in sorted(set(scopes.values()))},
+              "card_catalog_count": card_count,
+              "live_seller_articles": len(live),
+              "period_events": len(period_events),
+              "current_snapshot_events": len(current_events),
+              "decisions": len(d.get("decisions") or []),
+              "audit_errors": audit.get("errors"),
+          }, ensure_ascii=False, indent=2))
+          PY
