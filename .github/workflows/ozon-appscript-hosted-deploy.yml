@@ -142,6 +142,14 @@ jobs:
           clasp push -f
           echo "HOSTED_APPS_SCRIPT_DEPLOY=success"
 
+      - name: Try immediate FF sync
+        if: steps.auth.outputs.ready == '1'
+        shell: bash
+        continue-on-error: true
+        run: |
+          cd /tmp/ozon-appscript-live
+          clasp run ffPenaltiesSyncNow || true
+
       - name: Explain blocked deploy
         if: steps.auth.outputs.ready != '1'
         run: |
