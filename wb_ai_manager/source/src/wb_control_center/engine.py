@@ -271,11 +271,9 @@ class ControlCenter:
         period_native = {
             ("advertising_monitor", "stats_7d"),
             ("advertising_optimizer", "stats_14d"),
-            ("advertising_optimizer", "deep_scan"),
             ("funnel", "funnel_7d"),
             ("search_positions", "positions"),
             ("finance", "report_7d"),
-            ("finance", "worker_finance"),
             ("cost_guard", "paid_storage"),
             ("cost_guard", "measurement_penalties"),
             ("cost_guard", "deductions"),
@@ -285,11 +283,17 @@ class ControlCenter:
         }
         mixed = {
             ("inventory", "coverage"),
+            ("advertising_optimizer", "deep_scan"),
+        }
+        filterable_exports = {
+            ("finance", "worker_finance"),
         }
         if (agent, key) in period_native:
             return "selected_period"
         if (agent, key) in mixed:
             return "current_plus_period"
+        if (agent, key) in filterable_exports:
+            return "period_filterable_export"
         return "current_snapshot"
 
     async def _run_period_agent(self, name: str, period: PeriodContext) -> dict[str, Any]:
@@ -333,6 +337,7 @@ class ControlCenter:
         events = []
         for idx, event in enumerate(result.events):
             row = asdict(event)
+            row["event_key"] = row.get("key")
             row["id"] = f"period:{period.key}:{name}:{idx}"
             row["payload"] = dict(row.get("payload") or {})
             row["payload"]["_analysis"] = {"period": period.to_dict(), "mode": "period_audit"}
@@ -466,6 +471,7 @@ class ControlCenter:
                     "agent": "supervisor",
                     "severity": "info",
                     "key": "period_supervisor_digest",
+                    "event_key": "supervisor_digest",
                     "title": "Сводка управляющего за выбранный период",
                     "message": "\n".join(digest_lines),
                     "payload": {"period": period.to_dict(), "decision_count": len(cards)},
