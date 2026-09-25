@@ -421,6 +421,10 @@ if "function syncK2StocksOnlyLegacy_()" not in k2_text:
   }
 
   try {
+    if (typeof k2EvolutionFetchAndApply_ === 'function') {
+      return k2EvolutionFetchAndApply_();
+    }
+
     return syncK2StocksOnlyLegacy_();
   } finally {
     lock.releaseLock();
