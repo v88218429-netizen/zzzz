@@ -5,7 +5,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 import websocket
 
 HOST="0.0.0.0"; PORT=8900; CDP="http://127.0.0.1:9222"; _seq=0
-VERSION="win-edge-0.2.0"
+VERSION="win-edge-0.2.2"
 
 def _json(url):
     with urllib.request.urlopen(url, timeout=10) as r: return json.load(r)
