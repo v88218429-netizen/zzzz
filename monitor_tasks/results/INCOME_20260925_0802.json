@@ -1,0 +1,215 @@
+{
+  "task_id": "INCOME",
+  "request": "INCOME_20260925_0802.json",
+  "query": "как выйти на 1 миллион чистой прибыли в месяц бизнес реальные кейсы",
+  "knowledge_tag": "INCOME",
+  "generated_at": "2026-09-25T06:06:39.655954+00:00",
+  "videos": [
+    {
+      "video_id": "kq3w6vQRjoM",
+      "url": "https://www.youtube.com/watch?v=kq3w6vQRjoM",
+      "title": "300 МИЛЛИОНОВ РУБЛЕЙ НА ЭПИЛЯЦИИ ИЛИ КАК ВЫБРАТЬ 1 ПУТЬ РАЗВИТИЯ БИЗНЕСА? | Бизнес молодость",
+      "channel": "МЗС",
+      "duration": 549,
+      "timestamp": null,
+      "query": "как выйти на 1 миллион чистой прибыли в месяц бизнес реальные кейсы",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-25_INCOME_video_kq3w6vQRjoM.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "khoavWf-CTI",
+      "url": "https://www.youtube.com/watch?v=khoavWf-CTI",
+      "title": "С 1,1 до 4 млн: как стоматология в Чите выросла втрое и открыла второй филиал",
+      "channel": "Баир Цыренов | Стоматология как бизнес",
+      "duration": 212,
+      "timestamp": null,
+      "query": "как выйти на 1 миллион чистой прибыли в месяц бизнес реальные кейсы",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-25_INCOME_video_khoavWf-CTI.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "PljqnFcUgUg",
+      "url": "https://www.youtube.com/watch?v=PljqnFcUgUg",
+      "title": "Как заработать в интернете 100000 в месяц?",
+      "channel": "Онлайн ЗАРАБОТОК и ОБЗОРЫ",
+      "duration": 258,
+      "timestamp": null,
+      "query": "как выйти на 1 миллион чистой прибыли в месяц бизнес реальные кейсы",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-25_INCOME_video_PljqnFcUgUg.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "pf0XOiYTYGE",
+      "url": "https://www.youtube.com/watch?v=pf0XOiYTYGE",
+      "title": "Бизнес на экономии  Как зарабатывать 200 тыс рублей в месяц",
+      "channel": "Водяной",
+      "duration": 4443,
+      "timestamp": null,
+      "query": "как выйти на 1 миллион чистой прибыли в месяц бизнес реальные кейсы",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-25_INCOME_video_pf0XOiYTYGE.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "eoCrXWaIrJE",
+      "url": "https://www.youtube.com/watch?v=eoCrXWaIrJE",
+      "title": "Интернет бизнес до результата  с 0 до 300 000 рублей в месяц обзор",
+      "channel": "Работаем в сети",
+      "duration": 232,
+      "timestamp": null,
+      "query": "как выйти на 1 миллион чистой прибыли в месяц бизнес реальные кейсы",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-25_INCOME_video_eoCrXWaIrJE.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "ZiiY1hA9cWE",
+      "url": "https://www.youtube.com/watch?v=ZiiY1hA9cWE",
+      "title": "400 000 рублей чистыми в сентябре 2022. Кейс Тимура Евлоева после внедрения новой системы.",
+      "channel": "Госзакупки Тендеры Канал Александра Гуськова",
+      "duration": 661,
+      "timestamp": null,
+      "query": "как выйти на 1 миллион чистой прибыли в месяц бизнес реальные кейсы",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-25_INCOME_video_ZiiY1hA9cWE.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "RrWYlv3yoas",
+      "url": "https://www.youtube.com/watch?v=RrWYlv3yoas",
+      "title": "Пошаговая схема выхода с НУЛЯ на 1 МЛНр на WILDBERRIES в 2025-2026 году!",
+      "channel": "Сын Бакальчук",
+      "duration": 3120,
+      "timestamp": null,
+      "query": "как выйти на 1 миллион чистой прибыли в месяц бизнес реальные кейсы",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-25_INCOME_video_RrWYlv3yoas.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "VxHiBDaGnnI",
+      "url": "https://www.youtube.com/watch?v=VxHiBDaGnnI",
+      "title": "Самые ПРИБЫЛЬНЫЕ ниши для малого бизнеса ВО ВСЕ ВРЕМЕНА! / Как выбрать дело на ВСЮ жизнь?",
+      "channel": "Kumar Mukhametzyanov",
+      "duration": 692,
+      "timestamp": null,
+      "query": "как выйти на 1 миллион чистой прибыли в месяц бизнес реальные кейсы",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-25_INCOME_video_VxHiBDaGnnI.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "JIj6sNCUCEc",
+      "url": "https://www.youtube.com/watch?v=JIj6sNCUCEc",
+      "title": "Как быстро открыть прибыльный бизнес с нуля | РАЗБОР БМ ЦЕЛЬ",
+      "channel": "ПОЛНЫЙ РАЗБОР БМ ЦЕЛЬ",
+      "duration": 1082,
+      "timestamp": null,
+      "query": "как выйти на 1 миллион чистой прибыли в месяц бизнес реальные кейсы",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-25_INCOME_video_JIj6sNCUCEc.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "oBHs0azHzFw",
+      "url": "https://www.youtube.com/watch?v=oBHs0azHzFw",
+      "title": "Как получать пассивный доход 100.000 рублей в месяц сделав 1 сделку? [Автор секрета: Артем Мельник]",
+      "channel": "New Rich",
+      "duration": 1394,
+      "timestamp": null,
+      "query": "как выйти на 1 миллион чистой прибыли в месяц бизнес реальные кейсы",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-25_INCOME_video_oBHs0azHzFw.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "2oYMGQ50EhE",
+      "url": "https://www.youtube.com/watch?v=2oYMGQ50EhE",
+      "title": "Как закрыть долги | Что делать в безвыходной ситуации | Маргулан Сейсембай",
+      "channel": "МАРГУЛАН СЕЙСЕМБАЙ",
+      "duration": 95,
+      "timestamp": null,
+      "query": "как увеличить прибыль до 1 млн в месяц предприниматель",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-25_INCOME_short_2oYMGQ50EhE.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "lyvViRP-SuM",
+      "url": "https://www.youtube.com/watch?v=lyvViRP-SuM",
+      "title": "С 150т.р. до МИЛЛИОНЕРА за 4 встречи",
+      "channel": "Татьяна Суханова. БИЗНЕС - Психолог. РАССТАНОВКИ.",
+      "duration": 155,
+      "timestamp": null,
+      "query": "как увеличить прибыль до 1 млн в месяц предприниматель shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-25_INCOME_short_lyvViRP-SuM.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "79pzKHybyss",
+      "url": "https://www.youtube.com/watch?v=79pzKHybyss",
+      "title": "Хостел как бизнес идея. Бизнес план. Бизнес ниша. Ресепшн. Комната. Ключ. Карта. Общежитие. Соседи.",
+      "channel": "Free topic +",
+      "duration": 125,
+      "timestamp": null,
+      "query": "доход 1.5 млн в месяц бизнес модель shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-25_INCOME_short_79pzKHybyss.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "Fe0fRI3-2zA",
+      "url": "https://www.youtube.com/watch?v=Fe0fRI3-2zA",
+      "title": "Хостел преткновения: предпринимательница из Березников потеряла свободу и бизнес",
+      "channel": "RifeyTV",
+      "duration": 165,
+      "timestamp": null,
+      "query": "доход 1.5 млн в месяц бизнес модель shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-25_INCOME_short_Fe0fRI3-2zA.md",
+      "method": "FreeTranscriptAPI"
+    }
+  ],
+  "errors": [
+    {
+      "video_id": "uqsurljwxqM",
+      "url": "https://www.youtube.com/watch?v=uqsurljwxqM",
+      "title": "Партнерство и рост прибыли. Реальный кейс. Приглашение на бизнес-встречу",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "M8hfMLKkgAE",
+      "url": "https://www.youtube.com/watch?v=M8hfMLKkgAE",
+      "title": "где заработать миллион рублей за короткий срок",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "_wPv-CtaK64",
+      "url": "https://www.youtube.com/watch?v=_wPv-CtaK64",
+      "title": "СКОЛЬКО ЗАРАБАТЫВАЕТ РИЕЛТОР?",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "NcOKWAmESMY",
+      "url": "https://www.youtube.com/watch?v=NcOKWAmESMY",
+      "title": "Получай стабильный доход с надежным фермером из ОФ \"Наполеон\"",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "epPHLhk5vTs",
+      "url": "https://www.youtube.com/watch?v=epPHLhk5vTs",
+      "title": "Бизнес на 3д моделях! Меднение",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "NvAAMc4dw68",
+      "url": "https://www.youtube.com/watch?v=NvAAMc4dw68",
+      "title": "✅238 тысяч рублей за 1 месяц: Инвестиции для начинающих. Как начать инвестировать в акции 2022?",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    }
+  ]
+}
