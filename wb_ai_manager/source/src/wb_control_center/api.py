@@ -3,6 +3,9 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 import asyncio
 import logging
+import hashlib
+import csv
+import io
 import httpx
 from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
@@ -10,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, Header, HTTPException
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from .config import Settings
@@ -32,6 +35,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 update_manager = UpdateManager(PROJECT_ROOT, settings.auto_update_manifest_url, settings.auto_update_channel)
 log = logging.getLogger(__name__)
 _background_tasks: set[asyncio.Task] = set()
+_photo_csv_cache: dict[str, dict[str, Any]] = {}
+_photo_csv_inflight: set[str] = set()
+_photo_csv_sem = asyncio.Semaphore(1)
 
 
 def _iso_dt(value: Any) -> datetime | None:
@@ -106,6 +112,147 @@ def _health_payload() -> dict[str, Any]:
 @app.get("/health")
 async def health() -> dict[str, Any]:
     return _health_payload()
+
+
+def _photo_csv_row(result: dict[str, Any]) -> str:
+    buf = io.StringIO()
+    writer = csv.writer(buf, lineterminator="")
+    damage_types = result.get("damage_types") or []
+    if not isinstance(damage_types, list):
+        damage_types = []
+    writer.writerow([
+        result.get("display_status")
+        or (
+            "ПРОАНАЛИЗИРОВАНО"
+            if result.get("status") == "analyzed"
+            else "ОБРАБАТЫВАЕТСЯ"
+        ),
+        result.get("verdict") or "",
+        result.get("confidence_pct")
+        if result.get("confidence_pct") is not None
+        else "",
+        result.get("substitution") or "",
+        result.get("damage") or "",
+        result.get("damage_severity") or "",
+        ", ".join(str(x) for x in damage_types),
+        result.get("visible_evidence") or "",
+        "ДА" if result.get("human_review") else "НЕТ",
+        datetime.now(ZoneInfo(settings.app_timezone)).strftime("%d.%m.%Y %H:%M"),
+    ])
+    return buf.getvalue()
+
+
+async def _photo_csv_run(
+    key: str,
+    payload: dict[str, Any],
+) -> None:
+    async with _photo_csv_sem:
+        try:
+            result = await photo_analyzer.analyze(
+                expected=str(payload.get("expected") or ""),
+                reported_received=str(payload.get("reported_received") or ""),
+                category=str(payload.get("category") or ""),
+                shop=str(payload.get("shop") or ""),
+                sticker=str(payload.get("sticker") or ""),
+                nm_id=str(payload.get("nm_id") or ""),
+                photo_urls=[str(x) for x in payload.get("photo_urls") or []],
+            )
+            if result.get("status") == "analyzed":
+                result["display_status"] = "ПРОАНАЛИЗИРОВАНО"
+            else:
+                result["display_status"] = "НЕДОСТАТОЧНО ДАННЫХ"
+            _photo_csv_cache[key] = result
+        except Exception as exc:
+            log.exception("background photo csv analysis failed")
+            _photo_csv_cache[key] = {
+                "status": "insufficient",
+                "display_status": "ОШИБКА VISION",
+                "verdict": "НЕДОСТАТОЧНО ДАННЫХ",
+                "confidence_pct": "",
+                "substitution": "ВОЗМОЖНО",
+                "damage": "ВОЗМОЖНО",
+                "damage_severity": "НЕИЗВЕСТНО",
+                "damage_types": [],
+                "visible_evidence": str(exc)[:350],
+                "human_review": True,
+            }
+        finally:
+            _photo_csv_inflight.discard(key)
+
+
+@app.get("/api/photo-analysis.csv")
+async def photo_analysis_csv(
+    expected: str = "",
+    received: str = "",
+    category: str = "",
+    shop: str = "",
+    sticker: str = "",
+    nm: str = "",
+    p1: str = "",
+    p2: str = "",
+    p3: str = "",
+    p4: str = "",
+    p5: str = "",
+    t: str = "",
+) -> Response:
+    # Public read-only endpoint intentionally accepts only WB static-basket image URLs.
+    # It is designed for Google Sheets IMPORTDATA formulas; t is a harmless cache-buster.
+    photo_urls = [x for x in [p1, p2, p3, p4, p5] if x]
+    canonical = json.dumps(
+        {
+            "expected": expected,
+            "received": received,
+            "category": category,
+            "shop": shop,
+            "sticker": sticker,
+            "nm": nm,
+            "photo_urls": photo_urls,
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+    )
+    key = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+    cached = _photo_csv_cache.get(key)
+    if cached is not None:
+        return Response(
+            _photo_csv_row(cached),
+            media_type="text/csv; charset=utf-8",
+            headers={"Cache-Control": "public, max-age=120"},
+        )
+
+    if key not in _photo_csv_inflight:
+        _photo_csv_inflight.add(key)
+        payload = {
+            "expected": expected,
+            "reported_received": received,
+            "category": category,
+            "shop": shop,
+            "sticker": sticker,
+            "nm_id": nm,
+            "photo_urls": photo_urls,
+        }
+        task = asyncio.create_task(_photo_csv_run(key, payload))
+        _background_tasks.add(task)
+        task.add_done_callback(_background_tasks.discard)
+
+    pending = {
+        "status": "pending",
+        "display_status": "ОБРАБАТЫВАЕТСЯ",
+        "verdict": "",
+        "confidence_pct": "",
+        "substitution": "",
+        "damage": "",
+        "damage_severity": "",
+        "damage_types": [],
+        "visible_evidence": "Фото поставлены в очередь на локальный анализ.",
+        "human_review": False,
+    }
+    return Response(
+        _photo_csv_row(pending),
+        media_type="text/csv; charset=utf-8",
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 @app.get("/api/photo-analysis/status")
