@@ -138,13 +138,23 @@ async def sync_once():
                 state["ok"] = False
                 state["errors"]["promotion"] = f"{type(exc).__name__}: {exc}"
             try:
-                raw = await _request(client, token, "POST", ANALYTICS + "/api/analytics/v3/sales-funnel/products/history",
-                                     json={"selectedPeriod": {"start": begin, "end": end},
-                                           "nmIds": [], "skipDeletedNm": True, "aggregationLevel": "day"})
-                _atomic_json(DATA_DIR / shop / "funnel.json", raw)
-                shop_funnel = _funnel_rows(shop, raw)
+                # History requires 1..20 explicit nmIds; [] is a WB 400.
+                nm_ids = sorted({int(row[3]) for row in shop_rows})
+                shop_funnel = []
+                for start in range(0, len(nm_ids), 20):
+                    if start:
+                        await asyncio.sleep(20)
+                    raw = await _request(
+                        client, token, "POST",
+                        ANALYTICS + "/api/analytics/v3/sales-funnel/products/history",
+                        json={"selectedPeriod": {"start": begin, "end": end},
+                              "nmIds": nm_ids[start:start + 20],
+                              "skipDeletedNm": True, "aggregationLevel": "day"})
+                    _atomic_json(DATA_DIR / shop / f"funnel_{start // 20}.json", raw)
+                    shop_funnel.extend(_funnel_rows(shop, raw))
                 funnel_rows.extend(shop_funnel)
                 state["funnel_rows"] = len(shop_funnel)
+                state["funnel_nm_ids"] = len(nm_ids)
             except Exception as exc:
                 state["ok"] = False
                 state["errors"]["funnel"] = f"{type(exc).__name__}: {exc}"
