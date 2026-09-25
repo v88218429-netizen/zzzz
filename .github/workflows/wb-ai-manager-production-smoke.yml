@@ -1,0 +1,78 @@
+name: WB AI Manager production smoke
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [mainggg]
+    paths:
+      - ".github/workflows/wb-ai-manager-production-smoke.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Verify live Railway service
+        shell: bash
+        env:
+          BASE_URL: https://wb-ai-manager-live-production.up.railway.app
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, time, urllib.request
+
+          base=os.environ["BASE_URL"].rstrip("/")
+
+          def get(path):
+              req=urllib.request.Request(base+path, headers={"User-Agent":"wb-ai-manager-production-smoke/1"})
+              with urllib.request.urlopen(req, timeout=30) as r:
+                  if r.status != 200:
+                      raise RuntimeError(f"{path}: HTTP {r.status}")
+                  return json.loads(r.read().decode("utf-8"))
+
+          last=None
+          for attempt in range(20):
+              try:
+                  health=get("/health")
+                  assert health.get("status") == "ok", health
+                  assert health.get("wb_connected") is True, health
+                  assert health.get("wb_mode") == "live", health
+                  assert health.get("read_only") is True, health
+                  assert len(health.get("agents") or []) == 19, health
+
+                  dashboard=get("/api/dashboard-data")
+                  runs=dashboard.get("runs") or {}
+                  connections=dashboard.get("connections") or {}
+                  snapshots=dashboard.get("snapshots") or {}
+
+                  # Startup full audit is asynchronous; require every role to have
+                  # produced a latest run before calling production ready.
+                  assert len(runs) == 19, {"run_count":len(runs),"runs":sorted(runs)}
+                  assert (connections.get("wb_worker") or {}).get("configured") is True, connections
+                  assert "worker_source_health" in (snapshots.get("api_health") or {}), snapshots.get("api_health")
+                  assert "worker_finance" in (snapshots.get("finance") or {}), snapshots.get("finance")
+                  assert "worker_fbs" in (snapshots.get("orders_fbs") or {}), snapshots.get("orders_fbs")
+                  assert "worker_penalty_evidence" in (snapshots.get("cost_guard") or {}), snapshots.get("cost_guard")
+
+                  print(json.dumps({
+                      "ok": True,
+                      "app_version": health.get("app_version"),
+                      "agents": len(health.get("agents") or []),
+                      "latest_runs": len(runs),
+                      "wb_connected": health.get("wb_connected"),
+                      "read_only": health.get("read_only"),
+                      "worker_configured": (connections.get("wb_worker") or {}).get("configured"),
+                      "snapshot_groups": sorted(snapshots),
+                      "decision_count": len(dashboard.get("decisions") or []),
+                      "recommendation_count": len(dashboard.get("recommendations") or []),
+                  }, ensure_ascii=False, indent=2))
+                  raise SystemExit(0)
+              except Exception as exc:
+                  last=exc
+                  print(f"attempt={attempt+1}/20 not ready: {exc}")
+                  time.sleep(15)
+          raise SystemExit(f"production smoke failed: {last}")
+          PY
