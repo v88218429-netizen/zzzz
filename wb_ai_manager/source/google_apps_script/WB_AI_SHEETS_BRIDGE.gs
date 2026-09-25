@@ -105,67 +105,36 @@ function doPost(e) {
 }
 
 function readSource_(name, cfg) {
-  const token = ScriptApp.getOAuthToken();
-  const entries = Object.keys(cfg.ranges).map(key => {
-    const a1 = cfg.ranges[key];
-    const parsed = parseA1_(a1);
-    return {
-      key: key,
-      a1: a1,
-      url:
-        'https://docs.google.com/spreadsheets/d/' +
-        encodeURIComponent(cfg.spreadsheetId) +
-        '/gviz/tq?tqx=out:csv&sheet=' +
-        encodeURIComponent(parsed.sheet) +
-        '&range=' +
-        encodeURIComponent(parsed.range)
-    };
-  });
-
-  const responses = UrlFetchApp.fetchAll(entries.map(entry => ({
-    url: entry.url,
-    method: 'get',
-    headers: {Authorization: 'Bearer ' + token},
-    muteHttpExceptions: true,
-    followRedirects: true
-  })));
-
+  const ss = SpreadsheetApp.openById(cfg.spreadsheetId);
   const ranges = {};
-  responses.forEach((resp, i) => {
-    const entry = entries[i];
-    const code = resp.getResponseCode();
-    const text = resp.getContentText();
-    if (code >= 200 && code < 300) {
-      ranges[entry.key] = {
-        range: entry.a1,
-        values: text ? Utilities.parseCsv(text) : []
-      };
-    } else {
-      ranges[entry.key] = {
-        range: entry.a1,
-        error: 'GViz HTTP ' + code + ': ' + text.slice(0, 500)
-      };
+  Object.keys(cfg.ranges).forEach(key => {
+    const a1 = cfg.ranges[key];
+    try {
+      ranges[key] = {range: a1, values: readA1_(ss, a1)};
+    } catch (err) {
+      ranges[key] = {range: a1, error: String(err)};
     }
   });
-
   return {
     name: name,
-    title: name,
+    title: ss.getName(),
     spreadsheet_id: cfg.spreadsheetId,
     read_at: new Date().toISOString(),
     ranges: ranges
   };
 }
 
-function parseA1_(a1) {
+function readA1_(ss, a1) {
   const bang = a1.indexOf('!');
   if (bang < 0) throw new Error('Range must include sheet name: ' + a1);
-  let sheet = a1.substring(0, bang);
-  const range = a1.substring(bang + 1);
-  if (sheet.startsWith("'") && sheet.endsWith("'")) {
-    sheet = sheet.slice(1, -1).replace(/''/g, "'");
+  let sheetName = a1.substring(0, bang);
+  const cellRange = a1.substring(bang + 1);
+  if (sheetName.startsWith("'") && sheetName.endsWith("'")) {
+    sheetName = sheetName.slice(1, -1).replace(/''/g, "'");
   }
-  return {sheet: sheet, range: range};
+  const sh = ss.getSheetByName(sheetName);
+  if (!sh) throw new Error('Sheet not found: ' + sheetName);
+  return sh.getRange(cellRange).getDisplayValues();
 }
 
 function json_(obj) {
