@@ -383,3 +383,8 @@ button.interactive-card{font:inherit;color:inherit;text-align:left;width:100%}
 .period-audit-banner.done{border-color:#cde8dc;background:linear-gradient(135deg,#f5fcf8,#fff)}.period-audit-banner.done .period-audit-icon{background:#e0f4ea;color:#2f765a}
 .period-audit-banner.error{border-color:#f1c9cf;background:#fff8f9}.period-audit-banner.error .period-audit-icon{background:#fae2e6;color:#9c3b4b}
 @media(max-width:760px){.period-audit-banner{grid-template-columns:30px 1fr;margin:0 10px 12px}.period-audit-banner>.pill{grid-column:2;justify-self:start}.period-audit-icon{width:30px;height:30px}}
+
+.decision-toolbar { grid-column: 1 / -1; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 12px; border:1px solid #eceef3; border-radius:12px; background:#fafbfc; }
+.decision-toolbar > div:first-child { display:flex; flex-direction:column; gap:3px; }
+.decision-toolbar strong { font-size:10px; color:#343844; }
+.decision-toolbar span { font-size:8px; color:#818694; }
