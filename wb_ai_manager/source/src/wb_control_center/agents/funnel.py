@@ -12,10 +12,9 @@ class FunnelAgent(BaseAgent):
 
     async def run(self) -> AgentResult:
         out = AgentResult(agent=self.name)
-        today = datetime.now().date()
-        start = (today - timedelta(days=6)).isoformat()
+        start, end = self.dates(7)
         try:
-            data = await self.call("wb_analytics_detail", date_from=start, date_to=today.isoformat(), limit=1000)
+            data = await self.call("wb_analytics_detail", date_from=start, date_to=end, limit=1000)
         except Exception as e:
             out.events.append(self.event("warning", "funnel_failed", "Не удалось получить воронку продаж", str(e)))
             return out
