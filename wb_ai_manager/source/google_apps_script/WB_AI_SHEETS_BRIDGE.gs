@@ -9,7 +9,21 @@
  *
  * This code ONLY reads whitelisted spreadsheet IDs/ranges below. It has no write functions.
  */
-const ACCESS_KEY = 'CHANGE_ME_TO_A_LONG_RANDOM_SECRET';
+function accessKey_() {
+  const props = PropertiesService.getScriptProperties();
+  let key = props.getProperty('ACCESS_KEY');
+  if (!key) {
+    key = Utilities.getUuid().replace(/-/g, '') + Utilities.getUuid().replace(/-/g, '');
+    props.setProperty('ACCESS_KEY', key);
+  }
+  return key;
+}
+
+function setupBridge() {
+  const key = accessKey_();
+  console.log('WB_BRIDGE_KEY=' + key);
+  return {ok: true, key_created: true};
+}
 
 const SOURCES = {
   weekly_summary: {
@@ -77,7 +91,7 @@ function doGet() {
 function doPost(e) {
   try {
     const body = JSON.parse((e && e.postData && e.postData.contents) || '{}');
-    if (!body.key || body.key !== ACCESS_KEY) return json_({ok: false, error: 'unauthorized'});
+    if (!body.key || body.key !== accessKey_()) return json_({ok: false, error: 'unauthorized'});
     const requested = body.action === 'all' ? Object.keys(SOURCES) : [String(body.source || '')];
     const out = {};
     requested.forEach(name => {
