@@ -73,7 +73,7 @@ if "k2EvolutionFetchAndApply_()" not in func:
           .getProperty('K2_EV_CUTOVER_DONE') || ''
       ).trim() ||
       shouldRunByProperty_(
-        'K2_LAST_SUCCESS_AT',
+        'K2_EV_LAST_RUN_AT',
         MASTER_AUTOMATION_CFG.K2_EVERY_MINUTES
       )
     ) {
@@ -109,7 +109,7 @@ if "k2EvolutionFetchAndApply_()" not in func:
         raise SystemExit(f"PATCH_FAIL: K2 block replacements={count}")
 
 # Step 1b: guarantee one Evolution run during migration even while a legacy
-# 10-minute K2 trigger keeps K2_LAST_SUCCESS_AT fresh.
+# K2 scheduling is based on the last real Evolution API run, not the health heartbeat.
 if "K2_EV_LAST_RUN_AT" not in func:
     old_condition = (
         "if (forceAll || historyDue || "
@@ -131,7 +131,7 @@ if "K2_EV_LAST_RUN_AT" not in func:
           .getProperty('K2_EV_CUTOVER_DONE') || ''
       ).trim() ||
       shouldRunByProperty_(
-        'K2_LAST_SUCCESS_AT',
+        'K2_EV_LAST_RUN_AT',
         MASTER_AUTOMATION_CFG.K2_EVERY_MINUTES
       )
     ) {"""
