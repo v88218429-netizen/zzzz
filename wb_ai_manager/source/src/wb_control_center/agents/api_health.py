@@ -12,6 +12,14 @@ class ApiHealthAgent(BaseAgent):
         out = AgentResult(agent=self.name)
         shops = await self.call("wb_list_shops")
         out.snapshots.append(("shops", shops if isinstance(shops, dict) else {"data": shops}))
+        if self.ctx.worker is not None and self.ctx.worker.configured:
+            try:
+                worker_health = await self.ctx.worker.health_summary()
+                out.snapshots.append(("worker_source_health", worker_health))
+                if worker_health.get("status") != "FRESH":
+                    out.events.append(self.event("warning", "worker_source_degraded", "Внутренний источник wb-api-worker не полностью свежий", str(worker_health.get("streams") or {}), worker_health))
+            except Exception as e:
+                out.events.append(self.event("warning", "worker_source_failed", "Не удалось проверить wb-api-worker", str(e)))
         try:
             token_info = await self.call("wb_token_info")
             out.snapshots.append(("token_info", token_info if isinstance(token_info, dict) else {"data": token_info}))

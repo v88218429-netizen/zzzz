@@ -13,6 +13,7 @@ from .decision_engine import DecisionEngine
 from .portfolio import PortfolioService
 from .llm import LLMClient
 from .mcp_client import WBMCPClient
+from .worker_source import WorkerSource
 from .demo_wb import DemoWBClient
 from .models import ActionProposal, Event
 from .notifier import TelegramNotifier
@@ -37,6 +38,7 @@ class ControlCenter:
         self.remote_policy = RemotePolicyClient(settings.remote_policy_url, settings.data_path / "remote_policy_cache.json", settings.remote_policy_refresh_seconds)
         self.runtime_policy = RuntimePolicyStore(self.db, self.policy, self.remote_policy)
         self.wb = DemoWBClient() if settings.wb_mode.lower() == "demo" else WBMCPClient(settings.wb_api_token, str(settings.data_path / "wb_mcp"), settings.wb_shop_id, start_timeout=settings.mcp_start_timeout_seconds, call_timeout=settings.mcp_call_timeout_seconds)
+        self.worker = WorkerSource(settings.wb_worker_base_url, settings.wb_worker_export_token, settings.wb_worker_timeout_seconds)
         self.llm = LLMClient(settings)
         self.notifier = TelegramNotifier(settings)
         self.policy_engine = PolicyEngine(settings, self.policy)
@@ -48,10 +50,11 @@ class ControlCenter:
         self.outcome_evaluator = OutcomeEvaluator(self.db)
         self.investigation_engine = InvestigationEngine()
         self.demand_validator = DemandModelValidator()
-        self.ctx = AgentContext(settings=settings, policy=self.policy, db=self.db, wb=self.wb, llm=self.llm)
+        self.ctx = AgentContext(settings=settings, policy=self.policy, db=self.db, wb=self.wb, llm=self.llm, worker=self.worker)
         self.agents = {name: cls(self.ctx) for name, cls in AGENT_CLASSES.items()}
         self.scheduler = None
         self._telegram_task: asyncio.Task | None = None
+        self._startup_audit_task: asyncio.Task | None = None
         self._started = False
         self._agent_locks = {name: asyncio.Lock() for name in self.agents}
         self._run_all_lock = asyncio.Lock()
@@ -81,6 +84,8 @@ class ControlCenter:
                 self.notifier.poll_commands(self.approve_action_text, self.reject_action_text, self.status_text)
             )
         self._started = True
+        if self.settings.startup_audit_enabled:
+            self._startup_audit_task = asyncio.create_task(self.run_all_once())
 
     async def stop(self) -> None:
         if self.scheduler is not None and self.scheduler.running:
@@ -92,6 +97,13 @@ class ControlCenter:
                 await self._telegram_task
             except BaseException:
                 pass
+        if self._startup_audit_task:
+            self._startup_audit_task.cancel()
+            try:
+                await self._startup_audit_task
+            except BaseException:
+                pass
+            self._startup_audit_task = None
         await self.wb.close()
         self._started = False
 

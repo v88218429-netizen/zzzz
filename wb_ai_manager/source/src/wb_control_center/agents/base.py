@@ -9,6 +9,7 @@ from ..config import PolicyConfig, Settings
 from ..db import Database
 from ..llm import LLMClient
 from ..mcp_client import WBMCPClient
+from ..worker_source import WorkerSource
 from ..models import AgentResult, Event
 from ..metrics import fingerprint
 
@@ -22,6 +23,7 @@ class AgentContext:
     db: Database
     wb: WBMCPClient
     llm: LLMClient
+    worker: WorkerSource | None = None
 
 
 class BaseAgent:

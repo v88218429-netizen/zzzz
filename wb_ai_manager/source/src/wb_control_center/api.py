@@ -147,7 +147,7 @@ async def reject(action_id: int):
 
 
 SNAPSHOT_SPEC: dict[str, list[str]] = {
-    "api_health": ["shops", "token_info", "degradations"],
+    "api_health": ["shops", "token_info", "degradations", "worker_source_health"],
     "cards": ["card_errors", "banned_products", "price_quarantine"],
     "advertising_monitor": ["active_campaigns", "stats_7d"],
     "inventory": ["coverage"],
@@ -155,11 +155,11 @@ SNAPSHOT_SPEC: dict[str, list[str]] = {
     "funnel": ["funnel_7d"],
     "search_positions": ["positions"],
     "price_margin": ["prices", "promotions"],
-    "finance": ["balance", "report_7d"],
-    "cost_guard": ["paid_storage", "measurement_penalties", "deductions", "paid_acceptance"],
+    "finance": ["balance", "report_7d", "worker_finance"],
+    "cost_guard": ["paid_storage", "measurement_penalties", "deductions", "paid_acceptance", "worker_penalty_evidence"],
     "reviews_questions": ["seller_rating", "flags"],
     "buyer_chats": ["chat_events"],
-    "orders_fbs": ["new_orders", "reshipment"],
+    "orders_fbs": ["new_orders", "reshipment", "worker_fbs"],
     "returns_quality": ["open_claims"],
     "documents": ["documents_7d"],
 }
