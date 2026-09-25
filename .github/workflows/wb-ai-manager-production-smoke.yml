@@ -101,3 +101,5 @@ jobs:
                   time.sleep(15)
           raise SystemExit(f"production smoke failed: {last}")
           PY
+
+# post-period-deploy-smoke: 2026-09-25T07:31Z
