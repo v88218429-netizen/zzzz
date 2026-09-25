@@ -286,7 +286,7 @@ class ControlCenter:
             ("cost_guard", "measurement_penalties"),
             ("cost_guard", "deductions"),
             ("cost_guard", "paid_acceptance"),
-            ("documents", "documents"),
+            ("documents", "documents_7d"),
             ("price_margin", "promotions"),
         }
         mixed = {
