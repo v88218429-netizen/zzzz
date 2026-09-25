@@ -1,6 +1,6 @@
 FROM python:3.12-slim
 WORKDIR /app
-COPY pyproject.toml README.md ./
+COPY pyproject.toml README.md VERSION ./
 COPY src ./src
 COPY config ./config
 COPY data ./data
