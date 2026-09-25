@@ -107,9 +107,14 @@ class WBMCPClient:
                 texts.append(text)
         if not texts:
             return {"raw": str(result)}
-        if len(texts) == 1:
-            try:
-                return json.loads(texts[0])
-            except Exception:
-                return {"text": texts[0]}
-        return {"texts": texts}
+        # wb-mcp may append human-readable shaping/truncation notes as additional
+        # TextContent blocks. The first block remains the actual JSON payload and
+        # must not stop being machine-readable merely because a note was appended.
+        try:
+            parsed = json.loads(texts[0])
+            if len(texts) > 1 and isinstance(parsed, dict):
+                parsed = dict(parsed)
+                parsed["_mcp_notes"] = texts[1:]
+            return parsed
+        except Exception:
+            return {"text": texts[0], "notes": texts[1:]} if len(texts) > 1 else {"text": texts[0]}
