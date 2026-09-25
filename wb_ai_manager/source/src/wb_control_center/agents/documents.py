@@ -12,10 +12,9 @@ class DocumentsAgent(BaseAgent):
 
     async def run(self) -> AgentResult:
         out = AgentResult(agent=self.name)
-        today = datetime.now().date()
-        start = (today - timedelta(days=6)).isoformat()
+        start, end = self.dates(7)
         try:
-            docs = await self.call("wb_documents_list", date_from=start, date_to=today.isoformat(), limit=100)
+            docs = await self.call("wb_documents_list", date_from=start, date_to=end, limit=100)
         except Exception as e:
             out.events.append(self.event("warning", "documents_failed", "Не удалось проверить документы WB", str(e)))
             return out
