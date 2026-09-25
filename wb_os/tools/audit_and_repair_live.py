@@ -411,6 +411,10 @@ if "function syncK2StocksOnlyLegacy_()" not in k2_text:
         )
 
     wrapper = """function syncK2StocksOnly() {
+  if (typeof k2EvolutionFetchAndApply_ === 'function') {
+    return k2EvolutionFetchAndApply_();
+  }
+
   var lock = LockService.getScriptLock();
 
   if (!lock.tryLock(30000)) {
@@ -421,10 +425,6 @@ if "function syncK2StocksOnlyLegacy_()" not in k2_text:
   }
 
   try {
-    if (typeof k2EvolutionFetchAndApply_ === 'function') {
-      return k2EvolutionFetchAndApply_();
-    }
-
     return syncK2StocksOnlyLegacy_();
   } finally {
     lock.releaseLock();
