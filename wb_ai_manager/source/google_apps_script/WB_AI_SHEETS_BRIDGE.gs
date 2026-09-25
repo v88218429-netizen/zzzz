@@ -26,6 +26,15 @@ function setupBridge() {
 }
 
 const SOURCES = {
+  ads_hub: {
+    spreadsheetId: '11ULokTx74QjziZjThJ0lfxFiMQW42-WV4315cG7eIuU',
+    ranges: {
+      campaign_day: '12_ADS_CAMPAIGN_DAY!A1:O5000',
+      funnel_day: '13_FUNNEL_DAY!A1:K5000',
+      health: '14_ADS_CONTROL!A1:G10',
+      sku_master: '10_SKU_MASTER!A1:P1200'
+    }
+  },
   weekly_summary: {
     spreadsheetId: '1hU24PrecF2hbeLbKfPEKRQbjXhdd8kONLTMsR4yNIug',
     ranges: {
