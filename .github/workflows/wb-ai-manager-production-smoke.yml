@@ -43,6 +43,7 @@ jobs:
                   assert health.get("wb_mode") == "live", health
                   assert health.get("read_only") is True, health
                   assert len(health.get("agents") or []) == 19, health
+                  assert health.get("app_version") == "1.1.4", health
 
                   dashboard=get("/api/dashboard-data?days=7")
                   runs=dashboard.get("runs") or {}
@@ -68,6 +69,13 @@ jobs:
                       assert not bad, {"stale_money_decisions":bad[:5]}
                       assert any(d.get("decision_key")=="data:portfolio_historical_only" for d in (dashboard.get("decisions") or [])), dashboard.get("decisions")
                   assert isinstance(entity_map, dict), type(entity_map)
+                  card_wrap=(snapshots.get("cards") or {}).get("card_catalog") or {}
+                  card_data=card_wrap.get("data") if isinstance(card_wrap,dict) else {}
+                  card_data=card_data if isinstance(card_data,dict) else {}
+                  card_count=int(card_data.get("count") or len(card_data.get("cards") or []))
+                  live_entities=[v for v in entity_map.values() if isinstance(v,dict) and v.get("source")=="live_wb_cards" and v.get("seller_article")]
+                  assert card_count > 0, {"card_catalog":card_data}
+                  assert len(live_entities) >= card_count, {"card_count":card_count,"live_seller_articles":len(live_entities)}
 
                   print(json.dumps({
                       "ok": True,
@@ -83,6 +91,8 @@ jobs:
                       "period": period,
                       "data_quality": quality,
                       "entity_map_count": len(entity_map),
+                      "card_catalog_count": card_count,
+                      "live_seller_articles": len(live_entities),
                   }, ensure_ascii=False, indent=2))
                   raise SystemExit(0)
               except Exception as exc:
