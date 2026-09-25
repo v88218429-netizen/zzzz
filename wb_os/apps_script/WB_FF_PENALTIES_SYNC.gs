@@ -27,25 +27,14 @@ function ffPenaltiesAutoSync_() {
     return { skipped: true, reason: 'lock_busy' };
   }
   try {
-    var result = ffPodmenySyncCurrentPeriod_(true);
-    try {
-      ffVisionAnalyzePendingSheets_();
-    } catch (visionError) {
-      Logger.log(
-        'FF vision analysis: ' +
-        (visionError.stack || visionError.message || visionError)
-      );
-    }
-    return result;
+    return ffPodmenySyncCurrentPeriod_(true);
   } finally {
     lock.releaseLock();
   }
 }
 
 function ffPenaltiesSyncNow() {
-  var result = ffPodmenySyncCurrentPeriod_(false);
-  var vision = ffVisionAnalyzePendingSheets_();
-  return { sync: result, vision: vision };
+  return ffPodmenySyncCurrentPeriod_(false);
 }
 
 function ffPodmenySyncCurrentPeriod_(skipIfUnchanged) {
@@ -648,4 +637,139 @@ function ffVisionWriteResult_(sheet, rowNumber, result) {
   sheet
     .getRange(rowNumber, 21)
     .setNumberFormat('0"%"');
+}
+
+
+/**
+ * Export pending photo cases for the self-hosted Mac vision worker.
+ * Returns a JSON string so clasp run can transport the payload reliably.
+ */
+function ffVisionGetPendingJson(limit) {
+  var cfg = FF_PODMENY_SYNC_CFG;
+  var dst = SpreadsheetApp.openById(cfg.TARGET_SPREADSHEET_ID);
+  var current = ffPodmenyCurrentPeriod_().title;
+  var names = cfg.LEGACY_SHEETS.slice();
+  if (names.indexOf(current) === -1) names.push(current);
+
+  var maxRows = Math.max(1, Math.min(Number(limit || 8), 20));
+  var out = [];
+
+  for (var n = 0; n < names.length && out.length < maxRows; n++) {
+    var name = names[n];
+    var sheet = dst.getSheetByName(name);
+    if (!sheet || sheet.getLastRow() < 2) continue;
+    ffPodmenyEnsureAiColumns_(sheet);
+
+    var lastRow = sheet.getLastRow();
+    var headers = sheet
+      .getRange(1, 1, 1, Math.min(sheet.getMaxColumns(), 28))
+      .getDisplayValues()[0];
+    var modern = String(headers[0] || '') === 'Магазин';
+
+    var values = sheet
+      .getRange(2, 1, lastRow - 1, 28)
+      .getValues();
+    var formulas = sheet
+      .getRange(2, 1, lastRow - 1, 28)
+      .getFormulas();
+
+    for (var i = 0; i < values.length && out.length < maxRows; i++) {
+      var row = values[i];
+      if (!row[0]) continue;
+
+      var status = String(row[18] || '').trim();
+      if (
+        status === 'ПРОАНАЛИЗИРОВАНО' ||
+        status === 'НЕТ ФОТО'
+      ) {
+        continue;
+      }
+
+      var photoStart = modern ? 9 : 8;
+      var photoUrls = ffVisionExtractPhotoUrls_(
+        formulas[i].slice(photoStart, photoStart + 5),
+        row.slice(photoStart, photoStart + 5)
+      );
+
+      if (!photoUrls.length) continue;
+
+      out.push({
+        sheet: name,
+        row: i + 2,
+        shop: modern ? String(row[0] || '') : '',
+        category: modern ? String(row[2] || '') : String(row[1] || ''),
+        nm_id: modern ? String(row[4] || '') : String(row[3] || ''),
+        sticker: modern ? String(row[6] || '') : String(row[5] || ''),
+        expected: modern ? String(row[7] || '') : String(row[6] || ''),
+        reported_received: modern ? String(row[8] || '') : String(row[7] || ''),
+        photo_urls: photoUrls
+      });
+    }
+  }
+
+  return JSON.stringify(out);
+}
+
+
+/**
+ * Apply JSON results produced by the local self-hosted vision worker.
+ * The argument is a JSON string containing an array of result objects.
+ */
+function ffVisionApplyResultsJson(jsonText) {
+  var cfg = FF_PODMENY_SYNC_CFG;
+  var dst = SpreadsheetApp.openById(cfg.TARGET_SPREADSHEET_ID);
+  var current = ffPodmenyCurrentPeriod_().title;
+  var allowed = {};
+  cfg.LEGACY_SHEETS.forEach(function(name) { allowed[name] = true; });
+  allowed[current] = true;
+
+  var items = JSON.parse(String(jsonText || '[]'));
+  if (!Array.isArray(items)) {
+    throw new Error('Vision results must be an array');
+  }
+
+  var written = 0;
+  items.forEach(function(item) {
+    var sheetName = String(item.sheet || '');
+    var rowNumber = Number(item.row || 0);
+    if (!allowed[sheetName] || rowNumber < 2) return;
+
+    var sheet = dst.getSheetByName(sheetName);
+    if (!sheet || rowNumber > sheet.getMaxRows()) return;
+
+    var damageTypes = item.damage_types || [];
+    if (!Array.isArray(damageTypes)) damageTypes = [];
+
+    var confidence = item.confidence_pct;
+    if (confidence !== '' && confidence != null) {
+      confidence = Math.max(0, Math.min(100, Number(confidence)));
+    } else {
+      confidence = '';
+    }
+
+    var evidence = String(item.visible_evidence || '');
+    var receivedGuess = String(item.received_guess || '');
+    if (receivedGuess) {
+      evidence += (evidence ? ' ' : '') +
+        'Фактически видно: ' + receivedGuess + '.';
+    }
+
+    sheet.getRange(rowNumber, 19, 1, 10).setValues([[
+      'ПРОАНАЛИЗИРОВАНО',
+      String(item.verdict || ''),
+      confidence,
+      String(item.substitution || ''),
+      String(item.damage || ''),
+      String(item.damage_severity || ''),
+      damageTypes.join(', '),
+      evidence,
+      item.human_review ? 'ДА' : 'НЕТ',
+      new Date()
+    ]]);
+
+    sheet.getRange(rowNumber, 21).setNumberFormat('0"%"');
+    written++;
+  });
+
+  return JSON.stringify({ok: true, written: written});
 }
