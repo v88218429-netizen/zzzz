@@ -442,6 +442,37 @@ function syncK2StocksOnlyLegacy_() {"""
 
     print("LOCKED_LEGACY_K2_SYNC_ONLY:", keeper.relative_to(root))
 
+
+# Normalize legacy K2 lock variable names. The historical source has two
+# function-local "var lock" declarations starting at column 0; the namespace
+# audit intentionally treats column-0 declarations as suspicious, so make
+# these names explicit and collision-free.
+def namespace_function_lock(text, function_name, new_name):
+    marker = "function " + function_name + "()"
+    start = text.find(marker)
+    if start < 0:
+        return text
+    end = text.find("\nfunction ", start + len(marker))
+    if end < 0:
+        end = len(text)
+    block = text[start:end]
+    if "var lock =" not in block:
+        return text
+    block = block.replace("var lock =", "var " + new_name + " =", 1)
+    block = block.replace("lock.tryLock(", new_name + ".tryLock(", 1)
+    block = block.replace("lock.releaseLock()", new_name + ".releaseLock()", 1)
+    return text[:start] + block + text[end:]
+
+k2_text_before_locks = k2_text
+k2_text = namespace_function_lock(
+    k2_text, "syncK2StocksAndNotify", "k2NotifyLock"
+)
+k2_text = namespace_function_lock(
+    k2_text, "syncK2StocksOnly", "k2OnlyLock"
+)
+if k2_text != k2_text_before_locks:
+    print("K2_LOCK_NAMESPACED")
+
 # Existing K2 timers are a safe bootstrap path if the master trigger is absent.
 # They keep their legacy K2 behavior, but first ensure the single master clock.
 for fn in ("syncK2StocksOnly", "syncK2StocksAndNotify"):
