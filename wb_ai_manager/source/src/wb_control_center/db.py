@@ -162,6 +162,14 @@ class Database:
             rows = con.execute("SELECT * FROM events WHERE created_at>=? ORDER BY id DESC LIMIT ?", (cutoff, limit)).fetchall()
         return [dict(r) | {"payload": json.loads(r["payload_json"])} for r in rows]
 
+    def events_between(self, start_at: str, end_at: str, limit: int = 1000) -> list[dict[str, Any]]:
+        with self.connect() as con:
+            rows = con.execute(
+                "SELECT * FROM events WHERE created_at>=? AND created_at<? ORDER BY id DESC LIMIT ?",
+                (start_at, end_at, limit),
+            ).fetchall()
+        return [dict(r) | {"payload": json.loads(r["payload_json"])} for r in rows]
+
     def save_snapshot(self, source: str, key: str, data: dict[str, Any], created_at: str) -> int:
         with self.connect() as con:
             cur = con.execute(
