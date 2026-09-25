@@ -45,6 +45,11 @@ function syncAdsHub() {
         const values = item.rows.map(row => {
           const output = new Array(item.target.columns).fill('');
           row.forEach((value, i) => { if (i < output.length) output[i] = value; });
+          // Store dates and numeric counters as native Sheets values for control formulas.
+          if (row[1]) output[1] = new Date(row[1] + 'T12:00:00+03:00');
+          const numericColumns = item.target.sheet === '12_ADS_CAMPAIGN_DAY'
+            ? [2, 3, 4, 5, 6, 7, 8, 9] : [2, 4, 5, 6, 7];
+          numericColumns.forEach(i => { if (row[i] !== '') output[i] = Number(row[i]); });
           if (item.target.sheet === '12_ADS_CAMPAIGN_DAY') {
             output[12] = row[12] || '';
             output[13] = state.finishedAt;
