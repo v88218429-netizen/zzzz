@@ -1,4 +1,4 @@
-const state = { data: null, eventFilter: 'important', page: location.hash.replace('#','') || 'overview', periodFrom: null, periodTo: null };
+const state = { data: null, eventFilter: 'important', page: location.hash.replace('#','') || 'overview', periodFrom: null, periodTo: null, periodAuditRequestedKey: null, periodPollTimer: null };
 const $ = (id) => document.getElementById(id);
 const qa = (sel, root=document) => [...root.querySelectorAll(sel)];
 
@@ -45,6 +45,61 @@ function entityInfo(id){ return state.data?.entity_map?.[String(id)] || null; }
 function entityName(id){ const x=entityInfo(id); return x?.seller_article || x?.display || (missing(id)?'—':String(id)); }
 function entityMeta(id){ const x=entityInfo(id); return x ? `nmID ${esc(x.nm_id)}${x.weekly_group?` · ${esc(x.weekly_group)}`:''}` : (missing(id)?'':`nmID ${esc(id)}`); }
 function currentPeriodLabel(){ return state.data?.period?.label || 'выбранный период'; }
+function periodKey(from=state.periodFrom,to=state.periodTo){ return from&&to?`${from}__${to}`:''; }
+function snapshotScopeText(s){
+  const scope=s?.data?._analysis?.scope;
+  if(scope==='selected_period') return `за период ${currentPeriodLabel()}`;
+  if(scope==='current_plus_period') return `остаток на сейчас · скорость за ${currentPeriodLabel()}`;
+  if(scope==='current_snapshot') return 'снимок на сейчас';
+  return '';
+}
+async function triggerPeriodAudit({silent=false,force=false}={}){
+  const from=state.periodFrom, to=state.periodTo;
+  if(!from||!to) return;
+  const key=periodKey(from,to);
+  if(!force && state.periodAuditRequestedKey===key && ['running','completed'].includes(state.data?.period_audit?.status)) return;
+  state.periodAuditRequestedKey=key;
+  try{
+    const r=await fetch('/api/period-audit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({from_date:from,to_date:to})});
+    if(!r.ok) throw new Error(`HTTP ${r.status}`);
+    const out=await r.json();
+    if(!silent) showToast(out.status==='running'?'Анализ этого периода уже выполняется.':'Запущен анализ выбранного периода.','success');
+    clearTimeout(state.periodPollTimer);
+    state.periodPollTimer=setTimeout(()=>fetchData(false),1200);
+  }catch(e){
+    if(!silent) showToast(`Не удалось запустить анализ периода: ${e.message}`,'error');
+  }
+}
+function renderPeriodAudit(){
+  const pa=state.data?.period_audit||{}, box=$('period-audit-banner');
+  if(!box) return;
+  const status=pa.status||'missing', done=Number(pa.agents_done||0), total=Number(pa.agents_total||19);
+  box.classList.remove('hidden','done','error');
+  $('period-audit-title').textContent=`Анализ периода ${currentPeriodLabel()}`;
+  if(status==='completed'){
+    box.classList.add('done');
+    $('period-audit-status').textContent='ГОТОВО';
+    $('period-audit-text').textContent=`Все ${total} модулей пересчитаны в едином контексте периода.`;
+    $('period-audit-progress').style.width='100%';
+    $('period-audit-scopes').textContent='За период: реклама, воронка, поиск, финансы, списания, документы. На сейчас: карточки, цены, отзывы, чаты и FBS. Остатки: текущий остаток + скорость продаж за выбранный период.';
+  }else if(status==='running' || status==='started'){
+    $('period-audit-status').textContent='СЧИТАЮ';
+    $('period-audit-text').textContent=`Готово модулей: ${done}/${total}. Пока расчёт не завершён, текущие snapshots не подменяются данными выбранного периода.`;
+    $('period-audit-progress').style.width=`${Math.max(3,Math.min(100,done/total*100))}%`;
+    $('period-audit-scopes').textContent='Интерфейс обновится автоматически после завершения расчёта.';
+  }else if(status==='error'){
+    box.classList.add('error');
+    $('period-audit-status').textContent='ОШИБКА';
+    $('period-audit-text').textContent='Анализ периода завершился с ошибкой. Открой подключения/источники и повтори расчёт.';
+    $('period-audit-progress').style.width='100%';
+    $('period-audit-scopes').textContent=(pa.errors||[]).slice(0,3).map(x=>`${x.agent}: ${x.error}`).join(' · ');
+  }else{
+    $('period-audit-status').textContent='НЕ СЧИТАЛСЯ';
+    $('period-audit-text').textContent='Для выбранных дат ещё нет единого расчёта всех модулей.';
+    $('period-audit-progress').style.width='0%';
+    $('period-audit-scopes').textContent='Запускаю read-only анализ автоматически.';
+  }
+}
 function dateInSelectedRange(value){
   if(!value) return false;
   const raw=String(value).slice(0,10);
@@ -143,14 +198,32 @@ async function fetchData(showLoader=false){
     if(!state.periodTo && state.data?.period?.to) state.periodTo=state.data.period.to;
     if($('period-from')) $('period-from').value=state.periodFrom||''; if($('period-to')) $('period-to').value=state.periodTo||'';
     renderAll(); $('loading-state').classList.add('hidden');
+    const pa=state.data?.period_audit||{};
+    const key=periodKey();
+    if(pa.status==='missing' && key && state.periodAuditRequestedKey!==key){
+      triggerPeriodAudit({silent:true});
+    }else if(['running','started'].includes(pa.status)){
+      clearTimeout(state.periodPollTimer);
+      state.periodPollTimer=setTimeout(()=>fetchData(false),3000);
+    }else if(pa.status==='completed'){
+      state.periodAuditRequestedKey=key;
+      clearTimeout(state.periodPollTimer);
+    }
   }catch(e){ $('loading-state').classList.remove('hidden'); $('loading-state').innerHTML=`<div class="event-severity critical">!</div><div><strong>Не удалось получить данные</strong><span>${esc(e.message)}. Проверь, что WB AI Manager запущен.</span></div>`; }
 }
 
 async function runAudit(){
   const b=$('run-audit'); if(b.disabled) return; b.disabled=true; const old=b.innerHTML; b.innerHTML='<span class="spinner" style="width:14px;height:14px;border-color:rgba(255,255,255,.35);border-top-color:white"></span> Проверяю…';
-  showToast('Запущена полная безопасная проверка. Никакие изменения в WB не выполняются.');
-  try{ const r=await fetch('/run-all',{method:'POST'}); if(!r.ok) throw new Error(`HTTP ${r.status}`); await r.json(); showToast('Проверка завершена. Данные обновлены.','success'); await fetchData(); }
-  catch(e){ showToast(`Ошибка проверки: ${e.message}`,'error'); }
+  try{
+    if(state.periodFrom&&state.periodTo){
+      showToast(`Пересчитываю ${currentPeriodLabel()} по всем 19 модулям. Никаких изменений в WB не выполняется.`);
+      await triggerPeriodAudit({force:true});
+      await fetchData();
+    }else{
+      showToast('Запущена полная безопасная проверка. Никакие изменения в WB не выполняются.');
+      const r=await fetch('/run-all',{method:'POST'}); if(!r.ok) throw new Error(`HTTP ${r.status}`); await r.json(); await fetchData();
+    }
+  }catch(e){ showToast(`Ошибка проверки: ${e.message}`,'error'); }
   finally{ b.disabled=false; b.innerHTML=old; }
 }
 
@@ -166,6 +239,8 @@ function renderAll(){
   if($('finance-period-label')) $('finance-period-label').textContent=d.period?.label||'выбранный период';
   $('nav-alerts').textContent=critical+warning; if($('nav-decisions')) $('nav-decisions').textContent=(d.decisions||[]).filter(x=>['critical','high'].includes(x.priority)).length;
   const ad=adSummary(); $('metric-ad-spend').textContent=rub(ad.spend); const rating=snap('reviews_questions','seller_rating')?.data; const ratingVal=firstNumeric(rating,['rating']); $('metric-rating').textContent=ratingVal==null?'—':num(ratingVal,2);
+  renderPeriodAudit();
+  if($('metric-ad-period')) $('metric-ad-period').textContent=d.period_audit?.ready?(d.period?.label||'за выбранный период'):'ожидает расчёта периода';
   renderExecutive(); renderEvents(); renderRecommendations(); renderDecisions(); renderDecisionControl(); renderDomains(); renderPortfolio(); renderConnections(); renderAdvertising(); renderPolicyStudio(); renderInventory(); renderSearch(); renderFinance(); renderCustomers(); renderKnowledge(); renderAgents();
 }
 function snap(source,key){ return state.data?.snapshots?.[source]?.[key] || null; }
@@ -179,7 +254,7 @@ function healthScore(){ const c=state.data.summary?.critical_24h||0,w=state.data
 function renderExecutive(){
   const score=healthScore(), c=state.data.summary?.critical_24h||0,w=state.data.summary?.warning_24h||0; const hs=$('health-score'); hs.style.setProperty('--health-angle',`${score*3.6}deg`); hs.querySelector('span').textContent=score;
   const s=latestSupervisor(); $('executive-title').textContent=c?`${c} критических сигнал${c===1?'':'а'} требуют внимания`:w?`${w} предупреждений, критичных проблем нет`:'Серьёзных отклонений не обнаружено';
-  $('executive-summary').textContent=s?.message || (c||w ? 'Система обнаружила отклонения. Ниже показаны приоритеты, фактические показатели и рекомендации. Все действия остаются только рекомендациями.' : 'Агенты работают в режиме наблюдения. Существенных отклонений за последние 24 часа не найдено.');
+  $('executive-summary').textContent=s?.message || (c||w ? `Система обнаружила отклонения за ${currentPeriodLabel()}. Ниже показаны приоритеты, фактические показатели и решения.` : `За ${currentPeriodLabel()} существенных отклонений не обнаружено.`);
   const imp=(state.data.events||[]).filter(e=>['critical','warning'].includes(e.severity)).slice(0,4); $('priority-strip').innerHTML=imp.length?imp.map(e=>`<span class="priority-chip ${e.severity}"><b></b>${esc(e.title)}</span>`).join(''):'<span class="priority-chip"><b></b>Система работает штатно</span>';
 }
 function renderEvents(){
@@ -424,11 +499,15 @@ if($('refresh-decisions')) $('refresh-decisions').addEventListener('click',refre
 if($('refresh-sheets')) $('refresh-sheets').addEventListener('click',refreshSheets);
 if($('refresh-remote-policy')) $('refresh-remote-policy').addEventListener('click',refreshRemotePolicy);
 $('run-audit').addEventListener('click',runAudit);
-if($('apply-period')) $('apply-period').addEventListener('click',()=>{
+if($('apply-period')) $('apply-period').addEventListener('click',async()=>{
   const from=$('period-from')?.value||'', to=$('period-to')?.value||'';
   if(!from || !to){ showToast('Выбери обе даты периода.','error'); return; }
   if(new Date(from)>new Date(to)){ showToast('Дата начала не может быть позже даты окончания.','error'); return; }
-  state.periodFrom=from; state.periodTo=to; fetchData(true);
+  const days=Math.floor((new Date(to)-new Date(from))/86400000)+1;
+  if(days>91){ showToast('Максимальный диапазон — 91 день.','error'); return; }
+  state.periodFrom=from; state.periodTo=to; state.periodAuditRequestedKey=null;
+  await fetchData(true);
+  await triggerPeriodAudit({force:true});
 });
 document.addEventListener('click',e=>{
   if(e.target.closest('[data-close-detail]')){ closeDetail(); return; }
