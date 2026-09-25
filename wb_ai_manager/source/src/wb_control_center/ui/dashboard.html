@@ -115,6 +115,12 @@
             <span class="live-dot"></span>
             <span id="last-sync">Обновление…</span>
           </div>
+          <div class="period-picker" title="Период анализа для событий и доступных периодных данных">
+            <input id="period-from" type="date" aria-label="Дата начала" />
+            <span>—</span>
+            <input id="period-to" type="date" aria-label="Дата окончания" />
+            <button class="period-apply" id="apply-period" type="button">Применить</button>
+          </div>
           <button class="button secondary" id="refresh-data">
             <svg viewBox="0 0 24 24"><path d="M18.4 6.6A8 8 0 1 0 20 15h-2.1A6 6 0 1 1 16.9 8.1L14 11h7V4l-2.6 2.6Z"/></svg>
             Обновить
@@ -134,7 +140,7 @@
           <strong>Защищённый режим: только чтение и анализ</strong>
           <span>Агенты могут читать кабинет, находить проблемы и формировать рекомендации. Ставки, цены, бюджеты, остатки и карточки не изменяются.</span>
         </div>
-        <span class="pill safe">SHADOW</span>
+        <span class="pill safe">НАБЛЮДЕНИЕ</span>
       </div>
 
       <div id="loading-state" class="loading-state">
@@ -147,10 +153,10 @@
           <article class="card executive-card">
             <div class="card-head">
               <div>
-                <span class="section-label">AI DIRECTOR</span>
+                <span class="section-label">УПРАВЛЯЮЩИЙ</span>
                 <h2 id="executive-title">Собираю сводку…</h2>
               </div>
-              <div class="health-score" id="health-score"><span>—</span><small>health</small></div>
+              <div class="health-score" id="health-score"><span>—</span><small>состояние</small></div>
             </div>
             <p class="executive-summary" id="executive-summary">После первого аудита здесь появится короткая сводка: что критично, что изменилось и куда смотреть в первую очередь.</p>
             <div class="priority-strip" id="priority-strip"></div>
@@ -174,8 +180,8 @@
         </div>
 
         <div class="metric-grid" id="metric-grid">
-          <article class="metric-card"><span class="metric-icon danger">!</span><div><span>Критично</span><strong id="metric-critical">—</strong><small>за 24 часа</small></div></article>
-          <article class="metric-card"><span class="metric-icon warning">•</span><div><span>Предупреждения</span><strong id="metric-warning">—</strong><small>за 24 часа</small></div></article>
+          <article class="metric-card"><span class="metric-icon danger">!</span><div><span>Критично</span><strong id="metric-critical">—</strong><small id="metric-critical-period">за выбранный период</small></div></article>
+          <article class="metric-card"><span class="metric-icon warning">•</span><div><span>Предупреждения</span><strong id="metric-warning">—</strong><small id="metric-warning-period">за выбранный период</small></div></article>
           <article class="metric-card"><span class="metric-icon purple">↗</span><div><span>Рекомендации</span><strong id="metric-actions">—</strong><small>ничего не исполняется</small></div></article>
           <article class="metric-card"><span class="metric-icon teal">A</span><div><span>Агенты</span><strong id="metric-agents">—</strong><small>активных модулей</small></div></article>
           <article class="metric-card"><span class="metric-icon blue">₽</span><div><span>Расход рекламы</span><strong id="metric-ad-spend">—</strong><small>за 7 дней</small></div></article>
@@ -206,7 +212,8 @@
       </section>
 
       <section class="page" data-page-panel="stores">
-        <div class="section-intro"><div><span class="section-label">ПОРТФЕЛЬ</span><h2>Все магазины в одном окне</h2><p>Свежие финансовые факты из рабочих Google-таблиц. Каждый показатель хранит источник и дату среза.</p></div><span class="pill safe" id="portfolio-origin">TRUSTED SHEETS</span></div>
+        <div class="section-intro"><div><span class="section-label">ПОРТФЕЛЬ</span><h2>Все магазины в одном окне</h2><p>Свежие финансовые факты из рабочих Google-таблиц. Каждый показатель хранит источник и дату среза.</p></div><span class="pill safe" id="portfolio-origin">ПРОВЕРЕННЫЕ ИСТОЧНИКИ</span></div>
+        <div id="portfolio-truth-banner" class="data-truth-banner hidden"></div>
         <div class="metrics-grid portfolio-metrics">
           <article class="metric-card"><span>Заказы</span><strong id="pf-orders">—</strong><small id="pf-orders-change">—</small></article>
           <article class="metric-card"><span>Выкупы</span><strong id="pf-buyouts">—</strong><small>за выбранный период</small></article>
@@ -216,8 +223,8 @@
         </div>
         <article class="card"><div class="card-head"><div><span class="section-label">МАГАЗИНЫ</span><h3>Сравнение текущего периода</h3></div><span class="muted" id="portfolio-period">—</span></div><div id="stores-grid" class="stores-grid"></div></article>
         <div class="two-col-grid">
-          <article class="card"><div class="card-head"><div><span class="section-label">27 + ЮНИТКА</span><h3>Свой операционный контур</h3></div><span class="pill neutral">ТОЛЬКО ЧТЕНИЕ</span></div><div id="own27-grid" class="fact-grid"></div><div id="unit-alerts" class="signal-stack compact-stack"></div></article>
-          <article class="card"><div class="card-head"><div><span class="section-label">ФУЛФИЛМЕНТ</span><h3>Последний снимок ФФ</h3></div><span class="muted" id="ff-snapshot-date">—</span></div><div id="ff-grid" class="mini-table-list"></div></article>
+          <article class="card"><div class="card-head"><div><span class="section-label">ОПЕРАЦИОННЫЕ ДАННЫЕ</span><h3>Заказы, остатки и экономика</h3></div><span class="pill neutral">ТОЛЬКО ЧТЕНИЕ</span></div><div id="own27-grid" class="fact-grid"></div><div id="unit-alerts" class="signal-stack compact-stack"></div></article>
+          <article class="card"><div class="card-head"><div><span class="section-label">ФУЛФИЛМЕНТ</span><h3>Остатки на фулфилменте</h3></div><span class="muted" id="ff-snapshot-date">—</span></div><div id="ff-grid" class="mini-table-list"></div></article>
         </div>
       </section>
 
@@ -227,7 +234,7 @@
       </section>
 
       <section class="page" data-page-panel="control">
-        <div class="section-intro"><div><span class="section-label">ОБРАТНАЯ СВЯЗЬ</span><h2>Контроль решений и обучение</h2><p>Что агент рекомендовал, какие изменения реально произошли в WB, что показали контрольные точки и какие решения независимая проверка заблокировала.</p></div><span class="pill safe">БЕЗ ЛОЖНОЙ ПРИЧИННОСТИ</span></div>
+        <div class="section-intro"><div><span class="section-label">ОБРАТНАЯ СВЯЗЬ</span><h2>Что получилось после решений</h2><p>Рекомендация → фактическое изменение → результат. Здесь видно, что сработало, что не сработало и почему решение было остановлено.</p></div><span class="pill safe">БЕЗ ЛОЖНОЙ ПРИЧИННОСТИ</span></div>
         <div class="metric-grid four">
           <article class="metric-card"><span>Версий решений</span><strong id="control-history-count">—</strong><small>сохранено в истории</small></article>
           <article class="metric-card"><span>Замечено изменений</span><strong id="control-change-count">—</strong><small>ставка / цена / медиа</small></article>
@@ -236,14 +243,14 @@
         </div>
         <div class="two-col-grid">
           <article class="card"><div class="card-head"><div><span class="section-label">ФАКТИЧЕСКИЕ ИЗМЕНЕНИЯ</span><h3>Что реально изменилось</h3></div></div><div id="control-changes" class="signal-stack"></div></article>
-          <article class="card"><div class="card-head"><div><span class="section-label">НЕЗАВИСИМАЯ ПРОВЕРКА</span><h3>Возражения и блокеры</h3></div></div><div id="control-reviews" class="signal-stack"></div></article>
+          <article class="card"><div class="card-head"><div><span class="section-label">НЕЗАВИСИМАЯ ПРОВЕРКА</span><h3>Почему решение не принято</h3></div></div><div id="control-reviews" class="signal-stack"></div></article>
         </div>
         <article class="card"><div class="card-head"><div><span class="section-label">КОНТРОЛЬ РЕЗУЛЬТАТА</span><h3>1ч / 3ч / 24ч / 7д / 14д</h3></div></div><div id="control-evaluations" class="signal-stack"></div></article>
-        <article class="card"><div class="card-head"><div><span class="section-label">ПАМЯТЬ</span><h3>Последние версии решений</h3></div></div><div id="control-history" class="signal-stack"></div></article>
+        <article class="card"><div class="card-head"><div><span class="section-label">ПАМЯТЬ</span><h3>История решений</h3></div></div><div id="control-history" class="signal-stack"></div></article>
       </section>
 
       <section class="page" data-page-panel="advertising">
-        <div class="section-intro"><div><span class="section-label">РЕКЛАМА</span><h2>Контроль эффективности без автодействий</h2><p>Расход, заказы, ДРР, CTR и CPC. Агент только диагностирует и предлагает — ставки и бюджеты не меняются.</p></div><span class="pill safe">NO WRITES</span></div>
+        <div class="section-intro"><div><span class="section-label">РЕКЛАМА</span><h2>Контроль эффективности без автодействий</h2><p>Расход, заказы, ДРР, CTR и CPC. Агент только диагностирует и предлагает — ставки и бюджеты не меняются.</p></div><span class="pill safe">ТОЛЬКО ЧТЕНИЕ</span></div>
         <div class="metric-grid four">
           <article class="metric-card"><span class="metric-icon blue">₽</span><div><span>Расход 7д</span><strong id="ads-spend">—</strong><small>по активным кампаниям</small></div></article>
           <article class="metric-card"><span class="metric-icon green">#</span><div><span>Заказы</span><strong id="ads-orders">—</strong><small>атрибутировано рекламой</small></div></article>
@@ -303,7 +310,7 @@
       <section class="page" data-page-panel="search">
         <div class="section-intro"><div><span class="section-label">ПОИСК И КАРТОЧКИ</span><h2>Видимость товара и здоровье контента</h2><p>Позиции по запросам, ошибки карточек, блокировки и ценовой карантин.</p></div></div>
         <div class="content-grid half">
-          <article class="card"><div class="card-head"><div><span class="section-label">ПОЗИЦИИ</span><h3>Поисковая видимость</h3></div><span class="muted" id="search-updated">—</span></div><div class="table-wrap"><table class="data-table"><thead><tr><th>nmID</th><th>Запрос</th><th>Позиция</th><th>Оценка</th></tr></thead><tbody id="search-table"></tbody></table></div></article>
+          <article class="card"><div class="card-head"><div><span class="section-label">ПОЗИЦИИ</span><h3>Поисковая видимость</h3></div><span class="muted" id="search-updated">—</span></div><div class="table-wrap"><table class="data-table"><thead><tr><th>Артикул продавца</th><th>Запрос</th><th>Позиция</th><th>Оценка</th></tr></thead><tbody id="search-table"></tbody></table></div></article>
           <article class="card"><div class="card-head"><div><span class="section-label">КАРТОЧКИ</span><h3>Проблемы контента</h3></div></div><div id="cards-signals" class="signal-stack"></div></article>
         </div>
       </section>
@@ -316,7 +323,7 @@
           <article class="metric-card"><span class="metric-icon warning">!</span><div><span>Удержания</span><strong id="finance-deductions">—</strong><small>по доступным данным</small></div></article>
           <article class="metric-card"><span class="metric-icon purple">□</span><div><span>Хранение</span><strong id="finance-storage">—</strong><small>платное хранение</small></div></article>
         </div>
-        <article class="card"><div class="card-head"><div><span class="section-label">ФИНАНСОВЫЕ СИГНАЛЫ</span><h3>Что проверяет Cost Guard</h3></div></div><div id="finance-signals" class="signal-stack"></div></article>
+        <article class="card"><div class="card-head"><div><span class="section-label">ФИНАНСОВЫЕ СИГНАЛЫ</span><h3>Что требует внимания</h3></div><span class="muted" id="finance-period-label">выбранный период</span></div><div id="finance-signals" class="signal-stack"></div></article>
       </section>
 
       <section class="page" data-page-panel="customers">
@@ -327,11 +334,14 @@
           <article class="metric-card"><span class="metric-icon danger">↩</span><div><span>Возвраты</span><strong id="customer-returns">—</strong><small>открытые заявки</small></div></article>
           <article class="metric-card"><span class="metric-icon blue">✉</span><div><span>Чаты</span><strong id="customer-chats">—</strong><small>события последнего чтения</small></div></article>
         </div>
-        <article class="card"><div class="card-head"><div><span class="section-label">СИГНАЛЫ КАЧЕСТВА</span><h3>Что требует реакции человека</h3></div></div><div id="customer-signals" class="signal-stack"></div></article>
+        <div class="content-grid half">
+          <article class="card"><div class="card-head"><div><span class="section-label">ОТЗЫВЫ И ВОПРОСЫ</span><h3>Что написали покупатели</h3></div></div><div id="customer-feedback-list" class="signal-stack"></div></article>
+          <article class="card"><div class="card-head"><div><span class="section-label">СИГНАЛЫ КАЧЕСТВА</span><h3>Что требует реакции</h3></div></div><div id="customer-signals" class="signal-stack"></div></article>
+        </div>
       </section>
 
       <section class="page" data-page-panel="connections">
-        <div class="section-intro"><div><span class="section-label">ИНТЕГРАЦИИ</span><h2>Подключения и доверие к данным</h2><p>Токены не показываются в интерфейсе. Здесь видно только наличие доступа, свежесть источника и его роль.</p></div><span class="pill safe">СЕКРЕТЫ ХРАНЯТСЯ ЛОКАЛЬНО</span></div>
+        <div class="section-intro"><div><span class="section-label">ИНТЕГРАЦИИ</span><h2>Подключения и доверие к данным</h2><p>Токены не показываются в интерфейсе. Здесь видно только наличие доступа, свежесть источника и его роль.</p></div><span class="pill safe">СЕКРЕТЫ НЕ ПОКАЗЫВАЮТСЯ</span></div>
         <div class="connection-hero">
           <article class="connection-card" id="wb-connection-card"><div class="connection-logo">WB</div><div><span class="section-label">ДАННЫЕ WILDBERRIES</span><h3>API продавца WB</h3><p id="wb-connection-note">Проверяю…</p></div><span class="status-tag" id="wb-connection-status">—</span></article>
           <article class="connection-card" id="sheets-connection-card"><div class="connection-logo sheets">GS</div><div><span class="section-label">ТАБЛИЦЫ GOOGLE</span><h3>Автоисточники</h3><p id="sheets-connection-note">Проверяю…</p></div><span class="status-tag" id="sheets-connection-status">—</span></article>
@@ -368,18 +378,27 @@
       </section>
 
       <section class="page" data-page-panel="agents">
-        <div class="section-intro"><div><span class="section-label">АГЕНТЫ</span><h2>19 специализированных наблюдателей</h2><p>Каждый агент имеет свою зону ответственности и расписание. В этом режиме они только читают данные и формируют сигналы.</p></div><span class="pill safe">19 MODULES</span></div>
+        <div class="section-intro"><div><span class="section-label">АГЕНТЫ</span><h2>19 специализированных наблюдателей</h2><p>Каждый агент имеет свою зону ответственности и расписание. В этом режиме они только читают данные и формируют сигналы.</p></div><span class="pill safe">19 МОДУЛЕЙ</span></div>
         <div id="agents-grid" class="agents-grid"></div>
         <article class="card"><div class="card-head"><div><span class="section-label">ЖУРНАЛ</span><h3>Последние запуски</h3></div></div><div class="table-wrap"><table class="data-table"><thead><tr><th>Агент</th><th>Статус</th><th>Последний запуск</th><th>Интервал</th></tr></thead><tbody id="agents-table"></tbody></table></div></article>
       </section>
 
       <footer class="footer">
-        <span>WB AI Manager · локальный защищённый контур</span>
-        <span>Данные остаются на этом компьютере, кроме обращений к интерфейсам Wildberries.</span>
+        <span>WB AI Manager · защищённый облачный контур</span>
+        <span>Секреты не отображаются в интерфейсе. Источники и время факта видны рядом с данными.</span>
       </footer>
     </main>
   </div>
 
+  <div class="detail-modal" id="detail-modal" aria-hidden="true">
+    <div class="detail-backdrop" data-close-detail></div>
+    <div class="detail-panel" role="dialog" aria-modal="true" aria-labelledby="detail-title">
+      <button class="detail-close" type="button" data-close-detail aria-label="Закрыть">×</button>
+      <div class="detail-kicker" id="detail-kicker">Подробности</div>
+      <h2 id="detail-title">—</h2>
+      <div id="detail-body" class="detail-body"></div>
+    </div>
+  </div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <script src="/assets/dashboard.js"></script>
 </body>
