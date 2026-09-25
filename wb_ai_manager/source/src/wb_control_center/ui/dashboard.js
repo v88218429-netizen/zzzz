@@ -204,7 +204,9 @@ async function fetchData(showLoader=false){
     const r=await fetch('/api/dashboard-data'+(params.size?`?${params.toString()}`:''),{cache:'no-store'}); if(!r.ok) throw new Error(`HTTP ${r.status}`); state.data=await r.json();
     if(!state.periodFrom && state.data?.period?.from) state.periodFrom=state.data.period.from;
     if(!state.periodTo && state.data?.period?.to) state.periodTo=state.data.period.to;
-    if($('period-from')) $('period-from').value=state.periodFrom||''; if($('period-to')) $('period-to').value=state.periodTo||'';
+    const maxDate=state.data?.period?.max_selectable||'';
+    if($('period-from')){ $('period-from').value=state.periodFrom||''; if(maxDate) $('period-from').max=maxDate; }
+    if($('period-to')){ $('period-to').value=state.periodTo||''; if(maxDate) $('period-to').max=maxDate; }
     renderAll(); $('loading-state').classList.add('hidden');
     const pa=state.data?.period_audit||{};
     const key=periodKey();
@@ -511,6 +513,8 @@ if($('apply-period')) $('apply-period').addEventListener('click',async()=>{
   const from=$('period-from')?.value||'', to=$('period-to')?.value||'';
   if(!from || !to){ showToast('Выбери обе даты периода.','error'); return; }
   if(new Date(from)>new Date(to)){ showToast('Дата начала не может быть позже даты окончания.','error'); return; }
+  const maxDate=state.data?.period?.max_selectable||'';
+  if(maxDate && (from>maxDate || to>maxDate)){ showToast('Будущие даты выбрать нельзя.','error'); return; }
   const days=Math.floor((new Date(to)-new Date(from))/86400000)+1;
   if(days>91){ showToast('Максимальный диапазон — 91 день.','error'); return; }
   state.periodFrom=from; state.periodTo=to; state.periodAuditRequestedKey=null;
