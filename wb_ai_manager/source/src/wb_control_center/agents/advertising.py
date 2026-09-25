@@ -59,9 +59,8 @@ class AdvertisingMonitorAgent(BaseAgent):
         ids = extract_campaign_ids(campaigns)
         if not ids:
             return out
-        today = datetime.now().date()
-        start = (today - timedelta(days=6)).isoformat()
-        stats = await self.call("wb_advert_stats", advert_ids=ids, date_from=start, date_to=today.isoformat())
+        start, end = self.dates(7)
+        stats = await self.call("wb_advert_stats", advert_ids=ids, date_from=start, date_to=end)
         out.snapshots.append(("stats_7d", stats if isinstance(stats, dict) else {"data": stats}))
         rows = extract_ad_metrics(stats)
         warn = float(cfg.get("warn_drr_pct", 12))
@@ -116,9 +115,8 @@ class AdvertisingOptimizerAgent(BaseAgent):
             out.snapshots.append(("deep_scan", {"campaigns": [], "note": "no active campaigns"}))
             return out
 
-        today = datetime.now().date()
-        start = (today - timedelta(days=13)).isoformat()
-        stats_raw = await self._safe("wb_advert_stats", advert_ids=ids, date_from=start, date_to=today.isoformat())
+        start, end = self.dates(14)
+        stats_raw = await self._safe("wb_advert_stats", advert_ids=ids, date_from=start, date_to=end)
         stat_rows = _rows(stats_raw)
         if not stat_rows and isinstance(stats_raw, list):
             stat_rows = [x for x in stats_raw if isinstance(x, dict)]
@@ -156,13 +154,13 @@ class AdvertisingOptimizerAgent(BaseAgent):
             if nms:
                 clusters = await self._safe("wb_advert_clusters", advert_id=cid)
                 cluster_stats = await self._safe(
-                    "wb_advert_clusters_stats", advert_id=cid, date_from=start, date_to=today.isoformat(), nm_ids=nms[:10], daily=True
+                    "wb_advert_clusters_stats", advert_id=cid, date_from=start, date_to=end, nm_ids=nms[:10], daily=True
                 )
             row["recommendations"] = recommendations
             row["clusters"] = clusters
             row["cluster_stats"] = cluster_stats
             scanned.append(row)
 
-        out.snapshots.append(("deep_scan", {"generated_for": today.isoformat(), "campaigns": scanned}))
+        out.snapshots.append(("deep_scan", {"generated_for": {"from": start, "to": end}, "campaigns": scanned}))
         out.snapshots.append(("stats_14d", stats_raw if isinstance(stats_raw, dict) else {"data": stats_raw}))
         return out
