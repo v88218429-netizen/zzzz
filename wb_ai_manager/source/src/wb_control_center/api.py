@@ -283,8 +283,13 @@ def _entity_map(portfolio_snapshot: dict[str, Any], snapshots: dict[str, dict[st
             "display": prev.get("display") or article or f"Товар WB {nm}",
             "title": prev.get("title"),
             "cabinet": row.get("cabinet"),
+            "group_name": row.get("group_name"),
             "weekly_group": row.get("weekly_group"),
-            "source": prev.get("source") or "portfolio_identity_fallback",
+            "ozon_seller_article": row.get("ozon_seller_article"),
+            "ozon_sku": row.get("ozon_sku"),
+            "sheet_row": row.get("sheet_row"),
+            "stock_source": row.get("safe_stock_source"),
+            "source": prev.get("source") or "trusted_sheets_identity",
             "source_at": prev.get("source_at"),
         }
     return out
