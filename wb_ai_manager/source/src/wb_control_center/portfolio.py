@@ -305,52 +305,140 @@ class PortfolioService:
                 m = {headers[i]: total[i] if i < len(total) else None for i in range(len(headers))}
                 own = out.setdefault("own_27", {})
                 keys = {
-                    "fbs_debt_orders": "FBS долг по заказам",
-                    "ff_stock": "Остатки ФФ",
-                    "k2_safe_stock": "К2 ФФ · SAFE",
-                    "fbw_stock": "Остатки FBW",
-                    "in_way_to_client": "в пути к клиенту",
-                    "in_way_from_client": "в пути от клиенту",
-                    "wb_fbs_stock": "Остатки WB FBS",
-                    "ozon_fbs_stock": "Остатки Ozon FBS",
-                    "sales_qty": "Продажи, шт",
-                    "orders_qty": "Заказы, шт",
-                    "orders_rub": "Заказы,руб",
+                    "fbs_debt_orders": ("FBS долг по заказам",),
+                    "ff_stock": ("Остатки ФФ",),
+                    "k2_safe_stock": ("К2 ФФ · SAFE", "К2 ФФ"),
+                    "fbw_stock": ("Остатки FBW",),
+                    "in_way_to_client": ("в пути к клиенту",),
+                    "in_way_from_client": ("в пути от клиенту",),
+                    "wb_fbs_stock": ("Остатки WB FBS",),
+                    "ozon_fbs_stock": ("Остатки Ozon FBS",),
+                    "sales_qty": ("Продажи, шт",),
+                    "orders_qty": ("Заказы, шт",),
+                    "orders_rub": ("Заказы,руб",),
                 }
-                for dest, src in keys.items():
-                    n = self._num(m.get(src))
+                for dest, aliases in keys.items():
+                    n = None
+                    for src in aliases:
+                        n = self._num(m.get(src))
+                        if n is not None:
+                            break
                     if n is not None:
                         own[dest] = n
                 own["source"] = "google_sheets_bridge:own_27"
 
-            # Product-level operational facts from 27. These feed concrete supply decisions.
+            # Product-level operational facts from Сводная. The sheet contains
+            # aggregate physical-product rows (for example "Бидон 5л") followed
+            # by marketplace variants. Keep both levels: the aggregate row is the
+            # human product group, while WB/Ozon IDs identify concrete listings.
             if header_idx is not None:
                 headers = [str(x or "").strip() for x in values[header_idx]]
                 products=[]
-                for row in values[header_idx+1:]:
+                ozon_products=[]
+                groups: dict[str, dict[str, Any]] = {}
+                current_group: str | None = None
+                for sheet_row, row in enumerate(values[header_idx+1:], start=header_idx + 2):
                     rec={headers[i]: row[i] if i < len(row) else None for i in range(len(headers))}
+                    row_name=str(rec.get("Артикул продавца WB") or "").strip()
                     sku=str(rec.get("Артикул WB") or "").strip()
-                    if not sku.isdigit():
+                    ozon_sku=str(rec.get("Ozon артикул") or "").strip()
+                    ozon_article=str(rec.get("Артикул продавца Ozon") or "").strip()
+                    subject=str(rec.get("Предмет WB") or "").strip()
+
+                    if not sku.isdigit() and not ozon_sku.isdigit():
+                        group_facts = [
+                            self._num(rec.get("Остатки ФФ")),
+                            self._num(rec.get("К2 ФФ")),
+                            self._num(rec.get("К2 ФФ · SAFE")),
+                            self._num(rec.get("Остатки WB FBS")),
+                            self._num(rec.get("Остатки Ozon FBS")),
+                            self._num(rec.get("Заказы, шт")),
+                        ]
+                        # Section labels such as "ЛОТОК КРАСНЫЙ" contain no
+                        # operational totals. Aggregate product rows do.
+                        if row_name and any(v is not None and abs(v) > 0 for v in group_facts):
+                            current_group = row_name
+                            groups.setdefault(current_group, {
+                                "name": current_group,
+                                "wb_nm_ids": [],
+                                "ozon_skus": [],
+                                "variants": [],
+                            })
+                        elif row_name and row_name == row_name.upper():
+                            current_group = None
                         continue
-                    safe=self._num(rec.get("К2 ФФ · SAFE"))
+
+                    k2=self._num(rec.get("К2 ФФ · SAFE"))
+                    if k2 is None:
+                        k2=self._num(rec.get("К2 ФФ"))
                     ff=self._num(rec.get("Остатки ФФ"))
-                    products.append({
-                        "sku":sku,"name":str(rec.get("Артикул продавца WB") or ""),
-                        "price_client_rub":self._num(rec.get("Цена для клиента")),
-                        "fbs_debt_orders":self._num(rec.get("FBS долг по заказам")),
-                        "ff_stock":ff,"k2_safe_stock":safe,
-                        "fbw_stock":self._num(rec.get("Остатки FBW")),
-                        "wb_fbs_stock":self._num(rec.get("Остатки WB FBS")),
-                        "sales_qty":self._num(rec.get("Продажи, шт")),
-                        "orders_qty":self._num(rec.get("Заказы, шт")),
-                        "orders_per_day":self._num(rec.get("Заказов в день")),
-                        "orders_rub":self._num(rec.get("Заказы,руб")),
-                    })
+                    ivanovo=self._num(rec.get("ФФ Иваново"))
                     wb_stock=self._num(rec.get("Остатки WB FBS"))
-                    products[-1]["safe_stock"] = safe if safe is not None else (ff if ff is not None else wb_stock)
-                    products[-1]["safe_stock_source"] = "K2 SAFE" if safe is not None else ("FF" if ff is not None else ("WB FBS stock" if wb_stock is not None else ""))
+                    ozon_stock=self._num(rec.get("Остатки Ozon FBS"))
+
+                    if sku.isdigit():
+                        # For marketplace availability WB FBS is authoritative.
+                        # K2/FF are physical fulfilment pools and are kept separately.
+                        market_stock = wb_stock
+                        supply_stock = k2 if k2 is not None else (ff if ff is not None else ivanovo)
+                        safe_stock = market_stock if market_stock is not None else supply_stock
+                        safe_source = "WB FBS" if market_stock is not None else (
+                            "K2" if k2 is not None else ("FF" if ff is not None else ("FF Иваново" if ivanovo is not None else ""))
+                        )
+                        prod={
+                            "sku":sku,
+                            "name":row_name,
+                            "group_name":current_group,
+                            "sheet_row":sheet_row,
+                            "subject":subject,
+                            "price_client_rub":self._num(rec.get("Цена для клиента")),
+                            "fbs_debt_orders":self._num(rec.get("FBS долг по заказам")),
+                            "ff_stock":ff,
+                            "k2_safe_stock":k2,
+                            "ivanovo_stock":ivanovo,
+                            "fbw_stock":self._num(rec.get("Остатки FBW")),
+                            "wb_fbs_stock":wb_stock,
+                            "ozon_fbs_stock":ozon_stock,
+                            "ozon_seller_article":ozon_article or None,
+                            "ozon_sku":ozon_sku if ozon_sku.isdigit() else None,
+                            "sales_qty":self._num(rec.get("Продажи, шт")),
+                            "orders_qty":self._num(rec.get("Заказы, шт")),
+                            "orders_per_day":self._num(rec.get("Заказов в день")),
+                            "orders_rub":self._num(rec.get("Заказы,руб")),
+                            "safe_stock":safe_stock,
+                            "safe_stock_source":safe_source,
+                        }
+                        products.append(prod)
+                        if current_group:
+                            g=groups.setdefault(current_group, {"name":current_group,"wb_nm_ids":[],"ozon_skus":[],"variants":[]})
+                            g["wb_nm_ids"].append(sku)
+                            g["variants"].append({"platform":"WB","id":sku,"article":row_name})
+
+                    if ozon_sku.isdigit():
+                        cabinet = "Ozon каб.2" if ("Ozon каб.2" in subject or "Ozon каб.2" in row_name) else "Ozon каб.1"
+                        oz={
+                            "sku":ozon_sku,
+                            "seller_article":ozon_article,
+                            "name":row_name or ozon_article,
+                            "group_name":current_group,
+                            "cabinet":cabinet,
+                            "stock":ozon_stock,
+                            "sheet_row":sheet_row,
+                        }
+                        ozon_products.append(oz)
+                        if current_group:
+                            g=groups.setdefault(current_group, {"name":current_group,"wb_nm_ids":[],"ozon_skus":[],"variants":[]})
+                            g["ozon_skus"].append(ozon_sku)
+                            g["variants"].append({"platform":cabinet,"id":ozon_sku,"article":ozon_article or row_name})
+
+                own = out.setdefault("own_27", {})
                 if products:
-                    out.setdefault("own_27", {})["products"] = products
+                    own["products"] = products
+                if ozon_products:
+                    own["ozon_products"] = ozon_products
+                if groups:
+                    own["product_groups"] = list(groups.values())
+                own["identity_source"] = "Сводная"
 
         # Daily all-orders history gives the demand controller a real short-vs-baseline
         # signal instead of extrapolating from a single "orders/day" cell. We count
