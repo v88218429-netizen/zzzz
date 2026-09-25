@@ -68,21 +68,24 @@ def _campaign_ids(payload):
 
 
 def _stats_rows(shop, payload):
-    rows = []
+    # Fullstats can split a product/day across appType platforms. The HUB
+    # grain is campaign x product x date, so sum those disjoint counters.
+    grouped = {}
     for campaign in payload if isinstance(payload, list) else []:
         aid = campaign.get("advertId")
         for day in campaign.get("days", []):
             date = str(day.get("date", ""))[:10]
             for app in day.get("apps", []):
-                # appType is website/Android/iOS, never a placement zone.
                 for item in app.get("nms", []):
                     nm = item.get("nmId") or item.get("nmID")
                     if not (aid and nm and date):
                         continue
-                    rows.append([shop, date, aid, nm, item.get("views"), item.get("clicks"),
-                                 item.get("atbs"), item.get("orders"), item.get("sum"),
-                                 item.get("sum_price"), "WB /adv/v3/fullstats", "EXACT_CAMPAIGN_NM_DAY_APP", ""])
-    return rows
+                    key = (shop, date, aid, nm)
+                    values = grouped.setdefault(key, [0] * 6)
+                    for index, field in enumerate(("views", "clicks", "atbs", "orders", "sum", "sum_price")):
+                        values[index] += item.get(field) or 0
+    return [[*key, *values, "WB /adv/v3/fullstats",
+             "EXACT_CAMPAIGN_NM_DAY", ""] for key, values in sorted(grouped.items())]
 
 
 def _funnel_rows(shop, payload):
