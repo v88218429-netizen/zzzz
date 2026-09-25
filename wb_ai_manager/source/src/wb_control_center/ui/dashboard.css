@@ -358,3 +358,14 @@ button.interactive-card{font:inherit;color:inherit;text-align:left;width:100%}
 
 @media(max-width:1100px){.period-picker{display:none}.detail-facts{grid-template-columns:1fr}.finance-breakdown{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:620px){.detail-panel{width:100%;padding:20px 16px 40px}.detail-row{flex-direction:column}.detail-row span{text-align:left}.finance-breakdown{grid-template-columns:1fr}}
+
+
+/* v0.9 unified period audit */
+.period-audit-banner{display:grid;grid-template-columns:34px 1fr auto;gap:12px;align-items:center;margin:0 18px 14px;padding:12px 14px;border:1px solid #e4ddf5;border-radius:14px;background:linear-gradient(135deg,#fbf9ff,#fff);box-shadow:0 4px 14px rgba(61,44,97,.04)}
+.period-audit-banner.hidden{display:none}
+.period-audit-icon{width:34px;height:34px;border-radius:11px;display:grid;place-items:center;background:#ede7fa;color:#65459a;font-size:20px;font-weight:850}
+.period-audit-copy{min-width:0}.period-audit-copy strong{display:block;font-size:11px}.period-audit-copy span{display:block;margin-top:3px;color:#666c79;font-size:9.5px;line-height:1.45}.period-audit-copy small{display:block;margin-top:6px;color:#8b909c;font-size:8.5px;line-height:1.4}
+.period-audit-progress{height:4px;margin-top:8px;background:#eceef3;border-radius:999px;overflow:hidden}.period-audit-progress i{display:block;height:100%;width:0;background:linear-gradient(90deg,#7a55af,#4e9a80);border-radius:999px;transition:width .25s ease}
+.period-audit-banner.done{border-color:#cde8dc;background:linear-gradient(135deg,#f5fcf8,#fff)}.period-audit-banner.done .period-audit-icon{background:#e0f4ea;color:#2f765a}
+.period-audit-banner.error{border-color:#f1c9cf;background:#fff8f9}.period-audit-banner.error .period-audit-icon{background:#fae2e6;color:#9c3b4b}
+@media(max-width:760px){.period-audit-banner{grid-template-columns:30px 1fr;margin:0 10px 12px}.period-audit-banner>.pill{grid-column:2;justify-self:start}.period-audit-icon{width:30px;height:30px}}
