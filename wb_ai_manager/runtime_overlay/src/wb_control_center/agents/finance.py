@@ -25,7 +25,16 @@ class FinanceAgent(BaseAgent):
             out.snapshots.append(("report_7d", report if isinstance(report, dict) else {"data": report}))
         except Exception as e:
             out.events.append(self.event("warning", "finance_report_failed", "Не удалось получить отчёт реализации", str(e)))
-            return out
+            report = None
+        if self.ctx.worker is not None and self.ctx.worker.configured:
+            try:
+                worker_finance = await self.ctx.worker.finance_bundle()
+                out.snapshots.append(("worker_finance", worker_finance))
+                health = worker_finance.get("source_health") or {}
+                if health.get("status") != "FRESH":
+                    out.events.append(self.event("warning", "worker_finance_stale", "Финансовый контур wb-api-worker не свежий", str(health), health))
+            except Exception as e:
+                out.events.append(self.event("warning", "worker_finance_failed", "Не удалось получить сводный финансовый контур wb-api-worker", str(e)))
         if self.ctx.llm.enabled:
             text = await self.ctx.llm.complete(
                 "Ты финансовый контролёр Wildberries. Найди необычные штрафы, резкие расходы на логистику/хранение/комиссии и риски отрицательной экономики. Только по данным, без домыслов. Максимум 7 пунктов.",
