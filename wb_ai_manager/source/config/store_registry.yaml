@@ -17,7 +17,7 @@ sources:
     role: "own_operating_system"
     priority: 110
     ranges:
-      summary: "Сводная!A1:Z250"
+      summary: "Сводная!A1:BI1200"
       unit_economics: "Юнитка!A1:AQ500"
       ff_history: "История остатков ФФ!A1:J800"
       products: "Товары!A1:R500"
