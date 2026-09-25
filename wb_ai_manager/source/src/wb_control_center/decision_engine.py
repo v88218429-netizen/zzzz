@@ -293,13 +293,24 @@ class DecisionEngine:
                     ev=[_ev('27/Сводная','safe_stock',stock,x.get('safe_stock_source','')),_ev('27/Сводная','orders_per_day',daily),_ev('demand_forecast','forecast_orders_per_day',round(forecast_daily,2)),_ev('demand_forecast','orders_trend_pct',order_trend),_ev('search','search_frequency_trend_pct',freq_trend),_ev('27/Юнитка','profit_rub',profit),_ev('27/Юнитка','margin_pct',margin),_ev('27/Юнитка','drr_pct',drr)]
                 else:
                     need=max(0,ceil(forecast_daily*target + debt - effective_stock))
-                    title=f"{x.get('name')}: риск дефицита — нужен конкретный план пополнения"
-                    diagnosis=f"Безопасный остаток {stock:.0f} шт., текущий темп ≈{daily:.1f}/день{trend_note}, прогнозное покрытие ≈{days:.1f} дня. Для цели {target:.0f} дней ориентировочно не хватает {need} шт." + (f" В плане отмечено ещё {planned_incoming:.0f} шт., но приход не считается доступным, пока не подтверждена дата/приёмка." if planned_incoming and not incoming_confirmed else '')
-                    actions=[
-                        {"step":1,"action":f"Поставить/произвести ориентировочно {need} шт. до целевого покрытия {target:.0f} дней при прогнозном темпе {forecast_daily:.1f}/день","mode":"supply_plan"},
-                        {"step":2,"action":"Остаточный контур сам ставку не меняет. Рекламный контур должен пересчитать точную ставку и предел расхода с учётом этого прогноза запаса","mode":"advertising_control_link"},
-                        {"step":3,"action":"После нового снимка K2/ФФ пересчитать прогноз спроса, покрытие и рекламный коридор одновременно","mode":"follow_up"},
-                    ]
+                    if need == 0:
+                        title=f"{x.get('name')}: низкий остаток, но прогноз не подтверждает объём поставки"
+                        diagnosis=(f"Безопасный остаток {stock:.0f} шт., текущий темп ≈{daily:.1f}/день, "
+                                   f"прогноз ≈{forecast_daily:.3f}/день. Расчёт на {target:.0f} дней даёт нулевую потребность; "
+                                   "нельзя показывать это как распоряжение поставить 0 шт. Расхождение темпов требует проверки.")
+                        actions=[
+                            {"step":1,"action":"Сверить заказы последних 7 дней, остаток K2/ФФ и доступность карточки; выяснить, почему прогноз близок к нулю","mode":"demand_validation"},
+                            {"step":2,"action":"Не оформлять поставку по нулевому расчёту. До проверки не увеличивать рекламный спрос на товар с низким остатком","mode":"supply_guard"},
+                            {"step":3,"action":"После подтверждения спроса пересчитать количество для целевого покрытия и срок поступления","mode":"follow_up"},
+                        ]
+                    else:
+                        title=f"{x.get('name')}: риск дефицита — нужен конкретный план пополнения"
+                        diagnosis=f"Безопасный остаток {stock:.0f} шт., текущий темп ≈{daily:.1f}/день{trend_note}, прогнозное покрытие ≈{days:.1f} дня. Для цели {target:.0f} дней ориентировочно не хватает {need} шт." + (f" В плане отмечено ещё {planned_incoming:.0f} шт., но приход не считается доступным, пока не подтверждена дата/приёмка." if planned_incoming and not incoming_confirmed else '')
+                        actions=[
+                            {"step":1,"action":f"Поставить/произвести ориентировочно {need} шт. до целевого покрытия {target:.0f} дней при прогнозном темпе {forecast_daily:.1f}/день","mode":"supply_plan"},
+                            {"step":2,"action":"Остаточный контур сам ставку не меняет. Рекламный контур должен пересчитать точную ставку и предел расхода с учётом этого прогноза запаса","mode":"advertising_control_link"},
+                            {"step":3,"action":"После нового снимка K2/ФФ пересчитать прогноз спроса, покрытие и рекламный коридор одновременно","mode":"follow_up"},
+                        ]
                     if planned_incoming and not incoming_confirmed:
                         actions.insert(1,{"step":2,"action":f"Подтвердить дату и фактический приход запланированных {planned_incoming:.0f} шт.; до подтверждения не вычитать их из потребности и не использовать для разгона рекламы","mode":"incoming_supply_guard"})
                         for i,a in enumerate(actions,1): a["step"]=i
