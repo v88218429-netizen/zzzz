@@ -150,6 +150,11 @@ h1 { margin: 0; font-size: 24px; letter-spacing: -.035em; line-height: 1.05; }
 .segmented button { border: 0; background: transparent; color: var(--muted); height: 25px; border-radius: 7px; padding: 0 9px; font-size: 9px; font-weight: 700; }
 .segmented button.active { background: #fff; color: #444958; box-shadow: 0 1px 3px rgba(26,28,36,.08); }
 .event-list { display: flex; flex-direction: column; }
+.event-domain-group { margin-top: 10px; padding-top: 8px; border-top: 1px solid #eceef3; }
+.event-domain-group:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+.event-domain-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 0 6px; }
+.event-domain-title strong { font-size: 9px; text-transform: uppercase; letter-spacing: .08em; color: #757a89; }
+.event-domain-title span { min-width: 20px; height: 18px; border-radius: 999px; display: inline-grid; place-items: center; background: #f2f3f6; color: #777c8a; font-size: 8px; font-weight: 800; }
 .event-item { display: grid; grid-template-columns: 34px 1fr auto; gap: 10px; padding: 11px 0; border-top: 1px solid #f0f1f5; align-items: start; }
 .event-item:first-child { border-top: 0; padding-top: 0; }
 .event-severity { width: 31px; height: 31px; border-radius: 9px; display: grid; place-items: center; font-weight: 900; font-size: 9px; }
