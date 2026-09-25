@@ -14,6 +14,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .config import Settings
 from .engine import ControlCenter
+from .models import PeriodContext
 from .portfolio import PortfolioService
 from .source_discovery import SourceDiscovery
 from .auto_sheets import AutoSheets
@@ -167,12 +168,13 @@ SNAPSHOT_SPEC: dict[str, list[str]] = {
 }
 
 
-def _dashboard_snapshots() -> dict[str, dict[str, Any]]:
+def _dashboard_snapshots(period_key: str | None = None) -> dict[str, dict[str, Any]]:
     out: dict[str, dict[str, Any]] = {}
     for source, keys in SNAPSHOT_SPEC.items():
         rows: dict[str, Any] = {}
         for key in keys:
-            item = center.db.latest_snapshot(source, key)
+            db_key = f"period::{period_key}::{key}" if period_key else key
+            item = center.db.latest_snapshot(source, db_key)
             if item:
                 rows[key] = item
         if rows:
@@ -297,12 +299,21 @@ def _store_name(snapshots: dict[str, dict[str, Any]]) -> str:
 @app.get("/api/dashboard-data")
 async def dashboard_data(days: int = 7, from_date: str | None = None, to_date: str | None = None) -> dict[str, Any]:
     period = _dashboard_period(days, from_date, to_date)
-    events_period = center.db.events_between(period["start_utc"], period["end_utc"], limit=1000)
-    runs = center.db.latest_runs_by_agent(hours=720)
-    snapshots = _dashboard_snapshots()
-    recommendations = center.db.pending_actions(limit=100)
-    decisions = center.db.current_decisions(limit=200) or center.refresh_decisions()
-    completed_runs = [r for r in runs.values() if r.get("finished_at")]
+    period_ctx = PeriodContext.from_strings(period["from"], period["to"])
+    audit = center.period_audit_status(period_ctx)
+    audit_ready = audit.get("status") == "completed"
+    snapshots = _dashboard_snapshots(period_ctx.key if audit_ready else None)
+    if audit_ready:
+        events_period = list(audit.get("events") or [])
+        runs = dict(audit.get("agents") or {})
+        recommendations = []
+        decisions = list(audit.get("decisions") or [])
+    else:
+        events_period = center.db.events_between(period["start_utc"], period["end_utc"], limit=1000)
+        runs = center.db.latest_runs_by_agent(hours=720)
+        recommendations = center.db.pending_actions(limit=100)
+        decisions = center.db.current_decisions(limit=200) or center.refresh_decisions()
+    completed_runs = [r for r in runs.values() if isinstance(r, dict) and r.get("finished_at")]
     last_run_at = max((str(r["finished_at"]) for r in completed_runs), default=None)
     runtime_policy = await asyncio.to_thread(center.runtime_policy.get)
     portfolio_snapshot = portfolio.snapshot()
@@ -328,6 +339,16 @@ async def dashboard_data(days: int = 7, from_date: str | None = None, to_date: s
         "runs": runs,
         "events": events_period[:300],
         "period": {k: v for k, v in period.items() if k not in {"start_utc", "end_utc"}},
+        "period_audit": {
+            "status": audit.get("status"),
+            "ready": audit_ready,
+            "period": period_ctx.to_dict(),
+            "agents_done": sum(1 for x in (audit.get("agents") or {}).values() if isinstance(x, dict) and x.get("status") in {"ok", "error"}),
+            "agents_total": 19,
+            "errors": audit.get("errors") or [],
+            "started_at": audit.get("started_at"),
+            "finished_at": audit.get("finished_at"),
+        },
         "entity_map": entity_map,
         "data_quality": {
             "portfolio_current": bool(portfolio_snapshot.get("current_data")),
@@ -335,6 +356,8 @@ async def dashboard_data(days: int = 7, from_date: str | None = None, to_date: s
             "portfolio_origin": portfolio_snapshot.get("data_origin"),
             "portfolio_period": portfolio_snapshot.get("period"),
             "portfolio_warning": portfolio_snapshot.get("stale_reason"),
+            "period_audit_status": audit.get("status"),
+            "period_snapshot_mode": "selected_period" if audit_ready else "operational_fallback",
         },
         "recommendations": recommendations,
         "decisions": decisions,
@@ -360,6 +383,24 @@ async def dashboard_data(days: int = 7, from_date: str | None = None, to_date: s
 
 
 
+
+
+@app.get("/api/period-audit")
+async def period_audit_status(from_date: str, to_date: str) -> dict[str, Any]:
+    try:
+        period = PeriodContext.from_strings(from_date, to_date)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return center.period_audit_status(period)
+
+
+@app.post("/api/period-audit")
+async def start_period_audit(payload: dict[str, Any]) -> dict[str, Any]:
+    try:
+        period = PeriodContext.from_strings(str(payload.get("from_date") or ""), str(payload.get("to_date") or ""))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=f"Некорректный период: {exc}")
+    return center.start_period_audit(period)
 
 
 @app.get("/api/decisions")
