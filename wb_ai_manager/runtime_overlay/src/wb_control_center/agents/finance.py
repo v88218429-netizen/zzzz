@@ -18,10 +18,9 @@ class FinanceAgent(BaseAgent):
         except Exception as e:
             out.events.append(self.event("warning", "balance_failed", "Не удалось получить финансовый баланс WB", str(e)))
             balance = None
-        today = datetime.now().date()
-        start = (today - timedelta(days=6)).isoformat()
+        start, end = self.dates(7)
         try:
-            report = await self.call("wb_finance_report", date_from=start, date_to=today.isoformat(), limit=100000, rrd_id=0)
+            report = await self.call("wb_finance_report", date_from=start, date_to=end, limit=100000, rrd_id=0)
             out.snapshots.append(("report_7d", report if isinstance(report, dict) else {"data": report}))
         except Exception as e:
             out.events.append(self.event("warning", "finance_report_failed", "Не удалось получить отчёт реализации", str(e)))
