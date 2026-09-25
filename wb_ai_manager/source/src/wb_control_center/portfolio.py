@@ -745,10 +745,155 @@ class PortfolioService:
             if prev_pos is not None and cur_pos is not None:
                 prod["search_position_delta"] = round(cur_pos - prev_pos, 2)
 
+    def _parse_ozon_operating(self, payload: dict[str, Any], out: dict[str, Any]) -> None:
+        own = out.setdefault("own_27", {})
+        cabinet_values = self._range_values(payload, "own_27", "ozon_cabinets")
+        cabinet_statuses: list[dict[str, Any]] = []
+        feed_by_key: dict[tuple[str, str], dict[str, Any]] = {}
+
+        # Top status block: Кабинет / Название / Статус API / Карточек / FBS...
+        if len(cabinet_values) >= 2:
+            header = [str(x or "").strip() for x in cabinet_values[1]]
+            idx = {h: i for i, h in enumerate(header)}
+            cab_i = idx.get("Кабинет")
+            if cab_i is not None:
+                for row in cabinet_values[2:8]:
+                    if cab_i >= len(row):
+                        continue
+                    cab = str(row[cab_i] or "").strip()
+                    if not cab.isdigit():
+                        continue
+                    def cell(name: str):
+                        i = idx.get(name)
+                        return row[i] if i is not None and i < len(row) else None
+                    cabinet_statuses.append({
+                        "cabinet": cab,
+                        "name": str(cell("Название") or "").strip(),
+                        "api_status": str(cell("Статус API") or "").strip(),
+                        "cards": self._num(cell("Карточек")),
+                        "fbs_positions": self._num(cell("FBS позиций")),
+                        "stock": self._num(cell("На складе")),
+                        "reserve": self._num(cell("Резерв")),
+                        "available": self._num(cell("Доступно")),
+                        "comment": str(cell("Комментарий") or "").strip(),
+                    })
+
+        # Product lists for cabinet 1/2 live in parallel blocks in "Ozon кабинеты".
+        current_cab: str | None = None
+        current_col: int | None = None
+        for row in cabinet_values:
+            marker_found = False
+            for i, value in enumerate(row):
+                marker = str(value or "").strip().upper()
+                if marker in {"КАБИНЕТ 1", "КАБИНЕТ 2"}:
+                    current_cab = marker.rsplit(" ", 1)[-1]
+                    current_col = i
+                    marker_found = True
+                    break
+            if marker_found or current_cab is None or current_col is None:
+                continue
+            if current_col >= len(row):
+                continue
+            article = str(row[current_col] or "").strip()
+            if not article or article == "Артикул" or article.upper().startswith("КАБИНЕТ "):
+                continue
+            name = str(row[current_col + 1] if current_col + 1 < len(row) else "").strip()
+            stock = self._num(row[current_col + 2] if current_col + 2 < len(row) else None)
+            reserve = self._num(row[current_col + 3] if current_col + 3 < len(row) else None)
+            available = self._num(row[current_col + 4] if current_col + 4 < len(row) else None)
+            # Avoid accidental section labels; a real product row has a name or stock facts.
+            if not name and stock is None and available is None:
+                continue
+            feed_by_key[(current_cab, article)] = {
+                "cabinet": current_cab,
+                "seller_article": article,
+                "name": name,
+                "stock": stock,
+                "reserve": reserve,
+                "available": available,
+            }
+
+        order_values = self._range_values(payload, "own_27", "ozon_orders")
+        orders_by_key: dict[tuple[str, str], dict[str, Any]] = {}
+        if len(order_values) >= 2:
+            headers = [str(x or "").strip() for x in order_values[0]]
+            idx = {h: i for i, h in enumerate(headers)}
+            for row in order_values[1:]:
+                def val(name: str):
+                    i = idx.get(name)
+                    return row[i] if i is not None and i < len(row) else None
+                cab = str(val("Кабинет") or "").strip()
+                article = str(val("Артикул") or "").strip()
+                if not cab or not article:
+                    continue
+                qty = self._num(val("Кол-во")) or 0.0
+                amount = self._num(val("Сумма строки")) or 0.0
+                status = str(val("Статус") or "").strip().lower()
+                accepted = str(val("Принят в обработку") or "").strip()
+                key = (cab, article)
+                agg = orders_by_key.setdefault(key, {
+                    "cabinet": cab,
+                    "seller_article": article,
+                    "orders_qty": 0.0,
+                    "cancelled_qty": 0.0,
+                    "orders_rub": 0.0,
+                    "last_order_at": None,
+                })
+                if status == "cancelled":
+                    agg["cancelled_qty"] += qty
+                else:
+                    agg["orders_qty"] += qty
+                    agg["orders_rub"] += amount
+                if accepted and (not agg["last_order_at"] or accepted > agg["last_order_at"]):
+                    agg["last_order_at"] = accepted
+
+        for item in own.get("ozon_products") or []:
+            if not isinstance(item, dict):
+                continue
+            cabinet = "2" if "2" in str(item.get("cabinet") or "") else "1"
+            article = str(item.get("seller_article") or "").strip()
+            feed = feed_by_key.get((cabinet, article))
+            orders = orders_by_key.get((cabinet, article))
+            if feed:
+                item.update({
+                    "feed_present": True,
+                    "feed_stock": feed.get("stock"),
+                    "feed_reserve": feed.get("reserve"),
+                    "feed_available": feed.get("available"),
+                    "feed_name": feed.get("name"),
+                })
+            else:
+                item["feed_present"] = False
+            if orders:
+                item.update({
+                    "orders_qty_period": orders.get("orders_qty"),
+                    "cancelled_qty_period": orders.get("cancelled_qty"),
+                    "orders_rub_period": orders.get("orders_rub"),
+                    "last_order_at": orders.get("last_order_at"),
+                })
+            else:
+                item.update({"orders_qty_period": 0.0, "cancelled_qty_period": 0.0, "orders_rub_period": 0.0})
+            if item.get("feed_present") and (item.get("orders_qty_period") or 0) > 0:
+                item["operating_status"] = "selling"
+            elif item.get("feed_present"):
+                item["operating_status"] = "listed_no_recent_orders"
+            elif (item.get("orders_qty_period") or 0) > 0:
+                item["operating_status"] = "orders_present_feed_missing"
+            else:
+                item["operating_status"] = "mapped_but_not_in_current_feed_or_orders"
+
+        if cabinet_statuses:
+            own["ozon_cabinets"] = cabinet_statuses
+        if feed_by_key:
+            own["ozon_feed_products_count"] = len(feed_by_key)
+        if order_values:
+            own["ozon_orders_feed_rows"] = max(0, len(order_values) - 1)
+
     def _merge_bridge(self, payload: dict[str, Any]) -> dict[str, Any]:
         seed = self._read_json(self.seed_path) or {}
         out = self._parse_weekly(payload, seed)
         self._parse_own_27(payload, out)
+        self._parse_ozon_operating(payload, out)
         self._link_products_to_weekly_groups(out)
         self._parse_search_signals(payload, out)
         # Refresh source-health timestamps from the bridge without allowing a stale source
