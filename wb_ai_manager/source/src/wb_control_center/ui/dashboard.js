@@ -84,16 +84,31 @@ function entityMeta(id){
   const group=x.group_name||x.weekly_group;
   return `${group?`группа: ${esc(group)}`:''}${x.ozon_seller_article?`${group?' · ':''}Ozon: ${esc(x.ozon_seller_article)}`:''}`;
 }
+function activeCampaignRows(){ return extractList(snap('advertising_monitor','active_campaigns')?.data); }
+function campaignInfo(id){
+  const target=String(id||'');
+  return activeCampaignRows().find(r=>String(r?.id??r?.advertId??r?.advert_id??'')===target)||null;
+}
+function campaignLabel(id){
+  const c=campaignInfo(id)||{}, name=String(c?.settings?.name||c?.name||'').trim();
+  const nms=extractList(c?.nm_settings||c?.nmSettings||[]).map(x=>x?.nm_id??x?.nmId??x?.nmID).filter(x=>!missing(x));
+  const articles=[...new Set(nms.map(entityName).filter(x=>x&&x!=='—'))];
+  if(articles.length) return `${articles.slice(0,2).join(', ')}${articles.length>2?` +${articles.length-2}`:''}${name?` · ${name}`:''}`;
+  return name || `кампания ${id}`;
+}
 function humanizeText(value){
   let text=String(value??'');
   text=text.replace(/nmID\s*(\d{8,12})/gi,(_,id)=>{ const n=entityName(id); return n!==String(id)?n:`WB ID ${id}`; });
   text=text.replace(/NMID\s*(\d{8,12})/g,(_,id)=>{ const n=entityName(id); return n!==String(id)?n:`WB ID ${id}`; });
   text=text.replace(/\b(\d{7,10}):(\d{8,12})\b/g,(m,campaign,id)=>{ const n=entityName(id); return n!==String(id)?`кампания ${campaign} · ${n}`:m; });
+  text=text.replace(/Реклама\s*#(\d+)/gi,(_,id)=>`Реклама · ${campaignLabel(id)}`);
+  text=text.replace(/\bnmID\b/gi,'карточка WB');
   return text;
 }
 function eventEntity(e){
   const p=e?.payload||{};
-  const nm=p.nm_id??p.nmId??p.nmID;
+  const campaignNm=Array.isArray(p.nm_ids)?p.nm_ids.find(x=>!missing(x)):null;
+  const nm=p.nm_id??p.nmId??p.nmID??campaignNm;
   if(!missing(nm)) return {id:String(nm),name:entityName(nm),meta:entityMeta(nm)};
   const items=Array.isArray(p.items)?p.items:[];
   const article=p.vendor_code||p.vendorCode||items[0]?.vendor_code||items[0]?.vendorCode;
@@ -352,19 +367,27 @@ function renderAll(){
   const health=d.health||{}; $('reasoning-mode').textContent=String(health.reasoning||'').startsWith('rules')?'Правила и расчёты без LLM':(health.reasoning||'—');
   $('store-name').textContent=(d.portfolio?.stores?.length>1?'Портфель WB':(d.store?.name || (health.wb_mode==='demo'?'DEMO WB cabinet':'Wildberries'))); $('connection-dot').classList.toggle('ok',!!health.wb_connected);
   $('last-sync').textContent=d.summary?.last_run_at ? `Синхронизация ${ago(d.summary.last_run_at)}` : 'Нет запусков';
-  const dc=decisionCounts();
-  const critical=Math.max(Number(d.summary?.critical_24h||0),dc.critical), warning=Math.max(Number(d.summary?.warning_24h||0),dc.high), actions=dc.total || d.summary?.recommendations||0;
+  const dc=decisionCounts(), auditReady=!!d.period_audit?.ready;
+  const critical=auditReady?Number(d.summary?.critical_24h||0):Math.max(Number(d.summary?.critical_24h||0),dc.critical);
+  const warning=auditReady?Number(d.summary?.warning_24h||0):Math.max(Number(d.summary?.warning_24h||0),dc.high);
+  const actions=dc.total || d.summary?.recommendations||0;
   $('metric-critical').textContent=num(critical); $('metric-warning').textContent=num(warning); $('metric-actions').textContent=num(actions); $('metric-agents').textContent=num(Object.keys(d.agents||{}).length);
-  if($('metric-critical-period')) $('metric-critical-period').textContent=`решения и сигналы · ${d.period?.label||'текущий контекст'}`;
-  if($('metric-warning-period')) $('metric-warning-period').textContent=`решения и сигналы · ${d.period?.label||'текущий контекст'}`;
+  if($('metric-critical-period')) $('metric-critical-period').textContent=auditReady?`сигналы · ${d.period?.label||'текущий контекст'}`:'текущие решения · период пересчитывается';
+  if($('metric-warning-period')) $('metric-warning-period').textContent=auditReady?`сигналы · ${d.period?.label||'текущий контекст'}`:'текущие решения · период пересчитывается';
   if($('finance-period-label')) $('finance-period-label').textContent=d.period_audit?.ready?`за ${d.period?.label||'выбранный период'}`:'ожидает пересчёта периода';
   $('nav-alerts').textContent=critical+warning; if($('nav-decisions')) $('nav-decisions').textContent=(d.decisions||[]).filter(x=>['critical','high'].includes(x.priority)).length;
-  const ad=adSummary(); $('metric-ad-spend').textContent=rub(ad.spend); const rating=snap('reviews_questions','seller_rating')?.data; const ratingVal=firstNumeric(rating,['rating']); $('metric-rating').textContent=ratingVal==null?'—':num(ratingVal,2);
+  const ad=adSummary(); $('metric-ad-spend').textContent=ad.error&&!ad.rows.length?'—':rub(ad.spend); const ratingVal=sellerRating(); $('metric-rating').textContent=ratingVal==null?'Недоступен':num(ratingVal,2);
   renderPeriodAudit();
   if($('metric-ad-period')) $('metric-ad-period').textContent=d.period_audit?.ready?(d.period?.label||'за выбранный период'):'ожидает расчёта периода';
   renderExecutive(); renderEvents(); renderRecommendations(); renderDecisions(); renderDecisionControl(); renderDomains(); renderPortfolio(); renderConnections(); renderAdvertising(); renderPolicyStudio(); renderInventory(); renderSearch(); renderFinance(); renderCustomers(); renderKnowledge(); renderAgents();
 }
 function snap(source,key){ return state.data?.snapshots?.[source]?.[key] || null; }
+function sellerRating(){
+  const raw=snap('reviews_questions','seller_rating')?.data||{};
+  const direct=raw?.rating ?? raw?.data?.rating;
+  const n=Number(direct);
+  return Number.isFinite(n)&&n>=0&&n<=5?n:null;
+}
 function firstNumeric(obj, keys){
   if(obj==null) return null; if(typeof obj==='number') return obj; if(Array.isArray(obj)){ for(const v of obj){ const n=firstNumeric(v,keys); if(n!=null) return n; } return null; }
   if(typeof obj==='object'){ for(const k of Object.keys(obj)){ if(keys.includes(k) && !missing(obj[k]) && Number.isFinite(Number(obj[k]))) return Number(obj[k]); } for(const v of Object.values(obj)){ const n=firstNumeric(v,keys); if(n!=null) return n; } }
@@ -413,7 +436,7 @@ function renderExecutive(){
   if(eventImp.length){
     $('priority-strip').innerHTML=eventImp.map(e=>{const ent=eventEntity(e); return `<span class="priority-chip ${e.severity}"><b></b>${esc(humanizeText(ent?`${ent.name}: ${e.title}`:e.title))}</span>`;}).join('');
   }else if(decisionImp.length){
-    $('priority-strip').innerHTML=decisionImp.map(d=>`<span class="priority-chip ${d.priority==='critical'?'critical':'warning'}"><b></b>${esc(entityName(d.entity_id))}: ${esc(humanizeText(d.title))}</span>`).join('');
+    $('priority-strip').innerHTML=decisionImp.map(d=>{const entity=entityName(d.entity_id), title=humanizeText(d.title); const label=title.toLowerCase().startsWith(String(entity).toLowerCase())?title:`${entity}: ${title}`; return `<span class="priority-chip ${d.priority==='critical'?'critical':'warning'}"><b></b>${esc(label)}</span>`;}).join('');
   }else if(['running','started'].includes(pa.status)){
     $('priority-strip').innerHTML='<span class="priority-chip warning"><b></b>Период пересчитывается — итоговый статус ещё не готов</span>';
   }else{
@@ -470,7 +493,7 @@ function pf(){ return state.data?.portfolio||{}; }
 
 function renderPortfolio(){
   const p=pf(), all=p.portfolio||{}, current=!!p.current_data;
-  if($('portfolio-origin')) $('portfolio-origin').textContent=current?'ЖИВЫЕ ДАННЫЕ':'АРХИВНЫЙ СРЕЗ';
+  if($('portfolio-origin')) $('portfolio-origin').textContent=current?'ПОДКЛЮЧЁННЫЕ ДАННЫЕ':'АРХИВНЫЙ СРЕЗ';
   if($('portfolio-period')) $('portfolio-period').textContent=p.period||'период не указан';
   const truth=$('portfolio-truth-banner');
   if(truth){
@@ -619,12 +642,12 @@ function renderDecisionControl(){
   if($('control-reviews')){
     const parts=[];
     if(validation&&validation.samples){parts.push(`<div class="signal info"><strong>Проверка прогноза спроса</strong><p>${esc(`Окон: ${validation.samples}; товаров: ${validation.skus}; WAPE: ${validation.wape_pct??'—'}%; средняя ошибка: ${validation.mae_orders??'—'} заказа`)}</p><span class="source">Историческая проверка без использования будущих данных</span></div>`);}
-    parts.push(...investigations.slice(0,10).map(x=>`<div class="signal ${x.status==='частичное'?'warning':'info'}"><strong>Расследование · ${esc(entityName(x.entity_id))}</strong><p>${esc([...(x.hypotheses||[]),...(x.missing||[]).map(v=>'не хватает: '+v)].slice(0,4).join(' · ')||'Критичных гипотез не найдено.')}</p><span class="source">${esc(x.status)} расследование</span></div>`));
-    parts.push(...reviews.slice(0,20).map(x=>`<button type="button" class="signal ${x.verdict==='заблокировано проверкой'?'warning':'info'} interactive-card" data-decision-key="${esc(x.decision_key)}"><strong>${esc(x.verdict)} · ${esc(entityName(x.entity_id||''))}</strong><p>${esc([...(x.blockers_added||[]),...(x.critic||[]),...(x.risk_checks||[])].slice(0,4).join(' · ')||'Критичных возражений нет.')}</p><span class="source">Независимая проверка · открыть решение</span></button>`));
+    parts.push(...investigations.slice(0,10).map(x=>`<div class="signal ${x.status==='частичное'?'warning':'info'}"><strong>Расследование · ${esc(entityName(x.entity_id))}</strong><p>${esc(humanizeText([...(x.hypotheses||[]),...(x.missing||[]).map(v=>'не хватает: '+v)].slice(0,4).join(' · ')||'Критичных гипотез не найдено.'))}</p><span class="source">${esc(x.status)} расследование</span></div>`));
+    parts.push(...reviews.slice(0,20).map(x=>`<button type="button" class="signal ${x.verdict==='заблокировано проверкой'?'warning':'info'} interactive-card" data-decision-key="${esc(x.decision_key)}"><strong>${esc(x.verdict)} · ${esc(entityName(x.entity_id||''))}</strong><p>${esc(humanizeText([...(x.blockers_added||[]),...(x.critic||[]),...(x.risk_checks||[])].slice(0,4).join(' · ')||'Критичных возражений нет.'))}</p><span class="source">Независимая проверка · открыть решение</span></button>`));
     $('control-reviews').innerHTML=parts.length?parts.join(''):empty('Проверка ещё не запускалась.');
   }
   if($('control-evaluations')) $('control-evaluations').innerHTML=evals.length?evals.slice(0,30).map(x=>`<button type="button" class="signal info interactive-card" data-entity-id="${esc(x.entity_id)}"><strong>${esc(x.horizon)} · ${esc(entityName(x.entity_id))}</strong><p>${esc(x.verdict||'наблюдение')} ${x.notes?`· ${esc(x.notes)}`:''}</p><span class="source">${time(x.evaluated_at)}</span></button>`).join(''):empty('Нет завершённых контрольных точек. Они появятся после реально замеченного изменения.');
-  if($('control-history')) $('control-history').innerHTML=history.length?history.slice(0,30).map(x=>`<button type="button" class="signal info interactive-card" data-decision-key="${esc(x.decision_key)}"><strong>${esc(x.payload?.title||x.decision_key)}</strong><p>${esc(x.payload?.diagnosis||'')}</p><span class="source">${esc(historyStatusName(x.status))} · ${time(x.created_at)} · открыть</span></button>`).join(''):empty('История решений пока пуста.');
+  if($('control-history')) $('control-history').innerHTML=history.length?history.slice(0,30).map(x=>`<button type="button" class="signal info interactive-card" data-decision-key="${esc(x.decision_key)}"><strong>${esc(humanizeText(x.payload?.title||x.decision_key))}</strong><p>${esc(humanizeText(x.payload?.diagnosis||''))}</p><span class="source">${esc(historyStatusName(x.status))} · ${time(x.created_at)} · открыть</span></button>`).join(''):empty('История решений пока пуста.');
 }
 
 function renderPolicyStudio(){
@@ -725,9 +748,8 @@ function renderFinance(){
 
 function countObjList(s,k){ const x=snap(s,k)?.data; return extractList(x).length; }
 function renderCustomers(){
-  const ratingRaw=snap('reviews_questions','seller_rating')?.data||{};
-  const rating=Number(ratingRaw?.rating ?? ratingRaw?.data?.rating);
-  $('customer-rating').textContent=Number.isFinite(rating)&&rating>=0&&rating<=5?num(rating,2):'Недоступен';
+  const rating=sellerRating();
+  $('customer-rating').textContent=rating==null?'Недоступен':num(rating,2);
   const flagsRaw=snap('reviews_questions','flags')?.data||{}, flags=flagsRaw?.data||flagsRaw;
   const nf=!!flags.hasNewFeedbacks,nq=!!flags.hasNewQuestions;
   const feedbackRaw=snap('reviews_questions','feedbacks')?.data||{};
