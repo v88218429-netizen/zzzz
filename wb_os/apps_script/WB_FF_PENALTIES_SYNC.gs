@@ -549,15 +549,20 @@ function ffVisionExtractPhotoUrls_(formulas, values) {
     var m = formula.match(/=IMAGE\("([^"]+)"/i);
     var url = m ? m[1] : '';
 
+    if (!url) {
+      m = formula.match(/=HYPERLINK\("([^"]+)"/i);
+      url = m ? m[1] : '';
+    }
+
     if (!url && /^https?:\/\//i.test(value)) {
       url = value;
     }
 
-    if (
-      url &&
-      /^https:\/\/static-basket-[a-z0-9-]+\.wb\.ru\//i.test(url) &&
-      out.indexOf(url) === -1
-    ) {
+    var supported =
+      /^https:\/\/static-basket-[a-z0-9-]+\.wb\.ru\//i.test(url) ||
+      /^https:\/\/disk\.yandex\.(ru|com)\//i.test(url);
+
+    if (url && supported && out.indexOf(url) === -1) {
       out.push(url);
     }
   }
