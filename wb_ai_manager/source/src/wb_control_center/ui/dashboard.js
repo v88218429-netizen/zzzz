@@ -331,6 +331,40 @@ function renderPortfolio(){
   if($('ff-grid')) $('ff-grid').innerHTML=ff.length?ff.map(x=>`<div class="mini-row"><div><b>${esc(x.name)}</b><br><span>Учётный артикул ${esc(x.sku)}</span></div><strong>${num(x.available)} шт</strong></div>`).join(''):empty('Нет свежих фактов по фулфилменту.');
 }
 
+function sourceHealthClass(v){
+  const s=String(v||'').toLowerCase();
+  if(['fresh','ok','healthy','current'].includes(s)) return 'ok';
+  if(['broken','error','failed','down'].includes(s)) return 'bad';
+  return 'warn';
+}
+function campaignNames(){
+  const data=snap('advertising_monitor','active_campaigns')?.data||{};
+  const rows=extractList(data);
+  const out={};
+  for(const row of rows){
+    const id=row?.advertId??row?.advert_id??row?.id;
+    if(missing(id)) continue;
+    const name=row?.name||row?.settings?.name||row?.campaignName||row?.title;
+    if(name) out[String(id)]=String(name);
+  }
+  return out;
+}
+function adSummary(){
+  const raw=snap('advertising_monitor','stats_7d')?.data;
+  const rows=extractList(raw);
+  let spend=0, orders=0, revenue=0, clicks=0, views=0;
+  for(const r of rows){
+    spend+=Number(r?.sum??r?.spend??r?.spent??0)||0;
+    orders+=Number(r?.orders??r?.ordersCount??r?.orders_count??0)||0;
+    revenue+=Number(r?.sum_price??r?.revenue??r?.sales??0)||0;
+    clicks+=Number(r?.clicks??0)||0;
+    views+=Number(r?.views??r?.shows??0)||0;
+  }
+  const drr=revenue>0?spend/revenue*100:null;
+  const ctr=views>0?clicks/views*100:null;
+  return {rows,spend,orders,revenue,drr,ctr};
+}
+
 function renderConnections(){
   const c=state.data?.connections||{}, wb=c.wb||{}, gs=c.google_sheets||{};
   if($('wb-connection-status')){ $('wb-connection-status').className=`status-tag ${wb.configured?'ok':'warn'}`; $('wb-connection-status').textContent=wb.configured?'ПОДКЛЮЧЕН':'НЕТ ТОКЕНА'; }
