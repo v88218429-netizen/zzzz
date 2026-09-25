@@ -42,10 +42,18 @@ function scopeName(v){ const m={campaign_sku:'Реклама · товар',camp
 function changeTypeName(v){ const m={advert_bid:'Ставка рекламы',price:'Цена',card_media:'Медиа карточки'}; return m[String(v||'')]||String(v||'—'); }
 function historyStatusName(v){ const m={recommended:'Рекомендовано',observed_applied:'Фактически применено'}; return m[String(v||'')]||String(v||'—'); }
 function sourceHealthName(v){ const m={fresh:'Актуально',ok:'Актуально',stale:'Устарело',broken:'Ошибка',unknown:'Не проверено'}; return m[String(v||'').toLowerCase()]||String(v||'—'); }
-function extractList(obj){
+function extractList(obj, depth=0){
   if(Array.isArray(obj)) return obj;
-  if(!obj || typeof obj!=='object') return [];
-  for(const k of ['data','items','campaigns','adverts','products','feedbacks','questions','claims','orders','events']) if(Array.isArray(obj[k])) return obj[k];
+  if(!obj || typeof obj!=='object' || depth>4) return [];
+  for(const k of ['data','items','campaigns','adverts','products','feedbacks','questions','claims','orders','events']){
+    if(Array.isArray(obj[k])) return obj[k];
+  }
+  for(const k of ['data','result','response']){
+    if(obj[k] && typeof obj[k]==='object'){
+      const nested=extractList(obj[k],depth+1);
+      if(nested.length) return nested;
+    }
+  }
   return [];
 }
 function showToast(msg, kind=''){ const t=$('toast'); t.textContent=msg; t.className=`toast show ${kind}`; clearTimeout(showToast.t); showToast.t=setTimeout(()=>t.className='toast',3200); }
@@ -74,7 +82,7 @@ function entityMeta(id){
   const x=entityInfo(id);
   if(!x) return '';
   const group=x.group_name||x.weekly_group;
-  return `${group?`группа: ${esc(group)}`:''}${x.ozon_seller_article?`${group?' · ':''}Ozon: ${esc(x.ozon_seller_article)}`:''}${x.nm_id?`${group||x.ozon_seller_article?' · ':''}WB ID ${esc(x.nm_id)}`:''}`;
+  return `${group?`группа: ${esc(group)}`:''}${x.ozon_seller_article?`${group?' · ':''}Ozon: ${esc(x.ozon_seller_article)}`:''}`;
 }
 function humanizeText(value){
   let text=String(value??'');
@@ -217,7 +225,7 @@ function eventDetail(e){
     if(rows.length) body+=`<div class="detail-section"><h3>Конкретные заказы на повторную отгрузку</h3><div class="detail-table">${rows.slice(0,100).map((r,i)=>{
       const nm=r.nmId??r.nmID??r.nm_id; const art=r.vendorCode??r.supplierArticle??r.article??entityName(nm);
       const order=r.orderId??r.order_id??r.id??r.srid??'—'; const supply=r.supplyId??r.supply_id??r.supply??'—'; const qty=r.quantity??r.qty??1;
-      return `<div class="detail-row"><b>${i+1}. ${esc(art||entityName(nm))}</b><span>Заказ ${esc(order)} · поставка ${esc(supply)} · ${esc(qty)} шт${nm?` · nmID ${esc(nm)}`:''}</span></div>`;
+      return `<div class="detail-row"><b>${i+1}. ${esc(art||entityName(nm))}</b><span>Заказ ${esc(order)} · поставка ${esc(supply)} · ${esc(qty)} шт${nm?` · WB ID ${esc(nm)}`:''}</span></div>`;
     }).join('')}</div></div>`;
   } else {
     const publicPayload={...payload}; delete publicPayload._analysis; delete publicPayload.data;
@@ -249,7 +257,7 @@ function productDetail(id){
   const group=(own.product_groups||[]).find(x=>String(x.name)===String(groupName));
   const decisions=(state.data?.decisions||[]).filter(d=>String(d.entity_id)===String(id)).slice(0,10);
   const facts=[
-    ['Артикул продавца WB',entityName(id)],['Товарная группа',groupName||'—'],['nmID',id],
+    ['Артикул продавца WB',entityName(id)],['Товарная группа',groupName||'—'],['WB ID',entityNmId(id)||id],
     ['Ozon артикул',prod.ozon_seller_article||info.ozon_seller_article||'—'],['Ozon SKU',prod.ozon_sku||info.ozon_sku||'—'],
     ['Цена клиенту',rub(prod.price_client_rub)],['Прибыль на единицу',rub(prod.profit_rub)],
     ['Маржа',pct(prod.margin_pct)],['ДРР',pct(prod.drr_pct)],['Остаток',num(prod.safe_stock)],['Источник остатка',prod.safe_stock_source||info.stock_source||'—'],
@@ -446,7 +454,7 @@ function renderPortfolio(){
   const facts=[['Заказы, ₽',rub(o.orders_rub)],['Заказы, шт',num(o.orders_qty)],['Продажи, шт',num(o.sales_qty)],['Остатки ФФ',num(o.ff_stock)],['WB FBS',num(o.wb_fbs_stock)],['Ozon FBS',num(o.ozon_fbs_stock)],['В пути к клиенту',num(o.in_way_to_client)],['FBS долг заказов',num(o.fbs_debt_orders)],['FBW',num(o.fbw_stock)]];
   if($('own27-grid')) $('own27-grid').innerHTML=facts.map(([a,b])=>`<div class="fact-box"><span>${a}</span><strong>${b}</strong></div>`).join('');
   const econ=(o.economy_examples||[]).filter(x=>Number(x.margin_pct)<0 || Number(x.profit_rub)<0).slice(0,6);
-  if($('unit-alerts')) $('unit-alerts').innerHTML=econ.length?econ.map(x=>`<button type="button" class="signal warning interactive-card" data-entity-id="${esc(x.sku)}"><strong>${esc(x.name||entityName(x.sku))}</strong><p>Прибыль ${rub(x.profit_rub)} · маржа ${pct(x.margin_pct)} · ROI ${pct(x.roi_pct)} · ДРР ${pct(x.drr_pct)}</p><span class="source">Открыть товар · nmID ${esc(x.sku)}</span></button>`).join(''):empty('В свежем срезе отрицательных примеров экономики не найдено.');
+  if($('unit-alerts')) $('unit-alerts').innerHTML=econ.length?econ.map(x=>`<button type="button" class="signal warning interactive-card" data-entity-id="${esc(x.sku)}"><strong>${esc(x.name||entityName(x.sku))}</strong><p>Прибыль ${rub(x.profit_rub)} · маржа ${pct(x.margin_pct)} · ROI ${pct(x.roi_pct)} · ДРР ${pct(x.drr_pct)}</p><span class="source">Открыть товар · ${esc(x.name||entityName(x.sku))}</span></button>`).join(''):empty('В свежем срезе отрицательных примеров экономики не найдено.');
   if($('ff-snapshot-date')) $('ff-snapshot-date').textContent=o.ff_snapshot_date?`снимок ${o.ff_snapshot_date}`:'—';
   const ff=(o.ff_examples||[]).slice(0,30);
   if($('ff-grid')) $('ff-grid').innerHTML=ff.length?ff.map(x=>`<div class="mini-row"><div><b>${esc(x.name)}</b><br><span>Учётный артикул ${esc(x.sku)}</span></div><strong>${num(x.available)} шт</strong></div>`).join(''):empty('Нет свежих фактов по фулфилменту.');
@@ -473,6 +481,7 @@ function campaignNames(){
 function adSummary(){
   const raw=snap('advertising_monitor','stats_7d')?.data;
   const rows=extractList(raw);
+  const errorText=typeof raw?.text==='string' && /ошибка|error|429|403/i.test(raw.text) ? raw.text : '';
   let spend=0, orders=0, revenue=0, clicks=0, views=0;
   for(const r of rows){
     spend+=Number(r?.sum??r?.spend??r?.spent??0)||0;
@@ -483,7 +492,7 @@ function adSummary(){
   }
   const drr=revenue>0?spend/revenue*100:null;
   const ctr=views>0?clicks/views*100:null;
-  return {rows,spend,orders,revenue,drr,ctr};
+  return {rows,spend,orders,revenue,drr,ctr,error:errorText};
 }
 
 function renderConnections(){
@@ -525,8 +534,14 @@ function renderDecisions(){
 }
 
 function renderAdvertising(){
-  const a=adSummary(), names=campaignNames(); $('ads-spend').textContent=rub(a.spend); $('ads-orders').textContent=num(a.orders); $('ads-drr').textContent=pct(a.drr); $('ads-ctr').textContent=pct(a.ctr); const snapObj=snap('advertising_monitor','stats_7d'); $('ads-updated').textContent=snapObj?`${snapshotScopeText(snapObj)||'данные'} · обновлено ${ago(snapObj.created_at)}`:'нет данных';
-  $('ads-table').innerHTML=a.rows.length?a.rows.map(r=>{ const id=r.advertId??r.advert_id??r.id; const sp=Number(r.sum??r.spend??0)||0, or=Number(r.orders??r.ordersCount??0)||0, rev=Number(r.sum_price??r.revenue??0)||0, drr=rev>0?sp/rev*100:null, ctr=Number(r.ctr), cpc=Number(r.cpc); let st='ok',tx='Штатно'; if(or===0&&sp>=1500){st='bad';tx='Расход без заказов';} else if(drr!=null&&drr>=20){st='bad';tx='Критичный ДРР';} else if(drr!=null&&drr>=12){st='warn';tx='Повышенный ДРР';} const nms=extractList(r?.nm_settings||r?.nmSettings||[]).map(x=>x.nm_id??x.nmId??x.nmID).filter(x=>!missing(x)); const arts=[...new Set(nms.map(entityName).filter(Boolean))]; return `<tr><td><strong>${esc(names[String(id)]||`Кампания #${id??'—'}`)}</strong><br><span class="muted">${arts.length?esc(arts.join(', ')+' · '):''}кампания ID ${esc(id??'—')}</span></td><td>${rub(sp)}</td><td>${num(or)}</td><td>${rub(rev)}</td><td>${pct(drr)}</td><td>${Number.isFinite(ctr)?pct(ctr):'—'}</td><td>${Number.isFinite(cpc)?rub(cpc):'—'}</td><td><span class="status-tag ${st}">${tx}</span></td></tr>`; }).join(''):`<tr><td colspan="8">${empty('Нет рекламных данных. Запусти проверку.')}</td></tr>`;
+  const a=adSummary(), names=campaignNames();
+  $('ads-spend').textContent=a.error&&!a.rows.length?'—':rub(a.spend);
+  $('ads-orders').textContent=a.error&&!a.rows.length?'—':num(a.orders);
+  $('ads-drr').textContent=a.error&&!a.rows.length?'—':pct(a.drr);
+  $('ads-ctr').textContent=a.error&&!a.rows.length?'—':pct(a.ctr);
+  const snapObj=snap('advertising_monitor','stats_7d');
+  $('ads-updated').textContent=a.error&&!a.rows.length?'WB временно ограничил статистику (повторю автоматически)':snapObj?`${snapshotScopeText(snapObj)||'данные'} · обновлено ${ago(snapObj.created_at)}`:'нет данных';
+  $('ads-table').innerHTML=a.rows.length?a.rows.map(r=>{ const id=r.advertId??r.advert_id??r.id; const sp=Number(r.sum??r.spend??0)||0, or=Number(r.orders??r.ordersCount??0)||0, rev=Number(r.sum_price??r.revenue??0)||0, drr=rev>0?sp/rev*100:null, ctr=Number(r.ctr), cpc=Number(r.cpc); let st='ok',tx='Штатно'; if(or===0&&sp>=1500){st='bad';tx='Расход без заказов';} else if(drr!=null&&drr>=20){st='bad';tx='Критичный ДРР';} else if(drr!=null&&drr>=12){st='warn';tx='Повышенный ДРР';} const nms=extractList(r?.nm_settings||r?.nmSettings||[]).map(x=>x.nm_id??x.nmId??x.nmID).filter(x=>!missing(x)); const arts=[...new Set(nms.map(entityName).filter(Boolean))]; return `<tr><td><strong>${esc(names[String(id)]||`Кампания #${id??'—'}`)}</strong><br><span class="muted">${arts.length?esc(arts.join(', ')+' · '):''}кампания ID ${esc(id??'—')}</span></td><td>${rub(sp)}</td><td>${num(or)}</td><td>${rub(rev)}</td><td>${pct(drr)}</td><td>${Number.isFinite(ctr)?pct(ctr):'—'}</td><td>${Number.isFinite(cpc)?rub(cpc):'—'}</td><td><span class="status-tag ${st}">${tx}</span></td></tr>`; }).join(''):`<tr><td colspan="8">${empty(a.error?'WB временно ограничил статистику рекламы. Нули не считаются фактом; система повторит чтение автоматически.':'Нет рекламных данных. Запусти проверку.')}</td></tr>`;
   const ev=(state.data.events||[]).filter(e=>['advertising_monitor','advertising_optimizer'].includes(e.agent)&&['critical','warning'].includes(e.severity)).slice(0,8); $('ads-signals').innerHTML=ev.length?ev.map(signalHtml).join(''):empty('Проблемных рекламных сигналов сейчас нет.');
   const plans=(state.data.decisions||[]).filter(d=>String(d.decision_key||'').startsWith('advert:')&&(String(d.decision_key||'').includes('numeric_control')||String(d.decision_key||'').includes('zero_orders')));
   if($('ad-control-plans')) $('ad-control-plans').innerHTML=plans.length?plans.map(adPlanHtml).join(''):empty('Числовых планов пока нет. Запусти полный аудит.');
@@ -687,8 +702,10 @@ function renderKnowledge(){
 }
 
 function renderAgents(){
-  const agents=state.data.agents||{}, runs=state.data.runs||{}; const ordered=Object.keys(agents); $('agents-grid').innerHTML=ordered.map((name,i)=>{const r=runs[name],ok=!r||r.status==='ok',interval=agents[name].interval_minutes; return `<div class="agent-card"><div class="agent-card-top"><div class="agent-symbol">${String(i+1).padStart(2,'0')}</div><span class="status-tag ${ok?'ok':'bad'}">${ok?'РАБОТАЕТ':'ОШИБКА'}</span></div><strong>${esc(agentNames[name]||name)}</strong><p>${esc(agentDescriptions[name]||'Специализированный модуль WB AI Manager.')}</p><small>${r?.finished_at?`последний запуск ${ago(r.finished_at)}`:`каждые ${interval||'—'} мин`}</small></div>`;}).join('');
-  $('agents-table').innerHTML=ordered.map(name=>{const r=runs[name], int=agents[name].interval_minutes; return `<tr><td><strong>${esc(agentNames[name]||name)}</strong></td><td><span class="status-tag ${!r||r.status==='ok'?'ok':'bad'}">${esc(r?.status==='ok'?'работает':r?.status==='error'?'ошибка':'по расписанию')}</span></td><td>${r?.finished_at?time(r.finished_at):'ещё не запускался'}</td><td>${int?`${int} мин`:'ручной'}</td></tr>`;}).join('');
+  const agents=state.data.agents||{}, runs=state.data.runs||{}; const ordered=Object.keys(agents);
+  const status=(r)=>!r?['neutral','ПО РАСПИСАНИЮ']:r.status==='ok'?['ok','РАБОТАЕТ']:r.status==='error'?['bad','ОШИБКА']:['warn','СЧИТАЕТ'];
+  $('agents-grid').innerHTML=ordered.map((name,i)=>{const r=runs[name], st=status(r),interval=agents[name].interval_minutes; return `<div class="agent-card"><div class="agent-card-top"><div class="agent-symbol">${String(i+1).padStart(2,'0')}</div><span class="status-tag ${st[0]}">${st[1]}</span></div><strong>${esc(agentNames[name]||name)}</strong><p>${esc(agentDescriptions[name]||'Специализированный модуль WB AI Manager.')}</p><small>${r?.finished_at?`последний запуск ${ago(r.finished_at)}`:`каждые ${interval||'—'} мин`}</small></div>`;}).join('');
+  $('agents-table').innerHTML=ordered.map(name=>{const r=runs[name], int=agents[name].interval_minutes, st=status(r); return `<tr><td><strong>${esc(agentNames[name]||name)}</strong></td><td><span class="status-tag ${st[0]}">${st[1].toLowerCase()}</span></td><td>${r?.finished_at?time(r.finished_at):'ещё не завершался'}</td><td>${int?`${int} мин`:'ручной'}</td></tr>`;}).join('');
 }
 
 $('refresh-data').addEventListener('click',()=>fetchData(true));
