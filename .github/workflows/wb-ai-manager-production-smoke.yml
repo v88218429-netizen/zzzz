@@ -6,6 +6,7 @@ on:
     branches: [mainggg]
     paths:
       - ".github/workflows/wb-ai-manager-production-smoke.yml"
+      - "wb_ai_manager/source/**"
 
 permissions:
   contents: read
@@ -43,10 +44,13 @@ jobs:
                   assert health.get("read_only") is True, health
                   assert len(health.get("agents") or []) == 19, health
 
-                  dashboard=get("/api/dashboard-data")
+                  dashboard=get("/api/dashboard-data?days=7")
                   runs=dashboard.get("runs") or {}
                   connections=dashboard.get("connections") or {}
                   snapshots=dashboard.get("snapshots") or {}
+                  period=dashboard.get("period") or {}
+                  quality=dashboard.get("data_quality") or {}
+                  entity_map=dashboard.get("entity_map") or {}
 
                   # Startup full audit is asynchronous; require every role to have
                   # produced a latest run before calling production ready.
@@ -56,6 +60,14 @@ jobs:
                   assert "worker_finance" in (snapshots.get("finance") or {}), snapshots.get("finance")
                   assert "worker_fbs" in (snapshots.get("orders_fbs") or {}), snapshots.get("orders_fbs")
                   assert "worker_penalty_evidence" in (snapshots.get("cost_guard") or {}), snapshots.get("cost_guard")
+                  assert period.get("days") == 7, period
+                  assert period.get("from") and period.get("to"), period
+                  assert quality.get("portfolio_status") in {"current","historical_snapshot"}, quality
+                  if quality.get("portfolio_status") == "historical_snapshot":
+                      bad=[d for d in (dashboard.get("decisions") or []) if str(d.get("decision_key","")).startswith(("sku:","store:"))]
+                      assert not bad, {"stale_money_decisions":bad[:5]}
+                      assert any(d.get("decision_key")=="data:portfolio_historical_only" for d in (dashboard.get("decisions") or [])), dashboard.get("decisions")
+                  assert isinstance(entity_map, dict), type(entity_map)
 
                   print(json.dumps({
                       "ok": True,
@@ -68,6 +80,9 @@ jobs:
                       "snapshot_groups": sorted(snapshots),
                       "decision_count": len(dashboard.get("decisions") or []),
                       "recommendation_count": len(dashboard.get("recommendations") or []),
+                      "period": period,
+                      "data_quality": quality,
+                      "entity_map_count": len(entity_map),
                   }, ensure_ascii=False, indent=2))
                   raise SystemExit(0)
               except Exception as exc:
