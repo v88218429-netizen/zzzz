@@ -143,6 +143,17 @@
         <span class="pill safe">НАБЛЮДЕНИЕ</span>
       </div>
 
+      <div id="period-audit-banner" class="period-audit-banner hidden">
+        <div class="period-audit-icon">∿</div>
+        <div class="period-audit-copy">
+          <strong id="period-audit-title">Анализ выбранного периода</strong>
+          <span id="period-audit-text">Подготавливаю данные…</span>
+          <div class="period-audit-progress"><i id="period-audit-progress"></i></div>
+          <small id="period-audit-scopes"></small>
+        </div>
+        <span class="pill neutral" id="period-audit-status">—</span>
+      </div>
+
       <div id="loading-state" class="loading-state">
         <div class="spinner"></div>
         <div><strong>Собираю состояние магазина</strong><span>Проверяю события, агентов и последние снимки данных.</span></div>
@@ -184,8 +195,8 @@
           <article class="metric-card"><span class="metric-icon warning">•</span><div><span>Предупреждения</span><strong id="metric-warning">—</strong><small id="metric-warning-period">за выбранный период</small></div></article>
           <article class="metric-card"><span class="metric-icon purple">↗</span><div><span>Рекомендации</span><strong id="metric-actions">—</strong><small>ничего не исполняется</small></div></article>
           <article class="metric-card"><span class="metric-icon teal">A</span><div><span>Агенты</span><strong id="metric-agents">—</strong><small>активных модулей</small></div></article>
-          <article class="metric-card"><span class="metric-icon blue">₽</span><div><span>Расход рекламы</span><strong id="metric-ad-spend">—</strong><small>за 7 дней</small></div></article>
-          <article class="metric-card"><span class="metric-icon green">◎</span><div><span>Рейтинг</span><strong id="metric-rating">—</strong><small>магазина</small></div></article>
+          <article class="metric-card"><span class="metric-icon blue">₽</span><div><span>Расход рекламы</span><strong id="metric-ad-spend">—</strong><small id="metric-ad-period">за выбранный период</small></div></article>
+          <article class="metric-card"><span class="metric-icon green">◎</span><div><span>Рейтинг</span><strong id="metric-rating">—</strong><small>снимок на сейчас</small></div></article>
         </div>
 
         <div class="content-grid two-thirds">
