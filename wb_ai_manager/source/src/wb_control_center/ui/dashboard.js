@@ -422,6 +422,21 @@ function policyPayload(){ return {
   min_clicks_for_numeric_ad_decision:Number($('policy-min-clicks').value), min_orders_for_scale_up:Number($('policy-min-orders').value), evaluation_window_hours:Number($('policy-eval-hours').value),
   min_stock_days_for_scale:Number($('policy-stock-scale').value), min_stock_days_for_hold:Number($('policy-stock-hold').value), target_stock_days:Number($('policy-stock-target').value), organic_growth_hold_threshold_pct:Number($('policy-organic-growth').value), trend_short_days:Number($('policy-trend-short').value), trend_long_days:Number($('policy-trend-long').value), max_trend_pct_for_forecast:Number($('policy-max-trend').value), max_internal_spend_24h_rub:Number($('policy-max-spend24').value)
 }; }
+async function refreshDecisions(){
+  const b=$('refresh-decisions'); if(!b)return;
+  b.disabled=true; const old=b.textContent; b.textContent='Пересчитываю…';
+  try{
+    const r=await fetch('/api/decisions/refresh',{method:'POST'});
+    const j=await r.json();
+    if(!r.ok) throw new Error(j.detail||`HTTP ${r.status}`);
+    showToast('Решения пересчитаны по актуальным данным.','success');
+    await fetchData();
+  }catch(e){
+    showToast(`Решения не пересчитаны: ${e.message}`,'error');
+  }finally{
+    b.disabled=false; b.textContent=old;
+  }
+}
 async function refreshRemotePolicy(){ const b=$('refresh-remote-policy'); if(!b)return; b.disabled=true; const old=b.textContent; b.textContent='Обновляю…'; try{const r=await fetch('/api/policy-studio/remote-refresh',{method:'POST'}); const j=await r.json(); if(!r.ok)throw new Error(j.detail||`HTTP ${r.status}`); showToast('Удалённые правила обновлены, решения пересчитаны.','success'); await fetchData();}catch(e){showToast(`Правила не обновлены: ${e.message}`,'error');}finally{b.disabled=false;b.textContent=old;}}
 async function savePolicy(){ const b=$('save-policy'); if(!b)return; b.disabled=true; try{const r=await fetch('/api/policy-studio/advertising',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(policyPayload())}); const j=await r.json(); if(!r.ok)throw new Error(j.detail||`HTTP ${r.status}`); showToast('Правила применены без перезапуска. Решения пересчитаны.','success'); await fetchData();}catch(e){showToast(`Правила не сохранены: ${e.message}`,'error');}finally{b.disabled=false;}}
 async function rollbackPolicy(){ const b=$('rollback-policy'); if(!b)return; b.disabled=true; try{const r=await fetch('/api/policy-studio/rollback/0',{method:'POST'}); const j=await r.json(); if(!r.ok)throw new Error(j.detail||`HTTP ${r.status}`); showToast('Последнее изменение откатилось.','success'); await fetchData();}catch(e){showToast(`Откат не выполнен: ${e.message}`,'error');}finally{b.disabled=false;}}
