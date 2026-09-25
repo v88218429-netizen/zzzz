@@ -85,7 +85,7 @@ class PortfolioService:
             },
             "google_sheets": {
                 "configured": bool((self.settings.google_sheets_bridge_url and self.settings.google_sheets_bridge_key) or self.live_path.exists()),
-                "mode": "auto_browser_session" if self.live_path.exists() else ("apps_script_bridge" if self.settings.google_sheets_bridge_url else "not_connected"),
+                "mode": "apps_script_bridge" if (self.settings.google_sheets_bridge_url and self.settings.google_sheets_bridge_key) else ("saved_live_snapshot" if self.live_path.exists() else "not_connected"),
                 "bridge_url_set": bool(self.settings.google_sheets_bridge_url),
                 "bridge_key_set": bool(self.settings.google_sheets_bridge_key),
                 "last_live_snapshot": self._read_json(self.live_path).get("generated_at") if self.live_path.exists() and self._read_json(self.live_path) else None,
