@@ -36,6 +36,7 @@ class Settings(BaseSettings):
     # Optional read-only Google Sheets bridge (Apps Script Web App).
     google_sheets_bridge_url: str = ""
     google_sheets_bridge_key: str = ""
+    google_sheets_auto_refresh_seconds: int = 900
 
     app_host: str = "127.0.0.1"
     app_port: int = 8787
