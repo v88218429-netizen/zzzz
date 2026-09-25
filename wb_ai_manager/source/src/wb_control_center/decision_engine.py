@@ -65,16 +65,44 @@ class DecisionEngine:
     def build(self, portfolio: dict[str, Any], snapshots: dict[str, Any] | None = None) -> list[DecisionCard]:
         snapshots = snapshots or {}
         out: list[DecisionCard] = []
-        out += self._operating_findings(snapshots)
+        current_portfolio = bool(portfolio.get("current_data", portfolio.get("data_origin") != "seeded_real_facts"))
+        safe_portfolio = portfolio if current_portfolio else {
+            "data_origin": portfolio.get("data_origin"),
+            "current_data": False,
+            "source_health": portfolio.get("source_health") or [],
+            "stores": [],
+            "own_27": {},
+            "portfolio": {},
+        }
         out += self._source_quality(portfolio)
-        out += self._store_decisions(portfolio)
-        out += self._product_decisions(portfolio)
-        out += self._inventory_decisions(portfolio)
-        out += self._advertising_control_decisions(portfolio, snapshots)
-        out += self._card_content_decisions(portfolio, snapshots)
-        out += self._operational_decisions(portfolio, snapshots)
-        out += self._event_decisions(portfolio, snapshots)
-        out += self._search_market_decisions(portfolio, snapshots)
+        if not current_portfolio:
+            out.append(DecisionCard(
+                decision_key="data:portfolio_historical_only",
+                scope="system",
+                entity_id="portfolio",
+                title="Портфельный срез устарел — текущие решения по нему заблокированы",
+                diagnosis=str(portfolio.get("stale_reason") or "Доступен только исторический срез портфеля."),
+                priority="high",
+                confidence="high",
+                recommended_actions=[{
+                    "step": 1,
+                    "action": "Не использовать архивный срез для текущих цен, рекламы и поставок. Работать только по свежим WB/FBS/finance источникам до восстановления живого портфеля.",
+                    "mode": "automatic_policy",
+                }],
+                evidence=[_ev("portfolio", "period", portfolio.get("period")), _ev("portfolio", "origin", portfolio.get("data_origin"))],
+                blockers=["Нет свежего live-среза портфеля по выбранному периоду."],
+                follow_up="Снять блокировку автоматически после появления свежего live-среза.",
+            ))
+        if current_portfolio:
+            out += self._operating_findings(snapshots)
+            out += self._store_decisions(portfolio)
+            out += self._product_decisions(portfolio)
+            out += self._inventory_decisions(portfolio)
+        out += self._advertising_control_decisions(safe_portfolio, snapshots)
+        out += self._card_content_decisions(safe_portfolio, snapshots)
+        out += self._operational_decisions(safe_portfolio, snapshots)
+        out += self._event_decisions(safe_portfolio, snapshots)
+        out += self._search_market_decisions(safe_portfolio, snapshots)
         # Stable de-dup by key, retaining the highest priority version.
         rank={"low":1,"medium":2,"high":3,"critical":4}
         best: dict[str, DecisionCard] = {}
@@ -185,11 +213,17 @@ class DecisionEngine:
                     {"step":1,"action":"Не повышать ставку/бюджет рекламы для этого SKU","mode":"policy"},
                     {"step":2,"action":"Проверить, что именно делает единицу убыточной: ДРР, комиссия, логистика, себестоимость, цена","mode":"analysis"},
                 ]
-                target=_n(x.get('target_price_margin_rub')) or _n(x.get('target_price_profit_rub'))
-                if target and price and target>price:
-                    actions.append({"step":3,"action":f"Рассмотреть тест цены {price:.0f} → {target:.0f} ₽; не применять автоматически","mode":"price_test"})
+                targets=[_n(x.get('target_price_profit_rub')), _n(x.get('target_price_margin_rub')), _n(x.get('target_price_roi_rub'))]
+                viable=sorted(t for t in targets if t is not None and price is not None and t > price)
+                if viable and price:
+                    target=viable[0]
+                    actions.append({"step":3,"action":f"Конкретный ценовой тест: {price:.0f} → {target:.0f} ₽. До результата теста рекламу не масштабировать.","mode":"price_test"})
+                elif drr is not None and price and price > 0:
+                    break_even_drr=max(0.0, drr + (profit / price * 100.0))
+                    target_drr=max(0.0, break_even_drr - 1.0)
+                    actions.append({"step":3,"action":f"Цена не даёт подтверждённого безопасного сценария. Снизить рекламную нагрузку до ДРР не выше ≈{target_drr:.1f}% (расчётный безубыточный ≈{break_even_drr:.1f}%) и повторно проверить прибыль.","mode":"advertising_control"})
                 else:
-                    actions.append({"step":3,"action":"Если экономика не чинится ценой — ограничить платный трафик и проверить карточку/выкуп","mode":"analysis"})
+                    actions.append({"step":3,"action":"Денежное решение заблокировано: данных недостаточно для расчёта безопасной цены или рекламного ДРР.","mode":"blocked"})
                 out.append(DecisionCard(
                     decision_key=f"sku:{sku}:negative_unit", scope='sku', entity_id=sku,
                     title=f"{x.get('name')}: продажа убыточна по текущей юнитке",
