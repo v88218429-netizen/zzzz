@@ -70,6 +70,12 @@ class PortfolioService:
                 "mode": self.settings.wb_mode,
                 "read_only": bool(READ_ONLY_BUILD or self.settings.force_read_only),
             },
+            "wb_worker": {
+                "configured": bool(self.settings.wb_worker_base_url and self.settings.wb_worker_export_token),
+                "base_url_set": bool(self.settings.wb_worker_base_url),
+                "export_token_set": bool(self.settings.wb_worker_export_token),
+                "read_only": True,
+            },
             "google_sheets": {
                 "configured": bool((self.settings.google_sheets_bridge_url and self.settings.google_sheets_bridge_key) or self.live_path.exists()),
                 "mode": "auto_browser_session" if self.live_path.exists() else ("apps_script_bridge" if self.settings.google_sheets_bridge_url else "not_connected"),
