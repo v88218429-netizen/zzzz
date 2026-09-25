@@ -1,0 +1,41 @@
+name: WB AI Manager live inspect
+
+on:
+  push:
+    branches: [mainggg]
+    paths: [".github/workflows/wb-ai-manager-live-inspect.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Print live catalog coverage
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, urllib.request
+          base="https://wb-ai-manager-live-production.up.railway.app"
+          req=urllib.request.Request(base+"/api/dashboard-data?days=7",headers={"User-Agent":"wb-ai-manager-live-inspect/1"})
+          with urllib.request.urlopen(req,timeout=30) as r:
+              d=json.load(r)
+          sw=(d.get("snapshots",{}).get("cards",{}).get("card_catalog") or {})
+          cd=sw.get("data") if isinstance(sw,dict) else {}
+          cd=cd if isinstance(cd,dict) else {}
+          em=d.get("entity_map") or {}
+          live=[v for v in em.values() if isinstance(v,dict) and v.get("source")=="live_wb_cards" and v.get("seller_article")]
+          print(json.dumps({
+              "version":d.get("health",{}).get("app_version"),
+              "runs":len(d.get("runs") or {}),
+              "card_count":cd.get("count"),
+              "raw_cards_len":len(cd.get("cards") or []),
+              "catalog_complete":cd.get("complete"),
+              "entity_map_count":len(em),
+              "live_seller_articles":len(live),
+              "cards_run":(d.get("runs") or {}).get("cards"),
+              "data_quality":d.get("data_quality"),
+          },ensure_ascii=False,indent=2))
+          PY
