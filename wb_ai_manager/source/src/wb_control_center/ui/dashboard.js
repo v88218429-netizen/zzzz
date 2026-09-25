@@ -113,6 +113,14 @@ function productDetail(id){
   return body;
 }
 
+function actionDetail(a){
+  const facts=flattenFacts(a.arguments||{});
+  return `<div class="detail-lead"><p>${esc(a.reason||'')}</p><div class="detail-meta"><span>${esc(agentNames[a.agent]||a.agent||'Система')}</span><span>Риск: ${esc(a.risk||'—')}</span></div></div>
+  <div class="detail-section"><h3>Предложенное действие</h3><p>${esc(toolLabel(a.tool))}</p></div>
+  ${facts.length?`<div class="detail-section"><h3>Параметры</h3><div class="detail-facts">${facts.map(([k,v])=>`<div><span>${esc(k)}</span><strong>${esc(v)}</strong></div>`).join('')}</div></div>`:''}
+  <div class="detail-section"><h3>Статус</h3><p>Это только рекомендация. Изменения в Wildberries из этого интерфейса не выполняются.</p></div>`;
+}
+
 function initNav(){
   qa('.nav-item').forEach(btn=>btn.addEventListener('click',()=>setPage(btn.dataset.page)));
   $('mobile-menu').addEventListener('click',()=> $('sidebar').classList.toggle('open'));
@@ -180,7 +188,8 @@ function renderEvents(){
 }
 function toolLabel(t){ const m={wb_advert_pause:'Разобрать и при необходимости поставить кампанию на паузу',wb_prices_set:'Проверить изменение цены',wb_advert_bids_set:'Проверить изменение ставки',wb_advert_cluster_bids:'Проверить ставку кластера'}; return m[t]||`Рекомендация: ${t}`; }
 function renderRecommendations(){
-  const a=state.data?.recommendations||[]; $('recommendation-list').innerHTML=a.length?a.slice(0,8).map(x=>`<div class="recommendation"><div class="recommendation-head"><strong>${esc(toolLabel(x.tool))}</strong><span class="pill neutral">НЕ ИСПОЛНЯЕТСЯ</span></div><p>${esc(x.reason)}</p><small>${esc(agentNames[x.agent]||x.agent)} · #${x.id} · режим только чтения</small></div>`).join(''):empty('Сейчас нет рекомендаций, требующих отдельного внимания.');
+  const a=state.data?.recommendations||[];
+  $('recommendation-list').innerHTML=a.length?a.slice(0,8).map(x=>`<button type="button" class="recommendation interactive-card" data-action-id="${esc(x.id)}"><div class="recommendation-head"><strong>${esc(toolLabel(x.tool))}</strong><span class="pill neutral">ТОЛЬКО РЕКОМЕНДАЦИЯ</span></div><p>${esc(x.reason)}</p><small>${esc(agentNames[x.agent]||x.agent)} · открыть подробности</small></button>`).join(''):empty('Сейчас нет рекомендаций, требующих отдельного внимания.');
 }
 function eventsForAgents(list){ return (state.data.events||[]).filter(e=>list.includes(e.agent)&&['critical','warning'].includes(e.severity)); }
 function renderDomains(){
@@ -408,5 +417,51 @@ function renderAgents(){
   $('agents-table').innerHTML=ordered.map(name=>{const r=runs[name], int=agents[name].interval_minutes; return `<tr><td><strong>${esc(agentNames[name]||name)}</strong></td><td><span class="status-tag ${!r||r.status==='ok'?'ok':'bad'}">${esc(r?.status==='ok'?'работает':r?.status==='error'?'ошибка':'по расписанию')}</span></td><td>${r?.finished_at?time(r.finished_at):'ещё не запускался'}</td><td>${int?`${int} мин`:'ручной'}</td></tr>`;}).join('');
 }
 
-$('refresh-data').addEventListener('click',()=>fetchData(true)); if($('save-policy')) $('save-policy').addEventListener('click',savePolicy); if($('rollback-policy')) $('rollback-policy').addEventListener('click',rollbackPolicy); if($('refresh-decisions')) $('refresh-decisions').addEventListener('click',refreshDecisions); if($('refresh-sheets')) $('refresh-sheets').addEventListener('click',refreshSheets); if($('refresh-remote-policy')) $('refresh-remote-policy').addEventListener('click',refreshRemotePolicy); $('run-audit').addEventListener('click',runAudit); window.addEventListener('hashchange',()=>setPage(location.hash.replace('#','')||'overview'));
+$('refresh-data').addEventListener('click',()=>fetchData(true));
+if($('save-policy')) $('save-policy').addEventListener('click',savePolicy);
+if($('rollback-policy')) $('rollback-policy').addEventListener('click',rollbackPolicy);
+if($('refresh-decisions')) $('refresh-decisions').addEventListener('click',refreshDecisions);
+if($('refresh-sheets')) $('refresh-sheets').addEventListener('click',refreshSheets);
+if($('refresh-remote-policy')) $('refresh-remote-policy').addEventListener('click',refreshRemotePolicy);
+$('run-audit').addEventListener('click',runAudit);
+if($('apply-period')) $('apply-period').addEventListener('click',()=>{
+  const from=$('period-from')?.value||'', to=$('period-to')?.value||'';
+  if(!from || !to){ showToast('Выбери обе даты периода.','error'); return; }
+  if(new Date(from)>new Date(to)){ showToast('Дата начала не может быть позже даты окончания.','error'); return; }
+  state.periodFrom=from; state.periodTo=to; fetchData(true);
+});
+document.addEventListener('click',e=>{
+  if(e.target.closest('[data-close-detail]')){ closeDetail(); return; }
+  const go=e.target.closest('[data-go-page]'); if(go){ setPage(go.dataset.goPage); return; }
+  const decisionEl=e.target.closest('[data-decision-key]');
+  if(decisionEl){
+    const key=decisionEl.dataset.decisionKey;
+    let d=(state.data?.decisions||[]).find(x=>String(x.decision_key)===String(key));
+    if(!d){
+      const h=(state.data?.decision_control?.history||[]).find(x=>String(x.decision_key)===String(key));
+      d=h?.payload;
+    }
+    if(d){ openDetail('Решение системы',d.title,decisionDetail(d)); return; }
+  }
+  const eventEl=e.target.closest('[data-event-id]');
+  if(eventEl){
+    const ev=(state.data?.events||[]).find(x=>String(x.id)===String(eventEl.dataset.eventId));
+    if(ev){ openDetail('Сигнал',ev.title,eventDetail(ev)); return; }
+  }
+  const actionEl=e.target.closest('[data-action-id]');
+  if(actionEl){
+    const a=(state.data?.recommendations||[]).find(x=>String(x.id)===String(actionEl.dataset.actionId));
+    if(a){ openDetail('Рекомендация',toolLabel(a.tool),actionDetail(a)); return; }
+  }
+  const entityEl=e.target.closest('[data-entity-id]');
+  if(entityEl){
+    const id=entityEl.dataset.entityId;
+    if(id){ openDetail('Товар',entityName(id),productDetail(id)); return; }
+  }
+});
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape') closeDetail();
+  if((e.key==='Enter'||e.key===' ') && document.activeElement?.dataset?.decisionKey){ e.preventDefault(); document.activeElement.click(); }
+});
+window.addEventListener('hashchange',()=>setPage(location.hash.replace('#','')||'overview'));
 initNav(); fetchData(true); setInterval(()=>fetchData(false),15000);
