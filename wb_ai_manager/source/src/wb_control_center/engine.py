@@ -267,6 +267,14 @@ class ControlCenter:
         return self.db.current_decisions()
 
     @staticmethod
+    def _period_event_scope(agent: str) -> str:
+        if agent in {"advertising_monitor", "advertising_optimizer", "funnel", "search_positions", "finance", "cost_guard", "documents"}:
+            return "selected_period"
+        if agent in {"inventory", "price_margin"}:
+            return "current_plus_period"
+        return "current_snapshot"
+
+    @staticmethod
     def _period_snapshot_scope(agent: str, key: str) -> str:
         period_native = {
             ("advertising_monitor", "stats_7d"),
@@ -340,7 +348,11 @@ class ControlCenter:
             row["event_key"] = row.get("key")
             row["id"] = f"period:{period.key}:{name}:{idx}"
             row["payload"] = dict(row.get("payload") or {})
-            row["payload"]["_analysis"] = {"period": period.to_dict(), "mode": "period_audit"}
+            row["payload"]["_analysis"] = {
+                "period": period.to_dict(),
+                "mode": "period_audit",
+                "scope": self._period_event_scope(name),
+            }
             events.append(row)
 
         actions = []
@@ -458,11 +470,20 @@ class ControlCenter:
                 cards = self.decision_engine.build(portfolio, ss)
                 cards, reviews = self.review_board.review(cards, portfolio, ss)
 
-                critical = [e for e in period_events if e.get("severity") == "critical"]
-                warning = [e for e in period_events if e.get("severity") == "warning"]
+                period_relevant = [
+                    e for e in period_events
+                    if ((e.get("payload") or {}).get("_analysis") or {}).get("scope") != "current_snapshot"
+                ]
+                current_only = [
+                    e for e in period_events
+                    if ((e.get("payload") or {}).get("_analysis") or {}).get("scope") == "current_snapshot"
+                ]
+                critical = [e for e in period_relevant if e.get("severity") == "critical"]
+                warning = [e for e in period_relevant if e.get("severity") == "warning"]
                 digest_lines = [
                     f"Анализ периода {period.label}.",
-                    f"Критических сигналов: {len(critical)}; предупреждений: {len(warning)}; решений: {len(cards)}.",
+                    f"Сигналы выбранного периода: критических {len(critical)}, предупреждений {len(warning)}; решений {len(cards)}.",
+                    f"Дополнительно текущих сигналов вне исторического диапазона: {len(current_only)}.",
                 ]
                 for event in (critical + warning)[:8]:
                     digest_lines.append(f"• {event.get('title')}: {event.get('message')}")
