@@ -17,7 +17,8 @@ class SupervisorAgent(BaseAgent):
         important = [e for e in events if e.get("severity") in {"warning", "critical"} and e.get("agent") != self.name]
         pending = self.ctx.db.pending_actions(limit=100)
         portfolio = PortfolioService(self.ctx.settings).snapshot()
-        has_portfolio = bool(portfolio.get("stores") or portfolio.get("own_27"))
+        portfolio_current = bool(portfolio.get("current_data", portfolio.get("data_origin") != "seeded_real_facts"))
+        has_portfolio = portfolio_current and bool(portfolio.get("stores") or portfolio.get("own_27"))
         if not important and not pending and not has_portfolio:
             return out
 
@@ -36,22 +37,24 @@ class SupervisorAgent(BaseAgent):
                 f"Режим: RULES — облачная LLM не используется.",
                 f"За 6 часов: критических {len(crit)}, предупреждений {len(warn)}, действий ждут подтверждения {len(pending)}.",
             ]
-            pf = portfolio.get("portfolio") or {}
+            pf = (portfolio.get("portfolio") or {}) if portfolio_current else {}
             if pf:
                 lines.append(
                     "Портфель trusted sheets: "
                     f"заказы {pf.get('orders_rub', 0):,.0f} ₽; выкупы {pf.get('buyouts_rub', 0):,.0f} ₽; "
                     f"прибыль {pf.get('profit_rub', 0):,.0f} ₽; маржа {pf.get('margin_pct', 0):.1f}%; ДРР {pf.get('drr_pct', 0):.1f}%."
                 )
-            for store in portfolio.get("stores", []):
+            for store in (portfolio.get("stores", []) if portfolio_current else []):
                 if store.get("status") in {"critical", "watch"}:
                     lines.append(
                         f"• [SHEETS] {store.get('name')}: прибыль {store.get('profit_rub', 0):,.0f} ₽; "
                         f"маржа {store.get('margin_pct', 0):.1f}%; ДРР {store.get('drr_pct', 0):.1f}%."
                     )
-            neg = [x for x in (portfolio.get("own_27", {}).get("economy_examples") or []) if (x.get("profit_rub") or 0) < 0]
+            neg = [x for x in ((portfolio.get("own_27", {}).get("economy_examples") or []) if portfolio_current else []) if (x.get("profit_rub") or 0) < 0]
             for x in neg[:3]:
                 lines.append(f"• [ЮНИТКА] {x.get('name')}: прибыль/ед. {x.get('profit_rub')} ₽, маржа {x.get('margin_pct')}%.")
+            if not portfolio_current and portfolio.get("period"):
+                lines.append(f"Архивный портфельный срез {portfolio.get('period')} не используется как текущий факт.")
             for e in (crit + warn)[:6]:
                 lines.append(f"• [{str(e.get('severity')).upper()}] {e.get('title')}: {e.get('message')}")
             if pending:
