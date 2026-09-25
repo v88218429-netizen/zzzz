@@ -17,7 +17,7 @@ SHOPS = {
 }
 PROMO = "https://advert-api.wildberries.ru"
 ANALYTICS = "https://seller-analytics-api.wildberries.ru"
-COLUMNS = ["shop", "date", "advert_id", "nm_id", "views", "clicks", "atbs", "orders", "spend_rub", "order_sum_rub", "source", "quality"]
+COLUMNS = ["shop", "date", "advert_id", "nm_id", "views", "clicks", "atbs", "orders", "spend_rub", "order_sum_rub", "source", "quality", "seller_article"]
 FUNNEL_COLUMNS = ["shop", "date", "nm_id", "vendor_code", "open_count", "cart_count", "order_count", "order_sum_rub", "source"]
 INTERVAL = max(60, int(os.environ.get("TRAFFIC_SYNC_INTERVAL_MIN", "360")))
 _last_fullstats = 0.0
@@ -81,7 +81,7 @@ def _stats_rows(shop, payload):
                         continue
                     rows.append([shop, date, aid, nm, item.get("views"), item.get("clicks"),
                                  item.get("atbs"), item.get("orders"), item.get("sum"),
-                                 item.get("sum_price"), "WB /adv/v3/fullstats", "EXACT_CAMPAIGN_NM_DAY_APP"])
+                                 item.get("sum_price"), "WB /adv/v3/fullstats", "EXACT_CAMPAIGN_NM_DAY_APP", ""])
     return rows
 
 
@@ -146,7 +146,10 @@ async def sync_once():
                 state["ok"] = False
                 state["errors"]["funnel"] = f"{type(exc).__name__}: {exc}"
             status["shops"][shop] = state
-    # Publish only a complete snapshot for each source; partial failures are explicit.
+    vendor_map = {(r[0], str(r[2])): r[3] for r in funnel_rows if r[3]}
+    for row in ad_rows:
+        row[-1] = vendor_map.get((row[0], str(row[3])), "")
+    # Partial failures are explicit in status; never interpret missing rows as zero.
     _atomic_csv(DATA_DIR / "campaign_sku_day.csv", COLUMNS, ad_rows)
     _atomic_csv(DATA_DIR / "funnel_sku_day.csv", FUNNEL_COLUMNS, funnel_rows)
     status["finishedAt"] = datetime.now(ZoneInfo("Europe/Moscow")).isoformat()
