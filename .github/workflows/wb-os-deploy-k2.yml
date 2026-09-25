@@ -6,6 +6,8 @@ on:
     branches: [mainggg]
     paths:
       - "wb_os/apps_script/K2_EVOLUTION_ENGINE.gs"
+      - "wb_os/apps_script/WB_PUBLIC_PRICE_V4.gs"
+      - "wb_os/apps_script/WB_SELLER_PRICE_SAFE.gs"
       - "wb_os/apps_script/OZON_RADAR_TELEGRAM_RELAY.gs"
       - "wb_os/apps_script/OZON_RADAR_SERVER_BRIDGE.gs"
       - "wb_os/tools/discover_clasp_project.py"
@@ -97,6 +99,8 @@ jobs:
         run: |
           set -euo pipefail
           cp wb_os/apps_script/K2_EVOLUTION_ENGINE.gs "$SOURCE_ROOT/K2_EVOLUTION_ENGINE.gs"
+          cp wb_os/apps_script/WB_PUBLIC_PRICE_V4.gs "$SOURCE_ROOT/WB_PUBLIC_PRICE_V4.gs"
+          cp wb_os/apps_script/WB_SELLER_PRICE_SAFE.gs "$SOURCE_ROOT/WB_SELLER_PRICE_SAFE.gs"
           cp wb_os/apps_script/OZON_RADAR_TELEGRAM_RELAY.gs "$SOURCE_ROOT/OZON_RADAR_TELEGRAM_RELAY.gs"
           cp wb_os/apps_script/OZON_RADAR_SERVER_BRIDGE.gs "$SOURCE_ROOT/OZON_RADAR_SERVER_BRIDGE.gs"
           python3 wb_os/tools/patch_live_master.py "$SOURCE_ROOT"
