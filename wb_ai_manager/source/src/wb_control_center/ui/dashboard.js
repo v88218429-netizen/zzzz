@@ -793,7 +793,7 @@ function renderCustomers(){
   const nf=!!flags.hasNewFeedbacks,nq=!!flags.hasNewQuestions;
   const feedbackRaw=snap('reviews_questions','feedbacks')?.data||{};
   const unanswered=Number(feedbackRaw?.data?.countUnanswered);
-  $('customer-flags').textContent=nf||nq?[nf?(Number.isFinite(unanswered)?`Отзывы ${num(unanswered)}`:'Отзывы'):null,nq?'Вопросы':null].filter(Boolean).join(' + '):'Нет';
+  $('customer-flags').textContent=nf||nq?[nf?(Number.isFinite(unanswered)?`Неотвеченные отзывы: ${num(unanswered)}`:'Есть отзывы'):null,nq?'Есть вопросы':null].filter(Boolean).join(' · '):'Нет';
   $('customer-returns').textContent=num(countObjList('returns_quality','open_claims')); $('customer-chats').textContent=num(countObjList('buyer_chats','chat_events'));
   const feedbacks=extractList(snap('reviews_questions','feedbacks')?.data), questions=extractList(snap('reviews_questions','questions')?.data);
   const items=[
