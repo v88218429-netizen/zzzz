@@ -120,7 +120,7 @@ class PhotoAnalyzer:
             def _load_model():
                 model = AutoModelForImageTextToText.from_pretrained(
                     self.local_model,
-                    torch_dtype=torch.bfloat16,
+                    torch_dtype=torch.float32,
                     low_cpu_mem_usage=True,
                 )
                 model.eval()
