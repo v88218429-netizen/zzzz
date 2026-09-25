@@ -352,7 +352,8 @@ function renderAll(){
   const health=d.health||{}; $('reasoning-mode').textContent=String(health.reasoning||'').startsWith('rules')?'Правила и расчёты без LLM':(health.reasoning||'—');
   $('store-name').textContent=(d.portfolio?.stores?.length>1?'Портфель WB':(d.store?.name || (health.wb_mode==='demo'?'DEMO WB cabinet':'Wildberries'))); $('connection-dot').classList.toggle('ok',!!health.wb_connected);
   $('last-sync').textContent=d.summary?.last_run_at ? `Синхронизация ${ago(d.summary.last_run_at)}` : 'Нет запусков';
-  const critical=d.summary?.critical_24h||0, warning=d.summary?.warning_24h||0, actions=(d.decisions||[]).length || d.summary?.recommendations||0;
+  const dc=decisionCounts();
+  const critical=Math.max(Number(d.summary?.critical_24h||0),dc.critical), warning=Math.max(Number(d.summary?.warning_24h||0),dc.high), actions=dc.total || d.summary?.recommendations||0;
   $('metric-critical').textContent=num(critical); $('metric-warning').textContent=num(warning); $('metric-actions').textContent=num(actions); $('metric-agents').textContent=num(Object.keys(d.agents||{}).length);
   if($('metric-critical-period')) $('metric-critical-period').textContent=d.period?.label||'за выбранный период';
   if($('metric-warning-period')) $('metric-warning-period').textContent=d.period?.label||'за выбранный период';
@@ -370,12 +371,54 @@ function firstNumeric(obj, keys){
   return null;
 }
 function latestSupervisor(){ return (state.data.events||[]).find(e=>e.agent==='supervisor' && e.event_key==='supervisor_digest'); }
-function healthScore(){ const c=state.data.summary?.critical_24h||0,w=state.data.summary?.warning_24h||0,errs=state.data.summary?.agent_errors_24h||0; return Math.max(35,Math.round(100-c*14-w*4-errs*10)); }
+function decisionCounts(){
+  const rows=state.data?.decisions||[];
+  return {
+    critical:rows.filter(x=>x.priority==='critical').length,
+    high:rows.filter(x=>x.priority==='high').length,
+    medium:rows.filter(x=>x.priority==='medium').length,
+    total:rows.length
+  };
+}
+function healthScore(){
+  const evc=Number(state.data?.summary?.critical_24h||0), evw=Number(state.data?.summary?.warning_24h||0), errs=Number(state.data?.summary?.agent_errors_24h||0), dc=decisionCounts();
+  return Math.max(25,Math.round(100-Math.max(evc,dc.critical)*8-Math.max(evw,dc.high)*2-errs*10));
+}
 function renderExecutive(){
-  const score=healthScore(), c=state.data.summary?.critical_24h||0,w=state.data.summary?.warning_24h||0; const hs=$('health-score'); hs.style.setProperty('--health-angle',`${score*3.6}deg`); hs.querySelector('span').textContent=score;
-  const s=latestSupervisor(); $('executive-title').textContent=c?`${c} критических сигнал${c===1?'':'а'} требуют внимания`:w?`${w} предупреждений, критичных проблем нет`:'Серьёзных отклонений не обнаружено';
-  $('executive-summary').textContent=s?.message ? humanizeText(s.message) : (c||w ? `Система обнаружила отклонения за ${currentPeriodLabel()}. Ниже показаны приоритеты, фактические показатели и решения.` : `За ${currentPeriodLabel()} существенных отклонений не обнаружено.`);
-  const imp=(state.data.events||[]).filter(e=>['critical','warning'].includes(e.severity)).slice(0,4); $('priority-strip').innerHTML=imp.length?imp.map(e=>`<span class="priority-chip ${e.severity}"><b></b>${esc(e.title)}</span>`).join(''):'<span class="priority-chip"><b></b>Система работает штатно</span>';
+  const score=healthScore(), evc=Number(state.data?.summary?.critical_24h||0), evw=Number(state.data?.summary?.warning_24h||0), dc=decisionCounts(), pa=state.data?.period_audit||{};
+  const c=Math.max(evc,dc.critical), w=Math.max(evw,dc.high);
+  const hs=$('health-score'); hs.style.setProperty('--health-angle',`${score*3.6}deg`); hs.querySelector('span').textContent=score;
+  if(['running','started'].includes(pa.status)){
+    $('executive-title').textContent=`Пересчитываю период: ${Number(pa.agents_done||0)}/${Number(pa.agents_total||19)} модулей`;
+    $('executive-summary').textContent=dc.critical||dc.high
+      ? `Пока новый расчёт идёт, уже есть ${dc.critical} критичных и ${dc.high} высокоприоритетных решений из актуального операционного контура. Итог обновится после завершения всех модулей.`
+      : 'Новый расчёт периода выполняется. До его завершения система не объявляет магазин «штатным».';
+  }else if(dc.critical){
+    $('executive-title').textContent=`${dc.critical} критичных решений требуют внимания`;
+    $('executive-summary').textContent=`По текущим данным сформировано ${dc.total} решений: критичных ${dc.critical}, высокого приоритета ${dc.high}. Ниже — конкретные товары, причины и действия.`;
+  }else if(c){
+    $('executive-title').textContent=`${c} критических сигнал${c===1?'':'а'} требуют внимания`;
+    $('executive-summary').textContent=`Система обнаружила критичные отклонения за ${currentPeriodLabel()}. Ниже показаны факты и действия.`;
+  }else if(dc.high||w){
+    $('executive-title').textContent=`${dc.high||w} пунктов высокого приоритета`;
+    $('executive-summary').textContent=`Критичных решений нет, но есть вопросы высокого приоритета, которые требуют проверки.`;
+  }else{
+    const sup=latestSupervisor();
+    $('executive-title').textContent='Серьёзных отклонений не обнаружено';
+    $('executive-summary').textContent=sup?.message?humanizeText(sup.message):`За ${currentPeriodLabel()} существенных отклонений не обнаружено.`;
+  }
+
+  const eventImp=(state.data.events||[]).filter(e=>['critical','warning'].includes(e.severity)).slice(0,4);
+  const decisionImp=(state.data.decisions||[]).filter(d=>['critical','high'].includes(d.priority)).slice(0,4);
+  if(eventImp.length){
+    $('priority-strip').innerHTML=eventImp.map(e=>{const ent=eventEntity(e); return `<span class="priority-chip ${e.severity}"><b></b>${esc(humanizeText(ent?`${ent.name}: ${e.title}`:e.title))}</span>`;}).join('');
+  }else if(decisionImp.length){
+    $('priority-strip').innerHTML=decisionImp.map(d=>`<span class="priority-chip ${d.priority==='critical'?'critical':'warning'}"><b></b>${esc(entityName(d.entity_id))}: ${esc(humanizeText(d.title))}</span>`).join('');
+  }else if(['running','started'].includes(pa.status)){
+    $('priority-strip').innerHTML='<span class="priority-chip warning"><b></b>Период пересчитывается — итоговый статус ещё не готов</span>';
+  }else{
+    $('priority-strip').innerHTML='<span class="priority-chip"><b></b>Система работает штатно</span>';
+  }
 }
 function renderEvents(){
   let events=state.data?.events||[];
@@ -400,7 +443,16 @@ function renderEvents(){
 function toolLabel(t){ const m={wb_advert_pause:'Разобрать и при необходимости поставить кампанию на паузу',wb_prices_set:'Проверить изменение цены',wb_advert_bids_set:'Проверить изменение ставки',wb_advert_cluster_bids:'Проверить ставку кластера'}; return m[t]||`Рекомендация: ${t}`; }
 function renderRecommendations(){
   const a=state.data?.recommendations||[];
-  $('recommendation-list').innerHTML=a.length?a.slice(0,8).map(x=>`<button type="button" class="recommendation interactive-card" data-action-id="${esc(x.id)}"><div class="recommendation-head"><strong>${esc(toolLabel(x.tool))}</strong><span class="pill neutral">ТОЛЬКО РЕКОМЕНДАЦИЯ</span></div><p>${esc(humanizeText(x.reason))}</p><small>${esc(agentNames[x.agent]||x.agent)} · открыть подробности</small></button>`).join(''):empty('Сейчас нет рекомендаций, требующих отдельного внимания.');
+  if(a.length){
+    $('recommendation-list').innerHTML=a.slice(0,8).map(x=>`<button type="button" class="recommendation interactive-card" data-action-id="${esc(x.id)}"><div class="recommendation-head"><strong>${esc(toolLabel(x.tool))}</strong><span class="pill neutral">ТОЛЬКО РЕКОМЕНДАЦИЯ</span></div><p>${esc(humanizeText(x.reason))}</p><small>${esc(agentNames[x.agent]||x.agent)} · открыть подробности</small></button>`).join('');
+    return;
+  }
+  const decisions=(state.data?.decisions||[]).filter(d=>['critical','high','medium'].includes(d.priority)).slice(0,8);
+  $('recommendation-list').innerHTML=decisions.length?decisions.map(d=>{
+    const action=d.recommended_actions?.[0]?.action||d.diagnosis||'Открыть решение и проверить факты.';
+    const pri=d.priority==='critical'?'КРИТИЧНО':d.priority==='high'?'ВЫСОКИЙ':'СРЕДНИЙ';
+    return `<button type="button" class="recommendation interactive-card" data-decision-key="${esc(d.decision_key)}"><div class="recommendation-head"><strong>${esc(entityName(d.entity_id))}</strong><span class="pill neutral">${pri}</span></div><p>${esc(humanizeText(action))}</p><small>Решение системы · открыть подробности</small></button>`;
+  }).join(''):empty('Нет решений, требующих отдельного внимания.');
 }
 function eventsForAgents(list){ return (state.data.events||[]).filter(e=>list.includes(e.agent)&&['critical','warning'].includes(e.severity)); }
 function renderDomains(){
@@ -627,7 +679,7 @@ function renderInventory(){
       const width=Number.isFinite(days)?Math.max(4,Math.min(100,days/30*100)):100;
       const id=r.nm_id??r.nmId??r.nmID;
       const tag=cls==='critical'?['bad','Дефицит']:cls==='warn'?['warn','Низкий запас']:['ok','Норма'];
-      return `<button type="button" class="inventory-item ${cls} interactive-card" data-entity-id="${esc(id)}"><div class="inventory-top"><div><strong>${esc(entityName(id))}</strong><small>${entityMeta(id)}</small></div><span class="status-tag ${tag[0]}">${tag[1]}</span></div><div class="inventory-days">${Number.isFinite(days)?`${num(days,1)} дня`:'Нет данных о темпе'}</div><div class="inventory-meta">Остаток ${num(r.stock)} · темп ${num(r.daily_sales,1)}/день · ${esc(r.stock_source||'источник не указан')}</div><div class="cover-bar"><i style="width:${width}%"></i></div></button>`;
+      return `<button type="button" class="inventory-item ${cls} interactive-card" data-entity-id="${esc(id)}"><div class="inventory-top"><div><strong>${esc(entityName(id))}</strong><small>${entityMeta(id)}</small></div><span class="status-tag ${tag[0]}">${tag[1]}</span></div><div class="inventory-days">${Number.isFinite(days)?`${num(days,1)} дня`:'Нет данных о темпе'}</div><div class="inventory-meta">Остаток ${num(r.stock)} · темп ${num(r.daily_sales,1)}/день · ${esc(r.stock_source||'источник остатка не указан')}${r.velocity_source?` · темп: ${esc(r.velocity_source)}`:''}</div><div class="cover-bar"><i style="width:${width}%"></i></div></button>`;
     }).join('');
   }else if(!unverifiedCount){
     inventoryHtml+=empty('Нет данных по покрытию остатками.');
