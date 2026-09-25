@@ -13,6 +13,8 @@ var FF_PODMENY_SYNC_CFG = {
   VISION_URL: 'https://wb-ai-manager-live-production.up.railway.app/api/photo-analysis',
   VISION_MAX_ROWS_PER_RUN: 8,
   LEGACY_SHEETS: [
+    '16-25 июля',
+    '26 июля - 11 августа',
     '12-23 августа',
     '23 августа - 6 сентября',
     '07-20 сентября'
