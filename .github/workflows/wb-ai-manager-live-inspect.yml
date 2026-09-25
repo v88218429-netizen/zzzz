@@ -37,5 +37,7 @@ jobs:
               "live_seller_articles":len(live),
               "cards_run":(d.get("runs") or {}).get("cards"),
               "data_quality":d.get("data_quality"),
+              "card_events":[{"key":e.get("event_key"),"title":e.get("title"),"message":e.get("message")} for e in (d.get("events") or []) if e.get("agent")=="cards"],
+              "card_snapshot_keys":list((d.get("snapshots",{}).get("cards") or {}).keys()),
           },ensure_ascii=False,indent=2))
           PY
