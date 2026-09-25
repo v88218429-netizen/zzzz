@@ -3,6 +3,8 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 import asyncio
 import logging
+from datetime import date, datetime, time, timedelta, timezone
+from zoneinfo import ZoneInfo
 from pathlib import Path
 from typing import Any
 
@@ -178,6 +180,55 @@ def _dashboard_snapshots() -> dict[str, dict[str, Any]]:
     return out
 
 
+
+
+def _dashboard_period(days: int = 7, from_date: str | None = None, to_date: str | None = None) -> dict[str, Any]:
+    tz = ZoneInfo(settings.app_timezone)
+    today = datetime.now(tz).date()
+    try:
+        start_day = date.fromisoformat(from_date) if from_date else today - timedelta(days=max(1, min(days, 90)) - 1)
+        end_day = date.fromisoformat(to_date) if to_date else today
+    except ValueError:
+        start_day = today - timedelta(days=max(1, min(days, 90)) - 1)
+        end_day = today
+    if end_day < start_day:
+        start_day, end_day = end_day, start_day
+    if (end_day - start_day).days > 90:
+        start_day = end_day - timedelta(days=90)
+    start_local = datetime.combine(start_day, time.min, tzinfo=tz)
+    end_local = datetime.combine(end_day + timedelta(days=1), time.min, tzinfo=tz)
+    start_utc = start_local.astimezone(timezone.utc)
+    end_utc = end_local.astimezone(timezone.utc)
+    return {
+        "from": start_day.isoformat(),
+        "to": end_day.isoformat(),
+        "start_utc": start_utc.isoformat(),
+        "end_utc": end_utc.isoformat(),
+        "days": (end_day - start_day).days + 1,
+        "label": f"{start_day.strftime('%d.%m.%Y')}–{end_day.strftime('%d.%m.%Y')}",
+    }
+
+
+def _entity_map(portfolio_snapshot: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    out: dict[str, dict[str, Any]] = {}
+    own = portfolio_snapshot.get("own_27") or {}
+    for row in own.get("products") or []:
+        if not isinstance(row, dict):
+            continue
+        nm = str(row.get("sku") or "").strip()
+        article = str(row.get("name") or "").strip()
+        if not nm:
+            continue
+        out[nm] = {
+            "nm_id": nm,
+            "seller_article": article or None,
+            "display": article or f"Товар WB {nm}",
+            "cabinet": row.get("cabinet"),
+            "weekly_group": row.get("weekly_group"),
+        }
+    return out
+
+
 def _store_name(snapshots: dict[str, dict[str, Any]]) -> str:
     shops = snapshots.get("api_health", {}).get("shops", {}).get("data", {})
     candidates: list[dict[str, Any]] = []
@@ -194,9 +245,9 @@ def _store_name(snapshots: dict[str, dict[str, Any]]) -> str:
 
 
 @app.get("/api/dashboard-data")
-async def dashboard_data() -> dict[str, Any]:
-    events_24 = center.db.recent_events(hours=24, limit=500)
-    events_72 = center.db.recent_events(hours=72, limit=180)
+async def dashboard_data(days: int = 7, from_date: str | None = None, to_date: str | None = None) -> dict[str, Any]:
+    period = _dashboard_period(days, from_date, to_date)
+    events_period = center.db.events_between(period["start_utc"], period["end_utc"], limit=1000)
     runs = center.db.latest_runs_by_agent(hours=720)
     snapshots = _dashboard_snapshots()
     recommendations = center.db.pending_actions(limit=100)
@@ -204,13 +255,15 @@ async def dashboard_data() -> dict[str, Any]:
     completed_runs = [r for r in runs.values() if r.get("finished_at")]
     last_run_at = max((str(r["finished_at"]) for r in completed_runs), default=None)
     runtime_policy = await asyncio.to_thread(center.runtime_policy.get)
+    portfolio_snapshot = portfolio.snapshot()
+    entity_map = _entity_map(portfolio_snapshot)
     return {
         "health": _health_payload(),
         "store": {"name": _store_name(snapshots), "mode": settings.wb_mode},
         "summary": {
-            "critical_24h": sum(1 for e in events_24 if e.get("severity") == "critical"),
-            "warning_24h": sum(1 for e in events_24 if e.get("severity") == "warning"),
-            "info_24h": sum(1 for e in events_24 if e.get("severity") == "info"),
+            "critical_24h": sum(1 for e in events_period if e.get("severity") == "critical"),
+            "warning_24h": sum(1 for e in events_period if e.get("severity") == "warning"),
+            "info_24h": sum(1 for e in events_period if e.get("severity") == "info"),
             "recommendations": len(recommendations),
             "agent_errors_24h": sum(1 for r in center.db.recent_runs(hours=24, limit=1000) if r.get("status") == "error"),
             "last_run_at": last_run_at,
@@ -223,7 +276,16 @@ async def dashboard_data() -> dict[str, Any]:
             for name in sorted(center.agents)
         },
         "runs": runs,
-        "events": events_72,
+        "events": events_period[:300],
+        "period": {k: v for k, v in period.items() if k not in {"start_utc", "end_utc"}},
+        "entity_map": entity_map,
+        "data_quality": {
+            "portfolio_current": bool(portfolio_snapshot.get("current_data")),
+            "portfolio_status": portfolio_snapshot.get("data_status"),
+            "portfolio_origin": portfolio_snapshot.get("data_origin"),
+            "portfolio_period": portfolio_snapshot.get("period"),
+            "portfolio_warning": portfolio_snapshot.get("stale_reason"),
+        },
         "recommendations": recommendations,
         "decisions": decisions,
         "snapshots": snapshots,
@@ -242,7 +304,7 @@ async def dashboard_data() -> dict[str, Any]:
         "runtime_policy_history": center.runtime_policy.history()[:10],
         "remote_policy": center.runtime_policy.remote_status(),
         "policy_safety": {"hard_max_bid_change_pct": center.policy.safety.get("limits",{}).get("max_bid_change_pct"), "absolute_bid_cap_rub": center.policy.safety.get("limits",{}).get("absolute_bid_cap_rub")},
-        "portfolio": portfolio.snapshot(),
+        "portfolio": portfolio_snapshot,
         "connections": portfolio.connections(),
     }
 
