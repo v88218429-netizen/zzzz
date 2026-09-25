@@ -20,6 +20,8 @@ class ReviewsQuestionsAgent(BaseAgent):
         out.snapshots.append(("flags", flags if isinstance(flags, dict) else {"data": flags}))
         feedbacks = await self.call("wb_feedbacks_list", is_answered=False, take=100)
         questions = await self.call("wb_questions_list", is_answered=False, take=100)
+        out.snapshots.append(("feedbacks", feedbacks if isinstance(feedbacks, dict) else {"data": feedbacks}))
+        out.snapshots.append(("questions", questions if isinstance(questions, dict) else {"data": questions}))
         n_feedback = count_records(feedbacks)
         n_questions = count_records(questions)
         warn = int(cfg.get("unanswered_warn", 5))
