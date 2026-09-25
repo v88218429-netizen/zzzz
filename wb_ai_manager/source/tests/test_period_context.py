@@ -7,6 +7,7 @@ from wb_control_center.agents.base import BaseAgent, reset_analysis_period, set_
 from wb_control_center.agents.finance import FinanceAgent
 from wb_control_center.agents.inventory import InventoryAgent
 from wb_control_center.engine import ControlCenter
+from wb_control_center.config import Settings
 from wb_control_center.models import PeriodContext
 
 
@@ -128,3 +129,46 @@ async def test_inventory_uses_current_stock_and_only_period_sales():
     assert coverage["daily_sales"] == pytest.approx(1 / 7)
     assert coverage["stock_scope"] == "current_snapshot"
     assert coverage["velocity_scope"] == "selected_period"
+
+
+@pytest.mark.asyncio
+async def test_inventory_prefers_trusted_svodnaya_order_velocity(tmp_path, monkeypatch):
+    settings = Settings(data_dir=str(tmp_path), wb_api_token="")
+    ctx = SimpleNamespace(
+        policy=SimpleNamespace(thresholds={"inventory": {}}),
+        settings=settings,
+    )
+    agent = InventoryAgent(ctx)  # type: ignore[arg-type]
+
+    async def fake_call(tool, **kwargs):
+        if tool == "wb_stats_stocks":
+            return {"data": [{"nmId": 566189858, "quantity": 10}]}
+        if tool == "wb_stats_sales":
+            return {"data": [{"nmId": 566189858, "saleID": "x", "date": "2026-09-20", "quantity": 1}]}
+        raise AssertionError(tool)
+
+    monkeypatch.setattr(
+        "wb_control_center.agents.inventory.PortfolioService.snapshot",
+        lambda self: {
+            "current_data": True,
+            "own_27": {
+                "products": [{
+                    "sku": "566189858",
+                    "wb_fbs_stock": 999,
+                    "orders_per_day": 153,
+                }]
+            },
+        },
+    )
+    agent.call = fake_call  # type: ignore[method-assign]
+    token = set_analysis_period(PeriodContext.from_strings("2026-09-18", "2026-09-24"))
+    try:
+        result = await agent.run()
+    finally:
+        reset_analysis_period(token)
+
+    coverage = dict(result.snapshots)["coverage"]["566189858"]
+    assert coverage["stock"] == 999
+    assert coverage["daily_sales"] == 153
+    assert coverage["days_cover"] == pytest.approx(999 / 153)
+    assert coverage["velocity_source"] == "Сводная · WB Заказов в день"
