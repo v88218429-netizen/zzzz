@@ -31,9 +31,39 @@ log = logging.getLogger(__name__)
 _background_tasks: set[asyncio.Task] = set()
 
 
+def _iso_dt(value: Any) -> datetime | None:
+    if not value:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    except Exception:
+        return None
+
+
+async def _sheets_refresh_loop() -> None:
+    # Refresh trusted Sheets independently of any open browser. A dashboard client
+    # will automatically invalidate/re-run its selected-period audit when a newer
+    # portfolio snapshot appears.
+    delay = max(300, int(settings.google_sheets_auto_refresh_seconds or 900))
+    while True:
+        try:
+            await asyncio.to_thread(portfolio.refresh)
+            log.info("automatic Google Sheets refresh completed")
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.exception("automatic Google Sheets refresh failed")
+        await asyncio.sleep(delay)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await center.start()
+    if settings.google_sheets_bridge_url and settings.google_sheets_bridge_key:
+        task = asyncio.create_task(_sheets_refresh_loop())
+        _background_tasks.add(task)
+        task.add_done_callback(_background_tasks.discard)
     try:
         yield
     finally:
@@ -315,7 +345,16 @@ async def dashboard_data(days: int = 7, from_date: str | None = None, to_date: s
     period = _dashboard_period(days, from_date, to_date)
     period_ctx = PeriodContext.from_strings(period["from"], period["to"])
     audit = center.period_audit_status(period_ctx)
-    audit_ready = audit.get("status") == "completed"
+    portfolio_snapshot = portfolio.snapshot()
+    audit_finished = _iso_dt(audit.get("finished_at"))
+    portfolio_generated = _iso_dt(portfolio_snapshot.get("generated_at"))
+    audit_stale = bool(
+        audit.get("status") == "completed"
+        and audit_finished
+        and portfolio_generated
+        and portfolio_generated > audit_finished
+    )
+    audit_ready = audit.get("status") == "completed" and not audit_stale
     if audit_ready:
         snapshots = _dashboard_snapshots(period_ctx.key)
         events_period = list(audit.get("events") or [])
@@ -343,7 +382,6 @@ async def dashboard_data(days: int = 7, from_date: str | None = None, to_date: s
         period_count_events = events_period
         current_snapshot_events = []
     runtime_policy = await asyncio.to_thread(center.runtime_policy.get)
-    portfolio_snapshot = portfolio.snapshot()
     entity_map = _entity_map(portfolio_snapshot, snapshots)
     return {
         "health": _health_payload(),
@@ -368,8 +406,10 @@ async def dashboard_data(days: int = 7, from_date: str | None = None, to_date: s
         "events": events_period[:300],
         "period": {k: v for k, v in period.items() if k not in {"start_utc", "end_utc"}},
         "period_audit": {
-            "status": audit.get("status"),
+            "status": "missing" if audit_stale else audit.get("status"),
             "ready": audit_ready,
+            "stale": audit_stale,
+            "stale_reason": "Google Sheets обновились после последнего расчёта периода." if audit_stale else None,
             "period": period_ctx.to_dict(),
             "agents_done": sum(1 for x in (audit.get("agents") or {}).values() if isinstance(x, dict) and x.get("status") in {"ok", "error"}),
             "agents_total": 19,
