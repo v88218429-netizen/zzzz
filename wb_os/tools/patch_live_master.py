@@ -471,6 +471,36 @@ if "ensureOzonRadarServerTrigger_();" not in func:
         1,
     )
 
+# Step 2j: sync the fulfilment-facing penalty workbook once per Moscow day.
+# The sync itself is idempotent and preserves manual FF comments by stable IDs.
+if "ffPenaltiesAutoSync_();" not in func:
+    save_marker = "    saveMasterCycleResult_(cycleErrors);"
+    if func.count(save_marker) != 1:
+        raise SystemExit(
+            "PATCH_FAIL: cannot place FF penalties auto sync"
+        )
+
+    ff_penalties_block = """    /* FF penalties · Sanych + AIR + Khozyayushka · 14-day sheets */
+    try {
+      ffPenaltiesAutoSync_();
+    } catch (ffPenaltiesError) {
+      cycleErrors.push(
+        'FF penalties sync: ' + ffPenaltiesError.message
+      );
+      Logger.log(
+        'FF penalties sync: ' +
+        (ffPenaltiesError.stack || ffPenaltiesError.message)
+      );
+    }
+
+"""
+    func = func.replace(
+        save_marker,
+        ff_penalties_block + save_marker,
+        1,
+    )
+
+
 # Rebuild after all master-function migrations.
 new_text = before + func + after
 
@@ -880,6 +910,7 @@ required = [
     "function wbOsAssertTrustedNeedsSources_",
     "NEEDS_BLOCKED_STALE_SOURCE",
     "ensureOzonRadarServerTrigger_();",
+    "ffPenaltiesAutoSync_();",
 ]
 missing = [marker for marker in required if marker not in new_text]
 if missing:
