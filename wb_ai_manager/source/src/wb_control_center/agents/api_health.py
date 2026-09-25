@@ -5,6 +5,28 @@ from ..models import AgentResult
 from ..metrics import count_records
 
 
+def _degradation_count(value) -> int:
+    """Count only actual degradation evidence, not metadata-only OK responses."""
+    if isinstance(value, list):
+        return len(value)
+    if not isinstance(value, dict):
+        return 0
+    status = str(value.get("status") or "").strip().lower()
+    if status in {"ok", "healthy", "success", "normal"}:
+        return 0
+    for key in ("degradations", "problems", "issues", "items", "changes"):
+        if key in value:
+            return count_records(value.get(key))
+    data = value.get("data")
+    if isinstance(data, (list, dict)):
+        nested = _degradation_count(data)
+        if nested:
+            return nested
+    if status in {"degraded", "warning", "error", "failed", "down"} or value.get("error") is True:
+        return 1
+    return 0
+
+
 class ApiHealthAgent(BaseAgent):
     name = "api_health"
 
@@ -31,7 +53,7 @@ class ApiHealthAgent(BaseAgent):
             out.events.append(self.event("warning", "degradations_check_failed", "Не удалось проверить состояние WB API", str(e)))
             return out
         out.snapshots.append(("degradations", deg if isinstance(deg, dict) else {"data": deg}))
-        n = count_records(deg)
+        n = _degradation_count(deg)
         if n:
             out.events.append(self.event("warning", "wb_api_degradation", "WB API: обнаружены деградации", f"MCP сообщил о {n} проблемных/изменившихся элементах API. Проверь диагностику.", {"count": n, "data": deg}))
         return out
