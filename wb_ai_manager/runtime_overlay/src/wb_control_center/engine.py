@@ -419,6 +419,22 @@ class ControlCenter:
                     if row.get("snapshots"):
                         period_snapshots[name] = row["snapshots"]
                     period_events.extend(row.get("events") or [])
+                    progress_at = datetime.now(timezone.utc).isoformat()
+                    self.db.save_snapshot(
+                        "period_audit",
+                        period.key,
+                        {
+                            "status": "running",
+                            "period": period.to_dict(),
+                            "started_at": started,
+                            "updated_at": progress_at,
+                            "agents": agent_results,
+                            "events": period_events,
+                            "errors": errors,
+                            "snapshot_groups": sorted(period_snapshots),
+                        },
+                        progress_at,
+                    )
                     await asyncio.sleep(0.25)
 
                 portfolio = {
