@@ -159,7 +159,7 @@ SNAPSHOT_SPEC: dict[str, list[str]] = {
     "price_margin": ["prices", "promotions"],
     "finance": ["balance", "report_7d", "worker_finance"],
     "cost_guard": ["paid_storage", "measurement_penalties", "deductions", "paid_acceptance", "worker_penalty_evidence"],
-    "reviews_questions": ["seller_rating", "flags"],
+    "reviews_questions": ["seller_rating", "flags", "feedbacks", "questions"],
     "buyer_chats": ["chat_events"],
     "orders_fbs": ["new_orders", "reshipment", "worker_fbs"],
     "returns_quality": ["open_claims"],
