@@ -15,6 +15,15 @@ const domainAgents = {
   'Реклама':['advertising_monitor','advertising_optimizer'], 'Остатки':['inventory','supply'], 'Поиск':['search_positions','funnel'],
   'Карточки':['cards','price_margin'], 'Финансы':['finance','cost_guard','documents'], 'Клиенты':['reviews_questions','buyer_chats','returns_quality']
 };
+const agentDomain = Object.fromEntries(Object.entries(domainAgents).flatMap(([domain,agents])=>agents.map(a=>[a,domain])));
+const domainRequiredSnapshots = {
+  'Реклама':[['advertising_monitor','active_campaigns']],
+  'Остатки':[['inventory','coverage']],
+  'Поиск':[['search_positions','positions']],
+  'Карточки':[['cards','card_catalog']],
+  'Финансы':[['finance','balance'],['finance','worker_finance']],
+  'Клиенты':[['reviews_questions','seller_rating'],['buyer_chats','chat_events']]
+};
 
 function esc(v){ return String(v ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m])); }
 function missing(v){ return v===null || v===undefined || v==='' || (typeof v==='string' && !v.trim()); }
@@ -42,8 +51,41 @@ function extractList(obj){
 function showToast(msg, kind=''){ const t=$('toast'); t.textContent=msg; t.className=`toast show ${kind}`; clearTimeout(showToast.t); showToast.t=setTimeout(()=>t.className='toast',3200); }
 function empty(text){ return `<div class="empty">${esc(text)}</div>`; }
 function entityInfo(id){ return state.data?.entity_map?.[String(id)] || null; }
+function entityBySellerArticle(article){
+  const a=String(article||'').trim(); if(!a) return null;
+  return Object.values(state.data?.entity_map||{}).find(x=>String(x?.seller_article||'').trim()===a)||null;
+}
 function entityName(id){ const x=entityInfo(id); return x?.seller_article || x?.display || (missing(id)?'—':String(id)); }
-function entityMeta(id){ const x=entityInfo(id); return x ? `nmID ${esc(x.nm_id)}${x.weekly_group?` · ${esc(x.weekly_group)}`:''}` : (missing(id)?'':`nmID ${esc(id)}`); }
+function entityMeta(id){
+  const x=entityInfo(id);
+  if(!x) return missing(id)?'':`nmID ${esc(id)}`;
+  const group=x.group_name||x.weekly_group;
+  return `nmID ${esc(x.nm_id)}${group?` · группа: ${esc(group)}`:''}${x.ozon_seller_article?` · Ozon: ${esc(x.ozon_seller_article)}`:''}`;
+}
+function eventEntity(e){
+  const p=e?.payload||{};
+  const nm=p.nm_id??p.nmId??p.nmID;
+  if(!missing(nm)) return {id:String(nm),name:entityName(nm),meta:entityMeta(nm)};
+  const items=Array.isArray(p.items)?p.items:[];
+  const article=p.vendor_code||p.vendorCode||items[0]?.vendor_code||items[0]?.vendorCode;
+  const x=entityBySellerArticle(article);
+  return article?{id:x?.nm_id||'',name:String(article),meta:x?entityMeta(x.nm_id):'артикул продавца'}:null;
+}
+function domainDataQuality(name,agents){
+  if(name==='Остатки' && !state.data?.health?.sheets_connected) return {ok:false,text:'Не сверено с ФФ/K2 · Sheets не подключены'};
+  const req=domainRequiredSnapshots[name]||[];
+  if(req.length && !req.some(([a,k])=>!!snap(a,k))) return {ok:false,text:'Нет подтверждённого снимка данных'};
+  const stale=[];
+  for(const a of agents){
+    const r=state.data?.runs?.[a], interval=Number(state.data?.agents?.[a]?.interval_minutes||60);
+    const t=r?.finished_at?new Date(r.finished_at).getTime():NaN;
+    const maxAge=Math.max(60,interval*3)*60000;
+    if(r?.status==='error' || !Number.isFinite(t) || Date.now()-t>maxAge) stale.push(a);
+  }
+  if(stale.length) return {ok:false,text:`Данные устарели/не проверены: ${stale.length} мод.`};
+  const times=agents.map(a=>state.data?.runs?.[a]?.finished_at).filter(Boolean).sort();
+  return {ok:true,text:times.length?`Проверено ${ago(times[times.length-1])}`:'Проверено'};
+}
 function currentPeriodLabel(){ return state.data?.period?.label || 'выбранный период'; }
 function periodKey(from=state.periodFrom,to=state.periodTo){ return from&&to?`${from}__${to}`:''; }
 function snapshotScopeText(s){
@@ -133,22 +175,37 @@ function openDetail(kicker,title,body){
 }
 function closeDetail(){ $('detail-modal').classList.remove('open'); $('detail-modal').setAttribute('aria-hidden','true'); }
 function eventDetail(e){
-  const payload=e?.payload||{};
-  const rows=extractList(payload?.data ?? payload);
-  let body=`<div class="detail-lead"><p>${esc(e.message||'')}</p><div class="detail-meta"><span>${esc(agentNames[e.agent]||e.agent)}</span><span>${time(e.created_at)}</span></div></div>`;
-  if(e.event_key==='reshipment' && rows.length){
-    body+=`<div class="detail-section"><h3>Конкретные заказы на повторную отгрузку</h3><div class="detail-table">${rows.slice(0,100).map((r,i)=>{
+  const payload=e?.payload||{}, ent=eventEntity(e);
+  let body=`<div class="detail-lead">${ent?`<div class="detail-entity"><strong>${esc(ent.name)}</strong><span>${ent.meta}</span></div>`:''}<p>${esc(e.message||'')}</p><div class="detail-meta"><span>${esc(agentNames[e.agent]||e.agent)}</span><span>${time(e.created_at)}</span></div></div>`;
+
+  if(e.event_key==='card_errors' && Array.isArray(payload.items)){
+    body+=`<div class="detail-section"><h3>Что именно сломано</h3><div class="detail-table">${payload.items.map((r,i)=>{
+      const action=/не более\s+(\d+)\s+символ/i.test(r.error||'')?'Сократить поле «Наименование» до допустимой длины и повторно сохранить карточку.':'Открыть карточку WB и исправить указанную ошибку.';
+      return `<div class="detail-row"><b>${i+1}. ${esc(r.vendor_code||'Карточка')}</b><span>${esc(r.error||'—')}</span><small>Обновлено: ${time(r.updated_at)}${r.subject?` · ${esc(r.subject)}`:''}</small><p><strong>Действие:</strong> ${esc(action)}</p></div>`;
+    }).join('')}</div></div>`;
+    if(Number(payload.historical_count||0)>0) body+=`<div class="source-note">Ещё ${num(payload.historical_count)} старых/неактуальных записей скрыто из текущих проблем.</div>`;
+  } else if(String(e.event_key||'').startsWith('stockout:') || String(e.event_key||'').startsWith('low_stock:') || String(e.event_key||'').startsWith('overstock:')){
+    const verified=payload.stock_verified!==false;
+    body+=`<div class="detail-section"><h3>Остаток и темп</h3><div class="detail-facts"><div><span>Текущий остаток</span><strong>${num(payload.stock)} шт</strong></div><div><span>Источник</span><strong>${esc(payload.stock_source||'—')}</strong></div><div><span>Продажи за период</span><strong>${num(payload.sales_period)} шт</strong></div><div><span>Темп</span><strong>${num(payload.daily_sales,1)} / день</strong></div><div><span>Покрытие</span><strong>${verified&&Number.isFinite(Number(payload.days_cover))?`${num(payload.days_cover,1)} дня`:'не подтверждено'}</strong></div></div></div>`;
+    body+=`<div class="detail-section ${verified?'':'danger-box'}"><h3>Что делать</h3><p>${verified?'Сверить план поставки и физический остаток ФФ/K2; при подтверждённом дефиците — пополнить FBS.':'Не принимать решение о дефиците по этому сигналу. Сначала подключить/обновить «Сводную» и сверить FBS, K2 и ФФ.'}</p></div>`;
+  } else if(e.event_key==='inventory_source_unverified'){
+    body+=`<div class="detail-section danger-box"><h3>Почему это важно</h3><p>Без живой «Сводной» система не различает FBS-остаток и статистический складской остаток WB, поэтому не имеет права объявлять товар дефицитным.</p></div>`;
+    body+=`<div class="detail-section"><h3>Что сделать</h3><p>Подключить Google Sheets bridge и использовать «Сводная → Остатки WB FBS / К2 ФФ» как доверенный источник.</p></div>`;
+  } else if(e.event_key==='reshipment'){
+    const rows=extractList(payload?.data ?? payload);
+    if(rows.length) body+=`<div class="detail-section"><h3>Конкретные заказы на повторную отгрузку</h3><div class="detail-table">${rows.slice(0,100).map((r,i)=>{
       const nm=r.nmId??r.nmID??r.nm_id; const art=r.vendorCode??r.supplierArticle??r.article??entityName(nm);
       const order=r.orderId??r.order_id??r.id??r.srid??'—'; const supply=r.supplyId??r.supply_id??r.supply??'—'; const qty=r.quantity??r.qty??1;
       return `<div class="detail-row"><b>${i+1}. ${esc(art||entityName(nm))}</b><span>Заказ ${esc(order)} · поставка ${esc(supply)} · ${esc(qty)} шт${nm?` · nmID ${esc(nm)}`:''}</span></div>`;
     }).join('')}</div></div>`;
   } else {
-    const facts=flattenFacts(payload);
-    if(facts.length) body+=`<div class="detail-section"><h3>Исходные факты</h3><div class="detail-facts">${facts.map(([k,v])=>`<div><span>${esc(k)}</span><strong>${esc(v)}</strong></div>`).join('')}</div></div>`;
+    const publicPayload={...payload}; delete publicPayload._analysis; delete publicPayload.data;
+    const facts=flattenFacts(publicPayload).filter(([k])=>!/batchUUID|cursor|additionalErrors|errorText/i.test(k)).slice(0,12);
+    if(facts.length) body+=`<div class="detail-section"><h3>Ключевые факты</h3><div class="detail-facts">${facts.map(([k,v])=>`<div><span>${esc(k)}</span><strong>${esc(v)}</strong></div>`).join('')}</div></div>`;
   }
   const related=(state.data?.decisions||[]).filter(d=>{
     const hay=JSON.stringify(d); const needle=String(e.event_key||'');
-    return (needle && hay.includes(needle)) || (e.message && hay.includes(String(e.message).slice(0,40)));
+    return (needle && hay.includes(needle)) || (ent?.id && String(d.entity_id)===String(ent.id));
   }).slice(0,5);
   if(related.length) body+=`<div class="detail-section"><h3>Связанные решения</h3>${related.map(d=>`<button class="detail-link" data-decision-key="${esc(d.decision_key)}">${esc(d.title)}</button>`).join('')}</div>`;
   return body;
@@ -268,8 +325,24 @@ function renderExecutive(){
   const imp=(state.data.events||[]).filter(e=>['critical','warning'].includes(e.severity)).slice(0,4); $('priority-strip').innerHTML=imp.length?imp.map(e=>`<span class="priority-chip ${e.severity}"><b></b>${esc(e.title)}</span>`).join(''):'<span class="priority-chip"><b></b>Система работает штатно</span>';
 }
 function renderEvents(){
-  let events=state.data?.events||[]; if(state.eventFilter==='important') events=events.filter(e=>['critical','warning'].includes(e.severity)); events=events.slice(0,12);
-  $('event-list').innerHTML=events.length?events.map(e=>`<button class="event-item interactive-card" type="button" data-event-id="${esc(e.id)}"><div class="event-severity ${esc(e.severity)}">${severityIcon(e.severity)}</div><div class="event-main"><strong>${esc(e.title)}</strong><p>${esc(e.message)}</p><div class="event-meta"><span>${esc(agentNames[e.agent]||e.agent)}</span><span>${esc(eventScopeText(e)||'Открыть подробности')}</span></div></div><div class="event-time">${time(e.created_at)}</div></button>`).join(''):empty('Событий этого типа пока нет.');
+  let events=state.data?.events||[];
+  if(state.eventFilter==='important') events=events.filter(e=>['critical','warning'].includes(e.severity));
+  events=events.slice(0,24);
+  if(!events.length){ $('event-list').innerHTML=empty('Событий этого типа пока нет.'); return; }
+  const order=['Карточки','Остатки','Реклама','Финансы','Поиск','Клиенты','Система'];
+  const grouped={};
+  for(const e of events){
+    const domain=agentDomain[e.agent]||'Система';
+    (grouped[domain]||(grouped[domain]=[])).push(e);
+  }
+  $('event-list').innerHTML=order.filter(d=>grouped[d]?.length).map(domain=>{
+    const rows=grouped[domain].map(e=>{
+      const ent=eventEntity(e);
+      const title=ent?`${ent.name} · ${e.title}`:e.title;
+      return `<button class="event-item interactive-card" type="button" data-event-id="${esc(e.id)}"><div class="event-severity ${esc(e.severity)}">${severityIcon(e.severity)}</div><div class="event-main"><strong>${esc(title)}</strong><p>${esc(e.message)}</p><div class="event-meta">${ent?.meta?`<span>${ent.meta}</span>`:''}<span>${esc(agentNames[e.agent]||e.agent)}</span><span>${esc(eventScopeText(e)||'Открыть подробности')}</span></div></div><div class="event-time">${time(e.created_at)}</div></button>`;
+    }).join('');
+    return `<section class="event-domain-group"><div class="event-domain-title"><strong>${domain}</strong><span>${grouped[domain].length}</span></div>${rows}</section>`;
+  }).join('');
 }
 function toolLabel(t){ const m={wb_advert_pause:'Разобрать и при необходимости поставить кампанию на паузу',wb_prices_set:'Проверить изменение цены',wb_advert_bids_set:'Проверить изменение ставки',wb_advert_cluster_bids:'Проверить ставку кластера'}; return m[t]||`Рекомендация: ${t}`; }
 function renderRecommendations(){
@@ -281,9 +354,10 @@ function renderDomains(){
   const symbols={'Реклама':'AD','Остатки':'ST','Поиск':'SR','Карточки':'CD','Финансы':'₽','Клиенты':'CX'};
   const pages={'Реклама':'advertising','Остатки':'inventory','Поиск':'search','Карточки':'search','Финансы':'finance','Клиенты':'customers'};
   $('domain-grid').innerHTML=Object.entries(domainAgents).map(([name,agents])=>{
-    const es=eventsForAgents(agents), c=es.filter(e=>e.severity==='critical').length,w=es.filter(e=>e.severity==='warning').length, cls=c?'critical':w?'warn':'';
-    const note=c?`${c} критич. · ${w} предупр.`:w?`${w} предупреждений`:'Штатно';
-    return `<button type="button" class="domain ${cls} interactive-card" data-go-page="${pages[name]}"><div class="domain-top"><div class="domain-icon">${symbols[name]}</div><span class="dot"></span></div><strong>${name}</strong><span>${note}</span><small>Открыть раздел</small></button>`;
+    const es=eventsForAgents(agents), c=es.filter(e=>e.severity==='critical').length,w=es.filter(e=>e.severity==='warning').length, quality=domainDataQuality(name,agents);
+    const cls=c?'critical':(w||!quality.ok)?'warn':'';
+    const note=c?`${c} критич. · ${w} предупр.`:w?`${w} предупреждений`:quality.ok?`Штатно · ${quality.text}`:quality.text;
+    return `<button type="button" class="domain ${cls} interactive-card" data-go-page="${pages[name]}"><div class="domain-top"><div class="domain-icon">${symbols[name]}</div><span class="dot"></span></div><strong>${name}</strong><span>${esc(note)}</span><small>Открыть раздел</small></button>`;
   }).join('');
 }
 
@@ -479,12 +553,13 @@ async function rollbackPolicy(){ const b=$('rollback-policy'); if(!b)return; b.d
 
 function renderInventory(){
   const s=snap('inventory','coverage'), cov=s?.data||{}; $('inventory-updated').textContent=s?`${snapshotScopeText(s)||'данные'} · обновлено ${ago(s.created_at)}`:'нет данных';
-  const rows=Object.values(cov||{}).sort((a,b)=>(a.days_cover??9999)-(b.days_cover??9999));
+  const rows=Object.values(cov||{}).sort((a,b)=>(a.stock_verified===false?1:0)-(b.stock_verified===false?1:0)||((a.days_cover??9999)-(b.days_cover??9999)));
   $('inventory-grid').innerHTML=rows.length?rows.map(r=>{
-    const days=missing(r.days_cover)?null:Number(r.days_cover), cls=Number.isFinite(days)&&(days<=2?'critical':days<=5?'warn':'');
-    const width=Number.isFinite(days)?Math.max(4,Math.min(100,days/30*100)):100;
+    const verified=r.stock_verified!==false, days=missing(r.days_cover)?null:Number(r.days_cover), cls=verified&&Number.isFinite(days)&&(days<=2?'critical':days<=5?'warn':'');
+    const width=verified&&Number.isFinite(days)?Math.max(4,Math.min(100,days/30*100)):100;
     const id=r.nm_id??r.nmId??r.nmID;
-    return `<button type="button" class="inventory-item ${cls} interactive-card" data-entity-id="${esc(id)}"><div class="inventory-top"><div><strong>${esc(entityName(id))}</strong><small>${entityMeta(id)}</small></div><span class="status-tag ${cls==='critical'?'bad':cls==='warn'?'warn':'ok'}">${cls==='critical'?'Дефицит':cls==='warn'?'Низкий запас':'Норма'}</span></div><div class="inventory-days">${Number.isFinite(days)?`${num(days,1)} дня`:'Нет данных о темпе'}</div><div class="inventory-meta">Остаток ${num(r.stock)} · темп ${num(r.daily_sales,1)}/день</div><div class="cover-bar"><i style="width:${width}%"></i></div></button>`;
+    const tag=!verified?['warn','НЕ СВЕРЕНО']:cls==='critical'?['bad','Дефицит']:cls==='warn'?['warn','Низкий запас']:['ok','Норма'];
+    return `<button type="button" class="inventory-item ${cls} interactive-card" data-entity-id="${esc(id)}"><div class="inventory-top"><div><strong>${esc(entityName(id))}</strong><small>${entityMeta(id)}</small></div><span class="status-tag ${tag[0]}">${tag[1]}</span></div><div class="inventory-days">${!verified?'Нужна сверка FBS / K2':Number.isFinite(days)?`${num(days,1)} дня`:'Нет данных о темпе'}</div><div class="inventory-meta">Остаток ${num(r.stock)} · темп ${num(r.daily_sales,1)}/день · ${esc(r.stock_source||'источник не указан')}</div><div class="cover-bar"><i style="width:${width}%"></i></div></button>`;
   }).join(''):empty('Нет данных по покрытию остатками.');
   const acc=extractList(snap('supply','acceptance')?.data); $('acceptance-list').innerHTML=acc.length?acc.slice(0,8).map(x=>{const coef=missing(x.coefficient)?null:Number(x.coefficient); return `<div class="signal ${Number.isFinite(coef)&&coef<=1?'info':'warning'}"><strong>${esc(x.warehouseName||x.warehouse_name||'Склад')}</strong><p>Коэффициент приёмки: ${Number.isFinite(coef)?num(coef,0):'—'} · разгрузка ${x.allowUnload===false?'недоступна':'доступна'}</p><span class="source">Источник: коэффициенты приёмки WB</span></div>`;}).join(''):empty('Нет данных по коэффициентам приёмки.');
 }
