@@ -302,13 +302,15 @@ async def dashboard_data(days: int = 7, from_date: str | None = None, to_date: s
     period_ctx = PeriodContext.from_strings(period["from"], period["to"])
     audit = center.period_audit_status(period_ctx)
     audit_ready = audit.get("status") == "completed"
-    snapshots = _dashboard_snapshots(period_ctx.key if audit_ready else None)
-    if audit_ready:
+    explicit_period = bool(from_date or to_date)
+    if audit_ready or explicit_period:
+        snapshots = _dashboard_snapshots(period_ctx.key)
         events_period = list(audit.get("events") or [])
         runs = dict(audit.get("agents") or {})
         recommendations = []
-        decisions = list(audit.get("decisions") or [])
+        decisions = list(audit.get("decisions") or []) if audit_ready else []
     else:
+        snapshots = _dashboard_snapshots()
         events_period = center.db.events_between(period["start_utc"], period["end_utc"], limit=1000)
         runs = center.db.latest_runs_by_agent(hours=720)
         recommendations = center.db.pending_actions(limit=100)
