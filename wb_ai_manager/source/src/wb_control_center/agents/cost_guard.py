@@ -12,13 +12,12 @@ class CostGuardAgent(BaseAgent):
 
     async def run(self) -> AgentResult:
         out = AgentResult(agent=self.name)
-        today = datetime.now().date()
-        start = (today - timedelta(days=6)).isoformat()
+        start, end = self.dates(7)
         checks = [
-            ("wb_paid_storage", {"date_from": start, "date_to": today.isoformat()}, "paid_storage"),
-            ("wb_analytics_measurement_penalties", {"date_from": start, "date_to": today.isoformat()}, "measurement_penalties"),
-            ("wb_deductions", {"date_from": start, "date_to": today.isoformat(), "limit": 1000}, "deductions"),
-            ("wb_analytics_acceptance", {"date_from": start, "date_to": today.isoformat()}, "paid_acceptance"),
+            ("wb_paid_storage", {"date_from": start, "date_to": end}, "paid_storage"),
+            ("wb_analytics_measurement_penalties", {"date_from": start, "date_to": end}, "measurement_penalties"),
+            ("wb_deductions", {"date_from": start, "date_to": end, "limit": 1000}, "deductions"),
+            ("wb_analytics_acceptance", {"date_from": start, "date_to": end}, "paid_acceptance"),
         ]
         collected = {}
         for tool, args, key in checks:
