@@ -39,6 +39,7 @@ jobs:
           cp -a wb_ai_manager/source "$RUNNER_TEMP/wb-ai-run1"
           cd "$RUNNER_TEMP/wb-ai-run1"
           python -m compileall -q src scripts
+          node --check src/wb_control_center/ui/dashboard.js
           pytest -q
 
       - name: Clean run 2
