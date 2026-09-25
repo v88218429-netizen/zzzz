@@ -3,9 +3,9 @@
  *
  * 1) Create any Google Sheet -> Extensions -> Apps Script.
  * 2) Paste this whole file.
- * 3) Replace ACCESS_KEY with a long random string.
- * 4) Deploy -> New deployment -> Web app -> Execute as: Me -> Access: Anyone with the link.
- * 5) Copy the /exec URL and the same ACCESS_KEY into WB AI Manager -> Connections.
+ * 3) Run setupBridge() once. It creates a secret in Script Properties.
+ * 4) Deploy -> Web app -> Execute as: Me -> Access: Anyone, even anonymous.
+ * 5) Put the /exec URL and generated secret into WB AI Manager / Railway.
  *
  * This code ONLY reads whitelisted spreadsheet IDs/ranges below. It has no write functions.
  */
@@ -106,64 +106,66 @@ function doPost(e) {
 
 function readSource_(name, cfg) {
   const token = ScriptApp.getOAuthToken();
-  const entries = Object.keys(cfg.ranges).map(key => ({key: key, a1: cfg.ranges[key]}));
-  const query = entries.map(x => 'ranges=' + encodeURIComponent(x.a1)).join('&');
-  const valuesUrl =
-    'https://sheets.googleapis.com/v4/spreadsheets/' +
-    encodeURIComponent(cfg.spreadsheetId) +
-    '/values:batchGet?valueRenderOption=FORMATTED_VALUE&majorDimension=ROWS&' + query;
-
-  const valuesResp = googleGet_(valuesUrl, token);
-  const valueRanges = valuesResp.valueRanges || [];
-  const ranges = {};
-  entries.forEach((entry, i) => {
-    const vr = valueRanges[i] || {};
-    ranges[entry.key] = {range: entry.a1, values: vr.values || []};
+  const entries = Object.keys(cfg.ranges).map(key => {
+    const a1 = cfg.ranges[key];
+    const parsed = parseA1_(a1);
+    return {
+      key: key,
+      a1: a1,
+      url:
+        'https://docs.google.com/spreadsheets/d/' +
+        encodeURIComponent(cfg.spreadsheetId) +
+        '/gviz/tq?tqx=out:csv&sheet=' +
+        encodeURIComponent(parsed.sheet) +
+        '&range=' +
+        encodeURIComponent(parsed.range)
+    };
   });
 
-  let title = name;
-  try {
-    const meta = googleGet_(
-      'https://sheets.googleapis.com/v4/spreadsheets/' +
-      encodeURIComponent(cfg.spreadsheetId) +
-      '?fields=properties.title',
-      token
-    );
-    title = (meta.properties && meta.properties.title) || name;
-  } catch (_) {}
+  const responses = UrlFetchApp.fetchAll(entries.map(entry => ({
+    url: entry.url,
+    method: 'get',
+    headers: {Authorization: 'Bearer ' + token},
+    muteHttpExceptions: true,
+    followRedirects: true
+  })));
 
-  let modified = null;
-  try {
-    const driveMeta = googleGet_(
-      'https://www.googleapis.com/drive/v3/files/' +
-      encodeURIComponent(cfg.spreadsheetId) +
-      '?fields=modifiedTime',
-      token
-    );
-    modified = driveMeta.modifiedTime || null;
-  } catch (_) {}
+  const ranges = {};
+  responses.forEach((resp, i) => {
+    const entry = entries[i];
+    const code = resp.getResponseCode();
+    const text = resp.getContentText();
+    if (code >= 200 && code < 300) {
+      ranges[entry.key] = {
+        range: entry.a1,
+        values: text ? Utilities.parseCsv(text) : []
+      };
+    } else {
+      ranges[entry.key] = {
+        range: entry.a1,
+        error: 'GViz HTTP ' + code + ': ' + text.slice(0, 500)
+      };
+    }
+  });
 
   return {
     name: name,
-    title: title,
+    title: name,
     spreadsheet_id: cfg.spreadsheetId,
-    modified_at: modified,
+    read_at: new Date().toISOString(),
     ranges: ranges
   };
 }
 
-function googleGet_(url, token) {
-  const resp = UrlFetchApp.fetch(url, {
-    method: 'get',
-    headers: {Authorization: 'Bearer ' + token},
-    muteHttpExceptions: true
-  });
-  const code = resp.getResponseCode();
-  const text = resp.getContentText();
-  if (code < 200 || code >= 300) {
-    throw new Error('Google API HTTP ' + code + ': ' + text.slice(0, 500));
+function parseA1_(a1) {
+  const bang = a1.indexOf('!');
+  if (bang < 0) throw new Error('Range must include sheet name: ' + a1);
+  let sheet = a1.substring(0, bang);
+  const range = a1.substring(bang + 1);
+  if (sheet.startsWith("'") && sheet.endsWith("'")) {
+    sheet = sheet.slice(1, -1).replace(/''/g, "'");
   }
-  return JSON.parse(text || '{}');
+  return {sheet: sheet, range: range};
 }
 
 function json_(obj) {
