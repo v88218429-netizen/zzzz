@@ -66,7 +66,8 @@ class InventoryAgent(BaseAgent):
         critical = float(cfg.get("critical_days_cover", 2))
         warning = float(cfg.get("warning_days_cover", 5))
         over = float(cfg.get("overstock_days_cover", 75))
-        all_nm = set(stock_by_nm) | set(sales_by_nm)
+        trusted_nm = {int(x) for x in trusted_rows if str(x).isdigit()} if trusted_current else set()
+        all_nm = set(stock_by_nm) | set(sales_by_nm) | trusted_nm
         for nm in all_nm:
             wb_stats_stock = stock_by_nm.get(nm, 0.0)
             trusted = trusted_rows.get(str(nm)) if trusted_current else None
@@ -80,7 +81,20 @@ class InventoryAgent(BaseAgent):
                 stock_source = "WB statistics · не подтверждено как FBS"
                 stock_verified = legacy_test_context
 
-            daily = sales_by_nm.get(nm, 0.0) / max(1.0, float(period_days))
+            api_daily = sales_by_nm.get(nm, 0.0) / max(1.0, float(period_days))
+            trusted_daily = None
+            if isinstance(trusted, dict):
+                try:
+                    value = trusted.get("orders_per_day")
+                    trusted_daily = float(value) if value is not None else None
+                except (TypeError, ValueError):
+                    trusted_daily = None
+            if trusted_daily is not None and trusted_daily > 0:
+                daily = trusted_daily
+                velocity_source = "Сводная · WB Заказов в день"
+            else:
+                daily = api_daily
+                velocity_source = "WB statistics · продажи за выбранный период"
             days = stock / daily if daily > 0 else None
             coverage[str(nm)] = {
                 "nm_id": nm,
@@ -93,6 +107,9 @@ class InventoryAgent(BaseAgent):
                 "sales_period_from": start,
                 "sales_period_to": end,
                 "daily_sales": daily,
+                "api_daily_sales": api_daily,
+                "trusted_orders_per_day": trusted_daily,
+                "velocity_source": velocity_source,
                 "days_cover": days,
                 "stock_scope": "current_snapshot",
                 "velocity_scope": "selected_period" if period is not None else "rolling_14d",
