@@ -1,0 +1,22 @@
+name: WB Ads HUB Apps Script discovery
+on:
+  push:
+    branches: [mainggg]
+    paths: ['.github/workflows/wb-ads-hub-discover.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  discover:
+    runs-on: [self-hosted, macOS, ozon-live]
+    timeout-minutes: 5
+    steps:
+      - name: List accessible script titles only
+        shell: bash
+        run: |
+          set -euo pipefail
+          if command -v clasp >/dev/null 2>&1; then
+            clasp list 2>&1 | sed -E 's/(https?:\/\/[^ ]+)/(URL)/g' | head -60
+          else
+            npx --yes @google/clasp list 2>&1 | sed -E 's/(https?:\/\/[^ ]+)/(URL)/g' | head -60
+          fi
