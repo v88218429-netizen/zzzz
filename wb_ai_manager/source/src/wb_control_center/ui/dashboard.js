@@ -355,8 +355,8 @@ function renderAll(){
   const dc=decisionCounts();
   const critical=Math.max(Number(d.summary?.critical_24h||0),dc.critical), warning=Math.max(Number(d.summary?.warning_24h||0),dc.high), actions=dc.total || d.summary?.recommendations||0;
   $('metric-critical').textContent=num(critical); $('metric-warning').textContent=num(warning); $('metric-actions').textContent=num(actions); $('metric-agents').textContent=num(Object.keys(d.agents||{}).length);
-  if($('metric-critical-period')) $('metric-critical-period').textContent=d.period?.label||'за выбранный период';
-  if($('metric-warning-period')) $('metric-warning-period').textContent=d.period?.label||'за выбранный период';
+  if($('metric-critical-period')) $('metric-critical-period').textContent=`решения и сигналы · ${d.period?.label||'текущий контекст'}`;
+  if($('metric-warning-period')) $('metric-warning-period').textContent=`решения и сигналы · ${d.period?.label||'текущий контекст'}`;
   if($('finance-period-label')) $('finance-period-label').textContent=d.period_audit?.ready?`за ${d.period?.label||'выбранный период'}`:'ожидает пересчёта периода';
   $('nav-alerts').textContent=critical+warning; if($('nav-decisions')) $('nav-decisions').textContent=(d.decisions||[]).filter(x=>['critical','high'].includes(x.priority)).length;
   const ad=adSummary(); $('metric-ad-spend').textContent=rub(ad.spend); const rating=snap('reviews_questions','seller_rating')?.data; const ratingVal=firstNumeric(rating,['rating']); $('metric-rating').textContent=ratingVal==null?'—':num(ratingVal,2);
