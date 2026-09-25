@@ -1,0 +1,233 @@
+{
+  "task_id": "AI_BUSINESS",
+  "request": "AI_BUSINESS_20260925_0702.json",
+  "query": "AI автоматизация бизнеса маркетплейсы кейсы 2026",
+  "knowledge_tag": "AI_BUSINESS",
+  "generated_at": "2026-09-25T04:04:10.432826+00:00",
+  "videos": [
+    {
+      "video_id": "fFFOk8LOshY",
+      "url": "https://www.youtube.com/watch?v=fFFOk8LOshY",
+      "title": "N8N + WILDBERRIES 16 узлов убивают 20 часов работы  Экономия 30 000₽ в месяц",
+      "channel": "Кирилл Титенко",
+      "duration": 501,
+      "timestamp": null,
+      "query": "AI агент Wildberries автоматизация",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-25_AI_BUSINESS_video_fFFOk8LOshY.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "iwGAd9lvFm8",
+      "url": "https://www.youtube.com/watch?v=iwGAd9lvFm8",
+      "title": "ИИ Агент ЗАКАЗАЛ мне носки! Создаю браузерного ИИ Агента в n8n + AirTop за 20 минут (+шаблон n8n)",
+      "channel": "Игорь Зуевич",
+      "duration": 1245,
+      "timestamp": null,
+      "query": "AI агент Wildberries автоматизация",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-25_AI_BUSINESS_video_iwGAd9lvFm8.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "3LifBPpiIMY",
+      "url": "https://www.youtube.com/watch?v=3LifBPpiIMY",
+      "title": "ИИ для работы на маркетплейсах WB и Ozon (реальный кейс)",
+      "channel": "Igor Melnikov | ИИ + БИЗНЕС",
+      "duration": 427,
+      "timestamp": null,
+      "query": "AI агент Wildberries автоматизация",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-25_AI_BUSINESS_video_3LifBPpiIMY.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "F06BxWLC2sU",
+      "url": "https://www.youtube.com/watch?v=F06BxWLC2sU",
+      "title": "ИИ-агенты для селлеров: что реально работает на Wildberries, Ozon, Яндекс.Маркет — с чего начать",
+      "channel": "Nat Mirnva | сервис Только финансы",
+      "duration": 1025,
+      "timestamp": null,
+      "query": "AI агент Wildberries автоматизация",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-25_AI_BUSINESS_video_F06BxWLC2sU.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "KkFYx2CDNPc",
+      "url": "https://www.youtube.com/watch?v=KkFYx2CDNPc",
+      "title": "🔥 AI AGENT CREATES PRODUCT LISTINGS for Ozon/WB: photo → interior → VIDEO | KLING AI, NANA BANANA",
+      "channel": "Сухов:Live | AI и автоматизация бизнеса",
+      "duration": 2048,
+      "timestamp": null,
+      "query": "AI агент Wildberries автоматизация",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-25_AI_BUSINESS_video_KkFYx2CDNPc.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "EAhBcZRFfww",
+      "url": "https://www.youtube.com/watch?v=EAhBcZRFfww",
+      "title": "How to Connect Claude to Wildberries: Installing Artel from Scratch",
+      "channel": "Косик Дмитрий | Торговец Кодом",
+      "duration": 1143,
+      "timestamp": null,
+      "query": "AI агент Wildberries автоматизация",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-25_AI_BUSINESS_video_EAhBcZRFfww.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "k9CeGYtDvHM",
+      "url": "https://www.youtube.com/watch?v=k9CeGYtDvHM",
+      "title": "🔥 Нейро продавец для товара на Wildberries + Бот в Telegram: Полная настройка в n8n с нуля! Шаблоны",
+      "channel": "Адепт E-commerce - ИИ автоматизация",
+      "duration": 2620,
+      "timestamp": null,
+      "query": "AI агент Wildberries автоматизация",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-25_AI_BUSINESS_video_k9CeGYtDvHM.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "YRNSdXxOya0",
+      "url": "https://www.youtube.com/watch?v=YRNSdXxOya0",
+      "title": "ВНЕДРЕНИЕ ИИ-АГЕНТОВ В БИЗНЕС. Разбор кейсов",
+      "channel": "3R.agency",
+      "duration": 2159,
+      "timestamp": null,
+      "query": "AI агент Wildberries автоматизация",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-25_AI_BUSINESS_video_YRNSdXxOya0.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "MneQa2ZtnNo",
+      "url": "https://www.youtube.com/watch?v=MneQa2ZtnNo",
+      "title": "AI AGENT, AI ASSISTANT, BOT – which one to choose for your task (examples)",
+      "channel": "Web3nity",
+      "duration": 970,
+      "timestamp": null,
+      "query": "AI агент Wildberries автоматизация",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-25_AI_BUSINESS_video_MneQa2ZtnNo.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "Xrh8PqoTGxk",
+      "url": "https://www.youtube.com/watch?v=Xrh8PqoTGxk",
+      "title": "Ai-агент увеличил продажи на 27%. Кейс Ozon & WB.",
+      "channel": "3R.agency",
+      "duration": 447,
+      "timestamp": null,
+      "query": "AI агент Wildberries автоматизация",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-25_AI_BUSINESS_video_Xrh8PqoTGxk.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "SuPhikEfqpE",
+      "url": "https://www.youtube.com/watch?v=SuPhikEfqpE",
+      "title": "I connected Claude to my Wildberries store, and now the AI ​​is helping me work. Part 2",
+      "channel": "Косик Дмитрий | Торговец Кодом",
+      "duration": 562,
+      "timestamp": null,
+      "query": "AI агент Wildberries автоматизация",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-25_AI_BUSINESS_video_SuPhikEfqpE.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "video_id": "X5_RrohfOAw",
+      "url": "https://www.youtube.com/watch?v=X5_RrohfOAw",
+      "title": "Saas Marketing Strategies Explained For Startups | Saas Marketing Worth For Startups",
+      "channel": "Dekker the Marketer",
+      "duration": 147,
+      "timestamp": null,
+      "query": "AI SaaS для маркетплейсов",
+      "kind": "short",
+      "transcript": "transcripts/2026-09-25_AI_BUSINESS_short_X5_RrohfOAw.md",
+      "method": "FreeTranscriptAPI"
+    }
+  ],
+  "errors": [
+    {
+      "video_id": "mQe8pdoyL2w",
+      "url": "https://www.youtube.com/watch?v=mQe8pdoyL2w",
+      "title": "Что автоматизировать с помощью AI в бизнесе в 2026 году? Разбор каждого отдела для автоматизации",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "2-NxHJZVKKA",
+      "url": "https://www.youtube.com/watch?v=2-NxHJZVKKA",
+      "title": "Roofing  AI Chat Bot   727-777-6995",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "GvwYpbD0s1g",
+      "url": "https://www.youtube.com/watch?v=GvwYpbD0s1g",
+      "title": "SocialNowa Chatbot for Social Media | Create Chatbots for Facebook and Instagram",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "r4aCaaaJGJg",
+      "url": "https://www.youtube.com/watch?v=r4aCaaaJGJg",
+      "title": "Best-In-Class B2B Ecommerce Software for Medical & Pharmaceutical Suppliers",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "6HZqeDguDcY",
+      "url": "https://www.youtube.com/watch?v=6HZqeDguDcY",
+      "title": "Complete Guide to SaaS based Ecommerce Marketplace Platform",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "8rg8o71uP64",
+      "url": "https://www.youtube.com/watch?v=8rg8o71uP64",
+      "title": "SaaSify by Spektra Systems | Transactable SaaS Offer through Cloud Marketplaces",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "bUysOTVX9mU",
+      "url": "https://www.youtube.com/watch?v=bUysOTVX9mU",
+      "title": "Engati chatbot platform - Education",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "AoaFnnCf924",
+      "url": "https://www.youtube.com/watch?v=AoaFnnCf924",
+      "title": "ChatofAI Lifetime Deal $39 - Custom your AI chatbots powered by your data and ChatGPT",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "kztJw4xuBV8",
+      "url": "https://www.youtube.com/watch?v=kztJw4xuBV8",
+      "title": "RecapioGPT Review | RecapioGPT Lifetime Deal $39 - Summarize what you want in 1 click, using AI",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "jYerAbb8ILY",
+      "url": "https://www.youtube.com/watch?v=jYerAbb8ILY",
+      "title": "Formula Dog Lifetime Deal $39 - Conversion Optimization tool for websites | AppSumo Lifetime Deals",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "YQDmRNLr5_E",
+      "url": "https://www.youtube.com/watch?v=YQDmRNLr5_E",
+      "title": "What is Reditus? | Explainer video",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "yxRsvXks3ZE",
+      "url": "https://www.youtube.com/watch?v=yxRsvXks3ZE",
+      "title": "[Case Study] BloomsyBox: Personalized eCommerce Chatbot using Generative AI",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "jX4dLxiso6A",
+      "url": "https://www.youtube.com/watch?v=jX4dLxiso6A",
+      "title": "Video Ad for AI / SaaS Product | Doks.AI",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 404: Not Found"
+    }
+  ]
+}
