@@ -17,6 +17,11 @@ class Settings(BaseSettings):
     wb_api_token: str = ""
     wb_shop_id: str | None = None
 
+    # Trusted internal read-only source produced by wb-api-worker.
+    wb_worker_base_url: str = ""
+    wb_worker_export_token: str = ""
+    wb_worker_timeout_seconds: float = 30.0
+
     # Reasoning layer. rules requires no LLM/API key. ollama is fully local.
     llm_provider: str = "rules"
     llm_model: str = ""
@@ -64,6 +69,7 @@ class Settings(BaseSettings):
     mcp_start_timeout_seconds: float = 45.0
     mcp_call_timeout_seconds: float = 90.0
     agent_run_timeout_seconds: float = 300.0
+    startup_audit_enabled: bool = True
 
     @property
     def data_path(self) -> Path:
