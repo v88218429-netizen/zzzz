@@ -454,16 +454,14 @@ class ControlCenter:
                     )
                     await asyncio.sleep(0.25)
 
-                portfolio = {
-                    "data_origin": "period_audit",
-                    "current_data": True,
-                    "data_status": "selected_period",
-                    "period": period.label,
-                    "source_health": [],
-                    "stores": [],
-                    "own_27": {},
-                    "portfolio": {},
-                }
+                # Period snapshots describe period-dependent metrics, but
+                # product identity, unit economics and current stock come from the
+                # trusted live portfolio. Do not replace them with an empty shell:
+                # that manufactured false "missing unit economics / nmID" blockers.
+                portfolio = self.portfolio.snapshot()
+                portfolio = dict(portfolio)
+                portfolio["analysis_period"] = period.to_dict()
+                portfolio["period"] = period.label
                 ss = dict(period_snapshots)
                 ss["_events"] = period_events
                 ss["_operating_findings"] = []
