@@ -240,8 +240,17 @@ function productDetail(id){
     body+=`<div class="detail-section"><h3>Все карточки этой товарной группы</h3><div class="detail-table">${group.variants.map(v=>{
       const oz=ozonBySku[String(v.id)]||{};
       const platform=v.platform||'—';
-      const stock=platform.startsWith('Ozon')&&!missing(oz.stock)?` · остаток ${num(oz.stock)}`:'';
-      return `<div class="detail-row"><b>${esc(platform)} · ${esc(v.article||'без артикула')}</b><span>ID ${esc(v.id||'—')}${stock}</span></div>`;
+      const statusMap={
+        selling:'продаётся',
+        listed_no_recent_orders:'есть в фиде · заказов за выгруженный период нет',
+        orders_present_feed_missing:'заказы есть · карточка отсутствует в текущем фиде',
+        mapped_but_not_in_current_feed_or_orders:'привязано в Сводной · в текущем фиде и заказах не найдено'
+      };
+      const ozonMeta=platform.startsWith('Ozon')?
+        [!missing(oz.feed_available)?`доступно ${num(oz.feed_available)}`:null,
+         !missing(oz.orders_qty_period)?`заказы ${num(oz.orders_qty_period)} шт`:null,
+         oz.operating_status?statusMap[oz.operating_status]:null].filter(Boolean).join(' · '):'';
+      return `<div class="detail-row"><b>${esc(platform)} · ${esc(v.article||'без артикула')}</b><span>ID ${esc(v.id||'—')}${ozonMeta?` · ${esc(ozonMeta)}`:''}</span></div>`;
     }).join('')}</div></div>`;
   }
   if(decisions.length) body+=`<div class="detail-section"><h3>Текущие решения</h3>${decisions.map(d=>`<button class="detail-link" data-decision-key="${esc(d.decision_key)}">${esc(d.title)}</button>`).join('')}</div>`;
