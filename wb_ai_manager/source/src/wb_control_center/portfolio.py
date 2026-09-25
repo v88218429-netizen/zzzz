@@ -333,6 +333,17 @@ class PortfolioService:
             # human product group, while WB/Ozon IDs identify concrete listings.
             if header_idx is not None:
                 headers = [str(x or "").strip() for x in values[header_idx]]
+                header_positions: dict[str, list[int]] = {}
+                for col_idx, header in enumerate(headers):
+                    header_positions.setdefault(header, []).append(col_idx)
+
+                def row_cell(row: list[Any], header: str, occurrence: int = 0) -> Any:
+                    positions = header_positions.get(header) or []
+                    if occurrence >= len(positions):
+                        return None
+                    col = positions[occurrence]
+                    return row[col] if col < len(row) else None
+
                 products=[]
                 ozon_products=[]
                 groups: dict[str, dict[str, Any]] = {}
@@ -403,7 +414,11 @@ class PortfolioService:
                             "ozon_sku":ozon_sku if ozon_sku.isdigit() else None,
                             "sales_qty":self._num(rec.get("Продажи, шт")),
                             "orders_qty":self._num(rec.get("Заказы, шт")),
-                            "orders_per_day":self._num(rec.get("Заказов в день")),
+                            # "Сводная" contains two identically named columns:
+                            # the first "Заказов в день" is WB, the second is Ozon.
+                            # A dict keyed by header silently overwrote WB with Ozon.
+                            "orders_per_day":self._num(row_cell(row, "Заказов в день", 0)),
+                            "ozon_orders_per_day":self._num(row_cell(row, "Заказов в день", 1)),
                             "orders_rub":self._num(rec.get("Заказы,руб")),
                             "safe_stock":safe_stock,
                             "safe_stock_source":safe_source,
