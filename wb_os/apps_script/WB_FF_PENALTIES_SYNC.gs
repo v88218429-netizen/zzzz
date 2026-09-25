@@ -7,40 +7,27 @@ var FF_PENALTIES_SYNC_CFG = {
   PERIOD_ANCHOR: '2026-09-21',
   PERIOD_DAYS: 14,
   TZ: 'Europe/Moscow',
-  LAST_SYNC_PROPERTY: 'FF_PENALTIES_LAST_SYNC_DATE'
+  LAST_SYNC_PROPERTY: 'FF_PENALTIES_LAST_SYNC_FINGERPRINT'
 };
 
 function ffPenaltiesAutoSync_() {
-  var todayKey = Utilities.formatDate(
-    new Date(),
-    FF_PENALTIES_SYNC_CFG.TZ,
-    'yyyy-MM-dd'
-  );
-
-  var props = PropertiesService.getScriptProperties();
-  if (props.getProperty(FF_PENALTIES_SYNC_CFG.LAST_SYNC_PROPERTY) === todayKey) {
-    return { skipped: true, reason: 'already_synced_today', date: todayKey };
-  }
-
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(5000)) {
-    return { skipped: true, reason: 'lock_busy', date: todayKey };
+    return { skipped: true, reason: 'lock_busy' };
   }
 
   try {
-    var result = ffPenaltiesSyncCurrentPeriod_();
-    props.setProperty(FF_PENALTIES_SYNC_CFG.LAST_SYNC_PROPERTY, todayKey);
-    return result;
+    return ffPenaltiesSyncCurrentPeriod_(true);
   } finally {
     lock.releaseLock();
   }
 }
 
 function ffPenaltiesSyncNow() {
-  return ffPenaltiesSyncCurrentPeriod_();
+  return ffPenaltiesSyncCurrentPeriod_(false);
 }
 
-function ffPenaltiesSyncCurrentPeriod_() {
+function ffPenaltiesSyncCurrentPeriod_(skipIfUnchanged) {
   var cfg = FF_PENALTIES_SYNC_CFG;
   var period = ffPenaltiesCurrentPeriod_();
 
@@ -70,7 +57,25 @@ function ffPenaltiesSyncCurrentPeriod_() {
     period.end
   );
 
+  var fingerprint = ffPenaltiesFingerprint_(period.title, rows);
+  var props = PropertiesService.getScriptProperties();
+  var fingerprintKey =
+    FF_PENALTIES_SYNC_CFG.LAST_SYNC_PROPERTY + '_' + period.title;
+
+  if (
+    skipIfUnchanged &&
+    props.getProperty(fingerprintKey) === fingerprint
+  ) {
+    return {
+      skipped: true,
+      reason: 'source_unchanged',
+      period: period.title,
+      rows: rows.length
+    };
+  }
+
   ffPenaltiesWriteSheet_(targetSheet, rows);
+  props.setProperty(fingerprintKey, fingerprint);
 
   Logger.log(
     'FF penalties sync: period=' + period.title +
@@ -287,6 +292,39 @@ function ffPenaltiesBuildRows_(
   });
 
   return rows;
+}
+
+function ffPenaltiesFingerprint_(periodTitle, rows) {
+  var payload = [periodTitle];
+
+  rows.forEach(function(row) {
+    payload.push(
+      row.slice(0, 17).map(function(value) {
+        if (
+          Object.prototype.toString.call(value) === '[object Date]' &&
+          !isNaN(value)
+        ) {
+          return Utilities.formatDate(
+            value,
+            FF_PENALTIES_SYNC_CFG.TZ,
+            'yyyy-MM-dd'
+          );
+        }
+        return String(value == null ? '' : value);
+      }).join('\u001f')
+    );
+  });
+
+  var digest = Utilities.computeDigest(
+    Utilities.DigestAlgorithm.SHA_256,
+    payload.join('\u001e'),
+    Utilities.Charset.UTF_8
+  );
+
+  return digest.map(function(b) {
+    var v = b < 0 ? b + 256 : b;
+    return ('0' + v.toString(16)).slice(-2);
+  }).join('');
 }
 
 function ffPenaltiesWriteSheet_(sheet, rows) {
