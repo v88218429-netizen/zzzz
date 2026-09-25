@@ -28,6 +28,22 @@ class CostGuardAgent(BaseAgent):
                 out.snapshots.append((key, data if isinstance(data, dict) else {"data": data}))
             except Exception as e:
                 out.events.append(self.event("warning", f"{key}_failed", f"Не удалось проверить {key}", str(e)))
+        if self.ctx.worker is not None and self.ctx.worker.configured:
+            try:
+                worker_fbs = await self.ctx.worker.fbs_bundle()
+                evidence_snapshot = {
+                    "source": worker_fbs.get("source"),
+                    "retrieved_at": worker_fbs.get("retrieved_at"),
+                    "evidence_health": worker_fbs.get("evidence_health"),
+                    "evidence_status": worker_fbs.get("evidence_status"),
+                    "penalty_evidence": worker_fbs.get("penalty_evidence", []),
+                }
+                out.snapshots.append(("worker_penalty_evidence", evidence_snapshot))
+                collected["worker_penalty_evidence"] = evidence_snapshot
+                if (worker_fbs.get("evidence_health") or {}).get("status") != "FRESH":
+                    out.events.append(self.event("warning", "worker_penalty_evidence_stale", "FBS evidence wb-api-worker не свежий", str(worker_fbs.get("evidence_health") or {})))
+            except Exception as e:
+                out.events.append(self.event("warning", "worker_penalty_evidence_failed", "Не удалось получить FBS evidence wb-api-worker", str(e)))
         if self.ctx.llm.enabled and collected:
             text = await self.ctx.llm.complete(
                 "Ты контролёр скрытых расходов Wildberries. Найди существенные платное хранение, платную приёмку, штрафы за габариты, подмены/вложения и другие удержания. Не выдумывай суммы. Сначала самые дорогие отклонения.",
