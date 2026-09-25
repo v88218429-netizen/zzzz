@@ -55,3 +55,14 @@ jobs:
         run: |
           $base = Join-Path $env:RUNNER_TEMP "ozon-edge-validate"
           & ".\ozon_radar_server\edge_updater_windows.ps1" -Base $base -ValidateOnly
+
+      - name: Validate runtime version matches manifest
+        shell: pwsh
+        run: |
+          $m = Get-Content "ozon_radar_server/edge_release_windows.json" -Raw | ConvertFrom-Json
+          $agent = Get-Content "ozon_radar_server/edge_agent_windows.py" -Raw
+          $expected = 'VERSION="win-edge-' + [string]$m.version + '"'
+          if (-not $agent.Contains($expected)) {
+            throw "Runtime VERSION does not match manifest version=$($m.version)"
+          }
+          Write-Host "VERSION_MATCH_OK $($m.version)"
