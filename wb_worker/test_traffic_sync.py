@@ -20,8 +20,18 @@ class TrafficParsingTest(unittest.TestCase):
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0][3], 42)
         self.assertEqual(rows[0][4:6], [100, 3])
-        self.assertEqual(rows[0][-2], "EXACT_CAMPAIGN_NM_DAY_APP")
+        self.assertEqual(rows[0][-2], "EXACT_CAMPAIGN_NM_DAY")
         self.assertEqual(len(rows[0]), 13)
+
+    def test_platform_rows_are_aggregated(self):
+        data = [{"advertId": 12, "days": [{"date": "2026-09-24", "apps": [
+            {"appType": 1, "nms": [{"nmId": 42, "views": 100, "clicks": 3, "sum": 9}]},
+            {"appType": 32, "nms": [{"nmId": 42, "views": 20, "clicks": 1, "sum": 2}]}
+        ]}]}]
+        rows = _stats_rows("ap", data)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0][4:6], [120, 4])
+        self.assertEqual(rows[0][8], 11)
 
     def test_funnel_product_history(self):
         data = [{"product": {"nmId": 42, "vendorCode": "MY-42"},
