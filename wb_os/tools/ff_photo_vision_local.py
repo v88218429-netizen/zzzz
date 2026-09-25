@@ -59,14 +59,72 @@ def extract_clasp_return(text: str) -> Any:
     raise RuntimeError("Could not parse clasp return value")
 
 
-def download_image_b64(url: str, timeout: int = 40) -> str:
+def _download_bytes(url: str, timeout: int = 40) -> bytes:
     r = requests.get(
         url,
         timeout=timeout,
         headers={"User-Agent": "ff-photo-vision/1.0"},
     )
     r.raise_for_status()
-    return base64.b64encode(r.content).decode("ascii")
+    return r.content
+
+
+def expand_photo_source(url: str, timeout: int = 40) -> list[str]:
+    """Return direct image URLs for WB images or a public Yandex Disk link."""
+    if re.match(r"^https://static-basket-[a-z0-9-]+\\.wb\\.ru/", url, re.I):
+        return [url]
+
+    if re.match(r"^https://disk\\.yandex\\.(ru|com)/", url, re.I):
+        meta = requests.get(
+            "https://cloud-api.yandex.net/v1/disk/public/resources",
+            params={"public_key": url, "limit": 50},
+            timeout=timeout,
+        )
+        meta.raise_for_status()
+        data = meta.json() or {}
+
+        direct: list[str] = []
+
+        if data.get("type") == "file":
+            mime = str(data.get("mime_type") or "")
+            file_url = str(data.get("file") or "")
+            if mime.startswith("image/") and file_url:
+                direct.append(file_url)
+
+        embedded = (data.get("_embedded") or {}).get("items") or []
+        for item in embedded:
+            if len(direct) >= 5:
+                break
+            if str(item.get("type") or "") != "file":
+                continue
+            mime = str(item.get("mime_type") or "")
+            if not mime.startswith("image/"):
+                continue
+
+            file_url = str(item.get("file") or "")
+            if file_url:
+                direct.append(file_url)
+                continue
+
+            path = str(item.get("path") or "")
+            if path:
+                dl = requests.get(
+                    "https://cloud-api.yandex.net/v1/disk/public/resources/download",
+                    params={"public_key": url, "path": path},
+                    timeout=timeout,
+                )
+                dl.raise_for_status()
+                href = str((dl.json() or {}).get("href") or "")
+                if href:
+                    direct.append(href)
+
+        return direct[:5]
+
+    return []
+
+
+def download_image_b64(url: str, timeout: int = 40) -> str:
+    return base64.b64encode(_download_bytes(url, timeout=timeout)).decode("ascii")
 
 
 def normalize_enum(value: Any, allowed: list[str], default: str) -> str:
@@ -138,11 +196,25 @@ def analyze_case(case: dict[str, Any], *, ollama_url: str, model: str) -> dict[s
     images: list[str] = []
     failed: list[str] = []
 
-    for url in photo_urls[:5]:
+    for source_url in photo_urls[:5]:
         try:
-            images.append(download_image_b64(url))
+            direct_urls = expand_photo_source(source_url)
+            if not direct_urls:
+                failed.append(f"{source_url}: unsupported or empty photo source")
+                continue
+
+            for direct_url in direct_urls:
+                if len(images) >= 5:
+                    break
+                try:
+                    images.append(download_image_b64(direct_url))
+                except Exception as exc:
+                    failed.append(f"{direct_url}: {exc}")
         except Exception as exc:
-            failed.append(f"{url}: {exc}")
+            failed.append(f"{source_url}: {exc}")
+
+        if len(images) >= 5:
+            break
 
     if not images:
         result = {
