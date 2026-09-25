@@ -1,4 +1,4 @@
-const state = { data: null, eventFilter: 'important', inventoryFilter: 'attention', page: location.hash.replace('#','') || 'overview', periodFrom: null, periodTo: null, periodAuditRequestedKey: null, periodPollTimer: null };
+const state = { data: null, eventFilter: 'important', inventoryFilter: 'shortage', decisionFilter: 'priority', page: location.hash.replace('#','') || 'overview', periodFrom: null, periodTo: null, periodAuditRequestedKey: null, periodPollTimer: null };
 const $ = (id) => document.getElementById(id);
 const qa = (sel, root=document) => [...root.querySelectorAll(sel)];
 
@@ -598,14 +598,16 @@ function renderDecisions(){
   const rows=state.data?.decisions||[], counts={critical:0,high:0,medium:0,low:0}; rows.forEach(x=>counts[x.priority]=(counts[x.priority]||0)+1);
   if($('decision-summary')) $('decision-summary').innerHTML=`<div><span>Критично</span><strong>${counts.critical}</strong></div><div><span>Высокий приоритет</span><strong>${counts.high}</strong></div><div><span>Средний</span><strong>${counts.medium}</strong></div><div><span>Всего решений</span><strong>${rows.length}</strong></div>`;
   if(!$('decision-grid')) return;
-  $('decision-grid').innerHTML=rows.length?rows.map(d=>{
+  const visible=state.decisionFilter==='all'?rows:rows.filter(d=>['critical','high'].includes(d.priority));
+  const toolbar=`<div class="decision-toolbar"><div><strong>Сначала решения, требующие действия</strong><span>критично ${num(counts.critical)} · высокий ${num(counts.high)} · средний ${num(counts.medium)}</span></div><div class="segmented"><button type="button" data-decision-filter="priority" class="${state.decisionFilter==='priority'?'active':''}">Критично + высокий (${num(counts.critical+counts.high)})</button><button type="button" data-decision-filter="all" class="${state.decisionFilter==='all'?'active':''}">Все (${num(rows.length)})</button></div></div>`;
+  $('decision-grid').innerHTML=toolbar+(visible.length?visible.map(d=>{
     const acts=(d.recommended_actions||[]).map((a,i)=>`<div class="decision-action"><b>${i+1}</b><span>${esc(humanizeText(a.action))}</span></div>`).join('');
     const ev=(d.evidence||[]).map(x=>`<li><strong>${esc(x.metric)}</strong>: ${esc(humanizeText(x.value))} <span class="muted">${esc(x.source)} ${x.note?`· ${esc(humanizeText(x.note))}`:''}</span></li>`).join('');
-    const blockers=(d.blockers||[]).map(x=>`<li>${esc(x)}</li>`).join('');
+    const blockers=(d.blockers||[]).map(x=>`<li>${esc(humanizeText(x))}</li>`).join('');
     const pri=d.priority==='critical'?'КРИТИЧНО':d.priority==='high'?'ВЫСОКИЙ':d.priority==='medium'?'СРЕДНИЙ':'НИЗКИЙ';
     const entity=entityName(d.entity_id), meta=entityMeta(d.entity_id);
     return `<article class="decision-card ${esc(d.priority)} interactive-card" tabindex="0" data-decision-key="${esc(d.decision_key)}"><div class="decision-head"><div><small>${esc(scopeName(d.scope))} · ${esc(entity)}${meta?` · ${meta}`:''}</small><h3>${esc(humanizeText(d.title))}</h3></div><span class="confidence">${pri} · ${esc(d.confidence==='high'?'высокая уверенность':d.confidence==='medium'?'средняя уверенность':'низкая уверенность')}</span></div><p class="decision-diagnosis">${esc(humanizeText(d.diagnosis))}</p>${blockers?`<div class="decision-blockers"><strong>Почему решение ограничено</strong><ul>${blockers}</ul></div>`:''}<div class="decision-actions">${acts}</div><details class="decision-evidence" onclick="event.stopPropagation()"><summary>Факты · ${d.evidence?.length||0}</summary><ul>${ev||'<li>Нет подтверждающих фактов</li>'}</ul></details><div class="decision-foot">Контроль результата: ${esc(humanizeText(d.follow_up||'—'))} · нажми карточку для подробностей</div></article>`;
-  }).join(''):empty('Текущих решений нет. Запусти «Проверить сейчас».');
+  }).join(''):empty('Нет решений выбранного приоритета.'));
 }
 
 function renderAdvertising(){
@@ -702,8 +704,11 @@ function renderInventory(){
   };
   const counts={critical:0,low:0,overstock:0,normal:0,unknown:0};
   verifiedRows.forEach(r=>counts[classify(r)]++);
-  const attention=verifiedRows.filter(r=>['critical','low','overstock'].includes(classify(r)));
-  const visible=(state.inventoryFilter==='all'?verifiedRows:attention).sort((a,b)=>{
+  const shortage=verifiedRows.filter(r=>['critical','low'].includes(classify(r)));
+  const overstockRows=verifiedRows.filter(r=>classify(r)==='overstock');
+  const attention=[...shortage,...overstockRows];
+  const sourceRows=state.inventoryFilter==='all'?verifiedRows:state.inventoryFilter==='overstock'?overstockRows:shortage;
+  const visible=sourceRows.sort((a,b)=>{
     const rank={critical:0,low:1,overstock:2,normal:3,unknown:4};
     const ca=classify(a), cb=classify(b);
     if(rank[ca]!==rank[cb]) return rank[ca]-rank[cb];
@@ -711,7 +716,7 @@ function renderInventory(){
     return ca==='overstock' ? db-da : da-db;
   });
 
-  let inventoryHtml=`<div class="inventory-toolbar"><div><strong>Требуют внимания: ${num(attention.length)}</strong><span>дефицит ${num(counts.critical)} · низкий запас ${num(counts.low)} · избыток ${num(counts.overstock)} · норма ${num(counts.normal)}</span></div><div class="segmented"><button type="button" data-inventory-filter="attention" class="${state.inventoryFilter==='attention'?'active':''}">Требуют внимания</button><button type="button" data-inventory-filter="all" class="${state.inventoryFilter==='all'?'active':''}">Все товары (${num(verifiedRows.length)})</button></div></div>`;
+  let inventoryHtml=`<div class="inventory-toolbar"><div><strong>Требуют внимания: ${num(attention.length)}</strong><span>дефицит ${num(counts.critical)} · низкий запас ${num(counts.low)} · избыток ${num(counts.overstock)} · норма ${num(counts.normal)}</span></div><div class="segmented"><button type="button" data-inventory-filter="shortage" class="${state.inventoryFilter==='shortage'?'active':''}">Дефицит / низкий (${num(shortage.length)})</button><button type="button" data-inventory-filter="overstock" class="${state.inventoryFilter==='overstock'?'active':''}">Избыток (${num(overstockRows.length)})</button><button type="button" data-inventory-filter="all" class="${state.inventoryFilter==='all'?'active':''}">Все (${num(verifiedRows.length)})</button></div></div>`;
   if(unverifiedCount){
     inventoryHtml+=`<div class="inventory-source-warning"><strong>Не показываю неподтверждённые остатки как реальные</strong><p>${num(unverifiedCount)} SKU не удалось сопоставить с текущей «Сводной» / FBS. Они скрыты из расчёта дефицита, чтобы не создавать ложные тревоги.</p><small>Нужно проверить строку товара/артикул продавца в «Сводной». Остальные карточки считаются по живым данным.</small></div>`;
   }
@@ -725,7 +730,7 @@ function renderInventory(){
       return `<button type="button" class="inventory-item ${cls} interactive-card" data-entity-id="${esc(id)}"><div class="inventory-top"><div><strong>${esc(entityName(id))}</strong><small>${entityMeta(id)}</small></div><span class="status-tag ${tag[0]}">${tag[1]}</span></div><div class="inventory-days">${Number.isFinite(days)?`${num(days,1)} дня`:'Нет данных о темпе'}</div><div class="inventory-meta">Остаток ${num(r.stock)} · темп ${num(r.daily_sales,1)}/день · ${esc(r.stock_source||'источник остатка не указан')}${r.velocity_source?` · темп: ${esc(r.velocity_source)}`:''}</div><div class="cover-bar"><i style="width:${width}%"></i></div></button>`;
     }).join('');
   }else{
-    inventoryHtml+=empty(state.inventoryFilter==='attention'?'Нет подтверждённых дефицитов, низкого или избыточного запаса.':'Нет данных по покрытию остатками.');
+    inventoryHtml+=empty(state.inventoryFilter==='shortage'?'Нет подтверждённых дефицитов или низкого запаса.':state.inventoryFilter==='overstock'?'Нет подтверждённого избыточного запаса.':'Нет данных по покрытию остатками.');
   }
   $('inventory-grid').innerHTML=inventoryHtml;
   const acc=extractList(snap('supply','acceptance')?.data); $('acceptance-list').innerHTML=acc.length?acc.slice(0,8).map(x=>{const coef=missing(x.coefficient)?null:Number(x.coefficient); return `<div class="signal ${Number.isFinite(coef)&&coef<=1?'info':'warning'}"><strong>${esc(x.warehouseName||x.warehouse_name||'Склад')}</strong><p>Коэффициент приёмки: ${Number.isFinite(coef)?num(coef,0):'—'} · разгрузка ${x.allowUnload===false?'недоступна':'доступна'}</p><span class="source">Источник: коэффициенты приёмки WB</span></div>`;}).join(''):empty('Нет данных по коэффициентам приёмки.');
@@ -824,7 +829,9 @@ if($('apply-period')) $('apply-period').addEventListener('click',async()=>{
 document.addEventListener('click',e=>{
   if(e.target.closest('[data-close-detail]')){ closeDetail(); return; }
   const invFilter=e.target.closest('[data-inventory-filter]');
-  if(invFilter){ state.inventoryFilter=invFilter.dataset.inventoryFilter||'attention'; renderInventory(); return; }
+  if(invFilter){ state.inventoryFilter=invFilter.dataset.inventoryFilter||'shortage'; renderInventory(); return; }
+  const decisionFilter=e.target.closest('[data-decision-filter]');
+  if(decisionFilter){ state.decisionFilter=decisionFilter.dataset.decisionFilter||'priority'; renderDecisions(); return; }
   const go=e.target.closest('[data-go-page]'); if(go){ setPage(go.dataset.goPage); return; }
   const decisionEl=e.target.closest('[data-decision-key]');
   if(decisionEl){
