@@ -185,39 +185,56 @@ function renderRecommendations(){
 function eventsForAgents(list){ return (state.data.events||[]).filter(e=>list.includes(e.agent)&&['critical','warning'].includes(e.severity)); }
 function renderDomains(){
   const symbols={'Реклама':'AD','Остатки':'ST','Поиск':'SR','Карточки':'CD','Финансы':'₽','Клиенты':'CX'};
-  $('domain-grid').innerHTML=Object.entries(domainAgents).map(([name,agents])=>{ const es=eventsForAgents(agents), c=es.filter(e=>e.severity==='critical').length,w=es.filter(e=>e.severity==='warning').length, cls=c?'critical':w?'warn':''; const note=c?`${c} критич. · ${w} предупр.`:w?`${w} предупреждений`:'Штатно'; return `<div class="domain ${cls}"><div class="domain-top"><div class="domain-icon">${symbols[name]}</div><span class="dot"></span></div><strong>${name}</strong><span>${note}</span></div>`; }).join('');
+  const pages={'Реклама':'advertising','Остатки':'inventory','Поиск':'search','Карточки':'search','Финансы':'finance','Клиенты':'customers'};
+  $('domain-grid').innerHTML=Object.entries(domainAgents).map(([name,agents])=>{
+    const es=eventsForAgents(agents), c=es.filter(e=>e.severity==='critical').length,w=es.filter(e=>e.severity==='warning').length, cls=c?'critical':w?'warn':'';
+    const note=c?`${c} критич. · ${w} предупр.`:w?`${w} предупреждений`:'Штатно';
+    return `<button type="button" class="domain ${cls} interactive-card" data-go-page="${pages[name]}"><div class="domain-top"><div class="domain-icon">${symbols[name]}</div><span class="dot"></span></div><strong>${name}</strong><span>${note}</span><small>Открыть раздел</small></button>`;
+  }).join('');
 }
 
-function pf(){ return state.data?.portfolio || {}; }
-function sourceHealthClass(status){ return status==='fresh'?'fresh':status==='broken'?'broken':'stale'; }
 function renderPortfolio(){
-  const p=pf(), all=p.portfolio||{};
-  if($('portfolio-origin')) $('portfolio-origin').textContent=p.data_origin==='google_sheets_bridge'?'ЖИВЫЕ ТАБЛИЦЫ':'СОХРАНЁННЫЙ СРЕЗ';
-  if($('portfolio-period')) $('portfolio-period').textContent=p.period||'—';
-  if($('pf-orders')) $('pf-orders').textContent=rub(all.orders_rub);
-  if($('pf-buyouts')) $('pf-buyouts').textContent=rub(all.buyouts_rub);
-  if($('pf-profit')) $('pf-profit').textContent=rub(all.profit_rub);
-  if($('pf-margin')) $('pf-margin').textContent=pct(all.margin_pct);
-  if($('pf-roi')) $('pf-roi').textContent=`ROI ${pct(all.roi_pct)}`;
-  if($('pf-ads')) $('pf-ads').textContent=rub(all.ad_spend_rub);
-  if($('pf-drr')) $('pf-drr').textContent=`ДРР ${pct(all.drr_pct)}`;
-  if($('pf-orders-change')) $('pf-orders-change').textContent=Number.isFinite(Number(all.orders_change_pct))?`${Number(all.orders_change_pct)>=0?'+':''}${pct(all.orders_change_pct)} к прошлому периоду`:'—';
-  if($('pf-profit-change')) $('pf-profit-change').textContent=Number.isFinite(Number(all.profit_change_pct))?`${Number(all.profit_change_pct)>=0?'+':''}${pct(all.profit_change_pct)} к прошлому периоду`:'—';
+  const p=pf(), all=p.portfolio||{}, current=!!p.current_data;
+  if($('portfolio-origin')) $('portfolio-origin').textContent=current?'ЖИВЫЕ ДАННЫЕ':'АРХИВНЫЙ СРЕЗ';
+  if($('portfolio-period')) $('portfolio-period').textContent=p.period||'период не указан';
+  const truth=$('portfolio-truth-banner');
+  if(truth){
+    truth.classList.toggle('hidden',current);
+    truth.innerHTML=current?'':`<strong>Это не текущие показатели.</strong><span>${esc(p.stale_reason||'Показан последний сохранённый срез. Он не участвует в текущих денежных решениях.')}</span><small>Период архива: ${esc(p.period||'—')}</small>`;
+  }
+  if($('pf-orders')) $('pf-orders').textContent=current?rub(all.orders_rub):'—';
+  if($('pf-buyouts')) $('pf-buyouts').textContent=current?rub(all.buyouts_rub):'—';
+  if($('pf-profit')) $('pf-profit').textContent=current?rub(all.profit_rub):'—';
+  if($('pf-margin')) $('pf-margin').textContent=current?pct(all.margin_pct):'—';
+  if($('pf-roi')) $('pf-roi').textContent=current?`ROI ${pct(all.roi_pct)}`:'Нет свежих данных';
+  if($('pf-ads')) $('pf-ads').textContent=current?rub(all.ad_spend_rub):'—';
+  if($('pf-drr')) $('pf-drr').textContent=current?`ДРР ${pct(all.drr_pct)}`:'Нет свежих данных';
+  if($('pf-orders-change')) $('pf-orders-change').textContent=current&&Number.isFinite(Number(all.orders_change_pct))?`${Number(all.orders_change_pct)>=0?'+':''}${pct(all.orders_change_pct)} к прошлому периоду`:'—';
+  if($('pf-profit-change')) $('pf-profit-change').textContent=current&&Number.isFinite(Number(all.profit_change_pct))?`${Number(all.profit_change_pct)>=0?'+':''}${pct(all.profit_change_pct)} к прошлому периоду`:'—';
+
   const stores=p.stores||[];
   if($('stores-grid')) $('stores-grid').innerHTML=stores.length?stores.map(x=>{
-    const cls=x.status==='critical'?'critical':x.status==='watch'?'watch':'';
-    const badge=x.status==='critical'?['bad','Требует внимания']:x.status==='watch'?['warn','Наблюдать']:['ok','Штатно'];
-    return `<div class="store-portfolio-card ${cls}"><div class="store-card-head"><div><strong>${esc(x.name)}</strong><div class="store-source">${esc(x.source||'')}</div></div><span class="status-tag ${badge[0]}">${badge[1]}</span></div><div class="store-stat-grid"><div class="store-stat"><span>Заказы</span><b>${rub(x.orders_rub)}</b></div><div class="store-stat"><span>Выкупы</span><b>${rub(x.buyouts_rub)}</b></div><div class="store-stat"><span>Прибыль</span><b>${rub(x.profit_rub)}</b></div><div class="store-stat"><span>Маржа / ROI</span><b>${pct(x.margin_pct)} · ${pct(x.roi_pct)}</b></div><div class="store-stat"><span>Реклама</span><b>${rub(x.ad_spend_rub)}</b></div><div class="store-stat"><span>ДРР</span><b>${pct(x.drr_pct)}</b></div></div><p class="store-note">Срез: ${esc(x.freshness||'—')}. ${esc(x.note||'')}</p></div>`;
+    const cls=current?(x.status==='critical'?'critical':x.status==='watch'?'watch':''):'';
+    const badge=current?(x.status==='critical'?['bad','Требует внимания']:x.status==='watch'?['warn','Наблюдать']:['ok','Штатно']):['neutral','АРХИВ'];
+    return `<div class="store-portfolio-card ${cls}"><div class="store-card-head"><div><strong>${esc(x.name)}</strong><div class="store-source">${esc(x.source||'')}</div></div><span class="status-tag ${badge[0]}">${badge[1]}</span></div><div class="store-stat-grid"><div class="store-stat"><span>Заказы</span><b>${rub(x.orders_rub)}</b></div><div class="store-stat"><span>Выкупы</span><b>${rub(x.buyouts_rub)}</b></div><div class="store-stat"><span>Прибыль</span><b>${rub(x.profit_rub)}</b></div><div class="store-stat"><span>Маржа / ROI</span><b>${pct(x.margin_pct)} · ${pct(x.roi_pct)}</b></div><div class="store-stat"><span>Реклама</span><b>${rub(x.ad_spend_rub)}</b></div><div class="store-stat"><span>ДРР</span><b>${pct(x.drr_pct)}</b></div></div><p class="store-note">${current?'Срез':'Архив'}: ${esc(x.freshness||p.period||'—')}. ${esc(x.note||'')}</p></div>`;
   }).join(''):empty('Нет портфельных фактов.');
+
+  if(!current){
+    if($('own27-grid')) $('own27-grid').innerHTML=empty('Живой операционный срез не подключён. Архивные остатки и экономика не показываются как текущие.');
+    if($('unit-alerts')) $('unit-alerts').innerHTML=empty('Архивная юнит-экономика исключена из текущих решений.');
+    if($('ff-grid')) $('ff-grid').innerHTML=empty('Архивный снимок фулфилмента скрыт из текущего режима.');
+    if($('ff-snapshot-date')) $('ff-snapshot-date').textContent='нет свежего снимка';
+    return;
+  }
 
   const o=p.own_27||{};
   const facts=[['Заказы, ₽',rub(o.orders_rub)],['Заказы, шт',num(o.orders_qty)],['Продажи, шт',num(o.sales_qty)],['Остатки ФФ',num(o.ff_stock)],['WB FBS',num(o.wb_fbs_stock)],['Ozon FBS',num(o.ozon_fbs_stock)],['В пути к клиенту',num(o.in_way_to_client)],['FBS долг заказов',num(o.fbs_debt_orders)],['FBW',num(o.fbw_stock)]];
   if($('own27-grid')) $('own27-grid').innerHTML=facts.map(([a,b])=>`<div class="fact-box"><span>${a}</span><strong>${b}</strong></div>`).join('');
   const econ=(o.economy_examples||[]).filter(x=>Number(x.margin_pct)<0 || Number(x.profit_rub)<0).slice(0,6);
-  if($('unit-alerts')) $('unit-alerts').innerHTML=econ.length?econ.map(x=>`<div class="signal warning"><strong>${esc(x.name)} · ${esc(x.sku)}</strong><p>Прибыль ${rub(x.profit_rub)} · маржа ${pct(x.margin_pct)} · ROI ${pct(x.roi_pct)} · ДРР ${pct(x.drr_pct)}</p><span class="source">Источник: Юнитка / 27</span></div>`).join(''):empty('В загруженном срезе отрицательных примеров экономики не найдено.');
+  if($('unit-alerts')) $('unit-alerts').innerHTML=econ.length?econ.map(x=>`<button type="button" class="signal warning interactive-card" data-entity-id="${esc(x.sku)}"><strong>${esc(x.name||entityName(x.sku))}</strong><p>Прибыль ${rub(x.profit_rub)} · маржа ${pct(x.margin_pct)} · ROI ${pct(x.roi_pct)} · ДРР ${pct(x.drr_pct)}</p><span class="source">Открыть товар · nmID ${esc(x.sku)}</span></button>`).join(''):empty('В свежем срезе отрицательных примеров экономики не найдено.');
   if($('ff-snapshot-date')) $('ff-snapshot-date').textContent=o.ff_snapshot_date?`снимок ${o.ff_snapshot_date}`:'—';
-  const ff=(o.ff_examples||[]).slice(0,12);
-  if($('ff-grid')) $('ff-grid').innerHTML=ff.length?ff.map(x=>`<div class="mini-row"><div><b>${esc(x.name)}</b><br><span>${esc(x.sku)}</span></div><strong>${num(x.available)} шт</strong></div>`).join(''):empty('Нет фактов ФФ.');
+  const ff=(o.ff_examples||[]).slice(0,30);
+  if($('ff-grid')) $('ff-grid').innerHTML=ff.length?ff.map(x=>`<div class="mini-row"><div><b>${esc(x.name)}</b><br><span>Учётный артикул ${esc(x.sku)}</span></div><strong>${num(x.available)} шт</strong></div>`).join(''):empty('Нет свежих фактов по фулфилменту.');
 }
 
 function renderConnections(){
@@ -248,16 +265,16 @@ function renderDecisions(){
   const rows=state.data?.decisions||[], counts={critical:0,high:0,medium:0,low:0}; rows.forEach(x=>counts[x.priority]=(counts[x.priority]||0)+1);
   if($('decision-summary')) $('decision-summary').innerHTML=`<div><span>Критично</span><strong>${counts.critical}</strong></div><div><span>Высокий приоритет</span><strong>${counts.high}</strong></div><div><span>Средний</span><strong>${counts.medium}</strong></div><div><span>Всего решений</span><strong>${rows.length}</strong></div>`;
   if(!$('decision-grid')) return;
-  $('decision-grid').innerHTML=rows.length?rows.map(d=>{ const acts=(d.recommended_actions||[]).map((a,i)=>`<div class="decision-action"><b>${i+1}</b><span>${esc(a.action)}</span></div>`).join(''); const ev=(d.evidence||[]).map(x=>`<li><strong>${esc(x.metric)}</strong>: ${esc(x.value)} <span class="muted">${esc(x.source)} ${x.note?`· ${esc(x.note)}`:''}</span></li>`).join(''); const blockers=(d.blockers||[]).map(x=>`<li>${esc(x)}</li>`).join(''); const pri=d.priority==='critical'?'КРИТИЧНО':d.priority==='high'?'ВЫСОКИЙ':d.priority==='medium'?'СРЕДНИЙ':'НИЗКИЙ'; return `<article class="decision-card ${esc(d.priority)}"><div class="decision-head"><div><small>${esc(scopeName(d.scope))} · ${esc(d.entity_id)}</small><h3>${esc(d.title)}</h3></div><span class="confidence">${pri} · ${esc(d.confidence)}</span></div><p class="decision-diagnosis">${esc(d.diagnosis)}</p>${blockers?`<div class="decision-blockers"><strong>Чего не хватает для безопасного решения</strong><ul>${blockers}</ul></div>`:''}<div class="decision-actions">${acts}</div><details class="decision-evidence"><summary>Почему так · ${d.evidence?.length||0} фактов</summary><ul>${ev||'<li>Нет evidence</li>'}</ul></details><div class="decision-foot">Контроль: ${esc(d.follow_up||'—')}</div></article>`; }).join(''):empty('Решений пока нет. Запусти «Проверить сейчас».');
+  $('decision-grid').innerHTML=rows.length?rows.map(d=>{
+    const acts=(d.recommended_actions||[]).map((a,i)=>`<div class="decision-action"><b>${i+1}</b><span>${esc(a.action)}</span></div>`).join('');
+    const ev=(d.evidence||[]).map(x=>`<li><strong>${esc(x.metric)}</strong>: ${esc(x.value)} <span class="muted">${esc(x.source)} ${x.note?`· ${esc(x.note)}`:''}</span></li>`).join('');
+    const blockers=(d.blockers||[]).map(x=>`<li>${esc(x)}</li>`).join('');
+    const pri=d.priority==='critical'?'КРИТИЧНО':d.priority==='high'?'ВЫСОКИЙ':d.priority==='medium'?'СРЕДНИЙ':'НИЗКИЙ';
+    const entity=entityName(d.entity_id), meta=entityMeta(d.entity_id);
+    return `<article class="decision-card ${esc(d.priority)} interactive-card" tabindex="0" data-decision-key="${esc(d.decision_key)}"><div class="decision-head"><div><small>${esc(scopeName(d.scope))} · ${esc(entity)}${meta?` · ${meta}`:''}</small><h3>${esc(d.title)}</h3></div><span class="confidence">${pri} · ${esc(d.confidence==='high'?'высокая уверенность':d.confidence==='medium'?'средняя уверенность':'низкая уверенность')}</span></div><p class="decision-diagnosis">${esc(d.diagnosis)}</p>${blockers?`<div class="decision-blockers"><strong>Почему решение ограничено</strong><ul>${blockers}</ul></div>`:''}<div class="decision-actions">${acts}</div><details class="decision-evidence" onclick="event.stopPropagation()"><summary>Факты · ${d.evidence?.length||0}</summary><ul>${ev||'<li>Нет подтверждающих фактов</li>'}</ul></details><div class="decision-foot">Контроль результата: ${esc(d.follow_up||'—')} · нажми карточку для подробностей</div></article>`;
+  }).join(''):empty('Текущих решений нет. Запусти «Проверить сейчас».');
 }
-async function refreshDecisions(){ const b=$('refresh-decisions'); if(b)b.disabled=true; try{ const r=await fetch('/api/decisions/refresh',{method:'POST'}); if(!r.ok) throw new Error(`HTTP ${r.status}`); await fetchData(); showToast('Решения пересчитаны по всем доступным контурам.','success'); }catch(e){ showToast(`Не удалось пересчитать: ${e.message}`,'error'); }finally{ if(b)b.disabled=false; } }
 
-function adSummary(){
-  const s=snap('advertising_monitor','stats_7d')?.data; const rows=extractList(s); let spend=0,orders=0,revenue=0,views=0,clicks=0;
-  for(const r of rows){ spend+=Number(r.sum??r.spend??r.cost??0)||0; orders+=Number(r.orders??r.ordersCount??0)||0; revenue+=Number(r.sum_price??r.revenue??r.sales??0)||0; views+=Number(r.views??r.impressions??0)||0; clicks+=Number(r.clicks??0)||0; }
-  return {rows,spend,orders,revenue,drr:revenue>0?spend/revenue*100:null,ctr:views>0?clicks/views*100:null};
-}
-function campaignNames(){ const c=extractList(snap('advertising_monitor','active_campaigns')?.data); const m={}; c.forEach(x=>{ const id=x.advertId??x.advert_id??x.id; if(id!=null)m[String(id)]=x.name||`Кампания #${id}`; }); return m; }
 function renderAdvertising(){
   const a=adSummary(), names=campaignNames(); $('ads-spend').textContent=rub(a.spend); $('ads-orders').textContent=num(a.orders); $('ads-drr').textContent=pct(a.drr); $('ads-ctr').textContent=pct(a.ctr); const snapObj=snap('advertising_monitor','stats_7d'); $('ads-updated').textContent=snapObj?`обновлено ${ago(snapObj.created_at)}`:'нет данных';
   $('ads-table').innerHTML=a.rows.length?a.rows.map(r=>{ const id=r.advertId??r.advert_id??r.id; const sp=Number(r.sum??r.spend??0)||0, or=Number(r.orders??r.ordersCount??0)||0, rev=Number(r.sum_price??r.revenue??0)||0, drr=rev>0?sp/rev*100:null, ctr=Number(r.ctr), cpc=Number(r.cpc); let st='ok',tx='Штатно'; if(or===0&&sp>=1500){st='bad';tx='Расход без заказов';} else if(drr!=null&&drr>=20){st='bad';tx='Критичный ДРР';} else if(drr!=null&&drr>=12){st='warn';tx='Повышенный ДРР';} return `<tr><td><strong>${esc(names[String(id)]||`Кампания #${id??'—'}`)}</strong><br><span class="muted">ID ${esc(id??'—')}</span></td><td>${rub(sp)}</td><td>${num(or)}</td><td>${rub(rev)}</td><td>${pct(drr)}</td><td>${Number.isFinite(ctr)?pct(ctr):'—'}</td><td>${Number.isFinite(cpc)?rub(cpc):'—'}</td><td><span class="status-tag ${st}">${tx}</span></td></tr>`; }).join(''):`<tr><td colspan="8">${empty('Нет рекламных данных. Запусти проверку.')}</td></tr>`;
