@@ -29,7 +29,7 @@ class CardsAgent(BaseAgent):
         # Read the actual card catalogue as a source for content completeness and
         # media-change tracking. Failure is non-fatal because some tokens omit Content.
         try:
-            cards = await self.call("wb_cards_list", limit=100)
+            cards = await self.call("wb_cards_list", limit=1000)
             out.snapshots.append(("card_catalog", cards if isinstance(cards, dict) else {"data": cards}))
         except Exception as e:
             out.events.append(self.event("info", "card_catalog_unavailable", "Каталог карточек недоступен для контент-аудита", str(e)))
