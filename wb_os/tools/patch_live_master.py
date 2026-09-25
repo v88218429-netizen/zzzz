@@ -732,6 +732,55 @@ if old_ready in new_text:
 # the deploy. The hard safety property is that the master does not gate K2 on
 # getMasterConfigurationState_().k2Ready anymore.
 
+
+# Step 3b: make the daily FF snapshot self-healing after 12:00 Moscow time.
+# If today's snapshot is missing, every later master cycle keeps historyDue=true
+# until a fresh K2+Ivanovo snapshot is successfully written.
+history_due_pattern = re.compile(
+    r"function\s+shouldTakeDailyStockSnapshot_\s*\(\)\s*\{.*?\n\}",
+    re.S,
+)
+history_due_replacement = """function shouldTakeDailyStockSnapshot_() {
+  /* WB_OS_HISTORY_SELF_HEAL_V2 */
+  var props = PropertiesService.getScriptProperties();
+  var now = new Date();
+  var tz = 'Europe/Moscow';
+  var hour = Number(Utilities.formatDate(now, tz, 'H'));
+
+  if (hour < 12) {
+    return false;
+  }
+
+  var today = Utilities.formatDate(now, tz, 'yyyy-MM-dd');
+  var lastRaw = String(k2EvolutionHistoryLastAt_(props) || '').trim();
+
+  if (!lastRaw) {
+    return true;
+  }
+
+  var lastDate = new Date(lastRaw);
+
+  if (isNaN(lastDate.getTime())) {
+    return true;
+  }
+
+  var lastDay = Utilities.formatDate(lastDate, tz, 'yyyy-MM-dd');
+  return lastDay !== today;
+}"""
+
+if "WB_OS_HISTORY_SELF_HEAL_V2" not in new_text:
+    new_text, count = history_due_pattern.subn(
+        history_due_replacement,
+        new_text,
+        count=1,
+    )
+
+    if count != 1:
+        raise SystemExit(
+            "PATCH_FAIL: shouldTakeDailyStockSnapshot_ not found exactly once"
+        )
+
+
 # Step 4: independently migrate history heartbeat self-healing.
 old_history = "buildAutomationStatusRow_('История остатков', props.getProperty('FF_STOCK_HISTORY_LAST_AT'), 1560)"
 new_history = "buildAutomationStatusRow_('История остатков', k2EvolutionHistoryLastAt_(props), 1560)"
@@ -765,6 +814,7 @@ required = [
     "MASTER_RUN_GUARD_DOCUMENT_LOCK",
     "K2_EV_LAST_RUN_AT",
     "K2_EV_CUTOVER_DONE",
+    "WB_OS_HISTORY_SELF_HEAL_V2",
     "historyK2Fresh = true;",
     "historyIvanovoFresh = true;",
     "if (historyDue && historyK2Fresh && historyIvanovoFresh) {",
