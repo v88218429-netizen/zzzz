@@ -1,0 +1,39 @@
+name: WB AI Manager period inspect
+on:
+  push:
+    branches: [mainggg]
+    paths: [".github/workflows/wb-ai-manager-period-inspect.yml"]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Inspect period audit
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, urllib.request
+          base="https://wb-ai-manager-live-production.up.railway.app"
+          path="/api/dashboard-data?from_date=2026-09-22&to_date=2026-09-24"
+          req=urllib.request.Request(base+path,headers={"User-Agent":"period-inspect/1"})
+          with urllib.request.urlopen(req,timeout=45) as r:
+              d=json.load(r)
+          pa=d.get("period_audit") or {}
+          snaps=d.get("snapshots") or {}
+          scopes={}
+          for a,g in snaps.items():
+              for k,item in (g or {}).items():
+                  meta=((item or {}).get("data") or {}).get("_analysis") or {}
+                  scopes[f"{a}.{k}"]=meta.get("scope")
+          print(json.dumps({
+              "period_audit":pa,
+              "runs":d.get("runs"),
+              "snapshot_groups":sorted(snaps),
+              "scopes":scopes,
+              "events":len(d.get("events") or []),
+              "decisions":len(d.get("decisions") or []),
+              "summary":d.get("summary"),
+          },ensure_ascii=False,indent=2))
+          PY
