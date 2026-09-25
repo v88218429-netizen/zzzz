@@ -23,7 +23,7 @@ dependencies = [
   "safetensors>=0.4",
   "accelerate>=1.0",
   "transformers>=4.55",
-  "torch>=2.4",
+  "torch @ https://download.pytorch.org/whl/cpu/torch-2.5.1%2Bcpu-cp312-cp312-linux_x86_64.whl",
   "pillow>=10.4",
 ]
 
