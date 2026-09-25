@@ -221,14 +221,29 @@ function decisionDetail(d){
     <div class="detail-section"><h3>Когда проверить результат</h3><p>${esc(d.follow_up||'—')}</p></div>`;
 }
 function productDetail(id){
-  const prod=(state.data?.portfolio?.own_27?.products||[]).find(x=>String(x.sku)===String(id))||{};
+  const own=state.data?.portfolio?.own_27||{};
+  const prod=(own.products||[]).find(x=>String(x.sku)===String(id))||{};
+  const info=entityInfo(id)||{};
+  const groupName=prod.group_name||info.group_name||info.weekly_group||'';
+  const group=(own.product_groups||[]).find(x=>String(x.name)===String(groupName));
   const decisions=(state.data?.decisions||[]).filter(d=>String(d.entity_id)===String(id)).slice(0,10);
   const facts=[
-    ['Артикул продавца',entityName(id)],['nmID',id],['Цена клиенту',rub(prod.price_client_rub)],['Прибыль на единицу',rub(prod.profit_rub)],
-    ['Маржа',pct(prod.margin_pct)],['ДРР',pct(prod.drr_pct)],['Остаток',num(prod.safe_stock)],['Источник остатка',prod.safe_stock_source||'—'],
+    ['Артикул продавца WB',entityName(id)],['Товарная группа',groupName||'—'],['nmID',id],
+    ['Ozon артикул',prod.ozon_seller_article||info.ozon_seller_article||'—'],['Ozon SKU',prod.ozon_sku||info.ozon_sku||'—'],
+    ['Цена клиенту',rub(prod.price_client_rub)],['Прибыль на единицу',rub(prod.profit_rub)],
+    ['Маржа',pct(prod.margin_pct)],['ДРР',pct(prod.drr_pct)],['Остаток',num(prod.safe_stock)],['Источник остатка',prod.safe_stock_source||info.stock_source||'—'],
     ['Заказов в день',num(prod.orders_per_day,1)],['Заказы, ₽',rub(prod.orders_rub)]
   ];
-  let body=`<div class="detail-section"><h3>Факты по товару</h3><div class="detail-facts">${facts.map(([k,v])=>`<div><span>${esc(k)}</span><strong>${esc(v)}</strong></div>`).join('')}</div></div>`;
+  let body=`<div class="detail-section"><h3>Карточка и физический товар</h3><div class="detail-facts">${facts.map(([k,v])=>`<div><span>${esc(k)}</span><strong>${esc(v)}</strong></div>`).join('')}</div></div>`;
+  if(group?.variants?.length){
+    const ozonBySku=Object.fromEntries((own.ozon_products||[]).map(x=>[String(x.sku),x]));
+    body+=`<div class="detail-section"><h3>Все карточки этой товарной группы</h3><div class="detail-table">${group.variants.map(v=>{
+      const oz=ozonBySku[String(v.id)]||{};
+      const platform=v.platform||'—';
+      const stock=platform.startsWith('Ozon')&&!missing(oz.stock)?` · остаток ${num(oz.stock)}`:'';
+      return `<div class="detail-row"><b>${esc(platform)} · ${esc(v.article||'без артикула')}</b><span>ID ${esc(v.id||'—')}${stock}</span></div>`;
+    }).join('')}</div></div>`;
+  }
   if(decisions.length) body+=`<div class="detail-section"><h3>Текущие решения</h3>${decisions.map(d=>`<button class="detail-link" data-decision-key="${esc(d.decision_key)}">${esc(d.title)}</button>`).join('')}</div>`;
   return body;
 }
