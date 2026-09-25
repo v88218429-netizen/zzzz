@@ -210,6 +210,10 @@ h1 { margin: 0; font-size: 24px; letter-spacing: -.035em; line-height: 1.05; }
 .rule strong { display: block; font-size: 10.5px; margin-top: 8px; }
 .rule span { display: block; color: var(--muted); font-size: 8.8px; line-height: 1.45; margin-top: 5px; }
 .inventory-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 9px; }
+.inventory-source-warning { grid-column: 1 / -1; border: 1px solid #f0d6a7; background: #fffaf0; border-radius: 12px; padding: 13px 14px; }
+.inventory-source-warning strong { display: block; font-size: 10.5px; color: #805816; margin-bottom: 5px; }
+.inventory-source-warning p { margin: 0; color: #786a51; font-size: 9px; line-height: 1.5; }
+.inventory-source-warning small { display: block; color: #a18d68; font-size: 8px; margin-top: 7px; }
 .inventory-item { border: 1px solid var(--border); border-radius: 12px; padding: 11px; }
 .inventory-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .inventory-top strong { font-size: 10.5px; }
