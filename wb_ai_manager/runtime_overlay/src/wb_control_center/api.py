@@ -150,7 +150,7 @@ async def reject(action_id: int):
 
 SNAPSHOT_SPEC: dict[str, list[str]] = {
     "api_health": ["shops", "token_info", "degradations", "worker_source_health"],
-    "cards": ["card_errors", "banned_products", "price_quarantine"],
+    "cards": ["card_errors", "banned_products", "price_quarantine", "card_catalog"],
     "advertising_monitor": ["active_campaigns", "stats_7d"],
     "inventory": ["coverage"],
     "supply": ["acceptance"],
@@ -209,8 +209,54 @@ def _dashboard_period(days: int = 7, from_date: str | None = None, to_date: str 
     }
 
 
-def _entity_map(portfolio_snapshot: dict[str, Any]) -> dict[str, dict[str, Any]]:
+def _entity_map(portfolio_snapshot: dict[str, Any], snapshots: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Canonical UI identity map.
+
+    Product identity is not a financial fact, so a live WB card catalogue is the
+    authoritative source for nmID -> seller article. Trusted tables may enrich/fill
+    missing identity fields, but historical economics never overrides a live card.
+    """
     out: dict[str, dict[str, Any]] = {}
+
+    def walk(value: Any):
+        if isinstance(value, dict):
+            yield value
+            for child in value.values():
+                yield from walk(child)
+        elif isinstance(value, list):
+            for child in value:
+                yield from walk(child)
+
+    card_snapshot = snapshots.get("cards", {}).get("card_catalog", {})
+    card_data = card_snapshot.get("data") if isinstance(card_snapshot, dict) else card_snapshot
+    for row in walk(card_data):
+        nm = row.get("nmID", row.get("nmId", row.get("nm_id")))
+        try:
+            nm_s = str(int(nm)) if nm is not None else ""
+        except (TypeError, ValueError):
+            nm_s = str(nm or "").strip()
+        if not nm_s or not nm_s.isdigit():
+            continue
+        article = str(
+            row.get("vendorCode")
+            or row.get("vendor_code")
+            or row.get("supplierArticle")
+            or row.get("supplier_article")
+            or ""
+        ).strip()
+        title = str(row.get("title") or row.get("name") or "").strip()
+        if not article and not title:
+            continue
+        prev = out.get(nm_s) or {}
+        out[nm_s] = {
+            "nm_id": nm_s,
+            "seller_article": article or prev.get("seller_article"),
+            "display": article or title or prev.get("display") or f"Товар WB {nm_s}",
+            "title": title or prev.get("title"),
+            "source": "live_wb_cards",
+            "source_at": card_snapshot.get("created_at") if isinstance(card_snapshot, dict) else None,
+        }
+
     own = portfolio_snapshot.get("own_27") or {}
     for row in own.get("products") or []:
         if not isinstance(row, dict):
@@ -219,12 +265,16 @@ def _entity_map(portfolio_snapshot: dict[str, Any]) -> dict[str, dict[str, Any]]
         article = str(row.get("name") or "").strip()
         if not nm:
             continue
+        prev = out.get(nm) or {}
         out[nm] = {
             "nm_id": nm,
-            "seller_article": article or None,
-            "display": article or f"Товар WB {nm}",
+            "seller_article": prev.get("seller_article") or article or None,
+            "display": prev.get("display") or article or f"Товар WB {nm}",
+            "title": prev.get("title"),
             "cabinet": row.get("cabinet"),
             "weekly_group": row.get("weekly_group"),
+            "source": prev.get("source") or "portfolio_identity_fallback",
+            "source_at": prev.get("source_at"),
         }
     return out
 
@@ -256,7 +306,7 @@ async def dashboard_data(days: int = 7, from_date: str | None = None, to_date: s
     last_run_at = max((str(r["finished_at"]) for r in completed_runs), default=None)
     runtime_policy = await asyncio.to_thread(center.runtime_policy.get)
     portfolio_snapshot = portfolio.snapshot()
-    entity_map = _entity_map(portfolio_snapshot)
+    entity_map = _entity_map(portfolio_snapshot, snapshots)
     return {
         "health": _health_payload(),
         "store": {"name": _store_name(snapshots), "mode": settings.wb_mode},
