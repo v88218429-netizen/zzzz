@@ -56,28 +56,37 @@ class AdvertisingMonitorAgent(BaseAgent):
         cfg = self.ctx.policy.thresholds.get("advertising", {})
         campaigns = await self.call("wb_advert_list", statuses=[9])
         out.snapshots.append(("active_campaigns", campaigns if isinstance(campaigns, dict) else {"data": campaigns}))
-        ids = [cid for cid in (_campaign_id(row) for row in _rows(campaigns)) if cid]
+        campaign_rows = _rows(campaigns)
+        campaign_by_id = {cid: row for row in campaign_rows if (cid := _campaign_id(row))}
+        ids = sorted(campaign_by_id)
         if not ids:
             return out
         start, end = self.dates(7)
         stats = await self.call("wb_advert_stats", advert_ids=ids, date_from=start, date_to=end)
         out.snapshots.append(("stats_7d", stats if isinstance(stats, dict) else {"data": stats}))
-        rows = extract_ad_metrics(stats)
+        # Fullstats contains nested day/app/SKU rows with spend but no campaign id.
+        # Those are components of a campaign, not independent campaigns.
+        rows = [r for r in extract_ad_metrics(stats) if r.get("advert_id") is not None]
         warn = float(cfg.get("warn_drr_pct", 12))
         critical = float(cfg.get("critical_drr_pct", 20))
         min_spend = float(cfg.get("min_spend_for_drr_rub", 1000))
         zero_orders_spend = float(cfg.get("zero_orders_spend_rub", 1500))
         for r in rows:
-            aid = r.get("advert_id")
+            aid = int(r.get("advert_id"))
             spend = float(r.get("spend") or 0)
             orders = float(r.get("orders") or 0)
             drr = r.get("drr_pct")
+            campaign = campaign_by_id.get(aid) or {}
+            payload = dict(r)
+            payload["nm_ids"] = _nm_ids(campaign)
+            payload["campaign_name"] = str((campaign.get("settings") or {}).get("name") or "").strip()
+            campaign_label = payload["campaign_name"] or f"кампания {aid}"
             if spend >= zero_orders_spend and orders <= 0:
-                out.events.append(self.event("critical", f"ad_zero_orders:{aid}", f"Реклама #{aid}: расход без заказов", f"Расход около {spend:.0f} ₽, заказов 0 за анализируемый период.", r))
+                out.events.append(self.event("critical", f"ad_zero_orders:{aid}", "Расход рекламы без заказов", f"{campaign_label}: расход около {spend:.0f} ₽, заказов 0 за анализируемый период.", payload))
             if drr is not None and spend >= min_spend and float(drr) >= critical:
-                out.events.append(self.event("critical", f"ad_drr_critical:{aid}", f"Реклама #{aid}: критический ДРР", f"ДРР ≈ {float(drr):.1f}% при расходе {spend:.0f} ₽.", r))
+                out.events.append(self.event("critical", f"ad_drr_critical:{aid}", "Критический ДРР рекламы", f"{campaign_label}: ДРР ≈ {float(drr):.1f}% при расходе {spend:.0f} ₽.", payload))
             elif drr is not None and spend >= min_spend and float(drr) >= warn:
-                out.events.append(self.event("warning", f"ad_drr_warn:{aid}", f"Реклама #{aid}: повышенный ДРР", f"ДРР ≈ {float(drr):.1f}% при расходе {spend:.0f} ₽.", r))
+                out.events.append(self.event("warning", f"ad_drr_warn:{aid}", "Повышенный ДРР рекламы", f"{campaign_label}: ДРР ≈ {float(drr):.1f}% при расходе {spend:.0f} ₽.", payload))
 
         if self.ctx.llm.enabled and rows:
             text = await self.ctx.llm.complete(
