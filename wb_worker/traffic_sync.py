@@ -168,6 +168,7 @@ async def sync_once():
     status["finishedAt"] = datetime.now(ZoneInfo("Europe/Moscow")).isoformat()
     status["ok"] = all(s["ok"] for s in status["shops"].values())
     _atomic_json(DATA_DIR / "status.json", status)
+    print("WB_TRAFFIC_SYNC_DONE " + json.dumps(status, ensure_ascii=False), flush=True)
     return status
 
 
