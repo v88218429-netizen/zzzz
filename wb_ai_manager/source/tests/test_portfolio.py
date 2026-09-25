@@ -70,3 +70,46 @@ def test_svodnaya_groups_variants_and_current_k2_header(tmp_path):
     assert group_row["name"] == "Бидон 5л"
     assert "123" in group_row["wb_nm_ids"]
     assert {"456", "789"} <= set(group_row["ozon_skus"])
+
+
+def test_ozon_variants_are_reconciled_per_cabinet(tmp_path):
+    service = PortfolioService(Settings(data_dir=str(tmp_path), wb_api_token=""))
+    out = {
+        "own_27": {
+            "ozon_products": [
+                {"sku": "456", "seller_article": "Бидон_5л", "cabinet": "Ozon каб.1"},
+                {"sku": "789", "seller_article": "Бидон_5л", "cabinet": "Ozon каб.2"},
+            ]
+        }
+    }
+    cabinet_rows = [
+        ["OZON"],
+        ["Кабинет", "Название", "Статус API", "Карточек", "FBS позиций", "На складе", "Резерв", "Доступно", "Комментарий"],
+        ["1", "Текущий Ozon", "ACTIVE", "195", "187", "1000", "2", "998", "ok"],
+        ["2", "Новое ИП", "ORDERS_ACTIVE / MANUAL_PRODUCTS", "62", "62", "100", "0", "100", "manual"],
+        [],
+        ["", "", "", "", "", "", "", "", "", "", "", "КАБИНЕТ 1"],
+        ["", "", "", "", "", "", "", "", "", "", "", "Артикул", "Наименование", "На складе", "Резерв", "Доступно"],
+        ["", "", "", "", "", "", "", "", "", "", "", "Бидон_5л", "Бидон 5 литров", "884", "2", "882"],
+        ["", "", "", "", "", "", "", "", "", "", "", "КАБИНЕТ 2"],
+        ["", "", "", "", "", "", "", "", "", "", "", "Артикул", "Наименование", "На складе", "Резерв", "Доступно"],
+        ["", "", "", "", "", "", "", "", "", "", "", "Цемент_5кг", "Цемент 5 кг", "89", "1", "88"],
+    ]
+    orders = [
+        ["Кабинет", "Схема", "Номер отправления", "ID заказа", "Номер заказа", "Статус", "Подстатус", "Принят в обработку", "Дата отгрузки", "Дата доставки", "ID причины отмены", "Регион", "Город", "ID склада", "Склад", "SKU", "Артикул", "Товар", "Кол-во", "Цена", "Сумма строки", "Валюта"],
+        ["1", "FBS", "x", "1", "1", "delivered", "", "2026-09-24T10:00:00Z", "", "", "", "", "", "", "", "456", "Бидон_5л", "Бидон 5 л", "2", "979", "1958", "RUB"],
+    ]
+    payload = {"sources": {"own_27": {"ranges": {
+        "ozon_cabinets": {"values": cabinet_rows},
+        "ozon_orders": {"values": orders},
+    }}}}
+    service._parse_ozon_operating(payload, out)
+
+    by_cab = {x["cabinet"]: x for x in out["own_27"]["ozon_products"]}
+    assert by_cab["Ozon каб.1"]["feed_present"] is True
+    assert by_cab["Ozon каб.1"]["feed_available"] == 882
+    assert by_cab["Ozon каб.1"]["orders_qty_period"] == 2
+    assert by_cab["Ozon каб.1"]["operating_status"] == "selling"
+    assert by_cab["Ozon каб.2"]["feed_present"] is False
+    assert by_cab["Ozon каб.2"]["orders_qty_period"] == 0
+    assert by_cab["Ozon каб.2"]["operating_status"] == "mapped_but_not_in_current_feed_or_orders"
