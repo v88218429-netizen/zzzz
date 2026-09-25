@@ -24,6 +24,9 @@ sources:
       orders_history: "Заказы!A1:J40000"
       order_lifecycle: "_WB_ORDER_FEED!A1:L7000"
       supply_plan: "_ORDER_ANALYSIS_TMP!A1:L1000"
+      ozon_cabinets: "Ozon кабинеты!A1:X1200"
+      ozon_cab2_products: "Ozon каб2 товары!A1:L200"
+      ozon_orders: "Ozon Заказы!A1:V5000"
 
   sanych_sellmonitor:
     title: "Sellmonitor — аналитика магазина Саныча"
