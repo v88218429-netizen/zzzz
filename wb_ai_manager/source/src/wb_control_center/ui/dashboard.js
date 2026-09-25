@@ -96,6 +96,20 @@ function campaignLabel(id){
   if(articles.length) return `${articles.slice(0,2).join(', ')}${articles.length>2?` +${articles.length-2}`:''}${name?` · ${name}`:''}`;
   return name || `кампания ${id}`;
 }
+function entityLabel(id, scope=''){
+  const s=String(scope||'');
+  if(s==='campaign') return campaignLabel(id);
+  return entityName(id);
+}
+function entityMetaScoped(id, scope=''){
+  const s=String(scope||''), base=entityMeta(id);
+  if(s==='campaign') return missing(id)?'':`кампания ID ${id}`;
+  if(s==='campaign_sku'){
+    const m=String(id||'').match(/^(\d{4,12}):/);
+    return `${base}${base&&m?' · ':''}${m?`кампания ID ${m[1]}`:''}`;
+  }
+  return base;
+}
 function humanizeText(value){
   let text=String(value??'');
   text=text.replace(/nmID\s*(\d{8,12})/gi,(_,id)=>{ const n=entityName(id); return n!==String(id)?n:`WB ID ${id}`; });
@@ -258,7 +272,7 @@ function decisionDetail(d){
   const acts=(d.recommended_actions||[]).map((a,i)=>`<div class="detail-step"><b>${i+1}</b><span>${esc(a.action)}</span></div>`).join('');
   const ev=(d.evidence||[]).map(x=>`<div><span>${esc(x.metric)} · ${esc(x.source)}</span><strong>${esc(x.value)}</strong>${x.note?`<small>${esc(x.note)}</small>`:''}</div>`).join('');
   const blockers=(d.blockers||[]).map(x=>`<li>${esc(humanizeText(x))}</li>`).join('');
-  return `<div class="detail-lead"><div class="detail-entity"><strong>${esc(entityName(d.entity_id))}</strong><span>${entityMeta(d.entity_id)}</span></div><p>${esc(d.diagnosis||'')}</p></div>
+  return `<div class="detail-lead"><div class="detail-entity"><strong>${esc(entityLabel(d.entity_id,d.scope))}</strong><span>${entityMetaScoped(d.entity_id,d.scope)}</span></div><p>${esc(d.diagnosis||'')}</p></div>
     ${blockers?`<div class="detail-section danger-box"><h3>Почему решение ограничено</h3><ul>${blockers}</ul></div>`:''}
     <div class="detail-section"><h3>Что делать</h3><div class="detail-steps">${acts||empty('Конкретного действия пока нет.')}</div></div>
     <div class="detail-section"><h3>На каких фактах основано</h3><div class="detail-facts">${ev||'<div><span>Факты</span><strong>Недостаточно данных</strong></div>'}</div></div>
@@ -272,7 +286,7 @@ function productDetail(id){
   const group=(own.product_groups||[]).find(x=>String(x.name)===String(groupName));
   const decisions=(state.data?.decisions||[]).filter(d=>String(d.entity_id)===String(id)).slice(0,10);
   const facts=[
-    ['Артикул продавца WB',entityName(id)],['Товарная группа',groupName||'—'],['WB ID',entityNmId(id)||id],
+    ['Артикул продавца',entityName(id)],['Товарная группа',groupName||'—'],['WB ID',entityNmId(id)||id],
     ['Ozon артикул',prod.ozon_seller_article||info.ozon_seller_article||'—'],['Ozon SKU',prod.ozon_sku||info.ozon_sku||'—'],
     ['Цена клиенту',rub(prod.price_client_rub)],['Прибыль на единицу',rub(prod.profit_rub)],
     ['Маржа',pct(prod.margin_pct)],['ДРР',pct(prod.drr_pct)],['Остаток',num(prod.safe_stock)],['Источник остатка',prod.safe_stock_source||info.stock_source||'—'],
@@ -436,7 +450,7 @@ function renderExecutive(){
   if(eventImp.length){
     $('priority-strip').innerHTML=eventImp.map(e=>{const ent=eventEntity(e); return `<span class="priority-chip ${e.severity}"><b></b>${esc(humanizeText(ent?`${ent.name}: ${e.title}`:e.title))}</span>`;}).join('');
   }else if(decisionImp.length){
-    $('priority-strip').innerHTML=decisionImp.map(d=>{const entity=entityName(d.entity_id), title=humanizeText(d.title); const label=title.toLowerCase().startsWith(String(entity).toLowerCase())?title:`${entity}: ${title}`; return `<span class="priority-chip ${d.priority==='critical'?'critical':'warning'}"><b></b>${esc(label)}</span>`;}).join('');
+    $('priority-strip').innerHTML=decisionImp.map(d=>{const entity=entityLabel(d.entity_id,d.scope), title=humanizeText(d.title); const label=title.toLowerCase().startsWith(String(entity).toLowerCase())?title:`${entity}: ${title}`; return `<span class="priority-chip ${d.priority==='critical'?'critical':'warning'}"><b></b>${esc(label)}</span>`;}).join('');
   }else if(['running','started'].includes(pa.status)){
     $('priority-strip').innerHTML='<span class="priority-chip warning"><b></b>Период пересчитывается — итоговый статус ещё не готов</span>';
   }else{
@@ -474,7 +488,7 @@ function renderRecommendations(){
   $('recommendation-list').innerHTML=decisions.length?decisions.map(d=>{
     const action=d.recommended_actions?.[0]?.action||d.diagnosis||'Открыть решение и проверить факты.';
     const pri=d.priority==='critical'?'КРИТИЧНО':d.priority==='high'?'ВЫСОКИЙ':'СРЕДНИЙ';
-    return `<button type="button" class="recommendation interactive-card" data-decision-key="${esc(d.decision_key)}"><div class="recommendation-head"><strong>${esc(entityName(d.entity_id))}</strong><span class="pill neutral">${pri}</span></div><p>${esc(humanizeText(action))}</p><small>Решение системы · открыть подробности</small></button>`;
+    return `<button type="button" class="recommendation interactive-card" data-decision-key="${esc(d.decision_key)}"><div class="recommendation-head"><strong>${esc(entityLabel(d.entity_id,d.scope))}</strong><span class="pill neutral">${pri}</span></div><p>${esc(humanizeText(action))}</p><small>Решение системы · открыть подробности</small></button>`;
   }).join(''):empty('Нет решений, требующих отдельного внимания.');
 }
 function eventsForAgents(list){ return (state.data.events||[]).filter(e=>list.includes(e.agent)&&['critical','warning'].includes(e.severity)); }
@@ -605,7 +619,7 @@ function renderDecisions(){
     const ev=(d.evidence||[]).map(x=>`<li><strong>${esc(x.metric)}</strong>: ${esc(humanizeText(x.value))} <span class="muted">${esc(x.source)} ${x.note?`· ${esc(humanizeText(x.note))}`:''}</span></li>`).join('');
     const blockers=(d.blockers||[]).map(x=>`<li>${esc(humanizeText(x))}</li>`).join('');
     const pri=d.priority==='critical'?'КРИТИЧНО':d.priority==='high'?'ВЫСОКИЙ':d.priority==='medium'?'СРЕДНИЙ':'НИЗКИЙ';
-    const entity=entityName(d.entity_id), meta=entityMeta(d.entity_id);
+    const entity=entityLabel(d.entity_id,d.scope), meta=entityMetaScoped(d.entity_id,d.scope);
     return `<article class="decision-card ${esc(d.priority)} interactive-card" tabindex="0" data-decision-key="${esc(d.decision_key)}"><div class="decision-head"><div><small>${esc(scopeName(d.scope))} · ${esc(entity)}${meta?` · ${meta}`:''}</small><h3>${esc(humanizeText(d.title))}</h3></div><span class="confidence">${pri} · ${esc(d.confidence==='high'?'высокая уверенность':d.confidence==='medium'?'средняя уверенность':'низкая уверенность')}</span></div><p class="decision-diagnosis">${esc(humanizeText(d.diagnosis))}</p>${blockers?`<div class="decision-blockers"><strong>Почему решение ограничено</strong><ul>${blockers}</ul></div>`:''}<div class="decision-actions">${acts}</div><details class="decision-evidence" onclick="event.stopPropagation()"><summary>Факты · ${d.evidence?.length||0}</summary><ul>${ev||'<li>Нет подтверждающих фактов</li>'}</ul></details><div class="decision-foot">Контроль результата: ${esc(humanizeText(d.follow_up||'—'))} · нажми карточку для подробностей</div></article>`;
   }).join(''):empty('Нет решений выбранного приоритета.'));
 }
@@ -628,7 +642,7 @@ function adPlanHtml(d){
   const ev=Object.fromEntries((d.evidence||[]).map(x=>[x.metric,x.value]));
   const current=Number(ev.current_bid_rub), target=Number(ev.target_bid_rub), cap=Number(ev.max_spend_next_24h_rub), drr=Number(ev.observed_drr_pct), tdrr=Number(ev.target_drr_pct), trend=Number(ev.orders_trend_pct), stock=Number(ev.stock_days_forecast), maturity=Number(ev.cohort_maturity_pct), lag50=Number(ev.buyout_lag_p50_days), lag90=Number(ev.buyout_lag_p90_days);
   const bid=Number.isFinite(current)&&Number.isFinite(target)?`${rub(current)} → ${rub(target)}`:'нет подтверждённой ставки';
-  return `<article class="ad-control-card ${esc(d.priority)}"><div class="ad-control-head"><div><small>${esc(entityName(d.entity_id))}${entityMeta(d.entity_id)?` · ${entityMeta(d.entity_id)}`:''}</small><h3>${esc(humanizeText(d.title))}</h3></div><span class="confidence">${d.confidence==='high'?'высокая уверенность':d.confidence==='medium'?'средняя уверенность':'низкая уверенность'}</span></div><div class="ad-kpi-grid"><div><span>Ставка</span><strong>${bid}</strong></div><div><span>Лимит 24ч</span><strong>${Number.isFinite(cap)?rub(cap):'—'}</strong></div><div><span>ДРР / допустимый предел</span><strong>${Number.isFinite(drr)?pct(drr):'—'} / ${Number.isFinite(tdrr)?pct(tdrr):'—'}</strong></div><div><span>Изменение темпа заказов</span><strong>${Number.isFinite(trend)?pct(trend):'—'}</strong></div><div><span>Прогноз запаса</span><strong>${Number.isFinite(stock)?`${num(stock,1)} дн.`:'—'}</strong></div><div><span>Созревание заказов</span><strong>${Number.isFinite(maturity)?`${num(maturity,0)}%`:'—'}</strong></div><div><span>Типичный срок выкупа</span><strong>${Number.isFinite(lag50)&&Number.isFinite(lag90)?`${num(lag50,1)} / ${num(lag90,1)} дн. (50/90%)`:'—'}</strong></div></div><p>${esc(humanizeText(d.diagnosis))}</p>${(d.blockers||[]).length?`<div class="decision-blockers"><strong>Не хватает данных</strong><ul>${d.blockers.map(x=>`<li>${esc(humanizeText(x))}</li>`).join('')}</ul></div>`:''}<div class="decision-actions">${(d.recommended_actions||[]).map((a,i)=>`<div class="decision-action"><b>${i+1}</b><span>${esc(humanizeText(a.action))}</span></div>`).join('')}</div></article>`;
+  return `<article class="ad-control-card ${esc(d.priority)}"><div class="ad-control-head"><div><small>${esc(entityLabel(d.entity_id,d.scope))}${entityMetaScoped(d.entity_id,d.scope)?` · ${entityMetaScoped(d.entity_id,d.scope)}`:''}</small><h3>${esc(humanizeText(d.title))}</h3></div><span class="confidence">${d.confidence==='high'?'высокая уверенность':d.confidence==='medium'?'средняя уверенность':'низкая уверенность'}</span></div><div class="ad-kpi-grid"><div><span>Ставка</span><strong>${bid}</strong></div><div><span>Лимит 24ч</span><strong>${Number.isFinite(cap)?rub(cap):'—'}</strong></div><div><span>ДРР / допустимый предел</span><strong>${Number.isFinite(drr)?pct(drr):'—'} / ${Number.isFinite(tdrr)?pct(tdrr):'—'}</strong></div><div><span>Изменение темпа заказов</span><strong>${Number.isFinite(trend)?pct(trend):'—'}</strong></div><div><span>Прогноз запаса</span><strong>${Number.isFinite(stock)?`${num(stock,1)} дн.`:'—'}</strong></div><div><span>Созревание заказов</span><strong>${Number.isFinite(maturity)?`${num(maturity,0)}%`:'—'}</strong></div><div><span>Типичный срок выкупа</span><strong>${Number.isFinite(lag50)&&Number.isFinite(lag90)?`${num(lag50,1)} / ${num(lag90,1)} дн. (50/90%)`:'—'}</strong></div></div><p>${esc(humanizeText(d.diagnosis))}</p>${(d.blockers||[]).length?`<div class="decision-blockers"><strong>Не хватает данных</strong><ul>${d.blockers.map(x=>`<li>${esc(humanizeText(x))}</li>`).join('')}</ul></div>`:''}<div class="decision-actions">${(d.recommended_actions||[]).map((a,i)=>`<div class="decision-action"><b>${i+1}</b><span>${esc(humanizeText(a.action))}</span></div>`).join('')}</div></article>`;
 }
 
 function renderDecisionControl(){
@@ -640,15 +654,15 @@ function renderDecisionControl(){
   if($('control-eval-count')) $('control-eval-count').textContent=num(evals.length);
   const blocked=reviews.filter(x=>x.verdict==='заблокировано проверкой').length;
   if($('control-blocked-count')) $('control-blocked-count').textContent=num(blocked);
-  if($('control-changes')) $('control-changes').innerHTML=changes.length?changes.slice(0,20).map(x=>`<button type="button" class="signal info interactive-card" data-entity-id="${esc(x.entity_id)}"><strong>${esc(changeTypeName(x.change_type))} · ${esc(entityName(x.entity_id))}</strong><p>${esc(x.old?.value)} → ${esc(x.new?.value)}</p><span class="source">${esc(x.source)} · ${time(x.observed_at)}</span></button>`).join(''):empty('Фактических изменений пока не замечено.');
+  if($('control-changes')) $('control-changes').innerHTML=changes.length?changes.slice(0,20).map(x=>`<button type="button" class="signal info interactive-card" data-entity-id="${esc(x.entity_id)}"><strong>${esc(changeTypeName(x.change_type))} · ${esc(entityLabel(x.entity_id,x.scope))}</strong><p>${esc(x.old?.value)} → ${esc(x.new?.value)}</p><span class="source">${esc(x.source)} · ${time(x.observed_at)}</span></button>`).join(''):empty('Фактических изменений пока не замечено.');
   if($('control-reviews')){
     const parts=[];
     if(validation&&validation.samples){parts.push(`<div class="signal info"><strong>Проверка прогноза спроса</strong><p>${esc(`Окон: ${validation.samples}; товаров: ${validation.skus}; WAPE: ${validation.wape_pct??'—'}%; средняя ошибка: ${validation.mae_orders??'—'} заказа`)}</p><span class="source">Историческая проверка без использования будущих данных</span></div>`);}
-    parts.push(...investigations.slice(0,10).map(x=>`<div class="signal ${x.status==='частичное'?'warning':'info'}"><strong>Расследование · ${esc(entityName(x.entity_id))}</strong><p>${esc(humanizeText([...(x.hypotheses||[]),...(x.missing||[]).map(v=>'не хватает: '+v)].slice(0,4).join(' · ')||'Критичных гипотез не найдено.'))}</p><span class="source">${esc(x.status)} расследование</span></div>`));
-    parts.push(...reviews.slice(0,20).map(x=>`<button type="button" class="signal ${x.verdict==='заблокировано проверкой'?'warning':'info'} interactive-card" data-decision-key="${esc(x.decision_key)}"><strong>${esc(x.verdict)} · ${esc(entityName(x.entity_id||''))}</strong><p>${esc(humanizeText([...(x.blockers_added||[]),...(x.critic||[]),...(x.risk_checks||[])].slice(0,4).join(' · ')||'Критичных возражений нет.'))}</p><span class="source">Независимая проверка · открыть решение</span></button>`));
+    parts.push(...investigations.slice(0,10).map(x=>`<div class="signal ${x.status==='частичное'?'warning':'info'}"><strong>Расследование · ${esc(entityLabel(x.entity_id,x.scope))}</strong><p>${esc(humanizeText([...(x.hypotheses||[]),...(x.missing||[]).map(v=>'не хватает: '+v)].slice(0,4).join(' · ')||'Критичных гипотез не найдено.'))}</p><span class="source">${esc(x.status)} расследование</span></div>`));
+    parts.push(...reviews.slice(0,20).map(x=>`<button type="button" class="signal ${x.verdict==='заблокировано проверкой'?'warning':'info'} interactive-card" data-decision-key="${esc(x.decision_key)}"><strong>${esc(x.verdict)} · ${esc(entityLabel(x.entity_id||'',x.scope))}</strong><p>${esc(humanizeText([...(x.blockers_added||[]),...(x.critic||[]),...(x.risk_checks||[])].slice(0,4).join(' · ')||'Критичных возражений нет.'))}</p><span class="source">Независимая проверка · открыть решение</span></button>`));
     $('control-reviews').innerHTML=parts.length?parts.join(''):empty('Проверка ещё не запускалась.');
   }
-  if($('control-evaluations')) $('control-evaluations').innerHTML=evals.length?evals.slice(0,30).map(x=>`<button type="button" class="signal info interactive-card" data-entity-id="${esc(x.entity_id)}"><strong>${esc(x.horizon)} · ${esc(entityName(x.entity_id))}</strong><p>${esc(x.verdict||'наблюдение')} ${x.notes?`· ${esc(x.notes)}`:''}</p><span class="source">${time(x.evaluated_at)}</span></button>`).join(''):empty('Нет завершённых контрольных точек. Они появятся после реально замеченного изменения.');
+  if($('control-evaluations')) $('control-evaluations').innerHTML=evals.length?evals.slice(0,30).map(x=>`<button type="button" class="signal info interactive-card" data-entity-id="${esc(x.entity_id)}"><strong>${esc(x.horizon)} · ${esc(entityLabel(x.entity_id,x.scope))}</strong><p>${esc(x.verdict||'наблюдение')} ${x.notes?`· ${esc(x.notes)}`:''}</p><span class="source">${time(x.evaluated_at)}</span></button>`).join(''):empty('Нет завершённых контрольных точек. Они появятся после реально замеченного изменения.');
   if($('control-history')) $('control-history').innerHTML=history.length?history.slice(0,30).map(x=>`<button type="button" class="signal info interactive-card" data-decision-key="${esc(x.decision_key)}"><strong>${esc(humanizeText(x.payload?.title||x.decision_key))}</strong><p>${esc(humanizeText(x.payload?.diagnosis||''))}</p><span class="source">${esc(historyStatusName(x.status))} · ${time(x.created_at)} · открыть</span></button>`).join(''):empty('История решений пока пуста.');
 }
 
