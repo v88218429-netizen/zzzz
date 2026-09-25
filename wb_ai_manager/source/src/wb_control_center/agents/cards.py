@@ -34,7 +34,10 @@ class CardsAgent(BaseAgent):
             seen_cursors: set[tuple[str, str]] = set()
             last_cursor: dict = {}
             for _page in range(50):
-                page = await self.call("wb_cards_list", limit=100, cursor=cursor)
+                args: dict = {"limit": 100}
+                if cursor is not None:
+                    args["cursor"] = cursor
+                page = await self.call("wb_cards_list", **args)
                 if not isinstance(page, dict):
                     break
                 rows = page.get("cards")
