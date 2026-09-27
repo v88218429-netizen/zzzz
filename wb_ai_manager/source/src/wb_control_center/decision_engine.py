@@ -358,41 +358,10 @@ class DecisionEngine:
                 _ev('analytics_kernel','demand_quality_score',dq.score,'100 = согласованные и проверяемые сигналы спроса'),
             ]
 
-            # When sources disagree, a precise restock/overstock instruction is more
-            # dangerous than a missing instruction. Surface the conflict only when it
-            # can change an operational decision now.
-            static_days=(effective_stock/daily) if daily and daily>0 else None
-            model_days=(effective_stock/forecast_daily) if forecast_daily and forecast_daily>0 else None
-            potential_risk=(stock <= 0 or (static_days is not None and static_days <= warning) or (model_days is not None and model_days <= warning))
-            potential_over=(static_days is not None and static_days >= over) or (model_days is not None and model_days >= over)
+            # Conflicting / low-quality demand evidence stays in the analytics quality
+            # layer. It must not become an operator Decision card: Decisions are reserved
+            # for actions backed by enough evidence to be useful.
             if not dq.ready:
-                # Do not flood Decisions with weak "possible overstock" signals. A low-quality
-                # forecast is itself a portfolio data-quality statistic; it becomes an
-                # individual decision only when the disagreement can hide a near-term stockout.
-                if potential_risk:
-                    issue_text='; '.join(dq.issues[:3]) or 'недостаточно статистики для количественного прогноза'
-                    out.append(DecisionCard(
-                        decision_key=f"sku:{sku}:demand_conflict", scope='sku', entity_id=sku,
-                        title=f"{x.get('name')}: запас требует внимания, но точное количество пока считать нельзя",
-                        diagnosis=(
-                            f"Остаток {stock:.0f} шт. "
-                            + (f"Сводная показывает ≈{daily:.2f} заказа/день; " if daily is not None else "")
-                            + (f"модель {demand.model_name} даёт ≈{forecast_daily:.2f}/день. " if forecast_daily is not None else "")
-                            + f"Качество прогноза {dq.score}/100: {issue_text}. "
-                            + "Поэтому система не превращает этот конфликт в ложное распоряжение на поставку или остановку закупки."
-                        ),
-                        priority='high' if potential_risk else 'medium',
-                        confidence='low',
-                        recommended_actions=[
-                            {"step":1,"action":"Сверить дневные заказы, доступность карточки и остатки по тем же датам; нулевые продажи во время отсутствия товара не считать нулевым спросом","mode":"demand_reconciliation"},
-                            {"step":2,"action":"Не использовать точные дни покрытия и количество поставки, пока источники темпа не согласованы либо модель не пройдёт backtest","mode":"supply_guard"},
-                            {"step":3,"action":"После следующего подтверждённого снимка пересчитать тип спроса, модель, ошибку и только затем количество","mode":"follow_up"},
-                        ],
-                        evidence=demand_evidence,
-                        blockers=list(dict.fromkeys(dq.issues + [f"нет данных: {v}" for v in dq.missing])),
-                        follow_up='Повторить после нового дневного снимка заказов/остатков или исправления источника темпа.',
-                        analysis=analysis,
-                    ))
                 continue
 
             if forecast_daily is None or forecast_daily <= 0:

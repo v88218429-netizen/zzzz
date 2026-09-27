@@ -36,16 +36,14 @@ def test_stockout_uses_concrete_qty_only_when_history_confirms_rate():
     assert c.analysis["backtest_mae"] == 0
 
 
-def test_zero_forecast_conflict_blocks_exact_supply_quantity():
+def test_zero_forecast_conflict_is_suppressed_from_operator_decisions():
     p={"source_health":[],"stores":[],"own_27":{"products":[{
         "sku":"zero","name":"Таз","orders_per_day":3,"safe_stock":0,
         "orders_daily_history":[{"date":f"2026-09-{d:02d}","orders":0} for d in range(18,25)],
     }]}}
-    c=by_key(DecisionEngine(load_policy()).build(p),"sku:zero:demand_conflict")
-    assert c is not None
-    assert c.confidence == "low"
-    assert "точное количество" in c.title.lower()
-    assert not any(a["mode"] == "supply_plan" for a in c.recommended_actions)
+    cards=DecisionEngine(load_policy()).build(p)
+    assert not any(c.decision_key=="sku:zero:demand_conflict" for c in cards)
+    assert not any(c.entity_id=="zero" and any(a.get("mode")=="supply_plan" for a in c.recommended_actions) for c in cards)
 
 
 def test_k2_stock_source_is_high_confidence_when_demand_is_validated():
