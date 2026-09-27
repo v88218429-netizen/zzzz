@@ -94,6 +94,13 @@ class PortfolioService:
         }
 
     @staticmethod
+    def _category_name(value: Any) -> str:
+        text = str(value or "").strip()
+        if "·" in text and "ozon" in text.lower():
+            text = text.split("·", 1)[0].strip()
+        return text or "Без категории"
+
+    @staticmethod
     def _num(value: Any) -> float | None:
         if isinstance(value, (int, float)):
             return float(value)
@@ -347,7 +354,6 @@ class PortfolioService:
                 products=[]
                 ozon_products=[]
                 groups: dict[str, dict[str, Any]] = {}
-                current_group: str | None = None
                 for sheet_row, row in enumerate(values[header_idx+1:], start=header_idx + 2):
                     rec={headers[i]: row[i] if i < len(row) else None for i in range(len(headers))}
                     row_name=str(rec.get("Артикул продавца WB") or "").strip()
@@ -357,27 +363,11 @@ class PortfolioService:
                     subject=str(rec.get("Предмет WB") or "").strip()
 
                     if not sku.isdigit() and not ozon_sku.isdigit():
-                        group_facts = [
-                            self._num(rec.get("Остатки ФФ")),
-                            self._num(rec.get("К2 ФФ")),
-                            self._num(rec.get("К2 ФФ · SAFE")),
-                            self._num(rec.get("Остатки WB FBS")),
-                            self._num(rec.get("Остатки Ozon FBS")),
-                            self._num(rec.get("Заказы, шт")),
-                        ]
-                        # Section labels such as "ЛОТОК КРАСНЫЙ" contain no
-                        # operational totals. Aggregate product rows do.
-                        if row_name and any(v is not None and abs(v) > 0 for v in group_facts):
-                            current_group = row_name
-                            groups.setdefault(current_group, {
-                                "name": current_group,
-                                "wb_nm_ids": [],
-                                "ozon_skus": [],
-                                "variants": [],
-                            })
-                        elif row_name and row_name == row_name.upper():
-                            current_group = None
+                        # Spreadsheet section/aggregate rows are not product groups.
+                        # Concrete listings are grouped only by their WB subject/category.
                         continue
+
+                    category = self._category_name(subject)
 
                     k2=self._num(rec.get("К2 ФФ · SAFE"))
                     if k2 is None:
@@ -399,7 +389,8 @@ class PortfolioService:
                         prod={
                             "sku":sku,
                             "name":row_name,
-                            "group_name":current_group,
+                            "group_name":category,
+                            "category_name":category,
                             "sheet_row":sheet_row,
                             "subject":subject,
                             "price_client_rub":self._num(rec.get("Цена для клиента")),
@@ -424,10 +415,9 @@ class PortfolioService:
                             "safe_stock_source":safe_source,
                         }
                         products.append(prod)
-                        if current_group:
-                            g=groups.setdefault(current_group, {"name":current_group,"wb_nm_ids":[],"ozon_skus":[],"variants":[]})
-                            g["wb_nm_ids"].append(sku)
-                            g["variants"].append({"platform":"WB","id":sku,"article":row_name})
+                        g=groups.setdefault(category, {"name":category,"wb_nm_ids":[],"ozon_skus":[],"variants":[]})
+                        g["wb_nm_ids"].append(sku)
+                        g["variants"].append({"platform":"WB","id":sku,"article":row_name})
 
                     if ozon_sku.isdigit():
                         cabinet = "Ozon каб.2" if ("Ozon каб.2" in subject or "Ozon каб.2" in row_name) else "Ozon каб.1"
@@ -435,16 +425,16 @@ class PortfolioService:
                             "sku":ozon_sku,
                             "seller_article":ozon_article,
                             "name":row_name or ozon_article,
-                            "group_name":current_group,
+                            "group_name":category,
+                            "category_name":category,
                             "cabinet":cabinet,
                             "stock":ozon_stock,
                             "sheet_row":sheet_row,
                         }
                         ozon_products.append(oz)
-                        if current_group:
-                            g=groups.setdefault(current_group, {"name":current_group,"wb_nm_ids":[],"ozon_skus":[],"variants":[]})
-                            g["ozon_skus"].append(ozon_sku)
-                            g["variants"].append({"platform":cabinet,"id":ozon_sku,"article":ozon_article or row_name})
+                        g=groups.setdefault(category, {"name":category,"wb_nm_ids":[],"ozon_skus":[],"variants":[]})
+                        g["ozon_skus"].append(ozon_sku)
+                        g["variants"].append({"platform":cabinet,"id":ozon_sku,"article":ozon_article or row_name})
 
                 own = out.setdefault("own_27", {})
                 if products:

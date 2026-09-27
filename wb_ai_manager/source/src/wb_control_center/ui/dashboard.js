@@ -349,8 +349,8 @@ async function fetchData(showLoader=false){
     renderAll(); $('loading-state').classList.add('hidden');
     const pa=state.data?.period_audit||{};
     const key=periodKey();
-    if(pa.status==='missing' && key && state.periodAuditRequestedKey!==key){
-      triggerPeriodAudit({silent:true});
+    if(pa.status==='missing' && key && (pa.stale || state.periodAuditRequestedKey!==key)){
+      triggerPeriodAudit({silent:true,force:!!pa.stale});
     }else if(['running','started'].includes(pa.status)){
       clearTimeout(state.periodPollTimer);
       state.periodPollTimer=setTimeout(()=>fetchData(false),3000);

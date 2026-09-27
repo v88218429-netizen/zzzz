@@ -38,7 +38,7 @@ def test_order_history_builds_real_short_vs_baseline_demand_trend(tmp_path):
     assert product["demand_history_asof"] == "2026-09-14"
 
 
-def test_svodnaya_groups_variants_and_current_k2_header(tmp_path):
+def test_svodnaya_groups_by_wb_subject_category_and_current_k2_header(tmp_path):
     service = PortfolioService(Settings(data_dir=str(tmp_path), wb_api_token=""))
     headers = [
         "Артикул продавца WB", "Предмет WB", "Артикул WB", "Ссылка WB", "Баркод WB",
@@ -56,7 +56,7 @@ def test_svodnaya_groups_variants_and_current_k2_header(tmp_path):
 
     product = out["own_27"]["products"][0]
     assert product["sku"] == "123"
-    assert product["group_name"] == "Бидон 5л"
+    assert product["group_name"] == "Бидоны"
     assert product["wb_fbs_stock"] == 91
     assert product["safe_stock"] == 91
     assert product["safe_stock_source"] == "WB FBS"
@@ -65,9 +65,9 @@ def test_svodnaya_groups_variants_and_current_k2_header(tmp_path):
 
     ozon = {x["sku"]: x for x in out["own_27"]["ozon_products"]}
     assert ozon["789"]["cabinet"] == "Ozon каб.2"
-    assert ozon["789"]["group_name"] == "Бидон 5л"
+    assert ozon["789"]["group_name"] == "Бидоны"
     group_row = out["own_27"]["product_groups"][0]
-    assert group_row["name"] == "Бидон 5л"
+    assert group_row["name"] == "Бидоны"
     assert "123" in group_row["wb_nm_ids"]
     assert {"456", "789"} <= set(group_row["ozon_skus"])
 
