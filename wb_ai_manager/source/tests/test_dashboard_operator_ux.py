@@ -129,6 +129,11 @@ def test_dashboard_period_defaults_to_last_completed_week_and_exposes_date_limit
     assert period["default_mode"] == "last_completed_7_days"
 
 
+def test_dashboard_uses_inline_favicon_to_avoid_browser_404():
+    html = (Path(__file__).parents[1] / "src" / "wb_control_center" / "ui" / "dashboard.html").read_text(encoding="utf-8")
+    assert '<link rel="icon" href="data:," />' in html
+
+
 def test_dashboard_js_blocks_future_periods_and_sets_calendar_max():
     js = (Path(__file__).parents[1] / "src" / "wb_control_center" / "ui" / "dashboard.js").read_text(encoding="utf-8")
     assert "max_selectable" in js
