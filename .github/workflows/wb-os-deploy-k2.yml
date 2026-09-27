@@ -11,9 +11,11 @@ on:
       - "wb_os/apps_script/OZON_RADAR_TELEGRAM_RELAY.gs"
       - "wb_os/apps_script/OZON_RADAR_SERVER_BRIDGE.gs"
       - "wb_os/apps_script/WB_TRIGGER_MAINTENANCE.gs"
+      - "wb_os/apps_script/STOCK_HISTORY_MATRIX.gs"
       - "wb_os/apps_script/WB_FF_PENALTIES_SYNC.gs"
       - "wb_os/tools/discover_clasp_project.py"
       - "wb_os/tools/patch_live_master.py"
+      - "wb_os/tools/patch_stock_history_matrix.py"
       - "wb_os/tools/audit_and_repair_live.py"
       - ".github/workflows/wb-os-deploy-k2.yml"
 
@@ -106,8 +108,10 @@ jobs:
           cp wb_os/apps_script/OZON_RADAR_TELEGRAM_RELAY.gs "$SOURCE_ROOT/OZON_RADAR_TELEGRAM_RELAY.gs"
           cp wb_os/apps_script/OZON_RADAR_SERVER_BRIDGE.gs "$SOURCE_ROOT/OZON_RADAR_SERVER_BRIDGE.gs"
           cp wb_os/apps_script/WB_TRIGGER_MAINTENANCE.gs "$SOURCE_ROOT/WB_TRIGGER_MAINTENANCE.gs"
+          cp wb_os/apps_script/STOCK_HISTORY_MATRIX.gs "$SOURCE_ROOT/STOCK_HISTORY_MATRIX.gs"
           cp wb_os/apps_script/WB_FF_PENALTIES_SYNC.gs "$SOURCE_ROOT/WB_FF_PENALTIES_SYNC.gs"
           python3 wb_os/tools/patch_live_master.py "$SOURCE_ROOT"
+          python3 wb_os/tools/patch_stock_history_matrix.py "$SOURCE_ROOT"
           python3 wb_os/tools/audit_and_repair_live.py "$SOURCE_ROOT"
 
       - name: Syntax check patched Apps Script
@@ -163,6 +167,8 @@ jobs:
           grep -Rqs "getK2CredentialsWithFallback_();" "$VERIFY_DIR"
           grep -Rqs "function runFinalAutomationCycle_" "$VERIFY_DIR"
           grep -Rqs "function wbOsCleanupKnownDeadTriggersNow()" "$VERIFY_DIR"
+          grep -Rqs "function refreshDailyStockMatrix_()" "$VERIFY_DIR"
+          grep -Rqs "WB_OS_DAILY_MATRIX_REFRESH_V1" "$VERIFY_DIR"
           grep -Rqs "function ffVisionGetPendingJson(" "$VERIFY_DIR"
           grep -Rqs "function ffVisionApplyResultsJson(" "$VERIFY_DIR"
 
