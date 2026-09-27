@@ -94,4 +94,5 @@ class DecisionCard:
     evidence: list[dict[str, Any]] = field(default_factory=list)
     blockers: list[str] = field(default_factory=list)
     follow_up: str = ""
+    analysis: dict[str, Any] = field(default_factory=dict)
     created_at: str = field(default_factory=utcnow_iso)

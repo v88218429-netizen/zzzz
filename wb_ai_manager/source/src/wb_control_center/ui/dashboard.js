@@ -181,13 +181,13 @@ async function triggerPeriodAudit({silent=false,force=false}={}){
 function renderPeriodAudit(){
   const pa=state.data?.period_audit||{}, box=$('period-audit-banner');
   if(!box) return;
-  const status=pa.status||'missing', done=Number(pa.agents_done||0), total=Number(pa.agents_total||19);
+  const status=pa.status||'missing', done=Number(pa.agents_done||0), total=Number(pa.agents_total||19), failed=Number(pa.agents_failed||0), degraded=Number(pa.datasets_degraded||0);
   box.classList.remove('hidden','done','error');
   $('period-audit-title').textContent=`Анализ периода ${currentPeriodLabel()}`;
   if(status==='completed'){
     box.classList.add('done');
     $('period-audit-status').textContent='ГОТОВО';
-    $('period-audit-text').textContent=`Все ${total} модулей пересчитаны в едином контексте периода.`;
+    $('period-audit-text').textContent=failed?`${done}/${total} модулей завершили расчёт, ошибок запуска: ${failed}.`:`Все ${total} модулей завершили расчёт. Источников с ограничениями: ${degraded}.`;
     $('period-audit-progress').style.width='100%';
     $('period-audit-scopes').textContent='За период: реклама, воронка, поиск, финансы, списания, документы. На сейчас: карточки, цены, отзывы, чаты и FBS. Остатки: текущий остаток + скорость продаж за выбранный период.';
   }else if(status==='running' || status==='started'){
@@ -272,7 +272,11 @@ function decisionDetail(d){
   const acts=(d.recommended_actions||[]).map((a,i)=>`<div class="detail-step"><b>${i+1}</b><span>${esc(a.action)}</span></div>`).join('');
   const ev=(d.evidence||[]).map(x=>`<div><span>${esc(x.metric)} · ${esc(x.source)}</span><strong>${esc(x.value)}</strong>${x.note?`<small>${esc(x.note)}</small>`:''}</div>`).join('');
   const blockers=(d.blockers||[]).map(x=>`<li>${esc(humanizeText(x))}</li>`).join('');
+  const a=d.analysis||{};
+  const analysisFacts=[['Тип показателя',a.metric_type],['Временной смысл',a.time_semantics],['Период / актуальность',a.period],['Источник расчёта',a.source],['Источник обновлён',a.source_updated_at],['Формула',a.formula],['Модель спроса',a.demand_model],['Тип спроса',a.demand_type],['Ошибка backtest',missing(a.backtest_mae)?null:`${num(a.backtest_mae,2)} заказа/день`],['Качество данных',missing(a.quality_score)?null:`${num(a.quality_score,0)}/100`]].filter(x=>!missing(x[1]));
+  const analysisHtml=analysisFacts.length?`<div class="detail-section"><h3>Как получен вывод</h3><div class="detail-facts">${analysisFacts.map(([k,v])=>`<div><span>${esc(k)}</span><strong>${esc(humanizeText(v))}</strong></div>`).join('')}</div></div>`:'';
   return `<div class="detail-lead"><div class="detail-entity"><strong>${esc(entityLabel(d.entity_id,d.scope))}</strong><span>${entityMetaScoped(d.entity_id,d.scope)}</span></div><p>${esc(d.diagnosis||'')}</p></div>
+    ${analysisHtml}
     ${blockers?`<div class="detail-section danger-box"><h3>Почему решение ограничено</h3><ul>${blockers}</ul></div>`:''}
     <div class="detail-section"><h3>Что делать</h3><div class="detail-steps">${acts||empty('Конкретного действия пока нет.')}</div></div>
     <div class="detail-section"><h3>На каких фактах основано</h3><div class="detail-facts">${ev||'<div><span>Факты</span><strong>Недостаточно данных</strong></div>'}</div></div>
@@ -288,8 +292,8 @@ function productDetail(id){
   const facts=[
     ['Артикул продавца',entityName(id)],['Товарная группа',groupName||'—'],['WB ID',entityNmId(id)||id],
     ['Ozon артикул',prod.ozon_seller_article||info.ozon_seller_article||'—'],['Ozon SKU',prod.ozon_sku||info.ozon_sku||'—'],
-    ['Цена клиенту',rub(prod.price_client_rub)],['Прибыль на единицу',rub(prod.profit_rub)],
-    ['Маржа',pct(prod.margin_pct)],['ДРР',pct(prod.drr_pct)],['Остаток',num(prod.safe_stock)],['Источник остатка',prod.safe_stock_source||info.stock_source||'—'],
+    ['Цена клиенту',rub(prod.price_client_rub)],['Расчётная прибыль/шт · Юнитка',rub(prod.profit_rub)],
+    ['Расчётная маржа · Юнитка',pct(prod.margin_pct)],['ДРР в юнитке',pct(prod.drr_pct)],['Остаток',num(prod.safe_stock)],['Источник остатка',prod.safe_stock_source||info.stock_source||'—'],
     ['Заказов в день',num(prod.orders_per_day,1)],['Заказы, ₽',rub(prod.orders_rub)]
   ];
   let body=`<div class="detail-section"><h3>Карточка и физический товар</h3><div class="detail-facts">${facts.map(([k,v])=>`<div><span>${esc(k)}</span><strong>${esc(v)}</strong></div>`).join('')}</div></div>`;

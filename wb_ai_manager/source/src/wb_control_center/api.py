@@ -24,6 +24,7 @@ from .portfolio import PortfolioService
 from .photo_analyzer import PhotoAnalyzer
 from .source_discovery import SourceDiscovery
 from .auto_sheets import AutoSheets
+from .analytics_kernel import measurement_contract, portfolio_quality, snapshot_quality
 from .updater import UpdateManager, current_version
 
 settings = Settings()
@@ -577,6 +578,10 @@ async def dashboard_data(days: int = 7, from_date: str | None = None, to_date: s
         current_snapshot_events = []
     runtime_policy = await asyncio.to_thread(center.runtime_policy.get)
     entity_map = _entity_map(portfolio_snapshot, snapshots)
+    dataset_quality = snapshot_quality(snapshots)
+    analytical_quality = portfolio_quality(portfolio_snapshot)
+    audit_agents = audit.get("agents") or {}
+    audit_failed = sum(1 for x in audit_agents.values() if isinstance(x, dict) and x.get("status") == "error")
     return {
         "health": _health_payload(),
         "store": {"name": _store_name(snapshots), "mode": settings.wb_mode},
@@ -607,6 +612,8 @@ async def dashboard_data(days: int = 7, from_date: str | None = None, to_date: s
             "period": period_ctx.to_dict(),
             "agents_done": sum(1 for x in (audit.get("agents") or {}).values() if isinstance(x, dict) and x.get("status") in {"ok", "error"}),
             "agents_total": 19,
+            "agents_failed": audit_failed,
+            "datasets_degraded": dataset_quality.get("datasets_degraded", 0),
             "errors": audit.get("errors") or [],
             "started_at": audit.get("started_at"),
             "finished_at": audit.get("finished_at"),
@@ -620,6 +627,9 @@ async def dashboard_data(days: int = 7, from_date: str | None = None, to_date: s
             "portfolio_warning": portfolio_snapshot.get("stale_reason"),
             "period_audit_status": audit.get("status"),
             "period_snapshot_mode": "selected_period" if audit_ready else "operational_fallback",
+            "dataset_quality": dataset_quality,
+            "analytics_quality": analytical_quality,
+            "measurement_contract": measurement_contract(),
         },
         "recommendations": recommendations,
         "decisions": decisions,

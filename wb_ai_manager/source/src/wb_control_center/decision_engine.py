@@ -6,6 +6,7 @@ from typing import Any
 
 from .models import DecisionCard
 from .advertising_controller import AdvertisingController
+from .analytics_kernel import demand_quality, economics_quality
 from .demand_forecast import build_demand_forecast
 
 
@@ -206,44 +207,102 @@ class DecisionEngine:
         out=[]; own=p.get('own_27') or {}
         for x in own.get('products',[])[:500]:
             sku=str(x.get('sku') or '')
-            if not sku: continue
-            profit=_n(x.get('profit_rub')); margin=_n(x.get('margin_pct')); drr=_n(x.get('drr_pct')); price=_n(x.get('price_rub'))
-            if profit is not None and profit<0:
+            if not sku:
+                continue
+            profit=_n(x.get('profit_rub')); margin=_n(x.get('margin_pct'))
+            drr=_n(x.get('drr_pct')); price=_n(x.get('price_rub'))
+            eq=economics_quality(x)
+            basis={
+                "time_semantics":"snapshot_model",
+                "metric_type":"calculated_unit_economics",
+                "source":"27/Юнитка",
+                "source_updated_at":own.get("source_updated_at"),
+                "period":"не прибыль выбранной недели; расчёт на 1 единицу по текущему снимку юнитки",
+                "formula":"цена → комиссия/логистика/приёмка/эквайринг/налоги/реклама → себестоимость → расчётная прибыль",
+                "quality_score":eq.score,
+                "quality_level":eq.level,
+                "quality_issues":eq.issues,
+                "missing_inputs":eq.missing,
+            }
+            if profit is not None and profit < 0:
+                evidence=[
+                    _ev('27/Юнитка','price_rub',price,'расчётная цена WB'),
+                    _ev('27/Юнитка','price_client_rub',_n(x.get('price_client_rub')),'цена клиента из юнитки'),
+                    _ev('27/Юнитка','cost_rub',_n(x.get('cost_rub')),'себестоимость из юнитки'),
+                    _ev('27/Юнитка','commission_pct',_n(x.get('commission_pct'))),
+                    _ev('27/Юнитка','logistics_total_rub',_n(x.get('logistics_total_rub'))),
+                    _ev('27/Юнитка','tax_total_rub',_n(x.get('tax_total_rub'))),
+                    _ev('27/Юнитка','profit_rub',profit,'расчёт на единицу, не фактическая прибыль периода'),
+                    _ev('27/Юнитка','margin_pct',margin),
+                    _ev('27/Юнитка','drr_pct',drr),
+                    _ev('analytics_kernel','data_quality_score',eq.score,'100 = полный и внутренне согласованный расчёт'),
+                ]
+                if not eq.ready:
+                    blockers=list(dict.fromkeys(eq.issues + [f"нет поля: {v}" for v in eq.missing]))
+                    out.append(DecisionCard(
+                        decision_key=f"sku:{sku}:negative_unit", scope='sku', entity_id=sku,
+                        title=f"{x.get('name')}: юнитка показывает убыток, но расчёт требует проверки",
+                        diagnosis=(
+                            f"В листе «Юнитка» сейчас записана расчётная прибыль {profit:.2f} ₽/шт"
+                            + (f" и маржа {margin:.1f}%" if margin is not None else "")
+                            + ". Это не фактическая прибыль выбранного периода. "
+                            + "Качество исходных компонентов недостаточно для денежного вывода, поэтому убыток считается сигналом на проверку, а не доказанным фактом."
+                        ),
+                        priority='high', confidence='low',
+                        recommended_actions=[
+                            {"step":1,"action":"Не масштабировать рекламу и не менять цену только на основании этой строки юнитки","mode":"data_guard"},
+                            {"step":2,"action":"Сверить себестоимость, логистику, комиссию, налоги и цену клиента по этому SKU; затем пересчитать юнитку из первичных компонентов","mode":"unit_reconciliation"},
+                            {"step":3,"action":"После появления закрытой реализации сверить расчётную прибыль с фактическими начислениями WB по тому же SKU","mode":"finance_reconciliation"},
+                        ],
+                        evidence=evidence, blockers=blockers,
+                        follow_up='Пересчитать сразу после исправления компонентов юнитки или появления подтверждённой реализации.',
+                        analysis=basis,
+                    ))
+                    continue
+
                 actions=[
-                    {"step":1,"action":"Не повышать ставку/бюджет рекламы для этого SKU","mode":"policy"},
-                    {"step":2,"action":"Проверить, что именно делает единицу убыточной: ДРР, комиссия, логистика, себестоимость, цена","mode":"analysis"},
+                    {"step":1,"action":"Не повышать ставку/бюджет рекламы для этого SKU до повторной проверки экономики","mode":"policy"},
+                    {"step":2,"action":"Разложить отрицательную прибыль по компонентам: цена, комиссия, логистика, себестоимость, налоги и реклама","mode":"analysis"},
                 ]
                 targets=[_n(x.get('target_price_profit_rub')), _n(x.get('target_price_margin_rub')), _n(x.get('target_price_roi_rub'))]
                 viable=sorted(t for t in targets if t is not None and price is not None and t > price)
                 if viable and price:
                     target=viable[0]
-                    actions.append({"step":3,"action":f"Конкретный ценовой тест: {price:.0f} → {target:.0f} ₽. До результата теста рекламу не масштабировать.","mode":"price_test"})
+                    actions.append({"step":3,"action":f"Проверить сценарий цены {price:.0f} → {target:.0f} ₽ и оценить влияние на конверсию; не считать рост цены автоматически прибыльным.","mode":"price_scenario"})
                 elif drr is not None and price and price > 0:
                     break_even_drr=max(0.0, drr + (profit / price * 100.0))
                     target_drr=max(0.0, break_even_drr - 1.0)
-                    actions.append({"step":3,"action":f"Цена не даёт подтверждённого безопасного сценария. Снизить рекламную нагрузку до ДРР не выше ≈{target_drr:.1f}% (расчётный безубыточный ≈{break_even_drr:.1f}%) и повторно проверить прибыль.","mode":"advertising_control"})
+                    actions.append({"step":3,"action":f"Расчётный безубыточный ДРР ≈{break_even_drr:.1f}%; проверить снижение рекламной нагрузки до ≈{target_drr:.1f}% без потери органики.","mode":"advertising_scenario"})
                 else:
-                    actions.append({"step":3,"action":"Денежное решение заблокировано: данных недостаточно для расчёта безопасной цены или рекламного ДРР.","mode":"blocked"})
+                    actions.append({"step":3,"action":"Рекламный сценарий не считать: нет подтверждённого ДРР для SKU.","mode":"blocked"})
                 out.append(DecisionCard(
                     decision_key=f"sku:{sku}:negative_unit", scope='sku', entity_id=sku,
-                    title=f"{x.get('name')}: продажа убыточна по текущей юнитке",
-                    diagnosis=f"Прибыль на единицу {profit:.2f} ₽" + (f", маржа {margin:.1f}%" if margin is not None else '') + (f", ДРР {drr:.1f}%" if drr is not None else '') + '. Увеличение рекламы сейчас масштабирует убыток.',
-                    priority='critical', confidence='high', recommended_actions=actions,
-                    evidence=[_ev('27/Юнитка','price_rub',price),_ev('27/Юнитка','profit_rub',profit),_ev('27/Юнитка','margin_pct',margin),_ev('27/Юнитка','drr_pct',drr)],
-                    follow_up='Повторно разрешать масштабирование только после положительной экономики на достаточной выборке.'
+                    title=f"{x.get('name')}: расчётная юнитка отрицательная",
+                    diagnosis=(
+                        f"Текущий расчёт на одну единицу: {profit:.2f} ₽"
+                        + (f", маржа {margin:.1f}%" if margin is not None else "")
+                        + (f", ДРР {drr:.1f}%" if drr is not None else "")
+                        + ". Это модель текущей единицы, а не реализованная прибыль выбранной недели."
+                    ),
+                    priority='critical', confidence='high' if eq.level == 'high' else 'medium',
+                    recommended_actions=actions, evidence=evidence,
+                    follow_up='Подтвердить вывод закрытой реализацией и сравнить фактическую прибыль той же когорты.',
+                    analysis=basis,
                 ))
-            elif margin is not None and margin < 5 and drr is not None and drr > 8:
+            elif margin is not None and margin < 5 and drr is not None and drr > 8 and eq.ready:
                 out.append(DecisionCard(
                     decision_key=f"sku:{sku}:thin_margin_ads", scope='sku', entity_id=sku,
                     title=f"{x.get('name')}: слишком тонкий запас маржи для текущей рекламы",
-                    diagnosis=f"Маржа {margin:.1f}% при ДРР {drr:.1f}%. Небольшое ухудшение CPC/CR может сделать SKU убыточным.",
-                    priority='high', confidence='high',
+                    diagnosis=f"Расчётная маржа {margin:.1f}% при ДРР {drr:.1f}%. Небольшое ухудшение CPC/CR может сделать текущую модель убыточной.",
+                    priority='high', confidence='high' if eq.level == 'high' else 'medium',
                     recommended_actions=[
                         {"step":1,"action":"Не масштабировать бюджет до проверки 3–7 дней","mode":"policy"},
                         {"step":2,"action":"Искать рост прибыли через CR/цену/органику, а не через голое повышение ставки","mode":"analysis"},
-                        {"step":3,"action":"Задать стоп-условие: отрицательная прибыль или дальнейшее ухудшение ДРР","mode":"experiment"},
-                    ], evidence=[_ev('27/Юнитка','margin_pct',margin),_ev('27/Юнитка','drr_pct',drr)],
-                    follow_up='Сравнить абсолютную прибыль до/после теста.'
+                        {"step":3,"action":"Задать стоп-условие: отрицательная расчётная прибыль или дальнейшее ухудшение ДРР","mode":"experiment"},
+                    ],
+                    evidence=[_ev('27/Юнитка','margin_pct',margin),_ev('27/Юнитка','drr_pct',drr),_ev('analytics_kernel','data_quality_score',eq.score)],
+                    follow_up='Сравнить абсолютную прибыль до/после теста и затем сверить с реализацией.',
+                    analysis=basis,
                 ))
         return out
 
@@ -252,87 +311,177 @@ class DecisionEngine:
         invcfg=self.policy.thresholds.get('inventory',{})
         runtime_ad=((self.policy.raw.get('runtime') or {}).get('advertising') or {})
         critical=float(invcfg.get('critical_days_cover',2))
-        warning=float(runtime_ad.get('min_stock_days_for_hold', invcfg.get('warning_days_cover',5)))
-        target=float(runtime_ad.get('target_stock_days', invcfg.get('target_days_cover',14)))
+        default_warning=float(runtime_ad.get('min_stock_days_for_hold', invcfg.get('warning_days_cover',5)))
+        default_target=float(runtime_ad.get('target_stock_days', invcfg.get('target_days_cover',14)))
         max_trend=float(runtime_ad.get('max_trend_pct_for_forecast',60))
         over=float(invcfg.get('overstock_days_cover',75))
+
         for x in own.get('products',[])[:500]:
-            daily=_n(x.get('orders_per_day')); stock=_n(x.get('safe_stock'))
-            if not daily or daily<=0 or stock is None: continue
+            sku=str(x.get('sku') or '')
+            stock=_n(x.get('safe_stock'))
+            if not sku or stock is None:
+                continue
+            daily=_n(x.get('orders_per_day'))
             planned_incoming=max(0.0, _n(x.get('planned_incoming_qty')) or 0.0)
             incoming_confirmed=bool(x.get('planned_incoming_confirmed'))
             effective_stock=stock + (planned_incoming if incoming_confirmed else 0.0)
-
-            # Один прогноз спроса используется и здесь, и в рекламном контуре. Так
-            # запас и реклама не получают разные версии будущего спроса.
-            demand = build_demand_forecast(x, max_growth_pct=max_trend)
-            forecast_daily = demand.forecast_orders_1d if demand.forecast_orders_1d is not None else daily
-            order_trend = demand.order_acceleration_pct
-            freq_trend = demand.search_frequency_trend_pct
-            demand_growth = order_trend if order_trend is not None else 0.0
-            days=effective_stock/forecast_daily if forecast_daily and forecast_daily>0 else effective_stock/daily
+            demand=build_demand_forecast(x, max_growth_pct=max_trend)
+            dq=demand_quality(x, demand)
+            forecast_daily=_n(demand.forecast_orders_1d)
+            warning=float(_n(x.get('reorder_point_days')) or default_warning)
+            target=float(_n(x.get('supply_target_days')) or default_target)
             debt=max(0,_n(x.get('fbs_debt_orders')) or 0)
-            trend_note=(f"; прогнозный темп ≈{forecast_daily:.1f}/день" + (f" ({demand_growth:+.1f}% к базовому)" if order_trend is not None else ""))
+            eq=economics_quality(x)
+
+            analysis={
+                "time_semantics":"forecast",
+                "metric_type":"inventory_risk",
+                "source":"27/Сводная + дневная история заказов + adaptive demand model",
+                "period":f"история до {demand.as_of or 'неизвестно'}; прогноз вперёд",
+                "formula":"inventory_position = on_hand + confirmed_inbound - committed; supply_need = forecast_daily × target_horizon + debt - inventory_position",
+                "demand_model":demand.model_name,
+                "demand_type":demand.demand_type,
+                "adi":demand.adi,
+                "cv2":demand.cv2,
+                "backtest_mae":demand.backtest_mae,
+                "backtest_bias":demand.backtest_bias,
+                "quality_score":dq.score,
+                "quality_level":dq.level,
+                "quality_issues":dq.issues,
+            }
+            demand_evidence=[
+                _ev('27/Сводная','safe_stock',stock,x.get('safe_stock_source','')),
+                _ev('27/Сводная','orders_per_day',daily,'операционный показатель из Сводной; не заменяет дневную историю'),
+                _ev('demand_forecast','forecast_orders_per_day',round(forecast_daily,3) if forecast_daily is not None else None,demand.model_name),
+                _ev('demand_forecast','demand_type',demand.demand_type,f"ADI={demand.adi}; CV²={demand.cv2}"),
+                _ev('demand_forecast','backtest_mae',demand.backtest_mae,'ошибка rolling one-step backtest, заказов/день'),
+                _ev('analytics_kernel','demand_quality_score',dq.score,'100 = согласованные и проверяемые сигналы спроса'),
+            ]
+
+            # When sources disagree, a precise restock/overstock instruction is more
+            # dangerous than a missing instruction. Surface the conflict only when it
+            # can change an operational decision now.
+            static_days=(effective_stock/daily) if daily and daily>0 else None
+            model_days=(effective_stock/forecast_daily) if forecast_daily and forecast_daily>0 else None
+            potential_risk=(stock <= 0 or (static_days is not None and static_days <= warning) or (model_days is not None and model_days <= warning))
+            potential_over=(static_days is not None and static_days >= over) or (model_days is not None and model_days >= over)
+            if not dq.ready:
+                # Do not flood Decisions with weak "possible overstock" signals. A low-quality
+                # forecast is itself a portfolio data-quality statistic; it becomes an
+                # individual decision only when the disagreement can hide a near-term stockout.
+                if potential_risk:
+                    issue_text='; '.join(dq.issues[:3]) or 'недостаточно статистики для количественного прогноза'
+                    out.append(DecisionCard(
+                        decision_key=f"sku:{sku}:demand_conflict", scope='sku', entity_id=sku,
+                        title=f"{x.get('name')}: запас требует внимания, но точное количество пока считать нельзя",
+                        diagnosis=(
+                            f"Остаток {stock:.0f} шт. "
+                            + (f"Сводная показывает ≈{daily:.2f} заказа/день; " if daily is not None else "")
+                            + (f"модель {demand.model_name} даёт ≈{forecast_daily:.2f}/день. " if forecast_daily is not None else "")
+                            + f"Качество прогноза {dq.score}/100: {issue_text}. "
+                            + "Поэтому система не превращает этот конфликт в ложное распоряжение на поставку или остановку закупки."
+                        ),
+                        priority='high' if potential_risk else 'medium',
+                        confidence='low',
+                        recommended_actions=[
+                            {"step":1,"action":"Сверить дневные заказы, доступность карточки и остатки по тем же датам; нулевые продажи во время отсутствия товара не считать нулевым спросом","mode":"demand_reconciliation"},
+                            {"step":2,"action":"Не использовать точные дни покрытия и количество поставки, пока источники темпа не согласованы либо модель не пройдёт backtest","mode":"supply_guard"},
+                            {"step":3,"action":"После следующего подтверждённого снимка пересчитать тип спроса, модель, ошибку и только затем количество","mode":"follow_up"},
+                        ],
+                        evidence=demand_evidence,
+                        blockers=list(dict.fromkeys(dq.issues + [f"нет данных: {v}" for v in dq.missing])),
+                        follow_up='Повторить после нового дневного снимка заказов/остатков или исправления источника темпа.',
+                        analysis=analysis,
+                    ))
+                continue
+
+            if forecast_daily is None or forecast_daily <= 0:
+                continue
+            days=effective_stock/forecast_daily
+            order_trend=demand.order_acceleration_pct
+            freq_trend=demand.search_frequency_trend_pct
+            trend_note=(f"; модель {demand.model_name} ≈{forecast_daily:.2f}/день")
+            semantics="ожидаемое покрытие" if demand.demand_type in {"intermittent","lumpy"} else "прогнозное покрытие"
 
             if days <= warning:
                 profit=_n(x.get('profit_rub')); margin=_n(x.get('margin_pct')); drr=_n(x.get('drr_pct'))
-                pri='critical' if days<=critical else 'high'
-                source_conf='high' if str(x.get('safe_stock_source','')).upper() in {'K2 SAFE','FF','K2'} else 'medium'
-                if profit is not None and profit < 0:
-                    bridge_days=max(3.0, critical + 1.0)
-                    bridge_need=max(0,ceil(forecast_daily*bridge_days + debt - stock))
-                    title=f"{x.get('name')}: запас низкий, но юнитка отрицательная — нельзя закупать на полный горизонт"
-                    diagnosis=(f"Покрытие ≈{days:.1f} дня при текущем темпе ≈{daily:.1f}/день{trend_note}, но прибыль на единицу {profit:.2f} ₽"
-                               + (f" и маржа {margin:.1f}%" if margin is not None else '')
-                               + f'. Пополнение на {target:.0f} дней сейчас масштабирует не только продажи, но и убыток.')
+                pri='critical' if days<=critical or stock<=0 else 'high'
+                source_conf='high' if str(x.get('safe_stock_source','')).upper() in {'K2 SAFE','FF','K2','WB FBS'} and dq.level=='high' else 'medium'
+                need=max(0,ceil(forecast_daily*target + debt - effective_stock))
+
+                if profit is not None and profit < 0 and eq.ready:
+                    bridge_days=max(3.0,critical+1.0)
+                    bridge_need=max(0,ceil(forecast_daily*bridge_days + debt - effective_stock))
+                    title=f"{x.get('name')}: риск дефицита подтверждён, но подтверждённая юнитка отрицательная"
+                    diagnosis=(
+                        f"{semantics.capitalize()} ≈{days:.1f} дня при {trend_note.lstrip('; ')}. "
+                        f"Расчётная прибыль {profit:.2f} ₽/шт"
+                        + (f", маржа {margin:.1f}%" if margin is not None else "")
+                        + f". Полное пополнение до {target:.0f} дней увеличит экспозицию убыточной модели."
+                    )
                     actions=[
-                        {"step":1,"action":"Сначала исправить экономику SKU: цена → комиссия/логистика → ДРР → себестоимость → выкуп","mode":"unit_economics_guard"},
-                        {"step":2,"action":f"Если дефицит недопустим, пополнить не более чем примерно до {bridge_days:.0f} дней: ориентир {bridge_need} шт. по прогнозному темпу {forecast_daily:.1f}/день","mode":"bridge_supply"},
-                        {"step":3,"action":"Рекламное решение брать только из рекламного контура этого товара; отрицательная юнитка запрещает повышение ставки","mode":"advertising_control_link"},
+                        {"step":1,"action":"Не закупать полный горизонт до устранения причины отрицательной юнитки","mode":"unit_economics_guard"},
+                        {"step":2,"action":f"Если наличие критично, мостовой ориентир — не более {bridge_need} шт. примерно до {bridge_days:.0f} дней ожидаемого спроса","mode":"bridge_supply"},
+                        {"step":3,"action":"После подтверждения новой экономики пересчитать нормальный горизонт поставки","mode":"follow_up"},
                     ]
-                    ev=[_ev('27/Сводная','safe_stock',stock,x.get('safe_stock_source','')),_ev('27/Сводная','orders_per_day',daily),_ev('demand_forecast','forecast_orders_per_day',round(forecast_daily,2)),_ev('demand_forecast','orders_trend_pct',order_trend),_ev('search','search_frequency_trend_pct',freq_trend),_ev('27/Юнитка','profit_rub',profit),_ev('27/Юнитка','margin_pct',margin),_ev('27/Юнитка','drr_pct',drr)]
                 else:
-                    need=max(0,ceil(forecast_daily*target + debt - effective_stock))
-                    if need == 0:
-                        title=f"{x.get('name')}: низкий остаток, но прогноз не подтверждает объём поставки"
-                        diagnosis=(f"Безопасный остаток {stock:.0f} шт., текущий темп ≈{daily:.1f}/день, "
-                                   f"прогноз ≈{forecast_daily:.3f}/день. Расчёт на {target:.0f} дней даёт нулевую потребность; "
-                                   "нельзя показывать это как распоряжение поставить 0 шт. Расхождение темпов требует проверки.")
-                        actions=[
-                            {"step":1,"action":"Сверить заказы последних 7 дней, остаток K2/ФФ и доступность карточки; выяснить, почему прогноз близок к нулю","mode":"demand_validation"},
-                            {"step":2,"action":"Не оформлять поставку по нулевому расчёту. До проверки не увеличивать рекламный спрос на товар с низким остатком","mode":"supply_guard"},
-                            {"step":3,"action":"После подтверждения спроса пересчитать количество для целевого покрытия и срок поступления","mode":"follow_up"},
-                        ]
-                    else:
-                        title=f"{x.get('name')}: риск дефицита — нужен конкретный план пополнения"
-                        diagnosis=f"Безопасный остаток {stock:.0f} шт., текущий темп ≈{daily:.1f}/день{trend_note}, прогнозное покрытие ≈{days:.1f} дня. Для цели {target:.0f} дней ориентировочно не хватает {need} шт." + (f" В плане отмечено ещё {planned_incoming:.0f} шт., но приход не считается доступным, пока не подтверждена дата/приёмка." if planned_incoming and not incoming_confirmed else '')
-                        actions=[
-                            {"step":1,"action":f"Поставить/произвести ориентировочно {need} шт. до целевого покрытия {target:.0f} дней при прогнозном темпе {forecast_daily:.1f}/день","mode":"supply_plan"},
-                            {"step":2,"action":"Остаточный контур сам ставку не меняет. Рекламный контур должен пересчитать точную ставку и предел расхода с учётом этого прогноза запаса","mode":"advertising_control_link"},
-                            {"step":3,"action":"После нового снимка K2/ФФ пересчитать прогноз спроса, покрытие и рекламный коридор одновременно","mode":"follow_up"},
-                        ]
+                    title=f"{x.get('name')}: подтверждён риск дефицита"
+                    diagnosis=(
+                        f"Остаток {stock:.0f} шт.; {semantics} ≈{days:.1f} дня при модели {demand.model_name} ≈{forecast_daily:.2f}/день. "
+                        f"Для текущего целевого горизонта {target:.0f} дней расчётная потребность ≈{need} шт."
+                    )
                     if planned_incoming and not incoming_confirmed:
-                        actions.insert(1,{"step":2,"action":f"Подтвердить дату и фактический приход запланированных {planned_incoming:.0f} шт.; до подтверждения не вычитать их из потребности и не использовать для разгона рекламы","mode":"incoming_supply_guard"})
-                        for i,a in enumerate(actions,1): a["step"]=i
-                    ev=[_ev('27/Сводная','safe_stock',stock,x.get('safe_stock_source','')), _ev('27/Сводная','orders_per_day',daily), _ev('demand_forecast','forecast_orders_per_day',round(forecast_daily,2)), _ev('demand_forecast','demand_growth_pct',round(demand_growth,2)), _ev('demand_forecast','orders_trend_pct',order_trend), _ev('search','search_frequency_trend_pct',freq_trend), _ev('derived','forecast_days_cover',round(days,1)), _ev('27/Сводная','fbs_debt_orders',debt),_ev('27/Юнитка','profit_rub',profit),_ev('27/Юнитка','margin_pct',margin)]
+                        diagnosis += f" План на {planned_incoming:.0f} шт. не считается доступным остатком, пока не подтверждены дата и приёмка."
+                    if not eq.ready and profit is not None and profit < 0:
+                        diagnosis += " Юнитка также показывает минус, но её качество недостаточно для запрета поставки; сначала сверить экономику."
+                    actions=[
+                        {"step":1,"action":f"Подготовить ориентир поставки {need} шт. до текущего целевого горизонта {target:.0f} дней; перед отправкой сверить фактический остаток и срок поступления","mode":"supply_plan"},
+                        {"step":2,"action":"Проверить срок производства/доставки: при длинном lead time заменить фиксированный горизонт на риск дефицита до даты прихода","mode":"lead_time_check"},
+                        {"step":3,"action":"После нового снимка остатков и заказов пересчитать прогноз и количество","mode":"follow_up"},
+                    ]
+                evidence=demand_evidence + [
+                    _ev('derived','forecast_days_cover',round(days,1),semantics),
+                    _ev('derived','supply_need_qty',need,f"целевой горизонт {target:.0f} дней"),
+                    _ev('27/Сводная','fbs_debt_orders',debt),
+                    _ev('27/Юнитка','profit_rub',profit,'использовать как жёсткий guard только при подтверждённой юнитке'),
+                    _ev('27/Юнитка','margin_pct',margin),
+                ]
+                blockers=[]
+                if planned_incoming and not incoming_confirmed:
+                    blockers.append(f"запланировано {planned_incoming:.0f} шт., но дата/приёмка не подтверждены")
                 out.append(DecisionCard(
-                    decision_key=f"sku:{x.get('sku')}:stockout", scope='sku', entity_id=str(x.get('sku')),
+                    decision_key=f"sku:{sku}:stockout", scope='sku', entity_id=sku,
                     title=title, diagnosis=diagnosis, priority=pri, confidence=source_conf,
-                    recommended_actions=actions, evidence=ev,
-                    follow_up='Пересчитывать при каждом новом снимке K2/ФФ, изменении темпа заказов, частотности или экономики.'
+                    recommended_actions=actions, evidence=evidence, blockers=blockers,
+                    follow_up='Пересчитывать при каждом новом снимке остатков, спроса и подтверждённой поставки.',
+                    analysis=analysis,
                 ))
             elif days >= over:
+                target_stock=forecast_daily*target
+                excess=max(0.0,effective_stock-target_stock)
+                cost=_n(x.get('cost_rub'))
+                frozen=excess*cost if cost is not None else None
+                money_note=(f" Это ≈{frozen:.0f} ₽ капитала по указанной себестоимости." if frozen is not None else "")
                 out.append(DecisionCard(
-                    decision_key=f"sku:{x.get('sku')}:overstock", scope='sku', entity_id=str(x.get('sku')),
-                    title=f"{x.get('name')}: капитал заморожен в избыточном запасе",
-                    diagnosis=f"Прогнозное покрытие ≈{days:.0f} дней при текущем темпе {daily:.1f}/день{trend_note}. Новую закупку лучше не делать, пока спрос не догонит запас.",
-                    priority='medium', confidence='medium',
+                    decision_key=f"sku:{sku}:overstock", scope='sku', entity_id=sku,
+                    title=f"{x.get('name')}: подтверждён избыточный запас",
+                    diagnosis=(
+                        f"{semantics.capitalize()} ≈{days:.0f} дней при модели {demand.model_name} ≈{forecast_daily:.2f}/день. "
+                        f"Сверх текущего горизонта {target:.0f} дней находится ориентировочно {excess:.0f} шт.{money_note}"
+                    ),
+                    priority='medium', confidence='high' if dq.level=='high' else 'medium',
                     recommended_actions=[
-                        {"step":1,"action":"Остановить дополнительное пополнение этого SKU","mode":"supply_guard"},
-                        {"step":2,"action":"Если юнитка положительная — рекламный контур может проверять дополнительный спрос только в пределах рассчитанной экономики и разрешённого шага ставки","mode":"advertising_control_link"},
-                        {"step":3,"action":"Если юнитка слабая — сначала исправить экономику, не демпинговать автоматически","mode":"analysis"},
-                    ], evidence=[_ev('27/Сводная','safe_stock',stock),_ev('27/Сводная','orders_per_day',daily),_ev('demand_forecast','forecast_orders_per_day',round(forecast_daily,2)),_ev('derived','forecast_days_cover',round(days,1))],
-                    follow_up='Проверять темп заказов и поисковый спрос при каждом цикле; не ждать конца недели при резком ускорении.'
+                        {"step":1,"action":"Не пополнять этот SKU, пока запас не приблизится к рабочему горизонту","mode":"supply_guard"},
+                        {"step":2,"action":"Оценивать разгрузку запаса через прибыльный дополнительный спрос, а не через автоматический демпинг","mode":"profit_guard"},
+                        {"step":3,"action":"Проверить каннибализацию между близкими фасовками/комплектами прежде чем усиливать рекламу именно этого SKU","mode":"portfolio_check"},
+                    ],
+                    evidence=demand_evidence + [
+                        _ev('derived','forecast_days_cover',round(days,1),semantics),
+                        _ev('derived','excess_units_vs_target',round(excess,1),f"горизонт {target:.0f} дней"),
+                        _ev('derived','frozen_capital_rub',round(frozen,2) if frozen is not None else None,'по указанной себестоимости'),
+                    ],
+                    follow_up='Пересчитать после заметного изменения спроса, цены, рекламы или остатка.',
+                    analysis=analysis,
                 ))
         return out
 
