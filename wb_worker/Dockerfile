@@ -11,6 +11,7 @@ RUN pip install --no-cache-dir "wb-mcp-server==2.6.1"
 
 WORKDIR /app
 COPY finance_sync.py /app/finance_sync.py
+COPY deductions_sync.py /app/deductions_sync.py
 COPY fbs_supply_sync.py /app/fbs_supply_sync.py
 COPY penalty_evidence_sync.py /app/penalty_evidence_sync.py
 COPY traffic_sync.py /app/traffic_sync.py
