@@ -29,6 +29,7 @@ from .decision_groups import decision_group_summary, group_decisions
 from .discovery_engine import discover_cross_sku_patterns
 from .research_engine import build_research_agenda
 from .updater import UpdateManager, current_version
+from .planning_engine import build_planning_dashboard, calculate_scenario
 
 settings = Settings()
 center = ControlCenter(settings)
@@ -393,6 +394,7 @@ SNAPSHOT_SPEC: dict[str, list[str]] = {
     "orders_fbs": ["new_orders", "reshipment", "worker_fbs"],
     "returns_quality": ["open_claims"],
     "documents": ["documents_7d"],
+    "planning": ["plans"],
 }
 
 
@@ -588,6 +590,9 @@ async def dashboard_data(days: int = 7, from_date: str | None = None, to_date: s
     research_agenda = build_research_agenda(decision_groups, analytical_quality, dataset_quality)
     research_agenda["discoveries"] = discover_cross_sku_patterns(portfolio_snapshot)
     research_agenda["discovery_count"] = len(research_agenda["discoveries"])
+    saved_plan_snapshot = center.db.latest_snapshot("planning", "plans")
+    saved_plans = (saved_plan_snapshot or {}).get("data") if saved_plan_snapshot else {}
+    planning = build_planning_dashboard(portfolio_snapshot, snapshots, saved_plans if isinstance(saved_plans, dict) else {})
     audit_agents = audit.get("agents") or {}
     audit_failed = sum(1 for x in audit_agents.values() if isinstance(x, dict) and x.get("status") == "error")
     return {
@@ -644,6 +649,7 @@ async def dashboard_data(days: int = 7, from_date: str | None = None, to_date: s
         "decision_groups": decision_groups,
         "decision_group_summary": grouped_summary,
         "research_agenda": research_agenda,
+        "planning": planning,
         "snapshots": snapshots,
         "decision_control": {
             "history": center.db.decision_history(limit=80),
@@ -694,6 +700,65 @@ async def decisions() -> list[dict[str, Any]]:
 async def refresh_decisions() -> dict[str, Any]:
     rows=center.refresh_decisions()
     return {"ok": True, "count": len(rows), "decisions": rows}
+
+
+@app.get("/api/planning")
+async def planning_data() -> dict[str, Any]:
+    portfolio_snapshot = portfolio.snapshot()
+    snapshots = _dashboard_snapshots()
+    saved_snapshot = center.db.latest_snapshot("planning", "plans")
+    saved = (saved_snapshot or {}).get("data") if saved_snapshot else {}
+    result = build_planning_dashboard(portfolio_snapshot, snapshots, saved if isinstance(saved, dict) else {})
+    result["saved_at"] = saved_snapshot.get("created_at") if saved_snapshot else None
+    return result
+
+
+@app.post("/api/planning/plan")
+async def save_planning_plan(payload: dict[str, Any]) -> dict[str, Any]:
+    sku = str(payload.get("sku") or "").strip()
+    if not sku:
+        raise HTTPException(400, "sku is required")
+    planned = payload.get("planned_orders_day")
+    try:
+        planned_value = float(planned)
+    except Exception:
+        raise HTTPException(400, "planned_orders_day must be numeric")
+    if planned_value < 0:
+        raise HTTPException(400, "planned_orders_day must be >= 0")
+    existing_snapshot = center.db.latest_snapshot("planning", "plans")
+    existing = (existing_snapshot or {}).get("data") if existing_snapshot else {}
+    plans = dict(existing) if isinstance(existing, dict) else {}
+    plans[sku] = {
+        "planned_orders_day": planned_value,
+        "note": str(payload.get("note") or "")[:500],
+        "scenario": payload.get("scenario") if isinstance(payload.get("scenario"), dict) else {},
+    }
+    now = datetime.now(timezone.utc).isoformat()
+    center.db.save_snapshot("planning", "plans", plans, now)
+    decisions = center.refresh_decisions()
+    return {"ok": True, "sku": sku, "plan": plans[sku], "saved_at": now, "decisions": len(decisions)}
+
+
+@app.post("/api/planning/scenario")
+async def planning_scenario(payload: dict[str, Any]) -> dict[str, Any]:
+    sku = str(payload.get("sku") or "").strip()
+    if not sku:
+        raise HTTPException(400, "sku is required")
+    portfolio_snapshot = portfolio.snapshot()
+    snapshots = _dashboard_snapshots()
+    saved_snapshot = center.db.latest_snapshot("planning", "plans")
+    saved = (saved_snapshot or {}).get("data") if saved_snapshot else {}
+    planning = build_planning_dashboard(portfolio_snapshot, snapshots, saved if isinstance(saved, dict) else {})
+    row = next((x for x in planning.get("rows", []) if str(x.get("sku")) == sku), None)
+    if not row:
+        raise HTTPException(404, "sku not found")
+    own = portfolio_snapshot.get("own_27") or {}
+    product = next((x for x in own.get("products", []) if str(x.get("sku") or x.get("nm_id") or "") == sku), {})
+    enriched = dict(row)
+    enriched["price_rub"] = product.get("price_client_rub") or product.get("price_rub") or product.get("price")
+    enriched["unit_profit_rub"] = product.get("profit_rub") or product.get("unit_profit_rub")
+    overrides = payload.get("overrides") if isinstance(payload.get("overrides"), dict) else {}
+    return {"sku": sku, "scenario": calculate_scenario(enriched, overrides), "base": row}
 
 
 @app.get("/api/decision-control")
