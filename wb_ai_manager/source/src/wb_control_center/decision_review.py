@@ -185,4 +185,11 @@ class DecisionReviewBoard:
                 card.evidence.append({"source":"критик","metric":"возражение","value":item})
             for item in risk[:3]:
                 card.evidence.append({"source":"контроль риска","metric":"риск","value":item})
-        return cards, results
+        # "Решения" is an operator queue, not a diagnostics dump.  Cards whose
+        # remaining work is entirely automatic stay in snapshots/review evidence and
+        # do not consume owner attention.
+        actionable = [
+            card for card in cards
+            if bool((card.analysis or {}).get("operator_action_required", bool(card.recommended_actions)))
+        ]
+        return actionable, results
