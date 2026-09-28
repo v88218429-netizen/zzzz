@@ -35,6 +35,14 @@ class ReviewResult:
         return asdict(self)
 
 
+_SYSTEM_WORK_MODES = {
+    "automatic_policy", "maintenance", "identity_reconciliation", "information_gain",
+    "automatic_follow_up", "unit_reconciliation", "finance_reconciliation",
+    "root_cause_resolved", "measured_follow_up", "follow_up", "lead_time_check",
+    "portfolio_check", "reasoning", "recheck_rule", "analysis",
+}
+
+
 class DecisionReviewBoard:
     """Independent deterministic critic + risk controller.
 
@@ -148,8 +156,31 @@ class DecisionReviewBoard:
                 verdict = "заблокировано проверкой"
             elif card.blockers:
                 verdict = "нужны данные"
+            # Internal analysis is work for the system, not a chore for the owner.
+            # Keep it in machine-readable analysis and expose only operator actions.
+            system_work = []
+            operator_actions = []
+            for action in card.recommended_actions:
+                if not isinstance(action, dict):
+                    continue
+                mode = str(action.get("mode") or "")
+                text = str(action.get("action") or "")
+                if mode in _SYSTEM_WORK_MODES:
+                    if text:
+                        system_work.append(text)
+                else:
+                    operator_actions.append(action)
+            if system_work:
+                card.analysis = dict(card.analysis or {})
+                card.analysis["system_work"] = system_work
+            for idx, action in enumerate(operator_actions, start=1):
+                action["step"] = idx
+            card.recommended_actions = operator_actions
+            card.analysis = dict(card.analysis or {})
+            card.analysis["operator_action_required"] = bool(operator_actions)
+
             results.append(ReviewResult(card.decision_key, verdict, critic, risk, added, confidence))
-            card.evidence.append({"source":"независимая проверка","metric":"review_verdict","value":verdict})
+            card.evidence.append({"source":"независимая проверка","metric":"Вердикт проверки","value":verdict})
             for item in critic[:3]:
                 card.evidence.append({"source":"критик","metric":"возражение","value":item})
             for item in risk[:3]:
