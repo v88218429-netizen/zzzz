@@ -8,6 +8,7 @@ from .models import DecisionCard
 from .advertising_controller import AdvertisingController
 from .analytics_kernel import demand_quality, economics_quality
 from .demand_forecast import build_demand_forecast
+from .metrics import extract_ad_nm_metrics
 
 
 def _n(v: Any) -> float | None:
@@ -51,6 +52,146 @@ def _pick_num(row: dict[str, Any], *keys: str) -> float | None:
             if n is not None:
                 return n
     return None
+
+
+def _direct_num(row: dict[str, Any], *keys: str) -> float | None:
+    lowered = {str(k).lower(): v for k, v in row.items()}
+    for key in keys:
+        if key.lower() in lowered:
+            value = _n(lowered[key.lower()])
+            if value is not None:
+                return value
+    return None
+
+
+def _funnel_fact_index(obj: Any) -> dict[str, dict[str, float]]:
+    """Pick the most complete current-period funnel row for each exact nmID."""
+    out: dict[str, dict[str, float]] = {}
+
+    def walk(value: Any) -> None:
+        if isinstance(value, list):
+            for item in value:
+                walk(item)
+            return
+        if not isinstance(value, dict):
+            return
+        nm = _direct_num(value, "nmId", "nmID", "nm_id", "nm")
+        if nm is not None:
+            current = value.get("currentPeriod") or value.get("current_period") or value.get("current")
+            row = current if isinstance(current, dict) else value
+            order_sum = _direct_num(row, "orderSum", "order_sum")
+            buyout_sum = _direct_num(row, "buyoutSum", "buyout_sum")
+            order_count = _direct_num(row, "orderCount", "order_count")
+            buyout_count = _direct_num(row, "buyoutCount", "buyout_count")
+            if any(v is not None for v in (order_sum, buyout_sum, order_count, buyout_count)):
+                key = str(int(nm))
+                candidate = {
+                    "order_sum_rub": float(order_sum or 0.0),
+                    "buyout_sum_rub": float(buyout_sum or 0.0),
+                    "order_count": float(order_count or 0.0),
+                    "buyout_count": float(buyout_count or 0.0),
+                }
+                score = sum(1 for v in (order_sum, buyout_sum, order_count, buyout_count) if v is not None)
+                old = out.get(key)
+                old_score = int(old.get("_score", 0)) if old else -1
+                if score > old_score or (score == old_score and candidate["buyout_sum_rub"] > float((old or {}).get("buyout_sum_rub") or 0)):
+                    candidate["_score"] = score
+                    out[key] = candidate
+        for nested in value.values():
+            if isinstance(nested, (dict, list)):
+                walk(nested)
+
+    walk(obj)
+    for row in out.values():
+        row.pop("_score", None)
+    return out
+
+
+def _live_economics_fact_index(snapshots: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Build period-aligned factual DRR from exact SKU ad spend and funnel revenue."""
+    stats = _snap(snapshots, "advertising_monitor", "stats_7d")
+    funnel = _snap(snapshots, "funnel", "funnel_7d")
+    if stats is None or funnel is None:
+        return {}
+    ad_buckets = extract_ad_nm_metrics(stats)
+    ads: dict[str, dict[str, Any]] = {}
+    for (_, nm), row in ad_buckets.items():
+        key = str(int(nm))
+        agg = ads.setdefault(key, {"spend_rub": 0.0, "days": set()})
+        agg["spend_rub"] += float(row.get("sum") or 0.0)
+        for day in row.get("days") or []:
+            dt = str(day.get("date") or "")[:10]
+            if dt:
+                agg["days"].add(dt)
+    funnels = _funnel_fact_index(funnel)
+    out: dict[str, dict[str, Any]] = {}
+    for sku, ad in ads.items():
+        fr = funnels.get(sku)
+        if not fr:
+            continue
+        sales = float(fr.get("buyout_sum_rub") or 0.0)
+        orders = float(fr.get("order_sum_rub") or 0.0)
+        spend = float(ad.get("spend_rub") or 0.0)
+        days = sorted(ad.get("days") or [])
+        out[sku] = {
+            "ad_spend_rub": spend,
+            "sales_revenue_rub": sales if sales > 0 else None,
+            "orders_revenue_rub": orders if orders > 0 else None,
+            "fact_drr_sales_pct": (spend / sales * 100.0) if sales > 0 else None,
+            "fact_drr_orders_pct": (spend / orders * 100.0) if orders > 0 else None,
+            "period_from": days[0] if days else None,
+            "period_to": days[-1] if days else None,
+            "days": len(days),
+            "source": "WB Promotion exact nmID + WB funnel",
+            "quality": "LIVE_EXACT_SKU",
+        }
+    return out
+
+
+def _product_economics_reconciliation(product: dict[str, Any], live_fact: dict[str, Any] | None = None) -> dict[str, Any]:
+    plan_drr = _n(product.get("plan_drr_pct"))
+    plan_profit = _n(product.get("profit_rub"))
+    plan_margin = _n(product.get("margin_pct"))
+    price = _n(product.get("price_rub"))
+
+    fact = live_fact or {}
+    if _n(fact.get("fact_drr_sales_pct")) is None:
+        fact = {
+            "ad_spend_rub": _n(product.get("fact_ad_spend_rub")),
+            "sales_revenue_rub": _n(product.get("fact_sales_revenue_rub")),
+            "fact_drr_sales_pct": _n(product.get("fact_drr_sales_pct")),
+            "period_from": product.get("fact_economics_period_from"),
+            "period_to": product.get("fact_economics_period_to"),
+            "days": _n(product.get("fact_economics_days")),
+            "source": product.get("fact_economics_source"),
+            "quality": product.get("fact_economics_quality"),
+        }
+    actual_drr = _n(fact.get("fact_drr_sales_pct"))
+    scenario_profit = None
+    scenario_margin = None
+    break_even_drr = None
+    if price and price > 0 and plan_profit is not None and plan_drr is not None:
+        break_even_drr = plan_drr + plan_profit / price * 100.0
+        if actual_drr is not None:
+            scenario_profit = plan_profit - (actual_drr - plan_drr) / 100.0 * price
+            scenario_margin = scenario_profit / price * 100.0
+    return {
+        "plan_drr_pct": plan_drr,
+        "plan_profit_rub": plan_profit,
+        "plan_margin_pct": plan_margin,
+        "price_after_discount_rub": price,
+        "fact_drr_sales_pct": actual_drr,
+        "fact_ad_spend_rub": _n(fact.get("ad_spend_rub")),
+        "fact_sales_revenue_rub": _n(fact.get("sales_revenue_rub")),
+        "fact_period_from": fact.get("period_from"),
+        "fact_period_to": fact.get("period_to"),
+        "fact_days": _n(fact.get("days")),
+        "fact_source": fact.get("source"),
+        "fact_quality": fact.get("quality"),
+        "scenario_profit_rub": scenario_profit,
+        "scenario_margin_pct": scenario_margin,
+        "break_even_drr_pct": break_even_drr,
+    }
 
 
 @dataclass
@@ -97,7 +238,7 @@ class DecisionEngine:
         if current_portfolio:
             out += self._operating_findings(snapshots)
             out += self._store_decisions(portfolio)
-            out += self._product_decisions(portfolio)
+            out += self._product_decisions(portfolio, snapshots)
             out += self._inventory_decisions(portfolio)
         out += self._advertising_control_decisions(safe_portfolio, snapshots)
         out += self._card_content_decisions(safe_portfolio, snapshots)
@@ -203,107 +344,143 @@ class DecisionEngine:
                 ))
         return out
 
-    def _product_decisions(self, p: dict[str, Any]) -> list[DecisionCard]:
-        out=[]; own=p.get('own_27') or {}
-        for x in own.get('products',[])[:500]:
-            sku=str(x.get('sku') or '')
+    def _product_decisions(self, p: dict[str, Any], snapshots: dict[str, Any] | None = None) -> list[DecisionCard]:
+        out: list[DecisionCard] = []
+        own = p.get("own_27") or {}
+        live_facts = _live_economics_fact_index(snapshots or {})
+
+        for x in own.get("products", [])[:500]:
+            sku = str(x.get("sku") or "")
             if not sku:
                 continue
-            profit=_n(x.get('profit_rub')); margin=_n(x.get('margin_pct'))
-            drr=_n(x.get('drr_pct')); price=_n(x.get('price_rub'))
-            eq=economics_quality(x)
-            basis={
-                "time_semantics":"snapshot_model",
-                "metric_type":"calculated_unit_economics",
-                "source":"27/Юнитка",
-                "source_updated_at":own.get("source_updated_at"),
-                "period":"не прибыль выбранной недели; расчёт на 1 единицу по текущему снимку юнитки",
-                "formula":"цена → комиссия/логистика/приёмка/эквайринг/налоги/реклама → себестоимость → расчётная прибыль",
-                "quality_score":eq.score,
-                "quality_level":eq.level,
-                "quality_issues":eq.issues,
-                "missing_inputs":eq.missing,
-            }
-            if profit is not None and profit < 0:
-                evidence=[
-                    _ev('27/Юнитка','price_rub',price,'расчётная цена WB'),
-                    _ev('27/Юнитка','price_client_rub',_n(x.get('price_client_rub')),'цена клиента из юнитки'),
-                    _ev('27/Юнитка','cost_rub',_n(x.get('cost_rub')),'себестоимость из юнитки'),
-                    _ev('27/Юнитка','commission_pct',_n(x.get('commission_pct'))),
-                    _ev('27/Юнитка','logistics_total_rub',_n(x.get('logistics_total_rub'))),
-                    _ev('27/Юнитка','tax_total_rub',_n(x.get('tax_total_rub'))),
-                    _ev('27/Юнитка','profit_rub',profit,'расчёт на единицу, не фактическая прибыль периода'),
-                    _ev('27/Юнитка','margin_pct',margin),
-                    _ev('27/Юнитка','drr_pct',drr),
-                    _ev('analytics_kernel','data_quality_score',eq.score,'100 = полный и внутренне согласованный расчёт'),
-                ]
-                if not eq.ready:
-                    blockers=list(dict.fromkeys(eq.issues + [f"нет поля: {v}" for v in eq.missing]))
-                    out.append(DecisionCard(
-                        decision_key=f"sku:{sku}:negative_unit", scope='sku', entity_id=sku,
-                        title=f"{x.get('name')}: юнитка показывает убыток, но расчёт требует проверки",
-                        diagnosis=(
-                            f"В листе «Юнитка» сейчас записана расчётная прибыль {profit:.2f} ₽/шт"
-                            + (f" и маржа {margin:.1f}%" if margin is not None else "")
-                            + ". Это не фактическая прибыль выбранного периода. "
-                            + "Качество исходных компонентов недостаточно для денежного вывода, поэтому убыток считается сигналом на проверку, а не доказанным фактом."
-                        ),
-                        priority='high', confidence='low',
-                        recommended_actions=[
-                            {"step":1,"action":"Не масштабировать рекламу и не менять цену только на основании этой строки юнитки","mode":"data_guard"},
-                            {"step":2,"action":"Сверить себестоимость, логистику, комиссию, налоги и цену клиента по этому SKU; затем пересчитать юнитку из первичных компонентов","mode":"unit_reconciliation"},
-                            {"step":3,"action":"После появления закрытой реализации сверить расчётную прибыль с фактическими начислениями WB по тому же SKU","mode":"finance_reconciliation"},
-                        ],
-                        evidence=evidence, blockers=blockers,
-                        follow_up='Пересчитать сразу после исправления компонентов юнитки или появления подтверждённой реализации.',
-                        analysis=basis,
-                    ))
-                    continue
 
-                actions=[
-                    {"step":1,"action":"Не повышать ставку/бюджет рекламы для этого SKU до повторной проверки экономики","mode":"policy"},
-                    {"step":2,"action":"Разложить отрицательную прибыль по компонентам: цена, комиссия, логистика, себестоимость, налоги и реклама","mode":"analysis"},
+            # The old 27/Юнитка is retained for diagnostics only.  If a SKU is not
+            # confidently mapped to the primary model, do not manufacture a money task.
+            if str(x.get("unit_economics_role") or "") != "primary_plan":
+                continue
+
+            eq = economics_quality(x)
+            if not eq.ready:
+                continue
+
+            rec = _product_economics_reconciliation(x, live_facts.get(sku))
+            plan_profit = _n(rec.get("plan_profit_rub"))
+            plan_margin = _n(rec.get("plan_margin_pct"))
+            plan_drr = _n(rec.get("plan_drr_pct"))
+            actual_drr = _n(rec.get("fact_drr_sales_pct"))
+            scenario_profit = _n(rec.get("scenario_profit_rub"))
+            scenario_margin = _n(rec.get("scenario_margin_pct"))
+            break_even = _n(rec.get("break_even_drr_pct"))
+            price = _n(rec.get("price_after_discount_rub"))
+
+            evidence = [
+                _ev("Основная юнитка", "Цена после скидки, ₽", price, "плановая модель"),
+                _ev("Основная юнитка", "Себестоимость, ₽", _n(x.get("cost_rub")), "до передачи на маркетплейс"),
+                _ev("Основная юнитка", "Комиссия WB, %", _n(x.get("commission_pct"))),
+                _ev("Основная юнитка", "Логистика с учётом выкупа, ₽", _n(x.get("logistics_total_rub"))),
+                _ev("Основная юнитка", "Платная приёмка, ₽", _n(x.get("acceptance_rub"))),
+                _ev("Основная юнитка", "Налоги, ₽", _n(x.get("tax_total_rub"))),
+                _ev("Основная юнитка", "Плановый ДРР, %", plan_drr, "это допущение модели, не факт WB"),
+                _ev("Основная юнитка", "Плановая прибыль, ₽/шт", plan_profit),
+                _ev("Основная юнитка", "Плановая маржа, %", plan_margin),
+            ]
+            if actual_drr is not None:
+                period = " → ".join(str(v) for v in (rec.get("fact_period_from"), rec.get("fact_period_to")) if v)
+                evidence += [
+                    _ev(str(rec.get("fact_source") or "Факт WB"), "Фактический расход рекламы, ₽", _n(rec.get("fact_ad_spend_rub")), period),
+                    _ev(str(rec.get("fact_source") or "Факт WB"), "Фактическая выручка продаж, ₽", _n(rec.get("fact_sales_revenue_rub")), period),
+                    _ev(str(rec.get("fact_source") or "Факт WB"), "Фактический ДРР продаж, %", actual_drr, period),
+                    _ev("Сверка план ↔ факт", "Модельная прибыль при фактическом ДРР, ₽/шт", scenario_profit, "не реализованная прибыль; остальные параметры юнитки зафиксированы"),
+                    _ev("Сверка план ↔ факт", "Модельная маржа при фактическом ДРР, %", scenario_margin),
                 ]
-                targets=[_n(x.get('target_price_profit_rub')), _n(x.get('target_price_margin_rub')), _n(x.get('target_price_roi_rub'))]
-                viable=sorted(t for t in targets if t is not None and price is not None and t > price)
-                if viable and price:
-                    target=viable[0]
-                    actions.append({"step":3,"action":f"Проверить сценарий цены {price:.0f} → {target:.0f} ₽ и оценить влияние на конверсию; не считать рост цены автоматически прибыльным.","mode":"price_scenario"})
-                elif drr is not None and price and price > 0:
-                    break_even_drr=max(0.0, drr + (profit / price * 100.0))
-                    target_drr=max(0.0, break_even_drr - 1.0)
-                    actions.append({"step":3,"action":f"Расчётный безубыточный ДРР ≈{break_even_drr:.1f}%; проверить снижение рекламной нагрузки до ≈{target_drr:.1f}% без потери органики.","mode":"advertising_scenario"})
-                else:
-                    actions.append({"step":3,"action":"Рекламный сценарий не считать: нет подтверждённого ДРР для SKU.","mode":"blocked"})
+
+            basis = {
+                "time_semantics": "plan_vs_fact",
+                "metric_type": "economics_reconciliation",
+                "source": "Юнит-экономика вб / WB FBS новая + независимый факт WB/Sellmonitor",
+                "source_updated_at": (own.get("primary_unit_economics") or {}).get("snapshot_date"),
+                "period": f"{rec.get('fact_period_from') or 'нет'}–{rec.get('fact_period_to') or 'нет'}",
+                "formula": "модельная прибыль при фактическом ДРР = плановая прибыль − (факт ДРР − план ДРР) × цена после скидки",
+                "quality_score": eq.score,
+                "quality_level": eq.level,
+                "fact_quality": rec.get("fact_quality"),
+                "warning": "Модельная прибыль при фактическом ДРР не равна закрытой реализованной прибыли WB.",
+            }
+
+            # A primary plan that is already negative is a planning problem.  Without
+            # independent fact it is never presented as a proven realised loss.
+            if plan_profit is not None and plan_profit < 0 and actual_drr is None:
                 out.append(DecisionCard(
-                    decision_key=f"sku:{sku}:negative_unit", scope='sku', entity_id=sku,
-                    title=f"{x.get('name')}: расчётная юнитка отрицательная",
+                    decision_key=f"sku:{sku}:negative_plan_model", scope="sku", entity_id=sku,
+                    title=f"{x.get('name')}: основная юнитка показывает отрицательную плановую экономику",
                     diagnosis=(
-                        f"Текущий расчёт на одну единицу: {profit:.2f} ₽"
-                        + (f", маржа {margin:.1f}%" if margin is not None else "")
-                        + (f", ДРР {drr:.1f}%" if drr is not None else "")
-                        + ". Это модель текущей единицы, а не реализованная прибыль выбранной недели."
+                        f"По основной юнитке прибыль {plan_profit:.2f} ₽/шт"
+                        + (f", маржа {plan_margin:.1f}%" if plan_margin is not None else "")
+                        + ". Фактический ДРР за сопоставимый период пока не подтверждён, поэтому это проблема плановой модели, а не доказанный убыток WB."
                     ),
-                    priority='critical', confidence='high' if eq.level == 'high' else 'medium',
-                    recommended_actions=actions, evidence=evidence,
-                    follow_up='Подтвердить вывод закрытой реализацией и сравнить фактическую прибыль той же когорты.',
-                    analysis=basis,
-                ))
-            elif margin is not None and margin < 5 and drr is not None and drr > 8 and eq.ready:
-                out.append(DecisionCard(
-                    decision_key=f"sku:{sku}:thin_margin_ads", scope='sku', entity_id=sku,
-                    title=f"{x.get('name')}: слишком тонкий запас маржи для текущей рекламы",
-                    diagnosis=f"Расчётная маржа {margin:.1f}% при ДРР {drr:.1f}%. Небольшое ухудшение CPC/CR может сделать текущую модель убыточной.",
-                    priority='high', confidence='high' if eq.level == 'high' else 'medium',
+                    priority="high", confidence="medium",
                     recommended_actions=[
-                        {"step":1,"action":"Не масштабировать бюджет до проверки 3–7 дней","mode":"policy"},
-                        {"step":2,"action":"Искать рост прибыли через CR/цену/органику, а не через голое повышение ставки","mode":"analysis"},
-                        {"step":3,"action":"Задать стоп-условие: отрицательная расчётная прибыль или дальнейшее ухудшение ДРР","mode":"experiment"},
+                        {"step": 1, "action": "Не масштабировать рекламу до появления сопоставимого факта по этому nmID.", "mode": "data_guard"},
+                        {"step": 2, "action": "Проверить цену, себестоимость, комиссию, логистику, налоги и плановый ДРР в основной юнитке.", "mode": "unit_reconciliation"},
+                        {"step": 3, "action": "После загрузки факта пересчитать модель с фактическим ДРР и затем сверить с закрытой реализацией WB.", "mode": "finance_reconciliation"},
                     ],
-                    evidence=[_ev('27/Юнитка','margin_pct',margin),_ev('27/Юнитка','drr_pct',drr),_ev('analytics_kernel','data_quality_score',eq.score)],
-                    follow_up='Сравнить абсолютную прибыль до/после теста и затем сверить с реализацией.',
-                    analysis=basis,
+                    evidence=evidence, blockers=["Нет независимого фактического ДРР за сопоставимый период."],
+                    follow_up="Пересчитать автоматически после появления факта.", analysis=basis,
                 ))
+                continue
+
+            if actual_drr is None or scenario_profit is None or scenario_margin is None:
+                continue
+
+            drr_gap = actual_drr - float(plan_drr or 0.0)
+            if scenario_profit < 0:
+                target_5_margin = (break_even - 5.0) if break_even is not None else None
+                actions = [
+                    {"step": 1, "action": "Не увеличивать рекламную нагрузку: фактический ДРР уже делает модель убыточной.", "mode": "advertising_guard"},
+                    {"step": 2, "action": "Проверить, какой источник расхода дал превышение: ставка, лишние кампании, дорогие кластеры или просадка конверсии.", "mode": "root_cause"},
+                    {"step": 3, "action": "Подтвердить итог закрытой реализацией WB; текущий минус — модель при фактическом ДРР, а не финальная бухгалтерская прибыль.", "mode": "finance_reconciliation"},
+                ]
+                if target_5_margin is not None and target_5_margin >= 0:
+                    actions.insert(1, {"step": 2, "action": f"Для модельной маржи не ниже 5% нужен ДРР примерно ≤{target_5_margin:.1f}%; снижать нагрузку только с контролем общего спроса и органики.", "mode": "advertising_scenario"})
+                out.append(DecisionCard(
+                    decision_key=f"sku:{sku}:actual_ads_negative", scope="sku", entity_id=sku,
+                    title=f"{x.get('name')}: фактический ДРР выводит модель в минус",
+                    diagnosis=(
+                        f"Плановый ДРР {plan_drr:.1f}%, фактический {actual_drr:.1f}%"
+                        f". При неизменных остальных параметрах основной юнитки прибыль меняется с {plan_profit:.2f} до {scenario_profit:.2f} ₽/шт"
+                        f", модельная маржа — {scenario_margin:.1f}%."
+                    ),
+                    priority="critical", confidence="high" if str(rec.get("fact_quality") or "").startswith(("COMPLETE", "LIVE")) else "medium",
+                    recommended_actions=actions, evidence=evidence,
+                    follow_up="После изменения рекламы сравнить общий спрос, органику и закрытую прибыль на сопоставимом окне.", analysis=basis,
+                ))
+                continue
+
+            # Positive but thin factual economics: this is the useful warning case for
+            # products such as the beige toilet bucket — not 'loss', but very little room.
+            if scenario_margin < 5.0 or drr_gap >= 5.0:
+                target_5_margin = (break_even - 5.0) if break_even is not None else None
+                actions = [
+                    {"step": 1, "action": "Не повышать ставку или бюджет до проверки причин расхождения планового и фактического ДРР.", "mode": "advertising_guard"},
+                    {"step": 2, "action": "Разложить рост ДРР на расход рекламы и фактическую выручку: понять, проблема в цене трафика или в конверсии/продажах.", "mode": "root_cause"},
+                    {"step": 3, "action": "Сверить модельную прибыль с закрытой финансовой реализацией WB перед изменением цены.", "mode": "finance_reconciliation"},
+                ]
+                if target_5_margin is not None and actual_drr > target_5_margin >= 0:
+                    actions.insert(1, {"step": 2, "action": f"Для запаса модельной маржи ≥5% ориентир ДРР — не выше ≈{target_5_margin:.1f}%; проверить снижение без потери общего спроса.", "mode": "advertising_scenario"})
+                out.append(DecisionCard(
+                    decision_key=f"sku:{sku}:plan_fact_economics_gap", scope="sku", entity_id=sku,
+                    title=f"{x.get('name')}: фактическая реклама съедает запас плановой маржи",
+                    diagnosis=(
+                        f"План ДРР {plan_drr:.1f}%, факт {actual_drr:.1f}%."
+                        f" Плановая прибыль {plan_profit:.2f} ₽/шт; при фактической рекламной нагрузке модель даёт {scenario_profit:.2f} ₽/шт"
+                        f" и маржу {scenario_margin:.1f}%."
+                    ),
+                    priority="high" if scenario_margin < 5.0 else "medium",
+                    confidence="high" if str(rec.get("fact_quality") or "").startswith(("COMPLETE", "LIVE")) else "medium",
+                    recommended_actions=actions, evidence=evidence,
+                    follow_up="Повторить сверку после следующего полного фактического окна и закрытия финансового отчёта.", analysis=basis,
+                ))
+
         return out
 
     def _inventory_decisions(self, p: dict[str, Any]) -> list[DecisionCard]:
