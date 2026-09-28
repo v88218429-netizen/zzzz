@@ -8,6 +8,7 @@
   --muted-2: #9da2b3;
   --border: #e8eaf0;
   --border-strong: #dddfe7;
+  --line: var(--border);
   --purple: #7a3cff;
   --purple-2: #a138ef;
   --pink: #d82d8b;
