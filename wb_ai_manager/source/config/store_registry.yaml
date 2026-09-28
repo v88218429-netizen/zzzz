@@ -11,6 +11,14 @@ sources:
       sanych: "Саныч 09.09–16.09!A1:R160"
       hozyushka: "Хозяюшка 09.09–16.09!A1:R120"
 
+  primary_unit_economics:
+    title: "Юнит-экономика вб"
+    spreadsheet_id: "1KqOYHeuqxgcLwYAqh0psugqAbhSXo_6BJooSjPSG1-M"
+    role: "primary_unit_economics"
+    priority: 130
+    ranges:
+      unit_economics: "WB FBS новая!A1:AP220"
+
   own_27:
     title: "Остатки v.1 27июля"
     spreadsheet_id: "1VQwf-QPeSjexrEculDjWt_hpuCKu7PLzLZhMFjP2VZM"
@@ -36,7 +44,7 @@ sources:
     ranges:
       dashboard: "00_Дашборд!A1:Z100"
       ads_status: "84_Статус_реклама!A1:H300"
-      calculator: "05_Калькулятор!A1:BD300"
+      calculator: "05_Калькулятор!A1:BD4983"
       stocks: "06_Остатки!A1:Z300"
       positions: "07_Контроль_позиций!A1:R6000"
 
