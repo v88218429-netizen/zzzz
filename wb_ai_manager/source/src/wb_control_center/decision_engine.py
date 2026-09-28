@@ -9,6 +9,7 @@ from .advertising_controller import AdvertisingController
 from .analytics_kernel import demand_quality, economics_quality
 from .demand_forecast import build_demand_forecast
 from .metrics import extract_ad_nm_metrics
+from .planning_engine import build_product_plan
 
 
 def _n(v: Any) -> float | None:
@@ -310,6 +311,7 @@ class DecisionEngine:
             out += self._store_decisions(portfolio)
             out += self._product_decisions(portfolio, snapshots)
             out += self._inventory_decisions(portfolio)
+        out += self._planning_decisions(safe_portfolio, snapshots)
         out += self._advertising_control_decisions(safe_portfolio, snapshots)
         out += self._card_content_decisions(safe_portfolio, snapshots)
         out += self._operational_decisions(safe_portfolio, snapshots)
@@ -322,6 +324,99 @@ class DecisionEngine:
             if d.decision_key not in best or rank[d.priority] > rank[best[d.decision_key].priority]:
                 best[d.decision_key]=d
         return sorted(best.values(), key=lambda d:(-rank[d.priority], d.title))
+
+
+    def _planning_decisions(self, portfolio: dict[str, Any], snapshots: dict[str, Any]) -> list[DecisionCard]:
+        """Turn saved sales plans into fact-vs-plan operating decisions."""
+        raw = _snap(snapshots, "planning", "plans")
+        plans = raw if isinstance(raw, dict) else {}
+        if not plans:
+            return []
+        own = portfolio.get("own_27") if isinstance(portfolio, dict) else {}
+        products = own.get("products") if isinstance(own, dict) else []
+        out: list[DecisionCard] = []
+        for product in products or []:
+            if not isinstance(product, dict):
+                continue
+            sku = str(product.get("sku") or product.get("nm_id") or "")
+            saved = plans.get(sku)
+            if not isinstance(saved, dict):
+                continue
+            row = build_product_plan(product, snapshots, saved).to_dict()
+            deviation = _n(row.get("deviation_pct"))
+            if deviation is None or abs(deviation) < 15:
+                continue
+            behind = deviation < 0
+            article = str(row.get("seller_article") or product.get("name") or sku)
+            plan_daily = _n(row.get("plan_orders_day"))
+            fact_daily = _n(product.get("orders_per_day"))
+            auto_daily = _n(row.get("auto_orders_day"))
+            freq = _n(row.get("search_frequency_trend_pct"))
+            cvr = _n(row.get("conversion_pct"))
+            core = row.get("query_core") if isinstance(row.get("query_core"), list) else []
+            core_text = ", ".join(str(x.get("query") or "") for x in core[:5] if isinstance(x, dict) and x.get("query"))
+            diagnosis = (
+                f"План {plan_daily:.2f} заказа/день, факт {fact_daily:.2f}; отклонение {deviation:+.1f}%."
+                if plan_daily is not None and fact_daily is not None
+                else f"Отклонение от сохранённого плана {deviation:+.1f}%."
+            )
+            diagnosis += (
+                " Агент должен разложить отклонение по частотности ядра, конверсии, позиции, рекламе и наличию, а не менять один фактор вслепую."
+                if behind
+                else " Рост выше плана нужно проверить на устойчивость и заранее обеспечить рекламу/остаток без потери экономики."
+            )
+            actions = [
+                {
+                    "step": 1,
+                    "action": (
+                        "Разложить недобор по ядру запросов: частотность → позиция → CTR/CVR → рекламный вклад → наличие; определить главный драйвер."
+                        if behind
+                        else "Проверить, какой драйвер дал превышение плана: сезонная частотность, позиция, конверсия или реклама; подтвердить, что рост не разовый."
+                    ),
+                    "mode": "plan_variance_root_cause",
+                },
+                {
+                    "step": 2,
+                    "action": (
+                        f"Пересчитать потребность в трафике и остатке от текущего автоматического прогноза {auto_daily:.2f} заказа/день."
+                        if auto_daily is not None
+                        else "Пересчитать трафик и остаток от обновлённого прогноза спроса."
+                    ),
+                    "mode": "cross_contour_replan",
+                },
+                {
+                    "step": 3,
+                    "action": "После следующего дневного окна повторно сравнить факт с планом; менять план только после подтверждённого сдвига спроса.",
+                    "mode": "plan_control",
+                },
+            ]
+            out.append(DecisionCard(
+                decision_key=f"plan:{sku}:variance",
+                scope="sku",
+                entity_id=sku,
+                title=f"{article}: {'ниже' if behind else 'выше'} плана на {abs(deviation):.1f}%",
+                diagnosis=diagnosis,
+                priority="high" if abs(deviation) >= 25 else "medium",
+                confidence="high" if row.get("forecast_confidence") == "high" else "medium",
+                recommended_actions=actions,
+                evidence=[
+                    _ev("Планирование", "План заказов/день", plan_daily),
+                    _ev("Факт", "Факт заказов/день", fact_daily),
+                    _ev("Планирование", "Отклонение, %", deviation),
+                    _ev("Автопрогноз", "Прогноз заказов/день", auto_daily),
+                    _ev("Поиск", "Тренд частотности ядра, %", freq),
+                    _ev("Воронка", "Конверсия ядра, %", cvr),
+                    _ev("Поиск", "Ядро запросов", core_text or "нет подтверждённого ядра"),
+                ],
+                follow_up="Автоматически пересчитать после следующего обновления спроса, поиска, рекламы и остатков.",
+                analysis={
+                    "metric_type": "plan_vs_fact",
+                    "formula": "отклонение = факт заказов/день ÷ план заказов/день − 1",
+                    "demand_model": row.get("forecast_model"),
+                    "source": "история заказов + ядро запросов + поиск + сохранённый план",
+                },
+            ))
+        return out
 
 
     def _operating_findings(self, snapshots: dict[str, Any]) -> list[DecisionCard]:
