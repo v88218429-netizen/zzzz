@@ -42,19 +42,26 @@ def economics_quality(product: dict[str, Any]) -> QualityAssessment:
     missing: list[str] = []
     notes: list[str] = []
 
+    role = str(product.get("unit_economics_role") or "")
+    source = str(product.get("unit_economics_source") or "")
+    if role != "primary_plan":
+        issues.append("нет подтверждённой привязки к основной юнит-экономике")
+        notes.append("старый лист 27/Юнитка допустим только как диагностический fallback")
+        score -= 55
+
     required = {
-        "price_rub": "цена WB",
+        "price_rub": "цена после скидки",
         "cost_rub": "себестоимость",
-        "profit_rub": "расчётная прибыль",
-        "margin_pct": "расчётная маржа",
+        "profit_rub": "плановая прибыль",
+        "margin_pct": "плановая маржа",
         "commission_pct": "комиссия WB",
         "tax_total_rub": "налоги",
     }
     supporting = {
-        "logistics_total_rub": "логистика",
-        "drr_pct": "ДРР",
-        "historical_buyout_pct": "исторический выкуп",
-        "price_client_rub": "цена клиента",
+        "logistics_total_rub": "логистика с учётом выкупа",
+        "plan_drr_pct": "плановый ДРР",
+        "buyout_plan_pct": "плановый выкуп",
+        "price_client_rub": "цена после СПП",
     }
     for key, label in required.items():
         if _n(product.get(key)) is None:
@@ -72,14 +79,14 @@ def economics_quality(product: dict[str, Any]) -> QualityAssessment:
     margin = _n(product.get("margin_pct"))
 
     if price is not None and price <= 0:
-        issues.append("цена WB неположительная")
+        issues.append("цена после скидки неположительная")
         score -= 30
     if cost is not None and cost < 0:
         issues.append("себестоимость отрицательная")
         score -= 30
-    if price is not None and client_price is not None and client_price > price * 1.15:
-        issues.append("цена клиента существенно выше цены WB — проверить смысл полей")
-        score -= 10
+    if price is not None and client_price is not None and client_price > price * 1.05:
+        issues.append("цена после СПП выше цены после скидки — проверить смысл полей")
+        score -= 15
     if price and profit is not None and margin is not None:
         implied = profit / price * 100.0
         if abs(implied - margin) > 2.0:
@@ -88,13 +95,19 @@ def economics_quality(product: dict[str, Any]) -> QualityAssessment:
 
     logistics = _n(product.get("logistics_total_rub"))
     if profit is not None and logistics is None:
-        issues.append("прибыль есть, но отдельная логистика отсутствует — формулу нельзя независимо проверить")
-    drr = _n(product.get("drr_pct"))
-    if profit is not None and drr is None:
-        notes.append("ДРР отсутствует: вывод о базовой экономике возможен, рекламное решение — нет")
+        issues.append("плановая прибыль есть, но логистика отсутствует — формулу нельзя независимо проверить")
+    plan_drr = _n(product.get("plan_drr_pct"))
+    if role == "primary_plan" and plan_drr is None:
+        notes.append("в основной юнитке нет планового ДРР: рекламное сравнение заблокировано")
+    if role == "primary_plan":
+        notes.append(f"источник плана: {source or 'Юнит-экономика вб / WB FBS новая'}")
 
     score = max(0, min(100, score))
-    ready = all(_n(product.get(k)) is not None for k in required) and logistics is not None
+    ready = (
+        role == "primary_plan"
+        and all(_n(product.get(k)) is not None for k in required)
+        and logistics is not None
+    )
     return QualityAssessment(score, _level(score), ready, issues, missing, notes)
 
 
