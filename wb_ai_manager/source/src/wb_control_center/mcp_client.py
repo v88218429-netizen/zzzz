@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import sys
 from contextlib import AsyncExitStack
 from typing import Any
 
@@ -46,7 +47,7 @@ class WBMCPClient:
             "PATH": os.environ.get("PATH", ""),
             "HOME": os.environ.get("HOME", ""),
         }
-        params = StdioServerParameters(command="wb-mcp", args=[], env=env)
+        params = StdioServerParameters(command=sys.executable, args=["-m", "wb_control_center.wb_mcp_runner"], env=env)
 
         async def _connect() -> None:
             assert self._stack is not None
