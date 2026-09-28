@@ -52,10 +52,6 @@
           <svg viewBox="0 0 24 24"><path d="M4 18V9h3v9H4Zm6 0V5h3v13h-3Zm6 0v-7h3v7h-3Z"/></svg>
           <span>Реклама</span>
         </button>
-        <button class="nav-item" data-page="planning">
-          <svg viewBox="0 0 24 24"><path d="M4 19V5h2v12h14v2H4Zm4-4V9h3v6H8Zm5 0V6h3v9h-3Zm5 0v-3h3v3h-3Z"/></svg>
-          <span>Планирование</span>
-        </button>
         <button class="nav-item" data-page="policy">
           <svg viewBox="0 0 24 24"><path d="M4 5h10v2H4V5Zm0 6h16v2H4v-2Zm0 6h7v2H4v-2Zm13-13h3v5h-3V4Zm-3 12h3v5h-3v-5Z"/></svg>
           <span>Редактор правил</span>
@@ -286,29 +282,6 @@
         </div></article>
       </section>
 
-      <section class="page" data-page-panel="planning">
-        <div class="section-intro"><div><span class="section-label">ПЛАНИРОВАНИЕ</span><h2>Автопрогноз → план → факт</h2><p>Ядро запросов, сезонная частотность, историческая конверсия и прогноз заказов. Сохрани рабочий план — агенты будут контролировать отклонения и связывать их с рекламой, позициями и остатками.</p></div><span class="pill safe">ТОЛЬКО ЧТЕНИЕ WB</span></div>
-        <div class="metric-grid four">
-          <article class="metric-card"><span class="metric-icon blue">Σ</span><div><span>Товаров в прогнозе</span><strong id="planning-count">—</strong><small>SKU</small></div></article>
-          <article class="metric-card"><span class="metric-icon warning">↓</span><div><span>Ниже плана</span><strong id="planning-behind">—</strong><small>отклонение ≤ −15%</small></div></article>
-          <article class="metric-card"><span class="metric-icon green">✓</span><div><span>В плане</span><strong id="planning-on-plan">—</strong><small>коридор ±15%</small></div></article>
-          <article class="metric-card"><span class="metric-icon purple">↑</span><div><span>Выше плана</span><strong id="planning-ahead">—</strong><small>нужно проверить устойчивость</small></div></article>
-        </div>
-        <article class="card"><div class="card-head"><div><span class="section-label">ТОВАРЫ</span><h3>Прогноз и контроль плана</h3></div><span class="muted">артикул продавца → ядро → прогноз → план → отклонение</span></div><div class="table-wrap"><table class="data-table"><thead><tr><th>Артикул продавца</th><th>Ядро запросов</th><th>Сезон</th><th>CVR</th><th>Автопрогноз / день</th><th>План / день</th><th>Отклонение</th><th>Сохранить</th></tr></thead><tbody id="planning-table"></tbody></table></div></article>
-        <article class="card"><div class="card-head"><div><span class="section-label">СЦЕНАРИЙ</span><h3>Ручной калькулятор поверх автопрогноза</h3></div></div>
-          <div class="policy-form">
-            <label><span>Товар</span><select id="planning-sku"></select><small>База — автоматический прогноз выбранного SKU.</small></label>
-            <label><span>Частотность, изменение %</span><input id="planning-frequency" type="number" step="1" value="0"><small>Что будет, если сезонный спрос изменится.</small></label>
-            <label><span>Конверсия, изменение %</span><input id="planning-conversion" type="number" step="1" value="0"><small>Относительно текущей исторической конверсии.</small></label>
-            <label><span>Эффект позиции, %</span><input id="planning-position" type="number" step="1" value="0"><small>Положительное значение — улучшение видимости.</small></label>
-            <label><span>Доп. рекламные клики / день</span><input id="planning-ad-clicks" type="number" min="0" step="10" value="0"><small>Переводятся в заказы через текущую CVR.</small></label>
-            <label><span>Выкуп, %</span><input id="planning-buyout" type="number" min="0" max="100" step="1" value="100"><small>Для сценария продаж/выручки.</small></label>
-          </div>
-          <button class="button primary" id="calculate-planning">Рассчитать сценарий</button>
-          <div id="planning-scenario-result" class="posture-list"></div>
-        </article>
-      </section>
-
       <section class="page" data-page-panel="policy">
         <div class="section-intro"><div><span class="section-label">БЕЗ ПЕРЕЗАПУСКА</span><h2>Редактор правил</h2><p>Меняй стратегию управления рекламой прямо здесь. Новые значения применяются к следующему пересчёту решений без перезапуска и без новой версии приложения.</p></div><span class="pill safe">ПРЕДОХРАНИТЕЛИ ЗАБЛОКИРОВАНЫ</span></div>
         <div class="content-grid two-thirds">
@@ -440,6 +413,6 @@
     </div>
   </div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="/assets/dashboard.js?v=20260928-planning"></script>
+  <script src="/assets/dashboard.js?v=20260925-actions"></script>
 </body>
 </html>
