@@ -325,6 +325,17 @@ class PortfolioService:
             for m in re.finditer(r"(\d+(?:\.\d+)?)\s*(кг|л)\b", text)
         }
 
+    @staticmethod
+    def _economics_pack_count(value: Any) -> int | None:
+        text = str(value or "").lower().replace("×", "x").replace("х", "x")
+        matches = list(re.finditer(r"(\d+)\s*шт\b", text))
+        if matches:
+            return int(matches[-1].group(1))
+        matches = list(re.finditer(r"\bx\s*(\d+)\b", text))
+        if matches:
+            return int(matches[-1].group(1))
+        return None
+
     def _parse_primary_economics_axis(self, payload: dict[str, Any], out: dict[str, Any]) -> None:
         """Overlay the authoritative plan model and an independent factual snapshot.
 
@@ -416,7 +427,15 @@ class PortfolioService:
                     candidate = next(iter(physical_unique.values()))
                     seller_units = self._economics_units(prod.get("name"))
                     plan_units = self._economics_units(candidate.get("name"))
-                    if not seller_units or not plan_units or seller_units == plan_units:
+                    seller_pack = self._economics_pack_count(prod.get("name"))
+                    plan_pack = self._economics_pack_count(candidate.get("name"))
+                    units_ok = not seller_units or not plan_units or seller_units == plan_units
+                    pack_ok = (
+                        seller_pack is None
+                        or seller_pack == 1 and plan_pack in {None, 1}
+                        or seller_pack is not None and seller_pack > 1 and seller_pack == plan_pack
+                    )
+                    if units_ok and pack_ok:
                         plan = candidate
 
             if plan is None:
