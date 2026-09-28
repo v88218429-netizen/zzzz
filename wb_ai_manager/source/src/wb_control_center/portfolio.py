@@ -669,6 +669,7 @@ class PortfolioService:
 
                 products=[]
                 ozon_products=[]
+                physical_inventory=[]
                 groups: dict[str, dict[str, Any]] = {}
                 current_physical_position = ""
                 for sheet_row, row in enumerate(values[header_idx+1:], start=header_idx + 2):
@@ -680,11 +681,41 @@ class PortfolioService:
                     subject=str(rec.get("Предмет WB") or "").strip()
 
                     if not sku.isdigit() and not ozon_sku.isdigit():
-                        # Preserve the preceding physical/K2 row as identity context.
-                        # It is useful for deterministic reconciliation with the primary
-                        # unit-economics product names, but it is not itself a listing.
+                        # Aggregate/K2 row = the physical inventory object.  Variants
+                        # such as "Бидон 15л 1шт" and "Бидон 15л 2шт" consume the same
+                        # physical stock and must never create separate replenishment
+                        # tasks for the owner.
                         if row_name:
                             current_physical_position = row_name
+                            order_status = str(rec.get("Наличие заказа") or "").strip()
+                            need_raw = self._num(rec.get("Потребность"))
+                            planned_slots = []
+                            for h in ["Заказы"] + [f"Заказ {n}" for n in range(2, 14)]:
+                                v = self._num(rec.get(h))
+                                if v is not None and v > 0:
+                                    planned_slots.append(v)
+                            item = {
+                                "physical_position": row_name,
+                                "fbs_debt_orders": self._num(rec.get("FBS долг по заказам")),
+                                "ff_stock": self._num(rec.get("Остатки ФФ")),
+                                "k2_safe_stock": self._num(rec.get("К2 ФФ · SAFE")) if self._num(rec.get("К2 ФФ · SAFE")) is not None else self._num(rec.get("К2 ФФ")),
+                                "ivanovo_stock": self._num(rec.get("ФФ Иваново")),
+                                "wb_fbs_stock": self._num(rec.get("Остатки WB FBS")),
+                                "orders_qty": self._num(rec.get("Заказы, шт")),
+                                "orders_per_day": self._num(row_cell(row, "Заказов в день", 0)),
+                                "order_status": order_status,
+                                "sheet_need_raw": need_raw,
+                                "reorder_point_days": self._num(rec.get("Точка заказа")),
+                                "supply_target_days": self._num(rec.get("Заказ на кол-во дней")),
+                                "planned_order_qty": sum(planned_slots) if planned_slots else 0.0,
+                                "supplier_debt_qty": self._num(rec.get("Долг поставщика")),
+                                "sheet_row": sheet_row,
+                            }
+                            if any(item.get(k) not in (None, "", 0, 0.0) for k in (
+                                "fbs_debt_orders", "ff_stock", "k2_safe_stock", "orders_qty",
+                                "orders_per_day", "sheet_need_raw", "planned_order_qty", "supplier_debt_qty"
+                            )) or order_status:
+                                physical_inventory.append(item)
                         continue
 
                     category = self._category_name(subject)
@@ -762,6 +793,19 @@ class PortfolioService:
                     own["products"] = products
                 if ozon_products:
                     own["ozon_products"] = ozon_products
+                if physical_inventory:
+                    members: dict[str, list[dict[str, Any]]] = {}
+                    for prod in products:
+                        key = str(prod.get("physical_position") or "").strip()
+                        if key:
+                            members.setdefault(key, []).append(prod)
+                    for item in physical_inventory:
+                        key = str(item.get("physical_position") or "").strip()
+                        item["member_skus"] = [
+                            {"sku": x.get("sku"), "name": x.get("name")}
+                            for x in members.get(key, [])
+                        ]
+                    own["physical_inventory"] = physical_inventory
                 if groups:
                     own["product_groups"] = list(groups.values())
                 own["identity_source"] = "Сводная"
