@@ -421,10 +421,23 @@ class ControlCenter:
             period_events: list[dict[str, Any]] = []
             errors: list[dict[str, str]] = []
             try:
-                for name in order:
-                    if name == "supervisor":
-                        continue
-                    row = await self._run_period_agent(name, period)
+                # Independent read-only agents do not need to run serially.
+                # Keep concurrency bounded so WB endpoints are not hit by all modules
+                # at once and rate-limit risk stays controlled.
+                semaphore = asyncio.Semaphore(4)
+
+                async def run_bounded(agent_name: str) -> dict[str, Any]:
+                    async with semaphore:
+                        return await self._run_period_agent(agent_name, period)
+
+                tasks = [
+                    asyncio.create_task(run_bounded(name))
+                    for name in order
+                    if name != "supervisor"
+                ]
+                for task in asyncio.as_completed(tasks):
+                    row = await task
+                    name = str(row.get("agent") or "")
                     agent_results[name] = {
                         "status": row.get("status"),
                         "started_at": row.get("started_at"),
@@ -452,7 +465,6 @@ class ControlCenter:
                         },
                         progress_at,
                     )
-                    await asyncio.sleep(0.25)
 
                 # Period snapshots describe period-dependent metrics, but
                 # product identity, unit economics and current stock come from the
