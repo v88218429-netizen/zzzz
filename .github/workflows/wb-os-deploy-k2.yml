@@ -16,6 +16,7 @@ on:
       - "wb_os/tools/discover_clasp_project.py"
       - "wb_os/tools/patch_live_master.py"
       - "wb_os/tools/patch_stock_history_matrix.py"
+      - "wb_os/tools/patch_supplier_debt_cutoff.py"
       - "wb_os/tools/audit_and_repair_live.py"
       - ".github/workflows/wb-os-deploy-k2.yml"
 
@@ -112,6 +113,7 @@ jobs:
           cp wb_os/apps_script/WB_FF_PENALTIES_SYNC.gs "$SOURCE_ROOT/WB_FF_PENALTIES_SYNC.gs"
           python3 wb_os/tools/patch_live_master.py "$SOURCE_ROOT"
           python3 wb_os/tools/patch_stock_history_matrix.py "$SOURCE_ROOT"
+          python3 wb_os/tools/patch_supplier_debt_cutoff.py "$SOURCE_ROOT"
           python3 wb_os/tools/audit_and_repair_live.py "$SOURCE_ROOT"
 
       - name: Syntax check patched Apps Script
@@ -169,6 +171,7 @@ jobs:
           grep -Rqs "function wbOsCleanupKnownDeadTriggersNow()" "$VERIFY_DIR"
           grep -Rqs "function refreshDailyStockMatrix_()" "$VERIFY_DIR"
           grep -Rqs "WB_OS_DAILY_MATRIX_REFRESH_V1" "$VERIFY_DIR"
+          grep -Rqs "SUPPLIER_DEBT_CUTOFF_ORDER_10" "$VERIFY_DIR"
           grep -Rqs "function ffVisionGetPendingJson(" "$VERIFY_DIR"
           grep -Rqs "function ffVisionApplyResultsJson(" "$VERIFY_DIR"
 
