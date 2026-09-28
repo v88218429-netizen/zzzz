@@ -278,22 +278,59 @@ class DecisionEngine:
         return out
 
     def _source_quality(self, p: dict[str, Any]) -> list[DecisionCard]:
-        bad=[x for x in p.get('source_health',[]) if x.get('status') in {'broken','stale'}]
-        if not bad: return []
-        critical=[x for x in bad if x.get('status')=='broken']
-        return [DecisionCard(
-            decision_key='data:source_quality', scope='system', entity_id='sources',
-            title='Не использовать слабые источники как основание для денег',
-            diagnosis='Часть таблиц устарела или возвращает некорректный срез. Решения должны идти из live WB / 27 / свежей сводки, а слабые источники — только как справка.',
-            priority='high' if critical else 'medium', confidence='high',
-            recommended_actions=[
-                {"step":1,"action":"Исключить broken/stale источники из финансовых решений","mode":"automatic_policy"},
-                {"step":2,"action":"Продолжать работу на более свежем trusted-источнике","mode":"automatic_policy"},
-                {"step":3,"action":"Восстановить источник в фоне и вернуть его только после проверки свежести","mode":"maintenance"},
-            ],
-            evidence=[_ev(x.get('id','source'),'status',x.get('status'),f"freshness={x.get('freshness')}; trust={x.get('trust')}") for x in bad[:8]],
-            follow_up='Перепроверять свежесть при каждом цикле импорта.'
-        )]
+        out: list[DecisionCard] = []
+        bad = [x for x in p.get("source_health", []) if x.get("status") in {"broken", "stale"}]
+        if bad:
+            critical = [x for x in bad if x.get("status") == "broken"]
+            out.append(DecisionCard(
+                decision_key="data:source_quality", scope="system", entity_id="sources",
+                title="Слабые источники не участвуют в денежных решениях",
+                diagnosis=(
+                    "Часть источников устарела или возвращает некорректный срез. "
+                    "Плановая экономика берётся только из PRIMARY «Юнит-экономика вб / WB FBS новая», "
+                    "факт — из WB/Sellmonitor/закрытой реализации. Старый 27/Юнитка — только диагностический fallback."
+                ),
+                priority="high" if critical else "medium", confidence="high",
+                recommended_actions=[
+                    {"step": 1, "action": "Автоматически исключать broken/stale источники из денежного вывода.", "mode": "automatic_policy"},
+                    {"step": 2, "action": "Не заменять отсутствующий факт нулём и не подменять его плановым значением.", "mode": "automatic_policy"},
+                    {"step": 3, "action": "Возвращать источник в расчёт только после проверки свежести и согласованности.", "mode": "maintenance"},
+                ],
+                evidence=[_ev(x.get("id", "source"), "Статус источника", x.get("status"), f"freshness={x.get('freshness')}; trust={x.get('trust')}") for x in bad[:8]],
+                follow_up="Перепроверять свежесть и семантику источников при каждом цикле импорта.",
+            ))
+
+        own = p.get("own_27") or {}
+        axis = own.get("primary_unit_economics") or {}
+        total_products = len([x for x in own.get("products", []) if isinstance(x, dict) and str(x.get("sku") or "").isdigit()])
+        mapped = int(axis.get("mapped_products") or 0)
+        unmatched = int(axis.get("unmatched_products") or max(0, total_products - mapped))
+        if axis and total_products and unmatched:
+            coverage = mapped / total_products * 100.0
+            priority = "high" if coverage < 50 else "medium"
+            out.append(DecisionCard(
+                decision_key="data:primary_unit_mapping", scope="system", entity_id="primary_unit_economics",
+                title="PRIMARY-юнитка привязана не ко всем WB SKU",
+                diagnosis=(
+                    f"Безопасно сопоставлено {mapped} из {total_products} WB SKU ({coverage:.1f}%). "
+                    f"Ещё {unmatched} SKU не получают денежные решения, пока соответствие основной юнитке неоднозначно или отсутствует. "
+                    "Это одна задача идентичности данных, а не отдельные тревоги по каждому товару."
+                ),
+                priority=priority, confidence="high",
+                recommended_actions=[
+                    {"step": 1, "action": "Достраивать таблицу идентичности seller article/nmID → строка PRIMARY-юнитки только детерминированными правилами.", "mode": "identity_reconciliation"},
+                    {"step": 2, "action": "Не использовать fuzzy-совпадение и не откатываться на 27/Юнитка для непривязанных SKU.", "mode": "data_guard"},
+                    {"step": 3, "action": "В первую очередь привязывать SKU с фактической рекламой, высокой выручкой или критичным запасом — там ценность корректной экономики выше.", "mode": "information_gain"},
+                ],
+                evidence=[
+                    _ev("PRIMARY-юнитка", "Плановых строк", axis.get("plan_records")),
+                    _ev("Идентичность SKU", "Безопасно привязано", mapped),
+                    _ev("Идентичность SKU", "Не привязано", unmatched),
+                    _ev("Идентичность SKU", "Покрытие, %", round(coverage, 1)),
+                ],
+                follow_up="Пересчитывать покрытие после каждого обновления таблицы идентичности.",
+            ))
+        return out
 
     def _store_decisions(self, p: dict[str, Any]) -> list[DecisionCard]:
         out=[]
