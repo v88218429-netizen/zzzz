@@ -71,7 +71,7 @@ class AutoSheets:
         return {'ok':True,'generated_at':datetime.now(timezone.utc).isoformat(),'sources':sources}
 
     def refresh_core_via_browser(self)->dict[str,Any]:
-        wanted=['own_27','weekly_summary','sanych_sellmonitor']; supplementary=['air_fbs','hozyushka_fbs']; exported=[]
+        wanted=['primary_unit_economics','own_27','weekly_summary','sanych_sellmonitor']; supplementary=['air_fbs','hozyushka_fbs']; exported=[]
         for sid in wanted:
             if self.browser_export(sid): exported.append(sid)
         payload=self.payload_from_cached_xlsx(wanted+supplementary); payload['exported']=exported; return payload
