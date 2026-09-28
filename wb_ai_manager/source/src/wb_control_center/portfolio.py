@@ -336,6 +336,59 @@ class PortfolioService:
             return int(matches[-1].group(1))
         return None
 
+    @staticmethod
+    def _economics_families(value: Any) -> set[str]:
+        text = str(value or "").lower().replace("ё", "е")
+        dictionary = {
+            "цемент": "cement", "извест": "lime", "мел": "chalk", "гипс": "gypsum",
+            "бидон": "can", "ведро": "bucket", "таз": "basin", "кашпо": "planter",
+            "вазон": "flowerpot", "ваза": "vase", "лоток": "tray", "грабл": "rake",
+            "метл": "broom", "ветош": "rag", "полотно": "rag", "лопат": "shovel",
+            "вил": "fork", "черенок": "handle", "сода": "soda", "перчат": "gloves",
+        }
+        return {code for needle, code in dictionary.items() if needle in text}
+
+    @staticmethod
+    def _economics_traits(value: Any) -> set[str]:
+        text = str(value or "").lower().replace("ё", "е")
+        traits: set[str] = set()
+        if any(x in text for x in ("оцинк", "цинк", "металлическ")):
+            traits.add("zinc")
+        if any(x in text for x in ("строительн", "р/м", "черное р", "черное р/м")):
+            traits.add("construction")
+        if "гермет" in text:
+            traits.add("hermetic")
+        if "туалет" in text:
+            traits.add("toilet")
+        if "подвес" in text:
+            traits.add("hanging")
+        if "европа" in text:
+            traits.add("europe")
+        if "черенок" in text:
+            traits.add("with_handle")
+        if "бел" in text:
+            traits.add("white")
+        if "черн" in text:
+            traits.add("black")
+        if "красн" in text or re.search(r"\bкр\b", text):
+            traits.add("red")
+        if "беж" in text:
+            traits.add("beige")
+        if "сер" in text:
+            traits.add("gray")
+        return traits
+
+    @staticmethod
+    def _lotok_signature(value: Any) -> tuple[int | None, int | None, bool | None]:
+        text = str(value or "").lower().replace("ё", "е")
+        count = None
+        m = re.search(r"\b(6|12|18|30)\b", text)
+        if m:
+            count = int(m.group(1))
+        model = 2 if ("н2" in text or "№2" in text) else (1 if ("№1" in text) else None)
+        no_plate = True if ("бп" in text or "без плаш" in text) else (False if re.search(r"\bп(?:2|4|6|10)\b", text) or "плашк" in text else None)
+        return count, model, no_plate
+
     def _parse_primary_economics_axis(self, payload: dict[str, Any], out: dict[str, Any]) -> None:
         """Overlay the authoritative plan model and an independent factual snapshot.
 
@@ -437,6 +490,62 @@ class PortfolioService:
                     )
                     if units_ok and pack_ok:
                         plan = candidate
+
+            if plan is None:
+                # Deterministic semantic reconciliation.  It is deliberately a
+                # constraint solver, not fuzzy text matching: family, dimensions,
+                # bundle size and strong product traits must agree and exactly one
+                # plan row must survive.
+                seller_text = str(prod.get("name") or "")
+                identity_text = seller_text + " " + str(prod.get("physical_position") or "")
+                seller_families = self._economics_families(seller_text)
+                seller_units = self._economics_units(seller_text)
+                seller_pack = self._economics_pack_count(seller_text)
+                seller_traits = self._economics_traits(identity_text)
+                candidates: list[dict[str, Any]] = []
+                for candidate in plans:
+                    plan_text = str(candidate.get("name") or "") + " " + str(candidate.get("group") or "")
+                    plan_families = self._economics_families(plan_text)
+                    if seller_families and plan_families and seller_families != plan_families:
+                        continue
+                    plan_units = self._economics_units(candidate.get("name"))
+                    if seller_units and plan_units and seller_units != plan_units:
+                        continue
+                    plan_pack = self._economics_pack_count(candidate.get("name"))
+                    if seller_pack is not None:
+                        if seller_pack == 1 and plan_pack not in {None, 1}:
+                            continue
+                        if seller_pack > 1 and seller_pack != plan_pack:
+                            continue
+
+                    plan_traits = self._economics_traits(plan_text)
+                    strong = {"zinc", "construction", "hermetic", "toilet", "hanging", "europe", "with_handle"}
+                    contradicted = False
+                    for trait in strong:
+                        if trait in seller_traits and trait not in plan_traits:
+                            contradicted = True
+                            break
+                    if contradicted:
+                        continue
+                    seller_colors = seller_traits & {"white", "black", "red", "beige", "gray"}
+                    plan_colors = plan_traits & {"white", "black", "red", "beige", "gray"}
+                    if seller_colors and plan_colors and seller_colors.isdisjoint(plan_colors):
+                        continue
+
+                    if "tray" in seller_families:
+                        s_count, s_model, s_no_plate = self._lotok_signature(seller_text)
+                        p_count, p_model, p_no_plate = self._lotok_signature(plan_text)
+                        if s_count is not None and p_count != s_count:
+                            continue
+                        if s_model is not None and p_model != s_model:
+                            continue
+                        if s_no_plate is not None and p_no_plate != s_no_plate:
+                            continue
+                    candidates.append(candidate)
+
+                unique = {int(x.get("source_row") or 0): x for x in candidates}
+                if len(unique) == 1:
+                    plan = next(iter(unique.values()))
 
             if plan is None:
                 unmatched.append({"sku": sku, "name": prod.get("name"), "physical_position": prod.get("physical_position")})
