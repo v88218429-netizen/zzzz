@@ -136,7 +136,8 @@ def demand_quality(product: dict[str, Any], forecast: DemandForecast | None = No
         notes.append(f"rolling MAE {forecast.backtest_mae:.2f} заказа/день; модель {forecast.model_name}")
 
     score = max(0, min(100, score))
-    ready = predicted is not None and forecast.history_days >= 14 and ratio is not None and ratio < 3 and forecast.confidence != "low"
+    source_conflict = any("расходятся" in x or "заблокировано" in x for x in issues)
+    ready = predicted is not None and forecast.history_days >= 14 and forecast.confidence != "low" and not source_conflict
     return QualityAssessment(score, _level(score), ready, issues, missing, notes)
 
 

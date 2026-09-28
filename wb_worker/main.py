@@ -8,6 +8,10 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 
 from wb_mcp import settings as cfg
+from wb_mcp_hotfixes import apply_wb_mcp_hotfixes
+
+apply_wb_mcp_hotfixes()
+
 from wb_mcp.app import fastapi_app as wb_app
 
 from finance_sync import DATA_DIR as FINANCE_DIR, sync_loop

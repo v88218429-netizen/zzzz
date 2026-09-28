@@ -612,20 +612,34 @@ async function refreshSheets(){
 }
 
 
+function decisionCardHtml(d){
+  const acts=(d.recommended_actions||[]).map((a,i)=>`<div class="decision-action"><b>${i+1}</b><span>${esc(humanizeText(a.action))}</span></div>`).join('');
+  const ev=(d.evidence||[]).map(x=>`<li><strong>${esc(x.metric)}</strong>: ${esc(humanizeText(x.value))} <span class="muted">${esc(x.source)} ${x.note?`· ${esc(humanizeText(x.note))}`:''}</span></li>`).join('');
+  const blockers=(d.blockers||[]).map(x=>`<li>${esc(humanizeText(x))}</li>`).join('');
+  const pri=d.priority==='critical'?'КРИТИЧНО':d.priority==='high'?'ВЫСОКИЙ':d.priority==='medium'?'СРЕДНИЙ':'НИЗКИЙ';
+  const entity=entityLabel(d.entity_id,d.scope), meta=entityMetaScoped(d.entity_id,d.scope);
+  return `<article class="decision-card ${esc(d.priority)} interactive-card" tabindex="0" data-decision-key="${esc(d.decision_key)}"><div class="decision-head"><div><small>${esc(scopeName(d.scope))} · ${esc(entity)}${meta?` · ${meta}`:''}</small><h3>${esc(humanizeText(d.title))}</h3></div><span class="confidence">${pri} · ${esc(d.confidence==='high'?'высокая уверенность':d.confidence==='medium'?'средняя уверенность':'низкая уверенность')}</span></div><p class="decision-diagnosis">${esc(humanizeText(d.diagnosis))}</p>${blockers?`<div class="decision-blockers"><strong>Почему решение ограничено</strong><ul>${blockers}</ul></div>`:''}<div class="decision-actions">${acts}</div><details class="decision-evidence" onclick="event.stopPropagation()"><summary>Факты · ${d.evidence?.length||0}</summary><ul>${ev||'<li>Нет подтверждающих фактов</li>'}</ul></details><div class="decision-foot">Контроль результата: ${esc(humanizeText(d.follow_up||'—'))} · нажми карточку для подробностей</div></article>`;
+}
+
 function renderDecisions(){
-  const rows=state.data?.decisions||[], counts={critical:0,high:0,medium:0,low:0}; rows.forEach(x=>counts[x.priority]=(counts[x.priority]||0)+1);
-  if($('decision-summary')) $('decision-summary').innerHTML=`<div><span>Критично</span><strong>${counts.critical}</strong></div><div><span>Высокий приоритет</span><strong>${counts.high}</strong></div><div><span>Средний</span><strong>${counts.medium}</strong></div><div><span>Всего решений</span><strong>${rows.length}</strong></div>`;
+  const rows=state.data?.decisions||[];
+  const groups=state.data?.decision_groups||[];
+  const gs=state.data?.decision_group_summary||{};
+  if($('decision-summary')) $('decision-summary').innerHTML=`<div><span>Смысловых задач</span><strong>${num(gs.groups??groups.length)}</strong></div><div><span>Активных решений</span><strong>${num(gs.active_decisions??rows.length)}</strong></div><div><span>Критичных смыслов</span><strong>${num(gs.critical_groups??groups.filter(g=>g.priority==='critical').length)}</strong></div><div><span>Скрыто «ничего не менять»</span><strong>${num(gs.passive_hidden??0)}</strong></div>`;
   if(!$('decision-grid')) return;
-  const visible=state.decisionFilter==='all'?rows:rows.filter(d=>['critical','high'].includes(d.priority));
-  const toolbar=`<div class="decision-toolbar"><div><strong>Сначала решения, требующие действия</strong><span>критично ${num(counts.critical)} · высокий ${num(counts.high)} · средний ${num(counts.medium)}</span></div><div class="segmented"><button type="button" data-decision-filter="priority" class="${state.decisionFilter==='priority'?'active':''}">Критично + высокий (${num(counts.critical+counts.high)})</button><button type="button" data-decision-filter="all" class="${state.decisionFilter==='all'?'active':''}">Все (${num(rows.length)})</button></div></div>`;
-  $('decision-grid').innerHTML=toolbar+(visible.length?visible.map(d=>{
-    const acts=(d.recommended_actions||[]).map((a,i)=>`<div class="decision-action"><b>${i+1}</b><span>${esc(humanizeText(a.action))}</span></div>`).join('');
-    const ev=(d.evidence||[]).map(x=>`<li><strong>${esc(x.metric)}</strong>: ${esc(humanizeText(x.value))} <span class="muted">${esc(x.source)} ${x.note?`· ${esc(humanizeText(x.note))}`:''}</span></li>`).join('');
-    const blockers=(d.blockers||[]).map(x=>`<li>${esc(humanizeText(x))}</li>`).join('');
-    const pri=d.priority==='critical'?'КРИТИЧНО':d.priority==='high'?'ВЫСОКИЙ':d.priority==='medium'?'СРЕДНИЙ':'НИЗКИЙ';
-    const entity=entityLabel(d.entity_id,d.scope), meta=entityMetaScoped(d.entity_id,d.scope);
-    return `<article class="decision-card ${esc(d.priority)} interactive-card" tabindex="0" data-decision-key="${esc(d.decision_key)}"><div class="decision-head"><div><small>${esc(scopeName(d.scope))} · ${esc(entity)}${meta?` · ${meta}`:''}</small><h3>${esc(humanizeText(d.title))}</h3></div><span class="confidence">${pri} · ${esc(d.confidence==='high'?'высокая уверенность':d.confidence==='medium'?'средняя уверенность':'низкая уверенность')}</span></div><p class="decision-diagnosis">${esc(humanizeText(d.diagnosis))}</p>${blockers?`<div class="decision-blockers"><strong>Почему решение ограничено</strong><ul>${blockers}</ul></div>`:''}<div class="decision-actions">${acts}</div><details class="decision-evidence" onclick="event.stopPropagation()"><summary>Факты · ${d.evidence?.length||0}</summary><ul>${ev||'<li>Нет подтверждающих фактов</li>'}</ul></details><div class="decision-foot">Контроль результата: ${esc(humanizeText(d.follow_up||'—'))} · нажми карточку для подробностей</div></article>`;
-  }).join(''):empty('Нет решений выбранного приоритета.'));
+  const visibleGroups=state.decisionFilter==='all'?groups:groups.filter(g=>['critical','high'].includes(g.priority));
+  const toolbar=`<div class="decision-toolbar"><div><strong>Одна проблема — один исследовательский кейс</strong><span>${num(groups.length)} смыслов вместо ${num(rows.length)} разрозненных карточек</span></div><div class="segmented"><button type="button" data-decision-filter="priority" class="${state.decisionFilter==='priority'?'active':''}">Критично + высокий (${num(groups.filter(g=>['critical','high'].includes(g.priority)).length)})</button><button type="button" data-decision-filter="all" class="${state.decisionFilter==='all'?'active':''}">Все смыслы (${num(groups.length)})</button></div></div>`;
+  const byKey=Object.fromEntries(rows.map(d=>[String(d.decision_key),d]));
+  const html=visibleGroups.map(g=>{
+    const items=(g.decision_keys||[]).map(k=>byKey[String(k)]).filter(Boolean);
+    const pri=g.priority==='critical'?'КРИТИЧНО':g.priority==='high'?'ВЫСОКИЙ':g.priority==='medium'?'СРЕДНИЙ':'НИЗКИЙ';
+    const cats=(g.top_categories||[]).map(x=>`<span class="pill neutral">${esc(x.name)} · ${num(x.count)}</span>`).join('');
+    const impact=Number.isFinite(Number(g.frozen_capital_rub))?` · заморожено ≈${rub(g.frozen_capital_rub)}`:'';
+    const review=Number(g.needs_review_count||0)?` · требуют проверки данных ${num(g.needs_review_count)}`:'';
+    const verified=Number(g.verified_count||0)?` · подтверждено ${num(g.verified_count)}`:'';
+    return `<section class="event-domain-group"><div class="decision-toolbar"><div><strong>${esc(g.title)}</strong><span>${esc(g.question)}</span></div><span class="confidence">${pri}</span></div><p class="decision-diagnosis">${esc(g.meaning)}</p><div class="priority-strip">${cats}</div><div class="decision-foot">Затронуто: ${num(g.affected_count)} · решений внутри: ${num(g.decision_count)}${verified}${review}${impact}</div><details class="decision-evidence"><summary>Открыть конкретные товары и действия · ${num(items.length)}</summary><div class="decision-group-items">${items.map(decisionCardHtml).join('')}</div></details></section>`;
+  }).join('');
+  $('decision-grid').innerHTML=toolbar+(html||empty('Нет смысловых задач выбранного приоритета.'));
 }
 
 function renderAdvertising(){
