@@ -1,4 +1,5 @@
 name: WB AI Manager UI audit
+# post-css-cache-bust verification
 
 on:
   workflow_dispatch:
