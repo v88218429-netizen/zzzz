@@ -594,3 +594,20 @@ summary:focus-visible,
 @media (max-width: 760px) {
   .ad-kpi-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
 }
+
+/* Independent visual audit: final touch-target polish */
+.health-score small { font-size: 10.5px; }
+.agent-card p { font-size: 11.5px; line-height: 1.55; }
+.agent-card small { font-size: 10.5px; }
+.status-tag { font-size: 10.5px; }
+.knowledge-card small { font-size: 10.5px; }
+.period-picker input { min-height: 36px; }
+.period-apply { min-height: 36px; }
+.segmented button { min-height: 36px; height: 36px; }
+details > summary {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+.mobile-menu { min-width: 42px; min-height: 42px; }
