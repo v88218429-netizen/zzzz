@@ -1,0 +1,131 @@
+name: WB AI Manager UI audit
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [mainggg]
+    paths:
+      - ".github/workflows/wb-ai-manager-ui-audit.yml"
+      - "wb_ai_manager/source/src/wb_control_center/ui/**"
+
+permissions:
+  contents: read
+
+jobs:
+  visual-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Wait for production
+        shell: bash
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 30); do
+            if curl -fsS --max-time 20 https://wb-ai-manager-live-production.up.railway.app/health >/dev/null; then
+              exit 0
+            fi
+            sleep 10
+          done
+          exit 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Chromium driver
+        run: |
+          npm init -y >/dev/null 2>&1
+          npm install playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+
+      - name: Audit live UI
+        shell: bash
+        env:
+          BASE_URL: https://wb-ai-manager-live-production.up.railway.app
+        run: |
+          mkdir -p ui-audit
+          cat > /tmp/ui-audit.mjs <<'NODE'
+          import fs from 'node:fs';
+          import { chromium } from 'playwright';
+
+          const base=process.env.BASE_URL.replace(/\/$/,'');
+          const pages=['overview','stores','decisions','control','advertising','policy','inventory','search','finance','customers','connections','knowledge','agents'];
+          const modes=[
+            {name:'desktop', viewport:{width:1440,height:1000}},
+            {name:'mobile', viewport:{width:390,height:844}},
+          ];
+          const browser=await chromium.launch({headless:true});
+          const report={generated_at:new Date().toISOString(),base,pages:{},console_errors:[]};
+
+          for(const mode of modes){
+            const ctx=await browser.newContext({viewport:mode.viewport});
+            const page=await ctx.newPage();
+            page.on('console',msg=>{ if(msg.type()==='error') report.console_errors.push({mode:mode.name,text:msg.text()}); });
+            page.on('pageerror',err=>report.console_errors.push({mode:mode.name,text:String(err)}));
+            report.pages[mode.name]={};
+
+            for(const name of pages){
+              await page.goto(base+(name==='overview'?'':('#'+name)),{waitUntil:'domcontentloaded',timeout:60000});
+              await page.waitForTimeout(2200);
+              const result=await page.evaluate((name)=>{
+                const visible=(el)=>{
+                  const s=getComputedStyle(el),r=el.getBoundingClientRect();
+                  return s.display!=='none' && s.visibility!=='hidden' && r.width>0 && r.height>0;
+                };
+                const texts=[...document.querySelectorAll('body *')].filter(el=>visible(el) && el.children.length===0 && (el.textContent||'').trim());
+                const textStats=texts.map(el=>({tag:el.tagName,cls:el.className||'',text:(el.textContent||'').trim().slice(0,100),px:parseFloat(getComputedStyle(el).fontSize)||0}));
+                const tiny=textStats.filter(x=>x.px<10);
+                const small=textStats.filter(x=>x.px<11);
+                const interactive=[...document.querySelectorAll('button,a,input,select,summary,[role="button"],.interactive-card')].filter(visible);
+                const short=interactive.map(el=>({tag:el.tagName,text:(el.textContent||el.getAttribute('aria-label')||'').trim().slice(0,80),h:Math.round(el.getBoundingClientRect().height)})).filter(x=>x.h<40);
+                const panel=document.querySelector('[data-page-panel="'+name+'"]');
+                return {
+                  title:document.title,
+                  panel_found:!!panel,
+                  panel_visible:!!panel && visible(panel),
+                  document_width:document.documentElement.scrollWidth,
+                  viewport_width:innerWidth,
+                  horizontal_overflow:Math.max(0,document.documentElement.scrollWidth-innerWidth),
+                  visible_text_nodes:textStats.length,
+                  tiny_text_count:tiny.length,
+                  tiny_text_examples:tiny.slice(0,20),
+                  under_11px_count:small.length,
+                  interactive_count:interactive.length,
+                  interactive_under_40px:short.length,
+                  short_interactive_examples:short.slice(0,15),
+                  h1:(document.querySelector('h1')?.textContent||'').trim(),
+                };
+              },name);
+              report.pages[mode.name][name]=result;
+              await page.screenshot({path:`ui-audit/${mode.name}-${name}.png`,fullPage:true});
+            }
+            await ctx.close();
+          }
+          await browser.close();
+          fs.writeFileSync('ui-audit/audit.json',JSON.stringify(report,null,2));
+          console.log(JSON.stringify(report,null,2));
+
+          const desktop=Object.values(report.pages.desktop);
+          const mobile=Object.values(report.pages.mobile);
+          const failures=[];
+          for(const [mode,rows] of [['desktop',desktop],['mobile',mobile]]){
+            rows.forEach((x,i)=>{
+              if(!x.panel_found || !x.panel_visible) failures.push(`${mode}: panel ${pages[i]} missing/hidden`);
+              if(x.horizontal_overflow>8 && mode==='desktop') failures.push(`${mode}: ${pages[i]} horizontal overflow ${x.horizontal_overflow}px`);
+            });
+          }
+          if(report.console_errors.length) failures.push(`console/page errors: ${report.console_errors.length}`);
+          if(failures.length){
+            console.error('UI AUDIT FAILURES\n'+failures.join('\n'));
+            process.exit(1);
+          }
+          NODE
+          node /tmp/ui-audit.mjs
+
+      - name: Upload screenshots and audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wb-ai-manager-ui-audit
+          path: ui-audit/
+          retention-days: 14
