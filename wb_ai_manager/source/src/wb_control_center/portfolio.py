@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from copy import deepcopy
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -298,6 +299,161 @@ class PortfolioService:
         self._parse_group_changes(payload, out)
         return out
 
+    @staticmethod
+    def _economics_norm(value: Any) -> str:
+        text = str(value or "").strip().lower().replace("ё", "е").replace("×", "x")
+        text = re.sub(r"(\d+(?:[.,]\d+)?)\s*(л|кг|м|шт)\b", lambda m: m.group(1).replace(",", ".") + m.group(2), text)
+        replacements = {
+            "пластиковое": "пласт", "пластиковый": "пласт", "пластиковая": "пласт",
+            "бежевое": "беж", "бежевый": "беж", "серое": "сер", "серый": "сер",
+        }
+        for src, dst in replacements.items():
+            text = text.replace(src, dst)
+        text = re.sub(r"[^a-zа-я0-9.,]+", " ", text)
+        return re.sub(r"\s+", " ", text).strip()
+
+    def _parse_primary_economics_axis(self, payload: dict[str, Any], out: dict[str, Any]) -> None:
+        """Overlay the authoritative plan model and an independent factual snapshot.
+
+        The live Sheets bridge already reads sanych_sellmonitor/06_Остатки.  A compact
+        JSON block beginning with an economics_axis_snapshot marker is stored in the
+        unused technical tail of that range.  This lets production consume the new
+        primary unit-economics model without pretending that plan values are WB facts.
+        """
+        values = self._range_values(payload, "sanych_sellmonitor", "stocks")
+        if not values:
+            return
+        marker: dict[str, Any] | None = None
+        plans: list[dict[str, Any]] = []
+        facts: dict[str, dict[str, Any]] = {}
+        for row in values:
+            for cell in row:
+                text = str(cell or "").strip()
+                if not text.startswith("{"):
+                    continue
+                try:
+                    record = json.loads(text)
+                except Exception:
+                    continue
+                if not isinstance(record, dict):
+                    continue
+                kind = str(record.get("type") or "")
+                if kind in {"economics_axis_snapshot", "primary_unit_snapshot"}:
+                    marker = record
+                elif kind == "primary_unit_plan" and record.get("name"):
+                    plans.append(record)
+                elif kind == "actual_economics_fact":
+                    sku = str(record.get("nmId") or "").strip()
+                    if sku.isdigit():
+                        facts[sku] = record
+        if not plans:
+            return
+
+        own = out.setdefault("own_27", {})
+        products = [x for x in own.get("products", []) if isinstance(x, dict)]
+        plan_by_name: dict[str, list[dict[str, Any]]] = {}
+        for plan in plans:
+            plan_by_name.setdefault(self._economics_norm(plan.get("name")), []).append(plan)
+
+        # Explicit aliases are deliberately small and evidence-backed.  Ambiguous
+        # fuzzy matches are never allowed to create a money decision.
+        explicit_plan_by_sku = {
+            "1442769822": "Ведро-туалет пластиковое бежевое",
+            "1515475863": "Ведро-туалет пластиковое серое",
+            "1260779020": "Метла уличная (гардена)",
+            "1588037156": "Метла уличная + черенок",
+        }
+        economics_keys = (
+            "cost_rub", "price_rub", "price_client_rub", "profit_rub", "margin_pct",
+            "roi_pct", "drr_pct", "commission_pct", "logistics_total_rub",
+            "acceptance_rub", "constructor_pct", "acquiring_pct", "tax_total_rub",
+            "target_profit_rub", "target_margin_pct", "target_roi_pct",
+            "target_price_profit_rub", "target_price_margin_rub", "target_price_roi_rub",
+        )
+        mapped = 0
+        unmatched: list[dict[str, Any]] = []
+
+        for prod in products:
+            sku = str(prod.get("sku") or "")
+            legacy = {k: prod.get(k) for k in economics_keys if prod.get(k) is not None}
+            if legacy:
+                prod["legacy_unit_economics"] = legacy
+            prod["unit_economics_role"] = "legacy_fallback_diagnostic"
+            prod["unit_economics_decision_ready"] = False
+            prod["unit_economics_source"] = "27/Юнитка — только fallback"
+
+            plan: dict[str, Any] | None = None
+            alias = explicit_plan_by_sku.get(sku)
+            if alias:
+                candidates = plan_by_name.get(self._economics_norm(alias)) or []
+                if len(candidates) == 1:
+                    plan = candidates[0]
+            if plan is None:
+                candidate_names = [prod.get("name"), prod.get("physical_position")]
+                matches: list[dict[str, Any]] = []
+                for value in candidate_names:
+                    if not value:
+                        continue
+                    matches.extend(plan_by_name.get(self._economics_norm(value)) or [])
+                unique = {int(x.get("source_row") or 0): x for x in matches}
+                if len(unique) == 1:
+                    plan = next(iter(unique.values()))
+
+            if plan is None:
+                unmatched.append({"sku": sku, "name": prod.get("name"), "physical_position": prod.get("physical_position")})
+            else:
+                mapped += 1
+                prod.update({
+                    "cost_rub": self._num(plan.get("cost_rub")),
+                    "price_rub": self._num(plan.get("price_after_discount_rub")),
+                    "price_client_rub": self._num(plan.get("price_after_spp_rub")),
+                    "profit_rub": self._num(plan.get("plan_profit_rub")),
+                    "margin_pct": self._num(plan.get("plan_margin_pct")),
+                    "roi_pct": self._num(plan.get("plan_roi_pct")),
+                    "drr_pct": self._num(plan.get("plan_drr_pct")),
+                    "plan_drr_pct": self._num(plan.get("plan_drr_pct")),
+                    "commission_pct": self._num(plan.get("commission_pct")),
+                    "logistics_total_rub": self._num(plan.get("logistics_total_rub")),
+                    "acceptance_rub": self._num(plan.get("acceptance_rub")),
+                    "constructor_pct": self._num(plan.get("constructor_pct")),
+                    "acquiring_pct": self._num(plan.get("acquiring_pct")),
+                    "tax_total_rub": self._num(plan.get("tax_total_rub")),
+                    "buyout_plan_pct": self._num(plan.get("buyout_plan_pct")),
+                    "primary_unit_plan_name": plan.get("name"),
+                    "primary_unit_group": plan.get("group"),
+                    "primary_unit_source_row": plan.get("source_row"),
+                    "unit_economics_source": "Юнит-экономика вб / WB FBS новая",
+                    "unit_economics_role": "primary_plan",
+                    "unit_economics_decision_ready": True,
+                })
+
+            fact = facts.get(sku)
+            if fact:
+                prod.update({
+                    "fact_ad_spend_rub": self._num(fact.get("ad_spend_rub")),
+                    "fact_sales_revenue_rub": self._num(fact.get("sales_revenue_rub")),
+                    "fact_sales_qty": self._num(fact.get("sales_qty")),
+                    "fact_drr_sales_pct": self._num(fact.get("fact_drr_sales_pct")),
+                    "fact_economics_period_from": fact.get("from_date"),
+                    "fact_economics_period_to": fact.get("to_date"),
+                    "fact_economics_days": self._num(fact.get("days")),
+                    "fact_economics_quality": fact.get("quality"),
+                    "fact_economics_source": fact.get("source"),
+                })
+
+        own["primary_unit_economics"] = {
+            "source": "Юнит-экономика вб / WB FBS новая",
+            "source_spreadsheet_id": (marker or {}).get("primary_spreadsheet_id") or (marker or {}).get("source_spreadsheet_id"),
+            "snapshot_date": (marker or {}).get("snapshot_date"),
+            "plan_records": len(plans),
+            "fact_records": len(facts),
+            "mapped_products": mapped,
+            "unmatched_products": len(unmatched),
+            "fact_period": (marker or {}).get("fact_period"),
+            "semantics": "plan_model_plus_independent_fact",
+        }
+        own["primary_unit_unmatched_examples"] = unmatched[:30]
+
     def _parse_own_27(self, payload: dict[str, Any], out: dict[str, Any]) -> None:
         values = self._range_values(payload, "own_27", "summary")
         if values:
@@ -354,6 +510,7 @@ class PortfolioService:
                 products=[]
                 ozon_products=[]
                 groups: dict[str, dict[str, Any]] = {}
+                current_physical_position = ""
                 for sheet_row, row in enumerate(values[header_idx+1:], start=header_idx + 2):
                     rec={headers[i]: row[i] if i < len(row) else None for i in range(len(headers))}
                     row_name=str(rec.get("Артикул продавца WB") or "").strip()
@@ -363,8 +520,11 @@ class PortfolioService:
                     subject=str(rec.get("Предмет WB") or "").strip()
 
                     if not sku.isdigit() and not ozon_sku.isdigit():
-                        # Spreadsheet section/aggregate rows are not product groups.
-                        # Concrete listings are grouped only by their WB subject/category.
+                        # Preserve the preceding physical/K2 row as identity context.
+                        # It is useful for deterministic reconciliation with the primary
+                        # unit-economics product names, but it is not itself a listing.
+                        if row_name:
+                            current_physical_position = row_name
                         continue
 
                     category = self._category_name(subject)
@@ -393,6 +553,7 @@ class PortfolioService:
                             "category_name":category,
                             "sheet_row":sheet_row,
                             "subject":subject,
+                            "physical_position": current_physical_position or None,
                             "price_client_rub":self._num(rec.get("Цена для клиента")),
                             "fbs_debt_orders":self._num(rec.get("FBS долг по заказам")),
                             "ff_stock":ff,
@@ -898,6 +1059,7 @@ class PortfolioService:
         seed = self._read_json(self.seed_path) or {}
         out = self._parse_weekly(payload, seed)
         self._parse_own_27(payload, out)
+        self._parse_primary_economics_axis(payload, out)
         self._parse_ozon_operating(payload, out)
         self._link_products_to_weekly_groups(out)
         self._parse_search_signals(payload, out)
