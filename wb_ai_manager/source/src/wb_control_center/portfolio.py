@@ -301,7 +301,7 @@ class PortfolioService:
 
     @staticmethod
     def _economics_norm(value: Any) -> str:
-        text = str(value or "").strip().lower().replace("ё", "е").replace("×", "x").replace("х", "x")
+        text = str(value or "").strip().lower().replace("ё", "е").replace("×", "x")
         # Parenthetical manufacturing detail such as "(2×5 кг)" must not stop a
         # seller article "цемент 10 кг" from matching the 10 kg plan row.
         text = re.sub(r"\([^)]*\)", " ", text)
@@ -327,11 +327,11 @@ class PortfolioService:
 
     @staticmethod
     def _economics_pack_count(value: Any) -> int | None:
-        text = str(value or "").lower().replace("×", "x").replace("х", "x")
+        text = str(value or "").lower().replace("×", "x")
         matches = list(re.finditer(r"(\d+)\s*шт\b", text))
         if matches:
             return int(matches[-1].group(1))
-        matches = list(re.finditer(r"\bx\s*(\d+)\b", text))
+        matches = list(re.finditer(r"\b(?:x|х)\s*(\d+)\b", text))
         if matches:
             return int(matches[-1].group(1))
         return None
