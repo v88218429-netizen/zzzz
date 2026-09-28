@@ -56,7 +56,7 @@ function time(iso){ if(!iso) return '—'; const d=new Date(iso); return Number.
 function severityIcon(s){ return s==='critical'?'!':s==='warning'?'•':'i'; }
 function statusClass(n, thresholds={warn:12,bad:20}){ if(!Number.isFinite(n)) return 'neutral'; if(n>=thresholds.bad) return 'bad'; if(n>=thresholds.warn) return 'warn'; return 'ok'; }
 
-function scopeName(v){ const m={campaign_sku:'Реклама · товар',campaign:'Реклама',sku:'Товар',store:'Магазин',system:'Система',operating_model:'Модель управления'}; return m[String(v||'')]||String(v||'—'); }
+function scopeName(v){ const m={campaign_sku:'Реклама · товар',campaign:'Реклама',sku:'Товар',physical_product:'Физический товар',store:'Магазин',system:'Система',operating_model:'Модель управления'}; return m[String(v||'')]||String(v||'—'); }
 function changeTypeName(v){ const m={advert_bid:'Ставка рекламы',price:'Цена',card_media:'Медиа карточки'}; return m[String(v||'')]||String(v||'—'); }
 function historyStatusName(v){ const m={recommended:'Рекомендовано',observed_applied:'Фактически применено'}; return m[String(v||'')]||String(v||'—'); }
 function sourceHealthName(v){ const m={fresh:'Актуально',ok:'Актуально',stale:'Устарело',broken:'Ошибка',unknown:'Не проверено'}; return m[String(v||'').toLowerCase()]||String(v||'—'); }
