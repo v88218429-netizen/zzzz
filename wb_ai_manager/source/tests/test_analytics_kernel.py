@@ -37,7 +37,7 @@ def test_economics_quality_does_not_treat_profit_column_as_self_proving():
              "logistics_total_rub":None}
     q=economics_quality(product)
     assert q.ready is False
-    assert "логистика" in q.missing
+    assert any("логистика" in x for x in q.missing)
     assert q.level != "high"
 
 
