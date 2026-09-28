@@ -35,6 +35,12 @@ const SOURCES = {
       sku_master: '10_SKU_MASTER!A1:P1200'
     }
   },
+  primary_unit_economics: {
+    spreadsheetId: '1KqOYHeuqxgcLwYAqh0psugqAbhSXo_6BJooSjPSG1-M',
+    ranges: {
+      unit_economics: 'WB FBS новая!A1:AP220'
+    }
+  },
   weekly_summary: {
     spreadsheetId: '1hU24PrecF2hbeLbKfPEKRQbjXhdd8kONLTMsR4yNIug',
     ranges: {
@@ -64,7 +70,7 @@ const SOURCES = {
     ranges: {
       dashboard: '00_Дашборд!A1:Z100',
       ads_status: '84_Статус_реклама!A1:H300',
-      calculator: '05_Калькулятор!A1:BD300',
+      calculator: '05_Калькулятор!A1:BD4983',
       stocks: '06_Остатки!A1:Z300',
       positions: '07_Контроль_позиций!A1:R6000'
     }
