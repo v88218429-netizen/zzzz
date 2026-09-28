@@ -40,6 +40,7 @@ _SYSTEM_WORK_MODES = {
     "automatic_follow_up", "unit_reconciliation", "finance_reconciliation",
     "root_cause_resolved", "measured_follow_up", "follow_up", "lead_time_check",
     "portfolio_check", "reasoning", "recheck_rule", "analysis",
+    "operating_model", "fbs_check", "stock_reconcile", "data_guard",
 }
 
 
