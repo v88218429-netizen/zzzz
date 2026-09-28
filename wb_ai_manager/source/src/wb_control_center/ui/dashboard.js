@@ -831,6 +831,15 @@ function signalHtml(e){ const scope=eventScopeText(e), ent=eventEntity(e); const
 
 function renderKnowledge(){
   const v=state.data?.knowledge?.policy_version; if($('policy-version')) $('policy-version').textContent=v?`ПРАВИЛА v${v}`:'ПРАВИЛА';
+  const agenda=state.data?.research_agenda||{}, programs=agenda.programs||[];
+  if($('research-count')) $('research-count').textContent=`${num(programs.length)} ПРОГРАММ`;
+  if($('research-agenda')) $('research-agenda').innerHTML=programs.length?programs.map((p,i)=>{
+    const hyps=(p.hypotheses||[]).slice(0,3).map((x,n)=>`<li><strong>H${n+1}</strong> ${esc(x)}</li>`).join('');
+    const tests=(p.tests||[]).slice(0,3).map((x,n)=>`<li><strong>T${n+1}</strong> ${esc(x)}</li>`).join('');
+    const tr=p.trigger||{};
+    const trigger=Object.entries(tr).filter(([,v])=>!missing(v)).map(([k,v])=>`${humanizeText(k)}: ${humanizeText(v)}`).join(' · ');
+    return `<article class="signal info"><strong>${i+1}. ${esc(p.title||p.program_id)}</strong><p>${esc(p.objective||'')}</p><span class="source">приоритет исследования ${num(p.priority_score||0)}/100${trigger?' · '+esc(trigger):''}</span><details class="decision-evidence"><summary>Гипотезы и проверки</summary><div class="content-grid half"><div><h4>Конкурирующие гипотезы</h4><ul>${hyps}</ul></div><div><h4>Следующие проверки</h4><ul>${tests}</ul></div></div><p><strong>Критерий знания:</strong> ${esc(p.success_condition||'—')}</p><small>${esc(p.loop||'')}</small></details></article>`;
+  }).join(''):empty('Активных исследовательских программ пока нет.');
 }
 
 function renderAgents(){
