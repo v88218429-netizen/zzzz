@@ -301,8 +301,13 @@ class PortfolioService:
 
     @staticmethod
     def _economics_norm(value: Any) -> str:
-        text = str(value or "").strip().lower().replace("ё", "е").replace("×", "x")
-        text = re.sub(r"(\d+(?:[.,]\d+)?)\s*(л|кг|м|шт)\b", lambda m: m.group(1).replace(",", ".") + m.group(2), text)
+        text = str(value or "").strip().lower().replace("ё", "е").replace("×", "x").replace("х", "x")
+        # Parenthetical manufacturing detail such as "(2×5 кг)" must not stop a
+        # seller article "цемент 10 кг" from matching the 10 kg plan row.
+        text = re.sub(r"\([^)]*\)", " ", text)
+        text = re.sub(r"(\d+(?:[.,]\d+)?)\s*(л|кг|м)\b", lambda m: m.group(1).replace(",", ".") + m.group(2), text)
+        text = re.sub(r"(?:x\s*)?(\d+)\s*шт\b", lambda m: ("" if m.group(1) == "1" else " pack" + m.group(1)), text)
+        text = re.sub(r"\bx\s*(\d+)\b", lambda m: ("" if m.group(1) == "1" else " pack" + m.group(1)), text)
         replacements = {
             "пластиковое": "пласт", "пластиковый": "пласт", "пластиковая": "пласт",
             "бежевое": "беж", "бежевый": "беж", "серое": "сер", "серый": "сер",
@@ -311,6 +316,14 @@ class PortfolioService:
             text = text.replace(src, dst)
         text = re.sub(r"[^a-zа-я0-9.,]+", " ", text)
         return re.sub(r"\s+", " ", text).strip()
+
+    @staticmethod
+    def _economics_units(value: Any) -> set[str]:
+        text = str(value or "").lower().replace(",", ".")
+        return {
+            f"{m.group(1)}{m.group(2)}"
+            for m in re.finditer(r"(\d+(?:\.\d+)?)\s*(кг|л)\b", text)
+        }
 
     def _parse_primary_economics_axis(self, payload: dict[str, Any], out: dict[str, Any]) -> None:
         """Overlay the authoritative plan model and an independent factual snapshot.
@@ -389,15 +402,22 @@ class PortfolioService:
                 if len(candidates) == 1:
                     plan = candidates[0]
             if plan is None:
-                candidate_names = [prod.get("name"), prod.get("physical_position")]
-                matches: list[dict[str, Any]] = []
-                for value in candidate_names:
-                    if not value:
-                        continue
-                    matches.extend(plan_by_name.get(self._economics_norm(value)) or [])
-                unique = {int(x.get("source_row") or 0): x for x in matches}
-                if len(unique) == 1:
-                    plan = next(iter(unique.values()))
+                # Seller article wins over the physical/K2 parent row.  This prevents,
+                # for example, a 10 kg cement SKU from inheriting the 5 kg plan merely
+                # because several variants sit under the same physical source row.
+                seller_matches = plan_by_name.get(self._economics_norm(prod.get("name"))) or []
+                seller_unique = {int(x.get("source_row") or 0): x for x in seller_matches}
+                if len(seller_unique) == 1:
+                    plan = next(iter(seller_unique.values()))
+            if plan is None and prod.get("physical_position"):
+                physical_matches = plan_by_name.get(self._economics_norm(prod.get("physical_position"))) or []
+                physical_unique = {int(x.get("source_row") or 0): x for x in physical_matches}
+                if len(physical_unique) == 1:
+                    candidate = next(iter(physical_unique.values()))
+                    seller_units = self._economics_units(prod.get("name"))
+                    plan_units = self._economics_units(candidate.get("name"))
+                    if not seller_units or not plan_units or seller_units == plan_units:
+                        plan = candidate
 
             if plan is None:
                 unmatched.append({"sku": sku, "name": prod.get("name"), "physical_position": prod.get("physical_position")})
@@ -419,6 +439,18 @@ class PortfolioService:
                     "acquiring_pct": self._num(plan.get("acquiring_pct")),
                     "tax_total_rub": self._num(plan.get("tax_total_rub")),
                     "buyout_plan_pct": self._num(plan.get("buyout_plan_pct")),
+                    "price_before_discount_rub": self._num(plan.get("price_before_discount_rub")),
+                    "discount_pct": self._num(plan.get("discount_pct")),
+                    "spp_pct": self._num(plan.get("spp_pct")),
+                    "logistics_base_rub": self._num(plan.get("logistics_base_rub")),
+                    "acquiring_rub": self._num(plan.get("acquiring_rub")),
+                    "tax_regime": plan.get("tax_regime"),
+                    "target_profit_rub": self._num(plan.get("target_profit_rub")),
+                    "target_margin_pct": self._num(plan.get("target_margin_pct")),
+                    "target_roi_pct": self._num(plan.get("target_roi_pct")),
+                    "target_price_profit_rub": self._num(plan.get("target_price_profit_rub")),
+                    "target_price_margin_rub": self._num(plan.get("target_price_margin_rub")),
+                    "target_price_roi_rub": self._num(plan.get("target_price_roi_rub")),
                     "primary_unit_plan_name": plan.get("name"),
                     "primary_unit_group": plan.get("group"),
                     "primary_unit_source_row": plan.get("source_row"),
