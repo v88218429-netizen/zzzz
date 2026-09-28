@@ -1,13 +1,13 @@
 {
   "channel": "stable",
-  "version": "1.1.0",
-  "build_commit": "765c005a8ca6b0ae7bf7f5bed331b2b757c861ca",
-  "package_sha256": "324ce1407087ab7c0d4ee7a60c2dca573721a4884cb1eec5e30f2d987a5519d5",
-  "package_size": 130851,
+  "version": "1.1.1",
+  "build_commit": "034557c28dd3ab6ddafc76ab68d1d807a3bf9ddb",
+  "package_sha256": "c751ad5d33348df15f8e1f099f8d108be31edebf7e50e9fd7cd9c5a22eabf00f",
+  "package_size": 131524,
   "parts": [
-    "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/trend-analyzer/releases/v1.1.0/part00.txt",
-    "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/trend-analyzer/releases/v1.1.0/part01.txt",
-    "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/trend-analyzer/releases/v1.1.0/part02.txt",
-    "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/trend-analyzer/releases/v1.1.0/part03.txt"
+    "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/trend-analyzer/releases/v1.1.1/part00.txt",
+    "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/trend-analyzer/releases/v1.1.1/part01.txt",
+    "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/trend-analyzer/releases/v1.1.1/part02.txt",
+    "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/trend-analyzer/releases/v1.1.1/part03.txt"
   ]
 }
