@@ -36,6 +36,8 @@ jobs:
 
           SHA=$(sha256sum "$ZIP" | awk '{print $1}')
           SIZE=$(stat -c%s "$ZIP")
+          export SHA SIZE
+
           base64 -w0 "$ZIP" > /tmp/trend-package.b64
           split -b 50000 -d -a 2 /tmp/trend-package.b64 /tmp/trend-part-
 
@@ -62,42 +64,9 @@ jobs:
                   for p in parts
               ],
           }
-          Path("trend-analyzer/releases/manifest.json").parent.mkdir(parents=True, exist_ok=True)
-          Path("trend-analyzer/releases/manifest.json").write_text(
-              json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-          )
-          PY
-        env:
-          SHA: ${{ steps.meta.outputs.sha }}
-          SIZE: ${{ steps.meta.outputs.size }}
-
-      - name: Rebuild manifest with package metadata
-        id: publish
-        run: |
-          set -euo pipefail
-          ZIP=/tmp/trend-artifact/Trend-Analyzer-macOS.zip
-          SHA=$(sha256sum "$ZIP" | awk '{print $1}')
-          SIZE=$(stat -c%s "$ZIP")
-          export SHA SIZE
-          python3 - <<'PY'
-          import json, os
-          from pathlib import Path
-          root = Path("trend-analyzer/releases/v1.1.0")
-          parts = sorted(root.glob("part*.txt"))
-          manifest = {
-              "channel": "stable",
-              "version": "1.1.0",
-              "build_commit": "765c005a8ca6b0ae7bf7f5bed331b2b757c861ca",
-              "package_sha256": os.environ["SHA"],
-              "package_size": int(os.environ["SIZE"]),
-              "parts": [
-                  f"https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/{p.as_posix()}"
-                  for p in parts
-              ],
-          }
-          Path("trend-analyzer/releases/manifest.json").write_text(
-              json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-          )
+          out = Path("trend-analyzer/releases/manifest.json")
+          out.parent.mkdir(parents=True, exist_ok=True)
+          out.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
           print(json.dumps(manifest, indent=2))
           PY
 
@@ -105,7 +74,6 @@ jobs:
         run: |
           set -euo pipefail
           cat trend-analyzer/releases/v1.1.0/part*.txt | base64 -d > /tmp/rebuilt.zip
-          test "$(sha256sum /tmp/rebuilt.zip | awk '{print $1}')" = "$(sha256sum /tmp/trend-artifact/Trend-Analyzer-macOS.zip | awk '{print $1}')"
           cmp /tmp/rebuilt.zip /tmp/trend-artifact/Trend-Analyzer-macOS.zip
           unzip -t /tmp/rebuilt.zip >/dev/null
 
