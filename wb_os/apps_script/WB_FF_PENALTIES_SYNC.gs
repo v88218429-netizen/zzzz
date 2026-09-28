@@ -10,6 +10,8 @@ var FF_PODMENY_SYNC_CFG = {
   PERIOD_DAYS: 14,
   TZ: 'Europe/Moscow',
   FP_PREFIX: 'FF_PODMENY_SYNC_FP_',
+  WORKER_URL: 'https://wb-api-worker-production.up.railway.app',
+  WORKER_TOKEN_SHA256: '86680560150c3d605c5786e41fb8f6d6964bcc7565ba3ec18a3af244f71043c2',
   VISION_URL: 'https://wb-ai-manager-live-production.up.railway.app/api/photo-analysis',
   VISION_MAX_ROWS_PER_RUN: 8,
   LEGACY_SHEETS: [
@@ -43,14 +45,38 @@ function ffPodmenySyncCurrentPeriod_(skipIfUnchanged) {
   var src = SpreadsheetApp.openById(cfg.SOURCE_SPREADSHEET_ID);
   var dst = SpreadsheetApp.openById(cfg.TARGET_SPREADSHEET_ID);
 
+  var refreshError = null;
+  try {
+    ffPodmenyRefreshSourcesFromWorker_(src);
+  } catch (err) {
+    refreshError = err;
+    Logger.log(
+      'FF podmeny worker refresh failed; using cached source sheets: ' +
+      (err && err.stack ? err.stack : err)
+    );
+  }
+
   var rows = [];
+  var missingSources = [];
   cfg.SOURCES.forEach(function(sourceCfg) {
     var sh = src.getSheetByName(sourceCfg.sheet);
-    if (!sh) return;
+    if (!sh) {
+      missingSources.push(sourceCfg.sheet);
+      return;
+    }
     rows = rows.concat(
       ffPodmenyReadSource_(sh, sourceCfg.shop, period.start, period.end)
     );
   });
+
+  if (missingSources.length && refreshError) {
+    throw new Error(
+      'FF_PODMENY_SOURCE_UNAVAILABLE: ' +
+      missingSources.join(', ') +
+      '; worker=' +
+      String(refreshError && refreshError.message ? refreshError.message : refreshError)
+    );
+  }
 
   rows.sort(function(a, b) {
     var dt = b[1].getTime() - a[1].getTime();
@@ -85,16 +111,204 @@ function ffPodmenySyncCurrentPeriod_(skipIfUnchanged) {
   ) {
     return {
       skipped: true,
-      reason: 'source_unchanged',
+      reason: refreshError ? 'source_unchanged_cached' : 'source_unchanged',
       period: period.title,
       rows: rows.length
     };
   }
 
+  if (refreshError && rows.length === 0 && sheet.getLastRow() > 1) {
+    throw new Error(
+      'FF_PODMENY_REFRESH_FAILED_PRESERVE_TARGET: ' +
+      String(refreshError && refreshError.message ? refreshError.message : refreshError)
+    );
+  }
+
   ffPodmenyWrite_(sheet, rows);
   props.setProperty(fpKey, fp);
 
-  return { ok: true, period: period.title, rows: rows.length };
+  return {
+    ok: true,
+    period: period.title,
+    rows: rows.length,
+    source: refreshError ? 'cached_sheets' : 'wb_deductions_api'
+  };
+}
+
+function ffPodmenySha256Hex_(value) {
+  var digest = Utilities.computeDigest(
+    Utilities.DigestAlgorithm.SHA_256,
+    String(value || ''),
+    Utilities.Charset.UTF_8
+  );
+  return digest.map(function(b) {
+    var v = b < 0 ? b + 256 : b;
+    return ('0' + v.toString(16)).slice(-2);
+  }).join('');
+}
+
+function ffPodmenyWorkerToken_() {
+  var cfg = FF_PODMENY_SYNC_CFG;
+  var props = PropertiesService.getScriptProperties().getProperties();
+  var preferred = [
+    'FINANCE_EXPORT_TOKEN',
+    'WB_FINANCE_EXPORT_TOKEN',
+    'WB_WORKER_EXPORT_TOKEN',
+    'FBS_SECRET_BRIDGE_KEY'
+  ];
+
+  for (var i = 0; i < preferred.length; i++) {
+    var value = String(props[preferred[i]] || '').trim();
+    if (value && ffPodmenySha256Hex_(value) === cfg.WORKER_TOKEN_SHA256) {
+      return value;
+    }
+  }
+
+  var keys = Object.keys(props);
+  for (var j = 0; j < keys.length; j++) {
+    var candidate = String(props[keys[j]] || '').trim();
+    if (!candidate) continue;
+    if (ffPodmenySha256Hex_(candidate) === cfg.WORKER_TOKEN_SHA256) {
+      return candidate;
+    }
+  }
+
+  throw new Error(
+    'FF_PODMENY_WORKER_TOKEN_NOT_FOUND: finance bridge secret is absent in Script Properties'
+  );
+}
+
+function ffPodmenyRefreshSourcesFromWorker_(book) {
+  var cfg = FF_PODMENY_SYNC_CFG;
+  var token = ffPodmenyWorkerToken_();
+  var url =
+    cfg.WORKER_URL +
+    '/api/deductions/export.csv?token=' +
+    encodeURIComponent(token);
+
+  var response = UrlFetchApp.fetch(url, {
+    method: 'get',
+    muteHttpExceptions: true,
+    followRedirects: true
+  });
+
+  var code = response.getResponseCode();
+  var body = response.getContentText('UTF-8');
+
+  if (code < 200 || code >= 300) {
+    throw new Error(
+      'FF_PODMENY_WORKER_HTTP_' + code + ': ' +
+      String(body || '').slice(0, 300)
+    );
+  }
+
+  var csv = Utilities.parseCsv(body);
+  if (!csv.length) {
+    throw new Error('FF_PODMENY_WORKER_EMPTY_CSV');
+  }
+
+  var expectedHeader = [
+    'Магазин','Дата штрафа','Тип','Артикул WB','Старый ШК',
+    'Старый цвет','Старый размер','Старый баркод','Старый артикул',
+    'Новый ШК','Новый цвет','Новый размер','Новый баркод',
+    'Новый артикул','Сумма штрафа','Фото замеров'
+  ];
+
+  var actual = csv[0].map(function(x) {
+    return String(x || '').replace(/^\uFEFF/, '').trim();
+  });
+  if (actual.join('|') !== expectedHeader.join('|')) {
+    throw new Error(
+      'FF_PODMENY_WORKER_SCHEMA_MISMATCH: ' + actual.join('|')
+    );
+  }
+
+  var grouped = {};
+  cfg.SOURCES.forEach(function(sourceCfg) {
+    grouped[sourceCfg.shop] = [];
+  });
+
+  for (var r = 1; r < csv.length; r++) {
+    var row = csv[r];
+    if (!row || !String(row[0] || '').trim()) continue;
+    var shop = String(row[0] || '').trim();
+    if (!Object.prototype.hasOwnProperty.call(grouped, shop)) continue;
+
+    grouped[shop].push([
+      row[1] || '',
+      row[2] || '',
+      row[3] || '',
+      row[4] || '',
+      row[5] || '',
+      row[6] || '',
+      row[7] || '',
+      row[8] || '',
+      row[9] || '',
+      row[10] || '',
+      row[11] || '',
+      row[12] || '',
+      row[13] || '',
+      row[14] || '',
+      row[15] || ''
+    ]);
+  }
+
+  cfg.SOURCES.forEach(function(sourceCfg) {
+    var sheet = book.getSheetByName(sourceCfg.sheet);
+    if (!sheet) sheet = book.insertSheet(sourceCfg.sheet);
+    ffPodmenyWriteSourceSheet_(sheet, grouped[sourceCfg.shop] || []);
+  });
+
+  return {
+    ok: true,
+    rows:
+      (grouped['Саныч'] || []).length +
+      (grouped['AIR'] || []).length +
+      (grouped['Хозяюшка'] || []).length
+  };
+}
+
+function ffPodmenyWriteSourceSheet_(sheet, rows) {
+  var headers = [[
+    'Дата штрафа',
+    'Тип',
+    'Артикул WB',
+    'Старый ШК',
+    'Старый цвет',
+    'Старый размер',
+    'Старый баркод',
+    'Старый артикул',
+    'Новый ШК',
+    'Новый цвет',
+    'Новый размер',
+    'Новый баркод',
+    'Новый артикул',
+    'Сумма штрафа',
+    'Фото замеров'
+  ]];
+
+  var needRows = Math.max(1000, rows.length + 20);
+  if (sheet.getMaxRows() < needRows) {
+    sheet.insertRowsAfter(sheet.getMaxRows(), needRows - sheet.getMaxRows());
+  }
+  if (sheet.getMaxColumns() < 15) {
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), 15 - sheet.getMaxColumns());
+  }
+
+  sheet.getRange(1, 1, sheet.getMaxRows(), 15).clearContent();
+  sheet.getRange(1, 1, 1, 15).setValues(headers);
+
+  if (rows.length) {
+    sheet.getRange(2, 1, rows.length, 15).setValues(rows);
+    sheet.getRange(2, 14, rows.length, 1).setNumberFormat('#,##0.00');
+    sheet.getRange(2, 1, rows.length, 15).setWrap(true);
+  }
+
+  sheet.setFrozenRows(1);
+  sheet.getRange(1, 1, 1, 15)
+    .setFontWeight('bold')
+    .setBackground('#d9ead3')
+    .setWrap(true);
 }
 
 function ffPodmenyReadSource_(sheet, shop, start, end) {
