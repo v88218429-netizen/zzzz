@@ -33,6 +33,6 @@ async def test_runtime_patch_updates_wb_mcp_request_contracts():
     assert "dateFrom" not in docs[2] and "dateTo" not in docs[2]
 
     rating=calls[3]
-    assert rating[0].startswith("https://common-api.wildberries.ru")
+    assert rating[0].startswith("https://feedbacks-api.wildberries.ru")
     assert rating[1] == "/api/common/v1/rating"
     await c.close()

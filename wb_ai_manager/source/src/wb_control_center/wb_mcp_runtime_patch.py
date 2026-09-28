@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any
 
 from wb_mcp.client import WBClient
@@ -12,6 +13,18 @@ def _rfc3339_day(value: str, *, end: bool = False) -> str:
     if "T" in text:
         return text
     return f"{text}T{'23:59:59' if end else '00:00:00'}Z"
+
+
+def _rfc3339_not_future(value: str) -> str:
+    text = _rfc3339_day(value, end=True)
+    try:
+        requested = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return text
+    now = datetime.now(timezone.utc)
+    if requested > now:
+        return now.replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    return text
 
 
 async def _promotions_list(
@@ -53,7 +66,7 @@ async def _analytics_deductions(
         "/api/analytics/v1/deductions",
         {
             "dateFrom": _rfc3339_day(date_from),
-            "dateTo": _rfc3339_day(date_to, end=True),
+            "dateTo": _rfc3339_not_future(date_to),
             "sort": "dtBonus",
             "order": "desc",
         },
@@ -77,7 +90,7 @@ async def _documents_list(
 
 
 async def _seller_rating(self: WBClient) -> dict:
-    return await self._get(self._tariffs, "/api/common/v1/rating")
+    return await self._get(self._feedbacks, "/api/common/v1/rating")
 
 
 def apply_wb_mcp_hotfixes() -> None:
