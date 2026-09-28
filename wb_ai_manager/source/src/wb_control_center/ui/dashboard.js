@@ -940,7 +940,7 @@ if($('apply-period')) $('apply-period').addEventListener('click',async()=>{
   await fetchData(true);
   await triggerPeriodAudit({force:true});
 });
-document.addEventListener('click',e=>{
+document.addEventListener('click',async e=>{
   if(e.target.closest('[data-close-detail]')){ closeDetail(); return; }
   const savePlan=e.target.closest('[data-save-plan]'); if(savePlan){ await savePlanningPlan(savePlan.dataset.savePlan); return; }
   if(e.target.closest('#calculate-planning')){ await calculatePlanningScenario(); return; }
