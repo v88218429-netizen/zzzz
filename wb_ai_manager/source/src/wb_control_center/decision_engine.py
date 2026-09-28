@@ -714,7 +714,158 @@ class DecisionEngine:
         max_trend=float(runtime_ad.get('max_trend_pct_for_forecast',60))
         over=float(invcfg.get('overstock_days_cover',75))
 
-        for x in own.get('products',[])[:500]:
+        # Supply decisions belong to the physical inventory object, not to every
+        # marketplace bundle that consumes it.  Example: "Бидон 15л 1шт" and
+        # "Бидон 15л 2шт" are two sales formats of one stock pool.
+        products = [x for x in own.get("products", [])[:500] if isinstance(x, dict)]
+        members_by_physical: dict[str, list[dict[str, Any]]] = {}
+        for prod in products:
+            physical = str(prod.get("physical_position") or "").strip()
+            if physical:
+                members_by_physical.setdefault(physical, []).append(prod)
+        physical_rows = {
+            str(x.get("physical_position") or "").strip(): x
+            for x in (own.get("physical_inventory") or [])
+            if isinstance(x, dict) and str(x.get("physical_position") or "").strip()
+        }
+        grouped_skus: set[str] = set()
+
+        for physical, row in physical_rows.items():
+            members = members_by_physical.get(physical) or []
+            if len(members) < 2:
+                continue
+            grouped_skus.update(str(x.get("sku") or "") for x in members)
+
+            base_daily = 0.0
+            exact_members = 0
+            variant_notes: list[str] = []
+            for prod in members:
+                demand = build_demand_forecast(prod, max_growth_pct=max_trend)
+                dq = demand_quality(prod, demand)
+                daily = _n(demand.forecast_orders_1d)
+                if not dq.ready or daily is None or daily <= 0:
+                    daily = _n(prod.get("orders_per_day"))
+                if daily is None or daily <= 0:
+                    continue
+                pack = _pack_qty(prod.get("name"))
+                base_daily += daily * pack
+                exact_members += 1
+                variant_notes.append(f"{prod.get('name')}: ≈{daily:.2f} заказа/день × {pack} шт")
+
+            if base_daily <= 0:
+                aggregate_daily = _n(row.get("orders_per_day"))
+                if aggregate_daily is not None and aggregate_daily > 0:
+                    # This is order count, not guaranteed base-unit demand; use only
+                    # as a low-confidence floor rather than inventing bundle mix.
+                    base_daily = aggregate_daily
+
+            if base_daily <= 0:
+                continue
+
+            stock = _n(row.get("k2_safe_stock"))
+            stock_source = "К2 ФФ"
+            if stock is None:
+                stock = _n(row.get("ff_stock"))
+                stock_source = "Остатки ФФ"
+            if stock is None:
+                stock = _n(row.get("ivanovo_stock"))
+                stock_source = "ФФ Иваново"
+            if stock is None:
+                stock = 0.0
+                stock_source = "нет подтверждённого ФФ-остатка"
+
+            target = float(_n(row.get("supply_target_days")) or default_target)
+            warning = float(_n(row.get("reorder_point_days")) or default_warning)
+            debt = max(0.0, _n(row.get("fbs_debt_orders")) or 0.0)
+            planned = max(0.0, _n(row.get("planned_order_qty")) or 0.0)
+            supplier_debt = max(0.0, _n(row.get("supplier_debt_qty")) or 0.0)
+            active_incoming = max(planned, supplier_debt)
+            order_status = str(row.get("order_status") or "")
+            active_order = ("ЗАКАЗ" in order_status.upper()) and active_incoming > 0
+            cover_days = stock / base_daily if base_daily > 0 else None
+            raw_need = max(0, ceil(base_daily * target + debt - stock))
+            remaining_need = max(0, ceil(raw_need - active_incoming)) if active_order else raw_need
+            variants = ", ".join(str(x.get("name") or x.get("sku")) for x in members)
+
+            common_evidence = [
+                _ev("Сводная · физический товар", "Физический товар", physical),
+                _ev("Сводная · физический товар", "Доступный запас ФФ, шт", stock, stock_source),
+                _ev("Прогноз вариантов", "Суммарный спрос базовых единиц, шт/день", round(base_daily, 3), "; ".join(variant_notes[:6])),
+                _ev("Сводная · физический товар", "FBS-долг, шт", debt),
+                _ev("Сводная · физический товар", "Целевой горизонт, дней", target),
+                _ev("Сводная · физический товар", "Расчётная потребность до учёта заказа, шт", raw_need),
+                _ev("Сводная · физический товар", "Активный заказ/долг поставщика, шт", active_incoming if active_order else 0),
+                _ev("Сводная · физический товар", "Варианты WB", variants),
+            ]
+
+            # If an already placed physical-product order covers the calculated gap,
+            # there is no owner decision.  Do not emit two fake SKU shortages.
+            if active_order and remaining_need <= 0:
+                continue
+
+            if cover_days is not None and (cover_days <= warning or stock <= 0):
+                if active_order:
+                    title = f"{physical}: текущий заказ не полностью закрывает общий дефицит"
+                    diagnosis = (
+                        f"Общий спрос вариантов ≈{base_daily:.1f} базовых шт/день, запас {stock:.0f} шт. "
+                        f"До горизонта {target:.0f} дней нужно ≈{raw_need} шт.; уже размещено/числится у поставщика ≈{active_incoming:.0f} шт. "
+                        f"Остаётся незакрыто ≈{remaining_need} шт. Это одна задача по физическому товару, а не по SKU-комплектам."
+                    )
+                    action = f"Дозаказать только оставшиеся ≈{remaining_need} шт. физического товара; отдельные заказы для {variants} не создавать."
+                else:
+                    title = f"{physical}: дефицит общего физического запаса"
+                    diagnosis = (
+                        f"Общий спрос вариантов ≈{base_daily:.1f} базовых шт/день, запас {stock:.0f} шт. "
+                        f"До горизонта {target:.0f} дней требуется ≈{raw_need} шт. SKU-комплекты используют один и тот же запас."
+                    )
+                    action = f"Сформировать одну поставку физического товара ≈{raw_need} шт.; распределение между карточками выполнять из общего пула."
+
+                out.append(DecisionCard(
+                    decision_key=f"physical:{physical}:stockout",
+                    scope="physical_product",
+                    entity_id=physical,
+                    title=title,
+                    diagnosis=diagnosis,
+                    priority="critical" if stock <= 0 else "high",
+                    confidence="high" if exact_members >= 2 else "medium",
+                    recommended_actions=[
+                        {"step": 1, "action": action, "mode": "physical_supply_plan"},
+                        {"step": 2, "action": "После прихода пересчитать доступность всех комплектностей из одного физического остатка автоматически.", "mode": "automatic_follow_up"},
+                    ],
+                    evidence=common_evidence,
+                    follow_up="Пересчитать при изменении общего физического остатка, спроса вариантов или активного заказа.",
+                    analysis={
+                        "metric_type": "physical_inventory_risk",
+                        "time_semantics": "forecast",
+                        "formula": "base_demand = Σ(SKU demand × pack_qty); need = base_demand × target_days + FBS debt − physical_stock − active_incoming",
+                        "member_skus": [str(x.get("sku") or "") for x in members],
+                    },
+                ))
+            elif cover_days is not None and cover_days >= over and not active_order:
+                excess = max(0.0, stock - base_daily * target)
+                out.append(DecisionCard(
+                    decision_key=f"physical:{physical}:overstock",
+                    scope="physical_product",
+                    entity_id=physical,
+                    title=f"{physical}: избыточный общий физический запас",
+                    diagnosis=(
+                        f"Запас {stock:.0f} шт. при общем спросе вариантов ≈{base_daily:.1f} базовых шт/день — "
+                        f"около {cover_days:.0f} дней покрытия. Сверх горизонта {target:.0f} дней ≈{excess:.0f} шт."
+                    ),
+                    priority="medium",
+                    confidence="high",
+                    recommended_actions=[
+                        {"step": 1, "action": "Не пополнять физический товар до возврата общего запаса к рабочему горизонту; отдельные комплектности не считать независимыми запасами.", "mode": "physical_supply_guard"},
+                    ],
+                    evidence=common_evidence,
+                    follow_up="Автоматически пересчитать общий запас после следующего снимка.",
+                    analysis={"metric_type": "physical_inventory_excess", "member_skus": [str(x.get("sku") or "") for x in members]},
+                ))
+
+        for x in products:
+            sku=str(x.get('sku') or '')
+            if sku in grouped_skus:
+                continue
             sku=str(x.get('sku') or '')
             stock=_n(x.get('safe_stock'))
             if not sku or stock is None:
@@ -748,12 +899,12 @@ class DecisionEngine:
                 "quality_issues":dq.issues,
             }
             demand_evidence=[
-                _ev('27/Сводная','safe_stock',stock,x.get('safe_stock_source','')),
-                _ev('27/Сводная','orders_per_day',daily,'операционный показатель из Сводной; не заменяет дневную историю'),
-                _ev('demand_forecast','forecast_orders_per_day',round(forecast_daily,3) if forecast_daily is not None else None,demand.model_name),
-                _ev('demand_forecast','demand_type',demand.demand_type,f"ADI={demand.adi}; CV²={demand.cv2}"),
-                _ev('demand_forecast','backtest_mae',demand.backtest_mae,'ошибка rolling one-step backtest, заказов/день'),
-                _ev('analytics_kernel','demand_quality_score',dq.score,'100 = согласованные и проверяемые сигналы спроса'),
+                _ev('Сводная','Доступный остаток, шт',stock,x.get('safe_stock_source','')),
+                _ev('Сводная','Заказы в день',daily,'операционный показатель; дневная история используется отдельно'),
+                _ev('Прогноз спроса','Прогноз заказов в день',round(forecast_daily,3) if forecast_daily is not None else None,demand.model_name),
+                _ev('Прогноз спроса','Тип спроса',demand.demand_type,f"ADI={demand.adi}; CV²={demand.cv2}"),
+                _ev('Прогноз спроса','Ошибка модели MAE',demand.backtest_mae,'заказов/день на исторической проверке'),
+                _ev('Качество данных','Оценка качества спроса',dq.score,'100 = согласованные и проверяемые сигналы'),
             ]
 
             # Conflicting / low-quality demand evidence stays in the analytics quality
