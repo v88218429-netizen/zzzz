@@ -403,52 +403,140 @@ class DecisionEngine:
         return out
 
     def _store_decisions(self, p: dict[str, Any]) -> list[DecisionCard]:
-        out=[]
-        adcfg=self.policy.thresholds.get('advertising',{})
-        warn=float(adcfg.get('warn_drr_pct',12))
-        for s in p.get('stores',[]):
-            drr=_n(s.get('drr_pct')); margin=_n(s.get('margin_pct')); profit=_n(s.get('profit_rub')); buyouts=_n(s.get('buyouts_qty')); orders=_n(s.get('orders_qty'))
-            buyout_rate=(buyouts/orders*100) if orders and buyouts is not None else None
-            groups=s.get('groups') or []
-            negative=[g for g in groups if (_n(g.get('profit_rub')) or 0) < 0]
-            if drr is not None and drr>=warn and margin is not None:
-                priority='critical' if margin<=0 or drr>=20 else 'high'
-                why=f"ДРР {drr:.1f}% при марже {margin:.1f}%"
-                if buyout_rate is not None: why+=f", текущий выкуп по срезу ≈{buyout_rate:.1f}%"
-                actions=[
-                    {"step":1,"action":"Не увеличивать рекламный трафик магазина до разложения по SKU/группам","mode":"read_only_recommendation"},
-                    {"step":2,"action":"Отделить убыточные группы от прибыльных и проверить, где проблема: выкуп, цена, карточка, логистика или реклама","mode":"analysis"},
-                    {"step":3,"action":"Для убыточных групп сформировать отдельный план: прекратить наращивание платного спроса → исправить экономику/выкуп → провести повторную проверку","mode":"analysis"},
-                ]
-                if negative:
-                    actions.insert(1,{"step":2,"action":"В первую очередь разобрать: "+', '.join(str(x.get('name')) for x in negative[:5]),"mode":"analysis"})
-                out.append(DecisionCard(
-                    decision_key=f"store:{s.get('id')}:ads_economics", scope='store', entity_id=str(s.get('id')),
-                    title=f"{s.get('name')}: рекламу нельзя оценивать отдельно от экономики",
-                    diagnosis=why+'. Решение по ставке нельзя делать из календарного сравнения заказов и выкупов: выкупы запаздывают. Нужны юнитка, кампания и зрелость той же когорты заказов.',
-                    priority=priority, confidence='high' if s.get('source') else 'medium', recommended_actions=actions,
-                    evidence=[_ev(s.get('source','trusted'),'ДРР',drr),_ev(s.get('source','trusted'),'Маржа',margin),_ev(s.get('source','trusted'),'Прибыль',profit),_ev(s.get('source','trusted'),'Выкуп %',buyout_rate)],
-                    follow_up='После исправления пересчитать прибыль, ДРР и выкуп на следующем сопоставимом окне.'
-                ))
+        out: list[DecisionCard] = []
+        adcfg = self.policy.thresholds.get("advertising", {})
+        warn = float(adcfg.get("warn_drr_pct", 12))
 
-            if negative:
-                worst=sorted(negative,key=lambda x:_n(x.get('profit_rub')) or 0)[:5]
-                out.append(DecisionCard(
-                    decision_key=f"store:{s.get('id')}:negative_groups", scope='store', entity_id=str(s.get('id')),
-                    title=f"{s.get('name')}: прошлый реализованный срез содержит убыточные группы",
-                    diagnosis=(
-                        'Это результат уже созревших более ранних когорт. Его нельзя напрямую приписывать свежим заказам текущей недели. '
-                        'Он нужен как сигнал для разбора причин и обучения рекламной модели, но не как автоматический запрет текущего спроса.'
+        for s in p.get("stores", []) or []:
+            groups = [g for g in (s.get("groups") or []) if isinstance(g, dict)]
+            if not groups:
+                continue
+            drr = _n(s.get("drr_pct"))
+            margin = _n(s.get("margin_pct"))
+            profit = _n(s.get("profit_rub"))
+            buyouts = _n(s.get("buyouts_qty"))
+            orders = _n(s.get("orders_qty"))
+            buyout_rate = (buyouts / orders * 100.0) if orders and buyouts is not None else None
+
+            hard_stop: list[dict[str, Any]] = []
+            hold: list[dict[str, Any]] = []
+            winners: list[dict[str, Any]] = []
+            for g in groups:
+                gp = _n(g.get("profit_rub")) or 0.0
+                gm = _n(g.get("margin_pct"))
+                gb = _n(g.get("buyout_pct"))
+                go = _n(g.get("orders_rub")) or 0.0
+                if gp < 0:
+                    if gp <= -500 or (gm is not None and gm <= -10) or (gb is not None and gb < 20 and go >= 5000):
+                        hard_stop.append(g)
+                    else:
+                        hold.append(g)
+                elif gp > 0 and (gm is None or gm >= 10) and (gb is None or gb >= 20):
+                    winners.append(g)
+
+            if not hard_stop and not hold and not (drr is not None and drr >= warn):
+                continue
+
+            hard_stop.sort(key=lambda x: _n(x.get("profit_rub")) or 0)
+            hold.sort(key=lambda x: _n(x.get("profit_rub")) or 0)
+            winners.sort(key=lambda x: _n(x.get("profit_rub")) or 0, reverse=True)
+
+            hard_names = ", ".join(str(x.get("name")) for x in hard_stop[:6]) or "нет"
+            hold_names = ", ".join(str(x.get("name")) for x in hold[:6]) or "нет"
+            winner_names = ", ".join(str(x.get("name")) for x in winners[:6]) or "нет"
+            historical_loss = sum((_n(x.get("profit_rub")) or 0.0) for x in hard_stop + hold)
+
+            diagnosis_parts = []
+            if drr is not None:
+                diagnosis_parts.append(f"ДРР магазина {drr:.1f}%")
+            if margin is not None:
+                diagnosis_parts.append(f"маржа {margin:.1f}%")
+            if buyout_rate is not None:
+                diagnosis_parts.append(f"выкуп по срезу ≈{buyout_rate:.1f}%")
+            diagnosis_parts.append(f"красная зона: {hard_names}")
+            if hold:
+                diagnosis_parts.append(f"удержание без расширения: {hold_names}")
+            if winners:
+                diagnosis_parts.append(f"положительные группы: {winner_names}")
+            diagnosis_parts.append(
+                f"суммарный реализованный минус отрицательных групп ≈{historical_loss:.0f} ₽"
+            )
+
+            actions: list[dict[str, Any]] = []
+            if hard_stop:
+                actions.append({
+                    "step": 1,
+                    "action": (
+                        "Не добавлять новый платный трафик в группы: "
+                        + hard_names
+                        + ". Причина уже определена по зрелому финансовому срезу: отрицательная реализованная прибыль; "
+                          "для групп с низким выкупом реклама усиливает не тот участок воронки."
                     ),
-                    priority='high', confidence='high',
-                    recommended_actions=[
-                        {"step":1,"action":"Разобрать убыточные группы по SKU и определить, какие именно старые когорты дали убыток","mode":"cohort_analysis"},
-                        {"step":2,"action":"Для текущих рекламных решений опираться на юнитку SKU, статистику кампании, спрос, позицию и зрелость свежей когорты","mode":"analysis"},
-                        {"step":3,"action":"После созревания новых заказов сравнить фактический результат той же когорты с прогнозом","mode":"cohort_followup"},
-                    ],
-                    evidence=[_ev(s.get('source','weekly'),str(g.get('name')),f"realised_profit={g.get('profit_rub')}; realised_margin={g.get('margin_pct')}") for g in worst],
-                    follow_up='Пересчитать после созревания сопоставимой когорты заказов.'
-                ))
+                    "mode": "portfolio_ad_guard",
+                })
+            if hold:
+                actions.append({
+                    "step": len(actions) + 1,
+                    "action": (
+                        "Оставить без расширения рекламной нагрузки группы: "
+                        + hold_names
+                        + ". Убыток мал/нестабилен, поэтому дополнительный бюджет не давать до свежего полного окна."
+                    ),
+                    "mode": "portfolio_hold",
+                })
+            if winners:
+                actions.append({
+                    "step": len(actions) + 1,
+                    "action": (
+                        "Новый рекламный бюджет рассматривать в первую очередь для: "
+                        + winner_names
+                        + ". Это не автоматическое повышение ставки: допуск действует только если свежий SKU-факт "
+                          "по ДРР и PRIMARY-юнитке остаётся положительным."
+                    ),
+                    "mode": "portfolio_scale_pool",
+                })
+            actions.append({
+                "step": len(actions) + 1,
+                "action": "Следующий прогон сам пересоберёт эти три корзины по новому зрелому факту; ручное «разделить группы» больше не требуется.",
+                "mode": "automatic_follow_up",
+            })
+
+            priority = "critical" if hard_stop and (margin is not None and margin <= 0) else ("high" if hard_stop else "medium")
+            evidence = [
+                _ev(s.get("source", "weekly"), "ДРР магазина, %", drr),
+                _ev(s.get("source", "weekly"), "Маржа магазина, %", margin),
+                _ev(s.get("source", "weekly"), "Прибыль магазина, ₽", profit),
+                _ev(s.get("source", "weekly"), "Выкуп магазина, %", buyout_rate),
+            ]
+            for label, rows in (("Красная зона", hard_stop), ("Удержание", hold), ("Положительная группа", winners)):
+                for g in rows[:8]:
+                    evidence.append(_ev(
+                        s.get("source", "weekly"),
+                        f"{label}: {g.get('name')}",
+                        _n(g.get("profit_rub")),
+                        f"прибыль, ₽; маржа={g.get('margin_pct')}; выкуп={g.get('buyout_pct')}",
+                    ))
+
+            out.append(DecisionCard(
+                decision_key=f"store:{s.get('id')}:portfolio_ads",
+                scope="store",
+                entity_id=str(s.get("id")),
+                title=f"{s.get('name')}: рекламный портфель уже разделён по экономике",
+                diagnosis=". ".join(diagnosis_parts) + ".",
+                priority=priority,
+                confidence="high",
+                recommended_actions=actions,
+                evidence=evidence,
+                follow_up="Автоматически пересобрать корзины после следующего зрелого финансового среза и свежего рекламного окна.",
+                analysis={
+                    "metric_type": "store_portfolio_allocation",
+                    "time_semantics": "mature_realised_group_economics",
+                    "hard_stop_groups": [x.get("name") for x in hard_stop],
+                    "hold_groups": [x.get("name") for x in hold],
+                    "scale_pool_groups": [x.get("name") for x in winners],
+                    "warning": "Зрелый групповой финансовый срез не заменяет свежий campaign×SKU факт; он задаёт guardrail, а не прямую ставку.",
+                },
+            ))
         return out
 
     def _product_decisions(self, p: dict[str, Any], snapshots: dict[str, Any] | None = None) -> list[DecisionCard]:
