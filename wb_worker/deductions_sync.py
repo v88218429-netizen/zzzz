@@ -13,7 +13,7 @@ BASE_URL = "https://seller-analytics-api.wildberries.ru"
 DATA_DIR = Path(os.environ.get("DATA_DIR", "/data")) / "deductions"
 SYNC_INTERVAL_MIN = int(os.environ.get("DEDUCTIONS_SYNC_INTERVAL_MIN", "60"))
 DATE_FROM_OVERRIDE = os.environ.get("DEDUCTIONS_DATE_FROM", "").strip()
-LOOKBACK_DAYS = int(os.environ.get("DEDUCTIONS_LOOKBACK_DAYS", "30"))
+LOOKBACK_DAYS = int(os.environ.get("DEDUCTIONS_LOOKBACK_DAYS", "3650"))
 PAGE_SIZE = 1000
 PAGE_INTERVAL_SEC = float(os.environ.get("DEDUCTIONS_PAGE_INTERVAL_SEC", "61"))
 
