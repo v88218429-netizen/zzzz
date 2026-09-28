@@ -2,7 +2,7 @@ import asyncio
 import csv
 import json
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -11,8 +11,9 @@ import httpx
 
 BASE_URL = "https://seller-analytics-api.wildberries.ru"
 DATA_DIR = Path(os.environ.get("DATA_DIR", "/data")) / "deductions"
-SYNC_INTERVAL_MIN = int(os.environ.get("DEDUCTIONS_SYNC_INTERVAL_MIN", "360"))
-DATE_FROM = os.environ.get("DEDUCTIONS_DATE_FROM", "2026-09-01")
+SYNC_INTERVAL_MIN = int(os.environ.get("DEDUCTIONS_SYNC_INTERVAL_MIN", "60"))
+DATE_FROM_OVERRIDE = os.environ.get("DEDUCTIONS_DATE_FROM", "").strip()
+LOOKBACK_DAYS = int(os.environ.get("DEDUCTIONS_LOOKBACK_DAYS", "30"))
 PAGE_SIZE = 1000
 PAGE_INTERVAL_SEC = float(os.environ.get("DEDUCTIONS_PAGE_INTERVAL_SEC", "61"))
 
@@ -60,10 +61,13 @@ def _write_csv(path: Path, rows: list[list[Any]]) -> None:
 
 
 def _date_from_param() -> str:
-    value = DATE_FROM.strip()
-    if "T" in value:
-        return value
-    return value + "T00:00:00Z"
+    value = DATE_FROM_OVERRIDE
+    if value:
+        if "T" in value:
+            return value
+        return value + "T00:00:00Z"
+    dt = datetime.now(timezone.utc) - timedelta(days=max(1, LOOKBACK_DAYS))
+    return dt.replace(hour=0, minute=0, second=0, microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 def _date_to_param() -> str:
@@ -149,7 +153,7 @@ async def sync_all() -> dict[str, Any]:
     status: dict[str, Any] = {
         "ok": True,
         "startedAt": datetime.now(timezone.utc).isoformat(),
-        "dateFrom": DATE_FROM,
+        "dateFrom": _date_from_param(),
         "dateTo": _date_to_param(),
         "shops": {},
     }
