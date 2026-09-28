@@ -831,15 +831,19 @@ function signalHtml(e){ const scope=eventScopeText(e), ent=eventEntity(e); const
 
 function renderKnowledge(){
   const v=state.data?.knowledge?.policy_version; if($('policy-version')) $('policy-version').textContent=v?`ПРАВИЛА v${v}`:'ПРАВИЛА';
-  const agenda=state.data?.research_agenda||{}, programs=agenda.programs||[];
-  if($('research-count')) $('research-count').textContent=`${num(programs.length)} ПРОГРАММ`;
-  if($('research-agenda')) $('research-agenda').innerHTML=programs.length?programs.map((p,i)=>{
-    const hyps=(p.hypotheses||[]).slice(0,3).map((x,n)=>`<li><strong>H${n+1}</strong> ${esc(x)}</li>`).join('');
-    const tests=(p.tests||[]).slice(0,3).map((x,n)=>`<li><strong>T${n+1}</strong> ${esc(x)}</li>`).join('');
-    const tr=p.trigger||{};
-    const trigger=Object.entries(tr).filter(([,v])=>!missing(v)).map(([k,v])=>`${humanizeText(k)}: ${humanizeText(v)}`).join(' · ');
-    return `<article class="signal info"><strong>${i+1}. ${esc(p.title||p.program_id)}</strong><p>${esc(p.objective||'')}</p><span class="source">приоритет исследования ${num(p.priority_score||0)}/100${trigger?' · '+esc(trigger):''}</span><details class="decision-evidence"><summary>Гипотезы и проверки</summary><div class="content-grid half"><div><h4>Конкурирующие гипотезы</h4><ul>${hyps}</ul></div><div><h4>Следующие проверки</h4><ul>${tests}</ul></div></div><p><strong>Критерий знания:</strong> ${esc(p.success_condition||'—')}</p><small>${esc(p.loop||'')}</small></details></article>`;
-  }).join(''):empty('Активных исследовательских программ пока нет.');
+  const agenda=state.data?.research_agenda||{}, programs=agenda.programs||[], discoveries=agenda.discoveries||[];
+  if($('research-count')) $('research-count').textContent=`${num(programs.length)} ПРОГРАММ · ${num(discoveries.length)} НОВЫХ СВЯЗЕЙ`;
+  if($('research-agenda')){
+    const discoveryHtml=discoveries.length?`<article class="signal warning"><strong>Автоматически найденные закономерности</strong><p>Показаны только связи, которые повторились на отложенной части SKU. Они ещё не считаются причинными.</p><div class="signal-stack">${discoveries.map(x=>`<div class="signal info"><strong>${esc(x.label_a)} ↔ ${esc(x.label_b)}</strong><p>${esc(x.statement)}</p><span class="source">ρ discovery ${num(x.rho_discovery,2)} · holdout ${num(x.rho_holdout,2)} · n=${num(x.discovery_n+x.holdout_n)} · сила ${num(x.strength_score,0)}/100</span><small>${esc(x.next_test)}</small></div>`).join('')}</div></article>`:''; 
+    const programsHtml=programs.map((p,i)=>{
+      const hyps=(p.hypotheses||[]).slice(0,3).map((x,n)=>`<li><strong>H${n+1}</strong> ${esc(x)}</li>`).join('');
+      const tests=(p.tests||[]).slice(0,3).map((x,n)=>`<li><strong>T${n+1}</strong> ${esc(x)}</li>`).join('');
+      const tr=p.trigger||{};
+      const trigger=Object.entries(tr).filter(([,v])=>!missing(v)).map(([k,v])=>`${humanizeText(k)}: ${humanizeText(v)}`).join(' · ');
+      return `<article class="signal info"><strong>${i+1}. ${esc(p.title||p.program_id)}</strong><p>${esc(p.objective||'')}</p><span class="source">приоритет исследования ${num(p.priority_score||0)}/100${trigger?' · '+esc(trigger):''}</span><details class="decision-evidence"><summary>Гипотезы и проверки</summary><div class="content-grid half"><div><h4>Конкурирующие гипотезы</h4><ul>${hyps}</ul></div><div><h4>Следующие проверки</h4><ul>${tests}</ul></div></div><p><strong>Критерий знания:</strong> ${esc(p.success_condition||'—')}</p><small>${esc(p.loop||'')}</small></details></article>`;
+    }).join('');
+    $('research-agenda').innerHTML=(discoveryHtml+programsHtml)||empty('Активных исследовательских программ пока нет.');
+  }
 }
 
 function renderAgents(){
