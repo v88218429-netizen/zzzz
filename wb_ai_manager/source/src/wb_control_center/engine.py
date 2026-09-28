@@ -239,6 +239,9 @@ class ControlCenter:
                 item = self.db.latest_snapshot(source, key)
                 if item:
                     ss[source][key] = item
+        planning_item = self.db.latest_snapshot("planning", "plans")
+        if planning_item:
+            ss["planning"] = {"plans": planning_item}
         ss["_events"] = self.db.recent_events(hours=48, limit=500)
         ss["_operating_findings"] = [x.to_dict() for x in self.operating_model.build(snap)]
         cards = self.decision_engine.build(snap, ss)
