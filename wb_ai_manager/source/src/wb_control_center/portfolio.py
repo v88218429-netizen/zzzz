@@ -342,7 +342,7 @@ class PortfolioService:
         dictionary = {
             "цемент": "cement", "извест": "lime", "мел": "chalk", "гипс": "gypsum",
             "бидон": "can", "ведро": "bucket", "таз": "basin", "кашпо": "planter",
-            "вазон": "flowerpot", "ваза": "vase", "лоток": "tray", "грабл": "rake",
+            "вазон": "vase", "ваза": "vase", "лоток": "tray", "грабл": "rake",
             "метл": "broom", "ветош": "rag", "полотно": "rag", "лопат": "shovel",
             "вил": "fork", "черенок": "handle", "сода": "soda", "перчат": "gloves",
         }
@@ -506,10 +506,10 @@ class PortfolioService:
                 for candidate in plans:
                     plan_text = str(candidate.get("name") or "") + " " + str(candidate.get("group") or "")
                     plan_families = self._economics_families(plan_text)
-                    if seller_families and plan_families and seller_families != plan_families:
+                    if seller_families and plan_families != seller_families:
                         continue
                     plan_units = self._economics_units(candidate.get("name"))
-                    if seller_units and plan_units and seller_units != plan_units:
+                    if seller_units and plan_units != seller_units:
                         continue
                     plan_pack = self._economics_pack_count(candidate.get("name"))
                     if seller_pack is not None:
@@ -533,7 +533,7 @@ class PortfolioService:
                         continue
 
                     if "tray" in seller_families:
-                        s_count, s_model, s_no_plate = self._lotok_signature(seller_text)
+                        s_count, s_model, s_no_plate = self._lotok_signature(identity_text)
                         p_count, p_model, p_no_plate = self._lotok_signature(plan_text)
                         if s_count is not None and p_count != s_count:
                             continue
