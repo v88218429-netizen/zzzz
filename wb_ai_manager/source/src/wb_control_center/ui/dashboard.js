@@ -354,7 +354,7 @@ function initNav(){
 function setPage(page){
   if(!document.querySelector(`[data-page-panel="${page}"]`)) page='overview'; state.page=page; location.hash=page==='overview'?'':page;
   qa('.nav-item').forEach(b=>b.classList.toggle('active',b.dataset.page===page)); qa('.page').forEach(p=>p.classList.toggle('active',p.dataset.pagePanel===page));
-  const titles={overview:['Операционный центр','Обзор магазина'],stores:['Портфель','Магазины и реальные факты'],decisions:['Решения','Что конкретно делать'],control:['Контроль решений','История, проверка и обучение'],advertising:['Реклама','Рекламная аналитика'],policy:['Редактор правил','Управление логикой агента'],inventory:['Логистика','Остатки и поставки'],search:['Видимость','Поиск и карточки'],finance:['Экономика','Финансы и расходы'],customers:['Качество','Клиенты и возвраты'],connections:['Интеграции','Подключения и источники'],knowledge:['Методология','База знаний и правила'],agents:['Система','Агенты и расписание']};
+  const titles={overview:['Операционный центр','Обзор магазина'],stores:['Портфель','Магазины и реальные факты'],decisions:['Решения','Что конкретно делать'],control:['Контроль решений','История, проверка и обучение'],advertising:['Реклама','Рекламная аналитика'],planning:['Планирование','Прогноз спроса и контроль плана'],policy:['Редактор правил','Управление логикой агента'],inventory:['Логистика','Остатки и поставки'],search:['Видимость','Поиск и карточки'],finance:['Экономика','Финансы и расходы'],customers:['Качество','Клиенты и возвраты'],connections:['Интеграции','Подключения и источники'],knowledge:['Методология','База знаний и правила'],agents:['Система','Агенты и расписание']};
   const t=titles[page]||titles.overview; $('page-kicker').textContent=t[0]; $('page-title').textContent=t[1]; $('sidebar').classList.remove('open');
 }
 
@@ -415,7 +415,7 @@ function renderAll(){
   const ad=adSummary(); $('metric-ad-spend').textContent=ad.error&&!ad.rows.length?'—':rub(ad.spend); const ratingVal=sellerRating(); $('metric-rating').textContent=ratingVal==null?'Недоступен':num(ratingVal,2);
   renderPeriodAudit();
   if($('metric-ad-period')) $('metric-ad-period').textContent=d.period_audit?.ready?(d.period?.label||'за выбранный период'):'ожидает расчёта периода';
-  renderExecutive(); renderEvents(); renderRecommendations(); renderDecisions(); renderDecisionControl(); renderDomains(); renderPortfolio(); renderConnections(); renderAdvertising(); renderPolicyStudio(); renderInventory(); renderSearch(); renderFinance(); renderCustomers(); renderKnowledge(); renderAgents();
+  renderExecutive(); renderEvents(); renderRecommendations(); renderDecisions(); renderDecisionControl(); renderDomains(); renderPortfolio(); renderConnections(); renderAdvertising(); renderPlanning(); renderPolicyStudio(); renderInventory(); renderSearch(); renderFinance(); renderCustomers(); renderKnowledge(); renderAgents();
 }
 function snap(source,key){ return state.data?.snapshots?.[source]?.[key] || null; }
 function sellerRating(){
@@ -739,6 +739,56 @@ async function refreshRemotePolicy(){ const b=$('refresh-remote-policy'); if(!b)
 async function savePolicy(){ const b=$('save-policy'); if(!b)return; b.disabled=true; try{const r=await fetch('/api/policy-studio/advertising',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(policyPayload())}); const j=await r.json(); if(!r.ok)throw new Error(j.detail||`HTTP ${r.status}`); showToast('Правила применены без перезапуска. Решения пересчитаны.','success'); await fetchData();}catch(e){showToast(`Правила не сохранены: ${e.message}`,'error');}finally{b.disabled=false;}}
 async function rollbackPolicy(){ const b=$('rollback-policy'); if(!b)return; b.disabled=true; try{const r=await fetch('/api/policy-studio/rollback/0',{method:'POST'}); const j=await r.json(); if(!r.ok)throw new Error(j.detail||`HTTP ${r.status}`); showToast('Последнее изменение откатилось.','success'); await fetchData();}catch(e){showToast(`Откат не выполнен: ${e.message}`,'error');}finally{b.disabled=false;}}
 
+function renderPlanning(){
+  const p=state.data?.planning||{}, rows=p.rows||[];
+  if($('planning-count')) $('planning-count').textContent=num(p.count||0);
+  if($('planning-behind')) $('planning-behind').textContent=num(p.behind_count||0);
+  if($('planning-on-plan')) $('planning-on-plan').textContent=num(p.on_plan_count||0);
+  if($('planning-ahead')) $('planning-ahead').textContent=num(p.ahead_count||0);
+  if($('planning-table')){
+    $('planning-table').innerHTML=rows.length?rows.map(r=>{
+      const core=(r.query_core||[]).slice(0,5).map(q=>esc(q.query)).join(', ')||'нет подтверждённого ядра';
+      const deviation=missing(r.deviation_pct)?'—':pct(r.deviation_pct);
+      const status=r.deviation_status==='behind'?'ниже плана':r.deviation_status==='ahead'?'выше плана':r.deviation_status==='on_plan'?'в плане':'нет факта';
+      return `<tr><td><strong>${esc(r.seller_article||r.sku)}</strong><small>nmID ${esc(r.sku)}</small></td><td title="${core}">${core}</td><td>${num(r.season_factor,2)}×<small>${missing(r.search_frequency_trend_pct)?'нет тренда':pct(r.search_frequency_trend_pct)}</small></td><td>${missing(r.conversion_pct)?'—':pct(r.conversion_pct)}</td><td><strong>${num(r.auto_orders_day,2)}</strong><small>7д: ${num(r.auto_orders_7d,1)} · 30д: ${num(r.auto_orders_30d,0)}</small></td><td><input class="plan-inline-input" data-plan-input="${esc(r.sku)}" type="number" min="0" step="0.1" value="${missing(r.plan_orders_day)?'':esc(r.plan_orders_day)}"></td><td><strong>${deviation}</strong><small>${status}</small></td><td><button class="button secondary" data-save-plan="${esc(r.sku)}">Сохранить</button></td></tr>`;
+    }).join(''):empty('Нет товаров для прогноза.');
+  }
+  if($('planning-sku')){
+    const current=$('planning-sku').value;
+    $('planning-sku').innerHTML=rows.map(r=>`<option value="${esc(r.sku)}">${esc(r.seller_article||r.sku)}</option>`).join('');
+    if(rows.some(r=>String(r.sku)===String(current))) $('planning-sku').value=current;
+  }
+}
+
+async function savePlanningPlan(sku){
+  const input=document.querySelector(`[data-plan-input="${CSS.escape(String(sku))}"]`);
+  const planned=Number(input?.value);
+  if(!Number.isFinite(planned)||planned<0){ showToast('Укажи корректный план заказов в день.','error'); return; }
+  try{
+    const r=await fetch('/api/planning/plan',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sku:String(sku),planned_orders_day:planned})});
+    const j=await r.json(); if(!r.ok) throw new Error(j.detail||`HTTP ${r.status}`);
+    showToast('План сохранён. Агенты будут контролировать отклонение.','success');
+    await fetchData();
+  }catch(e){ showToast(`План не сохранён: ${e.message}`,'error'); }
+}
+
+async function calculatePlanningScenario(){
+  const sku=$('planning-sku')?.value; if(!sku) return;
+  const overrides={
+    frequency_change_pct:Number($('planning-frequency')?.value||0),
+    conversion_change_pct:Number($('planning-conversion')?.value||0),
+    position_change_pct:Number($('planning-position')?.value||0),
+    additional_ad_clicks_day:Number($('planning-ad-clicks')?.value||0),
+    buyout_pct:Number($('planning-buyout')?.value||100),
+  };
+  try{
+    const r=await fetch('/api/planning/scenario',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sku,overrides})});
+    const j=await r.json(); if(!r.ok) throw new Error(j.detail||`HTTP ${r.status}`);
+    const s=j.scenario||{};
+    $('planning-scenario-result').innerHTML=`<div><span>Заказы / день</span><strong>${num(s.orders_day,2)}</strong></div><div><span>Заказы / 30 дней</span><strong>${num(s.orders_30d,0)}</strong></div><div><span>Продано / 30 дней</span><strong>${num(s.sold_units_30d,0)}</strong></div><div><span>Выручка / 30 дней</span><strong>${missing(s.revenue_30d_rub)?'—':rub(s.revenue_30d_rub)}</strong></div><div><span>Прибыль / 30 дней</span><strong>${missing(s.profit_30d_rub)?'—':rub(s.profit_30d_rub)}</strong></div><div><span>Доп. заказов из рекламы / день</span><strong>${num(s.additional_paid_orders_day,2)}</strong></div>`;
+  }catch(e){ showToast(`Сценарий не рассчитан: ${e.message}`,'error'); }
+}
+
 function renderInventory(){
   const s=snap('inventory','coverage'), cov=s?.data||{};
   $('inventory-updated').textContent=s?`${snapshotScopeText(s)||'данные'} · обновлено ${ago(s.created_at)}`:'нет данных';
@@ -892,6 +942,8 @@ if($('apply-period')) $('apply-period').addEventListener('click',async()=>{
 });
 document.addEventListener('click',e=>{
   if(e.target.closest('[data-close-detail]')){ closeDetail(); return; }
+  const savePlan=e.target.closest('[data-save-plan]'); if(savePlan){ await savePlanningPlan(savePlan.dataset.savePlan); return; }
+  if(e.target.closest('#calculate-planning')){ await calculatePlanningScenario(); return; }
   const invFilter=e.target.closest('[data-inventory-filter]');
   if(invFilter){ state.inventoryFilter=invFilter.dataset.inventoryFilter||'shortage'; renderInventory(); return; }
   const decisionFilter=e.target.closest('[data-decision-filter]');
