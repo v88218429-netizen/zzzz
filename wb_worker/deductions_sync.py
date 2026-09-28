@@ -16,6 +16,8 @@ DATE_FROM_OVERRIDE = os.environ.get("DEDUCTIONS_DATE_FROM", "").strip()
 LOOKBACK_DAYS = int(os.environ.get("DEDUCTIONS_LOOKBACK_DAYS", "3650"))
 PAGE_SIZE = 1000
 PAGE_INTERVAL_SEC = float(os.environ.get("DEDUCTIONS_PAGE_INTERVAL_SEC", "61"))
+RATE_LIMIT_RETRIES = int(os.environ.get("DEDUCTIONS_RATE_LIMIT_RETRIES", "3"))
+RATE_LIMIT_FALLBACK_SEC = float(os.environ.get("DEDUCTIONS_RATE_LIMIT_FALLBACK_SEC", "65"))
 
 SHOPS = {
     "AP": ("Саныч", "WB_API_TOKEN_AP"),
@@ -85,18 +87,44 @@ async def _fetch_shop(
     total_reported: int | None = None
 
     while True:
-        response = await client.get(
-            BASE_URL + "/api/analytics/v1/deductions",
-            headers={"Authorization": token},
-            params={
-                "dateFrom": _date_from_param(),
-                "dateTo": _date_to_param(),
-                "sort": "dtBonus",
-                "order": "desc",
-                "limit": PAGE_SIZE,
-                "offset": offset,
-            },
-        )
+        attempts = 0
+        while True:
+            response = await client.get(
+                BASE_URL + "/api/analytics/v1/deductions",
+                headers={"Authorization": token},
+                params={
+                    "dateFrom": _date_from_param(),
+                    "dateTo": _date_to_param(),
+                    "sort": "dtBonus",
+                    "order": "desc",
+                    "limit": PAGE_SIZE,
+                    "offset": offset,
+                },
+            )
+
+            if response.status_code != 429:
+                break
+
+            attempts += 1
+            if attempts > max(0, RATE_LIMIT_RETRIES):
+                response.raise_for_status()
+
+            retry_after = response.headers.get("Retry-After", "").strip()
+            try:
+                wait_sec = max(float(retry_after), RATE_LIMIT_FALLBACK_SEC) if retry_after else RATE_LIMIT_FALLBACK_SEC
+            except ValueError:
+                wait_sec = RATE_LIMIT_FALLBACK_SEC
+            print(
+                "DEDUCTIONS_RATE_LIMIT " +
+                json.dumps({
+                    "shop": shop_id,
+                    "attempt": attempts,
+                    "waitSec": wait_sec,
+                    "offset": offset,
+                }, ensure_ascii=False, separators=(",", ":")),
+                flush=True,
+            )
+            await asyncio.sleep(wait_sec)
 
         if response.status_code == 204:
             break
@@ -192,9 +220,14 @@ async def sync_all() -> dict[str, Any]:
         key=lambda row: (str(row[1]), str(row[0]), str(row[4])),
         reverse=True,
     )
-    _write_csv(DATA_DIR / "deductions_all.csv", all_rows)
 
-    status["rows"] = len(all_rows)
+    if status["ok"]:
+        _write_csv(DATA_DIR / "deductions_all.csv", all_rows)
+        status["rows"] = len(all_rows)
+        status["published"] = True
+    else:
+        status["rowsFetched"] = len(all_rows)
+        status["published"] = False
     status["finishedAt"] = datetime.now(timezone.utc).isoformat()
     _write_json(DATA_DIR / "status.json", status)
     print(
