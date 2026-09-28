@@ -50,7 +50,10 @@ def _group_id(row: dict[str, Any]) -> str:
     key = str(row.get("decision_key") or "")
     if key == "data:source_quality":
         return "data_quality"
-    if ":negative_unit" in key or ":thin_margin_ads" in key or ":negative_groups" in key or ":ads_economics" in key:
+    if any(tag in key for tag in (
+        ":negative_unit", ":thin_margin_ads", ":negative_groups", ":ads_economics",
+        ":negative_plan_model", ":actual_ads_negative", ":plan_fact_economics_gap",
+    )):
         return "economics"
     if ":overstock" in key:
         return "inventory_excess"
