@@ -496,10 +496,16 @@ class DecisionEngine:
                 evidence += [
                     _ev(str(rec.get("fact_source") or "Факт WB"), "Фактический расход рекламы, ₽", _n(rec.get("fact_ad_spend_rub")), period),
                     _ev(str(rec.get("fact_source") or "Факт WB"), "Фактическая выручка продаж, ₽", _n(rec.get("fact_sales_revenue_rub")), period),
+                    _ev(str(rec.get("fact_source") or "Факт WB"), "Фактические продажи, шт", _n(rec.get("fact_sales_qty")), period),
                     _ev(str(rec.get("fact_source") or "Факт WB"), "Фактический ДРР продаж, %", actual_drr, period),
+                    _ev("Авторазложение", "Реклама на одну продажу, ₽", _n(rec.get("actual_ad_cost_per_sale_rub"))),
+                    _ev("Авторазложение", "Выручка на одну продажу, ₽", _n(rec.get("actual_revenue_per_sale_rub"))),
+                    _ev("Авторазложение", "Лишний рекламный расход против плана, ₽", _n(rec.get("excess_ad_spend_vs_plan_rub")), period),
                     _ev("Сверка план ↔ факт", "Модельная прибыль при фактическом ДРР, ₽/шт", scenario_profit, "не реализованная прибыль; остальные параметры юнитки зафиксированы"),
                     _ev("Сверка план ↔ факт", "Модельная маржа при фактическом ДРР, %", scenario_margin),
                 ]
+                for cause in rec.get("root_causes") or []:
+                    evidence.append(_ev("Авторазложение причины", str(cause.get("cause") or "Причина"), round(float(cause.get("impact_pp") or 0), 2), str(cause.get("detail") or "")))
 
             basis = {
                 "time_semantics": "plan_vs_fact",
@@ -542,13 +548,23 @@ class DecisionEngine:
             drr_gap = actual_drr - float(plan_drr or 0.0)
             if scenario_profit < 0:
                 target_5_margin = (break_even - 5.0) if break_even is not None else None
+                sales_revenue = _n(rec.get("fact_sales_revenue_rub"))
+                current_spend = _n(rec.get("fact_ad_spend_rub"))
+                target_spend = (sales_revenue * target_5_margin / 100.0) if sales_revenue is not None and target_5_margin is not None and target_5_margin >= 0 else None
+                cut_rub = max(0.0, (current_spend or 0.0) - target_spend) if target_spend is not None and current_spend is not None else None
+                cut_pct = (cut_rub / current_spend * 100.0) if cut_rub is not None and current_spend and current_spend > 0 else None
+                causes = rec.get("root_causes") or []
+                cause_text = "; ".join(f"{x.get('cause')} ≈+{float(x.get('impact_pp') or 0):.1f} п.п." for x in causes[:2]) or "главный драйвер не удалось отделить по имеющемуся окну"
                 actions = [
-                    {"step": 1, "action": "Не увеличивать рекламную нагрузку: фактический ДРР уже делает модель убыточной.", "mode": "advertising_guard"},
-                    {"step": 2, "action": "Проверить, какой источник расхода дал превышение: ставка, лишние кампании, дорогие кластеры или просадка конверсии.", "mode": "root_cause"},
-                    {"step": 3, "action": "Подтвердить итог закрытой реализацией WB; текущий минус — модель при фактическом ДРР, а не финальная бухгалтерская прибыль.", "mode": "finance_reconciliation"},
+                    {"step": 1, "action": (
+                        f"Снизить рекламный расход по этому SKU до ≤{target_spend:.0f} ₽ на сопоставимое окно "
+                        f"(примерно −{cut_rub:.0f} ₽, −{cut_pct:.0f}%) и держать ДРР ≤{target_5_margin:.1f}% для модельной маржи ≥5%."
+                        if target_spend is not None and cut_rub is not None and cut_pct is not None
+                        else "Остановить дальнейшее увеличение рекламного расхода по этому SKU до возврата модели в положительную маржу."
+                    ), "mode": "advertising_target"},
+                    {"step": 2, "action": f"Система уже разложила отклонение: {cause_text}. Работать сначала с крупнейшим вкладом, а не менять цену вслепую.", "mode": "root_cause_resolved"},
+                    {"step": 3, "action": "После изменения сравнить фактический ДРР, выручку на продажу, общий спрос и закрытую прибыль; если продажи падают быстрее расхода, откатить изменение.", "mode": "measured_follow_up"},
                 ]
-                if target_5_margin is not None and target_5_margin >= 0:
-                    actions.insert(1, {"step": 2, "action": f"Для модельной маржи не ниже 5% нужен ДРР примерно ≤{target_5_margin:.1f}%; снижать нагрузку только с контролем общего спроса и органики.", "mode": "advertising_scenario"})
                 out.append(DecisionCard(
                     decision_key=f"sku:{sku}:actual_ads_negative", scope="sku", entity_id=sku,
                     title=f"{x.get('name')}: фактический ДРР выводит модель в минус",
@@ -567,13 +583,23 @@ class DecisionEngine:
             # products such as the beige toilet bucket — not 'loss', but very little room.
             if scenario_margin < 5.0 or drr_gap >= 5.0:
                 target_5_margin = (break_even - 5.0) if break_even is not None else None
+                sales_revenue = _n(rec.get("fact_sales_revenue_rub"))
+                current_spend = _n(rec.get("fact_ad_spend_rub"))
+                target_spend = (sales_revenue * target_5_margin / 100.0) if sales_revenue is not None and target_5_margin is not None and target_5_margin >= 0 else None
+                cut_rub = max(0.0, (current_spend or 0.0) - target_spend) if target_spend is not None and current_spend is not None else None
+                cut_pct = (cut_rub / current_spend * 100.0) if cut_rub is not None and current_spend and current_spend > 0 else None
+                causes = rec.get("root_causes") or []
+                cause_text = "; ".join(f"{x.get('cause')} ≈+{float(x.get('impact_pp') or 0):.1f} п.п." for x in causes[:2]) or "основной вклад не отделяется на текущем окне"
                 actions = [
-                    {"step": 1, "action": "Не повышать ставку или бюджет до проверки причин расхождения планового и фактического ДРР.", "mode": "advertising_guard"},
-                    {"step": 2, "action": "Разложить рост ДРР на расход рекламы и фактическую выручку: понять, проблема в цене трафика или в конверсии/продажах.", "mode": "root_cause"},
-                    {"step": 3, "action": "Сверить модельную прибыль с закрытой финансовой реализацией WB перед изменением цены.", "mode": "finance_reconciliation"},
+                    {"step": 1, "action": (
+                        f"Ограничить расход по SKU до ≤{target_spend:.0f} ₽ на сопоставимое окно "
+                        f"(сейчас {current_spend:.0f} ₽; снижение ≈{cut_rub:.0f} ₽ / {cut_pct:.0f}%) — это даёт ДРР ≤{target_5_margin:.1f}% и модельную маржу ≥5%."
+                        if target_spend is not None and current_spend is not None and cut_rub is not None and cut_pct is not None and actual_drr > target_5_margin
+                        else "Не увеличивать расход: текущая рекламная нагрузка уже съедает плановый запас маржи."
+                    ), "mode": "advertising_target"},
+                    {"step": 2, "action": f"Причина уже рассчитана: {cause_text}. Приоритет — крупнейший вклад в расхождение.", "mode": "root_cause_resolved"},
+                    {"step": 3, "action": "Не менять цену только ради ДРР. Сначала измерить эффект изменения рекламы на общую выручку и органику, затем подтвердить результат закрытой реализацией WB.", "mode": "measured_follow_up"},
                 ]
-                if target_5_margin is not None and actual_drr > target_5_margin >= 0:
-                    actions.insert(1, {"step": 2, "action": f"Для запаса модельной маржи ≥5% ориентир ДРР — не выше ≈{target_5_margin:.1f}%; проверить снижение без потери общего спроса.", "mode": "advertising_scenario"})
                 out.append(DecisionCard(
                     decision_key=f"sku:{sku}:plan_fact_economics_gap", scope="sku", entity_id=sku,
                     title=f"{x.get('name')}: фактическая реклама съедает запас плановой маржи",
