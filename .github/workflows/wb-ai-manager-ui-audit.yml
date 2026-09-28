@@ -28,9 +28,9 @@ jobs:
           done
           exit 1
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
-          node-version: "20"
+          node-version: "24"
 
       - name: Install Chromium driver
         run: |
@@ -44,7 +44,7 @@ jobs:
           BASE_URL: https://wb-ai-manager-live-production.up.railway.app
         run: |
           mkdir -p ui-audit
-          cat > /tmp/ui-audit.mjs <<'NODE'
+          cat > ui-audit.mjs <<'NODE'
           import fs from 'node:fs';
           import { chromium } from 'playwright';
 
@@ -120,7 +120,7 @@ jobs:
             process.exit(1);
           }
           NODE
-          node /tmp/ui-audit.mjs
+          node ui-audit.mjs
 
       - name: Upload screenshots and audit
         if: always()
