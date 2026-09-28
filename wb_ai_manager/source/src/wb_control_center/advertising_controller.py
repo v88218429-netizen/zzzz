@@ -213,6 +213,18 @@ class AdvertisingControlPlan:
     target_drr_pct: float
     economic_max_drr_pct: float | None
     observed_drr_pct: float | None
+    wb_attributed_drr_pct: float | None
+    business_drr_pct: float | None
+    business_ad_spend_rub: float | None
+    business_revenue_rub: float | None
+    paid_order_share_pct: float | None
+    incremental_capture_pct: float | None
+    cannibalization_risk: str
+    max_cpc_rub: float | None
+    conversion_rate_pct: float | None
+    required_incremental_orders_24h: float | None
+    required_clicks_24h: float | None
+    operating_mode: str
     clicks: float
     orders: float
     ctr_pct: float | None
@@ -408,6 +420,61 @@ class AdvertisingController:
         forecast_revenue_24 = (forecast_campaign_orders * avg_campaign_order_revenue) if forecast_campaign_orders is not None and avg_campaign_order_revenue else None
         economic_spend_ceiling = (forecast_campaign_orders * max_ad_cost_per_order) if forecast_campaign_orders is not None and max_ad_cost_per_order is not None else None
 
+        # WB attribution and seller economics are separate denominators.
+        business_ad_spend = _n(product.get("fact_ad_spend_rub")) if isinstance(product, dict) else None
+        business_revenue = _n(product.get("fact_sales_revenue_rub")) if isinstance(product, dict) else None
+        business_drr = (
+            business_ad_spend / business_revenue * 100.0
+            if business_ad_spend is not None and business_ad_spend >= 0 and business_revenue and business_revenue > 0
+            else None
+        )
+        control_drr = business_drr if business_drr is not None else drr
+        conversion_rate = (orders / clicks) if clicks > 0 else None
+        max_cpc = (max_ad_cost_per_order * conversion_rate) if max_ad_cost_per_order is not None and conversion_rate is not None else None
+
+        # Trend-based incrementality proxy. It answers whether growth in
+        # campaign-attributed orders is also visible in ALL SKU orders.
+        ad_recent = None
+        ad_baseline = None
+        if daily:
+            n_recent = min(short_days, len(daily))
+            recent_rows = daily[-n_recent:]
+            prior_rows = daily[:-n_recent]
+            prior_rows = prior_rows[-min(long_days, len(prior_rows)):] if prior_rows else []
+            if recent_rows:
+                ad_recent = mean(_metric(x, "orders", "ordersCount", "orders_count") for x in recent_rows)
+            if prior_rows:
+                ad_baseline = mean(_metric(x, "orders", "ordersCount", "orders_count") for x in prior_rows)
+        total_recent = demand.recent_3d
+        total_baseline = demand.baseline_14d
+        incremental_capture = None
+        if ad_recent is not None and ad_baseline is not None and total_recent is not None and total_baseline is not None:
+            ad_delta = ad_recent - ad_baseline
+            total_delta = total_recent - total_baseline
+            if ad_delta > 0.05:
+                incremental_capture = _clamp(total_delta / ad_delta, 0.0, 1.0) * 100.0
+
+        paid_share = None
+        if campaign_daily_orders is not None and demand.recent_7d and demand.recent_7d > 0:
+            paid_share = _clamp(campaign_daily_orders / demand.recent_7d, 0.0, 1.0) * 100.0
+        cannibalization_risk = "unknown"
+        if incremental_capture is not None:
+            cannibalization_risk = "high" if incremental_capture < 35 else ("medium" if incremental_capture < 70 else "low")
+        elif campaign_order_trend is not None and order_trend is not None:
+            if campaign_order_trend >= 15 and order_trend <= 3:
+                cannibalization_risk = "high"
+            elif campaign_order_trend >= 10 and order_trend < campaign_order_trend * 0.5:
+                cannibalization_risk = "medium"
+            elif order_trend >= campaign_order_trend - 5:
+                cannibalization_risk = "low"
+
+        required_incremental_orders = None
+        required_clicks = None
+        if forecast_campaign_orders is not None and campaign_daily_orders is not None:
+            required_incremental_orders = max(0.0, forecast_campaign_orders - campaign_daily_orders)
+            if conversion_rate and conversion_rate > 0:
+                required_clicks = required_incremental_orders / conversion_rate
+
         blockers: list[str] = []
         reasons: list[str] = []
         if nm is None:
@@ -435,15 +502,22 @@ class AdvertisingController:
         search_target = _n(product.get("top_search_target_position")) if isinstance(product, dict) else None
         search_delta = _n(product.get("search_position_delta")) if isinstance(product, dict) else None
         position_gap = (search_position - search_target) if search_position is not None and search_target is not None else None
+        season_growth = float(self.cfg.get("season_frequency_growth_pct", 15))
+        if mode == "growth":
+            operating_mode = "ramp"
+        elif search_frequency_trend is not None and search_frequency_trend >= season_growth and (order_trend or 0) >= 0:
+            operating_mode = "season"
+        else:
+            operating_mode = "steady"
 
         decision = "HOLD"
         label = "Ставку оставить без изменения"
         target_bid = current_bid
 
-        enough_data = clicks >= min_clicks and orders >= min_orders and nm is not None and product is not None and break_even_drr is not None and drr is not None
+        enough_data = clicks >= min_clicks and orders >= min_orders and nm is not None and product is not None and break_even_drr is not None and control_drr is not None
         profitable = profit is not None and profit >= min_profit
         stock_ok = stock_days_forecast is None or stock_days_forecast >= stock_scale
-        drr_ok = drr is None or drr <= effective_target_drr
+        drr_ok = control_drr is None or control_drr <= effective_target_drr
 
         if orders <= 0 and spend >= emergency_spend:
             decision, label = "PAUSE_REVIEW", "Кампанию остановить на разбор"
@@ -457,16 +531,38 @@ class AdvertisingController:
                 target_bid = current_bid * (1 - max_bid_step)
             if spend_24:
                 max_spend_24 = min(max_spend_24 if max_spend_24 is not None else spend_24, spend_24 * (1 - max_spend_step))
-        elif drr is not None and drr > effective_target_drr + 0.5 and clicks >= min_clicks:
-            decision, label = "SCALE_DOWN", "Ставку снизить: реклама вышла за допустимую экономику"
-            reasons.append(f"ДРР кампании {drr:.1f}% выше текущего допустимого уровня {effective_target_drr:.1f}%.")
-            if break_even_drr is not None:
-                reasons.append(f"По текущей юнитке предельный ДРР до заданной прибыли ≈{break_even_drr:.1f}%.")
+        elif control_drr is not None and control_drr > effective_target_drr + 0.5 and clicks >= min_clicks:
+            campaign_efficient = (
+                business_drr is not None
+                and drr is not None
+                and drr <= effective_target_drr
+                and (max_cpc is None or cpc is None or cpc <= max_cpc * 1.05)
+            )
+            if campaign_efficient:
+                decision, label = "HOLD", "Ставку оставить: бизнес-ДРР высок, но эта кампания не доказана причиной"
+                reasons.append(f"Бизнес-ДРР SKU {business_drr:.1f}% выше допустимого {effective_target_drr:.1f}%, поэтому масштабирование запрещено.")
+                reasons.append(f"При этом WB-атрибуция этой кампании {drr:.1f}% и CPC не выходят за её экономический коридор; снижать её без разбора других кампаний нельзя.")
+                target_bid = current_bid
+                if spend_24 is not None:
+                    max_spend_24 = min(max_spend_24 if max_spend_24 is not None else spend_24, spend_24)
+            else:
+                decision, label = "SCALE_DOWN", "Ставку снизить: реклама вышла за допустимую экономику"
+                drr_name = "Бизнес-ДРР SKU" if business_drr is not None else "Атрибуционный ДРР кампании"
+                reasons.append(f"{drr_name} {control_drr:.1f}% выше текущего допустимого уровня {effective_target_drr:.1f}%.")
+                if business_drr is not None and drr is not None:
+                    reasons.append(f"WB отдельно атрибутирует этой кампании ДРР {drr:.1f}%; он используется как сигнал вклада кампании, а не как общий знаменатель.")
+                if break_even_drr is not None:
+                    reasons.append(f"По текущей юнитке предельный ДРР до заданной прибыли ≈{break_even_drr:.1f}%.")
+                if current_bid is not None:
+                    ratio = effective_target_drr / max(control_drr, 0.01)
+                    target_bid = current_bid * max(1 - max_bid_step, ratio)
+                if spend_24:
+                    max_spend_24 = min(max_spend_24 if max_spend_24 is not None else spend_24, spend_24 * (1 - min(max_spend_step, max(0.0, (control_drr-effective_target_drr)/max(control_drr,1)))))
+        elif max_cpc is not None and cpc is not None and cpc > max_cpc * 1.05 and clicks >= min_clicks:
+            decision, label = "SCALE_DOWN", "Ставку снизить: CPC выше экономики конверсии"
+            reasons.append(f"При конверсии {conversion_rate*100:.2f}% допустимый CPC ≈{max_cpc:.2f} ₽, фактический {cpc:.2f} ₽.")
             if current_bid is not None:
-                ratio = effective_target_drr / max(drr, 0.01)
-                target_bid = current_bid * max(1 - max_bid_step, ratio)
-            if spend_24:
-                max_spend_24 = min(max_spend_24 if max_spend_24 is not None else spend_24, spend_24 * (1 - min(max_spend_step, max(0.0, (drr-effective_target_drr)/max(drr,1)))))
+                target_bid = current_bid * (1 - min(max_bid_step, 0.05))
         elif stock_days_forecast is not None and stock_days_forecast < stock_hold:
             decision, label = "CAP_DEMAND", "Ставку оставить; расход не увеличивать до восстановления запаса"
             reasons.append(f"При прогнозном спросе товара хватит примерно на {stock_days_forecast:.1f} дня.")
@@ -490,11 +586,21 @@ class AdvertisingController:
                 and (search_frequency_trend is None or search_frequency_trend >= 0)
                 and (search_delta is None or search_delta <= 0)
                 and mode != "growth"
+                and operating_mode != "season"
             )
             # If all-market orders are accelerating while position/frequency are not
             # worsening, paying more immediately is unnecessary. Keep exact bid and
             # re-evaluate after the evidence window.
-            if organic_hot:
+            if cannibalization_risk == "high" and mode != "growth":
+                operating_mode = "organic_protection"
+                decision, label = "HOLD", "Ставку оставить: высокий риск перепокупки органики"
+                if incremental_capture is not None:
+                    reasons.append(f"Только ≈{incremental_capture:.0f}% прироста рекламно-атрибутированных заказов отражается в приросте всех заказов SKU; это сигнал перепокупки органики, а не доказательство прироста.")
+                else:
+                    reasons.append("Рекламно-атрибутированные заказы растут заметно быстрее общего спроса SKU; повышение ставки заблокировано до проверки приростного эффекта.")
+                target_bid = current_bid
+            elif organic_hot:
+                operating_mode = "organic_protection"
                 decision, label = "HOLD", "Ставку оставить: спрос и так ускоряется"
                 reasons.append(f"Общий темп заказов товара ускорился примерно на {order_trend:.1f}%.")
                 if search_frequency_trend is not None:
@@ -507,31 +613,45 @@ class AdvertisingController:
                 # campaign is clearly below its economic corridor. WB's recommendation
                 # is a market reference, never an instruction by itself.
                 visibility_problem = position_gap is not None and position_gap >= 5
-                economics_room = drr is None or drr <= effective_target_drr * 0.9
+                season_opportunity = operating_mode == "season" and search_frequency_trend is not None and search_frequency_trend >= season_growth
+                economics_room = control_drr is None or control_drr <= effective_target_drr * 0.9
                 ceiling_refs = [x for x in (rec.get("competitive"), rec.get("reach_medium"), rec.get("leaders")) if isinstance(x,(int,float)) and x>0]
                 market_ceiling = min(ceiling_refs) if ceiling_refs else current_bid * (1 + max_bid_step)
-                if visibility_problem and economics_room:
-                    # Размер повышения выводим из двух независимых сигналов: насколько
-                    # позиция отстаёт от цели и сколько экономического запаса осталось.
-                    visibility_pressure = _clamp(position_gap / 30.0, 0.0, 1.0)
-                    headroom = _clamp((effective_target_drr - drr) / max(effective_target_drr, 0.01), 0.0, 1.0)
-                    derived_step = max_bid_step * _clamp(0.30 + 0.70 * visibility_pressure, 0.30, 1.0) * _clamp(0.35 + 0.65 * headroom, 0.35, 1.0)
+                if (visibility_problem or season_opportunity) and economics_room:
+                    # Размер повышения выводим из позиции/сезонного спроса, требуемого
+                    # трафика, CPC, конверсии и запаса экономики.
+                    visibility_pressure = _clamp((position_gap or 0.0) / 30.0, 0.0, 1.0)
+                    if season_opportunity:
+                        visibility_pressure = max(visibility_pressure, _clamp((search_frequency_trend or 0.0) / 60.0, 0.25, 1.0))
+                    headroom = _clamp((effective_target_drr - control_drr) / max(effective_target_drr, 0.01), 0.0, 1.0)
+                    daily_clicks = clicks / max(1, len(daily) or 7)
+                    traffic_pressure = _clamp((required_clicks or 0.0) / max(daily_clicks, 1.0), 0.0, 1.0)
+                    cpc_room = _clamp((max_cpc - cpc) / max(max_cpc, 0.01), 0.0, 1.0) if max_cpc is not None and cpc is not None else 0.5
+                    derived_step = max_bid_step * _clamp(0.30 + 0.70 * visibility_pressure, 0.30, 1.0) * _clamp(0.35 + 0.65 * headroom, 0.35, 1.0) * _clamp(0.55 + 0.30 * traffic_pressure + 0.15 * cpc_room, 0.55, 1.0)
                     proposed = min(current_bid * (1 + derived_step), market_ceiling)
                     if proposed > current_bid * 1.005:
-                        decision, label = "SCALE_UP", "Ставку повысить ограниченным шагом для проверки поисковой позиции"
+                        decision = "SCALE_UP"
+                        label = "Ставку повысить ограниченным шагом для сезонного спроса" if season_opportunity and not visibility_problem else "Ставку повысить ограниченным шагом для проверки поисковой позиции"
                         target_bid = proposed
-                        reasons.append(f"По запросу «{search_query or 'ключевой запрос'}» позиция {search_position:.0f}, цель {search_target:.0f}; отставание {position_gap:.0f} мест.")
-                        reasons.append(f"Текущий ДРР {drr:.1f}% ниже допустимого потолка {effective_target_drr:.1f}%; размер шага рассчитан из отставания позиции и запаса экономики.")
+                        if visibility_problem:
+                            reasons.append(f"По запросу «{search_query or 'ключевой запрос'}» позиция {search_position:.0f}, цель {search_target:.0f}; отставание {position_gap:.0f} мест.")
+                        if season_opportunity:
+                            reasons.append(f"Поисковая частотность растёт на {search_frequency_trend:+.1f}%: включён сезонный режим, но повышение всё равно ограничено экономикой и запасом.")
+                        reasons.append(f"Основной ДРР {control_drr:.1f}% ниже допустимого потолка {effective_target_drr:.1f}%; шаг учитывает позицию, требуемый трафик, CPC, конверсию и запас экономики.")
+                        if required_clicks is not None:
+                            reasons.append(f"Для закрытия расчётного разрыва спроса требуется ≈{required_clicks:.0f} дополнительных кликов/24ч при текущей конверсии.")
                     else:
                         decision, label = "HOLD", "Ставку оставить: повышение уже не даёт безопасного коридора"
-                elif drr is not None and drr <= effective_target_drr * 0.7 and (order_trend is None or order_trend <= 10):
-                    economic_headroom = _clamp((effective_target_drr - drr) / max(effective_target_drr, 0.01), 0.0, 1.0)
-                    derived_step = max_bid_step * _clamp(0.25 + 0.50 * economic_headroom, 0.25, 0.75)
+                elif control_drr is not None and control_drr <= effective_target_drr * 0.7 and (order_trend is None or order_trend <= 10):
+                    economic_headroom = _clamp((effective_target_drr - control_drr) / max(effective_target_drr, 0.01), 0.0, 1.0)
+                    cpc_room = _clamp((max_cpc - cpc) / max(max_cpc, 0.01), 0.0, 1.0) if max_cpc is not None and cpc is not None else 0.5
+                    traffic_factor = 1.0 if required_clicks is None else _clamp(0.45 + required_clicks / max(clicks / max(1, len(daily) or 7), 1.0), 0.45, 1.0)
+                    derived_step = max_bid_step * _clamp(0.25 + 0.50 * economic_headroom, 0.25, 0.75) * _clamp(0.65 + 0.35 * cpc_room, 0.65, 1.0) * traffic_factor
                     proposed = min(current_bid * (1 + derived_step), market_ceiling)
                     if proposed > current_bid * 1.005:
                         decision, label = "SCALE_UP", "Ставку повысить небольшим проверочным шагом"
                         target_bid = proposed
-                        reasons.append(f"ДРР {drr:.1f}% заметно ниже экономического потолка {effective_target_drr:.1f}%, а общий спрос сам не ускоряется; можно проверить, даст ли дополнительная видимость прирост заказов и прибыли.")
+                        reasons.append(f"Основной ДРР {control_drr:.1f}% заметно ниже экономического потолка {effective_target_drr:.1f}%, а общий спрос сам не ускоряется; проверочный шаг ограничен CPC, конверсией и требуемым трафиком.")
                 else:
                     decision, label = "HOLD", "Ставку оставить без изменения"
                     target_bid = current_bid
@@ -602,7 +722,19 @@ class AdvertisingController:
             max_spend_next_24h_rub=max_spend_24,
             target_drr_pct=round(effective_target_drr,2),
             economic_max_drr_pct=round(economic_max_drr,2) if economic_max_drr is not None else None,
-            observed_drr_pct=round(drr,2) if drr is not None else None,
+            observed_drr_pct=round(control_drr,2) if control_drr is not None else None,
+            wb_attributed_drr_pct=round(drr,2) if drr is not None else None,
+            business_drr_pct=round(business_drr,2) if business_drr is not None else None,
+            business_ad_spend_rub=round(business_ad_spend,2) if business_ad_spend is not None else None,
+            business_revenue_rub=round(business_revenue,2) if business_revenue is not None else None,
+            paid_order_share_pct=round(paid_share,2) if paid_share is not None else None,
+            incremental_capture_pct=round(incremental_capture,2) if incremental_capture is not None else None,
+            cannibalization_risk=cannibalization_risk,
+            max_cpc_rub=round(max_cpc,2) if max_cpc is not None else None,
+            conversion_rate_pct=round(conversion_rate*100,2) if conversion_rate is not None else None,
+            required_incremental_orders_24h=round(required_incremental_orders,2) if required_incremental_orders is not None else None,
+            required_clicks_24h=round(required_clicks,2) if required_clicks is not None else None,
+            operating_mode=operating_mode,
             clicks=clicks,
             orders=orders,
             ctr_pct=round(ctr,2) if ctr is not None else None,

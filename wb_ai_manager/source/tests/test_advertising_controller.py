@@ -146,3 +146,74 @@ def test_weekly_orders_and_profit_changes_are_context_not_same_cohort_gate():
     assert not any("рост заказов не превращается" in x.lower() for x in p.reasons)
     assert any("не используются как оценка качества новых заказов" in x.lower() for x in p.reasons)
 
+
+
+def test_business_drr_is_primary_and_wb_attribution_stays_separate():
+    c=AdvertisingController(cfg(target_drr_pct=8,organic_growth_hold_threshold_pct=99))
+    campaign={"advertId":21,"nmIds":[921],"bidKopecks":5000}
+    stats={"advertId":21,"sum":500,"orders":10,"sum_price":10000,"clicks":300,"views":6000,
+           "days":daily([1,1,1,1,2,2,2])}
+    product={
+        "sku":"921","price_client_rub":1000,"profit_rub":200,"drr_pct":5,
+        "safe_stock":1000,"orders_per_day":20,
+        "fact_ad_spend_rub":2000,"fact_sales_revenue_rub":10000,
+    }
+    p=c.build_plan(campaign,stats,product,{})
+    assert p.wb_attributed_drr_pct == 5.0
+    assert p.business_drr_pct == 20.0
+    assert p.observed_drr_pct == 20.0
+    assert p.decision == "HOLD"
+    assert p.target_bid_rub == p.current_bid_rub
+    assert any("Бизнес-ДРР" in x for x in p.reasons)
+    assert "не доказана" in p.decision_label
+
+
+def test_incrementality_proxy_blocks_buying_own_organic():
+    c=AdvertisingController(cfg(target_drr_pct=100,organic_growth_hold_threshold_pct=99))
+    campaign={"advertId":22,"nmIds":[922],"bidKopecks":5000}
+    stats={"advertId":22,"sum":700,"orders":24,"sum_price":24000,"clicks":500,"views":10000,
+           "days":daily([2,2,2,2,2,4,5,6])}
+    history=[{"date":f"2026-08-{i+1:02d}","orders":10} for i in range(20)]
+    product={
+        "sku":"922","price_client_rub":1000,"profit_rub":250,"drr_pct":5,
+        "safe_stock":1000,"orders_per_day":10,"orders_daily_history":history,
+    }
+    p=c.build_plan(campaign,stats,product,{"base":{"competitiveBid":{"bidKopecks":6000}}})
+    assert p.incremental_capture_pct == 0.0
+    assert p.cannibalization_risk == "high"
+    assert p.decision == "HOLD"
+    assert p.operating_mode == "organic_protection"
+
+
+def test_cpc_ceiling_comes_from_conversion_and_unit_economics():
+    c=AdvertisingController(cfg(target_drr_pct=100,organic_growth_hold_threshold_pct=99))
+    campaign={"advertId":23,"nmIds":[923],"bidKopecks":6000}
+    stats={"advertId":23,"sum":2000,"orders":10,"sum_price":100000,"clicks":300,"views":6000,
+           "days":daily([1,1,1,1,1,1,1],spend=[280]*7,revenue=[14000]*7)}
+    product={
+        "sku":"923","price_client_rub":1000,"profit_rub":20,"drr_pct":5,
+        "safe_stock":1000,"orders_per_day":10,
+    }
+    p=c.build_plan(campaign,stats,product,{})
+    assert p.max_ad_cost_per_order_rub == 70.0
+    assert 2.3 < p.max_cpc_rub < 2.4
+    assert p.cpc_rub > p.max_cpc_rub
+    assert p.decision == "SCALE_DOWN"
+    assert any("CPC" in x for x in p.reasons)
+
+
+def test_season_mode_can_scale_when_search_frequency_accelerates():
+    c=AdvertisingController(cfg(target_drr_pct=100,organic_growth_hold_threshold_pct=15))
+    campaign={"advertId":24,"nmIds":[924],"bidKopecks":5000}
+    stats={"advertId":24,"sum":500,"orders":10,"sum_price":20000,"clicks":400,"views":8000,
+           "days":daily([1,1,1,1,1,1,1])}
+    product={
+        "sku":"924","price_client_rub":1000,"profit_rub":250,"drr_pct":5,
+        "safe_stock":1000,"orders_per_day":10,
+        "orders_trend_pct":5,"search_frequency_trend_pct":30,
+    }
+    p=c.build_plan(campaign,stats,product,{"base":{"competitiveBid":{"bidKopecks":6000}}})
+    assert p.operating_mode == "season"
+    assert p.decision == "SCALE_UP"
+    assert p.target_bid_rub > p.current_bid_rub
+    assert any("сезон" in x.lower() for x in p.reasons)

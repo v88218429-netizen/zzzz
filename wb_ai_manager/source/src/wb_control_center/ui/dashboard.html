@@ -262,20 +262,20 @@
       </section>
 
       <section class="page" data-page-panel="advertising">
-        <div class="section-intro"><div><span class="section-label">РЕКЛАМА</span><h2>Контроль эффективности без автодействий</h2><p>Расход, заказы, ДРР, CTR и CPC. Агент только диагностирует и предлагает — ставки и бюджеты не меняются.</p></div><span class="pill safe">ТОЛЬКО ЧТЕНИЕ</span></div>
+        <div class="section-intro"><div><span class="section-label">РЕКЛАМА</span><h2>Контроль эффективности без автодействий</h2><p>Бизнес-ДРР SKU, WB-атрибуция, приростность, перепокупка органики, CPC, конверсия, позиция и запас. Агент выдаёт конкретный числовой план — ставки и бюджеты сам не меняет.</p></div><span class="pill safe">ТОЛЬКО ЧТЕНИЕ</span></div>
         <div class="metric-grid four">
           <article class="metric-card"><span class="metric-icon blue">₽</span><div><span>Расход 7д</span><strong id="ads-spend">—</strong><small>по активным кампаниям</small></div></article>
           <article class="metric-card"><span class="metric-icon green">#</span><div><span>Заказы</span><strong id="ads-orders">—</strong><small>атрибутировано рекламой</small></div></article>
-          <article class="metric-card"><span class="metric-icon purple">%</span><div><span>ДРР</span><strong id="ads-drr">—</strong><small>сводный</small></div></article>
+          <article class="metric-card"><span class="metric-icon purple">%</span><div><span>WB ДРР</span><strong id="ads-drr">—</strong><small>атрибуция кампаний</small></div></article>
           <article class="metric-card"><span class="metric-icon teal">↗</span><div><span>CTR</span><strong id="ads-ctr">—</strong><small>взвешенный</small></div></article>
         </div>
         <div class="content-grid two-thirds">
-          <article class="card"><div class="card-head"><div><span class="section-label">КАМПАНИИ</span><h3>Активная реклама</h3></div><span class="muted" id="ads-updated">—</span></div><div class="table-wrap"><table class="data-table"><thead><tr><th>Кампания</th><th>Расход</th><th>Заказы</th><th>Выручка</th><th>ДРР</th><th>CTR</th><th>CPC</th><th>Что делать</th></tr></thead><tbody id="ads-table"></tbody></table></div></article>
+          <article class="card"><div class="card-head"><div><span class="section-label">КАМПАНИИ</span><h3>Активная реклама</h3></div><span class="muted" id="ads-updated">—</span></div><div class="table-wrap"><table class="data-table"><thead><tr><th>Кампания</th><th>Расход</th><th>Заказы</th><th>Выручка WB</th><th>WB ДРР</th><th>CTR</th><th>CPC</th><th>Что делать</th></tr></thead><tbody id="ads-table"></tbody></table></div></article>
           <article class="card"><div class="card-head"><div><span class="section-label">ДИАГНОСТИКА</span><h3>Сигналы рекламы</h3></div></div><div id="ads-signals" class="signal-stack"></div></article>
         </div>
         <article class="card"><div class="card-head"><div><span class="section-label">УПРАВЛЕНИЕ РЕКЛАМОЙ</span><h3>Числовой план по каждой кампании</h3></div><span class="pill safe">ТОЛЬКО ЧТЕНИЕ</span></div><div id="ad-control-plans" class="ad-control-grid"></div></article>
         <article class="card"><div class="card-head"><div><span class="section-label">ПРАВИЛА</span><h3>Как агент принимает решение</h3></div></div><div class="rule-grid">
-          <div class="rule"><b>01</b><strong>Не судит по одному ДРР</strong><span>Сначала смотрит расход, заказы, CR/CTR, позиции, остатки и цену.</span></div>
+          <div class="rule"><b>01</b><strong>Бизнес-ДРР отдельно от WB</strong><span>Сначала общий результат SKU, затем вклад campaign×SKU, приростность, CPC, конверсия, позиция и запас.</span></div>
           <div class="rule"><b>02</b><strong>Малые данные — не решение</strong><span>Сигнал может появиться, но действие не считается доказанным без достаточной выборки.</span></div>
           <div class="rule"><b>03</b><strong>Ставки не меняются</strong><span>В текущем режиме агент только формирует диагностическую рекомендацию.</span></div>
           <div class="rule"><b>04</b><strong>Каждый сигнал имеет источник</strong><span>В карточке видны фактические метрики и время чтения данных.</span></div>

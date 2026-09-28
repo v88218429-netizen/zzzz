@@ -1016,6 +1016,7 @@ class DecisionEngine:
         group_overrides = runtime.get("group_overrides") if isinstance(runtime.get("group_overrides"), dict) else {}
         sku_overrides = runtime.get("sku_overrides") if isinstance(runtime.get("sku_overrides"), dict) else {}
         products = {str(x.get("sku")): x for x in (p.get("own_27") or {}).get("products", []) if isinstance(x, dict) and x.get("sku")}
+        live_economics = _live_economics_fact_index(snapshots)
 
         deep = _snap(snapshots, "advertising_optimizer", "deep_scan")
         deep_rows = []
@@ -1049,6 +1050,21 @@ class DecisionEngine:
             targets: list[int | None] = nm_ids if nm_ids else [None]
             for nm in targets:
                 product = products.get(str(nm)) if nm is not None else None
+                if product is not None:
+                    product = dict(product)
+                    live_fact = live_economics.get(str(nm)) or {}
+                    if live_fact:
+                        product.update({
+                            "fact_ad_spend_rub": live_fact.get("ad_spend_rub"),
+                            "fact_sales_revenue_rub": live_fact.get("sales_revenue_rub"),
+                            "fact_sales_qty": live_fact.get("sales_qty"),
+                            "fact_drr_sales_pct": live_fact.get("fact_drr_sales_pct"),
+                            "fact_economics_period_from": live_fact.get("period_from"),
+                            "fact_economics_period_to": live_fact.get("period_to"),
+                            "fact_economics_days": live_fact.get("days"),
+                            "fact_economics_quality": live_fact.get("quality"),
+                            "fact_economics_source": live_fact.get("source"),
+                        })
                 exact_stats = stats_by_nm.get(str(nm)) if nm is not None and isinstance(stats_by_nm.get(str(nm)), dict) else None
                 stats = exact_stats or (campaign_stats if len(nm_ids) <= 1 else {})
                 cfg = dict(base_cfg)
@@ -1095,11 +1111,21 @@ class DecisionEngine:
                     actions.append({"step":4,"action":"Для точного решения не хватает: " + " ".join(extra_blockers),"mode":"data_guard"})
 
                 name = str(campaign.get("name") or f"Кампания {cid}")
+                seller_article = str((product or {}).get("seller_article") or (product or {}).get("name") or "").strip()
                 sku_label = f" · nmID {nm}" if nm is not None else ""
                 diagnosis_bits = [plan.decision_label]
                 if len(nm_ids) > 1 and exact_stats is None:
                     diagnosis_bits = ["нет подтверждённой SKU-статистики — денежное решение заблокировано"]
-                if plan.observed_drr_pct is not None: diagnosis_bits.append(f"ДРР {plan.observed_drr_pct:.1f}% при допустимом потолке ≤{plan.target_drr_pct:.1f}%")
+                if plan.business_drr_pct is not None:
+                    diagnosis_bits.append(f"бизнес-ДРР {plan.business_drr_pct:.1f}% при допустимом потолке ≤{plan.target_drr_pct:.1f}%")
+                elif plan.observed_drr_pct is not None:
+                    diagnosis_bits.append(f"атрибуционный ДРР {plan.observed_drr_pct:.1f}% при допустимом потолке ≤{plan.target_drr_pct:.1f}%")
+                if plan.wb_attributed_drr_pct is not None and plan.business_drr_pct is not None:
+                    diagnosis_bits.append(f"WB-атрибуция кампании {plan.wb_attributed_drr_pct:.1f}%")
+                if plan.incremental_capture_pct is not None:
+                    diagnosis_bits.append(f"приростность ≈{plan.incremental_capture_pct:.0f}%")
+                if plan.cannibalization_risk != "unknown":
+                    diagnosis_bits.append(f"риск перепокупки органики: {plan.cannibalization_risk}")
                 if plan.orders_trend_pct is not None: diagnosis_bits.append(f"тренд заказов {plan.orders_trend_pct:+.1f}%")
                 if plan.traffic_trend_pct is not None: diagnosis_bits.append(f"тренд трафика {plan.traffic_trend_pct:+.1f}%")
                 if plan.stock_days_forecast is not None: diagnosis_bits.append(f"прогноз покрытия {plan.stock_days_forecast:.1f} дн.")
@@ -1121,7 +1147,18 @@ class DecisionEngine:
                     _ev("расчёт", "target_drr_pct", plan.target_drr_pct),
                     _ev("расчёт", "max_ad_cost_per_order_rub", plan.max_ad_cost_per_order_rub),
                     _ev("расчёт", "economic_max_drr_pct", plan.economic_max_drr_pct),
-                    _ev("WB Promotion", "observed_drr_pct", plan.observed_drr_pct),
+                    _ev("бизнес-факт SKU", "business_drr_pct", plan.business_drr_pct),
+                    _ev("бизнес-факт SKU", "business_ad_spend_rub", plan.business_ad_spend_rub),
+                    _ev("бизнес-факт SKU", "business_revenue_rub", plan.business_revenue_rub),
+                    _ev("WB Promotion", "wb_attributed_drr_pct", plan.wb_attributed_drr_pct),
+                    _ev("расчёт", "observed_drr_pct", plan.observed_drr_pct),
+                    _ev("приростность", "incremental_capture_pct", plan.incremental_capture_pct),
+                    _ev("приростность", "paid_order_share_pct", plan.paid_order_share_pct),
+                    _ev("приростность", "cannibalization_risk", plan.cannibalization_risk),
+                    _ev("экономика трафика", "max_cpc_rub", plan.max_cpc_rub),
+                    _ev("экономика трафика", "conversion_rate_pct", plan.conversion_rate_pct),
+                    _ev("план трафика", "required_clicks_24h", plan.required_clicks_24h),
+                    _ev("режим", "operating_mode", plan.operating_mode),
                     _ev("trend", "orders_trend_pct", plan.orders_trend_pct),
                     _ev("trend", "traffic_trend_pct", plan.traffic_trend_pct),
                     _ev("27/Сводная", "stock_days_forecast", plan.stock_days_forecast),
@@ -1146,7 +1183,7 @@ class DecisionEngine:
                 out.append(DecisionCard(
                     decision_key=decision_key,
                     scope=scope, entity_id=entity_id,
-                    title=f"{name}{sku_label}: {diagnosis_bits[0]}",
+                    title=f"{seller_article + ' · ' if seller_article else ''}{name}{sku_label}: {diagnosis_bits[0]}",
                     diagnosis=" · ".join(diagnosis_bits),
                     priority=priority, confidence=confidence,
                     recommended_actions=actions,
