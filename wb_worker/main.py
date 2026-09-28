@@ -1,11 +1,13 @@
 import asyncio
+import csv
+import io
 import os
 import secrets
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 
 from wb_mcp import settings as cfg
 from wb_mcp_hotfixes import apply_wb_mcp_hotfixes
@@ -22,6 +24,7 @@ from traffic_sync import DATA_DIR as TRAFFIC_DIR, sync_loop as traffic_sync_loop
 
 ROOT_DATA_DIR = Path(os.environ.get("DATA_DIR", "/data"))
 EXPORT_TOKEN = os.environ.get("FINANCE_EXPORT_TOKEN", "").strip()
+DEDUCTIONS_SHEET_TOKEN = os.environ.get("DEDUCTIONS_SHEET_TOKEN", "").strip()
 
 
 def bootstrap_shops() -> None:
@@ -152,6 +155,43 @@ async def deductions_export(request: Request):
         path,
         media_type="text/csv; charset=utf-8",
         filename="wb_deductions_all.csv",
+    )
+
+
+@app.get("/api/deductions/sheet.csv")
+async def deductions_sheet_export(request: Request, shop: str):
+    if not DEDUCTIONS_SHEET_TOKEN:
+        raise HTTPException(status_code=503, detail="DEDUCTIONS_SHEET_TOKEN is not configured")
+    supplied = request.query_params.get("key", "")
+    if not secrets.compare_digest(supplied, DEDUCTIONS_SHEET_TOKEN):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    shop_id = str(shop or "").strip().upper()
+    shop_names = {"AP": "Саныч", "AA": "AIR", "YV": "Хозяюшка"}
+    if shop_id not in shop_names:
+        raise HTTPException(status_code=404, detail="Unknown shop")
+
+    path = DEDUCTIONS_DIR / "deductions_all.csv"
+    if not path.exists():
+        raise HTTPException(status_code=503, detail="Initial deductions sync is still running")
+
+    out = io.StringIO(newline="")
+    writer = csv.writer(out)
+    with path.open("r", encoding="utf-8-sig", newline="") as fh:
+        reader = csv.reader(fh)
+        header = next(reader, None)
+        if not header or len(header) < 16:
+            raise HTTPException(status_code=500, detail="Deductions export schema is invalid")
+        writer.writerow(header[1:16])
+        expected_shop = shop_names[shop_id]
+        for row in reader:
+            if row and str(row[0]).strip() == expected_shop:
+                writer.writerow(row[1:16])
+
+    return Response(
+        content="\ufeff" + out.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={"Cache-Control": "no-store, max-age=0"},
     )
 
 
