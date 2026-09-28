@@ -24,7 +24,7 @@ class SupervisorAgent(BaseAgent):
 
         if self.ctx.llm.enabled:
             text = await self.ctx.llm.complete(
-                "Ты главный операционный AI-менеджер Wildberries. Сведи события разных агентов, убери дубли, найди причинно-следственные связи. Формат: 1) что критично, 2) вероятная причина только если подтверждается данными, 3) что система уже предложила, 4) что требует решения владельца. Максимум 8 пунктов.",
+                "Ты главный операционный AI-менеджер Wildberries. Главная экономическая ось: PRIMARY-план из «Юнит-экономика вб / WB FBS новая» → независимый факт рекламы/воронки/финансов → отклонение → причина → действие. Старый 27/Юнитка — только fallback и не может доказывать прибыль/убыток. Сведи события, убери дубли и не смешивай плановую, модельную и реализованную прибыль. Формат: 1) что критично, 2) чем план отличается от факта, 3) подтверждённая причина или что ещё надо измерить, 4) конкретное действие владельца. Максимум 8 пунктов.",
                 summarize_for_prompt({"events": important, "pending_actions": pending, "trusted_sheets": portfolio}),
                 max_tokens=900,
             )
@@ -50,9 +50,30 @@ class SupervisorAgent(BaseAgent):
                         f"• [SHEETS] {store.get('name')}: прибыль {store.get('profit_rub', 0):,.0f} ₽; "
                         f"маржа {store.get('margin_pct', 0):.1f}%; ДРР {store.get('drr_pct', 0):.1f}%."
                     )
-            neg = [x for x in ((portfolio.get("own_27", {}).get("economy_examples") or []) if portfolio_current else []) if (x.get("profit_rub") or 0) < 0]
-            for x in neg[:3]:
-                lines.append(f"• [ЮНИТКА] {x.get('name')}: прибыль/ед. {x.get('profit_rub')} ₽, маржа {x.get('margin_pct')}%.")
+            own = portfolio.get("own_27", {}) if portfolio_current else {}
+            axis = own.get("primary_unit_economics") or {}
+            if axis:
+                lines.append(
+                    "Экономическая ось: PRIMARY «Юнит-экономика вб / WB FBS новая»; "
+                    f"планов {axis.get('plan_records', 0)}, привязано SKU {axis.get('mapped_products', 0)}, "
+                    f"не привязано {axis.get('unmatched_products', 0)}; факт {axis.get('fact_period') or 'нет окна'}."
+                )
+            gaps = []
+            for x in own.get("products", []) or []:
+                if x.get("unit_economics_role") != "primary_plan":
+                    continue
+                pdrr = x.get("plan_drr_pct")
+                fdrr = x.get("fact_drr_sales_pct")
+                try:
+                    if pdrr is not None and fdrr is not None and float(fdrr) - float(pdrr) >= 5:
+                        gaps.append(x)
+                except Exception:
+                    pass
+            for x in gaps[:3]:
+                lines.append(
+                    f"• [ПЛАН↔ФАКТ] {x.get('name')}: план ДРР {x.get('plan_drr_pct')}%, "
+                    f"факт {x.get('fact_drr_sales_pct')}% за {x.get('fact_economics_period_from')}–{x.get('fact_economics_period_to')}."
+                )
             if not portfolio_current and portfolio.get("period"):
                 lines.append(f"Архивный портфельный срез {portfolio.get('period')} не используется как текущий факт.")
             for e in (crit + warn)[:6]:
