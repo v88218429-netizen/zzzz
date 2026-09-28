@@ -25,6 +25,7 @@ from .photo_analyzer import PhotoAnalyzer
 from .source_discovery import SourceDiscovery
 from .auto_sheets import AutoSheets
 from .analytics_kernel import measurement_contract, portfolio_quality, snapshot_quality
+from .decision_groups import decision_group_summary, group_decisions
 from .updater import UpdateManager, current_version
 
 settings = Settings()
@@ -580,6 +581,8 @@ async def dashboard_data(days: int = 7, from_date: str | None = None, to_date: s
     entity_map = _entity_map(portfolio_snapshot, snapshots)
     dataset_quality = snapshot_quality(snapshots)
     analytical_quality = portfolio_quality(portfolio_snapshot)
+    decision_groups = group_decisions(decisions, portfolio_snapshot)
+    grouped_summary = decision_group_summary(decision_groups)
     audit_agents = audit.get("agents") or {}
     audit_failed = sum(1 for x in audit_agents.values() if isinstance(x, dict) and x.get("status") == "error")
     return {
@@ -633,6 +636,8 @@ async def dashboard_data(days: int = 7, from_date: str | None = None, to_date: s
         },
         "recommendations": recommendations,
         "decisions": decisions,
+        "decision_groups": decision_groups,
+        "decision_group_summary": grouped_summary,
         "snapshots": snapshots,
         "decision_control": {
             "history": center.db.decision_history(limit=80),
