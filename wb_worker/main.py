@@ -15,6 +15,7 @@ apply_wb_mcp_hotfixes()
 from wb_mcp.app import fastapi_app as wb_app
 
 from finance_sync import DATA_DIR as FINANCE_DIR, sync_loop
+from deductions_sync import DATA_DIR as DEDUCTIONS_DIR, sync_loop as deductions_sync_loop
 from fbs_supply_sync import DATA_DIR as FBS_DIR, sync_loop as fbs_supply_sync_loop
 from penalty_evidence_sync import sync_loop as penalty_evidence_sync_loop
 from traffic_sync import DATA_DIR as TRAFFIC_DIR, sync_loop as traffic_sync_loop
@@ -57,15 +58,16 @@ async def lifespan(app: FastAPI):
     bootstrap_shops()
     async with wb_app.router.lifespan_context(wb_app):
         task = asyncio.create_task(sync_loop())
+        deductions_task = asyncio.create_task(deductions_sync_loop())
         fbs_task = asyncio.create_task(fbs_supply_sync_loop())
         evidence_task = asyncio.create_task(penalty_evidence_sync_loop())
         traffic_task = asyncio.create_task(traffic_sync_loop())
         try:
             yield
         finally:
-            task.cancel()
-            fbs_task.cancel()
-            for bg_task in (task, fbs_task, evidence_task, traffic_task):
+            for bg_task in (task, deductions_task, fbs_task, evidence_task, traffic_task):
+                bg_task.cancel()
+            for bg_task in (task, deductions_task, fbs_task, evidence_task, traffic_task):
                 try:
                     await bg_task
                 except asyncio.CancelledError:
@@ -124,6 +126,32 @@ async def finance_reports_export(request: Request):
         path,
         media_type="text/csv; charset=utf-8",
         filename="wb_finance_reports.csv",
+    )
+
+
+@app.get("/api/deductions/status")
+async def deductions_status(request: Request):
+    authorize(request)
+    path = DEDUCTIONS_DIR / "status.json"
+    if not path.exists():
+        return JSONResponse({"state": "syncing"}, status_code=503)
+    try:
+        import json
+        return JSONResponse(json.loads(path.read_text(encoding="utf-8")))
+    except Exception as exc:
+        return JSONResponse({"state": "error", "error": str(exc)}, status_code=500)
+
+
+@app.get("/api/deductions/export.csv")
+async def deductions_export(request: Request):
+    authorize(request)
+    path = DEDUCTIONS_DIR / "deductions_all.csv"
+    if not path.exists():
+        raise HTTPException(status_code=503, detail="Initial deductions sync is still running")
+    return FileResponse(
+        path,
+        media_type="text/csv; charset=utf-8",
+        filename="wb_deductions_all.csv",
     )
 
 
