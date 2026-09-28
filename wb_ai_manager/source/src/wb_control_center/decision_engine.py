@@ -64,6 +64,18 @@ def _direct_num(row: dict[str, Any], *keys: str) -> float | None:
     return None
 
 
+def _pack_qty(value: Any) -> int:
+    text = str(value or "").lower().replace("×", "x").replace("х", "x")
+    for pattern in (r"(\d+)\s*шт\b", r"\bx\s*(\d+)\b"):
+        m = __import__("re").search(pattern, text)
+        if m:
+            try:
+                return max(1, int(m.group(1)))
+            except Exception:
+                pass
+    return 1
+
+
 def _funnel_fact_index(obj: Any) -> dict[str, dict[str, float]]:
     """Pick the most complete current-period funnel row for each exact nmID."""
     out: dict[str, dict[str, float]] = {}
@@ -136,6 +148,7 @@ def _live_economics_fact_index(snapshots: dict[str, Any]) -> dict[str, dict[str,
         out[sku] = {
             "ad_spend_rub": spend,
             "sales_revenue_rub": sales if sales > 0 else None,
+            "sales_qty": float(fr.get("buyout_count") or 0.0) if float(fr.get("buyout_count") or 0.0) > 0 else None,
             "orders_revenue_rub": orders if orders > 0 else None,
             "fact_drr_sales_pct": (spend / sales * 100.0) if sales > 0 else None,
             "fact_drr_orders_pct": (spend / orders * 100.0) if orders > 0 else None,
@@ -153,12 +166,14 @@ def _product_economics_reconciliation(product: dict[str, Any], live_fact: dict[s
     plan_profit = _n(product.get("profit_rub"))
     plan_margin = _n(product.get("margin_pct"))
     price = _n(product.get("price_rub"))
+    client_price = _n(product.get("price_client_rub"))
 
     fact = live_fact or {}
     if _n(fact.get("fact_drr_sales_pct")) is None:
         fact = {
             "ad_spend_rub": _n(product.get("fact_ad_spend_rub")),
             "sales_revenue_rub": _n(product.get("fact_sales_revenue_rub")),
+            "sales_qty": _n(product.get("fact_sales_qty")),
             "fact_drr_sales_pct": _n(product.get("fact_drr_sales_pct")),
             "period_from": product.get("fact_economics_period_from"),
             "period_to": product.get("fact_economics_period_to"),
@@ -166,23 +181,69 @@ def _product_economics_reconciliation(product: dict[str, Any], live_fact: dict[s
             "source": product.get("fact_economics_source"),
             "quality": product.get("fact_economics_quality"),
         }
+
     actual_drr = _n(fact.get("fact_drr_sales_pct"))
+    ad_spend = _n(fact.get("ad_spend_rub"))
+    sales_revenue = _n(fact.get("sales_revenue_rub"))
+    sales_qty = _n(fact.get("sales_qty"))
     scenario_profit = None
     scenario_margin = None
     break_even_drr = None
+    actual_ad_cost_per_sale = None
+    actual_revenue_per_sale = None
+    plan_ad_cost_per_unit = None
+    drr_if_plan_revenue = None
+    ad_efficiency_gap_pp = None
+    revenue_gap_pp = None
+    expected_ad_spend_at_plan = None
+    excess_ad_spend = None
+
     if price and price > 0 and plan_profit is not None and plan_drr is not None:
         break_even_drr = plan_drr + plan_profit / price * 100.0
+        plan_ad_cost_per_unit = price * plan_drr / 100.0
         if actual_drr is not None:
             scenario_profit = plan_profit - (actual_drr - plan_drr) / 100.0 * price
             scenario_margin = scenario_profit / price * 100.0
+
+    if sales_qty and sales_qty > 0:
+        if ad_spend is not None:
+            actual_ad_cost_per_sale = ad_spend / sales_qty
+        if sales_revenue is not None:
+            actual_revenue_per_sale = sales_revenue / sales_qty
+    if sales_revenue is not None and plan_drr is not None:
+        expected_ad_spend_at_plan = sales_revenue * plan_drr / 100.0
+        if ad_spend is not None:
+            excess_ad_spend = ad_spend - expected_ad_spend_at_plan
+    if actual_ad_cost_per_sale is not None and client_price and client_price > 0 and plan_drr is not None and actual_drr is not None:
+        drr_if_plan_revenue = actual_ad_cost_per_sale / client_price * 100.0
+        ad_efficiency_gap_pp = max(0.0, drr_if_plan_revenue - plan_drr)
+        revenue_gap_pp = max(0.0, actual_drr - drr_if_plan_revenue)
+
+    root_causes: list[dict[str, Any]] = []
+    if ad_efficiency_gap_pp is not None and ad_efficiency_gap_pp >= 1.0:
+        root_causes.append({
+            "cause": "дорогая реклама на одну фактическую продажу",
+            "impact_pp": ad_efficiency_gap_pp,
+            "detail": f"даже при плановой выручке на продажу ДРР был бы около {drr_if_plan_revenue:.1f}%",
+        })
+    if revenue_gap_pp is not None and revenue_gap_pp >= 1.0:
+        root_causes.append({
+            "cause": "фактическая выручка на продажу ниже плановой",
+            "impact_pp": revenue_gap_pp,
+            "detail": f"факт ≈{actual_revenue_per_sale:.0f} ₽/продажу против плана после СПП ≈{client_price:.0f} ₽" if actual_revenue_per_sale is not None else "",
+        })
+    root_causes.sort(key=lambda x: float(x.get("impact_pp") or 0), reverse=True)
+
     return {
         "plan_drr_pct": plan_drr,
         "plan_profit_rub": plan_profit,
         "plan_margin_pct": plan_margin,
         "price_after_discount_rub": price,
+        "price_after_spp_rub": client_price,
         "fact_drr_sales_pct": actual_drr,
-        "fact_ad_spend_rub": _n(fact.get("ad_spend_rub")),
-        "fact_sales_revenue_rub": _n(fact.get("sales_revenue_rub")),
+        "fact_ad_spend_rub": ad_spend,
+        "fact_sales_revenue_rub": sales_revenue,
+        "fact_sales_qty": sales_qty,
         "fact_period_from": fact.get("period_from"),
         "fact_period_to": fact.get("period_to"),
         "fact_days": _n(fact.get("days")),
@@ -191,6 +252,15 @@ def _product_economics_reconciliation(product: dict[str, Any], live_fact: dict[s
         "scenario_profit_rub": scenario_profit,
         "scenario_margin_pct": scenario_margin,
         "break_even_drr_pct": break_even_drr,
+        "actual_ad_cost_per_sale_rub": actual_ad_cost_per_sale,
+        "actual_revenue_per_sale_rub": actual_revenue_per_sale,
+        "plan_ad_cost_per_unit_rub": plan_ad_cost_per_unit,
+        "drr_if_plan_revenue_pct": drr_if_plan_revenue,
+        "ad_efficiency_gap_pp": ad_efficiency_gap_pp,
+        "revenue_gap_pp": revenue_gap_pp,
+        "expected_ad_spend_at_plan_rub": expected_ad_spend_at_plan,
+        "excess_ad_spend_vs_plan_rub": excess_ad_spend,
+        "root_causes": root_causes,
     }
 
 
