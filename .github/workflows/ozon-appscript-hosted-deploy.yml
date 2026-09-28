@@ -150,8 +150,9 @@ jobs:
           cd /tmp/ozon-appscript-live
           clasp run ffPenaltiesSyncNow || true
 
-      - name: Explain blocked deploy
+      - name: Fail blocked deploy
         if: steps.auth.outputs.ready != '1'
         run: |
-          echo "HOSTED_APPS_SCRIPT_DEPLOY=blocked_missing_CLASPRC_JSON"
+          echo "::error::HOSTED_APPS_SCRIPT_DEPLOY=blocked_missing_CLASPRC_JSON"
+          exit 1
 # probe-trigger: 2026-09-22T15:21+03:00
