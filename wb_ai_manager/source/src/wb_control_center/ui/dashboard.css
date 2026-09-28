@@ -388,3 +388,178 @@ button.interactive-card{font:inherit;color:inherit;text-align:left;width:100%}
 .decision-toolbar > div:first-child { display:flex; flex-direction:column; gap:3px; }
 .decision-toolbar strong { font-size:10px; color:#343844; }
 .decision-toolbar span { font-size:8px; color:#818694; }
+
+
+/* 2026-09-28 independent readability and accessibility pass */
+:root {
+  --sidebar: 272px;
+  --muted: #666c7b;
+  --muted-2: #707584;
+}
+body { font-size: 14px; line-height: 1.45; }
+.sidebar { padding-left: 17px; padding-right: 17px; }
+.nav { min-height: 0; overflow-y: auto; padding-right: 2px; scrollbar-width: thin; }
+.brand-copy strong { font-size: 16px; }
+.brand-copy span { font-size: 12px; }
+.store-copy .eyebrow { font-size: 10.5px; }
+.store-copy strong { font-size: 13.5px; }
+.nav-item { min-height: 44px; height: 44px; font-size: 13.5px; }
+.nav-badge { font-size: 11px; }
+.safety-mini strong { font-size: 11.5px; }
+.safety-mini span, .version { font-size: 10.5px; }
+
+h1 { font-size: 26px; }
+.page-kicker { font-size: 10.5px; }
+.freshness { font-size: 12px; }
+.button { min-height: 42px; height: 42px; font-size: 12.5px; }
+.banner-copy strong { font-size: 13.5px; }
+.banner-copy span { font-size: 12px; }
+.pill { min-height: 26px; font-size: 10px; }
+.loading-state strong { font-size: 12.5px; }
+.loading-state span { font-size: 11.5px; }
+
+.card { padding: 20px; }
+.card-head h2 { font-size: 21px; }
+.card-head h3 { font-size: 16px; }
+.section-label { font-size: 10px; letter-spacing: .1em; }
+.executive-summary { font-size: 13px; line-height: 1.65; }
+.health-score small { font-size: 9px; }
+.priority-chip { font-size: 10.5px; padding: 7px 11px; }
+.posture-list > div, .posture-list strong { font-size: 11.5px; min-height: 38px; }
+
+.metric-card { min-height: 100px; padding: 15px; }
+.metric-card span:not(.metric-icon) { font-size: 11px; }
+.metric-card strong { font-size: 20px; }
+.metric-card small { font-size: 10px; margin-top: 7px; }
+.metric-icon { width: 32px; height: 32px; font-size: 11px; }
+.segmented button { min-height: 34px; height: 34px; font-size: 10.5px; padding: 0 11px; }
+
+.event-domain-title strong { font-size: 10.5px; }
+.event-domain-title span { font-size: 10px; }
+.event-item { padding: 13px 0; }
+.event-severity { width: 34px; height: 34px; font-size: 10.5px; }
+.event-main strong { font-size: 12.5px; }
+.event-main p { font-size: 11.5px; line-height: 1.55; }
+.event-meta span, .event-time { font-size: 10px; }
+.recommendation { padding: 13px; }
+.recommendation-head strong { font-size: 11.5px; }
+.recommendation p { font-size: 11.5px; line-height: 1.5; }
+.recommendation small { font-size: 10px; }
+
+.domain { min-height: 108px; padding: 13px; }
+.domain strong { font-size: 12px; }
+.domain span { font-size: 10.5px; line-height: 1.45; }
+.domain.interactive-card small { font-size: 10px; }
+.section-intro h2 { font-size: 22px; }
+.section-intro p { font-size: 12.5px; line-height: 1.6; }
+
+.data-table th { font-size: 10.5px; padding: 10px 9px; }
+.data-table td { font-size: 12px; padding: 13px 9px; line-height: 1.45; }
+.data-table strong { font-size: 12.5px; }
+.status-tag { min-height: 24px; font-size: 10px; }
+.signal { padding: 12px 13px; }
+.signal strong { font-size: 12px; }
+.signal p { font-size: 11.5px; line-height: 1.55; }
+.signal .source { font-size: 10px; }
+.rule { min-height: 125px; padding: 14px; }
+.rule b { font-size: 10.5px; }
+.rule strong { font-size: 12px; }
+.rule span { font-size: 10.5px; line-height: 1.5; }
+
+.inventory-toolbar strong { font-size: 11.5px; }
+.inventory-toolbar span { font-size: 10px; }
+.inventory-source-warning strong { font-size: 12px; }
+.inventory-source-warning p { font-size: 11.5px; }
+.inventory-source-warning small { font-size: 10px; }
+.inventory-item { padding: 13px; }
+.inventory-top strong { font-size: 12px; }
+.inventory-top small, .inventory-meta { font-size: 10px; }
+.inventory-days { font-size: 19px; }
+
+.agent-card { min-height: 124px; padding: 14px; }
+.agent-symbol { width: 32px; height: 32px; font-size: 10.5px; }
+.agent-card strong { font-size: 12px; }
+.agent-card p { font-size: 10.5px; line-height: 1.5; }
+.agent-card small { font-size: 10px; }
+.muted, .empty, .footer { font-size: 10.5px; }
+.toast { font-size: 12px; }
+
+.knowledge-card { min-height: 195px; padding: 16px; }
+.knowledge-card b, .knowledge-type { font-size: 10px; }
+.knowledge-card h3 { font-size: 14px; }
+.knowledge-card p { font-size: 11.5px; line-height: 1.55; }
+.knowledge-card small { font-size: 10px; }
+.pipeline i { font-size: 10px; }
+.pipeline strong, .trust-list strong { font-size: 11.5px; }
+.pipeline span, .trust-list small { font-size: 10.5px; }
+
+.decision-head small, .ad-control-head small { font-size: 11px; }
+.decision-diagnosis { font-size: 13.5px; }
+.decision-action span { font-size: 13.5px; }
+.decision-evidence summary, .decision-evidence ul { font-size: 12.5px; }
+.decision-foot, .confidence { font-size: 11.5px; }
+.ad-control-card > p { font-size: 13px; }
+.ad-kpi-grid span { font-size: 10.5px; }
+.ad-kpi-grid strong { font-size: 13px; }
+.policy-form label > span { font-size: 12px; }
+.policy-form small { font-size: 10.5px; line-height: 1.45; }
+.policy-form input, .policy-form select { min-height: 42px; }
+.policy-note { font-size: 12px; }
+.policy-history-row strong { font-size: 12px; }
+.policy-history-row span { font-size: 10px; }
+.policy-history-row p { font-size: 12px; }
+
+.period-picker input, .period-picker span, .period-apply { font-size: 10.5px; }
+.period-apply { min-height: 34px; }
+.data-truth-banner strong { font-size: 12px; }
+.data-truth-banner span { font-size: 11.5px; }
+.data-truth-banner small { font-size: 10px; }
+
+.detail-kicker { font-size: 10.5px; }
+.detail-lead p { font-size: 13px; }
+.detail-meta span, .detail-entity span { font-size: 10.5px; }
+.detail-section h3 { font-size: 13.5px; }
+.detail-section > p { font-size: 12.5px; }
+.detail-facts span { font-size: 10px; }
+.detail-facts strong { font-size: 12px; }
+.detail-facts small { font-size: 10px; }
+.detail-step b { font-size: 10px; }
+.detail-step span { font-size: 12.5px; }
+.detail-link { min-height: 40px; font-size: 11.5px; }
+.detail-row b { font-size: 11.5px; }
+.detail-row span { font-size: 10.5px; }
+.danger-box ul { font-size: 11.5px; }
+.finance-breakdown span { font-size: 10px; }
+.source-note { font-size: 10px; }
+.period-audit-copy strong { font-size: 12px; }
+.period-audit-copy span { font-size: 11px; }
+.period-audit-copy small { font-size: 10px; }
+.decision-toolbar strong { font-size: 11.5px; }
+.decision-toolbar span { font-size: 10px; }
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+a:focus-visible,
+summary:focus-visible,
+.interactive-card:focus-visible {
+  outline: 3px solid rgba(122, 60, 255, .28);
+  outline-offset: 2px;
+}
+
+@media (max-width: 980px) {
+  :root { --sidebar: 250px; }
+}
+@media (max-width: 760px) {
+  .button.secondary { display: inline-flex; }
+  .topbar-actions .button.secondary { display: none; }
+  .section-intro { margin-bottom: 16px; }
+  .card { padding: 16px; }
+  .data-table th { font-size: 10px; }
+  .data-table td { font-size: 11.5px; }
+}
+@media (max-width: 480px) {
+  .metric-card { min-height: 88px; }
+  .section-intro h2 { font-size: 20px; }
+  .section-intro p { font-size: 12px; }
+}
