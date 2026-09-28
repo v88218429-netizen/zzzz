@@ -59,7 +59,7 @@ def _group_id(row: dict[str, Any]) -> str:
         return "inventory_excess"
     if ":stockout" in key:
         return "inventory_shortage"
-    if key.startswith("advert:"):
+    if key.startswith("advert:") or ":portfolio_ads" in key:
         return "advertising"
     if "reshipment" in key or key.startswith("fbs:"):
         return "fulfillment"
