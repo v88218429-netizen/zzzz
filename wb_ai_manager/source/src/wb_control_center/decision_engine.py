@@ -659,7 +659,7 @@ class DecisionEngine:
                     diagnosis=(
                         f"Плановый ДРР {plan_drr:.1f}%, фактический {actual_drr:.1f}%"
                         f". При неизменных остальных параметрах основной юнитки прибыль меняется с {plan_profit:.2f} до {scenario_profit:.2f} ₽/шт"
-                        f", модельная маржа — {scenario_margin:.1f}%."
+                        f", модельная маржа — {scenario_margin:.1f}%. Главный вклад в отклонение: {cause_text}."
                     ),
                     priority="critical", confidence="high" if str(rec.get("fact_quality") or "").startswith(("COMPLETE", "LIVE")) else "medium",
                     recommended_actions=actions, evidence=evidence,
@@ -694,7 +694,7 @@ class DecisionEngine:
                     diagnosis=(
                         f"План ДРР {plan_drr:.1f}%, факт {actual_drr:.1f}%."
                         f" Плановая прибыль {plan_profit:.2f} ₽/шт; при фактической рекламной нагрузке модель даёт {scenario_profit:.2f} ₽/шт"
-                        f" и маржу {scenario_margin:.1f}%."
+                        f" и маржу {scenario_margin:.1f}%. Главный вклад в отклонение: {cause_text}."
                     ),
                     priority="high" if scenario_margin < 5.0 else "medium",
                     confidence="high" if str(rec.get("fact_quality") or "").startswith(("COMPLETE", "LIVE")) else "medium",
