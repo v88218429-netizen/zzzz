@@ -1,0 +1,41 @@
+name: Hessdalen primary M distillation
+
+on:
+  push:
+    paths:
+      - 'distill_hessdalen_primary_m.py'
+      - '.github/workflows/hessdalen-primary-m.yml'
+      - 'analysis/HESSDALEN_GACP_20260929_fragments.json'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  distill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Distill primary Hessdalen evidence for Object M
+        run: python distill_hessdalen_primary_m.py
+
+      - name: Commit distilled report
+        run: |
+          git config user.name "hessdalen-m-distiller-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add analysis/HESSDALEN_GACP_20260929_PRIMARY_M_REPORT.md analysis/HESSDALEN_GACP_20260929_PRIMARY_M_DISTILLED.json
+          if git diff --cached --quiet; then
+            echo "No distillation changes"
+          else
+            git commit -m "Add Hessdalen primary M distillation"
+            git pull --rebase origin "${GITHUB_REF_NAME}"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          fi
