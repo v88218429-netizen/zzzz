@@ -1,0 +1,125 @@
+{
+  "task_id": "IMRAM",
+  "request": "IMRAM_20260925_0958.json",
+  "query": "Имрам как правильно формулировать желание конечный результат",
+  "knowledge_tag": "IMRAM",
+  "generated_at": "2026-09-29T13:24:06.895920+00:00",
+  "videos": [
+    {
+      "video_id": "ms35epAFCz4",
+      "url": "https://www.youtube.com/watch?v=ms35epAFCz4",
+      "title": "No Failure, No Progress | The Whole Point in 4 Minutes",
+      "channel": "your fit",
+      "duration": 256,
+      "timestamp": null,
+      "query": "Имрам как правильно формулировать желание конечный результат",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-29_IMRAM_video_ms35epAFCz4.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "6WLUd9YEkzk",
+      "url": "https://www.youtube.com/watch?v=6WLUd9YEkzk",
+      "title": "HOW I GOT A 7.5 ON IELTS IN 20 DAYS",
+      "channel": "Farhad Najaf-zada",
+      "duration": 926,
+      "timestamp": null,
+      "query": "Имрам как правильно формулировать желание конечный результат",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-29_IMRAM_video_6WLUd9YEkzk.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "gDsISiJz56w",
+      "url": "https://www.youtube.com/watch?v=gDsISiJz56w",
+      "title": "MUSICAL TALENT Test: 100% accurate results! Test yourself",
+      "channel": "Уроки фортепиано c Александром Литваком",
+      "duration": 569,
+      "timestamp": null,
+      "query": "Имрам как правильно формулировать желание конечный результат",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-29_IMRAM_video_gDsISiJz56w.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "ROKGXp3zCEo",
+      "url": "https://www.youtube.com/watch?v=ROKGXp3zCEo",
+      "title": "Как ПРАВИЛЬНО ПОСТАВИТЬ ЦЕЛИ: простой гайд",
+      "channel": "амоБлог ",
+      "duration": 525,
+      "timestamp": null,
+      "query": "Имрам как правильно формулировать желание конечный результат",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-29_IMRAM_video_ROKGXp3zCEo.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "rcFKdG6P_ww",
+      "url": "https://www.youtube.com/watch?v=rcFKdG6P_ww",
+      "title": "The new ChatGPT: from beginner to pro in half an hour. A comprehensive free course.",
+      "channel": "Лебедев про Нейросети: уроки, секреты, лайфхаки",
+      "duration": 2346,
+      "timestamp": null,
+      "query": "Имрам как правильно формулировать желание конечный результат",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-29_IMRAM_video_rcFKdG6P_ww.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "qKPE2FAyjRY",
+      "url": "https://www.youtube.com/watch?v=qKPE2FAyjRY",
+      "title": "Тайна Малакута: секреты скрытого царства Аллаха и современная наука.",
+      "channel": "Religious Story TV",
+      "duration": 4045,
+      "timestamp": null,
+      "query": "Имрам как правильно формулировать желание конечный результат",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-29_IMRAM_video_qKPE2FAyjRY.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "HwcihZiEQkc",
+      "url": "https://www.youtube.com/watch?v=HwcihZiEQkc",
+      "title": "В эти дни Вселенная вас слышит / Как исполнить все желания в самые сильные дни в году?",
+      "channel": "Имрам Крийя - Йога",
+      "duration": 1254,
+      "timestamp": null,
+      "query": "Имрам состояние исполненного желания",
+      "kind": "video",
+      "transcript": "transcripts/2026-09-29_IMRAM_video_HwcihZiEQkc.md",
+      "method": "FreeTranscriptAPI"
+    }
+  ],
+  "errors": [
+    {
+      "video_id": "3UOgMn48FW8",
+      "url": "https://www.youtube.com/watch?v=3UOgMn48FW8",
+      "title": "Простые практики для энергии и исполнения желаний / Как открыть в себе бесконечные возможности?",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "Ts6LD3K4NkE",
+      "url": "https://www.youtube.com/watch?v=Ts6LD3K4NkE",
+      "title": "Things will improve instantly! A very powerful Dua!!!",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "y8EX0anUKpQ",
+      "url": "https://www.youtube.com/watch?v=y8EX0anUKpQ",
+      "title": "🕉 Можно ли пройти семинар онлайн? #самореализация",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "r4SQHIqOxMQ",
+      "url": "https://www.youtube.com/watch?v=r4SQHIqOxMQ",
+      "title": "Сложно ли понять Коран и Сунну? | Ринат Абу Мухаммад. Пользы из Тафсира аль-Багауи",
+      "error": "transcript_ai: no valid transcript | free_api: HTTP Error 429: Too Many Requests"
+    },
+    {
+      "video_id": "5P9wYbjVJxk",
+      "url": "https://www.youtube.com/watch?v=5P9wYbjVJxk",
+      "title": "Что такое Хиджра? Абу Имран Аль-Шаркаси (07/03/2019).",
+      "error": "transcript_ai: HTTP Error 429: Too Many Requests | free_api: HTTP Error 429: Too Many Requests"
+    }
+  ]
+}
