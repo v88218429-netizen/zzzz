@@ -853,3 +853,87 @@ body { font-size: 15px; line-height: 1.5; }
 @media (max-width: 480px) {
   .portfolio-metrics { grid-template-columns: 1fr; }
 }
+
+/* 2026-09-29 final table-width pass */
+[data-page-panel="advertising"] .content-grid.two-thirds {
+  grid-template-columns: 1fr;
+}
+[data-page-panel="advertising"] #ads-table th:first-child,
+[data-page-panel="advertising"] #ads-table td:first-child {
+  min-width: 190px;
+}
+[data-page-panel="advertising"] #ads-table th:last-child,
+[data-page-panel="advertising"] #ads-table td:last-child {
+  min-width: 210px;
+}
+[data-page-panel="advertising"] #ads-table td:last-child {
+  line-height: 1.55;
+}
+@media (max-width: 760px) {
+  [data-page-panel="advertising"] #ads-table {
+    min-width: 900px;
+  }
+}
+
+/* 2026-09-29 mobile audit corrections */
+@media (max-width: 760px) {
+  .section-intro {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    min-width: 0;
+  }
+  .section-intro > * { min-width: 0; max-width: 100%; }
+  .section-intro .pill { align-self: flex-start; }
+
+  .card-head {
+    flex-wrap: wrap;
+    min-width: 0;
+  }
+  .card-head > * { min-width: 0; max-width: 100%; }
+  .health-score { min-width: 78px; }
+
+  .decision-group-items,
+  .decision-card,
+  .decision-head,
+  .ad-control-grid,
+  .ad-control-card,
+  .ad-control-head {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .decision-head,
+  .ad-control-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .decision-head h3,
+  .decision-head small,
+  .ad-control-head h3,
+  .ad-control-head small,
+  .decision-diagnosis,
+  .decision-foot,
+  .decision-action span {
+    overflow-wrap: anywhere;
+    word-break: normal;
+  }
+  .confidence { align-self: flex-start; white-space: normal; }
+
+  .segmented button { min-height: 42px; height: auto; }
+  details > summary,
+  .decision-evidence summary {
+    min-height: 42px;
+    display: flex;
+    align-items: center;
+    overflow-wrap: anywhere;
+  }
+
+  [data-page-panel="knowledge"] .card-head {
+    align-items: flex-start;
+  }
+  [data-page-panel="knowledge"] .card-head .pill,
+  [data-page-panel="knowledge"] .card-head .muted {
+    max-width: 100%;
+    white-space: normal;
+  }
+}
