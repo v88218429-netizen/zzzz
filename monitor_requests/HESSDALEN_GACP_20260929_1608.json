@@ -1,0 +1,22 @@
+{
+  "task_id": "HESSDALEN_GACP",
+  "query": "Project Hessdalen Geophysically Anchored Coherent Plasmoid",
+  "extra_queries": [
+    "Project Hessdalen plasmoid",
+    "Hessdalen lights plasma plasmoid",
+    "Project Hessdalen neutron detection",
+    "Project Hessdalen spectrometer",
+    "Project Hessdalen Blue Box scientific camera raw sensor",
+    "Project Hessdalen OpenADS",
+    "Massimo Teodorani Hessdalen plasma",
+    "Hessdalen UAP detection summit",
+    "Hessdalen Sky360 UFODAP",
+    "Hessdalen recent findings MUFON presentation"
+  ],
+  "content": "Видео",
+  "limit_video": 30,
+  "limit_shorts": 0,
+  "depth_days": 3650,
+  "knowledge_tag": "HESSDALEN_GACP_OBJECT_M",
+  "language": "en"
+}
