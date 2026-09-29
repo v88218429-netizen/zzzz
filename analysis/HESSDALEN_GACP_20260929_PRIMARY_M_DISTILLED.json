@@ -1,0 +1,1496 @@
+{
+  "generated_at": "2026-09-29T13:34:52.211888+00:00",
+  "source_fragments": "analysis/HESSDALEN_GACP_20260929_fragments.json",
+  "input_fragment_count": 160,
+  "filtered_primary_medium_high": 152,
+  "deduped_count": 152,
+  "counts_by_category": {
+    "01_camera_artifact_control": 29,
+    "02_spectrometry_emission": 15,
+    "03_neutron_radiation": 10,
+    "04_object_behavior": 77,
+    "05_plasma_gacp_hypothesis": 10,
+    "06_open_data_infrastructure": 7,
+    "99_other": 4
+  },
+  "counts_by_video": {
+    "Hessdalen Lights Norway Mystery": 11,
+    "Monthly Status Meeting 2026 02 18": 20,
+    "Monthly Status Meeting 2026 03 18 A": 39,
+    "The Hessdalen Lights Have Stumped Scientists for 40 Years": 35,
+    "The Hessdalen Lights: 40 Years of Instrumented Observation": 18,
+    "The Hessdalen Lights: Norway's Unexplained Sky Phenomena – Explained?": 18,
+    "Ball Lightning, Plasmoids, and Fractals: Gateway to New Dimensions?": 6,
+    "#008 - Dr. Massimo Teodorani on #plasma physics, #consciousness, & #UFO research": 5
+  },
+  "top_fragments_by_category": {
+    "01_camera_artifact_control": [
+      {
+        "url": "https://www.youtube.com/watch?v=-54w-PkbE-0",
+        "channel": "World Stories English",
+        "title": "Hessdalen Lights Norway Mystery",
+        "timestamp": "06:56",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_-54w-PkbE-0.md",
+        "terms": [
+          "reflection"
+        ],
+        "groups": [
+          "instrument_camera_sensor"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "instrumentation_or_method",
+        "object_type": "artifact_control_or_sensor_issue",
+        "useful_for_M": "high",
+        "score": 5,
+        "category": "01_camera_artifact_control",
+        "fragment": "[06:52] Their unresolved nature inspires both [06:54] scientific rigor and philosophical [06:56] reflection. [06:59] Even with the latest sensor arrays, [07:01] machine learning, and international",
+        "next_action": "read_full_context"
+      },
+      {
+        "url": "https://www.youtube.com/watch?v=NbeGxunESXw",
+        "channel": "Project Hessdalen",
+        "title": "Monthly Status Meeting 2026 02 18",
+        "timestamp": "01:06:13",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_NbeGxunESXw.md",
+        "terms": [
+          "triangulation"
+        ],
+        "groups": [
+          "instrument_camera_sensor"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "instrumentation_or_method",
+        "object_type": "general_context",
+        "useful_for_M": "high",
+        "score": 5,
+        "category": "01_camera_artifact_control",
+        "fragment": "[01:06:09] and that's why uh we are desperate to [01:06:11] get more sensors and more cameras and [01:06:13] also do the real triangulation and you [01:06:16] can actually go to the site and you can [01:06:20] uh on the search you can type in fo n",
+        "next_action": "read_full_context"
+      },
+      {
+        "url": "https://www.youtube.com/watch?v=NbeGxunESXw",
+        "channel": "Project Hessdalen",
+        "title": "Monthly Status Meeting 2026 02 18",
+        "timestamp": "09:34",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_NbeGxunESXw.md",
+        "terms": [
+          "artifacts",
+          "artifact"
+        ],
+        "groups": [
+          "instrument_camera_sensor"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "instrumentation_or_method",
+        "object_type": "artifact_control_or_sensor_issue",
+        "useful_for_M": "high",
+        "score": 5,
+        "category": "01_camera_artifact_control",
+        "fragment": "[09:30] value and lighter mainly because of [09:32] range cost limitation. s the specific [09:34] expertise and artifacts [09:37] that can come out of it. Um my one of my [09:41] ideas for the IDTS as you some of you",
+        "next_action": "read_full_context"
+      },
+      {
+        "url": "https://www.youtube.com/watch?v=NbeGxunESXw",
+        "channel": "Project Hessdalen",
+        "title": "Monthly Status Meeting 2026 02 18",
+        "timestamp": "57:26",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_NbeGxunESXw.md",
+        "terms": [
+          "artifacts",
+          "artifact"
+        ],
+        "groups": [
+          "instrument_camera_sensor"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "instrumentation_or_method",
+        "object_type": "artifact_control_or_sensor_issue",
+        "useful_for_M": "high",
+        "score": 5,
+        "category": "01_camera_artifact_control",
+        "fragment": "[57:18] valuing the boring results like cow [57:22] lights, satellites, meteors, optical or [57:26] digital artifacts, etc. And don't be [57:30] afraid to say, \"I don't know.\" [57:34] In order for us to stay credible as a",
+        "next_action": "read_full_context"
+      },
+      {
+        "url": "https://www.youtube.com/watch?v=W-eQ2WWul-0",
+        "channel": "Project Hessdalen",
+        "title": "Monthly Status Meeting 2026 03 18 A",
+        "timestamp": "01:03:38",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_W-eQ2WWul-0.md",
+        "terms": [
+          "scientific camera"
+        ],
+        "groups": [
+          "instrument_camera_sensor"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "instrumentation_or_method",
+        "object_type": "measurement_setup",
+        "useful_for_M": "high",
+        "score": 5,
+        "category": "01_camera_artifact_control",
+        "fragment": "[01:03:34] for the people maybe watching the [01:03:35] stream. So we have a lot of ideas. We [01:03:38] also have hardware, scientific cameras [01:03:42] and sensors. But what we are lacking is [01:03:44] people with technical skills.",
+        "next_action": "read_full_context"
+      },
+      {
+        "url": "https://www.youtube.com/watch?v=W-eQ2WWul-0",
+        "channel": "Project Hessdalen",
+        "title": "Monthly Status Meeting 2026 03 18 A",
+        "timestamp": "05:14",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_W-eQ2WWul-0.md",
+        "terms": [
+          "scientific camera"
+        ],
+        "groups": [
+          "instrument_camera_sensor"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "instrumentation_or_method",
+        "object_type": "measurement_setup",
+        "useful_for_M": "high",
+        "score": 5,
+        "category": "01_camera_artifact_control",
+        "fragment": "[05:08] >> the ideas we had besides other cameras [05:12] of the type you already have [05:14] >> is to put one or more scientific cameras [05:17] out. [05:18] This means u there is no video",
+        "next_action": "read_full_context"
+      },
+      {
+        "url": "https://www.youtube.com/watch?v=W-eQ2WWul-0",
+        "channel": "Project Hessdalen",
+        "title": "Monthly Status Meeting 2026 03 18 A",
+        "timestamp": "05:21",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_W-eQ2WWul-0.md",
+        "terms": [
+          "compression"
+        ],
+        "groups": [
+          "instrument_camera_sensor"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "instrumentation_or_method",
+        "object_type": "artifact_control_or_sensor_issue",
+        "useful_for_M": "high",
+        "score": 5,
+        "category": "01_camera_artifact_control",
+        "fragment": "[05:17] out. [05:18] This means u there is no video [05:21] compression. [05:22] >> So um [05:25] if you have like um a scientific camera",
+        "next_action": "read_full_context"
+      },
+      {
+        "url": "https://www.youtube.com/watch?v=W-eQ2WWul-0",
+        "channel": "Project Hessdalen",
+        "title": "Monthly Status Meeting 2026 03 18 A",
+        "timestamp": "05:25",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_W-eQ2WWul-0.md",
+        "terms": [
+          "scientific camera"
+        ],
+        "groups": [
+          "instrument_camera_sensor"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "instrumentation_or_method",
+        "object_type": "measurement_setup",
+        "useful_for_M": "high",
+        "score": 5,
+        "category": "01_camera_artifact_control",
+        "fragment": "[05:21] compression. [05:22] >> So um [05:25] if you have like um a scientific camera [05:27] like it's [05:29] >> for example",
+        "next_action": "read_full_context"
+      },
+      {
+        "url": "https://www.youtube.com/watch?v=W-eQ2WWul-0",
+        "channel": "Project Hessdalen",
+        "title": "Monthly Status Meeting 2026 03 18 A",
+        "timestamp": "05:38",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_W-eQ2WWul-0.md",
+        "terms": [
+          "sensor data",
+          "raw sensor"
+        ],
+        "groups": [
+          "instrument_camera_sensor"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "instrumentation_or_method",
+        "object_type": "artifact_control_or_sensor_issue",
+        "useful_for_M": "high",
+        "score": 5,
+        "category": "01_camera_artifact_control",
+        "fragment": "[05:33] is the camera and um it doesn't compress [05:36] the images unless you ask it to but you [05:38] can also uh get the raw sensor data. [05:41] >> Mhm. [05:42] >> And this way for example we can get rid",
+        "next_action": "read_full_context"
+      },
+      {
+        "url": "https://www.youtube.com/watch?v=W-eQ2WWul-0",
+        "channel": "Project Hessdalen",
+        "title": "Monthly Status Meeting 2026 03 18 A",
+        "timestamp": "05:44",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_W-eQ2WWul-0.md",
+        "terms": [
+          "compression",
+          "jpeg"
+        ],
+        "groups": [
+          "instrument_camera_sensor"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "instrumentation_or_method",
+        "object_type": "artifact_control_or_sensor_issue",
+        "useful_for_M": "high",
+        "score": 5,
+        "category": "01_camera_artifact_control",
+        "fragment": "[05:41] >> Mhm. [05:42] >> And this way for example we can get rid [05:44] of all the JPEG uh compression [05:46] artifacts. Mhm. [05:47] >> So sometimes when we see a light or we",
+        "next_action": "read_full_context"
+      },
+      {
+        "url": "https://www.youtube.com/watch?v=W-eQ2WWul-0",
+        "channel": "Project Hessdalen",
+        "title": "Monthly Status Meeting 2026 03 18 A",
+        "timestamp": "05:46",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_W-eQ2WWul-0.md",
+        "terms": [
+          "artifacts",
+          "artifact"
+        ],
+        "groups": [
+          "instrument_camera_sensor"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "instrumentation_or_method",
+        "object_type": "artifact_control_or_sensor_issue",
+        "useful_for_M": "high",
+        "score": 5,
+        "category": "01_camera_artifact_control",
+        "fragment": "[05:42] >> And this way for example we can get rid [05:44] of all the JPEG uh compression [05:46] artifacts. Mhm. [05:47] >> So sometimes when we see a light or we [05:50] see I don't know a bird or like a sharp",
+        "next_action": "read_full_context"
+      },
+      {
+        "url": "https://www.youtube.com/watch?v=W-eQ2WWul-0",
+        "channel": "Project Hessdalen",
+        "title": "Monthly Status Meeting 2026 03 18 A",
+        "timestamp": "05:57",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_W-eQ2WWul-0.md",
+        "terms": [
+          "compression",
+          "jpeg"
+        ],
+        "groups": [
+          "instrument_camera_sensor"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "instrumentation_or_method",
+        "object_type": "artifact_control_or_sensor_issue",
+        "useful_for_M": "high",
+        "score": 5,
+        "category": "01_camera_artifact_control",
+        "fragment": "[05:52] sharp edge between very bright and very [05:55] dark [05:57] >> um yeah you see the JPEG compression [05:59] artifact. So if you save an image as a [06:00] Jailpacked it's a lossy compression",
+        "next_action": "read_full_context"
+      }
+    ],
+    "02_spectrometry_emission": [
+      {
+        "url": "https://www.youtube.com/watch?v=NbeGxunESXw",
+        "channel": "Project Hessdalen",
+        "title": "Monthly Status Meeting 2026 02 18",
+        "timestamp": "33:59",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_NbeGxunESXw.md",
+        "terms": [
+          "spectrum"
+        ],
+        "groups": [
+          "instrument_spectrometry"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "instrumentation_or_method",
+        "object_type": "general_context",
+        "useful_for_M": "high",
+        "score": 5,
+        "category": "02_spectrometry_emission",
+        "fragment": "[33:52] look at that. Look at that. [33:55] They are explaining all about that they [33:59] use the um spectrum of the [34:01] electromagnetic spectrum. So they had [34:03] this whole uh uh graph about like what",
+        "next_action": "read_full_context"
+      },
+      {
+        "url": "https://www.youtube.com/watch?v=NbeGxunESXw",
+        "channel": "Project Hessdalen",
+        "title": "Monthly Status Meeting 2026 02 18",
+        "timestamp": "34:01",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_NbeGxunESXw.md",
+        "terms": [
+          "spectrum"
+        ],
+        "groups": [
+          "instrument_spectrometry"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "instrumentation_or_method",
+        "object_type": "general_context",
+        "useful_for_M": "high",
+        "score": 5,
+        "category": "02_spectrometry_emission",
+        "fragment": "[33:55] They are explaining all about that they [33:59] use the um spectrum of the [34:01] electromagnetic spectrum. So they had [34:03] this whole uh uh graph about like what [34:06] kind of instruments they can use to",
+        "next_action": "read_full_context"
+      },
+      {
+        "url": "https://www.youtube.com/watch?v=W-eQ2WWul-0",
+        "channel": "Project Hessdalen",
+        "title": "Monthly Status Meeting 2026 03 18 A",
+        "timestamp": "31:18",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_W-eQ2WWul-0.md",
+        "terms": [
+          "tunable laser",
+          "laser"
+        ],
+        "groups": [
+          "instrument_spectrometry"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "instrumentation_or_method",
+        "object_type": "general_context",
+        "useful_for_M": "high",
+        "score": 5,
+        "category": "02_spectrometry_emission",
+        "fragment": "[31:13] advance the project's uh diagnostic [31:16] capabilities. And then he's talking [31:18] about a tunable laser and a high [31:21] precision spectrometer and so on. So I [31:25] I've actually received quite a lot of",
+        "next_action": "read_full_context"
+      },
+      {
+        "url": "https://www.youtube.com/watch?v=W-eQ2WWul-0",
+        "channel": "Project Hessdalen",
+        "title": "Monthly Status Meeting 2026 03 18 A",
+        "timestamp": "31:21",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_W-eQ2WWul-0.md",
+        "terms": [
+          "spectrometer"
+        ],
+        "groups": [
+          "instrument_spectrometry"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "instrumentation_or_method",
+        "object_type": "measurement_setup",
+        "useful_for_M": "high",
+        "score": 5,
+        "category": "02_spectrometry_emission",
+        "fragment": "[31:16] capabilities. And then he's talking [31:18] about a tunable laser and a high [31:21] precision spectrometer and so on. So I [31:25] I've actually received quite a lot of [31:27] information from these two guys. So",
+        "next_action": "read_full_context"
+      },
+      {
+        "url": "https://www.youtube.com/watch?v=YihXXHJ8VKc",
+        "channel": "Heriton",
+        "title": "The Hessdalen Lights Have Stumped Scientists for 40 Years",
+        "timestamp": "03:23",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_YihXXHJ8VKc.md",
+        "terms": [
+          "spectrum"
+        ],
+        "groups": [
+          "instrument_spectrometry"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "instrumentation_or_method",
+        "object_type": "general_context",
+        "useful_for_M": "high",
+        "score": 5,
+        "category": "02_spectrometry_emission",
+        "fragment": "[03:20] Winter of 1984. [03:22] Project Hessdalen. [03:23] Radar, cameras, spectrum analyzers, [03:27] magnetometers. [03:28] Real scientists with real equipment and",
+        "next_action": "read_full_context"
+      },
+      {
+        "url": "https://www.youtube.com/watch?v=YihXXHJ8VKc",
+        "channel": "Heriton",
+        "title": "The Hessdalen Lights Have Stumped Scientists for 40 Years",
+        "timestamp": "14:05",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_YihXXHJ8VKc.md",
+        "terms": [
+          "spectrometer"
+        ],
+        "groups": [
+          "instrument_spectrometry"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "instrumentation_or_method",
+        "object_type": "measurement_setup",
+        "useful_for_M": "high",
+        "score": 5,
+        "category": "02_spectrometry_emission",
+        "fragment": "[13:59] scientific observation since 1984. [14:03] Over 40 years. [14:05] Radar, spectrometers, geophysical [14:08] surveys, international field campaigns [14:10] across Norway, Greece, France, Italy.",
+        "next_action": "read_full_context"
+      },
+      {
+        "url": "https://www.youtube.com/watch?v=eEXTH43MmkQ",
+        "channel": "Beyond Reception",
+        "title": "The Hessdalen Lights: 40 Years of Instrumented Observation",
+        "timestamp": "02:14",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_eEXTH43MmkQ.md",
+        "terms": [
+          "spectrum"
+        ],
+        "groups": [
+          "instrument_spectrometry"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "instrumentation_or_method",
+        "object_type": "general_context",
+        "useful_for_M": "high",
+        "score": 5,
+        "category": "02_spectrometry_emission",
+        "fragment": "[02:10] published field report. During the 1984 [02:12] campaign, the team recorded the lights [02:14] using 35-mm cameras, a spectrum [02:17] analyzer, a seismograph, a magnetometer, [02:20] a radar unit borrowed from the Norwegian",
+        "next_action": "read_full_context"
+      },
+      {
+        "url": "https://www.youtube.com/watch?v=eEXTH43MmkQ",
+        "channel": "Beyond Reception",
+        "title": "The Hessdalen Lights: 40 Years of Instrumented Observation",
+        "timestamp": "02:22",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_eEXTH43MmkQ.md",
+        "terms": [
+          "laser"
+        ],
+        "groups": [
+          "instrument_spectrometry"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "instrumentation_or_method",
+        "object_type": "general_context",
+        "useful_for_M": "high",
+        "score": 5,
+        "category": "02_spectrometry_emission",
+        "fragment": "[02:17] analyzer, a seismograph, a magnetometer, [02:20] a radar unit borrowed from the Norwegian [02:22] Defense Research Establishment, lasers, [02:24] Geiger counters, and infrared viewers. [02:27] The instrument list and findings were",
+        "next_action": "read_full_context"
+      },
+      {
+        "url": "https://www.youtube.com/watch?v=eEXTH43MmkQ",
+        "channel": "Beyond Reception",
+        "title": "The Hessdalen Lights: 40 Years of Instrumented Observation",
+        "timestamp": "03:03",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_eEXTH43MmkQ.md",
+        "terms": [
+          "spectrum"
+        ],
+        "groups": [
+          "instrument_spectrometry"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "instrumentation_or_method",
+        "object_type": "general_context",
+        "useful_for_M": "high",
+        "score": 5,
+        "category": "02_spectrometry_emission",
+        "fragment": "[02:58] was limited. The equipment available in [03:00] 1984 had resolution constraints, but it [03:03] did not match the emission spectrum of [03:05] any common atmospheric combustion source [03:07] the team could identify at the time. In",
+        "next_action": "read_full_context"
+      },
+      {
+        "url": "https://www.youtube.com/watch?v=eEXTH43MmkQ",
+        "channel": "Beyond Reception",
+        "title": "The Hessdalen Lights: 40 Years of Instrumented Observation",
+        "timestamp": "04:08",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_eEXTH43MmkQ.md",
+        "terms": [
+          "spectrum"
+        ],
+        "groups": [
+          "instrument_spectrometry"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "instrumentation_or_method",
+        "object_type": "general_context",
+        "useful_for_M": "high",
+        "score": 5,
+        "category": "02_spectrometry_emission",
+        "fragment": "[04:02] continuously. It includes CCD cameras, a [04:05] magnetometer, a radar system, and since [04:08] later upgrades, a spectrum analyzer [04:10] capable of higher resolution than the [04:12] 1984 equipment. As of the most recent",
+        "next_action": "read_full_context"
+      },
+      {
+        "url": "https://www.youtube.com/watch?v=eEXTH43MmkQ",
+        "channel": "Beyond Reception",
+        "title": "The Hessdalen Lights: 40 Years of Instrumented Observation",
+        "timestamp": "09:25",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_eEXTH43MmkQ.md",
+        "terms": [
+          "spectrometer"
+        ],
+        "groups": [
+          "instrument_spectrometry"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "instrumentation_or_method",
+        "object_type": "measurement_setup",
+        "useful_for_M": "high",
+        "score": 5,
+        "category": "02_spectrometry_emission",
+        "fragment": "[09:20] dedicated instrumentation in a fixed [09:21] location since 1984. Cameras, radar, and [09:25] spectrometers operating around the clock [09:27] in a valley where the phenomenon [09:28] reliably recurs.",
+        "next_action": "read_full_context"
+      },
+      {
+        "url": "https://www.youtube.com/watch?v=eEXTH43MmkQ",
+        "channel": "Beyond Reception",
+        "title": "The Hessdalen Lights: 40 Years of Instrumented Observation",
+        "timestamp": "10:55",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_eEXTH43MmkQ.md",
+        "terms": [
+          "spectrometer"
+        ],
+        "groups": [
+          "instrument_spectrometry"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "instrumentation_or_method",
+        "object_type": "measurement_setup",
+        "useful_for_M": "high",
+        "score": 5,
+        "category": "02_spectrometry_emission",
+        "fragment": "[10:50] The question worth sitting with is a [10:53] simpler one. [10:55] If 40 years of cameras, spectrometers, [10:59] and radar have not produced a consensus [11:02] explanation for lights that reliably",
+        "next_action": "read_full_context"
+      }
+    ],
+    "03_neutron_radiation": [
+      {
+        "url": "https://www.youtube.com/watch?v=W-eQ2WWul-0",
+        "channel": "Project Hessdalen",
+        "title": "Monthly Status Meeting 2026 03 18 A",
+        "timestamp": "07:19",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_W-eQ2WWul-0.md",
+        "terms": [
+          "detection",
+          "motion"
+        ],
+        "groups": [
+          "instrument_neutron",
+          "object_behavior"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "instrumentation_or_method",
+        "object_type": "general_context",
+        "useful_for_M": "high",
+        "score": 6,
+        "category": "03_neutron_radiation",
+        "fragment": "[07:15] and and he's uh I think it was a little [07:17] bit busy, so he hasn't done much on his [07:19] motion detection, but uh at least he is [07:24] still working on it. And uh we had a [07:27] phone call Tom Andre. So do you want to",
+        "next_action": "read_full_context"
+      },
+      {
+        "url": "https://www.youtube.com/watch?v=W-eQ2WWul-0",
+        "channel": "Project Hessdalen",
+        "title": "Monthly Status Meeting 2026 03 18 A",
+        "timestamp": "52:43",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_W-eQ2WWul-0.md",
+        "terms": [
+          "detection",
+          "motion"
+        ],
+        "groups": [
+          "instrument_neutron",
+          "object_behavior"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "instrumentation_or_method",
+        "object_type": "general_context",
+        "useful_for_M": "high",
+        "score": 6,
+        "category": "03_neutron_radiation",
+        "fragment": "[52:36] I mean these are um so far like yeah [52:39] better surveillance cameras. So [52:43] >> So also is it is it motion detection on [52:46] it? [52:46] >> No, no, nothing. They record 24/7.",
+        "next_action": "read_full_context"
+      },
+      {
+        "url": "https://www.youtube.com/watch?v=W-eQ2WWul-0",
+        "channel": "Project Hessdalen",
+        "title": "Monthly Status Meeting 2026 03 18 A",
+        "timestamp": "52:59",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_W-eQ2WWul-0.md",
+        "terms": [
+          "detection",
+          "motion"
+        ],
+        "groups": [
+          "instrument_neutron",
+          "object_behavior"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "instrumentation_or_method",
+        "object_type": "general_context",
+        "useful_for_M": "high",
+        "score": 6,
+        "category": "03_neutron_radiation",
+        "fragment": "[52:54] Um, [52:55] Matias, I always say German Matias is [52:59] working on motion detection. [53:02] >> And and we have um if you go to the site [53:08] and I know that I have it somewhere, but",
+        "next_action": "read_full_context"
+      },
+      {
+        "url": "https://www.youtube.com/watch?v=NbeGxunESXw",
+        "channel": "Project Hessdalen",
+        "title": "Monthly Status Meeting 2026 02 18",
+        "timestamp": "08:20",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_NbeGxunESXw.md",
+        "terms": [
+          "detection"
+        ],
+        "groups": [
+          "instrument_neutron"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "instrumentation_or_method",
+        "object_type": "general_context",
+        "useful_for_M": "high",
+        "score": 5,
+        "category": "03_neutron_radiation",
+        "fragment": "[08:12] want uh top down by looking at what I [08:16] was calling the extended ADTS [08:20] like an anomaly detection and tracking [08:22] system that is modular and autonomous Um [08:26] what I'm meaning is automating sensor",
+        "next_action": "read_full_context"
+      },
+      {
+        "url": "https://www.youtube.com/watch?v=NbeGxunESXw",
+        "channel": "Project Hessdalen",
+        "title": "Monthly Status Meeting 2026 02 18",
+        "timestamp": "20:46",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_NbeGxunESXw.md",
+        "terms": [
+          "detection",
+          "neutron"
+        ],
+        "groups": [
+          "instrument_neutron"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "instrumentation_or_method",
+        "object_type": "measurement_setup",
+        "useful_for_M": "high",
+        "score": 5,
+        "category": "03_neutron_radiation",
+        "fragment": "[20:42] something I can show when when the [20:44] meeting is over. I have some emails [20:46] about a neutron detection system. This [20:50] sounds very interesting. And we also [20:53] have um a suggested u um project about",
+        "next_action": "read_full_context"
+      },
+      {
+        "url": "https://www.youtube.com/watch?v=NbeGxunESXw",
+        "channel": "Project Hessdalen",
+        "title": "Monthly Status Meeting 2026 02 18",
+        "timestamp": "48:02",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_NbeGxunESXw.md",
+        "terms": [
+          "detection"
+        ],
+        "groups": [
+          "instrument_neutron"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "instrumentation_or_method",
+        "object_type": "general_context",
+        "useful_for_M": "high",
+        "score": 5,
+        "category": "03_neutron_radiation",
+        "fragment": "[47:58] providing some standardization for what [48:00] we do globally [48:02] >> to characterize UAP detection. [48:05] >> Well [48:05] >> and I saw Adam clap his hands there too.",
+        "next_action": "read_full_context"
+      },
+      {
+        "url": "https://www.youtube.com/watch?v=NbeGxunESXw",
+        "channel": "Project Hessdalen",
+        "title": "Monthly Status Meeting 2026 02 18",
+        "timestamp": "55:53",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_NbeGxunESXw.md",
+        "terms": [
+          "radiation"
+        ],
+        "groups": [
+          "instrument_neutron"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "instrumentation_or_method",
+        "object_type": "general_context",
+        "useful_for_M": "high",
+        "score": 5,
+        "category": "03_neutron_radiation",
+        "fragment": "[55:47] radioactivity. In the graph, we see a [55:50] sudden spike, which means an increase [55:53] and decrease in measured radiation. But [55:56] what has caused this spike? We do not [55:59] know until we add more context.",
+        "next_action": "read_full_context"
+      },
+      {
+        "url": "https://www.youtube.com/watch?v=W-eQ2WWul-0",
+        "channel": "Project Hessdalen",
+        "title": "Monthly Status Meeting 2026 03 18 A",
+        "timestamp": "19:58",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_W-eQ2WWul-0.md",
+        "terms": [
+          "detection"
+        ],
+        "groups": [
+          "instrument_neutron"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "instrumentation_or_method",
+        "object_type": "general_context",
+        "useful_for_M": "high",
+        "score": 5,
+        "category": "03_neutron_radiation",
+        "fragment": "[19:52] >> But actually I I think so. But [19:56] >> uh [19:58] when it comes to detection of movement [20:01] uh then maybe it has good enough width [20:04] on the angle so",
+        "next_action": "read_full_context"
+      },
+      {
+        "url": "https://www.youtube.com/watch?v=W-eQ2WWul-0",
+        "channel": "Project Hessdalen",
+        "title": "Monthly Status Meeting 2026 03 18 A",
+        "timestamp": "30:55",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_W-eQ2WWul-0.md",
+        "terms": [
+          "detection",
+          "neutron"
+        ],
+        "groups": [
+          "instrument_neutron"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "instrumentation_or_method",
+        "object_type": "measurement_setup",
+        "useful_for_M": "high",
+        "score": 5,
+        "category": "03_neutron_radiation",
+        "fragment": "[30:47] these uh project proposals. [30:51] Also, Yuming um uh has sent a proposal [30:55] about neutron detection and today he [30:58] sent me an email. Let me see what he [31:00] says here. This says uh thank you for",
+        "next_action": "read_full_context"
+      },
+      {
+        "url": "https://www.youtube.com/watch?v=W-eQ2WWul-0",
+        "channel": "Project Hessdalen",
+        "title": "Monthly Status Meeting 2026 03 18 A",
+        "timestamp": "54:32",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_W-eQ2WWul-0.md",
+        "terms": [
+          "detection"
+        ],
+        "groups": [
+          "instrument_neutron"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "instrumentation_or_method",
+        "object_type": "general_context",
+        "useful_for_M": "high",
+        "score": 5,
+        "category": "03_neutron_radiation",
+        "fragment": "[54:24] bit to the uh open ads, uh then um [54:29] we we have been invited or we were part [54:32] of this UIP um detection and tracking [54:36] summit and I think you will find now you [54:40] have to pay a little bit and it will",
+        "next_action": "read_full_context"
+      }
+    ],
+    "04_object_behavior": [
+      {
+        "url": "https://www.youtube.com/watch?v=YihXXHJ8VKc",
+        "channel": "Heriton",
+        "title": "The Hessdalen Lights Have Stumped Scientists for 40 Years",
+        "timestamp": "07:02",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_YihXXHJ8VKc.md",
+        "terms": [
+          "spectrum",
+          "plasma"
+        ],
+        "groups": [
+          "gacp_core",
+          "instrument_spectrometry"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "instrumentation_or_method",
+        "object_type": "luminous_plasma_or_orb_candidate",
+        "useful_for_M": "high",
+        "score": 7,
+        "category": "04_object_behavior",
+        "fragment": "[06:58] supposedly close to an hour. [07:00] White light consistent with broad [07:02] spectrum plasma emission. [07:04] Oval and spherical shapes. [07:06] Natural for stable plasma structures.",
+        "next_action": "read_full_context"
+      },
+      {
+        "url": "https://www.youtube.com/watch?v=1c1kZflmmHs",
+        "channel": "Opening Minds Files",
+        "title": "Ball Lightning, Plasmoids, and Fractals: Gateway to New Dimensions?",
+        "timestamp": "1:07:09",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_1c1kZflmmHs.md",
+        "terms": [
+          "phenomena",
+          "hessdalen",
+          "coherent",
+          "plasma"
+        ],
+        "groups": [
+          "gacp_core",
+          "project_terms",
+          "object_behavior"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "conceptual_plasma_plasmoid_claim",
+        "object_type": "luminous_plasma_or_orb_candidate",
+        "useful_for_M": "high",
+        "score": 6,
+        "category": "04_object_behavior",
+        "fragment": "[1:06:06] SDM. It was a real disclosure movie funded by DOD, NASA, Edwards Air Force funded by DOD, NASA, Edwards Air Force Base, Edwards Air Force Base went to Base, Edwards Air Force Base went to Robert Emenegger. And Robert Emenegger. And Robert Emenegger. And someone who had worked with Richard someone who had worked with Richard Nixon as on his uh Nixon as on his uh media team and media team and media team and they created this movie, which later had they created this movie, which later had Jacques Vallee in it and included the Jacques Vallee in it and included the cattle mutilations from this area in the cattle mutilations from this area in the second version of the movie. It was second version of the movie. It was going to be released in movie theaters going to be released in movie theaters and for some reason and for some reason a few weeks before it was scheduled to a few weeks before it was scheduled to go into movie theaters for the [1:06:37] go into movie theaters for the in the '70s for the whole US population in the '70s for the whole US population to see it. It was a very straightforward to see it. It was a very straightforward movie about UFOs. There was no laughing movie about UFOs. There was no laughing or giggling or making fun of the or giggling or making fun of the subject. It was filmed and it's subject. It was filmed and it's affecting on It's online on Y",
+        "next_action": "read_full_context"
+      },
+      {
+        "url": "https://www.youtube.com/watch?v=1c1kZflmmHs",
+        "channel": "Opening Minds Files",
+        "title": "Ball Lightning, Plasmoids, and Fractals: Gateway to New Dimensions?",
+        "timestamp": "42:30",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_1c1kZflmmHs.md",
+        "terms": [
+          "phenomena",
+          "hessdalen",
+          "luminous",
+          "plasma"
+        ],
+        "groups": [
+          "gacp_core",
+          "project_terms",
+          "object_behavior"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "conceptual_plasma_plasmoid_claim",
+        "object_type": "luminous_plasma_or_orb_candidate",
+        "useful_for_M": "high",
+        "score": 6,
+        "category": "04_object_behavior",
+        "fragment": "[41:28] with ball lightning are alternative Maxwellian arrangements between Maxwellian arrangements between Maxwellian arrangements between electricity and magnetism. If you electricity and magnetism. If you remember from remember from remember from Faraday and Maxwell kind of Faraday and Maxwell kind of clarified what Faraday had discovered clarified what Faraday had discovered with magnetism and electricity, you get with magnetism and electricity, you get electricity and magnetism at right electricity and magnetism at right angles, and it radiates outward, which angles, and it radiates outward, which are called open pointing vectors. What are called open pointing vectors. What Frieberger argues Frieberger is that you Frieberger argues Frieberger is that you have closed pointing vectors, which have closed pointing vectors, which create alternative types of create alternative types of relationships between electricity and [41:58] relationships between electricity and magnetism, which he called duality magnetism, which he called duality angles. angles. angles. And he believed it creates baryon decay, And he believed it creates baryon decay, which means it basically shreds protons which means it basically shreds protons and neutrons. And this is why ball and neutrons. And this is why ball lightning has these nuclei effects, has lightning has these nuclei effects, has these sort o",
+        "next_action": "read_full_context"
+      },
+      {
+        "url": "https://www.youtube.com/watch?v=YihXXHJ8VKc",
+        "channel": "Heriton",
+        "title": "The Hessdalen Lights Have Stumped Scientists for 40 Years",
+        "timestamp": "08:07",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_YihXXHJ8VKc.md",
+        "terms": [
+          "phenomena",
+          "plasma"
+        ],
+        "groups": [
+          "gacp_core",
+          "object_behavior"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "conceptual_plasma_plasmoid_claim",
+        "object_type": "luminous_plasma_or_orb_candidate",
+        "useful_for_M": "high",
+        "score": 6,
+        "category": "04_object_behavior",
+        "fragment": "[08:00] Then someone ran actual analysis. [08:04] Researcher Henning Corsten, co-author of [08:07] a scientific book on plasma phenomena, [08:10] went through the footage frame by frame [08:12] over several weeks.",
+        "next_action": "read_full_context"
+      },
+      {
+        "url": "https://www.youtube.com/watch?v=YihXXHJ8VKc",
+        "channel": "Heriton",
+        "title": "The Hessdalen Lights Have Stumped Scientists for 40 Years",
+        "timestamp": "16:52",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_YihXXHJ8VKc.md",
+        "terms": [
+          "plasma",
+          "hover"
+        ],
+        "groups": [
+          "gacp_core",
+          "object_behavior"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "conceptual_plasma_plasmoid_claim",
+        "object_type": "luminous_plasma_or_orb_candidate",
+        "useful_for_M": "high",
+        "score": 6,
+        "category": "04_object_behavior",
+        "fragment": "[16:47] haven't fully mapped yet. [16:49] But here's what I can't shake. [16:52] Plasma doesn't deliberately stop, hover, [16:55] change direction, and descend back into [16:58] a forest.",
+        "next_action": "read_full_context"
+      },
+      {
+        "url": "https://www.youtube.com/watch?v=eEXTH43MmkQ",
+        "channel": "Beyond Reception",
+        "title": "The Hessdalen Lights: 40 Years of Instrumented Observation",
+        "timestamp": "04:44",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_eEXTH43MmkQ.md",
+        "terms": [
+          "luminous",
+          "plasma"
+        ],
+        "groups": [
+          "gacp_core",
+          "object_behavior"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "conceptual_plasma_plasmoid_claim",
+        "object_type": "luminous_plasma_or_orb_candidate",
+        "useful_for_M": "high",
+        "score": 6,
+        "category": "04_object_behavior",
+        "fragment": "[04:39] Teodorani's paper described the lights [04:41] as showing characteristics consistent [04:44] with a self-luminous plasma-like [04:45] phenomenon. He was careful to note that [04:47] this description was phenomenological.",
+        "next_action": "read_full_context"
+      },
+      {
+        "url": "https://www.youtube.com/watch?v=1c1kZflmmHs",
+        "channel": "Opening Minds Files",
+        "title": "Ball Lightning, Plasmoids, and Fractals: Gateway to New Dimensions?",
+        "timestamp": "1:07:39",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_1c1kZflmmHs.md",
+        "terms": [
+          "ball lightning",
+          "hessdalen",
+          "teodorani",
+          "massimo"
+        ],
+        "groups": [
+          "gacp_core",
+          "project_terms"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "conceptual_plasma_plasmoid_claim",
+        "object_type": "luminous_plasma_or_orb_candidate",
+        "useful_for_M": "high",
+        "score": 5,
+        "category": "04_object_behavior",
+        "fragment": "[1:06:37] go into movie theaters for the in the '70s for the whole US population in the '70s for the whole US population to see it. It was a very straightforward to see it. It was a very straightforward movie about UFOs. There was no laughing movie about UFOs. There was no laughing or giggling or making fun of the or giggling or making fun of the subject. It was filmed and it's subject. It was filmed and it's affecting on It's online on YouTube. affecting on It's online on YouTube. Uh Uh Uh uh uh uh right now, you can still see it. Uh they right now, you can still see it. Uh they pulled it and it never was shown in pulled it and it never was shown in movie theaters and it went dark. movie theaters and it went dark. After, you know, months and months and After, you know, months and months and months of work. But they had these months of work. But they had these photos of these objects. They sent a photos of these objects. They sent a team out here. And this is what they saw team out here. And this is what they saw over this area, which to me looks a lot [1:07:09] over this area, which to me looks a lot like the Hessdalen lights and all the like the Hessdalen lights and all the other earth lights that we've seen. Um other earth lights that we've seen. Um they even formed these toroidal shapes. they even formed these toroidal shapes. They said in the movie, these are UFOs. They sa",
+        "next_action": "read_full_context"
+      },
+      {
+        "url": "https://www.youtube.com/watch?v=-54w-PkbE-0",
+        "channel": "World Stories English",
+        "title": "Hessdalen Lights Norway Mystery",
+        "timestamp": "02:49",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_-54w-PkbE-0.md",
+        "terms": [
+          "spectral"
+        ],
+        "groups": [
+          "instrument_spectrometry"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "instrumentation_or_method",
+        "object_type": "measurement_setup",
+        "useful_for_M": "high",
+        "score": 5,
+        "category": "04_object_behavior",
+        "fragment": "[02:44] aura surrounding Hestilin. [02:47] In recent decades, cuttingedge tools [02:49] have been employed, including spectral [02:52] analysis, radar tracking, and aerial [02:54] drones. Yet, the lights continue to",
+        "next_action": "read_full_context"
+      },
+      {
+        "url": "https://www.youtube.com/watch?v=-54w-PkbE-0",
+        "channel": "World Stories English",
+        "title": "Hessdalen Lights Norway Mystery",
+        "timestamp": "04:24",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_-54w-PkbE-0.md",
+        "terms": [
+          "spectral"
+        ],
+        "groups": [
+          "instrument_spectrometry"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "instrumentation_or_method",
+        "object_type": "measurement_setup",
+        "useful_for_M": "high",
+        "score": 5,
+        "category": "04_object_behavior",
+        "fragment": "[04:18] that continue to thrive today. [04:21] Modern technology enabled more precise [04:24] data collection, spectral signatures, [04:26] motion tracking, and environmental [04:28] measurements. Yet predictions and",
+        "next_action": "read_full_context"
+      },
+      {
+        "url": "https://www.youtube.com/watch?v=YihXXHJ8VKc",
+        "channel": "Heriton",
+        "title": "The Hessdalen Lights Have Stumped Scientists for 40 Years",
+        "timestamp": "07:06",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_YihXXHJ8VKc.md",
+        "terms": [
+          "plasma"
+        ],
+        "groups": [
+          "gacp_core"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "conceptual_plasma_plasmoid_claim",
+        "object_type": "luminous_plasma_or_orb_candidate",
+        "useful_for_M": "high",
+        "score": 5,
+        "category": "04_object_behavior",
+        "fragment": "[07:02] spectrum plasma emission. [07:04] Oval and spherical shapes. [07:06] Natural for stable plasma structures. [07:09] Radar echoes. Plasma has free electrons. [07:13] They reflect radar.",
+        "next_action": "read_full_context"
+      },
+      {
+        "url": "https://www.youtube.com/watch?v=YihXXHJ8VKc",
+        "channel": "Heriton",
+        "title": "The Hessdalen Lights Have Stumped Scientists for 40 Years",
+        "timestamp": "07:09",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_YihXXHJ8VKc.md",
+        "terms": [
+          "plasma"
+        ],
+        "groups": [
+          "gacp_core"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "conceptual_plasma_plasmoid_claim",
+        "object_type": "luminous_plasma_or_orb_candidate",
+        "useful_for_M": "high",
+        "score": 5,
+        "category": "04_object_behavior",
+        "fragment": "[07:04] Oval and spherical shapes. [07:06] Natural for stable plasma structures. [07:09] Radar echoes. Plasma has free electrons. [07:13] They reflect radar. [07:14] And they appear close to the ground. Not",
+        "next_action": "read_full_context"
+      },
+      {
+        "url": "https://www.youtube.com/watch?v=YihXXHJ8VKc",
+        "channel": "Heriton",
+        "title": "The Hessdalen Lights Have Stumped Scientists for 40 Years",
+        "timestamp": "12:23",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_YihXXHJ8VKc.md",
+        "terms": [
+          "plasma"
+        ],
+        "groups": [
+          "gacp_core"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "conceptual_plasma_plasmoid_claim",
+        "object_type": "luminous_plasma_or_orb_candidate",
+        "useful_for_M": "high",
+        "score": 5,
+        "category": "04_object_behavior",
+        "fragment": "[12:19] electrochemical model describing the [12:21] Hessdalen lights as self-sustaining [12:23] plasma clusters. [12:25] The spectroscopic measurements have [12:27] given tantalizing clues,",
+        "next_action": "read_full_context"
+      }
+    ],
+    "05_plasma_gacp_hypothesis": [
+      {
+        "url": "https://www.youtube.com/watch?v=1c1kZflmmHs",
+        "channel": "Opening Minds Files",
+        "title": "Ball Lightning, Plasmoids, and Fractals: Gateway to New Dimensions?",
+        "timestamp": "1:02:00",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_1c1kZflmmHs.md",
+        "terms": [
+          "ball lightning",
+          "hessdalen",
+          "luminous"
+        ],
+        "groups": [
+          "gacp_core",
+          "project_terms",
+          "object_behavior"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "conceptual_plasma_plasmoid_claim",
+        "object_type": "luminous_plasma_or_orb_candidate",
+        "useful_for_M": "high",
+        "score": 6,
+        "category": "05_plasma_gacp_hypothesis",
+        "fragment": "[1:00:59] LENR companies in Ukraine and absorbing them into the US fusion program? them into the US fusion program? This is the old Proton 21 website. It's This is the old Proton 21 website. It's still online. The newer one's gone. So still online. The newer one's gone. So uh uh uh this is shows us that what we have here this is shows us that what we have here is a whole research area that is somehow is a whole research area that is somehow off-limits. It's either with private off-limits. It's either with private aerospace companies or it's a DOE Okay. aerospace companies or it's a DOE Okay. That's why we don't know where it is That's why we don't know where it is right now. right now. right now. Or we're learning it this way, okay. Or we're learning it this way, okay. Research study by research study. So, [1:01:29] Research study by research study. So, what is the evidence that cold fusion, what is the evidence that cold fusion, uh excuse me, ball lightning is related uh excuse me, ball lightning is related to laboratory plasma talk? If you look to laboratory plasma talk? If you look at like the photos from Hessdalen, at like the photos from Hessdalen, Norway, and you look at some of these Norway, and you look at some of these lab-produced experiments, it just looks lab-produced experiments, it just looks like the same track of lightning. You like the same track of lightning. ",
+        "next_action": "read_full_context"
+      },
+      {
+        "url": "https://www.youtube.com/watch?v=1c1kZflmmHs",
+        "channel": "Opening Minds Files",
+        "title": "Ball Lightning, Plasmoids, and Fractals: Gateway to New Dimensions?",
+        "timestamp": "1:01:29",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_1c1kZflmmHs.md",
+        "terms": [
+          "ball lightning",
+          "hessdalen",
+          "plasmoid",
+          "plasma"
+        ],
+        "groups": [
+          "gacp_core",
+          "project_terms"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "conceptual_plasma_plasmoid_claim",
+        "object_type": "luminous_plasma_or_orb_candidate",
+        "useful_for_M": "high",
+        "score": 5,
+        "category": "05_plasma_gacp_hypothesis",
+        "fragment": "[1:00:29] Just starting with ordinary metals. Uh Stanislav Uh Stanislav Uh Stanislav Adamenko and Vysotskii Adamenko and Vysotskii Adamenko and Vysotskii and the program was purchased by DOE, and the program was purchased by DOE, sent to Fermi Labs, all 100 employees sent to Fermi Labs, all 100 employees came over from Ukraine, and then it went came over from Ukraine, and then it went to Oak Ridge and the website was taken to Oak Ridge and the website was taken offline and the program went black. offline and the program went black. So if cold fusion LENR is this sort of So if cold fusion LENR is this sort of pathological fringe science, you know, pathological fringe science, you know, why is DOE buying cold fusion why is DOE buying cold fusion LENR companies in Ukraine and absorbing [1:00:59] LENR companies in Ukraine and absorbing them into the US fusion program? them into the US fusion program? This is the old Proton 21 website. It's This is the old Proton 21 website. It's still online. The newer one's gone. So still online. The newer one's gone. So uh uh uh this is shows us that what we have here this is shows us that what we have here is a whole research area that is somehow is a whole research area that is somehow off-limits. It's either with private off-limits. It's either with private aerospace companies or it's a DOE Okay. aerospace companies or it's a DOE Okay. That's ",
+        "next_action": "read_full_context"
+      },
+      {
+        "url": "https://www.youtube.com/watch?v=W-eQ2WWul-0",
+        "channel": "Project Hessdalen",
+        "title": "Monthly Status Meeting 2026 03 18 A",
+        "timestamp": "01:00:39",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_W-eQ2WWul-0.md",
+        "terms": [
+          "coherent",
+          "anchored"
+        ],
+        "groups": [
+          "gacp_core"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "conceptual_plasma_plasmoid_claim",
+        "object_type": "general_context",
+        "useful_for_M": "high",
+        "score": 5,
+        "category": "05_plasma_gacp_hypothesis",
+        "fragment": "[01:00:32] and said that we want to invite to the [01:00:35] discussion on um on your project. uh [01:00:39] they give a physical anchored coherent [01:00:42] plasmoid and he has sent us a lot of [01:00:44] information and even uh code that we can",
+        "next_action": "read_full_context"
+      },
+      {
+        "url": "https://www.youtube.com/watch?v=W-eQ2WWul-0",
+        "channel": "Project Hessdalen",
+        "title": "Monthly Status Meeting 2026 03 18 A",
+        "timestamp": "01:00:42",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_W-eQ2WWul-0.md",
+        "terms": [
+          "plasmoid"
+        ],
+        "groups": [
+          "gacp_core"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "conceptual_plasma_plasmoid_claim",
+        "object_type": "luminous_plasma_or_orb_candidate",
+        "useful_for_M": "high",
+        "score": 5,
+        "category": "05_plasma_gacp_hypothesis",
+        "fragment": "[01:00:35] discussion on um on your project. uh [01:00:39] they give a physical anchored coherent [01:00:42] plasmoid and he has sent us a lot of [01:00:44] information and even uh code that we can [01:00:47] use. So um I think his picture looks um",
+        "next_action": "read_full_context"
+      },
+      {
+        "url": "https://www.youtube.com/watch?v=W-eQ2WWul-0",
+        "channel": "Project Hessdalen",
+        "title": "Monthly Status Meeting 2026 03 18 A",
+        "timestamp": "30:21",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_W-eQ2WWul-0.md",
+        "terms": [
+          "coherent",
+          "anchored"
+        ],
+        "groups": [
+          "gacp_core"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "conceptual_plasma_plasmoid_claim",
+        "object_type": "general_context",
+        "useful_for_M": "high",
+        "score": 5,
+        "category": "05_plasma_gacp_hypothesis",
+        "fragment": "[30:13] meeting about the new project proposals [30:17] that we have received. uh one is this [30:21] ski physically anchored coherent [30:24] plasmoid [30:25] and uh I don't know how to say his name",
+        "next_action": "read_full_context"
+      },
+      {
+        "url": "https://www.youtube.com/watch?v=W-eQ2WWul-0",
+        "channel": "Project Hessdalen",
+        "title": "Monthly Status Meeting 2026 03 18 A",
+        "timestamp": "30:24",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_W-eQ2WWul-0.md",
+        "terms": [
+          "plasmoid"
+        ],
+        "groups": [
+          "gacp_core"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "conceptual_plasma_plasmoid_claim",
+        "object_type": "luminous_plasma_or_orb_candidate",
+        "useful_for_M": "high",
+        "score": 5,
+        "category": "05_plasma_gacp_hypothesis",
+        "fragment": "[30:17] that we have received. uh one is this [30:21] ski physically anchored coherent [30:24] plasmoid [30:25] and uh I don't know how to say his name [30:29] to",
+        "next_action": "read_full_context"
+      },
+      {
+        "url": "https://www.youtube.com/watch?v=YihXXHJ8VKc",
+        "channel": "Heriton",
+        "title": "The Hessdalen Lights Have Stumped Scientists for 40 Years",
+        "timestamp": "06:49",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_YihXXHJ8VKc.md",
+        "terms": [
+          "plasma"
+        ],
+        "groups": [
+          "gacp_core"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "conceptual_plasma_plasmoid_claim",
+        "object_type": "luminous_plasma_or_orb_candidate",
+        "useful_for_M": "high",
+        "score": 5,
+        "category": "05_plasma_gacp_hypothesis",
+        "fragment": "[06:44] up to a sufficient threshold in the low [06:46] atmosphere, under the right conditions, [06:49] you can get plasma. [06:51] Ball lightning. [06:52] Glowing spheres of ionized air that",
+        "next_action": "read_full_context"
+      },
+      {
+        "url": "https://www.youtube.com/watch?v=YihXXHJ8VKc",
+        "channel": "Heriton",
+        "title": "The Hessdalen Lights Have Stumped Scientists for 40 Years",
+        "timestamp": "06:51",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_YihXXHJ8VKc.md",
+        "terms": [
+          "ball lightning"
+        ],
+        "groups": [
+          "gacp_core"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "conceptual_plasma_plasmoid_claim",
+        "object_type": "luminous_plasma_or_orb_candidate",
+        "useful_for_M": "high",
+        "score": 5,
+        "category": "05_plasma_gacp_hypothesis",
+        "fragment": "[06:46] atmosphere, under the right conditions, [06:49] you can get plasma. [06:51] Ball lightning. [06:52] Glowing spheres of ionized air that [06:55] persist for seconds, minutes, sometimes",
+        "next_action": "read_full_context"
+      },
+      {
+        "url": "https://www.youtube.com/watch?v=YihXXHJ8VKc",
+        "channel": "Heriton",
+        "title": "The Hessdalen Lights Have Stumped Scientists for 40 Years",
+        "timestamp": "12:07",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_YihXXHJ8VKc.md",
+        "terms": [
+          "ball lightning"
+        ],
+        "groups": [
+          "gacp_core"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "conceptual_plasma_plasmoid_claim",
+        "object_type": "luminous_plasma_or_orb_candidate",
+        "useful_for_M": "high",
+        "score": 5,
+        "category": "05_plasma_gacp_hypothesis",
+        "fragment": "[12:01] Geology explains everything. Case [12:04] closed. Except it doesn't quite close. [12:07] Ball lightning is still poorly [12:09] understood. There are credible [12:11] scientific reports going back over a",
+        "next_action": "read_full_context"
+      },
+      {
+        "url": "https://www.youtube.com/watch?v=YihXXHJ8VKc",
+        "channel": "Heriton",
+        "title": "The Hessdalen Lights Have Stumped Scientists for 40 Years",
+        "timestamp": "15:24",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_YihXXHJ8VKc.md",
+        "terms": [
+          "phenomena"
+        ],
+        "groups": [
+          "object_behavior"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "context_or_popular_claim",
+        "object_type": "general_context",
+        "useful_for_M": "medium",
+        "score": 4,
+        "category": "05_plasma_gacp_hypothesis",
+        "fragment": "[15:17] Solar activity was elevated. Multiple [15:20] papers from 2024 and 2025 now propose [15:24] that certain glowing aerial phenomena, [15:27] what World War pilots called foo [15:29] fighters, may be plasmoids, plasma",
+        "next_action": "defer_or_sample"
+      }
+    ],
+    "06_open_data_infrastructure": [
+      {
+        "url": "https://www.youtube.com/watch?v=NbeGxunESXw",
+        "channel": "Project Hessdalen",
+        "title": "Monthly Status Meeting 2026 02 18",
+        "timestamp": "08:33",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_NbeGxunESXw.md",
+        "terms": [
+          "plasma"
+        ],
+        "groups": [
+          "gacp_core"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "conceptual_plasma_plasmoid_claim",
+        "object_type": "luminous_plasma_or_orb_candidate",
+        "useful_for_M": "high",
+        "score": 5,
+        "category": "06_open_data_infrastructure",
+        "fragment": "[08:29] data collection processing and reporting [08:32] and dashboarding [08:33] main focus on the plasma UP of the [08:36] valley uh discriminate mundane events [08:39] having multisspectral and sensor fusion",
+        "next_action": "read_full_context"
+      },
+      {
+        "url": "https://www.youtube.com/watch?v=NbeGxunESXw",
+        "channel": "Project Hessdalen",
+        "title": "Monthly Status Meeting 2026 02 18",
+        "timestamp": "08:39",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_NbeGxunESXw.md",
+        "terms": [
+          "spectral"
+        ],
+        "groups": [
+          "instrument_spectrometry"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "instrumentation_or_method",
+        "object_type": "measurement_setup",
+        "useful_for_M": "high",
+        "score": 5,
+        "category": "06_open_data_infrastructure",
+        "fragment": "[08:33] main focus on the plasma UP of the [08:36] valley uh discriminate mundane events [08:39] having multisspectral and sensor fusion [08:42] capabilities [08:43] and the modularity and flexibility",
+        "next_action": "read_full_context"
+      },
+      {
+        "url": "https://www.youtube.com/watch?v=NbeGxunESXw",
+        "channel": "Project Hessdalen",
+        "title": "Monthly Status Meeting 2026 02 18",
+        "timestamp": "10:05",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_NbeGxunESXw.md",
+        "terms": [
+          "detection"
+        ],
+        "groups": [
+          "instrument_neutron"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "instrumentation_or_method",
+        "object_type": "general_context",
+        "useful_for_M": "high",
+        "score": 5,
+        "category": "06_open_data_infrastructure",
+        "fragment": "[10:01] the MQTT [10:03] and send data directly to the cloud for [10:05] data aggregation and anomaly detection [10:07] systems. Uh one thing that I want to [10:10] stress out again is that we should be",
+        "next_action": "read_full_context"
+      },
+      {
+        "url": "https://www.youtube.com/watch?v=NbeGxunESXw",
+        "channel": "Project Hessdalen",
+        "title": "Monthly Status Meeting 2026 02 18",
+        "timestamp": "11:12",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_NbeGxunESXw.md",
+        "terms": [
+          "sensor data"
+        ],
+        "groups": [
+          "instrument_camera_sensor"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "instrumentation_or_method",
+        "object_type": "measurement_setup",
+        "useful_for_M": "high",
+        "score": 5,
+        "category": "06_open_data_infrastructure",
+        "fragment": "[11:05] and having also uh with the help of RER [11:08] to uh different locations in Dalan um [11:12] streaming sensor data from there to the [11:14] MQTT through MQTT uh to the cloud. [11:20] And if you want to read um any of the",
+        "next_action": "read_full_context"
+      },
+      {
+        "url": "https://www.youtube.com/watch?v=W-eQ2WWul-0",
+        "channel": "Project Hessdalen",
+        "title": "Monthly Status Meeting 2026 03 18 A",
+        "timestamp": "58:27",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_W-eQ2WWul-0.md",
+        "terms": [
+          "sensor data"
+        ],
+        "groups": [
+          "instrument_camera_sensor"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "instrumentation_or_method",
+        "object_type": "measurement_setup",
+        "useful_for_M": "high",
+        "score": 5,
+        "category": "06_open_data_infrastructure",
+        "fragment": "[58:21] Andreas has been working on an MQTT [58:24] server. So we want to have a way to save [58:27] um telemetry data, sensor data and [58:32] whatever we learn we want to share it. [58:34] Uh we have uh 100 terabyte free on the",
+        "next_action": "read_full_context"
+      },
+      {
+        "url": "https://www.youtube.com/watch?v=W-eQ2WWul-0",
+        "channel": "Project Hessdalen",
+        "title": "Monthly Status Meeting 2026 03 18 A",
+        "timestamp": "15:45",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_W-eQ2WWul-0.md",
+        "terms": [
+          "motion"
+        ],
+        "groups": [
+          "object_behavior"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "context_or_popular_claim",
+        "object_type": "general_context",
+        "useful_for_M": "medium",
+        "score": 4,
+        "category": "06_open_data_infrastructure",
+        "fragment": "[15:40] maximum. [15:41] >> Yeah. Yeah, it is. But um I think I I [15:45] don't think that the motion sensor is [15:47] the most important here. Uh I guess that [15:51] uh the most important thing is that we",
+        "next_action": "defer_or_sample"
+      },
+      {
+        "url": "https://www.youtube.com/watch?v=eEXTH43MmkQ",
+        "channel": "Beyond Reception",
+        "title": "The Hessdalen Lights: 40 Years of Instrumented Observation",
+        "timestamp": "09:15",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_eEXTH43MmkQ.md",
+        "terms": [
+          "phenomena"
+        ],
+        "groups": [
+          "object_behavior"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "context_or_popular_claim",
+        "object_type": "general_context",
+        "useful_for_M": "medium",
+        "score": 4,
+        "category": "06_open_data_infrastructure",
+        "fragment": "[09:11] to Congress emphasized that inconsistent [09:13] sensor coverage is a primary obstacle to [09:15] resolving unexplained aerial phenomena. [09:17] Project Hessdalen has been running [09:18] exactly that kind of continuous,",
+        "next_action": "defer_or_sample"
+      }
+    ],
+    "99_other": [
+      {
+        "url": "https://www.youtube.com/watch?v=NbeGxunESXw",
+        "channel": "Project Hessdalen",
+        "title": "Monthly Status Meeting 2026 02 18",
+        "timestamp": "22:16",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_NbeGxunESXw.md",
+        "terms": [
+          "phenomena"
+        ],
+        "groups": [
+          "object_behavior"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "context_or_popular_claim",
+        "object_type": "general_context",
+        "useful_for_M": "medium",
+        "score": 4,
+        "category": "99_other",
+        "fragment": "[22:10] interesting is because they have um this [22:12] motto preparing for contact. So we're [22:16] not discussing whether it is a phenomena [22:18] or not. I'm a member of Iser as you see [22:21] but they are pretty straight on there is",
+        "next_action": "defer_or_sample"
+      },
+      {
+        "url": "https://www.youtube.com/watch?v=NbeGxunESXw",
+        "channel": "Project Hessdalen",
+        "title": "Monthly Status Meeting 2026 02 18",
+        "timestamp": "39:23",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_NbeGxunESXw.md",
+        "terms": [
+          "anomalous"
+        ],
+        "groups": [
+          "object_behavior"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "context_or_popular_claim",
+        "object_type": "general_context",
+        "useful_for_M": "medium",
+        "score": 4,
+        "category": "99_other",
+        "fragment": "[39:17] analyzed by N right now. And he was [39:21] commenting something about like how this [39:23] is anomalous, why this is very [39:25] different. So Okay. [39:30] Okay. Yeah. And then you had the",
+        "next_action": "defer_or_sample"
+      },
+      {
+        "url": "https://www.youtube.com/watch?v=W-eQ2WWul-0",
+        "channel": "Project Hessdalen",
+        "title": "Monthly Status Meeting 2026 03 18 A",
+        "timestamp": "36:21",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_W-eQ2WWul-0.md",
+        "terms": [
+          "anomalous"
+        ],
+        "groups": [
+          "object_behavior"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "context_or_popular_claim",
+        "object_type": "general_context",
+        "useful_for_M": "medium",
+        "score": 4,
+        "category": "99_other",
+        "fragment": "[36:14] valley. I also no rain, no snow. So I [36:19] have no idea. I'm not saying saying this [36:21] is something anomalous but it is [36:23] strange. I mean, what is reflecting in [36:25] the middle of the of the sky?",
+        "next_action": "defer_or_sample"
+      },
+      {
+        "url": "https://www.youtube.com/watch?v=W-eQ2WWul-0",
+        "channel": "Project Hessdalen",
+        "title": "Monthly Status Meeting 2026 03 18 A",
+        "timestamp": "37:34",
+        "transcript": "transcripts/2026-09-29_HESSDALEN_GACP_video_W-eQ2WWul-0.md",
+        "terms": [
+          "anomalous"
+        ],
+        "groups": [
+          "object_behavior"
+        ],
+        "source_class": "primary_or_hessdalen_specific",
+        "evidence_type": "context_or_popular_claim",
+        "object_type": "general_context",
+        "useful_for_M": "medium",
+        "score": 4,
+        "category": "99_other",
+        "fragment": "[37:32] fashion. [37:33] >> Yeah. I'm not saying this is something [37:34] anomalous but at least it is the first [37:37] time we saw something like this. In the [37:39] same 20 minutes uh there was uh",
+        "next_action": "defer_or_sample"
+      }
+    ]
+  }
+}
