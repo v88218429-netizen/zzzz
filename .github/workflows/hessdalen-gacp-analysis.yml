@@ -1,0 +1,46 @@
+name: Hessdalen GACP analysis
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'analyze_hessdalen_gacp.py'
+      - 'monitor_tasks/results/HESSDALEN_GACP_20260929_1608.json'
+      - 'transcripts/*HESSDALEN_GACP*'
+      - '.github/workflows/hessdalen-gacp-analysis.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: hessdalen-gacp-analysis
+  cancel-in-progress: false
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Analyze Hessdalen GACP transcripts
+        run: python analyze_hessdalen_gacp.py
+
+      - name: Commit compact analysis
+        run: |
+          git config user.name "hessdalen-analysis-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add analysis/HESSDALEN_GACP_20260929_keyword_report.md analysis/HESSDALEN_GACP_20260929_keyword_table.csv analysis/HESSDALEN_GACP_20260929_fragments.json
+          if git diff --cached --quiet; then
+            echo "No analysis changes"
+          else
+            git commit -m "Add Hessdalen GACP compact analysis"
+            git pull --rebase origin "${GITHUB_REF_NAME}"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          fi
