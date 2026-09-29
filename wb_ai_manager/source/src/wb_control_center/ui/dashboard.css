@@ -937,3 +937,9 @@ body { font-size: 15px; line-height: 1.5; }
     white-space: normal;
   }
 }
+
+/* 2026-09-29 final micro-overflow fix */
+.health-score {
+  min-width: 78px;
+  flex: 0 0 78px;
+}
