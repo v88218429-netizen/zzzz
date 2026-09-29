@@ -1,0 +1,20 @@
+{
+  "task_id": "HESSDALEN_PROJECT_ONLY",
+  "query": "Project Hessdalen Monthly Status Meeting",
+  "extra_queries": [
+    "site:youtube.com Project Hessdalen Monthly Status Meeting 2026",
+    "site:youtube.com Project Hessdalen Monthly Status Meeting 2025",
+    "site:youtube.com Project Hessdalen Blue Box",
+    "site:youtube.com Project Hessdalen OpenADS",
+    "site:youtube.com Project Hessdalen scientific camera",
+    "site:youtube.com Project Hessdalen neutron detection",
+    "site:youtube.com Project Hessdalen spectrometer",
+    "site:youtube.com Project Hessdalen Massimo Teodorani"
+  ],
+  "content": "Видео",
+  "limit_video": 30,
+  "limit_shorts": 0,
+  "depth_days": 3650,
+  "knowledge_tag": "HESSDALEN_PROJECT_PRIMARY_OBJECT_M",
+  "language": "en"
+}
