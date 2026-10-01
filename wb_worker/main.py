@@ -1,8 +1,12 @@
 import asyncio
 import csv
+import datetime as dt
 import io
 import os
 import secrets
+from typing import Any
+
+import httpx
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -25,6 +29,8 @@ from traffic_sync import DATA_DIR as TRAFFIC_DIR, sync_loop as traffic_sync_loop
 ROOT_DATA_DIR = Path(os.environ.get("DATA_DIR", "/data"))
 EXPORT_TOKEN = os.environ.get("FINANCE_EXPORT_TOKEN", "").strip()
 DEDUCTIONS_SHEET_TOKEN = os.environ.get("DEDUCTIONS_SHEET_TOKEN", "").strip()
+PRICE_EXPORT_KEY = os.environ.get("PRICE_EXPORT_KEY", "").strip()
+PRICE_EXPORT_LIMIT = int(os.environ.get("PRICE_EXPORT_LIMIT", "1000"))
 
 
 def bootstrap_shops() -> None:
@@ -266,6 +272,175 @@ async def traffic_export(dataset: str, request: Request):
     if not path.exists():
         raise HTTPException(status_code=503, detail="Initial traffic sync is still running")
     return FileResponse(path, media_type="text/csv; charset=utf-8", filename=path.name)
+
+
+PRICE_SHOPS = {
+    "AP": ("Саныч", "WB_API_TOKEN_AP"),
+    "AA": ("AIR", "WB_API_TOKEN_AA"),
+    "YV": ("Хозяюшка", "WB_API_TOKEN_YV"),
+}
+
+
+def authorize_price_export(request: Request) -> None:
+    expected = PRICE_EXPORT_KEY or EXPORT_TOKEN
+    if not expected:
+        raise HTTPException(status_code=503, detail="PRICE_EXPORT_KEY/FINANCE_EXPORT_TOKEN is not configured")
+    supplied = request.query_params.get("key") or request.query_params.get("token") or ""
+    if not secrets.compare_digest(supplied, expected):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+
+def _as_number(value: Any) -> Any:
+    if value is None or value == "":
+        return ""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return value
+
+
+def _computed_after_discount(price: Any, discount: Any) -> str:
+    try:
+        p = float(price)
+        d = float(discount or 0)
+        return str(round(p * (100 - d) / 100, 2))
+    except (TypeError, ValueError):
+        return ""
+
+
+def _price_error_row(snapshot_at: str, shop_id: str, shop_name: str, status: str, error: str) -> list[Any]:
+    # Header has 18 columns. Columns 4..16 are product/price fields.
+    return [snapshot_at, shop_id, shop_name, "", "", "", "", "", "", "", "", "", "", "", "", "", status, error]
+
+
+async def _fetch_wb_price_rows_for_shop(
+    client: httpx.AsyncClient,
+    shop_id: str,
+    shop_name: str,
+    token: str,
+    snapshot_at: str,
+) -> list[list[Any]]:
+    rows: list[list[Any]] = []
+    url = "https://discounts-prices-api.wildberries.ru/api/v2/list/goods/filter"
+    limit = max(1, min(1000, PRICE_EXPORT_LIMIT))
+    offset = 0
+    headers_plain = {"Authorization": token}
+    headers_bearer = {"Authorization": f"Bearer {token}"}
+
+    while True:
+        params = {"limit": limit, "offset": offset}
+        try:
+            response = await client.get(url, headers=headers_plain, params=params)
+            if response.status_code in {401, 403}:
+                retry = await client.get(url, headers=headers_bearer, params=params)
+                if retry.status_code != response.status_code:
+                    response = retry
+            if response.status_code != 200:
+                rows.append(_price_error_row(
+                    snapshot_at, shop_id, shop_name,
+                    f"HTTP_{response.status_code}", response.text[:300].replace("\n", " "),
+                ))
+                break
+            payload = response.json()
+            data = payload.get("data", payload) if isinstance(payload, dict) else {}
+            goods = data.get("listGoods") or data.get("goods") or payload.get("listGoods", []) if isinstance(payload, dict) else []
+            if not goods:
+                break
+            for good in goods:
+                if not isinstance(good, dict):
+                    continue
+                nm_id = good.get("nmID") or good.get("nmId") or good.get("nm") or ""
+                vendor_code = good.get("vendorCode") or good.get("vendor_code") or ""
+                currency = good.get("currencyIsoCode4217") or good.get("currency") or ""
+                discount = good.get("discount") or ""
+                club_discount = good.get("clubDiscount") or ""
+                editable_size_price = good.get("editableSizePrice")
+                is_bad_turnover = good.get("isBadTurnover")
+                sizes = good.get("sizes") if isinstance(good.get("sizes"), list) else []
+                if not sizes:
+                    sizes = [{}]
+                for size in sizes:
+                    if not isinstance(size, dict):
+                        size = {}
+                    price = size.get("price", good.get("price", ""))
+                    discounted_price = size.get("discountedPrice", good.get("discountedPrice", ""))
+                    club_discounted_price = size.get("clubDiscountedPrice", good.get("clubDiscountedPrice", ""))
+                    rows.append([
+                        snapshot_at,
+                        shop_id,
+                        shop_name,
+                        nm_id,
+                        vendor_code,
+                        currency,
+                        discount,
+                        club_discount,
+                        editable_size_price,
+                        is_bad_turnover,
+                        size.get("sizeID") or size.get("sizeId") or "",
+                        size.get("techSizeName") or size.get("techSize") or "",
+                        price,
+                        discounted_price,
+                        club_discounted_price,
+                        _computed_after_discount(price, discount),
+                        "OK",
+                        "",
+                    ])
+            if len(goods) < limit:
+                break
+            offset += limit
+        except Exception as exc:
+            rows.append(_price_error_row(
+                snapshot_at, shop_id, shop_name,
+                "ERROR", str(exc)[:300].replace("\n", " "),
+            ))
+            break
+    return rows
+
+
+@app.get("/api/prices/export.csv")
+async def prices_export(request: Request):
+    authorize_price_export(request)
+    requested_shop = str(request.query_params.get("shop", "all")).strip().upper()
+    selected = PRICE_SHOPS.items() if requested_shop in {"", "ALL"} else [(requested_shop, PRICE_SHOPS.get(requested_shop))]
+    selected = [(code, meta) for code, meta in selected if meta]
+    if not selected:
+        raise HTTPException(status_code=404, detail="Unknown shop")
+
+    snapshot_at = dt.datetime.now(dt.UTC).replace(microsecond=0).isoformat()
+    header = [
+        "snapshot_at_utc", "shop_id", "shop_name", "nmID", "vendorCode", "currency",
+        "discount_pct", "club_discount_pct", "editable_size_price", "is_bad_turnover",
+        "sizeID", "techSizeName", "price_before_discount", "discounted_price",
+        "club_discounted_price", "computed_after_discount", "source_status", "source_error",
+    ]
+    all_rows: list[list[Any]] = []
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        for shop_id, (shop_name, env_name) in selected:
+            token = os.environ.get(env_name, "").strip()
+            if not token:
+                all_rows.append(_price_error_row(snapshot_at, shop_id, shop_name, "NO_TOKEN", env_name))
+                continue
+            all_rows.extend(await _fetch_wb_price_rows_for_shop(client, shop_id, shop_name, token, snapshot_at))
+
+    out = io.StringIO(newline="")
+    writer = csv.writer(out)
+    writer.writerow(header)
+    writer.writerows(all_rows)
+    return Response(
+        content="\ufeff" + out.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={"Cache-Control": "no-store, max-age=0"},
+    )
+
+
+@app.get("/api/prices/status")
+async def prices_status(request: Request):
+    authorize_price_export(request)
+    return JSONResponse({
+        "ok": True,
+        "configured_shops": [code for code, (_name, env_name) in PRICE_SHOPS.items() if os.environ.get(env_name, "").strip()],
+        "endpoint": "/api/prices/export.csv",
+    })
 
 
 app.mount("/", wb_app)
