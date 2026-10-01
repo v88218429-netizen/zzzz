@@ -79,6 +79,16 @@ function shouldRunByProperty_(propertyName, intervalMinutes) {
   return true;
 }
 
+function shouldTakeDailyStockSnapshot_() {
+  var props = PropertiesService.getScriptProperties();
+  var last = props.getProperty('FF_STOCK_HISTORY_LAST_AT');
+  return !last;
+}
+
+function buildAutomationStatusRow_(name, isoText, staleAfterMinutes) {
+  return [name, isoText || '', '', 'OK'];
+}
+
 function acquireMasterRunGuard_() {
   var props = PropertiesService.getScriptProperties();
   var key = 'MASTER_AUTOMATION_RUNNING_AT';
