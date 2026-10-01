@@ -15,6 +15,8 @@ var WB_FRESHNESS_GUARD_CFG = {
   staleRunningMinutes: 90,
   sourceSpreadsheetId: '1-aBDZ7c5xfmVwwiNmUi9-DyfIANXmfiM5-Ti2_zg4zI',
   monthlySummaryId: '1K2ocoaGBTVajwUw-HCWwsdyULNjSOSXcZX5a15gWl-Y',
+  airSpreadsheetId: '1qJvhEOIku7sOMydfrUz0PR5dkcU0sLjv433pa1MFBcM',
+  hozyushkaSpreadsheetId: '1f9dxXeZxkDth8h2C9GA7L7WqAr1-Ok-Oi5YtufLYOOk',
   storeId: 'sanych_wb',
   safeFiles: {
     wb_ads_bulk_ingest_v167: true,
@@ -140,6 +142,65 @@ function wbOsFreshnessGuardEnqueueAutopilot_(ss, reason) {
   return {enqueued: true, row: row, id: id};
 }
 
+function wbOsFreshnessGuardAirHealth_() {
+  try {
+    var ss = SpreadsheetApp.openById(WB_FRESHNESS_GUARD_CFG.airSpreadsheetId);
+    var log = ss.getSheetByName('Технический лог');
+    var lastUpdated = DriveApp.getFileById(WB_FRESHNESS_GUARD_CFG.airSpreadsheetId).getLastUpdated();
+    var tokenWithdrawn = false;
+    var lastError = '';
+    if (log && log.getLastRow() > 1) {
+      var start = Math.max(2, log.getLastRow() - 250);
+      var vals = log.getRange(start, 1, log.getLastRow() - start + 1, Math.min(5, log.getLastColumn())).getDisplayValues();
+      for (var i = vals.length - 1; i >= 0; i--) {
+        var msg = vals[i].join(' | ');
+        if (!lastError && String(vals[i][1] || '').toUpperCase() === 'ERROR') lastError = msg.slice(0, 500);
+        if (/Access token withdrawn|HTTP 401/i.test(msg)) { tokenWithdrawn = true; break; }
+      }
+    }
+    return {
+      ok: !tokenWithdrawn,
+      state: tokenWithdrawn ? 'AUTH_REVOKED' : 'OK',
+      lastUpdated: Utilities.formatDate(lastUpdated, WB_FRESHNESS_GUARD_CFG.timezone, 'yyyy-MM-dd HH:mm:ss'),
+      detail: tokenWithdrawn ? 'WB API token withdrawn / HTTP 401' : lastError
+    };
+  } catch (e) {
+    return {ok:false, state:'CHECK_ERROR', detail:String(e && e.message ? e.message : e)};
+  }
+}
+
+function wbOsFreshnessGuardHozyushkaHealth_() {
+  try {
+    var ss = SpreadsheetApp.openById(WB_FRESHNESS_GUARD_CFG.hozyushkaSpreadsheetId);
+    var launch = ss.getSheetByName('🚀 Запуск');
+    var settings = ss.getSheetByName('⚙️ Настройки');
+    var state = launch ? String(launch.getRange('C36').getDisplayValue() || '') : '';
+    var wbApi = settings ? String(settings.getRange('G4').getDisplayValue() || '') : '';
+    var lastUpdated = DriveApp.getFileById(WB_FRESHNESS_GUARD_CFG.hozyushkaSpreadsheetId).getLastUpdated();
+    var connected = state && state !== 'WAITING_API' && !/Не подключ/i.test(wbApi);
+    return {
+      ok: connected,
+      state: connected ? 'OK' : (state || 'NOT_CONNECTED'),
+      wbApi: wbApi,
+      lastUpdated: Utilities.formatDate(lastUpdated, WB_FRESHNESS_GUARD_CFG.timezone, 'yyyy-MM-dd HH:mm:ss'),
+      detail: connected ? '' : 'WB API/client registration is not complete'
+    };
+  } catch (e) {
+    return {ok:false, state:'CHECK_ERROR', detail:String(e && e.message ? e.message : e)};
+  }
+}
+
+function wbOsFreshnessGuardWriteHealthSheet_(monthlySs, rows) {
+  var name = '99_Контроль_свежести';
+  var sh = monthlySs.getSheetByName(name);
+  if (!sh) sh = monthlySs.insertSheet(name);
+  sh.clearContents();
+  sh.getRange(1,1,1,6).setValues([['Контур','Статус','Свежесть / дата','Ожидание','Деталь','Проверено']]);
+  sh.getRange(2,1,rows.length,6).setValues(rows);
+  sh.setFrozenRows(1);
+  return name;
+}
+
 function wbOsFreshnessGuardMarkSummary_(latestTrusted, yesterday) {
   var ss = SpreadsheetApp.openById(WB_FRESHNESS_GUARD_CFG.monthlySummaryId);
   var sh = ss.getSheetByName('00_Сводка');
@@ -147,19 +208,32 @@ function wbOsFreshnessGuardMarkSummary_(latestTrusted, yesterday) {
   var period = String(sh.getRange('A2').getDisplayValue() || '');
   var m = period.match(/—\s*(\d{2})\.(\d{2})\.(\d{4})/);
   var end = m ? (m[3] + '-' + m[2] + '-' + m[1]) : '';
-  var stale = !end || end < latestTrusted || latestTrusted < yesterday;
+  var air = wbOsFreshnessGuardAirHealth_();
+  var hoz = wbOsFreshnessGuardHozyushkaHealth_();
+  var sanychOk = !!latestTrusted && latestTrusted >= yesterday;
+  var reportOk = !!end && end >= latestTrusted && sanychOk;
+  var stale = !reportOk || !air.ok || !hoz.ok;
+  var checked = Utilities.formatDate(new Date(), WB_FRESHNESS_GUARD_CFG.timezone, 'yyyy-MM-dd HH:mm:ss');
+  var blockers = [];
+  if (!sanychOk) blockers.push('Саныч trusted=' + (latestTrusted || 'нет') + ', D-1=' + yesterday);
+  if (!reportOk) blockers.push('сводка до=' + (end || 'не распознано'));
+  if (!air.ok) blockers.push('AIR=' + air.state);
+  if (!hoz.ok) blockers.push('Хозяюшка=' + hoz.state);
 
   if (stale) {
-    sh.getRange('A3').setValue(
-      '⚠ АВТОКОНТРОЛЬ СВЕЖЕСТИ: отчёт устарел. ' +
-      'Источник Sellmonitor=' + (latestTrusted || 'нет даты') +
-      ', ожидается D-1=' + yesterday +
-      ', период отчёта до=' + (end || 'не распознан') + '.'
-    );
+    sh.getRange('A3').setValue('⚠ АВТОКОНТРОЛЬ СВЕЖЕСТИ: ' + blockers.join(' · '));
   } else if (/АВТОКОНТРОЛЬ СВЕЖЕСТИ/.test(String(sh.getRange('A3').getDisplayValue() || ''))) {
     sh.getRange('A3').clearContent();
   }
-  return {ok:true, reportEnd:end, stale:stale};
+
+  wbOsFreshnessGuardWriteHealthSheet_(ss, [
+    ['Саныч Sellmonitor', sanychOk ? 'OK' : 'STALE', latestTrusted || '', yesterday, sanychOk ? '' : 'trusted D-1 отстаёт', checked],
+    ['AIR FBS', air.ok ? 'OK' : air.state, air.lastUpdated || '', 'WB API авторизован', air.detail || '', checked],
+    ['Хозяюшка FBS', hoz.ok ? 'OK' : hoz.state, hoz.lastUpdated || '', 'клиент зарегистрирован + WB API подключён', hoz.detail || hoz.wbApi || '', checked],
+    ['Месячная сводка', reportOk ? 'OK' : 'STALE', end || '', latestTrusted || yesterday, reportOk ? '' : 'период/данные отстают от источника', checked]
+  ]);
+
+  return {ok:true, reportEnd:end, stale:stale, air:air, hozyushka:hoz, blockers:blockers};
 }
 
 function wbOsFreshnessGuardTick() {
