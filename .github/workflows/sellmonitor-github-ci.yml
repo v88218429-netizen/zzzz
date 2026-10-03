@@ -1,0 +1,38 @@
+name: Sellmonitor GitHub worker CI
+
+on:
+  push:
+    branches: [mainggg]
+    paths:
+      - "sellmonitor_github_worker/**"
+      - ".github/workflows/sellmonitor-github-ci.yml"
+  pull_request:
+    paths:
+      - "sellmonitor_github_worker/**"
+      - ".github/workflows/sellmonitor-github-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Python state-machine tests
+        working-directory: sellmonitor_github_worker
+        run: python -m unittest -v test_core.py
+      - name: Apps Script syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp sellmonitor_github_worker/SELLMONITOR_GITHUB_WORKER.gs /tmp/sellmonitor_worker.js
+          node --check /tmp/sellmonitor_worker.js

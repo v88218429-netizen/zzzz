@@ -1,0 +1,81 @@
+name: Sellmonitor GitHub worker deploy
+
+on:
+  push:
+    branches: [mainggg]
+    paths:
+      - "sellmonitor_github_worker/SELLMONITOR_GITHUB_WORKER.gs"
+      - ".github/workflows/sellmonitor-github-deploy.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sellmonitor-github-worker-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SCRIPT_ID: "15tH3jwOa5hKJFahIyPX5AIXO7KRf1O4jusfDfPIdX6KeH_GqMUC71hNT"
+      CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Require GitHub-hosted Google auth
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$CLASPRC_JSON" || {
+            echo "::error::CLASPRC_JSON is required for the Google adapter. Make and self-hosted runners are intentionally unsupported."
+            exit 20
+          }
+
+      - name: Install clasp and auth
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install -g @google/clasp
+          umask 077
+          printf '%s' "$CLASPRC_JSON" > "$HOME/.clasprc.json"
+          python - <<'PY'
+          import json, pathlib
+          p=pathlib.Path.home()/'.clasprc.json'
+          obj=json.loads(p.read_text())
+          assert isinstance(obj, dict) and obj
+          print("CLASP_AUTH_OK=yes")
+          PY
+
+      - name: Pull authorized adapter project
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/sellmonitor-gh-worker
+          mkdir -p /tmp/sellmonitor-gh-worker
+          printf '{"scriptId":"%s","rootDir":"."}\n' "$SCRIPT_ID" > /tmp/sellmonitor-gh-worker/.clasp.json
+          cd /tmp/sellmonitor-gh-worker
+          clasp pull
+          test -f appsscript.json
+
+      - name: Install GitHub central worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp sellmonitor_github_worker/SELLMONITOR_GITHUB_WORKER.gs /tmp/sellmonitor-gh-worker/SELLMONITOR_GITHUB_WORKER.gs
+          cp /tmp/sellmonitor-gh-worker/SELLMONITOR_GITHUB_WORKER.gs /tmp/check.js
+          node --check /tmp/check.js
+          cd /tmp/sellmonitor-gh-worker
+          clasp push -f
+
+      - name: Live health
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/sellmonitor-gh-worker
+          clasp run sellmonitorGithubHealth

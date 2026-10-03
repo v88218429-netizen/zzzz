@@ -1,0 +1,44 @@
+name: Sellmonitor GitHub central tick
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sellmonitor-github-central-tick
+  cancel-in-progress: false
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      SCRIPT_ID: "15tH3jwOa5hKJFahIyPX5AIXO7KRf1O4jusfDfPIdX6KeH_GqMUC71hNT"
+      CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Require GitHub-hosted Google auth
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$CLASPRC_JSON" || {
+            echo "::error::CLASPRC_JSON missing; GitHub worker cannot access Google adapter."
+            exit 20
+          }
+      - name: Run central worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install -g @google/clasp
+          umask 077
+          printf '%s' "$CLASPRC_JSON" > "$HOME/.clasprc.json"
+          D="$(mktemp -d)"
+          cd "$D"
+          printf '{"scriptId":"%s","rootDir":"."}\n' "$SCRIPT_ID" > .clasp.json
+          clasp run sellmonitorGithubTick
