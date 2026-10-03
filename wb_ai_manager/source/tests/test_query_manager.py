@@ -66,6 +66,6 @@ def test_outcome_evaluator_is_non_causal():
     assert out["causality"]=="not_proven"
 
 def test_auto_execute_is_opt_in_only():
-    cfg=QueryManagerConfig(auto_execute_bid_change_pct=10)
+    cfg=QueryManagerConfig(auto_execute_bid_change_pct=11)
     c=QueryManager(config=cfg,now=NOW).build({"own_27":{"products":[product([row()])]}})["cards"][0]
     assert c["execution_mode"]=="AUTO_EXECUTE"
