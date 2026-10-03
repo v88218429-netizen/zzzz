@@ -1073,12 +1073,51 @@ class PortfolioService:
                 sku = str(row[idx["nmId"]] if idx["nmId"] < len(row) else "").strip()
                 if active not in {"TRUE", "1", "ДА"} or not sku.isdigit():
                     continue
-                freq = self._num(row[idx["Частотность"]] if idx["Частотность"] < len(row) else None)
-                pos = self._num(row[idx["Текущая позиция"]] if idx["Текущая позиция"] < len(row) else None)
-                query = str(row[idx["Поисковый запрос"]] if idx["Поисковый запрос"] < len(row) else "")
-                snap = str(row[idx["Дата снимка"]] if idx.get("Дата снимка") is not None and idx["Дата снимка"] < len(row) else "")
-                target = self._num(row[idx["Эффективная цель"]] if idx.get("Эффективная цель") is not None and idx["Эффективная цель"] < len(row) else None)
-                grouped.setdefault(sku, []).append({"query": query, "frequency": freq or 0.0, "position": pos, "target": target, "snapshot": snap})
+                def cell(*names: str):
+                    for name in names:
+                        j = idx.get(name)
+                        if j is not None and j < len(row):
+                            value = row[j]
+                            if value not in (None, ""):
+                                return value
+                    return None
+
+                freq = self._num(cell("Частотность", "frequency", "search_frequency"))
+                pos = self._num(cell("Текущая позиция", "position", "current_position"))
+                query = str(cell("Поисковый запрос", "query", "search_query") or "")
+                snap = str(cell("Дата снимка", "snapshot_at", "snapshot") or "")
+                target = self._num(cell("Эффективная цель", "target_position", "target"))
+                item = {"query": query, "frequency": freq or 0.0, "position": pos, "target": target, "snapshot": snap}
+                optional_text = {
+                    "campaign_id": ("campaign_id", "ID кампании", "Кампания ID", "ID РК", "advertId"),
+                    "bid_at": ("bid_at", "Дата ставки"),
+                    "traffic_at": ("traffic_at", "Дата трафика"),
+                    "ads_at": ("ads_at", "Дата рекламы"),
+                    "orders_at": ("orders_at", "Дата заказов"),
+                }
+                optional_num = {
+                    "current_search_bid_rub": ("current_search_bid_rub", "Текущая ставка", "Ставка"),
+                    "organic_clicks": ("organic_clicks", "Органические клики", "Клики органика"),
+                    "paid_clicks": ("paid_clicks", "Рекламные клики", "Клики реклама"),
+                    "clicks": ("clicks", "Клики"),
+                    "impressions": ("impressions", "Показы"),
+                    "orders": ("orders", "Заказы"),
+                    "carts": ("carts", "Корзины"),
+                    "ctr_pct": ("ctr_pct", "CTR"),
+                    "cr_pct": ("cr_pct", "CR"),
+                    "cpc_rub": ("cpc_rub", "CPC"),
+                    "ad_spend_rub": ("ad_spend_rub", "Расход рекламы", "Расход"),
+                    "drr_pct": ("drr_pct", "ДРР"),
+                }
+                for key, names in optional_text.items():
+                    value = cell(*names)
+                    if value not in (None, ""):
+                        item[key] = str(value).strip()
+                for key, names in optional_num.items():
+                    value = self._num(cell(*names))
+                    if value is not None:
+                        item[key] = value
+                grouped.setdefault(sku, []).append(item)
             except Exception:
                 continue
         products = {str(x.get("sku")): x for x in out.get("own_27", {}).get("products", []) if x.get("sku")}
@@ -1100,6 +1139,16 @@ class PortfolioService:
             ranked = sorted(unique.values(), key=lambda r: float(r.get("frequency") or 0), reverse=True)
             total_freq = sum(float(r.get("frequency") or 0) for r in ranked)
             prod["search_frequency_current"] = round(total_freq, 2)
+            # Preserve the complete query layer, not only the top phrase. The
+            # QueryManager consumes this canonical list and applies freshness,
+            # economics and bid guardrails per query.
+            prod["query_intelligence"] = ranked
+            prod["query_intelligence_summary"] = {
+                "query_rows": len(ranked),
+                "frequency_total": round(total_freq, 2),
+                "source": "sanych_sellmonitor.positions",
+                "snapshot_at": max((str(x.get("snapshot") or "") for x in ranked), default=""),
+            }
             if ranked:
                 prod["top_search_query"] = ranked[0].get("query")
                 prod["top_search_frequency"] = ranked[0].get("frequency")
