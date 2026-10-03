@@ -57,7 +57,7 @@ def test_legacy_top_query_fallback():
 
 def test_similar_queries_cluster():
     rows=[row(query="побелка для деревьев садовая"),row(query="садовая побелка для деревьев",frequency=9000)]
-    cards=QueryManager(now=NOW).build({"own_27":{"products":[product(rows]}})["cards"]
+    cards=QueryManager(now=NOW).build({"own_27":{"products":[product(rows)}})["cards"]
     assert len({c["cluster_id"] for c in cards})==1
 
 def test_outcome_evaluator_is_non_causal():
