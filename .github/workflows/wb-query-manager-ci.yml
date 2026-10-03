@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - wb-manager-query-v2-20261003
+  pull_request:
+    branches:
+      - mainggg
   workflow_dispatch:
 
 jobs:
