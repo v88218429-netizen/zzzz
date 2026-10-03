@@ -28,6 +28,7 @@ from .analytics_kernel import measurement_contract, portfolio_quality, snapshot_
 from .decision_groups import decision_group_summary, group_decisions
 from .discovery_engine import discover_cross_sku_patterns
 from .research_engine import build_research_agenda
+from .query_manager import QueryManager, QueryManagerConfig
 from .updater import UpdateManager, current_version
 
 settings = Settings()
@@ -538,6 +539,30 @@ def _store_name(snapshots: dict[str, dict[str, Any]]) -> str:
     return "DEMO WB cabinet" if settings.wb_mode.lower() == "demo" else "Wildberries"
 
 
+def _query_manager_payload(
+    portfolio_snapshot: dict[str, Any] | None = None,
+    snapshots: dict[str, dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    limits = center.policy.safety.get("limits", {}) if isinstance(center.policy.safety, dict) else {}
+    try:
+        max_change = float(limits.get("max_bid_change_pct") or 15.0)
+    except (TypeError, ValueError):
+        max_change = 15.0
+    try:
+        bid_cap = float(limits.get("absolute_bid_cap_rub") or 2000.0)
+    except (TypeError, ValueError):
+        bid_cap = 2000.0
+    manager = QueryManager(QueryManagerConfig(
+        max_bid_change_pct=max(0.0, min(max_change, 25.0)),
+        absolute_bid_cap_rub=max(0.0, bid_cap),
+        # This repository build has a hard read-only WB write fuse. Query Manager
+        # may recommend money actions, but execution stays opt-in until that fuse
+        # is deliberately replaced by the audited execution adapter.
+        auto_execute_bid_change_pct=0.0,
+    ))
+    return manager.build(portfolio_snapshot or portfolio.snapshot(), snapshots or _dashboard_snapshots())
+
+
 @app.get("/api/dashboard-data")
 async def dashboard_data(days: int = 7, from_date: str | None = None, to_date: str | None = None) -> dict[str, Any]:
     period = _dashboard_period(days, from_date, to_date)
@@ -588,6 +613,7 @@ async def dashboard_data(days: int = 7, from_date: str | None = None, to_date: s
     research_agenda = build_research_agenda(decision_groups, analytical_quality, dataset_quality)
     research_agenda["discoveries"] = discover_cross_sku_patterns(portfolio_snapshot)
     research_agenda["discovery_count"] = len(research_agenda["discoveries"])
+    query_layer = _query_manager_payload(portfolio_snapshot, snapshots)
     audit_agents = audit.get("agents") or {}
     audit_failed = sum(1 for x in audit_agents.values() if isinstance(x, dict) and x.get("status") == "error")
     return {
@@ -644,6 +670,7 @@ async def dashboard_data(days: int = 7, from_date: str | None = None, to_date: s
         "decision_groups": decision_groups,
         "decision_group_summary": grouped_summary,
         "research_agenda": research_agenda,
+        "query_manager": query_layer,
         "snapshots": snapshots,
         "decision_control": {
             "history": center.db.decision_history(limit=80),
@@ -719,6 +746,16 @@ async def connections() -> dict[str, Any]:
 @app.get("/api/portfolio")
 async def portfolio_data() -> dict[str, Any]:
     return portfolio.snapshot()
+
+
+@app.get("/api/query-manager")
+async def query_manager() -> dict[str, Any]:
+    return _query_manager_payload()
+
+
+@app.get("/api/operator-brief")
+async def operator_brief() -> dict[str, Any]:
+    return _query_manager_payload().get("operator_brief") or {}
 
 
 @app.post("/api/sheets/refresh")
