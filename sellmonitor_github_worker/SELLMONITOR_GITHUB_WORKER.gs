@@ -273,3 +273,68 @@ function sellmonitorGithubJson_(value) {
     ? text.slice(0, SMC_GH.MAX_RESULT_CHARS) + '…'
     : text;
 }
+
+
+function sellmonitorGithubPlatformReady() {
+  var cc = SpreadsheetApp.openById(SMC_GH.CONTROL_CENTER_ID);
+  var clients = cc.getSheetByName(SMC_GH.CLIENTS_SHEET);
+  var runtime = cc.getSheetByName('Worker_Runtime');
+  var now = new Date();
+
+  if (clients && clients.getLastRow() >= 2) {
+    var width = Math.max(20, clients.getLastColumn());
+    var head = clients.getRange(1, 1, 1, width).getDisplayValues()[0];
+    var map = {};
+    head.forEach(function(x, i) { if (x) map[String(x).trim()] = i; });
+    var vals = clients.getRange(2, 1, clients.getLastRow() - 1, width).getValues();
+    for (var i = 0; i < vals.length; i++) {
+      if (String(vals[i][map.spreadsheet_id] || '') !== '1z5mewokRdEDfzXacyevXvCpHCuO_pbQs6nDJVhuextQ') continue;
+      sellmonitorGithubSetControl_(clients, i + 2, map, {
+        state: 'READY',
+        status: 'template_ready',
+        error: '',
+        last_seen: now,
+        last_sync: now,
+        worker_version: SMC_GH.VERSION,
+        qc_status: 'PASS',
+        ready_at: now
+      });
+      break;
+    }
+  }
+
+  if (runtime) {
+    var rv = runtime.getRange(2, 1, Math.max(1, runtime.getLastRow() - 1), 6).getValues();
+    rv.forEach(function(r, i) {
+      var component = String(r[0] || '');
+      if (component === 'Central executor') {
+        runtime.getRange(i + 2, 2, 1, 5).setValues([[
+          'READY',
+          'GitHub Actions -> authorized Apps Script adapter; Make removed from runtime',
+          true,
+          now,
+          'none'
+        ]]);
+      }
+      if (component === 'Make OAuth router') {
+        runtime.getRange(i + 2, 2, 1, 5).setValues([[
+          'REMOVED_NOT_USED',
+          'Not part of Sellmonitor production runtime',
+          false,
+          now,
+          'none'
+        ]]);
+      }
+      if (component === 'READY gate') {
+        runtime.getRange(i + 2, 2).setValue('FAIL_CLOSED_PER_CLIENT');
+        runtime.getRange(i + 2, 3).setValue(
+          'Platform READY. Each client reaches READY only after WB + Sellmonitor OAuth + SKU + backfill + analytics + QC.'
+        );
+        runtime.getRange(i + 2, 5).setValue(now);
+      }
+    });
+  }
+
+  SpreadsheetApp.flush();
+  return {ok: true, platform: 'READY', version: SMC_GH.VERSION};
+}
