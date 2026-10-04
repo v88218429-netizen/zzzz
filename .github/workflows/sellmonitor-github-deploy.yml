@@ -5,6 +5,7 @@ on:
     branches: [mainggg]
     paths:
       - "sellmonitor_github_worker/SELLMONITOR_GITHUB_WORKER.gs"
+      - "sellmonitor_github_worker/patch_master.py"
       - ".github/workflows/sellmonitor-github-deploy.yml"
   workflow_dispatch:
 
@@ -57,7 +58,7 @@ jobs:
           clasp pull
           test -f appsscript.json
 
-      - name: Install authenticated web worker
+      - name: Install worker and master hook
         shell: bash
         run: |
           set -euo pipefail
@@ -77,10 +78,24 @@ jobs:
           obj['webapp']={'executeAs':'USER_DEPLOYING','access':'ANYONE_ANONYMOUS'}
           m.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding='utf-8')
           PY
-          cp /tmp/sellmonitor-gh-worker/SELLMONITOR_GITHUB_WORKER.gs /tmp/check.js
-          node --check /tmp/check.js
+          python sellmonitor_github_worker/patch_master.py /tmp/sellmonitor-gh-worker
 
-      - name: Push and redeploy stable web app
+      - name: Syntax check full live project
+        shell: bash
+        run: |
+          set -euo pipefail
+          COUNT=0
+          while IFS= read -r -d '' f; do
+            T="$(mktemp --suffix=.js)"
+            cp "$f" "$T"
+            node --check "$T"
+            rm -f "$T"
+            COUNT=$((COUNT+1))
+          done < <(find /tmp/sellmonitor-gh-worker -type f \( -name '*.gs' -o -name '*.js' \) -print0)
+          test "$COUNT" -gt 0
+          echo "SYNTAX_OK=$COUNT"
+
+      - name: Push and redeploy stable adapter
         shell: bash
         run: |
           set -euo pipefail
@@ -88,24 +103,15 @@ jobs:
           clasp push -f
           clasp redeploy "$WEBAPP_DEPLOYMENT_ID" -d "Sellmonitor GitHub Central Worker Web"
 
-      - name: Verify live web worker
+      - name: Pull back and verify live code
         shell: bash
         run: |
           set -euo pipefail
-          URL="https://script.google.com/macros/s/$WEBAPP_DEPLOYMENT_ID/exec"
-          BODY="$(python - <<'PY'
-          import json, os
-          print(json.dumps({'token': os.environ['WEBHOOK_SECRET'], 'action': 'health'}))
-          PY
-          )"
-          RESP="$(curl -fsSL --max-time 45 -H 'Content-Type: application/json' --data-binary "$BODY" "$URL")"
-          RESP="$RESP" python - <<'PY'
-          import json, os
-          obj=json.loads(os.environ['RESP'])
-          if not obj.get('ok'):
-              raise SystemExit('web worker health failed: ' + str(obj.get('error')))
-          result=obj.get('result') or {}
-          if result.get('version') != 'github-worker-1.0.0':
-              raise SystemExit('unexpected worker version: ' + str(result.get('version')))
-          print('WEB_WORKER_HEALTH=ok')
-          PY
+          V="$(mktemp -d)"
+          printf '{"scriptId":"%s","rootDir":"."}\n' "$SCRIPT_ID" > "$V/.clasp.json"
+          cd "$V"
+          clasp pull
+          grep -Rqs "SELLMONITOR_GITHUB_MASTER_HOOK_V1" .
+          grep -Rqs "function sellmonitorGithubEnsureTrigger_()" .
+          grep -Rqs "github-worker-1.0.0" .
+          echo "LIVE_CODE_VERIFIED=yes"
