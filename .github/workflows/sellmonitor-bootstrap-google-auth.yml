@@ -1,0 +1,52 @@
+name: Sellmonitor bootstrap GitHub Google auth
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [mainggg]
+    paths:
+      - ".github/workflows/sellmonitor-bootstrap-google-auth.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  bootstrap:
+    runs-on: [self-hosted, macOS, ozon-live]
+    timeout-minutes: 5
+    steps:
+      - name: Verify existing local clasp auth
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "$HOME/.clasprc.json"
+          python3 - <<'PY'
+          import json, pathlib
+          p=pathlib.Path.home()/'.clasprc.json'
+          obj=json.loads(p.read_text())
+          if not isinstance(obj,dict) or not obj:
+              raise SystemExit("invalid local clasp auth")
+          print("LOCAL_CLASP_AUTH=present")
+          PY
+
+      - name: Verify local GitHub CLI authorization
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v gh >/dev/null
+          gh auth status -h github.com >/dev/null
+          echo "LOCAL_GH_AUTH=present"
+
+      - name: Migrate clasp auth into GitHub Actions secret
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh secret set CLASPRC_JSON --repo v88218429-netizen/zzzz < "$HOME/.clasprc.json"
+          echo "GITHUB_CLASPRC_JSON=set"
+
+      - name: Verify secret metadata without reading value
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh secret list --repo v88218429-netizen/zzzz | awk '$1=="CLASPRC_JSON"{found=1} END{exit found?0:1}'
+          echo "GITHUB_SECRET_METADATA=verified"
