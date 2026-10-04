@@ -10,7 +10,8 @@ const SMC_GH = Object.freeze({
   LOG_SHEET: 'Log',
   MAX_CLIENTS_PER_TICK: 12,
   MAX_COMMANDS_PER_CLIENT: 4,
-  MAX_RESULT_CHARS: 45000
+  MAX_RESULT_CHARS: 45000,
+  WEBHOOK_SECRET: '__SELLMONITOR_GITHUB_WEBHOOK_SECRET__'
 });
 
 function sellmonitorGithubHealth() {
@@ -337,4 +338,82 @@ function sellmonitorGithubPlatformReady() {
 
   SpreadsheetApp.flush();
   return {ok: true, platform: 'READY', version: SMC_GH.VERSION};
+}
+
+
+function sellmonitorGithubWebJson_(obj) {
+  return ContentService
+    .createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function sellmonitorGithubWebAuth_(token) {
+  token = String(token || '');
+  var expected = String(SMC_GH.WEBHOOK_SECRET || '');
+  if (!expected || expected === '__SELLMONITOR_GITHUB_WEBHOOK_SECRET__') {
+    throw new Error('SELLMONITOR_WEBHOOK_SECRET_NOT_COMPILED');
+  }
+  if (token !== expected) {
+    throw new Error('UNAUTHORIZED');
+  }
+}
+
+function doGet(e) {
+  try {
+    var token = e && e.parameter ? e.parameter.token : '';
+    sellmonitorGithubWebAuth_(token);
+    return sellmonitorGithubWebJson_({
+      ok: true,
+      service: 'sellmonitor-github-worker',
+      version: SMC_GH.VERSION,
+      health: sellmonitorGithubHealth()
+    });
+  } catch (err) {
+    return sellmonitorGithubWebJson_({
+      ok: false,
+      error: String(err && err.message ? err.message : err)
+    });
+  }
+}
+
+function doPost(e) {
+  try {
+    var body = JSON.parse((e && e.postData && e.postData.contents) || '{}');
+    sellmonitorGithubWebAuth_(body.token);
+    var action = String(body.action || 'tick');
+
+    if (action === 'health') {
+      return sellmonitorGithubWebJson_({
+        ok: true,
+        action: action,
+        result: sellmonitorGithubHealth()
+      });
+    }
+
+    if (action === 'platform_ready') {
+      return sellmonitorGithubWebJson_({
+        ok: true,
+        action: action,
+        result: sellmonitorGithubPlatformReady()
+      });
+    }
+
+    if (action === 'tick') {
+      var ready = sellmonitorGithubPlatformReady();
+      var tick = sellmonitorGithubTick();
+      return sellmonitorGithubWebJson_({
+        ok: Boolean(tick && tick.ok),
+        action: action,
+        platform: ready,
+        tick: tick
+      });
+    }
+
+    throw new Error('UNKNOWN_ACTION: ' + action);
+  } catch (err) {
+    return sellmonitorGithubWebJson_({
+      ok: false,
+      error: String(err && (err.stack || err.message) ? (err.stack || err.message) : err)
+    });
+  }
 }
