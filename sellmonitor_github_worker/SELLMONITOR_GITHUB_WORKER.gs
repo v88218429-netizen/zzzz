@@ -8,11 +8,28 @@ const SMC_GH = Object.freeze({
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
-  MAX_CLIENTS_PER_TICK: 12,
-  MAX_COMMANDS_PER_CLIENT: 4,
+  MAX_CLIENTS_PER_TICK: 4,
+  MAX_COMMANDS_PER_CLIENT: 1,
   MAX_RESULT_CHARS: 45000,
   WEBHOOK_SECRET: '__SELLMONITOR_GITHUB_WEBHOOK_SECRET__'
 });
+
+
+function sellmonitorGithubEnsureTrigger_() {
+  var fn = 'sellmonitorGithubTick';
+  var triggers = ScriptApp.getProjectTriggers();
+  var found = null;
+  for (var i = 0; i < triggers.length; i++) {
+    if (triggers[i].getHandlerFunction() !== fn) continue;
+    if (!found) found = triggers[i];
+    else ScriptApp.deleteTrigger(triggers[i]);
+  }
+  if (!found) {
+    ScriptApp.newTrigger(fn).timeBased().everyMinutes(5).create();
+    return {ok: true, created: true, intervalMinutes: 5};
+  }
+  return {ok: true, created: false, intervalMinutes: 5};
+}
 
 function sellmonitorGithubHealth() {
   var cc = SpreadsheetApp.openById(SMC_GH.CONTROL_CENTER_ID);
@@ -361,7 +378,20 @@ function sellmonitorGithubWebAuth_(token) {
 function doGet(e) {
   try {
     var token = e && e.parameter ? e.parameter.token : '';
+    var action = e && e.parameter ? String(e.parameter.action || 'health') : 'health';
     sellmonitorGithubWebAuth_(token);
+
+    if (action === 'tick') {
+      var ready = sellmonitorGithubPlatformReady();
+      var tick = sellmonitorGithubTick();
+      return sellmonitorGithubWebJson_({
+        ok: Boolean(tick && tick.ok),
+        action: action,
+        platform: ready,
+        tick: tick
+      });
+    }
+
     return sellmonitorGithubWebJson_({
       ok: true,
       service: 'sellmonitor-github-worker',
