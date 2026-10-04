@@ -744,8 +744,12 @@ function sellmonitorGithubWebAuth_(token) {
 
 function doGet(e) {
   try {
-    var token = e && e.parameter ? e.parameter.token : '';
-    var action = e && e.parameter ? String(e.parameter.action || 'health') : 'health';
+    var params = e && e.parameter ? e.parameter : {};
+    if ((params.code || params.error) && params.state) {
+      return sellmonitorGithubOAuthCallback_(e);
+    }
+    var token = params.token || '';
+    var action = String(params.action || 'health');
 
     if (action === 'oauth_callback') {
       return sellmonitorGithubOAuthCallback_(e);
