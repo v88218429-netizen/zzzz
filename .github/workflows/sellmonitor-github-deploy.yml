@@ -114,7 +114,8 @@ jobs:
           python - "$RESP" <<'PY'
           import json, sys
           obj=json.loads(sys.argv[1])
-          assert obj.get("ok") is True, obj
+          if obj.get("ok") is not True and obj.get("error") != "TICK_ONCE_V2_ALREADY_USED":
+              raise AssertionError(obj)
           print("WORKER_TICK_OK=yes")
           PY
 
@@ -128,7 +129,7 @@ jobs:
           clasp pull
           grep -Rqs "SELLMONITOR_GITHUB_MASTER_HOOK_V1" .
           grep -Rqs "function sellmonitorGithubEnsureTrigger_()" .
-          grep -Rqs "github-worker-1.0.0" .
+          grep -Rqs "github-worker-1.1.0" .
           python - <<'PY'
           import json
           obj=json.load(open('appsscript.json'))
