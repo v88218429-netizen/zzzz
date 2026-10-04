@@ -688,22 +688,23 @@ function sellmonitorGithubOAuthCallback_(e) {
       }
     }
 
-    var fullPrefix = 'FULL-START-' + storeId + '-';
-    var hasFull = false;
+    var canaryPrefix = 'POST-OAUTH-CANARY-' + storeId + '-';
+    var hasCanary = false;
     var q2 = q.getRange(1200,1,824,5).getValues();
     for (var z = 0; z < q2.length; z++) {
-      if (String(q2[z][0] || '').indexOf(fullPrefix) === 0 && ['PENDING','RUNNING','NEW','SCHEDULED','DONE'].indexOf(String(q2[z][4] || '')) >= 0) {
-        hasFull = true; break;
+      if (String(q2[z][0] || '').indexOf(canaryPrefix) === 0 && ['PENDING','RUNNING','NEW','SCHEDULED','DONE'].indexOf(String(q2[z][4] || '')) >= 0) {
+        hasCanary = true; break;
       }
     }
-    if (!hasFull) {
+    if (!hasCanary) {
       var row = queueSlot();
       q.getRange(row,1,1,5).setValues([[
-        fullPrefix + Date.now(), new Date(), 'RUN_REMOTE',
-        JSON.stringify({file:'store_full_sync_start_v201',entrypoint:'REMOTE_MAIN',payload:{storeId:storeId}}),
+        canaryPrefix + Date.now(), new Date(), 'RUN_REMOTE',
+        JSON.stringify({file:'client_post_oauth_canary_v300',entrypoint:'REMOTE_MAIN',payload:{storeId:storeId}}),
         'PENDING'
       ]]);
     }
+    ui.getRange('B22').setValue('ПРОВЕРКА · OAuth persistence canary');
 
     if (map.sellmonitor_account_id != null) clients.getRange(clientRow, map.sellmonitor_account_id + 1).setValue(accountId);
     if (map.status != null) clients.getRange(clientRow, map.status + 1).setValue('oauth_authorized');
