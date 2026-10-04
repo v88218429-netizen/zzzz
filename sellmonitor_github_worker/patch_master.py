@@ -52,3 +52,5 @@ block = """    /* SELLMONITOR_GITHUB_MASTER_HOOK_V1 */
 text = text.replace(needle, block + needle, 1)
 path.write_text(text, encoding="utf-8")
 print(f"PATCH_OK: {path.name}")
+
+# deploy-bump 2026-10-04
