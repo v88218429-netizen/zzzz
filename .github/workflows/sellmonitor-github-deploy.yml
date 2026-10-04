@@ -67,6 +67,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          rm -f /tmp/sellmonitor-gh-worker/SELLMONITOR_GITHUB_WORKER.js /tmp/sellmonitor-gh-worker/SELLMONITOR_GITHUB_WORKER.gs
           cp sellmonitor_github_worker/SELLMONITOR_GITHUB_WORKER.gs /tmp/sellmonitor-gh-worker/SELLMONITOR_GITHUB_WORKER.gs
           cp /tmp/sellmonitor-gh-worker/SELLMONITOR_GITHUB_WORKER.gs /tmp/check.js
           node --check /tmp/check.js
