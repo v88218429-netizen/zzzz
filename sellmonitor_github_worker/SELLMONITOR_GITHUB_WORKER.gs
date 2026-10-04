@@ -762,6 +762,25 @@ function doGet(e) {
       });
     }
 
+    if (action === 'tick_once_v3') {
+      var onceProps3 = PropertiesService.getScriptProperties();
+      var onceKey3 = 'SMC_TICK_ONCE_V3_USED';
+      if (onceProps3.getProperty(onceKey3) === '1') {
+        return sellmonitorGithubWebJson_({ok: false, error: 'TICK_ONCE_V3_ALREADY_USED'});
+      }
+      onceProps3.setProperty(onceKey3, '1');
+      var onceTrigger3 = sellmonitorGithubEnsureTrigger_();
+      var onceReady3 = sellmonitorGithubPlatformReady();
+      var onceTick3 = sellmonitorGithubTick();
+      return sellmonitorGithubWebJson_({
+        ok: Boolean(onceTick3 && onceTick3.ok),
+        action: action,
+        trigger: onceTrigger3,
+        platform: onceReady3,
+        tick: onceTick3
+      });
+    }
+
     sellmonitorGithubWebAuth_(token);
 
     if (action === 'tick') {

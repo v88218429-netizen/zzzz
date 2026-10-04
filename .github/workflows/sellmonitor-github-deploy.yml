@@ -109,12 +109,12 @@ jobs:
         run: |
           set -euo pipefail
           URL="https://script.google.com/macros/s/$WEBAPP_DEPLOYMENT_ID/exec"
-          RESP="$(curl -fsSL --retry 2 --retry-delay 2 "$URL?action=tick_once_v2")"
+          RESP="$(curl -fsSL --retry 2 --retry-delay 2 "$URL?action=tick_once_v3")"
           printf '%s\n' "$RESP"
           python - "$RESP" <<'PY'
           import json, sys
           obj=json.loads(sys.argv[1])
-          if obj.get("ok") is not True and obj.get("error") != "TICK_ONCE_V2_ALREADY_USED":
+          if obj.get("ok") is not True and obj.get("error") != "TICK_ONCE_V3_ALREADY_USED":
               raise AssertionError(obj)
           print("WORKER_TICK_OK=yes")
           PY
