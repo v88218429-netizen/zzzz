@@ -31,6 +31,7 @@ EXPORT_TOKEN = os.environ.get("FINANCE_EXPORT_TOKEN", "").strip()
 DEDUCTIONS_SHEET_TOKEN = os.environ.get("DEDUCTIONS_SHEET_TOKEN", "").strip()
 PRICE_EXPORT_KEY = os.environ.get("PRICE_EXPORT_KEY", "").strip()
 PRICE_EXPORT_LIMIT = int(os.environ.get("PRICE_EXPORT_LIMIT", "1000"))
+SELLMONITOR_USER_KEYS = {"AA": "SELLMONITOR_USER_API_KEY_AA", "YV": "SELLMONITOR_USER_API_KEY_YV"}
 
 
 def bootstrap_shops() -> None:
@@ -441,6 +442,46 @@ async def prices_status(request: Request):
         "configured_shops": [code for code, (_name, env_name) in PRICE_SHOPS.items() if os.environ.get(env_name, "").strip()],
         "endpoint": "/api/prices/export.csv",
     })
+
+
+
+@app.get("/api/sellmonitor/canary/{shop}")
+async def sellmonitor_canary(shop: str):
+    code = str(shop or "").strip().upper()
+    env_name = SELLMONITOR_USER_KEYS.get(code)
+    if not env_name:
+        raise HTTPException(status_code=404, detail="Unknown Sellmonitor shop")
+    key = os.environ.get(env_name, "").strip()
+    if not key:
+        raise HTTPException(status_code=503, detail="Sellmonitor user API key is not configured")
+    async with httpx.AsyncClient(timeout=30.0, follow_redirects=False) as client:
+        response = await client.get(
+            "https://sellmonitor.com/api/plugin/user/current/",
+            headers={"Api-key": key, "Accept": "application/json"},
+        )
+    content_type = response.headers.get("content-type", "")
+    text_body = response.text
+    if "json" not in content_type.lower():
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "error": "Sellmonitor returned non-JSON",
+                "upstream_http": response.status_code,
+                "content_type": content_type,
+                "preview": text_body[:220].replace("\n", " "),
+            },
+        )
+    try:
+        payload = response.json()
+    except Exception:
+        raise HTTPException(status_code=502, detail="Sellmonitor JSON parse failed")
+    return {
+        "ok": 200 <= response.status_code < 300,
+        "shop": code,
+        "upstream_http": response.status_code,
+        "content_type": content_type,
+        "top_level_keys": sorted(payload.keys())[:30] if isinstance(payload, dict) else [],
+    }
 
 
 app.mount("/", wb_app)
