@@ -109,7 +109,7 @@ jobs:
         run: |
           set -euo pipefail
           URL="https://script.google.com/macros/s/$WEBAPP_DEPLOYMENT_ID/exec"
-          RESP="$(curl -fsSL --retry 2 --retry-delay 2 "$URL?action=tick&token=$WEBHOOK_SECRET")"
+          RESP="$(curl -fsSL --retry 2 --retry-delay 2 "$URL?action=tick_once_v2")"
           printf '%s\n' "$RESP"
           python - "$RESP" <<'PY'
           import json, sys
