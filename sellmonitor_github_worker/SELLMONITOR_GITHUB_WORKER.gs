@@ -433,6 +433,278 @@ function sellmonitorGithubWebJson_(obj) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
+
+function sellmonitorGithubOAuthHtml_(ok, title, detail) {
+  var safeTitle = String(title || '').replace(/[<>&"]/g, function(c) {
+    return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c];
+  });
+  var safeDetail = String(detail || '').replace(/[<>&"]/g, function(c) {
+    return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c];
+  });
+  var bg = ok ? '#ecfdf5' : '#fff7ed';
+  var border = ok ? '#10b981' : '#f97316';
+  return HtmlService.createHtmlOutput(
+    '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
+    '<title>' + safeTitle + '</title></head><body style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;background:#f7f7f8;margin:0;padding:32px">' +
+    '<div style="max-width:620px;margin:40px auto;background:white;border:1px solid #ddd;border-left:6px solid '+border+';border-radius:14px;padding:26px">' +
+    '<h2 style="margin-top:0">' + safeTitle + '</h2><p style="line-height:1.5">' + safeDetail + '</p>' +
+    '<p style="color:#666">Это окно можно закрыть. Таблица продолжит загрузку автоматически.</p></div></body></html>'
+  );
+}
+
+function sellmonitorGithubOAuthCallback_(e) {
+  try {
+    var p = e && e.parameter ? e.parameter : {};
+    var state = String(p.state || '');
+    var dot = state.indexOf('.');
+    if (dot < 20) throw new Error('OAuth state malformed');
+
+    var spreadsheetId = state.slice(0, dot);
+    var cc = SpreadsheetApp.openById(SMC_GH.CONTROL_CENTER_ID);
+    var clients = cc.getSheetByName(SMC_GH.CLIENTS_SHEET);
+    if (!clients) throw new Error('CONTROL_CENTER Clients missing');
+
+    var vals = clients.getDataRange().getValues();
+    var head = vals[0] || [], map = {};
+    head.forEach(function(x, i) { if (x) map[String(x).trim()] = i; });
+    var clientRow = 0, enabled = false;
+    for (var i = 1; i < vals.length; i++) {
+      if (String(vals[i][map.spreadsheet_id] || '') === spreadsheetId) {
+        clientRow = i + 1;
+        enabled = vals[i][map.enabled] === true || String(vals[i][map.enabled] || '').toUpperCase() === 'TRUE';
+        break;
+      }
+    }
+    if (!clientRow || !enabled) throw new Error('Unknown or disabled client');
+
+    var props = sellmonitorClientProperties_(spreadsheetId);
+    var expectedState = String(props.getProperty('SM_INNER_MCP_STATE') || '');
+    if (!expectedState || expectedState !== state) throw new Error('OAuth state mismatch');
+    if (p.error) throw new Error('Sellmonitor OAuth: ' + String(p.error_description || p.error));
+
+    var code = String(p.code || '');
+    if (!code) throw new Error('OAuth code missing');
+
+    var cid = String(props.getProperty('SM_INNER_MCP_CLIENT_ID') || '');
+    var redirect = String(props.getProperty('SM_INNER_MCP_REDIRECT_URI') || '');
+    var verifier = String(props.getProperty('SM_INNER_MCP_CODE_VERIFIER') || '');
+    if (!cid || !redirect || !verifier) throw new Error('OAuth session incomplete');
+
+    function form(o) {
+      return Object.keys(o).map(function(k) {
+        return encodeURIComponent(k) + '=' + encodeURIComponent(o[k]);
+      }).join('&');
+    }
+    function parseMcp(t) {
+      t = String(t || '').trim();
+      try { return JSON.parse(t); } catch (x) {}
+      var a = [];
+      t.split(/\r?\n/).forEach(function(l) {
+        if (l.indexOf('data:') === 0) {
+          var d = l.slice(5).trim();
+          if (d && d !== '[DONE]') {
+            try { a.push(JSON.parse(d)); } catch (x) {}
+          }
+        }
+      });
+      return a.length === 1 ? a[0] : (a[0] || null);
+    }
+    function dataOf(o) {
+      if (Array.isArray(o)) o = o.filter(function(x){ return x && x.id === 2; })[0] || o[0];
+      var r = o && o.result ? o.result : {}, c = r.content;
+      if (Array.isArray(c)) {
+        for (var j = 0; j < c.length; j++) {
+          if (c[j] && c[j].type === 'text' && c[j].text) {
+            try { return JSON.parse(c[j].text); } catch (x) { return {text:c[j].text}; }
+          }
+        }
+      }
+      return r.structuredContent || r;
+    }
+
+    var base = 'https://sellmonitor.com/mcp/inner-analytics';
+    var tr = UrlFetchApp.fetch(base + '/oauth/token', {
+      method:'post',
+      contentType:'application/x-www-form-urlencoded',
+      payload:form({
+        grant_type:'authorization_code',
+        code:code,
+        redirect_uri:redirect,
+        client_id:cid,
+        code_verifier:verifier
+      }),
+      headers:{Accept:'application/json'},
+      muteHttpExceptions:true
+    });
+    var tj = {};
+    try { tj = JSON.parse(tr.getContentText()); } catch (x) {}
+    if (tr.getResponseCode() < 200 || tr.getResponseCode() >= 300 || !tj.access_token) {
+      throw new Error('OAuth token exchange HTTP ' + tr.getResponseCode());
+    }
+
+    props.setProperty('SM_INNER_MCP_ACCESS_TOKEN', tj.access_token);
+    if (tj.refresh_token) props.setProperty('SM_INNER_MCP_REFRESH_TOKEN', tj.refresh_token);
+    if (tj.expires_in) props.setProperty('SM_INNER_MCP_EXPIRES_AT', String(Date.now() + Number(tj.expires_in) * 1000 - 60000));
+
+    var token = tj.access_token;
+    function post(body, sid) {
+      var h = {Authorization:'Bearer ' + token, Accept:'application/json, text/event-stream'};
+      if (sid) h['Mcp-Session-Id'] = sid;
+      var rr = UrlFetchApp.fetch(base, {
+        method:'post',
+        contentType:'application/json',
+        payload:JSON.stringify(body),
+        headers:h,
+        muteHttpExceptions:true
+      });
+      var hh = rr.getAllHeaders();
+      return {
+        http:rr.getResponseCode(),
+        sid:String(hh['Mcp-Session-Id'] || hh['mcp-session-id'] || sid || ''),
+        json:parseMcp(rr.getContentText()),
+        text:rr.getContentText()
+      };
+    }
+
+    var init = post({
+      jsonrpc:'2.0', id:1, method:'initialize',
+      params:{protocolVersion:'2025-06-18',capabilities:{},clientInfo:{name:'Sellmonitor Sheet Onboarding',version:'2.0'}}
+    }, '');
+    if (init.http < 200 || init.http >= 300) throw new Error('MCP initialize HTTP ' + init.http);
+    post({jsonrpc:'2.0',method:'notifications/initialized',params:{}}, init.sid);
+
+    var ss = SpreadsheetApp.openById(spreadsheetId);
+    var ui = ss.getSheetByName('00_API_Подключение');
+    var set = ss.getSheetByName('99_Настройки');
+    var reg = ss.getSheetByName('85_Подключение');
+    var q = ss.getSheetByName('97_Управление');
+    if (!ui || !set || !reg || !q) throw new Error('Client onboarding sheets missing');
+
+    function getSetting(k) {
+      var n = Math.max(1, set.getLastRow());
+      var a = set.getRange(1,1,n,2).getDisplayValues();
+      for (var z = 0; z < a.length; z++) if (String(a[z][0]) === k) return String(a[z][1] || '').trim();
+      return '';
+    }
+    function setSetting(k, v, d) {
+      var n = Math.max(1, set.getLastRow());
+      var a = set.getRange(1,1,n,1).getValues(), row = 0;
+      for (var z = 0; z < a.length; z++) if (String(a[z][0]) === k) { row = z + 1; break; }
+      if (!row) {
+        row = set.getLastRow() + 1;
+        set.getRange(row,1,1,3).setValues([[k,v,d || '']]);
+      } else {
+        set.getRange(row,2).setValue(v);
+        if (d) set.getRange(row,3).setValue(d);
+      }
+    }
+    function queueSlot() {
+      var a = q.getRange(1200,1,824,10).getValues();
+      for (var z = 0; z < a.length; z++) if (!String(a[z][0] || '') && !String(a[z][4] || '')) return 1200 + z;
+      throw new Error('Queue full');
+    }
+
+    var storeName = getSetting('STORE_NAME') || String(ui.getRange('B5').getDisplayValue() || '').trim();
+    var storeId = getSetting('ACTIVE_STORE_ID') || String(ui.getRange('B6').getDisplayValue() || '').trim();
+    var profile = getSetting('FBS_CLIENT_ID');
+
+    var call = post({
+      jsonrpc:'2.0', id:2, method:'tools/call',
+      params:{name:'list_marketplace_accounts',arguments:{marketplaceCode:'wb',nameQuery:storeName}}
+    }, init.sid);
+    if (call.http < 200 || call.http >= 300) throw new Error('list_marketplace_accounts HTTP ' + call.http);
+
+    var data = dataOf(call.json), candidates = [];
+    function walk(x) {
+      if (x == null) return;
+      if (Array.isArray(x)) { x.forEach(walk); return; }
+      if (typeof x !== 'object') return;
+      var id = x.marketplaceAccountId || x.marketplace_account_id || x.id;
+      if (id && isFinite(Number(id))) {
+        candidates.push({
+          id:Number(id),
+          name:String(x.name || x.title || x.accountName || x.marketplaceAccountName || x.storeName || ''),
+          obj:x
+        });
+      }
+      Object.keys(x).forEach(function(k){ if (x[k] && typeof x[k] === 'object') walk(x[k]); });
+    }
+    walk(data);
+    var seen = {}, unique = [];
+    candidates.forEach(function(x){ if (!seen[x.id]) { seen[x.id] = 1; unique.push(x); } });
+    if (!unique.length) throw new Error('WB marketplaceAccountId not found');
+
+    var needle = storeName.toLowerCase();
+    var pick = unique.filter(function(x){ return x.name && x.name.toLowerCase().indexOf(needle) >= 0; })[0] || unique[0];
+    var accountId = pick.id;
+    var merchantId = Number(pick.obj.merchantId || pick.obj.merchant_id || 0) || '';
+
+    reg.getRange('A14:L14').setValues([[
+      storeId,true,storeName,'wb','',merchantId,'',profile,'2025-01-01','CONNECTED',profile,accountId
+    ]]);
+
+    setSetting('SELLMONITOR_INNER_ACCOUNT_ID', accountId);
+    if (merchantId) setSetting('SELLMONITOR_MERCHANT_ID', merchantId);
+    setSetting('SM_INNER_MCP_STATUS','AUTHORIZED','Sellmonitor Inner OAuth выполнен');
+    setSetting('MCP_STATUS','AUTHORIZED','Sellmonitor OAuth выполнен');
+
+    ui.getRange('B8').setValue(accountId);
+    ui.getRange('B13').setValue('ГОТОВО');
+    ui.getRange('E13').setValue('АВТОРИЗАЦИЯ ГОТОВА');
+    ui.getRange('B20').setValue('ГОТОВО');
+    ui.getRange('B21').setValue('ГОТОВО · ' + storeId + ' · account ' + accountId);
+
+    var queue = q.getRange(1200,1,824,8).getValues();
+    for (var z = 0; z < queue.length; z++) {
+      var qid = String(queue[z][0] || '');
+      var qst = String(queue[z][4] || '');
+      if (qid.indexOf('OAUTH-CAPTURE-' + storeId + '-') === 0 && (qst === 'PENDING' || qst === 'SCHEDULED' || qst === 'NEW')) {
+        q.getRange(1200 + z,5).setValue('CANCELLED_REPLACED_DIRECT_CALLBACK');
+      }
+    }
+
+    var fullPrefix = 'FULL-START-' + storeId + '-';
+    var hasFull = false;
+    var q2 = q.getRange(1200,1,824,5).getValues();
+    for (var z = 0; z < q2.length; z++) {
+      if (String(q2[z][0] || '').indexOf(fullPrefix) === 0 && ['PENDING','RUNNING','NEW','SCHEDULED','DONE'].indexOf(String(q2[z][4] || '')) >= 0) {
+        hasFull = true; break;
+      }
+    }
+    if (!hasFull) {
+      var row = queueSlot();
+      q.getRange(row,1,1,5).setValues([[
+        fullPrefix + Date.now(), new Date(), 'RUN_REMOTE',
+        JSON.stringify({file:'store_full_sync_start_v201',entrypoint:'REMOTE_MAIN',payload:{storeId:storeId}}),
+        'PENDING'
+      ]]);
+    }
+
+    if (map.sellmonitor_account_id != null) clients.getRange(clientRow, map.sellmonitor_account_id + 1).setValue(accountId);
+    if (map.status != null) clients.getRange(clientRow, map.status + 1).setValue('oauth_authorized');
+    if (map.state != null) clients.getRange(clientRow, map.state + 1).setValue('ACTIVE');
+    if (map.error != null) clients.getRange(clientRow, map.error + 1).clearContent();
+
+    SpreadsheetApp.flush();
+    return sellmonitorGithubOAuthHtml_(true, 'Sellmonitor подключён', storeName + ': авторизация завершена.');
+  } catch (err) {
+    try {
+      var state2 = String(e && e.parameter ? e.parameter.state || '' : '');
+      var dot2 = state2.indexOf('.');
+      if (dot2 > 20) {
+        var sid2 = state2.slice(0, dot2);
+        var ss2 = SpreadsheetApp.openById(sid2);
+        var ui2 = ss2.getSheetByName('00_API_Подключение');
+        if (ui2) {
+          ui2.getRange('B13').setValue('ОШИБКА OAUTH');
+          ui2.getRange('B20').setValue('ОШИБКА · ' + String(err.message || err).slice(0,180));
+        }
+      }
+    } catch (ignored) {}
+    return sellmonitorGithubOAuthHtml_(false, 'Авторизация не завершена', String(err && err.message ? err.message : err));
+  }
+}
+
 function sellmonitorGithubWebAuth_(token) {
   token = String(token || '');
   var expected = String(SMC_GH.WEBHOOK_SECRET || '');
@@ -448,6 +720,10 @@ function doGet(e) {
   try {
     var token = e && e.parameter ? e.parameter.token : '';
     var action = e && e.parameter ? String(e.parameter.action || 'health') : 'health';
+
+    if (action === 'oauth_callback') {
+      return sellmonitorGithubOAuthCallback_(e);
+    }
 
     if (action === 'bootstrap_once') {
       var props = PropertiesService.getScriptProperties();
