@@ -4,7 +4,7 @@
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.1.0',
+  VERSION: 'github-worker-1.2.0',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -303,17 +303,41 @@ function sellmonitorGithubRebindSource_(source, spreadsheetId) {
 }
 
 function sellmonitorClientProperties_(spreadsheetId) {
-  var base = PropertiesService.getScriptProperties();
+  var primary = PropertiesService.getUserProperties();
+  var legacy = PropertiesService.getScriptProperties();
   var prefix = 'SMC__' + String(spreadsheetId) + '__';
   function key(k) { return prefix + String(k); }
+  function migrateOne(k) {
+    var kk = key(k), v = primary.getProperty(kk);
+    if (v != null) return v;
+    v = legacy.getProperty(kk);
+    if (v != null) {
+      primary.setProperty(kk, String(v));
+      return v;
+    }
+    return null;
+  }
   return {
-    getProperty: function(k) { return base.getProperty(key(k)); },
-    setProperty: function(k, v) { base.setProperty(key(k), String(v)); return this; },
-    deleteProperty: function(k) { base.deleteProperty(key(k)); return this; },
+    getProperty: function(k) { return migrateOne(k); },
+    setProperty: function(k, v) {
+      primary.setProperty(key(k), String(v));
+      return this;
+    },
+    deleteProperty: function(k) {
+      primary.deleteProperty(key(k));
+      legacy.deleteProperty(key(k));
+      return this;
+    },
     getProperties: function() {
-      var all = base.getProperties(), out = {};
-      Object.keys(all).forEach(function(k) {
-        if (k.indexOf(prefix) === 0) out[k.slice(prefix.length)] = all[k];
+      var out = {}, a = legacy.getProperties(), b = primary.getProperties();
+      Object.keys(a).forEach(function(k) {
+        if (k.indexOf(prefix) === 0) out[k.slice(prefix.length)] = a[k];
+      });
+      Object.keys(b).forEach(function(k) {
+        if (k.indexOf(prefix) === 0) out[k.slice(prefix.length)] = b[k];
+      });
+      Object.keys(out).forEach(function(k) {
+        if (primary.getProperty(key(k)) == null) primary.setProperty(key(k), String(out[k]));
       });
       return out;
     },
@@ -321,12 +345,13 @@ function sellmonitorClientProperties_(spreadsheetId) {
       if (deleteOthers) this.deleteAllProperties();
       var out = {};
       Object.keys(obj || {}).forEach(function(k) { out[key(k)] = String(obj[k]); });
-      base.setProperties(out, false);
+      primary.setProperties(out, false);
       return this;
     },
     deleteAllProperties: function() {
-      var all = base.getProperties();
-      Object.keys(all).forEach(function(k) { if (k.indexOf(prefix) === 0) base.deleteProperty(k); });
+      var a = legacy.getProperties(), b = primary.getProperties();
+      Object.keys(a).forEach(function(k) { if (k.indexOf(prefix) === 0) legacy.deleteProperty(k); });
+      Object.keys(b).forEach(function(k) { if (k.indexOf(prefix) === 0) primary.deleteProperty(k); });
       return this;
     }
   };
