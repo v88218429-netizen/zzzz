@@ -4,7 +4,7 @@
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.2.0',
+  VERSION: 'github-worker-1.3.0',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -548,7 +548,17 @@ function sellmonitorGithubOAuthCallback_(e) {
     }
 
     var base = 'https://sellmonitor.com/mcp/inner-analytics';
-    var tr = UrlFetchApp.fetch(base + '/oauth/token', {
+    var tokenEndpoint = String(props.getProperty('SM_INNER_MCP_TOKEN_ENDPOINT') || '');
+    if (!tokenEndpoint) {
+      var metaResp = UrlFetchApp.fetch(base + '/.well-known/oauth-authorization-server', {
+        method:'get', headers:{Accept:'application/json'}, muteHttpExceptions:true, followRedirects:true
+      });
+      var metaJson = {};
+      try { metaJson = JSON.parse(metaResp.getContentText()); } catch (x) {}
+      tokenEndpoint = String(metaJson.token_endpoint || '');
+    }
+    if (!tokenEndpoint) throw new Error('OAuth token endpoint missing from metadata');
+    var tr = UrlFetchApp.fetch(tokenEndpoint, {
       method:'post',
       contentType:'application/x-www-form-urlencoded',
       payload:form({
