@@ -13,6 +13,7 @@
  */
 
 var WB_FBS_DIRECT_SUPPLY_CFG = {
+  spreadsheetId: '1_rMW6w4a7ZKhsWAyVo4B4Hn2x1cXwJWVW7K4JAHpjI8',
   ordersSheet: '📦 FBS Заказы',
   suppliesSheet: '🚚 Поставки FBS',
   historySheet: '🕘 История статусов',
@@ -25,8 +26,16 @@ var WB_FBS_DIRECT_SUPPLY_CFG = {
   pageLimit: 1000
 };
 
+function wbFbsSupplySpreadsheet_() {
+  return SpreadsheetApp.openById(WB_FBS_DIRECT_SUPPLY_CFG.spreadsheetId);
+}
+
 function wbFbsSupplyToken_() {
-  var props = PropertiesService.getScriptProperties();
+  var stores = [
+    PropertiesService.getScriptProperties(),
+    PropertiesService.getDocumentProperties(),
+    PropertiesService.getUserProperties()
+  ];
   var keys = [
     'WB_API_TOKEN_AP',
     'WB_API_TOKEN',
@@ -34,9 +43,13 @@ function wbFbsSupplyToken_() {
     'WB_API_KEY',
     'WILDBERRIES_API_TOKEN'
   ];
-  for (var i = 0; i < keys.length; i++) {
-    var token = String(props.getProperty(keys[i]) || '').trim();
-    if (token) return token;
+  for (var s = 0; s < stores.length; s++) {
+    var props = stores[s];
+    if (!props) continue;
+    for (var i = 0; i < keys.length; i++) {
+      var token = String(props.getProperty(keys[i]) || '').trim();
+      if (token) return token;
+    }
   }
 
   // Compatibility with older FBS builds if one of these helpers exists.
@@ -270,8 +283,10 @@ function wbFbsSupplyBackfillOrders_(ss, suppliesById) {
   var start = Math.max(2, last - WB_FBS_DIRECT_SUPPLY_CFG.orderTailRows + 1);
   var n = last - start + 1;
 
+  var orderIds = sh.getRange(start, 1, n, 1).getDisplayValues(); // A
   var bToK = sh.getRange(start, 2, n, 10).getValues(); // B:K
   var complete = sh.getRange(start, 20, n, 1).getValues(); // T
+  var lastChange = sh.getRange(start, 22, n, 1).getValues(); // V
   var timings = sh.getRange(start, 46, n, 6).getValues(); // AT:AY
   var sortedCols = sh.getRange(start, 58, n, 2).getValues(); // BF:BG
   var sortedMap = wbFbsSupplySortedMap_(ss);
@@ -300,7 +315,7 @@ function wbFbsSupplyBackfillOrders_(ss, suppliesById) {
       if (scan && orderDate) timings[i][5] = wbFbsSupplyHours_(orderDate, scan);          // AY
     }
 
-    var orderId = String(sh.getRange(start + i, 1).getDisplayValue() || '').trim();
+    var orderId = String(orderIds[i][0] || '').trim();
     var firstSorted = sortedCols[i][0];
 
     if (!firstSorted && orderId && sortedMap[orderId]) {
@@ -309,7 +324,7 @@ function wbFbsSupplyBackfillOrders_(ss, suppliesById) {
       sortedFilled++;
     } else if (!firstSorted && wbStatus === 'sorted') {
       // Fallback for a newly observed sorted state before the history row is flushed.
-      firstSorted = wbFbsSupplyDate_(sh.getRange(start + i, 22).getValue()); // V
+      firstSorted = wbFbsSupplyDate_(lastChange[i][0]); // V
       if (firstSorted) {
         sortedCols[i][0] = firstSorted;
         sortedFilled++;
@@ -349,7 +364,7 @@ function wbFbsSupplyWriteHealth_(ss, state, detail) {
 }
 
 function wbFbsSupplySyncCore_() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = wbFbsSupplySpreadsheet_();
   var token = wbFbsSupplyToken_();
   var checkedAt = new Date();
 
@@ -410,7 +425,7 @@ function wbFbsSupplyMaybeSync_() {
       WB_FBS_DIRECT_LAST_ERROR: msg.slice(0, 1000)
     });
     try {
-      wbFbsSupplyWriteHealth_(SpreadsheetApp.getActiveSpreadsheet(), 'ERROR', msg);
+      wbFbsSupplyWriteHealth_(wbFbsSupplySpreadsheet_(), 'ERROR', msg);
     } catch (ignored) {}
     Logger.log('WB_FBS_DIRECT_ERROR ' + msg);
     return {ok: false, error: msg};
