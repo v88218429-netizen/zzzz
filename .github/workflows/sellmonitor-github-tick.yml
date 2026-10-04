@@ -27,7 +27,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python -m unittest -v sellmonitor_github_worker/test_core.py
+          cd sellmonitor_github_worker
+          python -m unittest -v test_core.py
+          cd ..
           cp sellmonitor_github_worker/SELLMONITOR_GITHUB_WORKER.gs /tmp/sellmonitor_worker.js
           node --check /tmp/sellmonitor_worker.js
           python -m py_compile sellmonitor_github_worker/patch_master.py
