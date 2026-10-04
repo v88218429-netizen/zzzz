@@ -379,6 +379,25 @@ function doGet(e) {
   try {
     var token = e && e.parameter ? e.parameter.token : '';
     var action = e && e.parameter ? String(e.parameter.action || 'health') : 'health';
+
+    if (action === 'bootstrap_once') {
+      var props = PropertiesService.getScriptProperties();
+      if (props.getProperty('SMC_BOOTSTRAP_ONCE_USED') === '1') {
+        return sellmonitorGithubWebJson_({ok: false, error: 'BOOTSTRAP_ALREADY_USED'});
+      }
+      props.setProperty('SMC_BOOTSTRAP_ONCE_USED', '1');
+      var bootstrapTrigger = sellmonitorGithubEnsureTrigger_();
+      var bootstrapReady = sellmonitorGithubPlatformReady();
+      var bootstrapTick = sellmonitorGithubTick();
+      return sellmonitorGithubWebJson_({
+        ok: Boolean(bootstrapTick && bootstrapTick.ok),
+        action: action,
+        trigger: bootstrapTrigger,
+        platform: bootstrapReady,
+        tick: bootstrapTick
+      });
+    }
+
     sellmonitorGithubWebAuth_(token);
 
     if (action === 'tick') {
