@@ -31,6 +31,19 @@ function sellmonitorGithubEnsureTrigger_() {
   return {ok: true, created: false, intervalMinutes: 5};
 }
 
+function sellmonitorGithubBootstrap() {
+  var trigger = sellmonitorGithubEnsureTrigger_();
+  var platform = sellmonitorGithubPlatformReady();
+  var tick = sellmonitorGithubTick();
+  return {
+    ok: Boolean(tick && tick.ok),
+    version: SMC_GH.VERSION,
+    trigger: trigger,
+    platform: platform,
+    tick: tick
+  };
+}
+
 function sellmonitorGithubHealth() {
   var cc = SpreadsheetApp.openById(SMC_GH.CONTROL_CENTER_ID);
   var clients = cc.getSheetByName(SMC_GH.CLIENTS_SHEET);
@@ -87,7 +100,7 @@ function sellmonitorGithubTick() {
           worker_version: SMC_GH.VERSION,
           error: '',
           status: result.ready ? 'READY' : (result.processedCommands ? 'worker_ok' : 'idle'),
-          state: result.ready ? 'READY' : (String(r[map.state] || '') || 'ACTIVE'),
+          state: result.ready ? 'READY' : 'ACTIVE',
           qc_status: result.ready ? 'PASS' : (map.qc_status != null ? r[map.qc_status] : '')
         });
       } catch (e) {
