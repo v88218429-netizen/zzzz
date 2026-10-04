@@ -15,61 +15,41 @@ concurrency:
 jobs:
   tick:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 4
     env:
-      SCRIPT_ID: "15tH3jwOa5hKJFahIyPX5AIXO7KRf1O4jusfDfPIdX6KeH_GqMUC71hNT"
-      CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+      WEBHOOK_SECRET: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
+      WEBAPP_DEPLOYMENT_ID: ${{ secrets.SELLMONITOR_WEBAPP_DEPLOYMENT_ID }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-
-      - name: Require GitHub-hosted Google auth
+      - name: Require web worker secrets
         shell: bash
         run: |
           set -euo pipefail
-          test -n "$CLASPRC_JSON" || {
-            echo "::error::CLASPRC_JSON missing; add one Google OAuth credential to GitHub Secrets. Make and Mac are not used."
-            exit 20
-          }
+          test -n "$WEBHOOK_SECRET"
+          test -n "$WEBAPP_DEPLOYMENT_ID"
 
-      - name: Materialize authorized adapter
+      - name: Execute central worker
         shell: bash
         run: |
           set -euo pipefail
-          npm install -g @google/clasp
-          umask 077
-          printf '%s' "$CLASPRC_JSON" > "$HOME/.clasprc.json"
-          D="$(mktemp -d)"
-          echo "WORKER_DIR=$D" >> "$GITHUB_ENV"
-          cd "$D"
-          printf '{"scriptId":"%s","rootDir":"."}\n' "$SCRIPT_ID" > .clasp.json
-          clasp pull
-          test -f appsscript.json
-
-      - name: Self-heal deployed worker from GitHub
-        shell: bash
-        run: |
-          set -euo pipefail
-          rm -f "$WORKER_DIR/SELLMONITOR_GITHUB_WORKER.js" "$WORKER_DIR/SELLMONITOR_GITHUB_WORKER.gs"
-          cp sellmonitor_github_worker/SELLMONITOR_GITHUB_WORKER.gs "$WORKER_DIR/SELLMONITOR_GITHUB_WORKER.gs"
-          cp "$WORKER_DIR/SELLMONITOR_GITHUB_WORKER.gs" /tmp/sellmonitor_worker.js
-          node --check /tmp/sellmonitor_worker.js
-          cd "$WORKER_DIR"
-          clasp push -f
-
-      - name: Health and platform READY
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd "$WORKER_DIR"
-          clasp run sellmonitorGithubHealth
-          clasp run sellmonitorGithubPlatformReady
-
-      - name: Run central queue
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd "$WORKER_DIR"
-          clasp run sellmonitorGithubTick
+          URL="https://script.google.com/macros/s/$WEBAPP_DEPLOYMENT_ID/exec"
+          BODY="$(python - <<'PY'
+          import json, os
+          print(json.dumps({'token': os.environ['WEBHOOK_SECRET'], 'action': 'tick'}))
+          PY
+          )"
+          RESP="$(curl -fsSL --max-time 120 -H 'Content-Type: application/json' --data-binary "$BODY" "$URL")"
+          RESP="$RESP" python - <<'PY'
+          import json, os
+          obj=json.loads(os.environ['RESP'])
+          if not obj.get('ok'):
+              raise SystemExit('central tick failed: ' + str(obj.get('error') or obj))
+          tick=obj.get('tick') or {}
+          if tick.get('ok') is not True:
+              raise SystemExit('worker returned failure: ' + str(tick))
+          print(json.dumps({
+              'ok': True,
+              'processedClients': tick.get('processedClients'),
+              'processedCommands': tick.get('processedCommands'),
+              'version': tick.get('version'),
+          }, ensure_ascii=False))
+          PY
