@@ -52,6 +52,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          rm -f "$WORKER_DIR/SELLMONITOR_GITHUB_WORKER.js" "$WORKER_DIR/SELLMONITOR_GITHUB_WORKER.gs"
           cp sellmonitor_github_worker/SELLMONITOR_GITHUB_WORKER.gs "$WORKER_DIR/SELLMONITOR_GITHUB_WORKER.gs"
           cp "$WORKER_DIR/SELLMONITOR_GITHUB_WORKER.gs" /tmp/sellmonitor_worker.js
           node --check /tmp/sellmonitor_worker.js
