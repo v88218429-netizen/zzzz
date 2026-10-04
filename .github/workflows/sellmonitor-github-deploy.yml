@@ -76,6 +76,7 @@ jobs:
           m=root/'appsscript.json'
           obj=json.loads(m.read_text(encoding='utf-8'))
           obj['webapp']={'executeAs':'USER_DEPLOYING','access':'ANYONE_ANONYMOUS'}
+          obj['executionApi']={'access':'MYSELF'}
           m.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding='utf-8')
           PY
           python sellmonitor_github_worker/patch_master.py /tmp/sellmonitor-gh-worker
@@ -114,4 +115,10 @@ jobs:
           grep -Rqs "SELLMONITOR_GITHUB_MASTER_HOOK_V1" .
           grep -Rqs "function sellmonitorGithubEnsureTrigger_()" .
           grep -Rqs "github-worker-1.0.0" .
+          python - <<'PY'
+          import json
+          obj=json.load(open('appsscript.json'))
+          assert obj.get('executionApi',{}).get('access') == 'MYSELF'
+          print('EXECUTION_API_MANIFEST=ok')
+          PY
           echo "LIVE_CODE_VERIFIED=yes"
