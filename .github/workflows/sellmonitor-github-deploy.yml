@@ -22,20 +22,21 @@ jobs:
     env:
       SCRIPT_ID: "15tH3jwOa5hKJFahIyPX5AIXO7KRf1O4jusfDfPIdX6KeH_GqMUC71hNT"
       CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+      WEBHOOK_SECRET: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
+      WEBAPP_DEPLOYMENT_ID: ${{ secrets.SELLMONITOR_WEBAPP_DEPLOYMENT_ID }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
 
-      - name: Require GitHub-hosted Google auth
+      - name: Require GitHub-hosted auth
         shell: bash
         run: |
           set -euo pipefail
-          test -n "$CLASPRC_JSON" || {
-            echo "::error::CLASPRC_JSON is required for the Google adapter. Make and self-hosted runners are intentionally unsupported."
-            exit 20
-          }
+          test -n "$CLASPRC_JSON"
+          test -n "$WEBHOOK_SECRET"
+          test -n "$WEBAPP_DEPLOYMENT_ID"
 
       - name: Install clasp and auth
         shell: bash
@@ -44,13 +45,6 @@ jobs:
           npm install -g @google/clasp
           umask 077
           printf '%s' "$CLASPRC_JSON" > "$HOME/.clasprc.json"
-          python - <<'PY'
-          import json, pathlib
-          p=pathlib.Path.home()/'.clasprc.json'
-          obj=json.loads(p.read_text())
-          assert isinstance(obj, dict) and obj
-          print("CLASP_AUTH_OK=yes")
-          PY
 
       - name: Pull authorized adapter project
         shell: bash
@@ -63,20 +57,55 @@ jobs:
           clasp pull
           test -f appsscript.json
 
-      - name: Install GitHub central worker
+      - name: Install authenticated web worker
         shell: bash
         run: |
           set -euo pipefail
           rm -f /tmp/sellmonitor-gh-worker/SELLMONITOR_GITHUB_WORKER.js /tmp/sellmonitor-gh-worker/SELLMONITOR_GITHUB_WORKER.gs
           cp sellmonitor_github_worker/SELLMONITOR_GITHUB_WORKER.gs /tmp/sellmonitor-gh-worker/SELLMONITOR_GITHUB_WORKER.gs
+          WEBHOOK_SECRET="$WEBHOOK_SECRET" python - <<'PY'
+          import json, os, pathlib
+          root=pathlib.Path('/tmp/sellmonitor-gh-worker')
+          p=root/'SELLMONITOR_GITHUB_WORKER.gs'
+          s=p.read_text(encoding='utf-8')
+          marker='__SELLMONITOR_GITHUB_WEBHOOK_SECRET__'
+          if marker not in s:
+              raise SystemExit('webhook secret placeholder missing')
+          p.write_text(s.replace(marker, os.environ['WEBHOOK_SECRET']), encoding='utf-8')
+          m=root/'appsscript.json'
+          obj=json.loads(m.read_text(encoding='utf-8'))
+          obj['webapp']={'executeAs':'USER_DEPLOYING','access':'ANYONE_ANONYMOUS'}
+          m.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding='utf-8')
+          PY
           cp /tmp/sellmonitor-gh-worker/SELLMONITOR_GITHUB_WORKER.gs /tmp/check.js
           node --check /tmp/check.js
-          cd /tmp/sellmonitor-gh-worker
-          clasp push -f
 
-      - name: Live health
+      - name: Push and redeploy stable web app
         shell: bash
         run: |
           set -euo pipefail
           cd /tmp/sellmonitor-gh-worker
-          clasp run sellmonitorGithubHealth
+          clasp push -f
+          clasp redeploy "$WEBAPP_DEPLOYMENT_ID" -d "Sellmonitor GitHub Central Worker Web"
+
+      - name: Verify live web worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL="https://script.google.com/macros/s/$WEBAPP_DEPLOYMENT_ID/exec"
+          BODY="$(python - <<'PY'
+          import json, os
+          print(json.dumps({'token': os.environ['WEBHOOK_SECRET'], 'action': 'health'}))
+          PY
+          )"
+          RESP="$(curl -fsSL --max-time 45 -H 'Content-Type: application/json' --data-binary "$BODY" "$URL")"
+          RESP="$RESP" python - <<'PY'
+          import json, os
+          obj=json.loads(os.environ['RESP'])
+          if not obj.get('ok'):
+              raise SystemExit('web worker health failed: ' + str(obj.get('error')))
+          result=obj.get('result') or {}
+          if result.get('version') != 'github-worker-1.0.0':
+              raise SystemExit('unexpected worker version: ' + str(result.get('version')))
+          print('WEB_WORKER_HEALTH=ok')
+          PY
