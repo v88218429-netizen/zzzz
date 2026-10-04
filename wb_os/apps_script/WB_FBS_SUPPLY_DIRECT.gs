@@ -406,7 +406,7 @@ function wbFbsSupplyMaybeSync_() {
     return {ok: true, skipped: true, reason: 'fresh'};
   }
 
-  var lock = LockService.getScriptLock();
+  var lock = LockService.getUserLock();
   if (!lock.tryLock(1000)) return {ok: true, skipped: true, reason: 'locked'};
 
   try {
@@ -435,7 +435,7 @@ function wbFbsSupplyMaybeSync_() {
 }
 
 function wbFbsSupplySyncNow() {
-  var lock = LockService.getScriptLock();
+  var lock = LockService.getUserLock();
   if (!lock.tryLock(30000)) throw new Error('WB_FBS_DIRECT: another sync is running');
   try {
     return JSON.stringify(wbFbsSupplySyncCore_());
