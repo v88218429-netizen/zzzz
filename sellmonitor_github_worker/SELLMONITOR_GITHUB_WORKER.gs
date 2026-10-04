@@ -4,7 +4,7 @@
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.0.0',
+  VERSION: 'github-worker-1.1.0',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -17,18 +17,22 @@ const SMC_GH = Object.freeze({
 
 function sellmonitorGithubEnsureTrigger_() {
   var fn = 'sellmonitorGithubTick';
+  var desiredVersion = 'worker-1m-v1';
+  var props = PropertiesService.getScriptProperties();
   var triggers = ScriptApp.getProjectTriggers();
   var found = null;
+  var mustRecreate = props.getProperty('SMC_GH_TRIGGER_VERSION') !== desiredVersion;
   for (var i = 0; i < triggers.length; i++) {
     if (triggers[i].getHandlerFunction() !== fn) continue;
-    if (!found) found = triggers[i];
-    else ScriptApp.deleteTrigger(triggers[i]);
+    if (mustRecreate || found) ScriptApp.deleteTrigger(triggers[i]);
+    else found = triggers[i];
   }
-  if (!found) {
-    ScriptApp.newTrigger(fn).timeBased().everyMinutes(5).create();
-    return {ok: true, created: true, intervalMinutes: 5};
+  if (mustRecreate || !found) {
+    ScriptApp.newTrigger(fn).timeBased().everyMinutes(1).create();
+    props.setProperty('SMC_GH_TRIGGER_VERSION', desiredVersion);
+    return {ok: true, created: true, intervalMinutes: 1};
   }
-  return {ok: true, created: false, intervalMinutes: 5};
+  return {ok: true, created: false, intervalMinutes: 1};
 }
 
 function sellmonitorGithubBootstrap() {
@@ -135,6 +139,8 @@ function sellmonitorGithubProcessClient_(spreadsheetId) {
   var code = ss.getSheetByName('97_Код');
   if (!q || !code) throw new Error('Client missing 97_Управление/97_Код: ' + spreadsheetId);
 
+  sellmonitorGithubEnsureUiOnboarding_(ss, q);
+
   var processed = 0, last = null;
   while (processed < SMC_GH.MAX_COMMANDS_PER_CLIENT) {
     var row = sellmonitorGithubNextPendingRow_(q);
@@ -165,16 +171,66 @@ function sellmonitorGithubProcessClient_(spreadsheetId) {
 }
 
 function sellmonitorGithubNextPendingRow_(q) {
-  var lr = q.getLastRow();
-  if (lr < 2) return 0;
-  var from = Math.max(2, lr - 2500);
-  var vals = q.getRange(from, 1, lr - from + 1, 8).getValues();
+  var from = 1200;
+  var to = Math.min(2023, q.getMaxRows());
+  if (to < from) return 0;
+  var vals = q.getRange(from, 1, to - from + 1, 8).getValues();
+  var now = new Date().getTime();
   for (var i = 0; i < vals.length; i++) {
     var cmd = String(vals[i][2] || '');
     var st = String(vals[i][4] || '');
-    if (cmd === 'RUN_REMOTE' && (st === 'PENDING' || st === 'NEW' || st === 'SCHEDULED')) return from + i;
+    if (cmd !== 'RUN_REMOTE') continue;
+    if (st === 'SCHEDULED') {
+      var at = vals[i][1] instanceof Date ? vals[i][1].getTime() : new Date(vals[i][1]).getTime();
+      if (isFinite(at) && at > now) continue;
+    }
+    if (st === 'PENDING' || st === 'NEW' || st === 'SCHEDULED') return from + i;
   }
   return 0;
+}
+
+function sellmonitorGithubEnsureUiOnboarding_(ss, q) {
+  var ui = ss.getSheetByName('00_API_Подключение');
+  var set = ss.getSheetByName('99_Настройки');
+  if (!ui || !set || ui.getRange('A15').getValue() !== true) return {ok:true, armed:false};
+
+  function setting(k) {
+    var v = set.getRange(1, 1, Math.max(1, set.getLastRow()), 2).getDisplayValues();
+    for (var i = 0; i < v.length; i++) if (String(v[i][0]) === k) return String(v[i][1] || '').trim();
+    return '';
+  }
+
+  var storeId = setting('ACTIVE_STORE_ID');
+  var storeName = setting('STORE_NAME') || String(ui.getRange('B5').getDisplayValue() || '').trim();
+  var profile = setting('FBS_CLIENT_ID');
+  if (!storeId || !storeName || !profile) return {ok:false, armed:true, reason:'store/profile settings missing'};
+
+  var from = 1200, to = Math.min(2023, q.getMaxRows());
+  var vals = q.getRange(from, 1, to - from + 1, 5).getValues();
+  var prefix = 'ONBOARD-' + storeId + '-';
+  for (var i = 0; i < vals.length; i++) {
+    var id = String(vals[i][0] || '');
+    var st = String(vals[i][4] || '');
+    if (id.indexOf(prefix) === 0 && (st === 'PENDING' || st === 'RUNNING' || st === 'NEW' || st === 'SCHEDULED')) {
+      return {ok:true, armed:true, deduped:true, row:from+i};
+    }
+  }
+
+  var slot = 0;
+  for (var j = 0; j < vals.length; j++) {
+    if (!String(vals[j][0] || '') && !String(vals[j][4] || '')) { slot = from + j; break; }
+  }
+  if (!slot) return {ok:false, armed:true, reason:'worker-safe queue full'};
+
+  q.getRange(slot, 1, 1, 5).setValues([[
+    prefix + Date.now(),
+    new Date(),
+    'RUN_REMOTE',
+    JSON.stringify({file:'client_onboard_stage1_v1',entrypoint:'REMOTE_MAIN',payload:{storeId:storeId,storeName:storeName,profile:profile}}),
+    'PENDING'
+  ]]);
+  SpreadsheetApp.flush();
+  return {ok:true, armed:true, queued:true, row:slot};
 }
 
 function sellmonitorGithubExecuteQueueRow_(ss, q, codeSheet, row) {
