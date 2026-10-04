@@ -382,11 +382,13 @@ function doGet(e) {
     sellmonitorGithubWebAuth_(token);
 
     if (action === 'tick') {
+      var trigger = sellmonitorGithubEnsureTrigger_();
       var ready = sellmonitorGithubPlatformReady();
       var tick = sellmonitorGithubTick();
       return sellmonitorGithubWebJson_({
         ok: Boolean(tick && tick.ok),
         action: action,
+        trigger: trigger,
         platform: ready,
         tick: tick
       });
@@ -429,11 +431,13 @@ function doPost(e) {
     }
 
     if (action === 'tick') {
+      var trigger = sellmonitorGithubEnsureTrigger_();
       var ready = sellmonitorGithubPlatformReady();
       var tick = sellmonitorGithubTick();
       return sellmonitorGithubWebJson_({
         ok: Boolean(tick && tick.ok),
         action: action,
+        trigger: trigger,
         platform: ready,
         tick: tick
       });
