@@ -19,6 +19,12 @@ SHOPS = {
     "YV": ("Хозяюшка", "WB_API_TOKEN_YV"),
 }
 
+PENALTY_SHEET_COLUMNS = [
+    "Магазин", "Дата штрафа", "Причина / категория", "Артикул продавца", "Артикул WB",
+    "Сумма штрафа, ₽", "Стикер МП", "Что было заказано", "Что пришло",
+    "Фото 1", "Фото 2", "Фото 3", "Фото 4", "Фото 5", "Order ID", "Report ID", "RRD ID",
+]
+
 CSV_COLUMNS = [
     "Магазин", "Report ID", "Отчет с", "Отчет по", "Дата создания",
     "RR Date", "RRD ID", "Тип документа", "Операция", "Категория",
@@ -158,12 +164,32 @@ def _is_charge(row: list[Any]) -> bool:
     return any(abs(_money(row[idx])) > 0 for idx in (10, 11, 12, 13))
 
 
-def _write_sheet_csv(path: Path, rows: list[list[Any]]) -> None:
+def _to_penalty_sheet_row(row: list[Any]) -> list[Any]:
+    amount = round(sum(_money(row[idx]) for idx in (10, 11, 12, 13)), 2)
+    reason = row[16] or row[8] or row[9]
+    return [
+        row[0],   # Магазин
+        row[5],   # RR Date
+        reason,
+        row[18],  # Артикул продавца
+        row[17],  # nmId
+        amount,
+        row[25],  # Sticker ID
+        row[18] or row[19],
+        "",
+        "", "", "", "", "",
+        row[22],  # Order ID
+        row[1],   # Report ID
+        row[6],   # RRD ID
+    ]
+
+
+def _write_csv(path: Path, columns: list[str], rows: list[list[Any]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp")
     with tmp.open("w", encoding="utf-8-sig", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow(CSV_COLUMNS)
+        writer.writerow(columns)
         for row in rows:
             localized = []
             for value in row:
@@ -173,6 +199,10 @@ def _write_sheet_csv(path: Path, rows: list[list[Any]]) -> None:
                     localized.append(value)
             writer.writerow(localized)
     tmp.replace(path)
+
+
+def _write_sheet_csv(path: Path, rows: list[list[Any]]) -> None:
+    _write_csv(path, CSV_COLUMNS, rows)
 
 
 async def main() -> int:
@@ -200,6 +230,8 @@ async def main() -> int:
 
     all_rows.sort(key=lambda r: (str(r[5]), str(r[0]), str(r[6])), reverse=True)
     _write_sheet_csv(OUT_DIR / "charges_all.csv", all_rows)
+    penalty_rows = [_to_penalty_sheet_row(row) for row in all_rows]
+    _write_csv(OUT_DIR / "penalties_sheet.csv", PENALTY_SHEET_COLUMNS, penalty_rows)
 
     latest_rr = max((str(row[5]) for row in all_rows if row[5]), default="")
     print("GITHUB_FINANCE_DONE " + json.dumps({
