@@ -24,7 +24,7 @@ jobs:
       SCRIPT_ID: "15tH3jwOa5hKJFahIyPX5AIXO7KRf1O4jusfDfPIdX6KeH_GqMUC71hNT"
       CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
       WEBHOOK_SECRET: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
-      WEBAPP_DEPLOYMENT_ID: ${{ secrets.SELLMONITOR_WEBAPP_DEPLOYMENT_ID }}
+      WEBAPP_DEPLOYMENT_ID: AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
