@@ -49,7 +49,7 @@ jobs:
           set -euo pipefail
           git config user.name "wb-finance-bot"
           git config user.email "wb-finance-bot@users.noreply.github.com"
-          git add wb_data/finance/charges_all.csv
+          git add wb_data/finance/charges_all.csv wb_data/finance/penalties_sheet.csv
           if git diff --cached --quiet; then
             echo "No finance changes"
             exit 0
