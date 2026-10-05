@@ -1,0 +1,58 @@
+name: WB finance charges sync
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 * * * *"
+  push:
+    branches: [mainggg]
+    paths:
+      - "wb_worker/github_finance_charges_sync.py"
+      - ".github/workflows/wb-finance-charges-sync.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: wb-finance-charges-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: mainggg
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install runtime
+        run: python -m pip install --disable-pip-version-check httpx
+
+      - name: Pull WB finance charges
+        env:
+          WB_API_TOKEN_AP: ${{ secrets.WB_API_TOKEN_AP }}
+          WB_API_TOKEN_AA: ${{ secrets.WB_API_TOKEN_AA }}
+          WB_API_TOKEN_YV: ${{ secrets.WB_API_TOKEN_YV }}
+          FINANCE_LOOKBACK_DAYS: "30"
+          FINANCE_MIN_REQUEST_INTERVAL_SEC: "61"
+          FINANCE_GITHUB_OUT: "${{ github.workspace }}/wb_data/finance"
+        run: python wb_worker/github_finance_charges_sync.py
+
+      - name: Publish fresh CSV
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "wb-finance-bot"
+          git config user.email "wb-finance-bot@users.noreply.github.com"
+          git add wb_data/finance/charges_all.csv
+          if git diff --cached --quiet; then
+            echo "No finance changes"
+            exit 0
+          fi
+          git commit -m "wb finance: refresh charges"
+          git push
