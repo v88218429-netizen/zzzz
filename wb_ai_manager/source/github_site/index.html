@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WB AI Manager · GitHub Runtime</title>
+<style>
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;margin:0;background:#f4f6f8;color:#15171a}
+main{max-width:1280px;margin:0 auto;padding:24px}.top{display:flex;justify-content:space-between;gap:16px;align-items:center}
+h1{font-size:28px;margin:0}.muted{color:#69707d}.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:20px 0}
+.card{background:#fff;border:1px solid #e2e5e9;border-radius:14px;padding:16px;box-shadow:0 2px 10px #00000008}.card b{font-size:24px;display:block;margin-top:6px}
+table{width:100%;border-collapse:collapse;background:#fff;border-radius:14px;overflow:hidden}th,td{padding:10px;border-bottom:1px solid #eceef1;text-align:left;font-size:13px}
+th{background:#fafbfc;position:sticky;top:0}.pill{display:inline-block;padding:4px 8px;border-radius:999px;background:#eef1f4;font-size:12px}
+.bad{background:#ffe9e7}.good{background:#e5f7ea}.warn{background:#fff4d7}
+pre{white-space:pre-wrap;word-break:break-word}.section{margin-top:24px}@media(max-width:800px){.grid{grid-template-columns:repeat(2,1fr)}table{display:block;overflow:auto}}
+</style>
+</head>
+<body><main>
+<div class="top"><div><h1>WB AI Manager</h1><div class="muted">GitHub-only runtime · read-only</div></div><div id="updated" class="muted">загрузка…</div></div>
+<div class="grid" id="summary"></div>
+<section class="section"><h2>Приоритетные запросы</h2><table><thead><tr><th>SKU</th><th>Запрос</th><th>Роль</th><th>Очередь</th><th>Позиция</th><th>Ставка</th><th>Решение</th><th>Режим</th></tr></thead><tbody id="queries"></tbody></table></section>
+<section class="section"><h2>Операторский бриф</h2><div class="card"><pre id="brief"></pre></div></section>
+<section class="section"><h2>Ошибки источников</h2><div class="card"><pre id="errors"></pre></div></section>
+</main>
+<script>
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const cls=v=>v==='ready'?'good':v==='needs_refresh'?'warn':'bad';
+fetch('./data/latest.json',{cache:'no-store'}).then(r=>r.json()).then(d=>{
+ const q=d.query_manager||{},s=q.summary||{};
+ document.querySelector('#updated').textContent='Обновлено: '+(q.generated_at||'—');
+ const cards=[
+  ['Статус',s.query_status||d.health||'—'],
+  ['Запросов',s.query_rows??0],
+  ['Готовых действий',s.ready_query_actions??0],
+  ['Блокеров данных',s.data_blockers??0],
+ ];
+ document.querySelector('#summary').innerHTML=cards.map(x=>'<div class="card"><span class="muted">'+esc(x[0])+'</span><b class="'+cls(String(x[1]))+'">'+esc(x[1])+'</b></div>').join('');
+ document.querySelector('#queries').innerHTML=(q.cards||[]).slice(0,200).map(x=>{
+   const b=x.bid_decision||{};
+   return '<tr><td>'+esc(x.sku)+'</td><td>'+esc(x.query)+'</td><td>'+esc(x.role)+'</td><td><span class="pill">'+esc(x.queue)+'</span></td><td>'+esc(x.position??'—')+'</td><td>'+esc(b.current_bid_rub??'—')+' → '+esc(b.target_bid_rub??'—')+'</td><td>'+esc(b.decision||'—')+'</td><td>'+esc(x.execution_mode||'—')+'</td></tr>';
+ }).join('');
+ document.querySelector('#brief').textContent=JSON.stringify(q.operator_brief||{},null,2);
+ document.querySelector('#errors').textContent=JSON.stringify(d.errors||[],null,2);
+}).catch(e=>{document.querySelector('#errors').textContent=String(e)});
+</script></body></html>
