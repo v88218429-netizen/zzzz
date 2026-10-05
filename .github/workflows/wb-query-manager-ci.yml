@@ -1,0 +1,27 @@
+name: WB Query Manager CI
+
+on:
+  push:
+    branches:
+      - wb-manager-query-v2-20261003
+  pull_request:
+    branches:
+      - mainggg
+  workflow_dispatch:
+
+jobs:
+  query-manager:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install focused test dependencies
+        run: python -m pip install --upgrade pip pytest
+      - name: Compile WB Control Center
+        run: python -m compileall -q wb_ai_manager/source/src/wb_control_center
+      - name: Run Query Manager tests
+        env:
+          PYTHONPATH: wb_ai_manager/source/src
+        run: pytest -q wb_ai_manager/source/tests/test_query_manager.py
