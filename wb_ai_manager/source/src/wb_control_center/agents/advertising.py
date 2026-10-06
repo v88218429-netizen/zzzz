@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -139,36 +140,84 @@ class AdvertisingOptimizerAgent(BaseAgent):
         campaigns = sorted(campaigns, key=spend, reverse=True)
         runtime = (self.ctx.policy.raw.get("runtime") or {}).get("advertising", {})
         max_campaigns = int(runtime.get("max_campaigns_deep_scan", 8) or 8)
-        scanned: list[dict[str, Any]] = []
-        for c in campaigns[:max_campaigns]:
-            cid = _campaign_id(c)
+        # GitHub runtime has a hard execution window. Recommendation endpoints can
+        # individually be slow, so isolate failures and fetch a small bounded set
+        # concurrently instead of letting one campaign stall the whole agent.
+        concurrency = max(1, min(4, int(runtime.get("deep_scan_concurrency", 3) or 3)))
+        semaphore = asyncio.Semaphore(concurrency)
+        max_nms = int(runtime.get("max_nms_per_campaign", 8) or 8)
+
+        async def limited(tool: str, **kwargs: Any) -> Any:
+            async with semaphore:
+                return await self._safe(tool, **kwargs)
+
+        async def scan_campaign(campaign: dict[str, Any]) -> dict[str, Any] | None:
+            cid = _campaign_id(campaign)
             if not cid:
-                continue
-            nms = _nm_ids(c)
-            row: dict[str, Any] = {
-                "campaign": c,
+                return None
+            nms = _nm_ids(campaign)
+            selected_nms = nms[:max_nms]
+            budget_task = asyncio.create_task(limited("wb_advert_budget", advert_id=cid))
+            rec_tasks = {
+                str(nm): asyncio.create_task(
+                    limited("wb_advert_bids_recommendations", nm_id=nm, advert_id=cid)
+                )
+                for nm in selected_nms
+            }
+            clusters_task = (
+                asyncio.create_task(limited("wb_advert_clusters", advert_id=cid))
+                if nms else None
+            )
+            cluster_stats_task = (
+                asyncio.create_task(
+                    limited(
+                        "wb_advert_clusters_stats",
+                        advert_id=cid,
+                        date_from=start,
+                        date_to=end,
+                        nm_ids=nms[:10],
+                        daily=True,
+                    )
+                )
+                if nms else None
+            )
+            budget = await budget_task
+            recommendations = {
+                nm: await task
+                for nm, task in rec_tasks.items()
+            }
+            clusters = await clusters_task if clusters_task else {}
+            cluster_stats = await cluster_stats_task if cluster_stats_task else {}
+            return {
+                "campaign": campaign,
                 "campaign_id": cid,
                 "nm_ids": nms,
                 "stats": stats_by_id.get(str(cid), {}),
-                "stats_by_nm": {str(nm): exact_nm_stats[(cid, nm)] for nm in nms if (cid, nm) in exact_nm_stats},
-                "budget": await self._safe("wb_advert_budget", advert_id=cid),
+                "stats_by_nm": {
+                    str(nm): exact_nm_stats[(cid, nm)]
+                    for nm in nms if (cid, nm) in exact_nm_stats
+                },
+                "budget": budget,
+                "recommendations": recommendations,
+                "clusters": clusters,
+                "cluster_stats": cluster_stats,
             }
-            recommendations: dict[str, Any] = {}
-            cluster_stats: dict[str, Any] = {}
-            clusters: dict[str, Any] = {}
-            # Bid guidance is SKU-specific. Scan several SKUs, but keep API load bounded.
-            max_nms = int(runtime.get("max_nms_per_campaign", 8) or 8)
-            for nm in nms[:max_nms]:
-                recommendations[str(nm)] = await self._safe("wb_advert_bids_recommendations", nm_id=nm, advert_id=cid)
-            if nms:
-                clusters = await self._safe("wb_advert_clusters", advert_id=cid)
-                cluster_stats = await self._safe(
-                    "wb_advert_clusters_stats", advert_id=cid, date_from=start, date_to=end, nm_ids=nms[:10], daily=True
-                )
-            row["recommendations"] = recommendations
-            row["clusters"] = clusters
-            row["cluster_stats"] = cluster_stats
-            scanned.append(row)
+
+        results = await asyncio.gather(
+            *(scan_campaign(c) for c in campaigns[:max_campaigns]),
+            return_exceptions=True,
+        )
+        scanned: list[dict[str, Any]] = []
+        for campaign, result in zip(campaigns[:max_campaigns], results):
+            if isinstance(result, BaseException):
+                scanned.append({
+                    "campaign": campaign,
+                    "campaign_id": _campaign_id(campaign),
+                    "nm_ids": _nm_ids(campaign),
+                    "_error": str(result),
+                })
+            elif result is not None:
+                scanned.append(result)
 
         out.snapshots.append(("deep_scan", {"generated_for": {"from": start, "to": end}, "campaigns": scanned}))
         out.snapshots.append(("stats_14d", stats_raw if isinstance(stats_raw, dict) else {"data": stats_raw}))
