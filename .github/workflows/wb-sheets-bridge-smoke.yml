@@ -1,0 +1,44 @@
+name: WB Sheets bridge smoke
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [mainggg]
+    paths:
+      - ".github/workflows/wb-sheets-bridge-smoke.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify authenticated portfolio bridge
+        env:
+          BRIDGE_KEY: \${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
+          BRIDGE_URL: "https://script.google.com/macros/s/AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw/exec"
+        run: |
+          python - <<'PY'
+          import json, os, urllib.request
+          body=json.dumps({"key":os.environ["BRIDGE_KEY"],"action":"all"}).encode()
+          req=urllib.request.Request(os.environ["BRIDGE_URL"],data=body,headers={"Content-Type":"application/json"},method="POST")
+          with urllib.request.urlopen(req,timeout=180) as r:
+              d=json.loads(r.read().decode("utf-8"))
+          assert d.get("ok") is True, d
+          sources=d.get("sources") or {}
+          expected={"weekly_summary","own_27","sanych_sellmonitor","air_sellmonitor","hozyushka_sellmonitor"}
+          assert expected.issubset(set(sources)), sorted(sources)
+          counts={}
+          for sid,source in sources.items():
+              counts[sid]={k:len((v or {}).get("values") or []) for k,v in (source.get("ranges") or {}).items()}
+          assert counts["sanych_sellmonitor"].get("positions",0)>1, counts
+          assert counts["air_sellmonitor"].get("positions",0)>1, counts
+          assert counts["hozyushka_sellmonitor"].get("positions",0)>1, counts
+          assert counts["own_27"].get("summary",0)>1, counts
+          print(json.dumps({"ok":True,"sources":sorted(sources),"row_counts":counts,"bridge_errors":d.get("errors") or []},ensure_ascii=False,indent=2))
+          PY
