@@ -58,11 +58,11 @@ jobs:
         env:
           DATA_DIR: data/github-runtime
           WB_MODE: live
-          WB_API_TOKEN: \${{ secrets.WB_API_TOKEN }}
-          GOOGLE_SHEETS_BRIDGE_URL: \${{ secrets.GOOGLE_SHEETS_BRIDGE_URL }}
-          GOOGLE_SHEETS_BRIDGE_KEY: \${{ secrets.GOOGLE_SHEETS_BRIDGE_KEY }}
-          TELEGRAM_BOT_TOKEN: \${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: \${{ secrets.TELEGRAM_CHAT_ID }}
+          WB_API_TOKEN: ${{ secrets.WB_API_TOKEN }}
+          GOOGLE_SHEETS_BRIDGE_URL: ${{ secrets.GOOGLE_SHEETS_BRIDGE_URL }}
+          GOOGLE_SHEETS_BRIDGE_KEY: ${{ secrets.GOOGLE_SHEETS_BRIDGE_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           FORCE_READ_ONLY: "true"
           OPERATION_MODE: shadow
           ENABLE_PUBLIC_WB_SEARCH: "true"
@@ -85,6 +85,8 @@ jobs:
             src="wb_ai_manager/source/data/github-runtime/$f"
             [ -f "$src" ] && cp "$src" "$RUNNER_TEMP/wb-runtime-state/$f"
           done
+          mkdir -p "$RUNNER_TEMP/wb-runtime-state/site-data"
+          cp -f wb_ai_manager/source/github_site/data/*.json "$RUNNER_TEMP/wb-runtime-state/site-data/" 2>/dev/null || true
 
       - name: Persist one rolling GitHub state snapshot
         shell: bash
@@ -96,7 +98,9 @@ jobs:
           git rm -rf . >/dev/null 2>&1 || true
           mkdir -p state
           cp -f "$RUNNER_TEMP"/wb-runtime-state/* state/ 2>/dev/null || true
-          printf '%s\n' "generated_at=\${GITHUB_RUN_ID}-\${GITHUB_RUN_ATTEMPT}" > state/README.txt
+          mkdir -p state/site-data
+          cp -f "$RUNNER_TEMP"/wb-runtime-state/site-data/* state/site-data/ 2>/dev/null || true
+          printf '%s\n' "generated_at=${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" > state/README.txt
           git add state
           git commit -m "runtime: latest WB state"
           git push origin HEAD:runtime-state --force
@@ -107,7 +111,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
-      url: \${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.deployment.outputs.page_url }}
     permissions:
       pages: write
       id-token: write
