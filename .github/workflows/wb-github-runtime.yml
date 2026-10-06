@@ -9,12 +9,11 @@ on:
       - mainggg
     paths:
       - "wb_ai_manager/source/**"
+      - "sellmonitor_github_worker/**"
       - ".github/workflows/wb-github-runtime.yml"
 
 permissions:
   contents: write
-  pages: write
-  id-token: write
   actions: read
 
 concurrency:
@@ -22,9 +21,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
-    if: github.ref == 'refs/heads/mainggg'
+  run:
     runs-on: ubuntu-latest
+    timeout-minutes: 14
     steps:
       - uses: actions/checkout@v4
 
@@ -32,37 +31,41 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Restore latest runtime state
+      - name: Restore encrypted rolling runtime state
         shell: bash
+        env:
+          STATE_SECRET: \${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
         run: |
           set -euo pipefail
           mkdir -p wb_ai_manager/source/data/github-runtime
           if git ls-remote --exit-code --heads origin runtime-state >/dev/null 2>&1; then
             git fetch --depth=1 origin runtime-state:refs/remotes/origin/runtime-state
-            for f in control_center.sqlite3 portfolio_live.json remote_policy_cache.json; do
-              if git cat-file -e "origin/runtime-state:state/$f" 2>/dev/null; then
-                git show "origin/runtime-state:state/$f" > "wb_ai_manager/source/data/github-runtime/$f"
-              fi
-            done
+            if git cat-file -e "origin/runtime-state:state/runtime.tar.gz.enc" 2>/dev/null; then
+              git show "origin/runtime-state:state/runtime.tar.gz.enc" > "$RUNNER_TEMP/runtime.tar.gz.enc"
+              openssl enc -d -aes-256-cbc -pbkdf2 \
+                -pass env:STATE_SECRET \
+                -in "$RUNNER_TEMP/runtime.tar.gz.enc" \
+                -out "$RUNNER_TEMP/runtime.tar.gz"
+              tar -xzf "$RUNNER_TEMP/runtime.tar.gz" -C wb_ai_manager/source/data/github-runtime
+            fi
           fi
 
-      - name: Install focused runtime
+      - name: Install runtime
         working-directory: wb_ai_manager/source
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
           python -m pip install -e . --no-deps
 
-      - name: Run WB audit and build static snapshot
+      - name: Run three-cabinet WB audit and publish owner brief
         working-directory: wb_ai_manager/source
         env:
           DATA_DIR: data/github-runtime
-          WB_MODE: live
-          WB_API_TOKEN: ${{ secrets.WB_API_TOKEN_AP }}
-          GOOGLE_SHEETS_BRIDGE_URL: ${{ secrets.GOOGLE_SHEETS_BRIDGE_URL }}
-          GOOGLE_SHEETS_BRIDGE_KEY: ${{ secrets.GOOGLE_SHEETS_BRIDGE_KEY }}
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          WB_API_TOKEN_AP: \${{ secrets.WB_API_TOKEN_AP }}
+          WB_API_TOKEN_AA: \${{ secrets.WB_API_TOKEN_AA }}
+          WB_API_TOKEN_YV: \${{ secrets.WB_API_TOKEN_YV }}
+          GOOGLE_SHEETS_BRIDGE_URL: "https://script.google.com/macros/s/AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw/exec"
+          GOOGLE_SHEETS_BRIDGE_KEY: \${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
           FORCE_READ_ONLY: "true"
           OPERATION_MODE: shadow
           ENABLE_PUBLIC_WB_SEARCH: "true"
@@ -71,24 +74,49 @@ jobs:
           GITHUB_RUNTIME_OUTPUT: github_site
         run: python scripts/github_runtime.py
 
-      - name: Upload GitHub Pages snapshot
-        uses: actions/upload-pages-artifact@v4
-        with:
-          path: wb_ai_manager/source/github_site
+      - name: Encrypt full runtime state
+        shell: bash
+        env:
+          STATE_SECRET: \${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/wb-runtime-publish/state"
+          tar -czf "$RUNNER_TEMP/runtime.tar.gz" -C wb_ai_manager/source/data/github-runtime .
+          openssl enc -aes-256-cbc -salt -pbkdf2 \
+            -pass env:STATE_SECRET \
+            -in "$RUNNER_TEMP/runtime.tar.gz" \
+            -out "$RUNNER_TEMP/wb-runtime-publish/state/runtime.tar.gz.enc"
+          cp wb_ai_manager/source/github_site/data/health.json "$RUNNER_TEMP/wb-runtime-publish/state/health.json"
 
-      - name: Stage state outside worktree
+      - name: Build non-sensitive GitHub status page
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/wb-runtime-state"
-          for f in control_center.sqlite3 portfolio_live.json remote_policy_cache.json; do
-            src="wb_ai_manager/source/data/github-runtime/$f"
-            [ -f "$src" ] && cp "$src" "$RUNNER_TEMP/wb-runtime-state/$f"
-          done
-          mkdir -p "$RUNNER_TEMP/wb-runtime-state/site-data"
-          cp -f wb_ai_manager/source/github_site/data/*.json "$RUNNER_TEMP/wb-runtime-state/site-data/" 2>/dev/null || true
+          mkdir -p "$RUNNER_TEMP/wb-runtime-publish"
+          OUT="$RUNNER_TEMP/wb-runtime-publish/README.md" python - <<'PY'
+          import json, os, pathlib
+          p=pathlib.Path("wb_ai_manager/source/github_site/data/health.json")
+          d=json.loads(p.read_text(encoding="utf-8"))
+          lines=[
+            "# WB AI Manager · GitHub Runtime",
+            "",
+            "> Live business data is encrypted. This branch exposes only connection/health metadata.",
+            "",
+            f"- Generated: {d.get('generated_at','')}",
+            f"- Overall: {d.get('health','unknown')}",
+            f"- WB cabinets connected: {d.get('connected_cabinets',0)}/{d.get('expected_cabinets',3)}",
+            f"- Google Sheets/Sellmonitor live: {d.get('sheets_live',False)}",
+            f"- Private owner dashboard published: {d.get('dashboard_published',False)}",
+            f"- Query Manager: {d.get('query_status','unknown')}",
+            f"- Query rows: {d.get('query_rows',0)}",
+            f"- Ready query actions: {d.get('ready_query_actions',0)}",
+            "",
+            "Runtime state is AES-256 encrypted and replaced on every successful run.",
+          ]
+          pathlib.Path(os.environ["OUT"]).write_text("\n".join(lines)+"\n",encoding="utf-8")
+          PY
 
-      - name: Persist one rolling GitHub state snapshot
+      - name: Replace runtime branch with encrypted state only
         shell: bash
         run: |
           set -euo pipefail
@@ -96,26 +124,7 @@ jobs:
           git config user.email "wb-ai-manager[bot]@users.noreply.github.com"
           git checkout --orphan runtime-state-next
           git rm -rf . >/dev/null 2>&1 || true
-          mkdir -p state
-          cp -f "$RUNNER_TEMP"/wb-runtime-state/* state/ 2>/dev/null || true
-          mkdir -p state/site-data
-          cp -f "$RUNNER_TEMP"/wb-runtime-state/site-data/* state/site-data/ 2>/dev/null || true
-          printf '%s\n' "generated_at=${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" > state/README.txt
-          git add state
-          git commit -m "runtime: latest WB state"
+          cp -R "$RUNNER_TEMP/wb-runtime-publish/." .
+          git add README.md state
+          git commit -m "runtime: encrypted latest WB state"
           git push origin HEAD:runtime-state --force
-
-  deploy:
-    if: github.ref == 'refs/heads/mainggg'
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    permissions:
-      pages: write
-      id-token: write
-    steps:
-      - name: Deploy GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
