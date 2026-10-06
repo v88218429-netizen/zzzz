@@ -21,6 +21,35 @@ if worker.exists():
         "var onceKey3 = 'SMC_TICK_ONCE_V3_USED';",
         "var onceKey3 = 'SMC_TICK_ONCE_V4_USED';",
     )
+
+    # One-shot secret seeding endpoint. No JWT is stored in GitHub or Sheets.
+    post_anchor = "    sellmonitorGithubWebAuth_(body.token || body.key);"
+    if post_anchor in worker_text and "seed_wb_tokens_once_v1" not in worker_text:
+        seed_block = """    if (String(body.action || '') === 'seed_wb_tokens_once_v1') {
+      var seedProps = PropertiesService.getScriptProperties();
+      if (String(body.nonce || '') !== 'fDbUQTm1QRENPzZkoPHXCUwOS5cnMWjd') {
+        throw new Error('SEED_NONCE_INVALID');
+      }
+      if (seedProps.getProperty('SMC_WB_SEED_V1_USED') === '1') {
+        return sellmonitorGithubWebJson_({ok:false,error:'WB_SEED_ALREADY_USED'});
+      }
+      var tokens = body.tokens || {};
+      function seedPut_(key, value) {
+        value = String(value || '').trim();
+        if (!value || value.split('.').length !== 3 || value.length < 80) throw new Error('BAD_WB_TOKEN '+key);
+        seedProps.setProperty(key, value);
+      }
+      seedPut_('WB_FBS_API_TOKEN__SANYCH', tokens.AP);
+      seedPut_('FBS_CLIENT__SANYCH__WB_API_TOKEN', tokens.AP);
+      seedPut_('FBS_CLIENT__AIR__WB_API_TOKEN', tokens.AA);
+      seedPut_('FBS_CLIENT__FBS_14I5XGBA9NIG__WB_API_TOKEN', tokens.YV);
+      seedProps.setProperty('SMC_WB_SEED_V1_USED','1');
+      return sellmonitorGithubWebJson_({ok:true,stored:{AP:true,AA:true,YV:true},secretsReturned:false});
+    }
+
+"""
+        worker_text = worker_text.replace(post_anchor, seed_block + post_anchor, 1)
+        print("WB_SECRET_SEED_ENDPOINT=patched")
     worker.write_text(worker_text, encoding="utf-8")
     print("WORKER_TRIGGER_REFRESH_V2=patched")
 candidates = []
