@@ -292,7 +292,11 @@ class PortfolioService:
             fields = {"margin_pct":"Маржинальность","roi_pct":"ROI","orders_rub":"Сумма заказов","orders_qty":"Кол-во заказов","buyouts_rub":"Сумма выкупов","buyouts_qty":"Кол-во выкупов","profit_rub":"Сумма прибыли"}
             for dest, src in fields.items():
                 n=self._num(rec.get(src))
-                if n is not None: store[dest]=n
+                # "Сравнение" is the rolling current/previous source. Dated weekly
+                # tabs are fallback/context only and must never overwrite a fresher
+                # value already parsed from the rolling comparison block.
+                if n is not None and store.get(dest) is None:
+                    store[dest]=n
             groups=self._parse_group_rows(values)
             if groups: store['groups']=groups
             store["source"] = "google_sheets_bridge:weekly_summary"
