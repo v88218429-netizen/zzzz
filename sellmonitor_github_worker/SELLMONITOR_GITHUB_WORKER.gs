@@ -752,6 +752,101 @@ function sellmonitorGithubWebAuth_(token) {
   }
 }
 
+
+const SMC_PORTFOLIO_SOURCES = Object.freeze({
+  weekly_summary: {
+    spreadsheet_id: '1hU24PrecF2hbeLbKfPEKRQbjXhdd8kONLTMsR4yNIug',
+    ranges: {
+      comparison: 'Сравнение!A1:AN160',
+      air: 'AIR 09.09–16.09!A1:R120',
+      sanych: 'Саныч 09.09–16.09!A1:R160',
+      hozyushka: 'Хозяюшка 09.09–16.09!A1:R120'
+    }
+  },
+  own_27: {
+    spreadsheet_id: '1VQwf-QPeSjexrEculDjWt_hpuCKu7PLzLZhMFjP2VZM',
+    ranges: {
+      summary: 'Сводная!A1:BI1200',
+      unit_economics: 'Юнитка!A1:AQ500',
+      ff_history: 'История остатков ФФ!A1:J800',
+      products: 'Товары!A1:R500',
+      orders_history: 'Заказы!A1:J40000',
+      order_lifecycle: '_WB_ORDER_FEED!A1:L7000',
+      supply_plan: '_ORDER_ANALYSIS_TMP!A1:L1000',
+      ozon_cabinets: 'Ozon кабинеты!A1:X1200',
+      ozon_cab2_products: 'Ozon каб2 товары!A1:L200',
+      ozon_orders: 'Ozon Заказы!A1:V5000'
+    }
+  },
+  sanych_sellmonitor: {
+    spreadsheet_id: '1-aBDZ7c5xfmVwwiNmUi9-DyfIANXmfiM5-Ti2_zg4zI',
+    ranges: {
+      dashboard: '00_Дашборд!A1:Z100',
+      ads_status: '84_Статус_реклама!A1:H300',
+      calculator: '05_Калькулятор!A1:BD4983',
+      stocks: '06_Остатки!A1:Z300',
+      positions: '07_Контроль_позиций!A1:R6000'
+    }
+  }
+});
+
+function sellmonitorGithubTrimRows_(values) {
+  var end = values.length;
+  while (end > 0) {
+    var row = values[end - 1] || [];
+    var nonEmpty = false;
+    for (var i = 0; i < row.length; i++) {
+      if (String(row[i] == null ? '' : row[i]).trim() !== '') {
+        nonEmpty = true;
+        break;
+      }
+    }
+    if (nonEmpty) break;
+    end--;
+  }
+  return values.slice(0, end);
+}
+
+function sellmonitorGithubReadRange_(ss, a1) {
+  var bang = String(a1).indexOf('!');
+  if (bang < 1) throw new Error('Invalid A1 range: ' + a1);
+  var sheetName = String(a1).slice(0, bang);
+  var localA1 = String(a1).slice(bang + 1);
+  var sh = ss.getSheetByName(sheetName);
+  if (!sh) throw new Error('Missing sheet: ' + sheetName + ' in ' + ss.getId());
+  return sellmonitorGithubTrimRows_(sh.getRange(localA1).getDisplayValues());
+}
+
+function sellmonitorGithubPortfolioSnapshot_() {
+  var out = {
+    ok: true,
+    generated_at: new Date().toISOString(),
+    runtime: 'GITHUB_ACTIONS_GOOGLE_ADAPTER',
+    sources: {}
+  };
+  Object.keys(SMC_PORTFOLIO_SOURCES).forEach(function(sourceId) {
+    var cfg = SMC_PORTFOLIO_SOURCES[sourceId];
+    var ss = SpreadsheetApp.openById(cfg.spreadsheet_id);
+    var source = {
+      spreadsheet_id: cfg.spreadsheet_id,
+      modified_at: '',
+      ranges: {}
+    };
+    try {
+      source.modified_at = DriveApp.getFileById(cfg.spreadsheet_id).getLastUpdated().toISOString();
+    } catch (_ignored) {}
+    Object.keys(cfg.ranges).forEach(function(rangeKey) {
+      var a1 = cfg.ranges[rangeKey];
+      source.ranges[rangeKey] = {
+        a1: a1,
+        values: sellmonitorGithubReadRange_(ss, a1)
+      };
+    });
+    out.sources[sourceId] = source;
+  });
+  return out;
+}
+
 function doGet(e) {
   try {
     var params = e && e.parameter ? e.parameter : {};
@@ -853,7 +948,7 @@ function doGet(e) {
 function doPost(e) {
   try {
     var body = JSON.parse((e && e.postData && e.postData.contents) || '{}');
-    sellmonitorGithubWebAuth_(body.token);
+    sellmonitorGithubWebAuth_(body.token || body.key);
     var action = String(body.action || 'tick');
 
     if (action === 'health') {
@@ -862,6 +957,10 @@ function doPost(e) {
         action: action,
         result: sellmonitorGithubHealth()
       });
+    }
+
+    if (action === 'all' || action === 'portfolio_snapshot') {
+      return sellmonitorGithubWebJson_(sellmonitorGithubPortfolioSnapshot_());
     }
 
     if (action === 'platform_ready') {
