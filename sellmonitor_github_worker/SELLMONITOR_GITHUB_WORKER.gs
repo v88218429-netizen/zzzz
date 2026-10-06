@@ -754,34 +754,13 @@ function sellmonitorGithubSha256Hex_(value) {
   }).join('');
 }
 
-function sellmonitorGithubSetWebhookSecret(value) {
-  value = String(value || '').trim();
-  if (value.length < 24) throw new Error('WEBHOOK_SECRET_TOO_SHORT');
-  var expectedHash = String(SMC_GH.WEBHOOK_SECRET_SHA256 || '').trim().toLowerCase();
-  if (!expectedHash || expectedHash === '__sellmonitor_github_webhook_secret_sha256__') {
-    throw new Error('WEBHOOK_SECRET_HASH_NOT_COMPILED');
-  }
-  if (sellmonitorGithubSha256Hex_(value) !== expectedHash) {
-    throw new Error('WEBHOOK_SECRET_HASH_MISMATCH');
-  }
-  var props = PropertiesService.getScriptProperties();
-  var existing = String(props.getProperty('SMC_GH_WEBHOOK_SECRET') || '');
-  if (existing && existing !== value) {
-    throw new Error('WEBHOOK_SECRET_ALREADY_CONFIGURED');
-  }
-  props.setProperty('SMC_GH_WEBHOOK_SECRET', value);
-  return {ok: true, stored: true, secretsReturned: false, length: value.length};
-}
-
 function sellmonitorGithubWebAuth_(token) {
   token = String(token || '');
-  var stored = String(PropertiesService.getScriptProperties().getProperty('SMC_GH_WEBHOOK_SECRET') || '');
-  var compiled = String(SMC_GH.WEBHOOK_SECRET || '');
-  var expected = stored || (compiled === '__SELLMONITOR_GITHUB_WEBHOOK_SECRET__' ? '' : compiled);
-  if (!expected) {
-    throw new Error('SELLMONITOR_WEBHOOK_SECRET_NOT_CONFIGURED');
+  var expectedHash = String(SMC_GH.WEBHOOK_SECRET_SHA256 || '').trim().toLowerCase();
+  if (!expectedHash || expectedHash === '__sellmonitor_github_webhook_secret_sha256__') {
+    throw new Error('SELLMONITOR_WEBHOOK_HASH_NOT_COMPILED');
   }
-  if (token !== expected) {
+  if (sellmonitorGithubSha256Hex_(token) !== expectedHash) {
     throw new Error('UNAUTHORIZED');
   }
 }
@@ -1084,10 +1063,6 @@ function doPost(e) {
   try {
     var body = JSON.parse((e && e.postData && e.postData.contents) || '{}');
     var action = String(body.action || 'tick');
-
-    if (action === 'bootstrap_bridge_secret_v1') {
-      return sellmonitorGithubWebJson_(sellmonitorGithubSetWebhookSecret(body.secret));
-    }
 
     sellmonitorGithubWebAuth_(body.token || body.key);
 
