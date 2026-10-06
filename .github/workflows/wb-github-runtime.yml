@@ -34,7 +34,7 @@ jobs:
       - name: Restore encrypted rolling runtime state
         shell: bash
         env:
-          STATE_SECRET: \${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
+          STATE_SECRET: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
         run: |
           set -euo pipefail
           mkdir -p wb_ai_manager/source/data/github-runtime
@@ -61,11 +61,11 @@ jobs:
         working-directory: wb_ai_manager/source
         env:
           DATA_DIR: data/github-runtime
-          WB_API_TOKEN_AP: \${{ secrets.WB_API_TOKEN_AP }}
-          WB_API_TOKEN_AA: \${{ secrets.WB_API_TOKEN_AA }}
-          WB_API_TOKEN_YV: \${{ secrets.WB_API_TOKEN_YV }}
+          WB_API_TOKEN_AP: ${{ secrets.WB_API_TOKEN_AP }}
+          WB_API_TOKEN_AA: ${{ secrets.WB_API_TOKEN_AA }}
+          WB_API_TOKEN_YV: ${{ secrets.WB_API_TOKEN_YV }}
           GOOGLE_SHEETS_BRIDGE_URL: "https://script.google.com/macros/s/AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw/exec"
-          GOOGLE_SHEETS_BRIDGE_KEY: \${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
+          GOOGLE_SHEETS_BRIDGE_KEY: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
           FORCE_READ_ONLY: "true"
           OPERATION_MODE: shadow
           ENABLE_PUBLIC_WB_SEARCH: "true"
@@ -77,7 +77,7 @@ jobs:
       - name: Encrypt full runtime state
         shell: bash
         env:
-          STATE_SECRET: \${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
+          STATE_SECRET: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/wb-runtime-publish/state"
