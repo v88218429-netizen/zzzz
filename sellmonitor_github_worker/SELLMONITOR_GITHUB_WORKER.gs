@@ -741,11 +741,20 @@ function sellmonitorGithubOAuthCallback_(e) {
   }
 }
 
+function sellmonitorGithubSetWebhookSecret(value) {
+  value = String(value || '').trim();
+  if (value.length < 24) throw new Error('WEBHOOK_SECRET_TOO_SHORT');
+  PropertiesService.getScriptProperties().setProperty('SMC_GH_WEBHOOK_SECRET', value);
+  return {ok: true, stored: true, secretsReturned: false, length: value.length};
+}
+
 function sellmonitorGithubWebAuth_(token) {
   token = String(token || '');
-  var expected = String(SMC_GH.WEBHOOK_SECRET || '');
-  if (!expected || expected === '__SELLMONITOR_GITHUB_WEBHOOK_SECRET__') {
-    throw new Error('SELLMONITOR_WEBHOOK_SECRET_NOT_COMPILED');
+  var stored = String(PropertiesService.getScriptProperties().getProperty('SMC_GH_WEBHOOK_SECRET') || '');
+  var compiled = String(SMC_GH.WEBHOOK_SECRET || '');
+  var expected = stored || (compiled === '__SELLMONITOR_GITHUB_WEBHOOK_SECRET__' ? '' : compiled);
+  if (!expected) {
+    throw new Error('SELLMONITOR_WEBHOOK_SECRET_NOT_CONFIGURED');
   }
   if (token !== expected) {
     throw new Error('UNAUTHORIZED');
