@@ -847,7 +847,14 @@ function sellmonitorGithubReadRange_(ss, a1) {
   return sellmonitorGithubTrimRows_(sh.getRange(startRow, startCol, rows, cols).getDisplayValues());
 }
 
-function sellmonitorGithubPortfolioSnapshot_() {
+function sellmonitorGithubPortfolioSnapshot_(mode) {
+  mode = String(mode || 'fast').toLowerCase();
+  var heavyOwn27 = {
+    orders_history: true,
+    order_lifecycle: true,
+    ozon_cabinets: true,
+    ozon_orders: true
+  };
   var out = {
     ok: true,
     generated_at: new Date().toISOString(),
@@ -868,6 +875,7 @@ function sellmonitorGithubPortfolioSnapshot_() {
         source.modified_at = DriveApp.getFileById(cfg.spreadsheet_id).getLastUpdated().toISOString();
       } catch (_ignored) {}
       Object.keys(cfg.ranges).forEach(function(rangeKey) {
+        if (mode !== 'full' && sourceId === 'own_27' && heavyOwn27[rangeKey]) return;
         var a1 = cfg.ranges[rangeKey];
         try {
           source.ranges[rangeKey] = {
@@ -1080,7 +1088,11 @@ function doPost(e) {
 
 
     if (action === 'all' || action === 'portfolio_snapshot') {
-      return sellmonitorGithubWebJson_(sellmonitorGithubPortfolioSnapshot_());
+      return sellmonitorGithubWebJson_(sellmonitorGithubPortfolioSnapshot_('fast'));
+    }
+
+    if (action === 'all_full' || action === 'portfolio_snapshot_full') {
+      return sellmonitorGithubWebJson_(sellmonitorGithubPortfolioSnapshot_('full'));
     }
 
     if (action === 'platform_ready') {
