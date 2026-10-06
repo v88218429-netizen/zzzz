@@ -272,8 +272,10 @@ class QueryManager:
             pct=-self.config.max_bid_change_pct; decision="DECREASE"; reason="ДРР достиг/превысил экономический потолок."
         elif traffic.get("status")=="overpaid":
             pct=-min(10.0,self.config.max_bid_change_pct); decision="DECREASE"; reason="Платный трафик выше 55%; снижаем перепокупку органики."
-        elif role in {"core","growth"} and pos is not None and target is not None and pos>target+2 and profitable is not False:
-            pct=min(10.0,self.config.max_bid_change_pct); decision="INCREASE"; reason="Экономика допускает рост, позиция хуже целевой."
+        elif role in {"core","growth"} and pos is not None and target is not None and pos>target+2 and profitable is True:
+            pct=min(10.0,self.config.max_bid_change_pct); decision="INCREASE"; reason="Подтверждённая экономика допускает рост, позиция хуже целевой."
+        elif role in {"core","growth"} and pos is not None and target is not None and pos>target+2 and profitable is None:
+            decision="HOLD"; reason="Рост ставки заблокирован: нет подтверждённого экономического запаса."
         elif role=="core" and pos is not None and target is not None and pos<=target:
             reason="Ядро уже в целевой позиции; лишний рост ставки не нужен."
         target_bid=max(0.0,round(min(current*(1+pct/100),self.config.absolute_bid_cap_rub)/10)*10)
