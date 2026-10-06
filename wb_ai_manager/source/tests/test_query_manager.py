@@ -69,3 +69,11 @@ def test_auto_execute_is_opt_in_only():
     cfg=QueryManagerConfig(auto_execute_bid_change_pct=11)
     c=QueryManager(config=cfg,now=NOW).build({"own_27":{"products":[product([row()])]}})["cards"][0]
     assert c["execution_mode"]=="AUTO_EXECUTE"
+
+
+def test_unknown_economics_never_increases_bid():
+    p={"sku":"2","seller_article":"Без юнитки","query_intelligence":[row()]}
+    card=QueryManager(now=NOW).build({"own_27":{"products":[p]}})["cards"][0]
+    assert card["economics"]["profitable_to_scale"] is None
+    assert card["bid_decision"]["decision"]=="HOLD"
+    assert card["execution_mode"]=="INFORMATION_ONLY"
