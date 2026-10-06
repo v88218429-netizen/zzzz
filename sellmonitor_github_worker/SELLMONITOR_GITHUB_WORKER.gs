@@ -847,6 +847,79 @@ function sellmonitorGithubPortfolioSnapshot_() {
   return out;
 }
 
+
+function sellmonitorGithubPublishDashboard_(dashboard) {
+  dashboard = dashboard || {};
+  var cc = SpreadsheetApp.openById(SMC_GH.CONTROL_CENTER_ID);
+  var name = 'WB_AI_Manager';
+  var sh = cc.getSheetByName(name) || cc.insertSheet(name);
+  sh.clear({contentsOnly: true});
+  var rows = [];
+  function push() {
+    var a = Array.prototype.slice.call(arguments);
+    while (a.length < 8) a.push('');
+    rows.push(a.slice(0, 8));
+  }
+
+  push('WB AI MANAGER', '', '', '', '', '', '', '');
+  push('Обновлено', dashboard.generated_at || new Date().toISOString(), 'Статус', dashboard.overall_status || '', '', '', '', '');
+  push('', '', '', '', '', '', '', '');
+  push('КАБИНЕТ', 'WB', 'СТАТУС', 'РЕШЕНИЙ', 'CRITICAL', 'WARNING', 'ОШИБОК АГЕНТОВ', '');
+  (dashboard.cabinets || []).forEach(function(x) {
+    push(x.name || x.id || '', x.wb_connected ? 'OK' : 'НЕТ', x.status || '', x.decisions || 0, x.critical || 0, x.warnings || 0, x.agent_errors || 0, '');
+  });
+
+  push('', '', '', '', '', '', '', '');
+  push('ПРИОРИТЕТ', 'КАБИНЕТ', 'РЕШЕНИЕ', 'ДИАГНОЗ', 'УВЕРЕННОСТЬ', 'FOLLOW-UP', 'ОБЪЕКТ', '');
+  (dashboard.top_actions || []).slice(0, 25).forEach(function(x) {
+    push(x.priority || '', x.cabinet || '', x.title || '', x.diagnosis || '', x.confidence || '', x.follow_up || '', x.entity_id || '', '');
+  });
+
+  push('', '', '', '', '', '', '', '');
+  push('QUERY MANAGER', 'ЗНАЧЕНИЕ', '', '', '', '', '', '');
+  var qs = dashboard.query_summary || {};
+  [
+    ['Статус', qs.query_status],
+    ['Запросов', qs.query_rows],
+    ['Нужно обновить факты', qs.refresh_fact],
+    ['Protect top', qs.protect_top],
+    ['Fix gap', qs.fix_gap],
+    ['Avoid overbuy', qs.avoid_overbuy],
+    ['Готовых действий', qs.ready_query_actions],
+    ['Блокеров данных', qs.data_blockers]
+  ].forEach(function(x) { push(x[0], x[1] == null ? '' : x[1], '', '', '', '', '', ''); });
+
+  push('', '', '', '', '', '', '', '');
+  push('ЗАДАЧИ ПО ЗАПРОСАМ', 'SKU', 'ЗАПРОС', 'ОЧЕРЕДЬ', 'РЕШЕНИЕ', 'СТАВКА СЕЙЧАС', 'ЦЕЛЬ', 'РЕЖИМ');
+  (dashboard.query_tasks || []).slice(0, 30).forEach(function(x) {
+    push('', x.sku || '', x.query || '', x.queue || '', x.decision || '', x.current_search_bid_rub == null ? '' : x.current_search_bid_rub, x.target_search_bid_rub == null ? '' : x.target_search_bid_rub, x.execution_mode || '');
+  });
+
+  push('', '', '', '', '', '', '', '');
+  push('БЛОКЕРЫ ДАННЫХ', 'SKU', 'ЗАПРОС', 'БЛОКЕРЫ', '', '', '', '');
+  (dashboard.data_blockers || []).slice(0, 30).forEach(function(x) {
+    push('', x.sku || '', x.query || '', (x.blockers || []).join(', '), '', '', '', '');
+  });
+
+  if (rows.length) {
+    sh.getRange(1, 1, rows.length, 8).setValues(rows);
+    sh.getRange(1, 1, 1, 8).setFontWeight('bold').setFontSize(14);
+    sh.getRange(4, 1, 1, 8).setFontWeight('bold');
+    sh.setFrozenRows(4);
+    sh.setColumnWidth(1, 130);
+    sh.setColumnWidth(2, 130);
+    sh.setColumnWidth(3, 320);
+    sh.setColumnWidth(4, 360);
+    sh.setColumnWidth(5, 120);
+    sh.setColumnWidth(6, 320);
+    sh.setColumnWidth(7, 150);
+    sh.setColumnWidth(8, 130);
+    sh.getDataRange().setVerticalAlignment('top').setWrap(true);
+  }
+  SpreadsheetApp.flush();
+  return {ok: true, sheet: name, rows: rows.length, updated_at: new Date().toISOString()};
+}
+
 function doGet(e) {
   try {
     var params = e && e.parameter ? e.parameter : {};
@@ -958,6 +1031,11 @@ function doPost(e) {
         result: sellmonitorGithubHealth()
       });
     }
+
+    if (action === 'publish_dashboard') {
+      return sellmonitorGithubWebJson_(sellmonitorGithubPublishDashboard_(body.dashboard || {}));
+    }
+
 
     if (action === 'all' || action === 'portfolio_snapshot') {
       return sellmonitorGithubWebJson_(sellmonitorGithubPortfolioSnapshot_());
