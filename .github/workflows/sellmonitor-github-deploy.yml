@@ -65,13 +65,15 @@ jobs:
           rm -f /tmp/sellmonitor-gh-worker/SELLMONITOR_GITHUB_WORKER.js /tmp/sellmonitor-gh-worker/SELLMONITOR_GITHUB_WORKER.gs
           cp sellmonitor_github_worker/SELLMONITOR_GITHUB_WORKER.gs /tmp/sellmonitor-gh-worker/SELLMONITOR_GITHUB_WORKER.gs
           python - <<'PY'
-          import json, pathlib
+          import hashlib, json, os, pathlib
           root=pathlib.Path('/tmp/sellmonitor-gh-worker')
           p=root/'SELLMONITOR_GITHUB_WORKER.gs'
           s=p.read_text(encoding='utf-8')
-          marker='__SELLMONITOR_GITHUB_WEBHOOK_SECRET__'
+          marker='__SELLMONITOR_GITHUB_WEBHOOK_SECRET_SHA256__'
           if marker not in s:
-              raise SystemExit('webhook secret placeholder missing')
+              raise SystemExit('webhook hash placeholder missing')
+          digest=hashlib.sha256(os.environ['WEBHOOK_SECRET'].encode('utf-8')).hexdigest()
+          p.write_text(s.replace(marker, digest), encoding='utf-8')
           m=root/'appsscript.json'
           obj=json.loads(m.read_text(encoding='utf-8'))
           obj['webapp']={'executeAs':'USER_DEPLOYING','access':'ANYONE_ANONYMOUS'}
@@ -102,26 +104,6 @@ jobs:
           cd /tmp/sellmonitor-gh-worker
           clasp push -f
           clasp redeploy "$WEBAPP_DEPLOYMENT_ID" -d "Sellmonitor GitHub Central Worker Web"
-
-      - name: Seed bridge secret into Script Properties
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd /tmp/sellmonitor-gh-worker
-          PARAMS="$(python - <<'PY'
-          import json, os
-          print(json.dumps([os.environ["WEBHOOK_SECRET"]]))
-          PY
-          )"
-          RESULT="$(clasp run sellmonitorGithubSetWebhookSecret --params "$PARAMS")"
-          printf '%s\n' "$RESULT"
-          python - "$RESULT" <<'PY'
-          import json, sys
-          obj=json.loads(sys.argv[1])
-          if obj.get("ok") is not True or obj.get("stored") is not True:
-              raise AssertionError(obj)
-          print("WEBHOOK_SCRIPT_PROPERTY=stored")
-          PY
 
       - name: Verify protected bridge auth
         shell: bash
@@ -168,6 +150,10 @@ jobs:
           grep -Rqs "SELLMONITOR_GITHUB_MASTER_HOOK_V1" .
           grep -Rqs "function sellmonitorGithubEnsureTrigger_()" .
           grep -Rqs "github-worker-1.3.1" .
+          if grep -Rqs "__SELLMONITOR_GITHUB_WEBHOOK_SECRET_SHA256__" .; then
+            echo "HASH_PLACEHOLDER_STILL_PRESENT"
+            exit 4
+          fi
           grep -Rqs "function sellmonitorGithubSetWebhookSecret" .
           python - <<'PY'
           import json
