@@ -2,6 +2,9 @@ name: WB GitHub Runtime
 
 on:
   workflow_dispatch:
+  workflow_run:
+    workflows: ["Sellmonitor GitHub worker deploy"]
+    types: [completed]
   schedule:
     - cron: "*/15 * * * *"
   push:
@@ -22,6 +25,7 @@ concurrency:
 
 jobs:
   run:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 14
     steps:
