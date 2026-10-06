@@ -769,21 +769,16 @@ const SMC_PORTFOLIO_SOURCES = Object.freeze({
       summary: 'Сводная!A1:BI1200',
       unit_economics: 'Юнитка!A1:AQ500',
       ff_history: 'История остатков ФФ!A1:J800',
-      products: 'Товары!A1:R500',
       orders_history: 'Заказы!A1:J40000',
       order_lifecycle: '_WB_ORDER_FEED!A1:L7000',
       supply_plan: '_ORDER_ANALYSIS_TMP!A1:L1000',
       ozon_cabinets: 'Ozon кабинеты!A1:X1200',
-      ozon_cab2_products: 'Ozon каб2 товары!A1:L200',
       ozon_orders: 'Ozon Заказы!A1:V5000'
     }
   },
   sanych_sellmonitor: {
     spreadsheet_id: '1-aBDZ7c5xfmVwwiNmUi9-DyfIANXmfiM5-Ti2_zg4zI',
     ranges: {
-      dashboard: '00_Дашборд!A1:Z100',
-      ads_status: '84_Статус_реклама!A1:H300',
-      calculator: '05_Калькулятор!A1:BD4983',
       stocks: '06_Остатки!A1:Z300',
       positions: '07_Контроль_позиций!A1:R6000'
     }
@@ -814,7 +809,15 @@ function sellmonitorGithubReadRange_(ss, a1) {
   var localA1 = String(a1).slice(bang + 1);
   var sh = ss.getSheetByName(sheetName);
   if (!sh) throw new Error('Missing sheet: ' + sheetName + ' in ' + ss.getId());
-  return sellmonitorGithubTrimRows_(sh.getRange(localA1).getDisplayValues());
+  var requested = sh.getRange(localA1);
+  var startRow = requested.getRow();
+  var startCol = requested.getColumn();
+  var lastRow = sh.getLastRow();
+  var lastCol = sh.getLastColumn();
+  if (lastRow < startRow || lastCol < startCol) return [];
+  var rows = Math.min(requested.getNumRows(), lastRow - startRow + 1);
+  var cols = Math.min(requested.getNumColumns(), lastCol - startCol + 1);
+  return sellmonitorGithubTrimRows_(sh.getRange(startRow, startCol, rows, cols).getDisplayValues());
 }
 
 function sellmonitorGithubPortfolioSnapshot_() {
