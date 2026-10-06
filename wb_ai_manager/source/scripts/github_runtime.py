@@ -222,6 +222,7 @@ async def run() -> int:
 
     cabinets: dict[str, Any] = {}
     cabinet_snapshots: dict[str, dict[str, Any]] = {}
+    jobs: list[tuple[str, str, str, asyncio.Task]] = []
     for slug, name, env_name in CABINETS:
         token = (os.environ.get(env_name) or "").strip()
         if not token:
@@ -239,15 +240,39 @@ async def run() -> int:
                 "runs": [],
             }
             continue
-        cab, snap = await run_cabinet(
+        jobs.append((
             slug,
             name,
-            token,
-            portfolio_snapshot,
-            portfolio_service.live_path,
-        )
-        cabinets[slug] = cab
-        cabinet_snapshots[slug] = snap
+            env_name,
+            asyncio.create_task(run_cabinet(
+                slug,
+                name,
+                token,
+                portfolio_snapshot,
+                portfolio_service.live_path,
+            )),
+        ))
+    if jobs:
+        results = await asyncio.gather(*(x[3] for x in jobs), return_exceptions=True)
+        for (slug, name, env_name, _task), result in zip(jobs, results):
+            if isinstance(result, BaseException):
+                cabinets[slug] = {
+                    "id": slug,
+                    "name": name,
+                    "status": "error",
+                    "wb_connected": False,
+                    "errors": [{"stage": "cabinet_task", "error": str(result)}],
+                    "agent_errors": 1,
+                    "critical_events": 0,
+                    "warning_events": 0,
+                    "decisions": [],
+                    "events": [],
+                    "runs": [],
+                }
+                continue
+            cab, snap = result
+            cabinets[slug] = cab
+            cabinet_snapshots[slug] = snap
 
     q = query_manager(portfolio_snapshot, cabinet_snapshots.get("sanych") or {})
     healthy_cabs = sum(1 for c in cabinets.values() if c.get("wb_connected"))
