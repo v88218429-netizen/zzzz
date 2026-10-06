@@ -69,6 +69,9 @@ jobs:
           FORCE_READ_ONLY: "true"
           OPERATION_MODE: shadow
           ENABLE_PUBLIC_WB_SEARCH: "true"
+          MCP_START_TIMEOUT_SECONDS: "30"
+          MCP_CALL_TIMEOUT_SECONDS: "30"
+          AGENT_RUN_TIMEOUT_SECONDS: "45"
           STARTUP_AUDIT_ENABLED: "false"
           AUTO_UPDATE_ENABLED: "false"
           GITHUB_RUNTIME_OUTPUT: github_site
