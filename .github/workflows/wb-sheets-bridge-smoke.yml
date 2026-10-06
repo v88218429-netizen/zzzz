@@ -20,7 +20,7 @@ jobs:
           python-version: "3.12"
       - name: Verify authenticated portfolio bridge
         env:
-          BRIDGE_KEY: \${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
+          BRIDGE_KEY: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
           BRIDGE_URL: "https://script.google.com/macros/s/AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw/exec"
         run: |
           python - <<'PY'
