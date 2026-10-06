@@ -276,12 +276,14 @@ async def run() -> int:
 
     q = query_manager(portfolio_snapshot, cabinet_snapshots.get("sanych") or {})
     healthy_cabs = sum(1 for c in cabinets.values() if c.get("wb_connected"))
-    health = "ok" if healthy_cabs == len(CABINETS) and not source_errors else "degraded"
+    clean_cabs = sum(1 for c in cabinets.values() if c.get("status") == "ok")
+    health = "ok" if healthy_cabs == len(CABINETS) and clean_cabs == len(CABINETS) and not source_errors else "degraded"
     payload = {
         "generated_at": generated_at,
         "health": health,
         "read_only": True,
         "connected_cabinets": healthy_cabs,
+        "clean_cabinets": clean_cabs,
         "expected_cabinets": len(CABINETS),
         "source_errors": source_errors,
         "portfolio": portfolio_snapshot,
@@ -308,6 +310,7 @@ async def run() -> int:
         "generated_at": generated_at,
         "health": payload["health"],
         "connected_cabinets": healthy_cabs,
+        "clean_cabinets": clean_cabs,
         "expected_cabinets": len(CABINETS),
         "sheets_live": not any(x.get("stage") == "portfolio.refresh" for x in source_errors),
         "dashboard_published": bool(dashboard_publish.get("ok")),
@@ -318,7 +321,7 @@ async def run() -> int:
     }
     dump("health.json", public_health)
     print(json.dumps(public_health, ensure_ascii=False, indent=2))
-    return 0 if healthy_cabs else 2
+    return 0 if healthy_cabs == len(CABINETS) else 2
 
 
 if __name__ == "__main__":
