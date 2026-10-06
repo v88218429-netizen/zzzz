@@ -58,7 +58,7 @@ jobs:
         env:
           DATA_DIR: data/github-runtime
           WB_MODE: live
-          WB_API_TOKEN: ${{ secrets.WB_API_TOKEN }}
+          WB_API_TOKEN: ${{ secrets.WB_API_TOKEN_AP }}
           GOOGLE_SHEETS_BRIDGE_URL: ${{ secrets.GOOGLE_SHEETS_BRIDGE_URL }}
           GOOGLE_SHEETS_BRIDGE_KEY: ${{ secrets.GOOGLE_SHEETS_BRIDGE_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
