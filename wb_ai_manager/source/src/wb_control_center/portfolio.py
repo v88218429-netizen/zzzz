@@ -1057,7 +1057,11 @@ class PortfolioService:
             })
 
     def _parse_search_signals(self, payload: dict[str, Any], out: dict[str, Any]) -> None:
-        values = self._range_values(payload, "sanych_sellmonitor", "positions")
+        for source_id in ("sanych_sellmonitor", "air_sellmonitor", "hozyushka_sellmonitor"):
+            self._parse_search_signals_source(payload, out, source_id)
+
+    def _parse_search_signals_source(self, payload: dict[str, Any], out: dict[str, Any], source_id: str) -> None:
+        values = self._range_values(payload, source_id, "positions")
         if not values:
             return
         header_idx = None
@@ -1150,7 +1154,7 @@ class PortfolioService:
             prod["query_intelligence_summary"] = {
                 "query_rows": len(ranked),
                 "frequency_total": round(total_freq, 2),
-                "source": "sanych_sellmonitor.positions",
+                "source": f"{source_id}.positions",
                 "snapshot_at": max((str(x.get("snapshot") or "") for x in ranked), default=""),
             }
             if ranked:
