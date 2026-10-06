@@ -31,6 +31,7 @@ jobs:
           d=json.load(open("/tmp/wb-health.json",encoding="utf-8"))
           assert d.get("health") == "ok", d
           assert d.get("connected_cabinets") == d.get("expected_cabinets") == 3, d
+          assert d.get("clean_cabinets") == 3, d
           assert d.get("sheets_live") is True, d
           assert d.get("dashboard_published") is True, d
           assert int(d.get("query_rows") or 0) > 0, d
@@ -39,6 +40,7 @@ jobs:
               "ok": True,
               "runtime": "github_only",
               "connected_cabinets": d.get("connected_cabinets"),
+              "clean_cabinets": d.get("clean_cabinets"),
               "sheets_live": d.get("sheets_live"),
               "dashboard_published": d.get("dashboard_published"),
               "query_status": d.get("query_status"),
