@@ -782,6 +782,20 @@ const SMC_PORTFOLIO_SOURCES = Object.freeze({
       stocks: '06_Остатки!A1:Z300',
       positions: '07_Контроль_позиций!A1:R6000'
     }
+  },
+  air_sellmonitor: {
+    spreadsheet_id: '1SmsoG8zKx3hbTtTzS-zLekTFiWEQN8eIwHOxXq-5RHo',
+    ranges: {
+      stocks: '06_Остатки!A1:Z300',
+      positions: '07_Контроль_позиций!A1:R6000'
+    }
+  },
+  hozyushka_sellmonitor: {
+    spreadsheet_id: '1cVT_H_e8a519k_Gtph6fALWnBbtBrAQ2Jb_gFO3bM64',
+    ranges: {
+      stocks: '06_Остатки!A1:Z300',
+      positions: '07_Контроль_позиций!A1:R6000'
+    }
   }
 });
 
@@ -825,26 +839,37 @@ function sellmonitorGithubPortfolioSnapshot_() {
     ok: true,
     generated_at: new Date().toISOString(),
     runtime: 'GITHUB_ACTIONS_GOOGLE_ADAPTER',
-    sources: {}
+    sources: {},
+    errors: []
   };
   Object.keys(SMC_PORTFOLIO_SOURCES).forEach(function(sourceId) {
     var cfg = SMC_PORTFOLIO_SOURCES[sourceId];
-    var ss = SpreadsheetApp.openById(cfg.spreadsheet_id);
     var source = {
       spreadsheet_id: cfg.spreadsheet_id,
       modified_at: '',
       ranges: {}
     };
     try {
-      source.modified_at = DriveApp.getFileById(cfg.spreadsheet_id).getLastUpdated().toISOString();
-    } catch (_ignored) {}
-    Object.keys(cfg.ranges).forEach(function(rangeKey) {
-      var a1 = cfg.ranges[rangeKey];
-      source.ranges[rangeKey] = {
-        a1: a1,
-        values: sellmonitorGithubReadRange_(ss, a1)
-      };
-    });
+      var ss = SpreadsheetApp.openById(cfg.spreadsheet_id);
+      try {
+        source.modified_at = DriveApp.getFileById(cfg.spreadsheet_id).getLastUpdated().toISOString();
+      } catch (_ignored) {}
+      Object.keys(cfg.ranges).forEach(function(rangeKey) {
+        var a1 = cfg.ranges[rangeKey];
+        try {
+          source.ranges[rangeKey] = {
+            a1: a1,
+            values: sellmonitorGithubReadRange_(ss, a1)
+          };
+        } catch (rangeError) {
+          source.ranges[rangeKey] = {a1: a1, values: [], error: String(rangeError.message || rangeError)};
+          out.errors.push({source: sourceId, range: rangeKey, error: String(rangeError.message || rangeError)});
+        }
+      });
+    } catch (sourceError) {
+      source.error = String(sourceError.message || sourceError);
+      out.errors.push({source: sourceId, error: source.error});
+    }
     out.sources[sourceId] = source;
   });
   return out;
