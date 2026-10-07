@@ -4,7 +4,7 @@
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.8',
+  VERSION: 'github-worker-1.3.9',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -256,6 +256,109 @@ function sellmonitorGithubQueueSlot_(ss, q) {
   return reusable.row;
 }
 
+function sellmonitorGithubRefreshInnerCatalog_(ss, storeId) {
+  var fin = ss.getSheetByName('84_Финансы_периоды');
+  var raw = ss.getSheetByName('90_RAW_finance');
+  var prod = ss.getSheetByName('04_Товары');
+  if (!fin || !raw || !prod) throw new Error('Inner catalog: required sheets missing');
+
+  var universe = {}, lr = fin.getLastRow(), chunk = 2500;
+  for (var st = 2; st <= lr; st += chunk) {
+    var n = Math.min(chunk, lr - st + 1);
+    var a = fin.getRange(st,1,n,8).getValues();
+    var trust = fin.getRange(st,39,n,1).getDisplayValues();
+    for (var i=0; i<n; i++) {
+      if (String(a[i][0] || '') !== String(storeId)) continue;
+      if (String(trust[i][0] || '') !== 'FACTUAL_INNER_ANALYTICS') continue;
+      var nm = String(a[i][6] || '').trim();
+      if (!/^\d+$/.test(nm)) continue;
+      var u = universe[nm] || (universe[nm] = {nm:nm, seller:''});
+      if (a[i][7]) u.seller = String(a[i][7]);
+    }
+  }
+  var ids = Object.keys(universe);
+  if (!ids.length) throw new Error('Inner catalog: trusted finance universe empty ' + storeId);
+
+  var need = {};
+  ids.forEach(function(x){ need[x]=1; });
+  var latest = {}, rr = raw.getLastRow(), scanned = 0;
+  var maxScan = Math.min(Math.max(2000, ids.length * 8), 8000);
+  while (rr > 1 && scanned < maxScan && Object.keys(latest).length < ids.length) {
+    var count = Math.min(250, rr - 1, maxScan - scanned);
+    var start = rr - count + 1;
+    var vals = raw.getRange(start,1,count,11).getValues();
+    for (var j=count-1; j>=0; j--) {
+      var r = vals[j], nm = String(r[7] || '').trim();
+      if (!need[nm] || latest[nm]) continue;
+      if (String(r[0] || '') !== 'inner_product_list') continue;
+      if (String(r[4] || '') !== 'FACTUAL_INNER_ANALYTICS') continue;
+      if (String(r[5] || '').indexOf('|' + storeId + '|') < 0) continue;
+      var obj = {};
+      try { obj = JSON.parse(String(r[10] || '{}')); } catch (e) {}
+      latest[nm] = {o:obj, sync:r[2], seller:String(r[8] || '')};
+    }
+    scanned += count;
+    rr = start - 1;
+  }
+
+  var old = {};
+  if (prod.getLastRow() > 1) {
+    prod.getRange(2,2,prod.getLastRow()-1,26).getValues().forEach(function(r) {
+      var nm = String(r[0] || '').trim();
+      if (nm) old[nm] = {ops:r.slice(20,26)};
+    });
+  }
+
+  var items = ids.map(function(nm) {
+    var l = latest[nm] || {o:{},seller:''}, o = l.o || {}, u = universe[nm];
+    var stock = o.stock && o.stock.count != null ? Number(o.stock.count) : '';
+    var title = String(o.name || u.seller || ('SKU ' + nm));
+    var seller = String(o.supplierArticle || l.seller || u.seller || '');
+    var category = String(o.subjectName || o.categoryName || '');
+    var status = latest[nm] ? (stock !== '' && stock <= 0 ? 'Нет остатка' : 'В продаже') : 'Архив';
+    var buy = o.commonOrdersStat && o.commonOrdersStat.soldOrdersPercent != null
+      ? Number(o.commonOrdersStat.soldOrdersPercent) / 100 : '';
+    return {
+      nm:nm,title:title,seller:seller,brand:String(o.brand || ''),category:category,
+      rating:o.rating == null ? '' : Number(o.rating),
+      reviews:o.reviewsCount == null ? '' : Number(o.reviewsCount),
+      buy:buy,stock:stock,status:status,
+      url:String(o.url || ('https://www.wildberries.ru/catalog/' + nm + '/detail.aspx')),
+      sync:l.sync || '',
+      ops:(old[nm] && old[nm].ops) || ['','','','','','']
+    };
+  });
+  items.sort(function(a,b) {
+    var aa = Number(a.stock), bb = Number(b.stock);
+    if (!isFinite(aa)) aa = -1;
+    if (!isFinite(bb)) bb = -1;
+    return bb-aa || String(a.title).localeCompare(String(b.title));
+  });
+
+  var rows = items.map(function(x,i) {
+    return [
+      i+1,x.nm,x.title,x.brand,x.category,
+      '','','','','','',
+      x.rating,x.reviews,x.reviews,x.buy,x.stock,'',x.status,x.url,x.sync,x.seller
+    ].concat(x.ops);
+  });
+
+  prod.getRange(2,1,Math.max(1,prod.getMaxRows()-1),27).clearContent();
+  if (rows.length) prod.getRange(2,1,rows.length,27).setValues(rows);
+  if (rows.length) prod.getRange(2,15,rows.length,1).setNumberFormat('0.0%');
+  prod.setFrozenRows(1);
+  SpreadsheetApp.flush();
+
+  var stocks = sellmonitorGithubSyncStocksFromInner_(ss);
+  return {
+    ok:true, storeId:storeId, skuCount:rows.length,
+    rawMetadataFound:Object.keys(latest).length,
+    scannedRawRows:scanned,
+    stocks:stocks,
+    source:'Sellmonitor Inner normalized finance + RAW product metadata · lightweight core'
+  };
+}
+
 function sellmonitorGithubSyncStocksFromInner_(ss) {
   var prod = ss.getSheetByName('04_Товары');
   var stocks = ss.getSheetByName('06_Остатки');
@@ -348,8 +451,8 @@ function sellmonitorGithubEnsureCoreRefresh_(ss, q) {
   if (!set || !stocks) return {ok:false, reason:'core sheets missing'};
 
   function setting_(key) {
-    var vals = set.getRange(1, 1, Math.max(1, set.getLastRow()), 2).getDisplayValues();
-    for (var i = 0; i < vals.length; i++) {
+    var vals = set.getRange(1,1,Math.max(1,set.getLastRow()),2).getDisplayValues();
+    for (var i=0; i<vals.length; i++) {
       if (String(vals[i][0] || '').trim() === key) return String(vals[i][1] || '').trim();
     }
     return '';
@@ -362,57 +465,47 @@ function sellmonitorGithubEnsureCoreRefresh_(ss, q) {
   var publicToken = String(props.getProperty('SM_MCP_ACCESS_TOKEN') || '');
   var innerToken = String(props.getProperty('SM_INNER_MCP_ACCESS_TOKEN') || '');
   var useLegacyPublic = Boolean(merchantId && publicToken);
-  var coreFile = useLegacyPublic ? 'snapshot_products_safe_v129' : 'inner_sku_rnp_layout_v300';
+  var coreFile = useLegacyPublic ? 'snapshot_products_safe_v129' : '__central_inner_catalog__';
   var idPrefix = useLegacyPublic ? 'AUTO-SNAPSHOT-' : 'AUTO-INNER-CATALOG-';
 
-  var from = 1200, to = Math.min(2023, q.getMaxRows());
-  if (to < from) return {ok:false, reason:'queue range missing'};
-  var vals = q.getRange(from, 1, to - from + 1, 8).getValues();
+  var lastMs = Number(props.getProperty('SMC_CORE_REFRESH_AT_MS') || 0);
   var now = new Date();
-  var latestDone = null, active = false;
+  var emptyStocks = stocks.getLastRow() <= 1;
+  var stale = !lastMs || (now.getTime() - lastMs) >= 60 * 60000;
 
-  for (var i = 0; i < vals.length; i++) {
-    var st = String(vals[i][4] || '');
-    var spec = {};
-    try { spec = JSON.parse(String(vals[i][3] || '{}')); } catch (e) {}
-    var file = String(spec.file || '');
-    if (file !== coreFile) continue;
-    if (st === 'PENDING' || st === 'NEW' || st === 'RUNNING' || st === 'SCHEDULED') active = true;
-    if (st === 'DONE') {
-      var doneAt = vals[i][6] instanceof Date ? vals[i][6] : new Date(vals[i][6] || vals[i][5] || vals[i][1]);
-      if (doneAt instanceof Date && !isNaN(doneAt) && (!latestDone || doneAt > latestDone)) latestDone = doneAt;
-    }
+  var from=1200,to=Math.min(2023,q.getMaxRows()),active=false;
+  if (to >= from) {
+    q.getRange(from,1,to-from+1,8).getValues().forEach(function(r) {
+      var st=String(r[4] || ''), spec={};
+      try { spec=JSON.parse(String(r[3] || '{}')); } catch(e) {}
+      if (String(spec.file || '') !== coreFile) return;
+      if (st==='PENDING'||st==='NEW'||st==='RUNNING'||st==='SCHEDULED') active=true;
+    });
   }
 
-  var emptyStocks = stocks.getLastRow() <= 1;
-  var stale = !latestDone || ((now.getTime() - latestDone.getTime()) / 60000) >= 60;
   if ((!emptyStocks && !stale) || active) {
     return {
       ok:true, queued:false, active:active, emptyStocks:emptyStocks, stale:stale,
-      latestDone:latestDone, source:coreFile, publicMcp:Boolean(publicToken), innerMcp:Boolean(innerToken)
+      lastRefreshAtMs:lastMs || null, source:coreFile
     };
   }
   if (!useLegacyPublic && !innerToken) {
     return {ok:false, reason:'Inner OAuth missing for inner-native core refresh', source:coreFile};
   }
 
-  var slot = sellmonitorGithubQueueSlot_(ss, q);
-  if (!slot) return {ok:false, reason:'worker-safe queue full with no terminal row to recycle', emptyStocks:emptyStocks, stale:stale};
-
-  q.getRange(slot, 1, 1, 8).setValues([[
-    idPrefix + storeId + '-' + Utilities.formatDate(now, ss.getSpreadsheetTimeZone(), 'yyyyMMdd-HHmmss'),
-    now,
-    'RUN_REMOTE',
+  var slot=sellmonitorGithubQueueSlot_(ss,q);
+  if (!slot) return {ok:false, reason:'worker-safe queue full with no terminal row to recycle'};
+  q.getRange(slot,1,1,8).setValues([[
+    idPrefix + storeId + '-' + Utilities.formatDate(now,ss.getSpreadsheetTimeZone(),'yyyyMMdd-HHmmss'),
+    now,'RUN_REMOTE',
     JSON.stringify({file:coreFile,entrypoint:'REMOTE_MAIN',payload:{storeId:storeId}}),
-    'PENDING',
-    '',
-    '',
+    'PENDING','','',
     useLegacyPublic
-      ? 'Central worker current product/stock snapshot via authorized public Sellmonitor MCP'
-      : 'Central worker current catalog/stock refresh via authorized Sellmonitor Inner'
+      ? 'Hourly current product/stock snapshot via authorized public Sellmonitor MCP'
+      : 'Hourly lightweight current catalog/stock refresh via authorized Sellmonitor Inner'
   ]]);
   SpreadsheetApp.flush();
-  return {ok:true, queued:true, row:slot, emptyStocks:emptyStocks, stale:stale, source:coreFile};
+  return {ok:true,queued:true,row:slot,emptyStocks:emptyStocks,stale:stale,source:coreFile};
 }
 
 function sellmonitorGithubProcessClient_(spreadsheetId) {
@@ -546,6 +639,7 @@ function sellmonitorGithubNextPendingRow_(q) {
     if (/^FORCE-SEARCH-/.test(id)) return -2;
     if (
       file === 'snapshot_products_safe_v129'
+      || file === '__central_inner_catalog__'
       || file === 'inner_sku_rnp_layout_v300'
       || /^AUTO-SNAPSHOT-/.test(id)
       || /^AUTO-INNER-CATALOG-/.test(id)
@@ -683,6 +777,13 @@ function sellmonitorGithubExecuteQueueRow_(ss, q, codeSheet, row) {
     var file = String(spec.file || '').trim();
     var entrypoint = String(spec.entrypoint || 'REMOTE_MAIN').trim();
     if (!file) throw new Error('RUN_REMOTE file missing');
+    if (file === '__central_inner_catalog__') {
+      var centralResult = sellmonitorGithubRefreshInnerCatalog_(ss, String((spec.payload || {}).storeId || ''));
+      sellmonitorClientProperties_(ss.getId()).setProperty('SMC_CORE_REFRESH_AT_MS', String(Date.now()));
+      q.getRange(row,5,1,4).setValues([['DONE', data[5] || new Date(), new Date(), sellmonitorGithubJson_(centralResult)]]);
+      sellmonitorGithubLog_(SpreadsheetApp.openById(SMC_GH.CONTROL_CENTER_ID), ss.getId(), file, 'DONE', id, centralResult);
+      return {id:id,file:file,ok:true,result:centralResult};
+    }
     if (file === 'k2_inventory_pool_sync_v246') {
       var cfg = ss.getSheetByName('99_Настройки');
       var hasK2 = false;
@@ -711,6 +812,9 @@ function sellmonitorGithubExecuteQueueRow_(ss, q, codeSheet, row) {
     var result = eval(wrapped);
     if (file === 'inner_sku_rnp_layout_v300' && result && result.ok === true) {
       result.innerStocks = sellmonitorGithubSyncStocksFromInner_(ss);
+    }
+    if (file === 'snapshot_products_safe_v129' && result && result.ok === true) {
+      sellmonitorClientProperties_(ss.getId()).setProperty('SMC_CORE_REFRESH_AT_MS', String(Date.now()));
     }
     var resultText = sellmonitorGithubJson_(result);
 
