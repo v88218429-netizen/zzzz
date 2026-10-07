@@ -362,20 +362,44 @@ function sellmonitorGithubExecuteQueueRow_(ss, q, codeSheet, row) {
 }
 
 function sellmonitorGithubLoadSource_(codeSheet, file) {
-  var lr = codeSheet.getLastRow();
-  if (lr < 2) throw new Error('97_Код is empty');
-  var vals = codeSheet.getRange(2, 1, lr - 1, 6).getValues();
+  var canonical = {
+    store_autopilot_v207: 1,
+    search_monitor_refresh_gate_v214: 1,
+    daily_prevday_close_v268: 1,
+    daily_prevday_gate_v269: 1,
+    rnp_snapshot_history_v304: 1,
+    rnp_finance_columns_fast_v307: 1,
+    d1_gap_watchdog_v310: 1
+  };
+
+  function collect_(sheet) {
+    if (!sheet) return [];
+    var lr = sheet.getLastRow();
+    if (lr < 2) return [];
+    var vals = sheet.getRange(2, 1, lr - 1, 6).getValues();
+    var parts = [];
+    vals.forEach(function(r, i) {
+      var name = String(r[0] || '').trim();
+      var enabled = r[4] === true || String(r[4]).toUpperCase() === 'TRUE';
+      if (name !== file || !enabled) return;
+      var part = Number(r[2]);
+      if (!isFinite(part) || part <= 0) part = i + 1;
+      parts.push({part: part, code: String(r[3] || '')});
+    });
+    parts.sort(function(a, b) { return a.part - b.part; });
+    return parts;
+  }
+
   var parts = [];
-  vals.forEach(function(r, i) {
-    var name = String(r[0] || '').trim();
-    var enabled = r[4] === true || String(r[4]).toUpperCase() === 'TRUE';
-    if (name !== file || !enabled) return;
-    var part = Number(r[2]);
-    if (!isFinite(part) || part <= 0) part = i + 1;
-    parts.push({part: part, code: String(r[3] || '')});
-  });
+  if (canonical[file]) {
+    var master = SpreadsheetApp.openById('1z5mewokRdEDfzXacyevXvCpHCuO_pbQs6nDJVhuextQ');
+    parts = collect_(master.getSheetByName('97_Код'));
+    if (!parts.length) throw new Error('Canonical production code missing: ' + file);
+  } else {
+    parts = collect_(codeSheet);
+  }
+
   if (!parts.length) throw new Error('Active code not found: ' + file);
-  parts.sort(function(a, b) { return a.part - b.part; });
   return parts.map(function(x) { return x.code; }).join('\n');
 }
 
