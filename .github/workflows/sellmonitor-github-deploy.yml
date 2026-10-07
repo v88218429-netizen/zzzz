@@ -128,24 +128,33 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          URL="https://script.google.com/macros/s/$WEBAPP_DEPLOYMENT_ID/exec"
-          PAYLOAD="$(python - <<'PY'
-          import json, os
-          print(json.dumps({"token":os.environ["WEBHOOK_SECRET"],"action":"tick"}))
-          PY
-          )"
-          RESP="$(curl -fsSL --retry 3 --retry-delay 3 -H 'Content-Type: application/json' -d "$PAYLOAD" "$URL")"
-          printf '%s\n' "$RESP"
-          python - "$RESP" <<'PY'
-          import json, sys
-          obj=json.loads(sys.argv[1])
-          assert obj.get("ok") is True, obj
-          assert obj.get("action") == "tick", obj
-          tick=obj.get("tick") or {}
-          assert tick.get("ok") is True, tick
-          print("WORKER_TICK_OK=yes")
-          print("WORKER_TICK_PROCESSED_CLIENTS=", tick.get("processedClients"))
-          print("WORKER_TICK_PROCESSED_COMMANDS=", tick.get("processedCommands"))
+          python - <<'PY'
+          import json, os, time, urllib.request
+
+          url=f"https://script.google.com/macros/s/{os.environ['WEBAPP_DEPLOYMENT_ID']}/exec"
+          body=json.dumps({"token":os.environ["WEBHOOK_SECRET"],"action":"tick"}).encode()
+          last=None
+          for attempt in range(1,7):
+              req=urllib.request.Request(url,data=body,headers={"Content-Type":"application/json"},method="POST")
+              with urllib.request.urlopen(req,timeout=180) as r:
+                  obj=json.loads(r.read().decode("utf-8"))
+              last=obj
+              assert obj.get("ok") is True, obj
+              assert obj.get("action") == "tick", obj
+              tick=obj.get("tick") or {}
+              assert tick.get("ok") is True, tick
+              if tick.get("skipped") and tick.get("reason")=="worker_lock_busy":
+                  print(f"WORKER_TICK_BUSY attempt={attempt}/6")
+                  if attempt < 6:
+                      time.sleep(10)
+                      continue
+                  raise AssertionError(tick)
+              print("WORKER_TICK_OK=yes")
+              print("WORKER_TICK_PROCESSED_CLIENTS=", tick.get("processedClients"))
+              print("WORKER_TICK_PROCESSED_COMMANDS=", tick.get("processedCommands"))
+              break
+          else:
+              raise AssertionError(last)
           PY
 
       - name: Pull back and verify live code
