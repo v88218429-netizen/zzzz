@@ -77,3 +77,19 @@ def test_unknown_economics_never_increases_bid():
     assert card["economics"]["profitable_to_scale"] is None
     assert card["bid_decision"]["decision"]=="HOLD"
     assert card["execution_mode"]=="INFORMATION_ONLY"
+
+def test_mixed_freshness_is_operational_but_stale_rows_stay_quarantined():
+    rows=[
+        row(query="ведро",snapshot_at="2026-10-03T08:00:00+00:00"),
+        row(query="ведро строительное",snapshot_at="2026-09-20T00:00:00+00:00"),
+    ]
+    out=QueryManager(now=NOW).build({"own_27":{"products":[product(rows)]}})
+    assert out["summary"]["query_status"]=="ready_guarded"
+    assert out["summary"]["facts_status"]=="partial_refresh"
+    assert out["summary"]["operational_ready"] is True
+    assert out["summary"]["fresh_query_rows"]==1
+    assert out["summary"]["blocked_query_rows"]==1
+    stale=[c for c in out["cards"] if c["query"]=="ведро строительное"][0]
+    assert stale["queue"]=="refresh_fact"
+    assert stale["execution_mode"]=="INFORMATION_ONLY"
+
