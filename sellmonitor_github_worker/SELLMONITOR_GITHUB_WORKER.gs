@@ -4,7 +4,7 @@
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.5',
+  VERSION: 'github-worker-1.3.6',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -216,6 +216,39 @@ function sellmonitorGithubTick() {
   }
 }
 
+function sellmonitorGithubQueueSlot_(ss, q) {
+  var from = 1200, to = Math.min(2023, q.getMaxRows());
+  if (to < from) return 0;
+  var vals = q.getRange(from, 1, to - from + 1, 8).getValues();
+  var reusable = null;
+
+  function ts_(v) {
+    if (v instanceof Date && !isNaN(v)) return v.getTime();
+    var d = new Date(v || 0);
+    return d instanceof Date && !isNaN(d) ? d.getTime() : 0;
+  }
+
+  for (var i = 0; i < vals.length; i++) {
+    var id = String(vals[i][0] || '').trim();
+    var st = String(vals[i][4] || '').trim();
+    if (!id && !st) return from + i;
+    if (!/^(DONE|ERROR|CANCELLED)/.test(st)) continue;
+    var t = ts_(vals[i][6]) || ts_(vals[i][5]) || ts_(vals[i][1]);
+    if (!reusable || t < reusable.t) reusable = {row:from+i, t:t, values:vals[i]};
+  }
+  if (!reusable) return 0;
+
+  var archive = ss.getSheetByName('97_Архив_очереди');
+  if (archive) {
+    var ar = archive.getLastRow() + 1;
+    if (ar > archive.getMaxRows()) archive.insertRowsAfter(archive.getMaxRows(), Math.max(100, ar - archive.getMaxRows()));
+    archive.getRange(ar, 1, 1, 8).setValues([reusable.values]);
+  }
+  q.getRange(reusable.row, 1, 1, 8).clearContent();
+  SpreadsheetApp.flush();
+  return reusable.row;
+}
+
 function sellmonitorGithubEnsureCoreRefresh_(ss, q) {
   var set = ss.getSheetByName('99_Настройки');
   var stocks = ss.getSheetByName('06_Остатки');
@@ -235,7 +268,7 @@ function sellmonitorGithubEnsureCoreRefresh_(ss, q) {
   if (to < from) return {ok:false, reason:'queue range missing'};
   var vals = q.getRange(from, 1, to - from + 1, 8).getValues();
   var now = new Date();
-  var latestDone = null, active = false, slot = 0;
+  var latestDone = null, active = false;
 
   for (var i = 0; i < vals.length; i++) {
     var id = String(vals[i][0] || '');
@@ -243,7 +276,6 @@ function sellmonitorGithubEnsureCoreRefresh_(ss, q) {
     var spec = {};
     try { spec = JSON.parse(String(vals[i][3] || '{}')); } catch (e) {}
     var file = String(spec.file || '');
-    if (!slot && !id && !st) slot = from + i;
     if (file !== 'snapshot_products_safe_v129') continue;
     if (st === 'PENDING' || st === 'NEW' || st === 'RUNNING' || st === 'SCHEDULED') active = true;
     if (st === 'DONE') {
@@ -257,7 +289,8 @@ function sellmonitorGithubEnsureCoreRefresh_(ss, q) {
   if ((!emptyStocks && !stale) || active) {
     return {ok:true, queued:false, active:active, emptyStocks:emptyStocks, stale:stale, latestDone:latestDone};
   }
-  if (!slot) return {ok:false, reason:'worker-safe queue full', emptyStocks:emptyStocks, stale:stale};
+  var slot = sellmonitorGithubQueueSlot_(ss, q);
+  if (!slot) return {ok:false, reason:'worker-safe queue full with no terminal row to recycle', emptyStocks:emptyStocks, stale:stale};
 
   q.getRange(slot, 1, 1, 8).setValues([[
     'AUTO-SNAPSHOT-' + storeId + '-' + Utilities.formatDate(now, ss.getSpreadsheetTimeZone(), 'yyyyMMdd-HHmmss'),
@@ -505,11 +538,8 @@ function sellmonitorGithubEnsureUiOnboarding_(ss, q) {
     }
   }
 
-  var slot = 0;
-  for (var j = 0; j < vals.length; j++) {
-    if (!String(vals[j][0] || '') && !String(vals[j][4] || '')) { slot = from + j; break; }
-  }
-  if (!slot) return {ok:false, armed:true, reason:'worker-safe queue full'};
+  var slot = sellmonitorGithubQueueSlot_(ss, q);
+  if (!slot) return {ok:false, armed:true, reason:'worker-safe queue full with no terminal row to recycle'};
 
   q.getRange(slot, 1, 1, 5).setValues([[
     prefix + Date.now(),
