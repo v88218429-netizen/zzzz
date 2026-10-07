@@ -141,6 +141,7 @@ function sellmonitorGithubProcessClient_(spreadsheetId) {
   if (!q || !code) throw new Error('Client missing 97_Управление/97_Код: ' + spreadsheetId);
 
   sellmonitorGithubEnsureUiOnboarding_(ss, q);
+  var staleRepaired = sellmonitorGithubRepairStaleRunning_(q);
 
   var processed = 0, last = null;
   while (processed < SMC_GH.MAX_COMMANDS_PER_CLIENT) {
@@ -168,7 +169,51 @@ function sellmonitorGithubProcessClient_(spreadsheetId) {
     ready = allOk && values.length > 0 && sellmonitorGithubRecentExactReady_(ss, 7);
   }
 
-  return {ok: true, spreadsheetId: spreadsheetId, processedCommands: processed, last: last, ready: ready};
+  return {ok: true, spreadsheetId: spreadsheetId, processedCommands: processed, staleRepaired: staleRepaired, last: last, ready: ready};
+}
+
+function sellmonitorGithubRepairStaleRunning_(q) {
+  var from = 1200, to = Math.min(2023, q.getMaxRows());
+  if (to < from) return 0;
+  var vals = q.getRange(from, 1, to - from + 1, 8).getValues();
+  var now = new Date(), repaired = 0;
+
+  function limitMinutes_(file) {
+    file = String(file || '');
+    if ([
+      'mcp_inner_call_v183',
+      'inner_harvest_to_raw_v217',
+      'finance_period_normalize_incremental_v227',
+      'rnp_store_aggregate_v231',
+      'rnp_latest_period_inner_sync_v224',
+      'calculator_full_sync_chunked_v211',
+      'search_intelligence_sync_v240',
+      'search_traffic_intelligence_v271',
+      'search_intelligence_qc_v242',
+      'traffic_daily_sync_v255'
+    ].indexOf(file) >= 0) return 20;
+    return 12;
+  }
+
+  for (var i = 0; i < vals.length; i++) {
+    if (String(vals[i][4] || '') !== 'RUNNING') continue;
+    var spec = {};
+    try { spec = JSON.parse(String(vals[i][3] || '{}')); } catch (e) {}
+    var file = String(spec.file || '');
+    var started = vals[i][5] instanceof Date ? vals[i][5] :
+      (vals[i][1] instanceof Date ? vals[i][1] : new Date(vals[i][5] || vals[i][1]));
+    var age = started instanceof Date && !isNaN(started) ? (now.getTime() - started.getTime()) / 60000 : 999999;
+    var lim = limitMinutes_(file);
+    if (age < lim) continue;
+
+    var row = from + i;
+    q.getRange(row, 5).setValue('CANCELLED_STALE_WORKER');
+    q.getRange(row, 7).setValue(now);
+    q.getRange(row, 8).setValue('Central worker stale guard: ' + file + ' RUNNING ' + Math.round(age) + 'm >= ' + lim + 'm; task released for idempotent retry');
+    repaired++;
+  }
+  if (repaired) SpreadsheetApp.flush();
+  return repaired;
 }
 
 function sellmonitorGithubRecentExactReady_(ss, lookbackDays) {
