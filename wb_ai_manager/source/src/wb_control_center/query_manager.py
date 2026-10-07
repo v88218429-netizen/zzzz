@@ -304,10 +304,29 @@ class QueryManager:
         blockers=sum(1 for x in cards if x.get("blockers"))
         ready=sum(1 for x in cards if (x.get("bid_decision") or {}).get("monetary") and not x.get("blockers"))
         stale=qs.get("refresh_fact",0)
-        return {"query_rows":len(cards),"refresh_fact":stale,"observe":qs.get("observe",0),"protect_top":qs.get("protect_top",0),
+        fresh=max(0,len(cards)-blockers)
+        # Sellmonitor positionObservedAt is a per-query fact. A source refresh can
+        # therefore legitimately return a mixture of fresh and old observations.
+        # Old rows stay quarantined in refresh_fact and can never reach a monetary
+        # action. Do not mark the whole manager unhealthy when a fresh decisionable
+        # subset exists; expose the partial freshness explicitly instead.
+        if not cards:
+            query_status="no_data"
+            facts_status="no_data"
+        elif fresh <= 0:
+            query_status="needs_refresh"
+            facts_status="blocked"
+        elif blockers:
+            query_status="ready_guarded"
+            facts_status="partial_refresh"
+        else:
+            query_status="ready"
+            facts_status="all_fresh"
+        return {"query_rows":len(cards),"fresh_query_rows":fresh,"blocked_query_rows":blockers,
+                "refresh_fact":stale,"observe":qs.get("observe",0),"protect_top":qs.get("protect_top",0),
                 "fix_gap":qs.get("fix_gap",0),"avoid_overbuy":qs.get("avoid_overbuy",0),"ready_query_actions":ready,
-                "data_blockers":blockers,"query_status":"ready" if cards and stale==0 else ("needs_refresh" if cards else "no_data"),
-                "roles":dict(rs)}
+                "data_blockers":blockers,"query_status":query_status,"facts_status":facts_status,
+                "operational_ready":bool(cards and fresh>0),"roles":dict(rs)}
 
     def _plans(self,cards:list[dict[str,Any]])->dict[str,list[dict[str,Any]]]:
         out={}
