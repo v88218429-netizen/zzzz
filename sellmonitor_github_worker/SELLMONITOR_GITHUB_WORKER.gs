@@ -294,6 +294,7 @@ function sellmonitorGithubNextPendingRow_(q) {
     // and operational order refresh remain ahead of them.
     if (/^(ads_|calculator_ads_|quality_ads_|traffic_)/.test(file)) return 3;
     if ([
+      'search_monitor_refresh_gate_v214',
       'search_snapshot_config_v235',
       'search_position_monitor_sync_v238'
     ].indexOf(file) >= 0) return 3;
