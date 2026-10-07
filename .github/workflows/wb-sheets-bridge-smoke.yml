@@ -13,7 +13,7 @@ jobs:
   smoke:
     if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
-    timeout-minutes: 4
+    timeout-minutes: 6
     steps:
       - uses: actions/setup-python@v5
         with:
@@ -24,11 +24,38 @@ jobs:
           BRIDGE_URL: "https://script.google.com/macros/s/AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw/exec"
         run: |
           python - <<'PY'
-          import json, os, urllib.request
+          import json, os, time, urllib.error, urllib.request
+
+          url=os.environ["BRIDGE_URL"]
           body=json.dumps({"key":os.environ["BRIDGE_KEY"],"action":"all"}).encode()
-          req=urllib.request.Request(os.environ["BRIDGE_URL"],data=body,headers={"Content-Type":"application/json"},method="POST")
-          with urllib.request.urlopen(req,timeout=180) as r:
-              d=json.loads(r.read().decode("utf-8"))
+          d=None
+          last_error=None
+          # clasp redeploy can return a temporary 404 while the stable Apps Script
+          # deployment propagates. Treat only deployment/transient HTTP failures as
+          # retryable; auth/payload/assertion errors still fail closed immediately.
+          for attempt in range(1,9):
+              req=urllib.request.Request(
+                  url,
+                  data=body,
+                  headers={"Content-Type":"application/json"},
+                  method="POST",
+              )
+              try:
+                  with urllib.request.urlopen(req,timeout=120) as r:
+                      d=json.loads(r.read().decode("utf-8"))
+                  break
+              except urllib.error.HTTPError as exc:
+                  last_error=exc
+                  if exc.code not in {404,408,429,500,502,503,504}:
+                      raise
+              except urllib.error.URLError as exc:
+                  last_error=exc
+              if attempt < 8:
+                  print(f"bridge not ready (attempt {attempt}/8): {last_error}; retrying")
+                  time.sleep(15)
+          if d is None:
+              raise RuntimeError(f"bridge did not become ready after retries: {last_error}")
+
           assert d.get("ok") is True, d
           sources=d.get("sources") or {}
           expected={"weekly_summary","own_27","sanych_sellmonitor","air_sellmonitor","hozyushka_sellmonitor"}
