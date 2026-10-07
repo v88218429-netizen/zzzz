@@ -165,10 +165,40 @@ function sellmonitorGithubProcessClient_(spreadsheetId) {
         if (!/(ГОТОВО|READY|OK|ПОДКЛЮЧЕН|ACTIVE)/.test(value)) allOk = false;
       }
     }
-    ready = allOk && values.length > 0;
+    ready = allOk && values.length > 0 && sellmonitorGithubRecentExactReady_(ss, 7);
   }
 
   return {ok: true, spreadsheetId: spreadsheetId, processedCommands: processed, last: last, ready: ready};
+}
+
+function sellmonitorGithubRecentExactReady_(ss, lookbackDays) {
+  var sh = ss.getSheetByName('01_Дни');
+  if (!sh) return false;
+  var tz = ss.getSpreadsheetTimeZone();
+  var lastCol = Math.max(14, sh.getLastColumn());
+  var width = Math.min(lastCol - 13, 120);
+  if (width <= 0) return false;
+
+  var stat = sh.getRange(1, 14, 1, width).getDisplayValues()[0];
+  var head = sh.getRange(2, 14, 1, width).getDisplayValues()[0];
+  var byDay = {};
+  for (var i = 0; i < head.length; i++) {
+    var h = String(head[i] || '').trim();
+    var m = h.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+    if (!m) continue; // ignore PREVIEW and non-day columns
+    byDay[m[3] + '-' + m[2] + '-' + m[1]] = String(stat[i] || '').toUpperCase();
+  }
+
+  var n = Math.max(3, Math.min(14, Number(lookbackDays || 7)));
+  var now = new Date();
+  for (var d = 1; d <= n; d++) {
+    var x = new Date(now.getFullYear(), now.getMonth(), now.getDate() - d, 12);
+    var key = Utilities.formatDate(x, tz, 'yyyy-MM-dd');
+    var st = byDay[key] || '';
+    if (!/(🟢|ФАКТ|1\/1)/.test(st)) return false;
+    if (/(🔴|НЕТ ФАКТА|Н\/Д|ПРЕДВ)/.test(st)) return false;
+  }
+  return true;
 }
 
 function sellmonitorGithubNextPendingRow_(q) {
