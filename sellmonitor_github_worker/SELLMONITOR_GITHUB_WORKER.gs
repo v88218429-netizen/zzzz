@@ -4,7 +4,7 @@
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.1',
+  VERSION: 'github-worker-1.4.0',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -176,18 +176,73 @@ function sellmonitorGithubNextPendingRow_(q) {
   var to = Math.min(2023, q.getMaxRows());
   if (to < from) return 0;
   var vals = q.getRange(from, 1, to - from + 1, 8).getValues();
-  var now = new Date().getTime();
+  var now = new Date().getTime(), best = null;
+
+  function priority_(id, file) {
+    id = String(id || '');
+    file = String(file || '');
+
+    // P0: yesterday-close / finance truth / RNP write path. These must never
+    // wait behind SEO, traffic, competitors or cosmetic refreshes.
+    if (/^(RELENTLESS-D1-|D1-GAP-|D1-)/.test(id)) return 0;
+    if ([
+      'd1_gap_watchdog_v310',
+      'daily_prevday_close_v268',
+      'daily_prevday_gate_v269',
+      'inner_harvest_to_raw_v217',
+      'finance_period_normalize_incremental_v227',
+      'rnp_finance_columns_fast_v307',
+      'rnp_latest_period_inner_sync_v224',
+      'rnp_period_headers_sync_v198',
+      'rnp_store_aggregate_v231',
+      'finance_daily_coverage_guard_v226',
+      'coverage_freshness_sync_v161',
+      'connection_status_sync_v192'
+    ].indexOf(file) >= 0) return 0;
+
+    // P1: orchestration that can create/repair the finance path.
+    if ([
+      'store_autopilot_v207',
+      'queue_scheduler_tick_v263',
+      'store_full_sync_gate_v248',
+      'inner_backfill_gate_v250',
+      'inner_backfill_enqueue_v185'
+    ].indexOf(file) >= 0) return 1;
+
+    // P2: operational order/K2 refresh.
+    if (/^orders_/.test(file) || file === 'k2_inventory_pool_sync_v246') return 2;
+
+    // P3: ads / traffic. Important, but never blocks trusted finance D-1.
+    if (/^(ads_|calculator_ads_|quality_ads_|traffic_)/.test(file)) return 3;
+
+    // P5: search/SEO/competitors are explicitly nonblocking for finance.
+    if (/^(search_|snapshot_)/.test(file) || /^SEARCH-/.test(id)) return 5;
+
+    return 4;
+  }
+
   for (var i = 0; i < vals.length; i++) {
     var cmd = String(vals[i][2] || '');
     var st = String(vals[i][4] || '');
     if (cmd !== 'RUN_REMOTE') continue;
-    if (st === 'SCHEDULED') {
-      var at = vals[i][1] instanceof Date ? vals[i][1].getTime() : new Date(vals[i][1]).getTime();
-      if (isFinite(at) && at > now) continue;
+    if (st !== 'PENDING' && st !== 'NEW' && st !== 'SCHEDULED') continue;
+
+    var due = vals[i][1] instanceof Date ? vals[i][1].getTime() : new Date(vals[i][1]).getTime();
+    if (st === 'SCHEDULED' && isFinite(due) && due > now) continue;
+
+    var spec = {};
+    try { spec = JSON.parse(String(vals[i][3] || '{}')); } catch (e) {}
+    var id = String(vals[i][0] || '');
+    var file = String(spec.file || '');
+    var p = priority_(id, file);
+    var ageKey = isFinite(due) ? due : 0;
+
+    if (!best || p < best.priority || (p === best.priority && ageKey < best.ageKey) ||
+        (p === best.priority && ageKey === best.ageKey && i < best.i)) {
+      best = {row: from + i, priority: p, ageKey: ageKey, i: i};
     }
-    if (st === 'PENDING' || st === 'NEW' || st === 'SCHEDULED') return from + i;
   }
-  return 0;
+  return best ? best.row : 0;
 }
 
 function sellmonitorGithubEnsureUiOnboarding_(ss, q) {
