@@ -1,10 +1,10 @@
 /**
- * Sellmonitor GitHub Central Worker v1.0.0
+ * Sellmonitor GitHub Central Worker v1.3.5
  * GitHub is source-of-truth/scheduler. This Apps Script project is only
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.4',
+  VERSION: 'github-worker-1.3.5',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -50,6 +50,10 @@ function sellmonitorGithubBootstrap() {
 }
 
 function sellmonitorGithubHealth() {
+  var triggerState = sellmonitorGithubEnsureTrigger_();
+  var triggerCount = ScriptApp.getProjectTriggers().filter(function(t) {
+    return t.getHandlerFunction() === 'sellmonitorGithubTick';
+  }).length;
   var cc = SpreadsheetApp.openById(SMC_GH.CONTROL_CENTER_ID);
   var clients = cc.getSheetByName(SMC_GH.CLIENTS_SHEET);
   if (!clients) throw new Error('CONTROL_CENTER Clients sheet missing');
@@ -118,7 +122,10 @@ function sellmonitorGithubHealth() {
     controlCenterName: cc.getName(),
     clientsRows: Math.max(0, clients.getLastRow() - 1),
     clients: summaries,
-    runtime: 'GITHUB_ACTIONS'
+    runtime: 'GITHUB_ACTIONS',
+    trigger: triggerState,
+    trigger_count: triggerCount,
+    trigger_ok: triggerCount === 1
   };
 }
 
@@ -209,6 +216,63 @@ function sellmonitorGithubTick() {
   }
 }
 
+function sellmonitorGithubEnsureCoreRefresh_(ss, q) {
+  var set = ss.getSheetByName('99_Настройки');
+  var stocks = ss.getSheetByName('06_Остатки');
+  if (!set || !stocks) return {ok:false, reason:'core sheets missing'};
+
+  function setting_(key) {
+    var vals = set.getRange(1, 1, Math.max(1, set.getLastRow()), 2).getDisplayValues();
+    for (var i = 0; i < vals.length; i++) {
+      if (String(vals[i][0] || '').trim() === key) return String(vals[i][1] || '').trim();
+    }
+    return '';
+  }
+  var storeId = setting_('ACTIVE_STORE_ID');
+  if (!storeId) return {ok:false, reason:'ACTIVE_STORE_ID missing'};
+
+  var from = 1200, to = Math.min(2023, q.getMaxRows());
+  if (to < from) return {ok:false, reason:'queue range missing'};
+  var vals = q.getRange(from, 1, to - from + 1, 8).getValues();
+  var now = new Date();
+  var latestDone = null, active = false, slot = 0;
+
+  for (var i = 0; i < vals.length; i++) {
+    var id = String(vals[i][0] || '');
+    var st = String(vals[i][4] || '');
+    var spec = {};
+    try { spec = JSON.parse(String(vals[i][3] || '{}')); } catch (e) {}
+    var file = String(spec.file || '');
+    if (!slot && !id && !st) slot = from + i;
+    if (file !== 'snapshot_products_safe_v129') continue;
+    if (st === 'PENDING' || st === 'NEW' || st === 'RUNNING' || st === 'SCHEDULED') active = true;
+    if (st === 'DONE') {
+      var doneAt = vals[i][6] instanceof Date ? vals[i][6] : new Date(vals[i][6] || vals[i][5] || vals[i][1]);
+      if (doneAt instanceof Date && !isNaN(doneAt) && (!latestDone || doneAt > latestDone)) latestDone = doneAt;
+    }
+  }
+
+  var emptyStocks = stocks.getLastRow() <= 1;
+  var stale = !latestDone || ((now.getTime() - latestDone.getTime()) / 60000) >= 60;
+  if ((!emptyStocks && !stale) || active) {
+    return {ok:true, queued:false, active:active, emptyStocks:emptyStocks, stale:stale, latestDone:latestDone};
+  }
+  if (!slot) return {ok:false, reason:'worker-safe queue full', emptyStocks:emptyStocks, stale:stale};
+
+  q.getRange(slot, 1, 1, 8).setValues([[
+    'AUTO-SNAPSHOT-' + storeId + '-' + Utilities.formatDate(now, ss.getSpreadsheetTimeZone(), 'yyyyMMdd-HHmmss'),
+    now,
+    'RUN_REMOTE',
+    JSON.stringify({file:'snapshot_products_safe_v129',entrypoint:'REMOTE_MAIN',payload:{storeId:storeId}}),
+    'PENDING',
+    '',
+    '',
+    'Central worker auto-refresh: current product/stock snapshot every <=60m or immediately when empty'
+  ]]);
+  SpreadsheetApp.flush();
+  return {ok:true, queued:true, row:slot, emptyStocks:emptyStocks, stale:stale};
+}
+
 function sellmonitorGithubProcessClient_(spreadsheetId) {
   var ss = SpreadsheetApp.openById(spreadsheetId);
   var q = ss.getSheetByName('97_Управление');
@@ -217,6 +281,7 @@ function sellmonitorGithubProcessClient_(spreadsheetId) {
 
   sellmonitorGithubEnsureUiOnboarding_(ss, q);
   var staleRepaired = sellmonitorGithubRepairStaleRunning_(q);
+  var coreRefresh = sellmonitorGithubEnsureCoreRefresh_(ss, q);
 
   var processed = 0, last = null;
   while (processed < SMC_GH.MAX_COMMANDS_PER_CLIENT) {
@@ -244,7 +309,7 @@ function sellmonitorGithubProcessClient_(spreadsheetId) {
     ready = allOk && values.length > 0 && sellmonitorGithubRecentExactReady_(ss, 7);
   }
 
-  return {ok: true, spreadsheetId: spreadsheetId, processedCommands: processed, staleRepaired: staleRepaired, last: last, ready: ready};
+  return {ok: true, spreadsheetId: spreadsheetId, processedCommands: processed, staleRepaired: staleRepaired, coreRefresh: coreRefresh, last: last, ready: ready};
 }
 
 function sellmonitorGithubRepairStaleRunning_(q) {
@@ -267,8 +332,8 @@ function sellmonitorGithubRepairStaleRunning_(q) {
       'search_traffic_intelligence_v271',
       'search_intelligence_qc_v242',
       'traffic_daily_sync_v255'
-    ].indexOf(file) >= 0) return 20;
-    return 12;
+    ].indexOf(file) >= 0) return 8;
+    return 6;
   }
 
   for (var i = 0; i < vals.length; i++) {
@@ -333,13 +398,12 @@ function sellmonitorGithubNextPendingRow_(q) {
     id = String(id || '');
     file = String(file || '');
 
-    // Explicit owner/QC factual search refresh gets a short priority lane.
-    // It only refreshes facts; it does not spend money or change bids.
-    if (/^FORCE-SEARCH-/.test(id)) return -1;
+    // Emergency/current facts: never wait behind historical RNP, ads or SEO.
+    if (/^FORCE-SEARCH-/.test(id)) return -2;
+    if (file === 'snapshot_products_safe_v129' || /^AUTO-SNAPSHOT-/.test(id)) return -1;
 
-    // P0: yesterday-close / finance truth / RNP write path. These must never
-    // wait behind SEO, traffic, competitors or cosmetic refreshes.
-    if (/^(RELENTLESS-D1-|D1-GAP-|D1-)/.test(id)) return 0;
+    // P0: yesterday-close factual path only. Do not blanket-prioritize every D1-* row:
+    // D1 post-processing (month RNP/ads/etc.) must not starve current stock/search.
     if ([
       'd1_gap_watchdog_v310',
       'daily_prevday_close_v268',
@@ -347,7 +411,21 @@ function sellmonitorGithubNextPendingRow_(q) {
       'daily_prevday_gate_v312',
       'inner_product_harvest_fast_v311',
       'inner_harvest_to_raw_v217',
-      'finance_period_normalize_incremental_v227',
+      'finance_period_normalize_incremental_v227'
+    ].indexOf(file) >= 0) return 0;
+
+    // P1: direct operational facts required by the owner dashboard.
+    if (/^orders_/.test(file) || file === 'k2_inventory_pool_sync_v246') return 1;
+    if ([
+      'search_snapshot_config_v235',
+      'search_position_monitor_sync_v238',
+      'search_intelligence_sync_v240',
+      'search_traffic_intelligence_v271',
+      'search_intelligence_qc_v242'
+    ].indexOf(file) >= 0) return 1;
+
+    // P2: exact finance/RNP consolidation and freshness guards.
+    if ([
       'rnp_finance_columns_fast_v307',
       'rnp_latest_period_inner_sync_v224',
       'rnp_period_headers_sync_v198',
@@ -355,32 +433,23 @@ function sellmonitorGithubNextPendingRow_(q) {
       'finance_daily_coverage_guard_v226',
       'coverage_freshness_sync_v161',
       'connection_status_sync_v192'
-    ].indexOf(file) >= 0) return 0;
+    ].indexOf(file) >= 0) return 2;
 
-    // P1: orchestration that can create/repair the finance path.
+    // P3: ads / traffic. Important, but cannot block products/stocks/search/D-1.
+    if (/^(ads_|calculator_ads_|quality_ads_|traffic_|wb_ads_)/.test(file)) return 3;
+
+    // P4: orchestration/backfill that can create more work.
     if ([
       'store_autopilot_v207',
       'queue_scheduler_tick_v263',
       'store_full_sync_gate_v248',
       'inner_backfill_gate_v250',
       'inner_backfill_enqueue_v185'
-    ].indexOf(file) >= 0) return 1;
+    ].indexOf(file) >= 0) return 4;
 
-    // P2: operational order/K2 refresh.
-    if (/^orders_/.test(file) || file === 'k2_inventory_pool_sync_v246') return 2;
-
-    // P3: ads / traffic plus factual search-position refresh. Query decisions
-    // must not starve for hours behind cosmetic/competitor work, but finance D-1
-    // and operational order refresh remain ahead of them.
-    if (/^(ads_|calculator_ads_|quality_ads_|traffic_)/.test(file)) return 3;
-    if ([
-      'search_monitor_refresh_gate_v214',
-      'search_snapshot_config_v235',
-      'search_position_monitor_sync_v238'
-    ].indexOf(file) >= 0) return 3;
-
-    // P5: derived search intelligence / SEO / competitors stay nonblocking.
-    if (/^(search_|snapshot_)/.test(file) || /^SEARCH-/.test(id)) return 5;
+    // P6: competitor/cosmetic/derived work stays last.
+    if (/^(search_competitor_|snapshot_)/.test(file) || /^SEARCH-COMP/.test(id)) return 6;
+    if (/^search_/.test(file) || /^SEARCH-/.test(id)) return 5;
 
     return 4;
   }
