@@ -315,7 +315,11 @@ async def run() -> int:
         "sheets_live": not any(x.get("stage") == "portfolio.refresh" for x in source_errors),
         "dashboard_published": bool(dashboard_publish.get("ok")),
         "query_status": (q.get("summary") or {}).get("query_status"),
+        "query_facts_status": (q.get("summary") or {}).get("facts_status"),
+        "query_operational_ready": bool((q.get("summary") or {}).get("operational_ready")),
         "query_rows": (q.get("summary") or {}).get("query_rows"),
+        "fresh_query_rows": (q.get("summary") or {}).get("fresh_query_rows"),
+        "blocked_query_rows": (q.get("summary") or {}).get("blocked_query_rows"),
         "ready_query_actions": (q.get("summary") or {}).get("ready_query_actions"),
         "source_error_stages": [x.get("stage") for x in source_errors],
     }
