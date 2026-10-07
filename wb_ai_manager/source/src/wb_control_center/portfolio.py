@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from copy import deepcopy
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -1349,12 +1350,34 @@ class PortfolioService:
         if not url or not key:
             raise RuntimeError("Google Sheets bridge is not configured")
         request = {"key": key, "action": "all"}
-        with httpx.Client(timeout=httpx.Timeout(120.0, connect=10.0), follow_redirects=True) as client:
-            resp = client.post(url, json=request)
-            resp.raise_for_status()
-            payload = resp.json()
-        if not payload.get("ok"):
-            raise RuntimeError(str(payload.get("error") or "Sheets bridge returned error"))
-        merged = self._merge_bridge(payload)
-        self.live_path.write_text(json.dumps(merged, ensure_ascii=False, indent=2), encoding="utf-8")
-        return merged
+        last_error: Exception | None = None
+        timeout = httpx.Timeout(180.0, connect=10.0, write=30.0, pool=10.0)
+        with httpx.Client(timeout=timeout, follow_redirects=True) as client:
+            for attempt in range(1, 7):
+                try:
+                    resp = client.post(url, json=request)
+                    if resp.status_code in {404, 408, 429, 500, 502, 503, 504}:
+                        raise httpx.HTTPStatusError(
+                            f"transient Sheets bridge HTTP {resp.status_code}",
+                            request=resp.request,
+                            response=resp,
+                        )
+                    resp.raise_for_status()
+                    payload = resp.json()
+                    if payload.get("ok") is False and str(payload.get("error") or "").upper() == "UNAUTHORIZED":
+                        raise RuntimeError("transient Sheets bridge UNAUTHORIZED")
+                    if not payload.get("ok"):
+                        raise RuntimeError(str(payload.get("error") or "Sheets bridge returned error"))
+                    merged = self._merge_bridge(payload)
+                    self.live_path.write_text(json.dumps(merged, ensure_ascii=False, indent=2), encoding="utf-8")
+                    return merged
+                except (httpx.HTTPError, RuntimeError, ValueError) as exc:
+                    last_error = exc
+                    transient = (
+                        isinstance(exc, httpx.HTTPError)
+                        or "transient Sheets bridge" in str(exc)
+                    )
+                    if not transient or attempt >= 6:
+                        raise
+                    time.sleep(10)
+        raise RuntimeError(f"Google Sheets bridge refresh failed: {last_error}")

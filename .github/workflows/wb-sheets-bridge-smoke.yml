@@ -71,9 +71,13 @@ jobs:
           counts={}
           for sid,source in sources.items():
               counts[sid]={k:len((v or {}).get("values") or []) for k,v in (source.get("ranges") or {}).items()}
-          assert counts["sanych_sellmonitor"].get("positions",0)>1, counts
-          assert counts["air_sellmonitor"].get("positions",0)>1, counts
-          assert counts["hozyushka_sellmonitor"].get("positions",0)>1, counts
+          assert not (d.get("errors") or []), d.get("errors")
+          assert counts["sanych_sellmonitor"].get("positions",0)>2, counts
+          assert counts["air_sellmonitor"].get("positions",0)>2, counts
+          assert counts["hozyushka_sellmonitor"].get("positions",0)>2, counts
+          assert counts["sanych_sellmonitor"].get("stocks",0)>1, counts
+          assert counts["air_sellmonitor"].get("stocks",0)>1, counts
+          assert counts["hozyushka_sellmonitor"].get("stocks",0)>1, counts
           assert counts["own_27"].get("summary",0)>1, counts
           print(json.dumps({"ok":True,"sources":sorted(sources),"row_counts":counts,"bridge_errors":d.get("errors") or []},ensure_ascii=False,indent=2))
           PY

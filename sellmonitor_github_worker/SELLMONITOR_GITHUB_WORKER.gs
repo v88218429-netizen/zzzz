@@ -4,12 +4,12 @@
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.3',
+  VERSION: 'github-worker-1.3.4',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
   MAX_CLIENTS_PER_TICK: 4,
-  MAX_COMMANDS_PER_CLIENT: 4,
+  MAX_COMMANDS_PER_CLIENT: 1,
   MAX_RESULT_CHARS: 45000,
   WEBHOOK_SECRET: '__SELLMONITOR_GITHUB_WEBHOOK_SECRET__',
   WEBHOOK_SECRET_SHA256: '__SELLMONITOR_GITHUB_WEBHOOK_SECRET_SHA256__'
@@ -53,12 +53,71 @@ function sellmonitorGithubHealth() {
   var cc = SpreadsheetApp.openById(SMC_GH.CONTROL_CENTER_ID);
   var clients = cc.getSheetByName(SMC_GH.CLIENTS_SHEET);
   if (!clients) throw new Error('CONTROL_CENTER Clients sheet missing');
+
+  var summaries = [];
+  if (clients.getLastRow() >= 2) {
+    var width = Math.max(20, clients.getLastColumn());
+    var head = clients.getRange(1, 1, 1, width).getDisplayValues()[0];
+    var map = {};
+    head.forEach(function(x, i) { if (x) map[String(x).trim()] = i; });
+    var vals = clients.getRange(2, 1, clients.getLastRow() - 1, width).getDisplayValues();
+
+    function field_(r, key) {
+      return map[key] == null ? '' : String(r[map[key]] || '').trim();
+    }
+
+    vals.forEach(function(r) {
+      var enabled = field_(r, 'enabled').toUpperCase();
+      var spreadsheetId = field_(r, 'spreadsheet_id');
+      var storeId = field_(r, 'store_id');
+      var name = field_(r, 'client_name');
+      var status = field_(r, 'status');
+      if (['TRUE','1','ДА'].indexOf(enabled) < 0 || !spreadsheetId) return;
+      if (storeId === 'new_store_template' || /MASTER TEMPLATE/i.test(name) || status === 'template_only') return;
+
+      var item = {
+        client_name: name,
+        store_id: storeId,
+        state: field_(r, 'state'),
+        status: status,
+        qc_status: field_(r, 'qc_status'),
+        last_seen: field_(r, 'last_seen'),
+        last_sync: field_(r, 'last_sync'),
+        worker_version: field_(r, 'worker_version'),
+        positions_rows: 0,
+        stocks_rows: 0,
+        queue: {PENDING:0, NEW:0, SCHEDULED:0, RUNNING:0, DONE:0, ERROR:0, CANCELLED_STALE_WORKER:0}
+      };
+      try {
+        var ss = SpreadsheetApp.openById(spreadsheetId);
+        var pos = ss.getSheetByName('07_Контроль_позиций');
+        var stocks = ss.getSheetByName('06_Остатки');
+        var q = ss.getSheetByName('97_Управление');
+        item.positions_rows = pos ? pos.getLastRow() : 0;
+        item.stocks_rows = stocks ? stocks.getLastRow() : 0;
+        if (q) {
+          var to = Math.min(2023, q.getMaxRows());
+          if (to >= 1200) {
+            q.getRange(1200, 5, to - 1199, 1).getDisplayValues().forEach(function(x) {
+              var st = String((x || [])[0] || '').trim();
+              if (Object.prototype.hasOwnProperty.call(item.queue, st)) item.queue[st]++;
+            });
+          }
+        }
+      } catch (e) {
+        item.diagnostic_error = String(e && e.message ? e.message : e).slice(0, 300);
+      }
+      summaries.push(item);
+    });
+  }
+
   return {
     ok: true,
     version: SMC_GH.VERSION,
     controlCenterId: cc.getId(),
     controlCenterName: cc.getName(),
     clientsRows: Math.max(0, clients.getLastRow() - 1),
+    clients: summaries,
     runtime: 'GITHUB_ACTIONS'
   };
 }
@@ -82,22 +141,36 @@ function sellmonitorGithubTick() {
       if (map[k] == null) throw new Error('CONTROL_CENTER missing column: ' + k);
     });
 
-    var rows = sh.getRange(2, 1, lr - 1, width).getValues();
-    var processedClients = 0, processedCommands = 0, errors = [];
-
-    for (var i = 0; i < rows.length && processedClients < SMC_GH.MAX_CLIENTS_PER_TICK; i++) {
-      var r = rows[i], row = i + 2;
+    var rawRows = sh.getRange(2, 1, lr - 1, width).getValues();
+    var clients = [];
+    for (var i = 0; i < rawRows.length; i++) {
+      var r = rawRows[i];
       var enabled = r[map.enabled] === true || String(r[map.enabled]).toUpperCase() === 'TRUE';
       var spreadsheetId = String(r[map.spreadsheet_id] || '').trim();
       var storeId = String(r[map.store_id] || '').trim();
       var name = String(r[map.client_name] || '').trim();
       var status = String(r[map.status] || '').trim();
-
       if (!enabled || !spreadsheetId) continue;
       if (storeId === 'new_store_template' || /MASTER TEMPLATE/i.test(name) || status === 'template_only') continue;
+      clients.push({values:r,row:i + 2,spreadsheetId:spreadsheetId,storeId:storeId,name:name,status:status});
+    }
 
+    var processedClients = 0, processedCommands = 0, errors = [];
+    var props = PropertiesService.getScriptProperties();
+    var start = Number(props.getProperty('SMC_GH_CLIENT_CURSOR') || 0);
+    if (!isFinite(start) || start < 0) start = 0;
+    if (clients.length) {
+      start = Math.floor(start) % clients.length;
+      // Advance before running any remote command. If this execution hits the
+      // Apps Script wall-clock limit, the next minute starts from another client.
+      props.setProperty('SMC_GH_CLIENT_CURSOR', String((start + 1) % clients.length));
+    }
+
+    for (var step = 0; step < clients.length && processedClients < SMC_GH.MAX_CLIENTS_PER_TICK; step++) {
+      var item = clients[(start + step) % clients.length];
+      var r = item.values, row = item.row;
       try {
-        var result = sellmonitorGithubProcessClient_(spreadsheetId);
+        var result = sellmonitorGithubProcessClient_(item.spreadsheetId);
         processedClients++;
         processedCommands += Number(result.processedCommands || 0);
         sellmonitorGithubSetControl_(sh, row, map, {
@@ -109,7 +182,8 @@ function sellmonitorGithubTick() {
           qc_status: result.ready ? 'PASS' : (map.qc_status != null ? r[map.qc_status] : '')
         });
       } catch (e) {
-        errors.push({spreadsheetId: spreadsheetId, error: String(e.message || e)});
+        processedClients++;
+        errors.push({spreadsheetId: item.spreadsheetId, error: String(e.message || e)});
         sellmonitorGithubSetControl_(sh, row, map, {
           last_seen: new Date(),
           worker_version: SMC_GH.VERSION,
@@ -117,7 +191,7 @@ function sellmonitorGithubTick() {
           state: 'ERROR',
           error: String(e.message || e).slice(0, 1500)
         });
-        sellmonitorGithubLog_(cc, spreadsheetId, 'GITHUB_WORKER', 'ERROR', String(e.message || e), {});
+        sellmonitorGithubLog_(cc, item.spreadsheetId, 'GITHUB_WORKER', 'ERROR', String(e.message || e), {});
       }
     }
 
@@ -125,6 +199,7 @@ function sellmonitorGithubTick() {
     return {
       ok: errors.length === 0,
       version: SMC_GH.VERSION,
+      startClient: clients.length ? clients[start].storeId : '',
       processedClients: processedClients,
       processedCommands: processedCommands,
       errors: errors
@@ -999,6 +1074,35 @@ function sellmonitorGithubTrimRows_(values) {
   return values.slice(0, end);
 }
 
+function sellmonitorGithubCompactPositions_(values) {
+  if (!values || !values.length) return values || [];
+  var headerIdx = -1, idx = {};
+  for (var i = 0; i < Math.min(values.length, 10); i++) {
+    var labels = {};
+    (values[i] || []).forEach(function(x, j) { labels[String(x || '').trim()] = j; });
+    if (labels.nmId != null && labels['Частотность'] != null && labels['Текущая позиция'] != null) {
+      headerIdx = i;
+      idx = labels;
+      break;
+    }
+  }
+  if (headerIdx < 0) return values;
+  var out = values.slice(0, headerIdx + 1);
+  for (var r = headerIdx + 1; r < values.length; r++) {
+    var row = values[r] || [];
+    var sku = String(row[idx.nmId] || '').trim();
+    var activeIdx = idx['Активен'];
+    var active = activeIdx == null ? 'TRUE' : String(row[activeIdx] || '').trim().toUpperCase();
+    var queryIdx = idx['Поисковый запрос'];
+    var query = queryIdx == null ? '' : String(row[queryIdx] || '').trim();
+    if (!/^\d+$/.test(sku)) continue;
+    if (activeIdx != null && ['TRUE','1','ДА'].indexOf(active) < 0) continue;
+    if (queryIdx != null && !query) continue;
+    out.push(row);
+  }
+  return out;
+}
+
 function sellmonitorGithubReadRange_(ss, a1) {
   var bang = String(a1).indexOf('!');
   if (bang < 1) throw new Error('Invalid A1 range: ' + a1);
@@ -1048,9 +1152,11 @@ function sellmonitorGithubPortfolioSnapshot_(mode) {
         if (mode !== 'full' && sourceId === 'own_27' && heavyOwn27[rangeKey]) return;
         var a1 = cfg.ranges[rangeKey];
         try {
+          var values = sellmonitorGithubReadRange_(ss, a1);
+          if (rangeKey === 'positions') values = sellmonitorGithubCompactPositions_(values);
           source.ranges[rangeKey] = {
             a1: a1,
-            values: sellmonitorGithubReadRange_(ss, a1)
+            values: values
           };
         } catch (rangeError) {
           source.ranges[rangeKey] = {a1: a1, values: [], error: String(rangeError.message || rangeError)};

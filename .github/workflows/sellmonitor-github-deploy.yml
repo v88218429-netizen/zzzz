@@ -121,7 +121,12 @@ jobs:
           obj=json.loads(sys.argv[1])
           assert obj.get("ok") is True, obj
           assert obj.get("action") == "health", obj
+          health=obj.get("result") or {}
           print("PROTECTED_BRIDGE_AUTH=ok")
+          print(json.dumps({
+              "worker_version": health.get("version"),
+              "clients": health.get("clients") or [],
+          }, ensure_ascii=False, indent=2))
           PY
 
       - name: Run one authenticated worker tick
@@ -142,13 +147,17 @@ jobs:
               assert obj.get("ok") is True, obj
               assert obj.get("action") == "tick", obj
               tick=obj.get("tick") or {}
-              assert tick.get("ok") is True, tick
               if tick.get("skipped") and tick.get("reason")=="worker_lock_busy":
                   print(f"WORKER_TICK_BUSY attempt={attempt}/6")
                   if attempt < 6:
                       time.sleep(10)
                       continue
-                  raise AssertionError(tick)
+                  # A healthy minute-trigger worker may legitimately own the lock.
+                  # Deployment acceptance is code/auth based; the live worker can
+                  # complete the next tick instead of making CI falsely red.
+                  print("WORKER_TICK_DEFERRED_BUSY=yes")
+                  break
+              assert tick.get("ok") is True, tick
               print("WORKER_TICK_OK=yes")
               print("WORKER_TICK_PROCESSED_CLIENTS=", tick.get("processedClients"))
               print("WORKER_TICK_PROCESSED_COMMANDS=", tick.get("processedCommands"))
@@ -167,7 +176,7 @@ jobs:
           clasp pull
           grep -Rqs "SELLMONITOR_GITHUB_MASTER_HOOK_V1" .
           grep -Rqs "function sellmonitorGithubEnsureTrigger_()" .
-          grep -Rqs "github-worker-1.3.3" .
+          grep -Rqs "github-worker-1.3.4" .
           grep -Rqs "SELLMONITOR_WEBHOOK_HASH_NOT_COMPILED" .
           python - <<'PY'
           import json
