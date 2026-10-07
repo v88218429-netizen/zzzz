@@ -183,6 +183,7 @@ function sellmonitorGithubRepairStaleRunning_(q) {
     if ([
       'mcp_inner_call_v183',
       'inner_harvest_to_raw_v217',
+      'inner_product_harvest_fast_v311',
       'finance_period_normalize_incremental_v227',
       'rnp_store_aggregate_v231',
       'rnp_latest_period_inner_sync_v224',
