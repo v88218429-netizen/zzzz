@@ -34,8 +34,14 @@ jobs:
           assert d.get("clean_cabinets") == 3, d
           assert d.get("sheets_live") is True, d
           assert d.get("dashboard_published") is True, d
-          assert int(d.get("query_rows") or 0) > 0, d
-          assert d.get("query_status") in {"ready","needs_refresh"}, d
+          query_rows=int(d.get("query_rows") or 0)
+          fresh_rows=int(d.get("fresh_query_rows") or 0)
+          blocked_rows=int(d.get("blocked_query_rows") or 0)
+          assert query_rows > 0, d
+          assert d.get("query_operational_ready") is True, d
+          assert d.get("query_status") in {"ready","ready_guarded"}, d
+          assert fresh_rows > 0, d
+          assert fresh_rows + blocked_rows == query_rows, d
           print(json.dumps({
               "ok": True,
               "runtime": "github_only",
@@ -44,7 +50,10 @@ jobs:
               "sheets_live": d.get("sheets_live"),
               "dashboard_published": d.get("dashboard_published"),
               "query_status": d.get("query_status"),
-              "query_rows": d.get("query_rows"),
+              "query_facts_status": d.get("query_facts_status"),
+              "query_rows": query_rows,
+              "fresh_query_rows": fresh_rows,
+              "blocked_query_rows": blocked_rows,
               "ready_query_actions": d.get("ready_query_actions"),
           },ensure_ascii=False,indent=2))
           PY
