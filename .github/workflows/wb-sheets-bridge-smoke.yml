@@ -13,7 +13,7 @@ jobs:
   smoke:
     if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
-    timeout-minutes: 6
+    timeout-minutes: 12
     steps:
       - uses: actions/setup-python@v5
         with:
@@ -33,7 +33,7 @@ jobs:
           # clasp redeploy can return a temporary 404 while the stable Apps Script
           # deployment propagates. Treat only deployment/transient HTTP failures as
           # retryable; auth/payload/assertion errors still fail closed immediately.
-          for attempt in range(1,9):
+          for attempt in range(1,5):
               req=urllib.request.Request(
                   url,
                   data=body,
@@ -56,10 +56,10 @@ jobs:
                   last_error=exc
                   if exc.code not in {404,408,429,500,502,503,504}:
                       raise
-              except urllib.error.URLError as exc:
+              except (urllib.error.URLError, TimeoutError) as exc:
                   last_error=exc
-              if attempt < 8:
-                  print(f"bridge not ready (attempt {attempt}/8): {last_error}; retrying")
+              if attempt < 4:
+                  print(f"bridge not ready (attempt {attempt}/4): {last_error}; retrying")
                   time.sleep(15)
           if d is None:
               raise RuntimeError(f"bridge did not become ready after retries: {last_error}")
