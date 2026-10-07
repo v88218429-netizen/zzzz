@@ -4,7 +4,7 @@
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.6',
+  VERSION: 'github-worker-1.3.7',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -88,11 +88,18 @@ function sellmonitorGithubHealth() {
         last_seen: field_(r, 'last_seen'),
         last_sync: field_(r, 'last_sync'),
         worker_version: field_(r, 'worker_version'),
+        auth: {inner_access:false, refresh_token:false, legacy_alias:false},
         positions_rows: 0,
         stocks_rows: 0,
         queue: {PENDING:0, NEW:0, SCHEDULED:0, RUNNING:0, DONE:0, ERROR:0, CANCELLED_STALE_WORKER:0}
       };
       try {
+        var cp = sellmonitorClientProperties_(spreadsheetId);
+        item.auth = {
+          inner_access: Boolean(cp.getProperty('SM_INNER_MCP_ACCESS_TOKEN')),
+          refresh_token: Boolean(cp.getProperty('SM_INNER_MCP_REFRESH_TOKEN')),
+          legacy_alias: Boolean(cp.getProperty('SM_MCP_ACCESS_TOKEN'))
+        };
         var ss = SpreadsheetApp.openById(spreadsheetId);
         var pos = ss.getSheetByName('07_Контроль_позиций');
         var stocks = ss.getSheetByName('06_Остатки');
@@ -307,6 +314,7 @@ function sellmonitorGithubEnsureCoreRefresh_(ss, q) {
 }
 
 function sellmonitorGithubProcessClient_(spreadsheetId) {
+  var authState = sellmonitorGithubEnsureClientAuth_(spreadsheetId);
   var ss = SpreadsheetApp.openById(spreadsheetId);
   var q = ss.getSheetByName('97_Управление');
   var code = ss.getSheetByName('97_Код');
@@ -342,7 +350,7 @@ function sellmonitorGithubProcessClient_(spreadsheetId) {
     ready = allOk && values.length > 0 && sellmonitorGithubRecentExactReady_(ss, 7);
   }
 
-  return {ok: true, spreadsheetId: spreadsheetId, processedCommands: processed, staleRepaired: staleRepaired, coreRefresh: coreRefresh, last: last, ready: ready};
+  return {ok: true, spreadsheetId: spreadsheetId, auth: authState, processedCommands: processed, staleRepaired: staleRepaired, coreRefresh: coreRefresh, last: last, ready: ready};
 }
 
 function sellmonitorGithubRepairStaleRunning_(q) {
@@ -702,6 +710,69 @@ function sellmonitorClientProperties_(spreadsheetId) {
   };
 }
 
+function sellmonitorGithubEnsureClientAuth_(spreadsheetId) {
+  var props = sellmonitorClientProperties_(spreadsheetId);
+  var access = String(props.getProperty('SM_INNER_MCP_ACCESS_TOKEN') || '');
+  var refresh = String(props.getProperty('SM_INNER_MCP_REFRESH_TOKEN') || '');
+  var expiresAt = Number(props.getProperty('SM_INNER_MCP_EXPIRES_AT') || 0);
+  var refreshed = false;
+
+  if (refresh && (!access || !expiresAt || expiresAt <= Date.now() + 120000)) {
+    var cid = String(props.getProperty('SM_INNER_MCP_CLIENT_ID') || '');
+    var endpoint = String(props.getProperty('SM_INNER_MCP_TOKEN_ENDPOINT') || '');
+    if (!endpoint) {
+      try {
+        var meta = UrlFetchApp.fetch('https://sellmonitor.com/mcp/inner-analytics/.well-known/oauth-authorization-server', {
+          method:'get', headers:{Accept:'application/json'}, muteHttpExceptions:true, followRedirects:true
+        });
+        if (meta.getResponseCode() >= 200 && meta.getResponseCode() < 300) {
+          endpoint = String((JSON.parse(meta.getContentText()) || {}).token_endpoint || '');
+          if (endpoint) props.setProperty('SM_INNER_MCP_TOKEN_ENDPOINT', endpoint);
+        }
+      } catch (e) {}
+    }
+    if (cid && endpoint) {
+      var payload = 'grant_type=refresh_token&refresh_token=' + encodeURIComponent(refresh) +
+        '&client_id=' + encodeURIComponent(cid);
+      var rr = UrlFetchApp.fetch(endpoint, {
+        method:'post',
+        contentType:'application/x-www-form-urlencoded',
+        payload:payload,
+        headers:{Accept:'application/json'},
+        muteHttpExceptions:true
+      });
+      var body = {};
+      try { body = JSON.parse(rr.getContentText()); } catch (e) {}
+      if (rr.getResponseCode() >= 200 && rr.getResponseCode() < 300 && body.access_token) {
+        access = String(body.access_token);
+        props.setProperty('SM_INNER_MCP_ACCESS_TOKEN', access);
+        if (body.refresh_token) {
+          refresh = String(body.refresh_token);
+          props.setProperty('SM_INNER_MCP_REFRESH_TOKEN', refresh);
+        }
+        if (body.expires_in) {
+          expiresAt = Date.now() + Number(body.expires_in) * 1000 - 60000;
+          props.setProperty('SM_INNER_MCP_EXPIRES_AT', String(expiresAt));
+        }
+        refreshed = true;
+      }
+    }
+  }
+
+  // Legacy production modules still read SM_MCP_ACCESS_TOKEN. Keep one canonical
+  // OAuth session and mirror the current access token into that compatibility key.
+  if (access) props.setProperty('SM_MCP_ACCESS_TOKEN', access);
+
+  return {
+    ok: Boolean(access),
+    inner_access: Boolean(access),
+    refresh_token: Boolean(refresh),
+    legacy_alias: Boolean(props.getProperty('SM_MCP_ACCESS_TOKEN')),
+    refreshed: refreshed,
+    expires_at: expiresAt || null
+  };
+}
+
 function sellmonitorGithubSetControl_(sh, row, map, values) {
   Object.keys(values || {}).forEach(function(k) {
     if (map[k] == null) return;
@@ -923,6 +994,7 @@ function sellmonitorGithubOAuthCallback_(e) {
     }
 
     props.setProperty('SM_INNER_MCP_ACCESS_TOKEN', tj.access_token);
+    props.setProperty('SM_MCP_ACCESS_TOKEN', tj.access_token);
     if (tj.refresh_token) props.setProperty('SM_INNER_MCP_REFRESH_TOKEN', tj.refresh_token);
     if (tj.expires_in) props.setProperty('SM_INNER_MCP_EXPIRES_AT', String(Date.now() + Number(tj.expires_in) * 1000 - 60000));
 
