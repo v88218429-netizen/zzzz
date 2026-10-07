@@ -4,7 +4,7 @@
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.1',
+  VERSION: 'github-worker-1.3.2',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -289,10 +289,16 @@ function sellmonitorGithubNextPendingRow_(q) {
     // P2: operational order/K2 refresh.
     if (/^orders_/.test(file) || file === 'k2_inventory_pool_sync_v246') return 2;
 
-    // P3: ads / traffic. Important, but never blocks trusted finance D-1.
+    // P3: ads / traffic plus factual search-position refresh. Query decisions
+    // must not starve for hours behind cosmetic/competitor work, but finance D-1
+    // and operational order refresh remain ahead of them.
     if (/^(ads_|calculator_ads_|quality_ads_|traffic_)/.test(file)) return 3;
+    if ([
+      'search_snapshot_config_v235',
+      'search_position_monitor_sync_v238'
+    ].indexOf(file) >= 0) return 3;
 
-    // P5: search/SEO/competitors are explicitly nonblocking for finance.
+    // P5: derived search intelligence / SEO / competitors stay nonblocking.
     if (/^(search_|snapshot_)/.test(file) || /^SEARCH-/.test(id)) return 5;
 
     return 4;
