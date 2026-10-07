@@ -4,7 +4,7 @@
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.2',
+  VERSION: 'github-worker-1.3.3',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -256,6 +256,10 @@ function sellmonitorGithubNextPendingRow_(q) {
   function priority_(id, file) {
     id = String(id || '');
     file = String(file || '');
+
+    // Explicit owner/QC factual search refresh gets a short priority lane.
+    // It only refreshes facts; it does not spend money or change bids.
+    if (/^FORCE-SEARCH-/.test(id)) return -1;
 
     // P0: yesterday-close / finance truth / RNP write path. These must never
     // wait behind SEO, traffic, competitors or cosmetic refreshes.
