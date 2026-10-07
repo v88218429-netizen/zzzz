@@ -4,7 +4,7 @@
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.7',
+  VERSION: 'github-worker-1.3.8',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -256,6 +256,92 @@ function sellmonitorGithubQueueSlot_(ss, q) {
   return reusable.row;
 }
 
+function sellmonitorGithubSyncStocksFromInner_(ss) {
+  var prod = ss.getSheetByName('04_Товары');
+  var stocks = ss.getSheetByName('06_Остатки');
+  if (!prod || !stocks) return {ok:false, reason:'04/06 sheets missing'};
+  var lr = prod.getLastRow();
+  var headers = [
+    'Артикул WB',
+    'Название товара',
+    'Бренд',
+    'Остаток, шт · SELLMONITOR INNER SNAPSHOT',
+    'Остаток Sellmonitor · SNAPSHOT (raw)',
+    'Статус карточки · SNAPSHOT',
+    'Фулфилмент · SNAPSHOT',
+    'Продажи rolling 30д · НЕТ CURRENT INNER ФАКТА',
+    'Средние продажи/день · НЕТ CURRENT INNER ФАКТА',
+    'Запас, дней · НЕТ CURRENT INNER ФАКТА',
+    'Сигнал запаса · CURRENT SNAPSHOT'
+  ];
+  stocks.getRange(1,1,1,headers.length).setValues([headers]);
+  stocks.getRange(2,1,Math.max(1,stocks.getMaxRows()-1),headers.length).clearContent();
+  if (lr <= 1) {
+    SpreadsheetApp.flush();
+    return {ok:true, rows:0, source:'04_Товары · Sellmonitor Inner'};
+  }
+  var src = prod.getRange(2,1,lr-1,21).getValues();
+  var rows = [];
+  src.forEach(function(r) {
+    var nm = String(r[1] || '').trim();
+    if (!/^\d+$/.test(nm)) return;
+    var stock = r[15];
+    var status = String(r[17] || '').trim();
+    var signal = '';
+    if (stock !== '' && stock != null && isFinite(Number(stock))) {
+      signal = Number(stock) <= 0 ? '🔴 НЕТ ОСТАТКА' : '🟢 ЕСТЬ ОСТАТОК · current snapshot';
+    } else {
+      signal = '⚪ НЕТ CURRENT STOCK ФАКТА';
+    }
+    rows.push([
+      nm,
+      r[2] || '',
+      r[3] || '',
+      stock,
+      stock === '' || stock == null ? '' : String(stock),
+      status,
+      '',
+      '',
+      '',
+      '',
+      signal
+    ]);
+  });
+  if (rows.length) {
+    if (rows.length + 1 > stocks.getMaxRows()) stocks.insertRowsAfter(stocks.getMaxRows(), rows.length + 1 - stocks.getMaxRows());
+    stocks.getRange(2,1,rows.length,headers.length).setValues(rows);
+  }
+  stocks.setFrozenRows(1);
+  SpreadsheetApp.flush();
+  return {ok:true, rows:rows.length, source:'04_Товары · Sellmonitor Inner current snapshot'};
+}
+
+function sellmonitorGithubMaintainSearchLane_(ss, q) {
+  var from = 1780, to = Math.min(1840, q.getMaxRows());
+  if (to < from) return {ok:false, reason:'search lane missing'};
+  var vals = q.getRange(from,1,to-from+1,8).getValues();
+  var blanks = 0, terminals = [];
+  vals.forEach(function(r,i) {
+    var id = String(r[0] || '').trim(), st = String(r[4] || '').trim();
+    if (!id && !st) blanks++;
+    else if (/^(DONE|ERROR|CANCELLED)/.test(st)) terminals.push({row:from+i, values:r});
+  });
+  if (blanks >= 5) return {ok:true, blanks:blanks, recycled:0};
+  var archive = ss.getSheetByName('97_Архив_очереди');
+  var recycled = 0;
+  for (var i = 0; i < terminals.length && blanks < 10; i++) {
+    if (archive) {
+      var ar = archive.getLastRow()+1;
+      if (ar > archive.getMaxRows()) archive.insertRowsAfter(archive.getMaxRows(),100);
+      archive.getRange(ar,1,1,8).setValues([terminals[i].values]);
+    }
+    q.getRange(terminals[i].row,1,1,8).clearContent();
+    recycled++; blanks++;
+  }
+  if (recycled) SpreadsheetApp.flush();
+  return {ok:true, blanks:blanks, recycled:recycled};
+}
+
 function sellmonitorGithubEnsureCoreRefresh_(ss, q) {
   var set = ss.getSheetByName('99_Настройки');
   var stocks = ss.getSheetByName('06_Остатки');
@@ -268,8 +354,16 @@ function sellmonitorGithubEnsureCoreRefresh_(ss, q) {
     }
     return '';
   }
+
   var storeId = setting_('ACTIVE_STORE_ID');
   if (!storeId) return {ok:false, reason:'ACTIVE_STORE_ID missing'};
+  var merchantId = setting_('SELLMONITOR_MERCHANT_ID');
+  var props = sellmonitorClientProperties_(ss.getId());
+  var publicToken = String(props.getProperty('SM_MCP_ACCESS_TOKEN') || '');
+  var innerToken = String(props.getProperty('SM_INNER_MCP_ACCESS_TOKEN') || '');
+  var useLegacyPublic = Boolean(merchantId && publicToken);
+  var coreFile = useLegacyPublic ? 'snapshot_products_safe_v129' : 'inner_sku_rnp_layout_v300';
+  var idPrefix = useLegacyPublic ? 'AUTO-SNAPSHOT-' : 'AUTO-INNER-CATALOG-';
 
   var from = 1200, to = Math.min(2023, q.getMaxRows());
   if (to < from) return {ok:false, reason:'queue range missing'};
@@ -278,12 +372,11 @@ function sellmonitorGithubEnsureCoreRefresh_(ss, q) {
   var latestDone = null, active = false;
 
   for (var i = 0; i < vals.length; i++) {
-    var id = String(vals[i][0] || '');
     var st = String(vals[i][4] || '');
     var spec = {};
     try { spec = JSON.parse(String(vals[i][3] || '{}')); } catch (e) {}
     var file = String(spec.file || '');
-    if (file !== 'snapshot_products_safe_v129') continue;
+    if (file !== coreFile) continue;
     if (st === 'PENDING' || st === 'NEW' || st === 'RUNNING' || st === 'SCHEDULED') active = true;
     if (st === 'DONE') {
       var doneAt = vals[i][6] instanceof Date ? vals[i][6] : new Date(vals[i][6] || vals[i][5] || vals[i][1]);
@@ -294,23 +387,32 @@ function sellmonitorGithubEnsureCoreRefresh_(ss, q) {
   var emptyStocks = stocks.getLastRow() <= 1;
   var stale = !latestDone || ((now.getTime() - latestDone.getTime()) / 60000) >= 60;
   if ((!emptyStocks && !stale) || active) {
-    return {ok:true, queued:false, active:active, emptyStocks:emptyStocks, stale:stale, latestDone:latestDone};
+    return {
+      ok:true, queued:false, active:active, emptyStocks:emptyStocks, stale:stale,
+      latestDone:latestDone, source:coreFile, publicMcp:Boolean(publicToken), innerMcp:Boolean(innerToken)
+    };
   }
+  if (!useLegacyPublic && !innerToken) {
+    return {ok:false, reason:'Inner OAuth missing for inner-native core refresh', source:coreFile};
+  }
+
   var slot = sellmonitorGithubQueueSlot_(ss, q);
   if (!slot) return {ok:false, reason:'worker-safe queue full with no terminal row to recycle', emptyStocks:emptyStocks, stale:stale};
 
   q.getRange(slot, 1, 1, 8).setValues([[
-    'AUTO-SNAPSHOT-' + storeId + '-' + Utilities.formatDate(now, ss.getSpreadsheetTimeZone(), 'yyyyMMdd-HHmmss'),
+    idPrefix + storeId + '-' + Utilities.formatDate(now, ss.getSpreadsheetTimeZone(), 'yyyyMMdd-HHmmss'),
     now,
     'RUN_REMOTE',
-    JSON.stringify({file:'snapshot_products_safe_v129',entrypoint:'REMOTE_MAIN',payload:{storeId:storeId}}),
+    JSON.stringify({file:coreFile,entrypoint:'REMOTE_MAIN',payload:{storeId:storeId}}),
     'PENDING',
     '',
     '',
-    'Central worker auto-refresh: current product/stock snapshot every <=60m or immediately when empty'
+    useLegacyPublic
+      ? 'Central worker current product/stock snapshot via authorized public Sellmonitor MCP'
+      : 'Central worker current catalog/stock refresh via authorized Sellmonitor Inner'
   ]]);
   SpreadsheetApp.flush();
-  return {ok:true, queued:true, row:slot, emptyStocks:emptyStocks, stale:stale};
+  return {ok:true, queued:true, row:slot, emptyStocks:emptyStocks, stale:stale, source:coreFile};
 }
 
 function sellmonitorGithubProcessClient_(spreadsheetId) {
@@ -322,6 +424,7 @@ function sellmonitorGithubProcessClient_(spreadsheetId) {
 
   sellmonitorGithubEnsureUiOnboarding_(ss, q);
   var staleRepaired = sellmonitorGithubRepairStaleRunning_(q);
+  var searchLane = sellmonitorGithubMaintainSearchLane_(ss, q);
   var coreRefresh = sellmonitorGithubEnsureCoreRefresh_(ss, q);
 
   var processed = 0, last = null;
@@ -350,7 +453,7 @@ function sellmonitorGithubProcessClient_(spreadsheetId) {
     ready = allOk && values.length > 0 && sellmonitorGithubRecentExactReady_(ss, 7);
   }
 
-  return {ok: true, spreadsheetId: spreadsheetId, auth: authState, processedCommands: processed, staleRepaired: staleRepaired, coreRefresh: coreRefresh, last: last, ready: ready};
+  return {ok: true, spreadsheetId: spreadsheetId, auth: authState, processedCommands: processed, staleRepaired: staleRepaired, searchLane: searchLane, coreRefresh: coreRefresh, last: last, ready: ready};
 }
 
 function sellmonitorGithubRepairStaleRunning_(q) {
@@ -441,7 +544,12 @@ function sellmonitorGithubNextPendingRow_(q) {
 
     // Emergency/current facts: never wait behind historical RNP, ads or SEO.
     if (/^FORCE-SEARCH-/.test(id)) return -2;
-    if (file === 'snapshot_products_safe_v129' || /^AUTO-SNAPSHOT-/.test(id)) return -1;
+    if (
+      file === 'snapshot_products_safe_v129'
+      || file === 'inner_sku_rnp_layout_v300'
+      || /^AUTO-SNAPSHOT-/.test(id)
+      || /^AUTO-INNER-CATALOG-/.test(id)
+    ) return -1;
 
     // P0: yesterday-close factual path only. Do not blanket-prioritize every D1-* row:
     // D1 post-processing (month RNP/ads/etc.) must not starve current stock/search.
@@ -575,6 +683,24 @@ function sellmonitorGithubExecuteQueueRow_(ss, q, codeSheet, row) {
     var file = String(spec.file || '').trim();
     var entrypoint = String(spec.entrypoint || 'REMOTE_MAIN').trim();
     if (!file) throw new Error('RUN_REMOTE file missing');
+    if (file === 'k2_inventory_pool_sync_v246') {
+      var cfg = ss.getSheetByName('99_Настройки');
+      var hasK2 = false;
+      if (cfg) {
+        var cv = cfg.getRange(1,1,Math.max(1,cfg.getLastRow()),2).getDisplayValues();
+        for (var ci=0; ci<cv.length; ci++) {
+          if (String(cv[ci][0] || '').trim() === 'K2_SOURCE_SPREADSHEET_ID' && String(cv[ci][1] || '').trim()) {
+            hasK2 = true; break;
+          }
+        }
+      }
+      if (!hasK2) {
+        var skipped = {ok:true, skipped:true, reason:'K2_SOURCE_SPREADSHEET_ID not configured for this cabinet'};
+        q.getRange(row,5,1,4).setValues([['DONE', data[5] || new Date(), new Date(), sellmonitorGithubJson_(skipped)]]);
+        sellmonitorGithubLog_(SpreadsheetApp.openById(SMC_GH.CONTROL_CENTER_ID), ss.getId(), file, 'DONE', id, skipped);
+        return {id:id, file:file, ok:true, result:skipped};
+      }
+    }
     if (!/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(entrypoint)) throw new Error('Invalid entrypoint: ' + entrypoint);
 
     var source = sellmonitorGithubLoadSource_(codeSheet, file);
@@ -583,6 +709,9 @@ function sellmonitorGithubExecuteQueueRow_(ss, q, codeSheet, row) {
     var __SM_PAYLOAD__ = payload;
     var wrapped = '(function(__payload){\n' + source + '\n;return ' + entrypoint + '(__payload);\n})(__SM_PAYLOAD__)';
     var result = eval(wrapped);
+    if (file === 'inner_sku_rnp_layout_v300' && result && result.ok === true) {
+      result.innerStocks = sellmonitorGithubSyncStocksFromInner_(ss);
+    }
     var resultText = sellmonitorGithubJson_(result);
 
     q.getRange(row, 5, 1, 4).setValues([['DONE', data[5] || new Date(), new Date(), resultText]]);
@@ -610,6 +739,7 @@ function sellmonitorGithubLoadSource_(codeSheet, file) {
     daily_prevday_gate_v269: 1,
     daily_prevday_gate_v312: 1,
     inner_product_harvest_fast_v311: 1,
+    inner_sku_rnp_layout_v300: 1,
     rnp_snapshot_history_v304: 1,
     rnp_finance_columns_fast_v307: 1,
     d1_gap_watchdog_v310: 1
@@ -667,6 +797,19 @@ function sellmonitorClientProperties_(spreadsheetId) {
     if (v != null) {
       primary.setProperty(kk, String(v));
       return v;
+    }
+    // Sanych predates per-client namespacing. Its public Sellmonitor MCP token
+    // is a real legacy credential and may be migrated once into the client scope.
+    // Inner OAuth tokens are intentionally NOT treated as public-MCP tokens.
+    if (
+      String(spreadsheetId) === '1-aBDZ7c5xfmVwwiNmUi9-DyfIANXmfiM5-Ti2_zg4zI'
+      && String(k) === 'SM_MCP_ACCESS_TOKEN'
+    ) {
+      v = legacy.getProperty('SM_MCP_ACCESS_TOKEN');
+      if (v != null) {
+        primary.setProperty(kk, String(v));
+        return v;
+      }
     }
     return null;
   }
@@ -759,9 +902,8 @@ function sellmonitorGithubEnsureClientAuth_(spreadsheetId) {
     }
   }
 
-  // Legacy production modules still read SM_MCP_ACCESS_TOKEN. Keep one canonical
-  // OAuth session and mirror the current access token into that compatibility key.
-  if (access) props.setProperty('SM_MCP_ACCESS_TOKEN', access);
+  // Public /mcp/sellmonitor and Inner Analytics use different OAuth credentials.
+  // Never copy the Inner token into SM_MCP_ACCESS_TOKEN.
 
   return {
     ok: Boolean(access),
@@ -994,7 +1136,6 @@ function sellmonitorGithubOAuthCallback_(e) {
     }
 
     props.setProperty('SM_INNER_MCP_ACCESS_TOKEN', tj.access_token);
-    props.setProperty('SM_MCP_ACCESS_TOKEN', tj.access_token);
     if (tj.refresh_token) props.setProperty('SM_INNER_MCP_REFRESH_TOKEN', tj.refresh_token);
     if (tj.expires_in) props.setProperty('SM_INNER_MCP_EXPIRES_AT', String(Date.now() + Number(tj.expires_in) * 1000 - 60000));
 
