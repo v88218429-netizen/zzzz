@@ -219,6 +219,8 @@ function sellmonitorGithubNextPendingRow_(q) {
       'd1_gap_watchdog_v310',
       'daily_prevday_close_v268',
       'daily_prevday_gate_v269',
+      'daily_prevday_gate_v312',
+      'inner_product_harvest_fast_v311',
       'inner_harvest_to_raw_v217',
       'finance_period_normalize_incremental_v227',
       'rnp_finance_columns_fast_v307',
@@ -367,6 +369,8 @@ function sellmonitorGithubLoadSource_(codeSheet, file) {
     search_monitor_refresh_gate_v214: 1,
     daily_prevday_close_v268: 1,
     daily_prevday_gate_v269: 1,
+    daily_prevday_gate_v312: 1,
+    inner_product_harvest_fast_v311: 1,
     rnp_snapshot_history_v304: 1,
     rnp_finance_columns_fast_v307: 1,
     d1_gap_watchdog_v310: 1
