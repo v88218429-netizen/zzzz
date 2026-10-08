@@ -4,7 +4,7 @@
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.15',
+  VERSION: 'github-worker-1.3.16',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -1561,6 +1561,7 @@ function sellmonitorGithubExecuteQueueRow_(ss, q, codeSheet, row) {
 
 function sellmonitorGithubLoadSource_(codeSheet, file) {
   var canonical = {
+    mcp_inner_call_v183: 1,
     store_autopilot_v207: 1,
     search_monitor_refresh_gate_v214: 1,
     daily_prevday_close_v268: 1,
