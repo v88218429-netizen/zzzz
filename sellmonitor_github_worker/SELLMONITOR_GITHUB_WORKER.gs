@@ -4,7 +4,7 @@
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.22',
+  VERSION: 'github-worker-1.3.23',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -2800,7 +2800,12 @@ function doPost(e) {
     sellmonitorGithubWebAuth_(body.token || body.key);
 
     if (action === 'seed_wb_tokens') {
-      return sellmonitorGithubWebJson_(sellmonitorGithubSeedWbTokens_(body));
+      var seeded = sellmonitorGithubSeedWbTokens_(body);
+      return sellmonitorGithubWebJson_({
+        ok: seeded && seeded.ok === true,
+        action: action,
+        result: seeded
+      });
     }
 
     if (action === 'health') {
