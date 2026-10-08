@@ -4,11 +4,11 @@
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.29',
+  VERSION: 'github-worker-1.3.30',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
-  MAX_CLIENTS_PER_TICK: 4,
+  MAX_CLIENTS_PER_TICK: 1,
   MAX_COMMANDS_PER_CLIENT: 1,
   MAX_RESULT_CHARS: 45000,
   WEBHOOK_SECRET: '__SELLMONITOR_GITHUB_WEBHOOK_SECRET__',
