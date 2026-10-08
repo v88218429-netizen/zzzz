@@ -4,7 +4,7 @@
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.27',
+  VERSION: 'github-worker-1.3.28',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -1117,10 +1117,9 @@ function sellmonitorGithubEnsureAdsClusterRefresh_(ss, q) {
 
 
 
-function sellmonitorGithubCoreBacklog_(q) {
+function sellmonitorGithubCoreBacklog_(q, ss) {
   var from=1200,to=Math.min(2023,q.getMaxRows()),now=Date.now(),count=0,files=[];
-  if(to<from)return{count:0,files:[]};
-  q.getRange(from,1,to-from+1,8).getValues().forEach(function(r){
+  if(to>=from)q.getRange(from,1,to-from+1,8).getValues().forEach(function(r){
     var st=String(r[4]||'');
     if(['PENDING','NEW','RUNNING','SCHEDULED'].indexOf(st)<0)return;
     var due=r[1] instanceof Date?r[1].getTime():Date.parse(String(r[1]||''));
@@ -1137,7 +1136,17 @@ function sellmonitorGithubCoreBacklog_(q) {
     ].indexOf(f)>=0;
     if(critical){count++;if(files.indexOf(f)<0)files.push(f);}
   });
-  return{count:count,files:files};
+
+  var coverageGaps=0;
+  if(ss){
+    var cov=ss.getSheetByName('00_Покрытие_фактов');
+    if(cov){
+      var v=Number(cov.getRange('H2').getValue());
+      coverageGaps=isFinite(v)?Math.max(0,v):0;
+      if(coverageGaps){count+=coverageGaps;if(files.indexOf('COVERAGE_GAP')<0)files.push('COVERAGE_GAP');}
+    }
+  }
+  return{count:count,files:files,coverageGaps:coverageGaps};
 }
 
 function sellmonitorGithubSyncCoreQc_(ss,storeId) {
@@ -1149,7 +1158,7 @@ function sellmonitorGithubSyncCoreQc_(ss,storeId) {
   if(n){var core=fin.getRange(2,1,n,7).getValues(),trust=fin.getRange(2,39,n,1).getDisplayValues();for(var i=0;i<n;i++){if(String(core[i][0]||'')!==storeId||String(trust[i][0]||'')!=='FACTUAL_INNER_ANALYTICS'||Number(core[i][5]||0)!==1)continue;var f=dk(core[i][3]),t=dk(core[i][4]),nm=String(core[i][6]||'');if(!f||!nm)continue;var nx=new Date(f+'T12:00:00');nx.setDate(nx.getDate()+1);if(dk(nx)!==t)continue;(days[f]||(days[f]={}))[nm]=1;}}
   var dkeys=Object.keys(days).sort(),last=dkeys.length?dkeys[dkeys.length-1]:'',trustedRows=0;dkeys.forEach(function(d){trustedRows+=Object.keys(days[d]).length;});
   var adDays={},lastAds='';if(ads&&ads.getLastRow()>1){ads.getRange(2,1,ads.getLastRow()-1,4).getValues().forEach(function(r){if(String(r[0]||'')!==storeId)return;var st=String(r[2]||''),d=dk(r[1]);if(d&&/ТОЧНО WB ADS/.test(st))adDays[d]=1;});var ak=Object.keys(adDays).sort();lastAds=ak.length?ak[ak.length-1]:'';}
-  var backlog=sellmonitorGithubCoreBacklog_(q);
+  var backlog=sellmonitorGithubCoreBacklog_(q,ss);
   var labels=qc.getRange(1,1,Math.max(1,qc.getLastRow()),1).getDisplayValues();
   function setRow(label,value,status,meaning){for(var i=0;i<labels.length;i++){if(String(labels[i][0]||'')===label){qc.getRange(i+1,2,1,3).setValues([[value,status,meaning]]);return;}}}
   setRow('RAW / normalized finance',trustedRows+' trusted SKU-day · last '+(last||'NO_DATA'),last?'OK · FACTUAL_INNER_ANALYTICS':'БЛОКЕР','Trusted daily finance only; partial periods are excluded.');
@@ -1207,7 +1216,7 @@ function sellmonitorGithubProcessClient_(spreadsheetId) {
   var coreRefresh = sellmonitorGithubEnsureCoreRefresh_(ss, q);
   var operational = sellmonitorGithubEnsureOperationalHistory_(ss, q);
   var qcSync = sellmonitorGithubSyncCoreQc_(ss, String(sellmonitorGithubSetting_(ss,'ACTIVE_STORE_ID','')));
-  var coreBacklog = sellmonitorGithubCoreBacklog_(q);
+  var coreBacklog = sellmonitorGithubCoreBacklog_(q,ss);
   var searchRefresh = coreBacklog.count ? {ok:true,queued:false,skipped:true,reason:'CORE_BACKLOG',count:coreBacklog.count} : sellmonitorGithubEnsureSearchRefresh_(ss, q);
   var adsClusterRefresh = coreBacklog.count ? {ok:true,queued:false,skipped:true,reason:'CORE_BACKLOG',count:coreBacklog.count} : sellmonitorGithubEnsureAdsClusterRefresh_(ss, q);
 
@@ -1537,6 +1546,14 @@ function sellmonitorGithubEnsureOperationalHistory_(ss, q) {
   }
 
   var queued = {};
+
+  // D-1 coverage is core work. Keep exactly one watchdog alive even when a
+  // previous repair stopped cleanly on PARTIAL_INNER_ANALYTICS.
+  var d1At = Number(props.getProperty('SMC_D1_WATCHDOG_AT_MS') || 0);
+  if ((!d1At || now-d1At >= 15*60000) && !active.d1_gap_watchdog_v310) {
+    var d1r=queue_('D1-GAP','d1_gap_watchdog_v310',{storeId:storeId,lookback:7});
+    if (d1r) { queued.d1Watchdog=d1r; props.setProperty('SMC_D1_WATCHDOG_AT_MS',String(now)); }
+  }
 
   // Current operational facts bypass long full-sync/backfill lanes.
   var liveAt = Number(props.getProperty('SMC_LIVE_TODAY_AT_MS') || 0);
