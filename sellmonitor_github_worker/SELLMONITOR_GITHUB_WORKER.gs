@@ -4,7 +4,7 @@
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.12',
+  VERSION: 'github-worker-1.3.13',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -605,6 +605,7 @@ function sellmonitorGithubProcessClient_(spreadsheetId) {
   var searchLane = sellmonitorGithubMaintainSearchLane_(ss, q);
   var coreRefresh = sellmonitorGithubEnsureCoreRefresh_(ss, q);
   var searchRefresh = sellmonitorGithubEnsureSearchRefresh_(ss, q);
+  var operational = sellmonitorGithubEnsureOperationalHistory_(ss, q);
 
   var processed = 0, last = null;
   while (processed < SMC_GH.MAX_COMMANDS_PER_CLIENT) {
@@ -632,7 +633,7 @@ function sellmonitorGithubProcessClient_(spreadsheetId) {
     ready = allOk && values.length > 0 && sellmonitorGithubRecentExactReady_(ss, 7);
   }
 
-  return {ok: true, spreadsheetId: spreadsheetId, auth: authState, processedCommands: processed, staleRepaired: staleRepaired, searchLane: searchLane, coreRefresh: coreRefresh, searchRefresh: searchRefresh, last: last, ready: ready};
+  return {ok: true, spreadsheetId: spreadsheetId, auth: authState, processedCommands: processed, staleRepaired: staleRepaired, searchLane: searchLane, coreRefresh: coreRefresh, searchRefresh: searchRefresh, operational: operational, last: last, ready: ready};
 }
 
 function sellmonitorGithubRepairStaleRunning_(q) {
@@ -710,6 +711,141 @@ function sellmonitorGithubRecentExactReady_(ss, lookbackDays) {
   return true;
 }
 
+
+function sellmonitorGithubHydrateCurrentSnapshot_(ss, storeId) {
+  var days = ss.getSheetByName('01_Дни');
+  var prod = ss.getSheetByName('04_Товары');
+  if (!days || !prod || days.getLastRow() < 3 || prod.getLastRow() < 2) {
+    return {ok:true, skipped:true, reason:'days/products unavailable'};
+  }
+
+  var pm = {};
+  var pv = prod.getRange(2,1,prod.getLastRow()-1,21).getValues();
+  pv.forEach(function(r) {
+    var nm = String(r[1] || '').trim();
+    if (!nm) return;
+    pm[nm] = {
+      rating: r[11] === '' || r[11] == null ? '' : Number(r[11]),
+      stock: r[15] === '' || r[15] == null ? '' : Number(r[15])
+    };
+  });
+
+  var star = {};
+  var rs = ss.getSheetByName('84_Рейтинг_срез');
+  if (rs && rs.getLastRow() > 1) {
+    rs.getRange(2,1,rs.getLastRow()-1,12).getValues().forEach(function(r) {
+      var nm = String(r[0] || '').trim();
+      if (!nm) return;
+      star[nm] = {
+        rating_rating:r[3], rating_5:r[4], rating_4:r[5], rating_3:r[6],
+        rating_2:r[7], rating_1:r[8]
+      };
+    });
+  }
+
+  var n = days.getLastRow() - 2;
+  var meta = days.getRange(3,1,n,9).getValues();
+  var cur = days.getRange(3,13,n,1).getValues();
+  var changed = 0, stockSum = 0, stockCount = 0;
+  Object.keys(pm).forEach(function(nm) {
+    var v = pm[nm].stock;
+    if (v !== '' && isFinite(v)) { stockSum += Number(v); stockCount++; }
+  });
+
+  for (var i=0; i<n; i++) {
+    var level = String(meta[i][0] || '');
+    var nm = String(meta[i][5] || '').trim();
+    var code = String(meta[i][8] || '').trim();
+    var v = '';
+
+    if (level === 'SKU' && nm && code === 'stocks_Store_4' && pm[nm] && pm[nm].stock !== '') {
+      v = pm[nm].stock;
+    } else if (level === 'МАГАЗИН' && code === 'stocks_Store_4' && stockCount) {
+      v = stockSum;
+    } else if (level === 'SKU' && nm && code === 'rating_rating' && pm[nm] && pm[nm].rating !== '') {
+      v = pm[nm].rating;
+    } else if (level === 'SKU' && nm && /^rating_[1-5]$/.test(code) && star[nm] && star[nm][code] !== '' && star[nm][code] != null) {
+      v = star[nm][code];
+    } else if (level === 'SKU' && nm && code === 'rating_rating' && star[nm] && star[nm].rating_rating !== '' && star[nm].rating_rating != null) {
+      v = star[nm].rating_rating;
+    } else {
+      continue;
+    }
+    if (String(cur[i][0]) !== String(v)) {
+      cur[i][0] = v;
+      changed++;
+    }
+  }
+  if (changed) {
+    days.getRange(3,13,n,1).setValues(cur);
+    SpreadsheetApp.flush();
+  }
+  return {ok:true, storeId:storeId, changed:changed, productCount:Object.keys(pm).length, stockSkuCount:stockCount};
+}
+
+function sellmonitorGithubEnsureOperationalHistory_(ss, q) {
+  var set = ss.getSheetByName('99_Настройки');
+  if (!set) return {ok:true, skipped:true, reason:'settings missing'};
+  var vals = set.getRange(1,1,Math.max(1,set.getLastRow()),2).getDisplayValues();
+  var cfg = {};
+  vals.forEach(function(r){ if (r[0]) cfg[String(r[0]).trim()] = String(r[1] || '').trim(); });
+  var storeId = cfg.ACTIVE_STORE_ID || '';
+  if (!storeId) return {ok:true, skipped:true, reason:'ACTIVE_STORE_ID missing'};
+
+  var props = sellmonitorClientProperties_(ss.getId());
+  var now = Date.now();
+  var lastHydrate = Number(props.getProperty('SMC_OPERATIONAL_HYDRATE_AT_MS') || 0);
+  var hydrate = {ok:true, skipped:true, reason:'fresh'};
+  if (!lastHydrate || now-lastHydrate >= 30*60000) {
+    hydrate = sellmonitorGithubHydrateCurrentSnapshot_(ss, storeId);
+    props.setProperty('SMC_OPERATIONAL_HYDRATE_AT_MS', String(now));
+  }
+
+  var from=1200, to=Math.min(2023,q.getMaxRows());
+  var active = {};
+  if (to >= from) {
+    var qa=q.getRange(from,1,to-from+1,5).getValues();
+    qa.forEach(function(r) {
+      var st=String(r[4] || '');
+      if (['PENDING','RUNNING','NEW','SCHEDULED'].indexOf(st)<0) return;
+      try {
+        var s=JSON.parse(String(r[3] || '{}'));
+        if (s.file) active[String(s.file)] = true;
+      } catch(e) {}
+    });
+  }
+
+  function queue_(tag,file,payload) {
+    if (active[file]) return 0;
+    var row=sellmonitorGithubQueueSlot_(ss,q);
+    if (!row) return 0;
+    q.getRange(row,1,1,5).setValues([[
+      'AUTO-'+tag+'-'+storeId+'-'+Utilities.formatDate(new Date(),ss.getSpreadsheetTimeZone(),'yyyyMMdd-HHmmss'),
+      new Date(),'RUN_REMOTE',
+      JSON.stringify({file:file,entrypoint:'REMOTE_MAIN',payload:payload || {storeId:storeId}}),
+      'PENDING'
+    ]]);
+    active[file]=true;
+    return row;
+  }
+
+  var queued = {};
+  var snapAt = Number(props.getProperty('SMC_SNAPSHOT_HISTORY_AT_MS') || 0);
+  if ((!snapAt || now-snapAt >= 60*60000) && !active.rnp_snapshot_history_v304) {
+    var sr=queue_('SNAPSHOT-HISTORY','rnp_snapshot_history_v304',{storeId:storeId});
+    if (sr) { queued.snapshot=sr; props.setProperty('SMC_SNAPSHOT_HISTORY_AT_MS',String(now)); }
+  }
+
+  var enrAt = Number(props.getProperty('SMC_RNP_ENRICH_AT_MS') || 0);
+  if ((!enrAt || now-enrAt >= 4*3600000) && !active.rnp_enrichment_sync_v305) {
+    var er=queue_('RNP-ENRICH','rnp_enrichment_sync_v305',{storeId:storeId,sheetIndex:0,offset:0,chunkRows:1200});
+    if (er) { queued.enrichment=er; props.setProperty('SMC_RNP_ENRICH_AT_MS',String(now)); }
+  }
+
+  SpreadsheetApp.flush();
+  return {ok:true,storeId:storeId,hydrate:hydrate,queued:queued};
+}
+
 function sellmonitorGithubNextPendingRow_(q) {
   var from = 1200;
   var to = Math.min(2023, q.getMaxRows());
@@ -739,7 +875,9 @@ function sellmonitorGithubNextPendingRow_(q) {
     if ([
       'inner_product_harvest_fast_v311',
       'inner_harvest_to_raw_v217',
-      'finance_period_normalize_incremental_v227'
+      'finance_period_normalize_incremental_v227',
+      'traffic_daily_sync_v255',
+      'wb_ads_bulk_ingest_v167'
     ].indexOf(file) >= 0) return 0;
 
     // P1: D-1 coordination + current operational facts + critical post steps.
@@ -757,7 +895,9 @@ function sellmonitorGithubNextPendingRow_(q) {
       'rnp_store_aggregate_v231',
       'finance_daily_coverage_guard_v226',
       'coverage_freshness_sync_v161',
-      'connection_status_sync_v192'
+      'connection_status_sync_v192',
+      'rnp_snapshot_history_v304',
+      'rnp_enrichment_sync_v305'
     ].indexOf(file) >= 0) return 1;
     if (/^orders_/.test(file) || file === 'k2_inventory_pool_sync_v246') return 1;
     if ([
@@ -944,7 +1084,14 @@ function sellmonitorGithubLoadSource_(codeSheet, file) {
     inner_product_harvest_fast_v311: 1,
     inner_sku_rnp_layout_v300: 1,
     rnp_snapshot_history_v304: 1,
+    rnp_enrichment_sync_v305: 1,
     rnp_finance_columns_fast_v307: 1,
+    traffic_refresh_enqueue_v256: 1,
+    traffic_refresh_gate_v257: 1,
+    traffic_daily_sync_v255: 1,
+    wb_ads_bulk_ingest_v167: 1,
+    inner_live_today_sync_v260: 1,
+    orders_live_fast_v261: 1,
     d1_gap_watchdog_v310: 1
   };
 
