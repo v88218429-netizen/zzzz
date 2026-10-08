@@ -86,6 +86,7 @@ class QueryManager:
         cards=[]
         for p in own.get("products") or []:
             if isinstance(p,dict): cards.extend(self._product_cards(p))
+        self._overlay_runtime_search(cards, snapshots or {})
         self._rank(cards); self._clusters(cards)
         for c in cards: self._finish(c)
         qr={"protect_top":0,"fix_gap":1,"avoid_overbuy":2,"refresh_fact":3,"observe":4}
@@ -93,6 +94,59 @@ class QueryManager:
         summary=self._summary(cards)
         return {"generated_at":self.now.isoformat(),"status":summary["query_status"],"summary":summary,
                 "cards":cards,"plans_by_sku":self._plans(cards),"operator_brief":self._brief(cards,summary)}
+
+    def _overlay_runtime_search(self,cards:list[dict[str,Any]],snapshots:dict[str,Any])->None:
+        """Overlay only genuinely fresh WB search facts collected by the live runtime.
+
+        The Sheets query layer remains the source of the monitored query universe and
+        frequency. Runtime search_positions can refresh position timestamps, but only
+        when the agent actually obtained WB search-report data. Its trusted-Sellmonitor
+        fallback is intentionally ignored here so an old sheet row can never be made
+        fresh merely because it was re-read during a new runtime cycle.
+        """
+        agent=(snapshots or {}).get("search_positions") or {}
+        item=agent.get("positions") if isinstance(agent,dict) else None
+        if not isinstance(item,dict):
+            return
+        observed_at=_dt(item.get("created_at"))
+        data=item.get("data")
+        if observed_at is None or not isinstance(data,dict):
+            return
+
+        exact:dict[tuple[str,str],dict[str,Any]]={}
+        per_sku:dict[str,list[dict[str,Any]]]={}
+        for row in data.values():
+            if not isinstance(row,dict):
+                continue
+            if str(row.get("source") or "")!="wb_search_report":
+                continue
+            sku=str(row.get("nm_id") or row.get("nmId") or "").strip()
+            pos=_num(row.get("position"))
+            if not sku.isdigit() or pos is None:
+                continue
+            query=str(row.get("query") or "").strip()
+            record={"position":pos,"query":query}
+            per_sku.setdefault(sku,[]).append(record)
+            if query:
+                exact[(sku,_norm(query))]=record
+
+        for card in cards:
+            sku=str(card.get("sku") or "").strip()
+            q=_norm(str(card.get("query") or ""))
+            hit=exact.get((sku,q))
+            if hit is None:
+                # A query-less WB row is product-level position, not evidence for a
+                # specific monitored phrase. Never spread it across multiple queries.
+                continue
+            card["position"]=hit["position"]
+            card["runtime_search_source"]="wb_search_report"
+            card["runtime_search_observed_at"]=observed_at.isoformat()
+            ts=dict(card.get("timestamps") or {})
+            ts["position"]=observed_at.isoformat()
+            card["timestamps"]=ts
+            fresh=dict(card.get("freshness") or {})
+            fresh["position"]=self._fresh("position",observed_at)
+            card["freshness"]=fresh
 
     def _product_cards(self,p:dict[str,Any])->list[dict[str,Any]]:
         rows=[]; source="legacy_top_query"

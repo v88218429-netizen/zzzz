@@ -93,3 +93,50 @@ def test_mixed_freshness_is_operational_but_stale_rows_stay_quarantined():
     assert stale["queue"]=="refresh_fact"
     assert stale["execution_mode"]=="INFORMATION_ONLY"
 
+
+
+def test_runtime_wb_search_overlay_refreshes_only_exact_query_position():
+    stale=row(snapshot_at="2026-09-20T00:00:00+00:00", bid_at="2026-10-03T08:00:00+00:00")
+    snapshots={
+        "search_positions":{
+            "positions":{
+                "created_at":"2026-10-03T09:30:00+00:00",
+                "data":{
+                    "566189858:побелка для деревьев садовая":{
+                        "nm_id":566189858,
+                        "query":"побелка для деревьев садовая",
+                        "position":9,
+                        "source":"wb_search_report",
+                    }
+                },
+            }
+        }
+    }
+    out=QueryManager(now=NOW).build({"own_27":{"products":[product([stale])]}},snapshots)
+    c=out["cards"][0]
+    assert c["position"]==9
+    assert c["freshness"]["position"]["status"]=="fresh"
+    assert "stale_position" not in c["blockers"]
+    assert c["runtime_search_source"]=="wb_search_report"
+
+
+def test_runtime_sellmonitor_fallback_does_not_fake_freshness():
+    stale=row(snapshot_at="2026-09-20T00:00:00+00:00", bid_at="2026-10-03T08:00:00+00:00")
+    snapshots={
+        "search_positions":{
+            "positions":{
+                "created_at":"2026-10-03T09:30:00+00:00",
+                "data":{
+                    "566189858:побелка для деревьев садовая":{
+                        "nm_id":566189858,
+                        "query":"побелка для деревьев садовая",
+                        "position":9,
+                        "source":"trusted_sellmonitor_positions",
+                    }
+                },
+            }
+        }
+    }
+    c=QueryManager(now=NOW).build({"own_27":{"products":[product([stale])]}},snapshots)["cards"][0]
+    assert c["position"]==22
+    assert "stale_position" in c["blockers"]
