@@ -1,5 +1,5 @@
 /**
- * Sellmonitor GitHub Central Worker v1.3.19
+ * Sellmonitor GitHub Central Worker v1.3.20
  * GitHub is source-of-truth/scheduler. This Apps Script project is only
  * the authorized Google adapter. Make is not part of the execution path.
  */
@@ -90,6 +90,7 @@ function sellmonitorGithubHealth() {
         worker_version: field_(r, 'worker_version'),
         auth: {inner_access:false, refresh_token:false, legacy_alias:false},
         positions_rows: 0,
+        search_rows: 0,
         stocks_rows: 0,
         queue: {PENDING:0, NEW:0, SCHEDULED:0, RUNNING:0, DONE:0, ERROR:0, CANCELLED_STALE_WORKER:0}
       };
@@ -102,9 +103,11 @@ function sellmonitorGithubHealth() {
         };
         var ss = SpreadsheetApp.openById(spreadsheetId);
         var pos = ss.getSheetByName('07_Контроль_позиций');
+        var search = ss.getSheetByName('07_Поиск');
         var stocks = ss.getSheetByName('06_Остатки');
         var q = ss.getSheetByName('97_Управление');
         item.positions_rows = pos ? pos.getLastRow() : 0;
+        item.search_rows = search ? search.getLastRow() : 0;
         item.stocks_rows = stocks ? stocks.getLastRow() : 0;
         if (q) {
           var to = Math.min(2023, q.getMaxRows());
