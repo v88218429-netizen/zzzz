@@ -3,7 +3,7 @@ name: WB Sheets bridge smoke
 on:
   workflow_dispatch:
   workflow_run:
-    workflows: ["Sellmonitor GitHub worker deploy"]
+    workflows: ["WB GitHub Runtime"]
     types: [completed]
 
 permissions:
@@ -30,9 +30,9 @@ jobs:
           body=json.dumps({"key":os.environ["BRIDGE_KEY"],"action":"all"}).encode()
           d=None
           last_error=None
-          # clasp redeploy can return a temporary 404 while the stable Apps Script
-          # deployment propagates. Treat only deployment/transient HTTP failures as
-          # retryable; auth/payload/assertion errors still fail closed immediately.
+          # Run after the WB runtime has had a chance to publish current per-cabinet
+          # search positions. Transient Apps Script transport errors are retryable;
+          # content/assertion errors still fail closed.
           for attempt in range(1,5):
               req=urllib.request.Request(
                   url,
