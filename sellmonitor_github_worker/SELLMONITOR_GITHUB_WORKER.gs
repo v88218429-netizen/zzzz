@@ -1,10 +1,10 @@
 /**
- * Sellmonitor GitHub Central Worker v1.3.17
+ * Sellmonitor GitHub Central Worker v1.3.18
  * GitHub is source-of-truth/scheduler. This Apps Script project is only
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.17',
+  VERSION: 'github-worker-1.3.18',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -714,7 +714,7 @@ function sellmonitorGithubResolveWbAuth_(ss) {
       break;
     }
   }
-  var sp = PropertiesService.getScriptProperties();
+  var sp = sellmonitorClientProperties_(ss.getId());
   var token = String((prop && sp.getProperty(prop)) || sp.getProperty('FBS_CLIENT__' + cid + '__WB_API_TOKEN') || '');
   if (!token) throw new Error('WB ads clusters: WB token missing for ' + cid);
   return {clientId:cid, storeId:storeId, propertyName:prop, token:token};
@@ -948,7 +948,16 @@ function sellmonitorGithubAnalyzeAdsClusters_(rows, baseContribution) {
 
 function sellmonitorGithubRefreshAdsClusters_(ss, payload) {
   payload=payload||{};
-  var auth=sellmonitorGithubResolveWbAuth_(ss), token=auth.token, tz=ss.getSpreadsheetTimeZone();
+  var auth;
+  try {
+    auth=sellmonitorGithubResolveWbAuth_(ss);
+  } catch(e) {
+    if (/WB token missing for/.test(String(e && e.message || e))) {
+      return {ok:true,skipped:true,reason:'WB_ANALYTICS_TOKEN_MISSING'};
+    }
+    throw e;
+  }
+  var token=auth.token, tz=ss.getSpreadsheetTimeZone();
   var pairs=sellmonitorGithubCampaignPairs_(ss);
   if(!pairs.length)return{ok:true,skipped:true,reason:'no active search campaign pairs'};
   var now=new Date(), fromDate=new Date(now);
@@ -1066,6 +1075,14 @@ function sellmonitorGithubEnsureAdsClusterRefresh_(ss, q) {
   var enabled=String(sellmonitorGithubSetting_(ss,'ADS_CLUSTER_REFRESH_ENABLED','TRUE')).toUpperCase()!=='FALSE';
   if(!enabled)return{ok:true,enabled:false,queued:false};
   if(!ss.getSheetByName('90_RAW_ads_campaigns'))return{ok:true,enabled:true,queued:false,reason:'90_RAW_ads_campaigns missing'};
+  try {
+    sellmonitorGithubResolveWbAuth_(ss);
+  } catch(e) {
+    if (/WB token missing for/.test(String(e && e.message || e))) {
+      return {ok:true,enabled:true,queued:false,skipped:true,reason:'WB_ANALYTICS_TOKEN_MISSING'};
+    }
+    throw e;
+  }
   var hours=Math.max(1,Number(sellmonitorGithubSetting_(ss,'ADS_CLUSTER_REFRESH_HOURS','6'))||6);
   var props=sellmonitorClientProperties_(ss.getId()),last=Number(props.getProperty('SMC_ADS_CLUSTER_REFRESH_AT_MS')||0),due=!last||(Date.now()-last)>=hours*3600000;
   var from=1200,to=Math.min(2023,q.getMaxRows()),active=false;
@@ -1763,13 +1780,25 @@ function sellmonitorClientProperties_(spreadsheetId) {
         return v;
       }
     }
-    // Sanych's WB Promotion token predates per-client property namespacing.
-    // Migrate only its explicit alias, preserve the old value, and never return it.
-    if (
-      String(spreadsheetId) === '1-aBDZ7c5xfmVwwiNmUi9-DyfIANXmfiM5-Ti2_zg4zI'
-      && String(k) === 'FBS_CLIENT__SANYCH__WB_API_TOKEN'
-    ) {
-      v = legacy.getProperty('FBS_CLIENT__SANYCH__WB_API_TOKEN');
+    // Migrate only explicit client-scoped legacy keys; preserve old values.
+    var legacyKeysByClient = {};
+    legacyKeysByClient['1SmsoG8zKx3hbTtTzS-zLekTFiWEQN8eIwHOxXq-5RHo'] = [
+      'FBS_CLIENT__AIR__WB_API_TOKEN'
+    ];
+    legacyKeysByClient['1cVT_H_e8a519k_Gtph6fALWnBbtBrAQ2Jb_gFO3bM64'] = [
+      'FBS_CLIENT__FBS_14I5XGBA9NIG__WB_API_TOKEN'
+    ];
+    legacyKeysByClient['1-aBDZ7c5xfmVwwiNmUi9-DyfIANXmfiM5-Ti2_zg4zI'] = [
+      'FBS_CLIENT__SANYCH__WB_API_TOKEN',
+      'SM_INNER_MCP_ACCESS_TOKEN',
+      'SM_INNER_MCP_REFRESH_TOKEN',
+      'SM_INNER_MCP_EXPIRES_AT',
+      'SM_INNER_MCP_CLIENT_ID',
+      'SM_INNER_MCP_TOKEN_ENDPOINT'
+    ];
+    var allowedLegacyKeys = legacyKeysByClient[String(spreadsheetId)] || [];
+    if (allowedLegacyKeys.indexOf(String(k)) >= 0) {
+      v = legacy.getProperty(String(k));
       if (v != null) {
         primary.setProperty(kk, String(v));
         return v;
