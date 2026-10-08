@@ -1,10 +1,10 @@
 /**
- * Sellmonitor GitHub Central Worker v1.3.21
+ * Sellmonitor GitHub Central Worker v1.3.22
  * GitHub is source-of-truth/scheduler. This Apps Script project is only
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.21',
+  VERSION: 'github-worker-1.3.22',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -558,7 +558,8 @@ function sellmonitorGithubRefreshGithubSearch_(ss, payload) {
   var snap = {};
   try { snap = JSON.parse(text || '{}'); }
   catch(e) { throw new Error('GitHub search snapshot non-JSON'); }
-  if (String(snap.trust_status || '') !== 'FACTUAL_WB_ANALYTICS') throw new Error('GitHub search snapshot trust gate failed');
+  var trust=String(snap.trust_status || '');
+  if (['FACTUAL_WB_ANALYTICS','FACTUAL_PUBLIC_SERP'].indexOf(trust)<0) throw new Error('GitHub search snapshot trust gate failed: ' + trust);
   var createdAt = new Date(String(snap.created_at || ''));
   if (!(createdAt instanceof Date) || isNaN(createdAt)) throw new Error('GitHub search snapshot created_at invalid');
   var ageHours = (Date.now() - createdAt.getTime()) / 3600000;
@@ -589,6 +590,9 @@ function sellmonitorGithubEnsureSearchRefresh_(ss, q) {
   var publicToken=String(props.getProperty('SM_MCP_ACCESS_TOKEN') || '');
   var merchantId=setting_('SELLMONITOR_MERCHANT_ID','');
   var legacy=Boolean(publicToken&&merchantId);
+  if (!legacy && storeId === 'sanych_wb') {
+    return {ok:true,queued:false,storeId:storeId,source:'existing_sanych_search',reason:'Preserve proven Sanych search lane; GitHub snapshot lane targets AIR/Хозяюшка'};
+  }
   var snapshotFile=legacy?'search_snapshot_config_v235':'__central_github_search__';
 
   var hours=Math.max(1,Number(setting_('SEARCH_REFRESH_HOURS','6')) || 6);
@@ -620,7 +624,7 @@ function sellmonitorGithubEnsureSearchRefresh_(ss, q) {
     'PENDING','','',
     legacy
       ? 'Automatic factual search snapshot via Sellmonitor public MCP; monitor chains after success'
-      : 'Automatic factual search snapshot via official WB Analytics; monitor chains after success'
+      : 'Automatic factual search snapshot via GitHub-derived WB facts (Analytics or public SERP); monitor chains after success'
   ]]);
   SpreadsheetApp.flush();
   return {ok:true,queued:true,row:slot,storeId:storeId,hours:hours,source:snapshotFile};
@@ -2529,7 +2533,8 @@ function sellmonitorGithubPublishRuntimeSearch_(cabinet, snapshot) {
   var rows = [], searchRows = [];
   Object.keys(data).forEach(function(k) {
     var x = data[k] || {};
-    if (String(x.source || '') !== 'wb_search_report') return;
+    var rowSource = String(x.source || '');
+    if (['wb_search_report','wb_public_search'].indexOf(rowSource) < 0) return;
     var nm = String(x.nm_id || x.nmId || '').trim();
     var title = String(x.name || x.title || '').trim();
     var query = String(x.query || '').trim();
@@ -2538,13 +2543,16 @@ function sellmonitorGithubPublishRuntimeSearch_(cabinet, snapshot) {
     var freq = x.frequency == null || x.frequency === '' ? '' : Number(x.frequency);
     if (freq !== '' && !isFinite(freq)) freq = '';
     var zone = pos <= 3 ? 'ТОП-3' : pos <= 10 ? 'ТОП-10' : pos <= 30 ? '11–30' : pos <= 100 ? '31–100' : '>100';
-    var pri = pos <= 10 ? 'УДЕРЖИВАТЬ' : Number(freq || 0) >= 1000 ? 'ВЫСОКИЙ · частотный запрос вне ТОП-10' : Number(freq || 0) >= 300 ? 'СРЕДНИЙ · есть потенциал роста' : 'НИЗКИЙ';
+    var publicSerp = rowSource === 'wb_public_search';
+    var pri = publicSerp
+      ? (pos <= 10 ? 'УДЕРЖИВАТЬ · PUBLIC SERP' : 'ПОЗИЦИЯ · частотность Н/Д')
+      : (pos <= 10 ? 'УДЕРЖИВАТЬ' : Number(freq || 0) >= 1000 ? 'ВЫСОКИЙ · частотный запрос вне ТОП-10' : Number(freq || 0) >= 300 ? 'СРЕДНИЙ · есть потенциал роста' : 'НИЗКИЙ');
     searchRows.push([nm,title,query,pos,freq,'','',periodEnd,observedAt,'','',zone,pri]);
-    rows.push([true,nm,title,query,freq,pos,observedAt,'','','','','WB LIVE','','','','5',false,'WB runtime search_positions · factual']);
+    rows.push([true,nm,title,query,freq,pos,observedAt,'','','','',publicSerp ? 'WB PUBLIC SERP' : 'WB LIVE','','','','5',false,publicSerp ? 'WB public SERP · factual position · frequency unavailable' : 'WB Analytics search_positions · factual']);
   });
   searchRows.sort(function(a,b){return Number(a[0])-Number(b[0]) || Number(b[4]||0)-Number(a[4]||0) || Number(a[3])-Number(b[3]);});
   rows.sort(function(a,b){return Number(a[1])-Number(b[1]) || String(a[3]).localeCompare(String(b[3]));});
-  if (!rows.length) return {ok:true, skipped:true, reason:'wb_search_report_no_query_rows', cabinet:cabinet, observed_at:observedAt};
+  if (!rows.length) return {ok:true, skipped:true, reason:'wb_search_no_query_rows', cabinet:cabinet, observed_at:observedAt};
 
   var ss=SpreadsheetApp.openById(cfg.spreadsheet_id);
 
@@ -2566,9 +2574,11 @@ function sellmonitorGithubPublishRuntimeSearch_(cabinet, snapshot) {
   sh.getRange(1,1,Math.max(3,sh.getMaxRows()),18).clearContent();
   sh.getRange('A1:R1').breakApart();
   sh.getRange('A1:R1').merge().setValue('КОНТРОЛЬ ПОИСКОВЫХ ПОЗИЦИЙ · WB LIVE RUNTIME');
+  var snapshotTrust = String(snapshot.trust_status || '');
+  var sourceLabel = snapshotTrust === 'FACTUAL_PUBLIC_SERP' ? 'WB public SERP · factual' : 'WB Analytics · factual';
   sh.getRange(2,1,1,18).setValues([[
     'Обновление','обновлено '+Utilities.formatDate(new Date(),ss.getSpreadsheetTimeZone(),'dd.MM.yyyy HH:mm')+' · строк '+rows.length,
-    'Источник','WB Analytics runtime','Активных',rows.length,'','','','','','','','','','','',''
+    'Источник',sourceLabel,'Активных',rows.length,'','','','','','','','','','','',''
   ]]);
   sh.getRange(3,1,1,18).setValues([[
     'Активен','nmId','Товар','Поисковый запрос','Частотность','Текущая позиция','Дата снимка',
@@ -2587,8 +2597,9 @@ function sellmonitorGithubPublishRuntimeSearch_(cabinet, snapshot) {
   SpreadsheetApp.flush();
   return {
     ok:true,cabinet:cabinet,store_id:cfg.store_id,rows:rows.length,search_rows:searchRows.length,
-    observed_at:observedAt,period_end:periodEnd,source:'wb_search_report',
-    trust_status:'FACTUAL_WB_ANALYTICS',chained_monitor:chained,secretsReturned:false
+    observed_at:observedAt,period_end:periodEnd,
+    source:snapshotTrust === 'FACTUAL_PUBLIC_SERP' ? 'wb_public_search' : 'wb_search_report',
+    trust_status:snapshotTrust || 'FACTUAL_WB_ANALYTICS',chained_monitor:chained,secretsReturned:false
   };
 }
 
