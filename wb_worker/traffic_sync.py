@@ -108,6 +108,7 @@ async def sync_once():
     end = now.date().isoformat()
     status = {"startedAt": now.isoformat(), "period": [begin, end], "shops": {}}
     ad_rows, funnel_rows = [], []
+    successful_ads, successful_funnels = set(), set()
     async with httpx.AsyncClient(timeout=90) as client:
         for shop, (_, env_name) in SHOPS.items():
             token = os.environ.get(env_name, "").strip()
@@ -116,6 +117,7 @@ async def sync_once():
                 continue
             state = {"ok": True, "campaigns": 0, "ad_rows": 0, "funnel_rows": 0, "errors": {}}
             # Each source has independent health. An error never promotes stale data.
+            shop_rows = []
             try:
                 listing = await _request(client, token, "GET", PROMO + "/adv/v1/promotion/count")
                 ids = _campaign_ids(listing)
@@ -134,6 +136,7 @@ async def sync_once():
                     shop_rows.extend(_stats_rows(shop, raw))
                 ad_rows.extend(shop_rows)
                 state["ad_rows"] = len(shop_rows)
+                successful_ads.add(shop)
             except Exception as exc:
                 state["ok"] = False
                 state["errors"]["promotion"] = f"{type(exc).__name__}: {exc}"
@@ -155,6 +158,7 @@ async def sync_once():
                 funnel_rows.extend(shop_funnel)
                 state["funnel_rows"] = len(shop_funnel)
                 state["funnel_nm_ids"] = len(nm_ids)
+                successful_funnels.add(shop)
             except Exception as exc:
                 state["ok"] = False
                 state["errors"]["funnel"] = f"{type(exc).__name__}: {exc}"
@@ -162,9 +166,36 @@ async def sync_once():
     vendor_map = {(r[0], str(r[2])): r[3] for r in funnel_rows if r[3]}
     for row in ad_rows:
         row[-1] = vendor_map.get((row[0], str(row[3])), "")
-    # Partial failures are explicit in status; never interpret missing rows as zero.
-    _atomic_csv(DATA_DIR / "campaign_sku_day.csv", COLUMNS, ad_rows)
-    _atomic_csv(DATA_DIR / "funnel_sku_day.csv", FUNNEL_COLUMNS, funnel_rows)
+    # Keep verified last-good per-shop datasets on partial API failure.
+    # The combined exports are reconstructed from these persisted datasets.
+    for shop in SHOPS:
+        shop_dir = DATA_DIR / shop
+        if shop in successful_ads:
+            _atomic_csv(shop_dir / "campaign_sku_day.csv", COLUMNS,
+                        [r for r in ad_rows if r[0] == shop])
+            _atomic_json(shop_dir / "ad_refresh.json", {"refreshedAt": now.isoformat(),
+                          "period": [begin, end], "quality": "LIVE_API",
+                          "rows": sum(r[0] == shop for r in ad_rows)})
+        if shop in successful_funnels:
+            _atomic_csv(shop_dir / "funnel_sku_day.csv", FUNNEL_COLUMNS,
+                        [r for r in funnel_rows if r[0] == shop])
+        if shop in successful_ads or shop in successful_funnels:
+            _atomic_json(shop_dir / "latest_poll.json",
+                         {"polledAt": now.isoformat(), "state": status["shops"][shop]})
+    def _persisted_rows(shop, filename):
+        path = DATA_DIR / shop / filename
+        if not path.exists():
+            return []
+        with path.open("r", encoding="utf-8-sig", newline="") as stream:
+            return list(csv.reader(stream))[1:]
+    all_ads = [r for shop in SHOPS for r in _persisted_rows(shop, "campaign_sku_day.csv")]
+    all_funnels = [r for shop in SHOPS for r in _persisted_rows(shop, "funnel_sku_day.csv")]
+    _atomic_csv(DATA_DIR / "campaign_sku_day.csv", COLUMNS, all_ads)
+    _atomic_csv(DATA_DIR / "funnel_sku_day.csv", FUNNEL_COLUMNS, all_funnels)
+    # Hourly observation: never mislabel a rolling seven-day API report as hourly spend.
+    _atomic_json(DATA_DIR / "latest_poll.json", {"polledAt": now.isoformat(),
+                  "coverage": status["shops"], "ad_rows": len(all_ads),
+                  "funnel_rows": len(all_funnels), "grain": "campaign_x_sku_x_day"})
     status["finishedAt"] = datetime.now(ZoneInfo("Europe/Moscow")).isoformat()
     status["ok"] = all(s["ok"] for s in status["shops"].values())
     _atomic_json(DATA_DIR / "status.json", status)
