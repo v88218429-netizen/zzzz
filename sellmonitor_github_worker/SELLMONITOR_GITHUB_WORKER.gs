@@ -4,7 +4,7 @@
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.16',
+  VERSION: 'github-worker-1.3.17',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -1309,6 +1309,20 @@ function sellmonitorGithubEnsureOperationalHistory_(ss, q) {
   }
 
   var queued = {};
+
+  // Current operational facts bypass long full-sync/backfill lanes.
+  var liveAt = Number(props.getProperty('SMC_LIVE_TODAY_AT_MS') || 0);
+  if ((!liveAt || now-liveAt >= 15*60000) && !active.inner_live_today_sync_v260) {
+    var lr=queue_('LIVE-TODAY','inner_live_today_sync_v260',{storeId:storeId});
+    if (lr) { queued.liveToday=lr; props.setProperty('SMC_LIVE_TODAY_AT_MS',String(now)); }
+  }
+
+  var trafficAt = Number(props.getProperty('SMC_TRAFFIC_REFRESH_AT_MS') || 0);
+  if ((!trafficAt || now-trafficAt >= 60*60000) && !active.traffic_refresh_enqueue_v256) {
+    var tr=queue_('TRAFFIC-REFRESH','traffic_refresh_enqueue_v256',{storeId:storeId});
+    if (tr) { queued.traffic=tr; props.setProperty('SMC_TRAFFIC_REFRESH_AT_MS',String(now)); }
+  }
+
   var snapAt = Number(props.getProperty('SMC_SNAPSHOT_HISTORY_AT_MS') || 0);
   if ((!snapAt || now-snapAt >= 60*60000) && !active.rnp_snapshot_history_v304) {
     var sr=queue_('SNAPSHOT-HISTORY','rnp_snapshot_history_v304',{storeId:storeId});
@@ -1316,7 +1330,7 @@ function sellmonitorGithubEnsureOperationalHistory_(ss, q) {
   }
 
   var enrAt = Number(props.getProperty('SMC_RNP_ENRICH_AT_MS') || 0);
-  if ((!enrAt || now-enrAt >= 4*3600000) && !active.rnp_enrichment_sync_v305) {
+  if ((!enrAt || now-enrAt >= 60*60000) && !active.rnp_enrichment_sync_v305) {
     var er=queue_('RNP-ENRICH','rnp_enrichment_sync_v305',{storeId:storeId,sheetIndex:0,offset:0,chunkRows:500});
     if (er) { queued.enrichment=er; props.setProperty('SMC_RNP_ENRICH_AT_MS',String(now)); }
   }
