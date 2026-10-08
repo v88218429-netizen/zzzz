@@ -4,7 +4,7 @@
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.28',
+  VERSION: 'github-worker-1.3.29',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -1596,6 +1596,8 @@ function sellmonitorGithubNextPendingRow_(q) {
     file = String(file || '');
     spec = spec || {};
 
+    // Authentication/onboarding must outrank every data job; without it no factual source can recover.
+    if (file === 'client_onboard_stage1_v1') return -4;
     // Emergency/current facts: never wait behind historical RNP, ads or SEO.
     if (/^ADS-VERIFY-/.test(id)) return -3;
     if (/^FORCE-SEARCH-/.test(id)) return -2;
