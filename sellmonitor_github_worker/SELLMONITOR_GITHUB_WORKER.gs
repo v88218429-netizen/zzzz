@@ -4,7 +4,7 @@
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.23',
+  VERSION: 'github-worker-1.3.24',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -1182,6 +1182,7 @@ function sellmonitorGithubRepairStaleRunning_(q) {
 
   function limitMinutes_(file) {
     file = String(file || '');
+    if (file === 'wb_ads_bulk_ingest_v167' || file === 'rnp_enrichment_sync_v305') return 20;
     if ([
       'mcp_inner_call_v183',
       'inner_harvest_to_raw_v217',
