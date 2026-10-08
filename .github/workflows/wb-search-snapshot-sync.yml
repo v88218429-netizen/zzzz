@@ -47,16 +47,21 @@ jobs:
           python - <<'PY'
           import json, pathlib
           root=pathlib.Path("wb_data/search")
+          allowed_trust={"FACTUAL_WB_ANALYTICS","FACTUAL_PUBLIC_SERP"}
+          allowed_sources={"wb_search_report","wb_public_search"}
           for name in ("air.json","hozyushka.json"):
               obj=json.loads((root/name).read_text(encoding="utf-8"))
               rows=obj.get("data") or {}
-              assert obj.get("trust_status")=="FACTUAL_WB_ANALYTICS", obj
-              assert len(rows)>0, (name,len(rows))
+              assert obj.get("trust_status") in allowed_trust, obj
+              assert len(rows)>=10, (name,len(rows))
+              sources=set()
               for x in rows.values():
-                  assert x.get("source")=="wb_search_report"
+                  assert x.get("source") in allowed_sources
                   assert x.get("query")
                   assert isinstance(x.get("nm_id"), int)
-              print(name, "rows=", len(rows), "period_end=", obj.get("period_end"))
+                  assert float(x.get("position"))>=1
+                  sources.add(x.get("source"))
+              print(name, "rows=", len(rows), "trust=", obj.get("trust_status"), "sources=", sorted(sources), "period_end=", obj.get("period_end"))
           PY
 
       - name: Publish non-secret snapshots
