@@ -109,22 +109,42 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          URL="https://script.google.com/macros/s/$WEBAPP_DEPLOYMENT_ID/exec"
-          PAYLOAD="$(python - <<'PY'
-          import json, os
-          print(json.dumps({"token":os.environ["WEBHOOK_SECRET"],"action":"health"}))
-          PY
-          )"
-          RESP="$(curl -fsSL --retry 3 --retry-delay 3 -H 'Content-Type: application/json' -d "$PAYLOAD" "$URL")"
-          python - "$RESP" <<'PY'
-          import json, sys
-          obj=json.loads(sys.argv[1])
-          assert obj.get("ok") is True, obj
-          assert obj.get("action") == "health", obj
-          health=obj.get("result") or {}
+          python - <<'PY'
+          import json, os, time, urllib.error, urllib.request
+
+          url=f"https://script.google.com/macros/s/{os.environ['WEBAPP_DEPLOYMENT_ID']}/exec"
+          body=json.dumps({"token":os.environ["WEBHOOK_SECRET"],"action":"health"}).encode()
+          last=None
+          health=None
+          for attempt in range(1,9):
+              req=urllib.request.Request(url,data=body,headers={"Content-Type":"application/json"},method="POST")
+              try:
+                  with urllib.request.urlopen(req,timeout=120) as r:
+                      obj=json.loads(r.read().decode("utf-8"))
+                  last=obj
+                  if obj.get("ok") is True and obj.get("action")=="health":
+                      health=obj.get("result") or {}
+                      break
+                  if obj.get("error")=="UNAUTHORIZED":
+                      last="UNAUTHORIZED during Apps Script deployment propagation"
+                  else:
+                      raise AssertionError(obj)
+              except urllib.error.HTTPError as exc:
+                  last=f"HTTP {exc.code}"
+                  if exc.code not in {404,408,429,500,502,503,504}:
+                      raise
+              except (urllib.error.URLError, TimeoutError) as exc:
+                  last=str(exc)
+              if attempt < 8:
+                  print(f"PROTECTED_BRIDGE_WAIT attempt={attempt}/8 reason={last}")
+                  time.sleep(10)
+          if health is None:
+              raise AssertionError(last)
           print("PROTECTED_BRIDGE_AUTH=ok")
           print(json.dumps({
               "worker_version": health.get("version"),
+              "trigger_ok": health.get("trigger_ok"),
+              "trigger_count": health.get("trigger_count"),
               "clients": health.get("clients") or [],
           }, ensure_ascii=False, indent=2))
           PY
@@ -134,36 +154,51 @@ jobs:
         run: |
           set -euo pipefail
           python - <<'PY'
-          import json, os, time, urllib.request
+          import json, os, time, urllib.error, urllib.request
 
           url=f"https://script.google.com/macros/s/{os.environ['WEBAPP_DEPLOYMENT_ID']}/exec"
           body=json.dumps({"token":os.environ["WEBHOOK_SECRET"],"action":"tick"}).encode()
           last=None
-          for attempt in range(1,7):
+          busy_count=0
+          for attempt in range(1,9):
               req=urllib.request.Request(url,data=body,headers={"Content-Type":"application/json"},method="POST")
-              with urllib.request.urlopen(req,timeout=180) as r:
-                  obj=json.loads(r.read().decode("utf-8"))
-              last=obj
-              assert obj.get("ok") is True, obj
-              assert obj.get("action") == "tick", obj
-              tick=obj.get("tick") or {}
-              if tick.get("skipped") and tick.get("reason")=="worker_lock_busy":
-                  print(f"WORKER_TICK_BUSY attempt={attempt}/6")
-                  if attempt < 6:
-                      time.sleep(10)
-                      continue
-                  # A healthy minute-trigger worker may legitimately own the lock.
-                  # Deployment acceptance is code/auth based; the live worker can
-                  # complete the next tick instead of making CI falsely red.
-                  print("WORKER_TICK_DEFERRED_BUSY=yes")
-                  break
-              assert tick.get("ok") is True, tick
-              print("WORKER_TICK_OK=yes")
-              print("WORKER_TICK_PROCESSED_CLIENTS=", tick.get("processedClients"))
-              print("WORKER_TICK_PROCESSED_COMMANDS=", tick.get("processedCommands"))
-              break
+              try:
+                  with urllib.request.urlopen(req,timeout=180) as r:
+                      obj=json.loads(r.read().decode("utf-8"))
+                  last=obj
+                  if obj.get("ok") is False and obj.get("error")=="UNAUTHORIZED":
+                      print(f"WORKER_TICK_PROPAGATION attempt={attempt}/8 unauthorized")
+                  elif obj.get("ok") is True and obj.get("action")=="tick":
+                      tick=obj.get("tick") or {}
+                      if tick.get("skipped") and tick.get("reason")=="worker_lock_busy":
+                          busy_count += 1
+                          print(f"WORKER_TICK_BUSY attempt={attempt}/8")
+                      else:
+                          assert tick.get("ok") is True, tick
+                          print("WORKER_TICK_OK=yes")
+                          print("WORKER_TICK_PROCESSED_CLIENTS=", tick.get("processedClients"))
+                          print("WORKER_TICK_PROCESSED_COMMANDS=", tick.get("processedCommands"))
+                          break
+                  else:
+                      raise AssertionError(obj)
+              except urllib.error.HTTPError as exc:
+                  last=f"HTTP {exc.code}"
+                  if exc.code not in {404,408,429,500,502,503,504}:
+                      raise
+                  print(f"WORKER_TICK_PROPAGATION attempt={attempt}/8 http={exc.code}")
+              except (urllib.error.URLError, TimeoutError) as exc:
+                  last=str(exc)
+                  print(f"WORKER_TICK_PROPAGATION attempt={attempt}/8 network={exc}")
+              if attempt < 8:
+                  time.sleep(10)
           else:
-              raise AssertionError(last)
+              if busy_count:
+                  # A healthy minute-trigger worker may own the global lock for the
+                  # whole acceptance window. Code/auth/live pull verification below
+                  # is authoritative; do not create a false-red deploy for lock busy.
+                  print("WORKER_TICK_DEFERRED_BUSY=yes")
+              else:
+                  raise AssertionError(last)
           PY
 
       - name: Pull back and verify live code
