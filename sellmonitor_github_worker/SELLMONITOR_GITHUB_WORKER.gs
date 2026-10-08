@@ -722,6 +722,24 @@ function sellmonitorGithubBaseContributionPerSale_(ss, nmId) {
   return sellmonitorGithubMedian_(candidates);
 }
 
+
+function sellmonitorGithubOrganicSearchMap_(ss, nmId) {
+  var sh=ss.getSheetByName('07_Поиск'), out={};
+  if(!sh || sh.getLastRow()<2)return out;
+  var width=Math.min(sh.getLastColumn(),30), h=sh.getRange(1,1,1,width).getDisplayValues()[0], ix={};
+  h.forEach(function(x,i){ix[String(x||'').trim()]=i;});
+  var nmCol=ix['Артикул WB'], qCol=ix['Поисковый запрос'], pCol=ix['Позиция · SNAPSHOT'], fCol=ix['Частотность · SNAPSHOT'];
+  if(nmCol==null || qCol==null)return out;
+  var found=sh.createTextFinder(String(nmId)).matchEntireCell(true).findAll();
+  found.forEach(function(cell){
+    if(cell.getColumn()!==nmCol+1)return;
+    var r=sh.getRange(cell.getRow(),1,1,width).getValues()[0], q=String(r[qCol]||'').trim();
+    if(!q)return;
+    out[q]={position:pCol==null?0:sellmonitorGithubNumber_(r[pCol]),frequency:fCol==null?0:sellmonitorGithubNumber_(r[fCol])};
+  });
+  return out;
+}
+
 function sellmonitorGithubCampaignPairs_(ss) {
   var sh=ss.getSheetByName('90_RAW_ads_campaigns');
   if (!sh || sh.getLastRow()<2) return [];
@@ -903,15 +921,23 @@ function sellmonitorGithubRefreshAdsClusters_(ss, payload) {
   if(sh.getMaxRows()>1)sh.getRange(2,1,sh.getMaxRows()-1,headers.length).clearContent();
   if(all.length){if(all.length+1>sh.getMaxRows())sh.insertRowsAfter(sh.getMaxRows(),all.length+1-sh.getMaxRows());sh.getRange(2,1,all.length,headers.length).setValues(all);}
 
-  var diagHeaders=['store_id','period_from','period_to','advert_id','nmId','seller_article','campaign_name','norm_query','spend_rub','views','clicks','atbs','orders','shks','ctr_pct','cpc_rub','cr_click_order_pct','cpa_rub','base_contribution_per_sale_rub','safe_cpa_rub','safe_cpc_rub','safe_cpm_rub','current_cluster_bid_kopecks','target_cluster_bid_kopecks','cluster_state','action','reason','evidence_status','refreshed_at'];
+  var diagHeaders=['store_id','period_from','period_to','advert_id','nmId','seller_article','campaign_name','norm_query','organic_position','query_frequency','spend_rub','views','clicks','atbs','orders','shks','ctr_pct','cpc_rub','cr_click_order_pct','cpa_rub','base_contribution_per_sale_rub','safe_cpa_rub','safe_cpc_rub','safe_cpm_rub','current_cluster_bid_kopecks','target_cluster_bid_kopecks','cluster_state','action','reason','evidence_status','refreshed_at'];
   var diag=sellmonitorGithubEnsureSheet_(ss,'84_Реклама_диагностика',diagHeaders), diagRows=[];
   pairs.forEach(function(p){
     var subset=rawRows.filter(function(x){return x.advertId===p.advertId&&x.nmId===p.nmId;});
     if(!subset.length)return;
     var base=sellmonitorGithubBaseContributionPerSale_(ss,p.nmId), a=sellmonitorGithubAnalyzeAdsClusters_(subset,base);
-    a.forEach(function(x){diagRows.push([
-      auth.storeId,from,to,p.advertId,p.nmId,p.sellerArticle,p.campaignName,x.normQuery,x.spend,x.views,x.clicks,x.atbs,x.orders,x.shks,x.ctr,x.cpc,x.cr*100,x.cpa==null?'':x.cpa,x.baseContribution,x.safeCpa,x.safeCpc,x.safeCpm,x.currentBidKopecks,x.targetBidKopecks,x.state,x.action,x.reason,'FACTUAL_WB_CLUSTER + CALCULATED_ECONOMICS',loaded
-    ]);});
+    var organic=sellmonitorGithubOrganicSearchMap_(ss,p.nmId);
+    a.forEach(function(x){
+      var org=organic[x.normQuery]||{}, action=x.action, reason=x.reason;
+      if(Number(org.position||0)>0 && Number(org.position)<=10 && action==='ОСТАВИТЬ / МАСШТАБИРОВАТЬ'){
+        action='ОСТАВИТЬ / СНИЗИТЬ ДЛЯ ТЕСТА';
+        reason += '; органическая позиция уже ТОП-' + Math.round(Number(org.position));
+      }
+      diagRows.push([
+        auth.storeId,from,to,p.advertId,p.nmId,p.sellerArticle,p.campaignName,x.normQuery,org.position||'',org.frequency||'',x.spend,x.views,x.clicks,x.atbs,x.orders,x.shks,x.ctr,x.cpc,x.cr*100,x.cpa==null?'':x.cpa,x.baseContribution,x.safeCpa,x.safeCpc,x.safeCpm,x.currentBidKopecks,x.targetBidKopecks,x.state,action,reason,'FACTUAL_WB_CLUSTER + FACTUAL_SEARCH_POSITION + CALCULATED_ECONOMICS',loaded
+      ]);
+    });
   });
   if(diag.getMaxRows()>1)diag.getRange(2,1,diag.getMaxRows()-1,diagHeaders.length).clearContent();
   if(diagRows.length){if(diagRows.length+1>diag.getMaxRows())diag.insertRowsAfter(diag.getMaxRows(),diagRows.length+1-diag.getMaxRows());diag.getRange(2,1,diagRows.length,diagHeaders.length).setValues(diagRows);}
