@@ -593,6 +593,398 @@ function sellmonitorGithubEnsureCoreRefresh_(ss, q) {
   return {ok:true,queued:true,row:slot,emptyStocks:emptyStocks,stale:stale,source:coreFile};
 }
 
+/* ---------- WB ads cluster intelligence ---------- */
+
+function sellmonitorGithubSetting_(ss, key, def) {
+  var sh = ss.getSheetByName('99_Настройки');
+  if (!sh) return def == null ? '' : def;
+  var n = Math.max(1, sh.getLastRow());
+  var rows = sh.getRange(1, 1, n, 2).getDisplayValues();
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i][0] || '').trim() === String(key)) return String(rows[i][1] || '').trim();
+  }
+  return def == null ? '' : def;
+}
+
+function sellmonitorGithubResolveWbAuth_(ss) {
+  var cid = String(sellmonitorGithubSetting_(ss, 'FBS_CLIENT_ID', '') || '').trim();
+  var storeId = String(sellmonitorGithubSetting_(ss, 'ACTIVE_STORE_ID', '') || '').trim();
+  if (!cid) throw new Error('WB ads clusters: FBS_CLIENT_ID missing');
+  var reg = ss.getSheetByName('97_FBS_Клиенты');
+  if (!reg) throw new Error('WB ads clusters: 97_ФБС_Клиенты missing'.replace('ФБС','FBS'));
+  var vals = reg.getRange(2, 1, Math.max(1, reg.getLastRow() - 1), 14).getDisplayValues();
+  var prop = '';
+  for (var i = 0; i < vals.length; i++) {
+    if (String(vals[i][0] || '').trim() === cid) {
+      prop = String(vals[i][11] || '').trim();
+      break;
+    }
+  }
+  var sp = PropertiesService.getScriptProperties();
+  var token = String((prop && sp.getProperty(prop)) || sp.getProperty('FBS_CLIENT__' + cid + '__WB_API_TOKEN') || '');
+  if (!token) throw new Error('WB ads clusters: WB token missing for ' + cid);
+  return {clientId:cid, storeId:storeId, propertyName:prop, token:token};
+}
+
+function sellmonitorGithubWbJson_(url, method, token, payload) {
+  var opt = {
+    method: method || 'get',
+    headers: {Authorization:token, Accept:'application/json'},
+    muteHttpExceptions: true,
+    followRedirects: true
+  };
+  if (payload != null) {
+    opt.contentType = 'application/json';
+    opt.payload = JSON.stringify(payload);
+  }
+  var r = null;
+  for (var attempt = 0; attempt < 5; attempt++) {
+    r = UrlFetchApp.fetch(url, opt);
+    var code = r.getResponseCode();
+    if (code === 429 && attempt < 4) {
+      Utilities.sleep(Math.min(12000, 1200 * Math.pow(2, attempt)));
+      continue;
+    }
+    var text = r.getContentText();
+    if (code < 200 || code >= 300) {
+      throw new Error('WB ads HTTP ' + code + ' ' + String(text || '').slice(0, 350));
+    }
+    if (!text) return {};
+    try { return JSON.parse(text); }
+    catch (e) { throw new Error('WB ads non-JSON response'); }
+  }
+  throw new Error('WB ads request exhausted retries');
+}
+
+function sellmonitorGithubEnsureSheet_(ss, name, headers) {
+  var sh = ss.getSheetByName(name);
+  if (!sh) sh = ss.insertSheet(name);
+  if (sh.getMaxColumns() < headers.length) sh.insertColumnsAfter(sh.getMaxColumns(), headers.length - sh.getMaxColumns());
+  var current = sh.getRange(1, 1, 1, headers.length).getDisplayValues()[0];
+  var bad = current.length !== headers.length;
+  for (var i = 0; i < headers.length && !bad; i++) if (String(current[i] || '') !== headers[i]) bad = true;
+  if (bad) sh.getRange(1, 1, 1, headers.length).setValues([headers]);
+  sh.setFrozenRows(1);
+  return sh;
+}
+
+function sellmonitorGithubDateKey_(v, tz) {
+  if (v instanceof Date && !isNaN(v)) return Utilities.formatDate(v, tz, 'yyyy-MM-dd');
+  var s = String(v || '').trim();
+  var m = s.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (m) return m[1];
+  var d = new Date(s);
+  return isNaN(d) ? '' : Utilities.formatDate(d, tz, 'yyyy-MM-dd');
+}
+
+function sellmonitorGithubNumber_(v) {
+  if (typeof v === 'number') return isFinite(v) ? v : 0;
+  var s = String(v == null ? '' : v).replace(/\s/g,'').replace('%','').replace(',','.');
+  var n = Number(s);
+  return isFinite(n) ? n : 0;
+}
+
+function sellmonitorGithubMedian_(a) {
+  var v = (a || []).filter(function(x){ return isFinite(Number(x)); }).map(Number).sort(function(x,y){return x-y;});
+  if (!v.length) return 0;
+  var m = Math.floor(v.length / 2);
+  return v.length % 2 ? v[m] : (v[m-1] + v[m]) / 2;
+}
+
+function sellmonitorGithubBaseContributionPerSale_(ss, nmId) {
+  var sh = ss.getSheetByName('02_Недели');
+  if (!sh || sh.getLastRow() < 3) return 0;
+  var matches = sh.createTextFinder(String(nmId)).matchEntireCell(true).findAll();
+  var rows = {};
+  for (var i=0;i<matches.length;i++) {
+    var cell=matches[i];
+    if (cell.getColumn() !== 6) continue;
+    var row=cell.getRow();
+    var param=String(sh.getRange(row,9).getDisplayValue() || '');
+    if (['fin_Profit','expAdCosts','fin_sales_total_qnt'].indexOf(param)>=0) rows[param]=row;
+  }
+  if (!rows.fin_Profit || !rows.expAdCosts || !rows.fin_sales_total_qnt) return 0;
+  var lastCol=sh.getLastColumn(), start=14, width=Math.max(0,lastCol-start+1);
+  if (!width) return 0;
+  var headers=sh.getRange(2,start,1,width).getDisplayValues()[0];
+  var profit=sh.getRange(rows.fin_Profit,start,1,width).getValues()[0];
+  var ads=sh.getRange(rows.expAdCosts,start,1,width).getValues()[0];
+  var sales=sh.getRange(rows.fin_sales_total_qnt,start,1,width).getValues()[0];
+  var candidates=[];
+  for (var c=0;c<width && candidates.length<8;c++) {
+    if (!/^\d{2}\.\d{2}\.\d{4}$/.test(String(headers[c] || ''))) continue;
+    var q=sellmonitorGithubNumber_(sales[c]);
+    if (q<=0) continue;
+    var x=(sellmonitorGithubNumber_(profit[c])+sellmonitorGithubNumber_(ads[c]))/q;
+    if (isFinite(x) && x>0) candidates.push(x);
+  }
+  return sellmonitorGithubMedian_(candidates);
+}
+
+
+function sellmonitorGithubOrganicSearchMap_(ss, nmId) {
+  var sh=ss.getSheetByName('07_Поиск'), out={};
+  if(!sh || sh.getLastRow()<2)return out;
+  var width=Math.min(sh.getLastColumn(),30), h=sh.getRange(1,1,1,width).getDisplayValues()[0], ix={};
+  h.forEach(function(x,i){ix[String(x||'').trim()]=i;});
+  var nmCol=ix['Артикул WB'], qCol=ix['Поисковый запрос'], pCol=ix['Позиция · SNAPSHOT'], fCol=ix['Частотность · SNAPSHOT'];
+  if(nmCol==null || qCol==null)return out;
+  var found=sh.createTextFinder(String(nmId)).matchEntireCell(true).findAll();
+  found.forEach(function(cell){
+    if(cell.getColumn()!==nmCol+1)return;
+    var r=sh.getRange(cell.getRow(),1,1,width).getValues()[0], q=String(r[qCol]||'').trim();
+    if(!q)return;
+    out[q]={position:pCol==null?0:sellmonitorGithubNumber_(r[pCol]),frequency:fCol==null?0:sellmonitorGithubNumber_(r[fCol])};
+  });
+  return out;
+}
+
+function sellmonitorGithubCampaignPairs_(ss) {
+  var sh=ss.getSheetByName('90_RAW_ads_campaigns');
+  if (!sh || sh.getLastRow()<2) return [];
+  var width=Math.min(sh.getLastColumn(),40);
+  var h=sh.getRange(1,1,1,width).getDisplayValues()[0], ix={};
+  h.forEach(function(x,i){ix[String(x || '').trim()]=i;});
+  ['advert_id','nmId'].forEach(function(k){if(ix[k]==null)throw new Error('WB ads clusters: campaigns missing '+k);});
+  var rows=sh.getRange(2,1,sh.getLastRow()-1,width).getValues(), out={}, list=[];
+  rows.forEach(function(r){
+    var ad=String(r[ix.advert_id] || '').trim(), nm=String(r[ix.nmId] || '').trim();
+    if (!/^\d+$/.test(ad) || !/^\d+$/.test(nm)) return;
+    var status=ix.status==null?'':String(r[ix.status] || '').trim();
+    if (status && ['7','9','11'].indexOf(status)<0) return;
+    var search=ix.search==null?true:(r[ix.search]===true || String(r[ix.search]).toUpperCase()==='TRUE');
+    if (!search) return;
+    var key=ad+'|'+nm;
+    if(out[key])return;
+    out[key]=true;
+    list.push({
+      advertId:Number(ad), nmId:Number(nm),
+      sellerArticle:ix.seller_article==null?'':String(r[ix.seller_article] || ''),
+      campaignName:ix.campaign_name==null?'':String(r[ix.campaign_name] || ''),
+      paymentType:ix.payment_type==null?'':String(r[ix.payment_type] || ''),
+      bidType:ix.bid_type==null?'':String(r[ix.bid_type] || ''),
+      search:true,
+      recommendations:ix.recommendations==null?false:(r[ix.recommendations]===true || String(r[ix.recommendations]).toUpperCase()==='TRUE'),
+      bidSearchKopecks:ix.bid_search_kopecks==null?0:sellmonitorGithubNumber_(r[ix.bid_search_kopecks]),
+      bidRecommendationsKopecks:ix.bid_recommendations_kopecks==null?0:sellmonitorGithubNumber_(r[ix.bid_recommendations_kopecks])
+    });
+  });
+  return list;
+}
+
+function sellmonitorGithubParseClusterBidsByPair_(obj) {
+  var out={};
+  function walk(x) {
+    if (!x) return;
+    if (Array.isArray(x)) { x.forEach(walk); return; }
+    if (typeof x !== 'object') return;
+    var ad=Number(x.advertId || x.advert_id || 0), nm=Number(x.nmId || x.nm_id || 0);
+    var q=String(x.normQuery || x.norm_query || x.query || '').trim();
+    var bid=x.bidKopecks!=null?x.bidKopecks:(x.bid_kopecks!=null?x.bid_kopecks:(x.id_kopecks!=null?x.id_kopecks:x.bid));
+    if (ad && nm && q && bid!=null && isFinite(Number(bid))) {
+      var key=ad+'|'+nm;
+      if(!out[key])out[key]={};
+      out[key][q]=Number(bid);
+    }
+    Object.keys(x).forEach(function(k){ if (typeof x[k]==='object') walk(x[k]); });
+  }
+  walk(obj);
+  return out;
+}
+
+function sellmonitorGithubParseClusterStatesByPair_(obj) {
+  var out={};
+  function put(key,arr,state) {
+    if(!out[key])out[key]={};
+    (arr || []).forEach(function(x){
+      var q=typeof x==='string'?x:String((x||{}).normQuery || (x||{}).norm_query || (x||{}).query || '');
+      if(q)out[key][q]=state;
+    });
+  }
+  function walk(x) {
+    if(!x || typeof x!=='object')return;
+    var ad=Number(x.advertId || x.advert_id || 0), nm=Number(x.nmId || x.nm_id || 0);
+    if(ad && nm && x.normQueries){
+      var key=ad+'|'+nm;
+      put(key,x.normQueries.active,'active');
+      put(key,x.normQueries.excluded,'excluded');
+    }
+    Object.keys(x).forEach(function(k){if(typeof x[k]==='object')walk(x[k]);});
+  }
+  walk(obj);
+  return out;
+}
+
+function sellmonitorGithubAnalyzeAdsClusters_(rows, baseContribution) {
+  var g={};
+  (rows || []).forEach(function(r){
+    var q=String(r.normQuery || r.norm_query || '').trim();
+    if(!q)return;
+    var x=g[q] || (g[q]={normQuery:q,views:0,clicks:0,atbs:0,orders:0,shks:0,spend:0,bidKopecks:Number(r.clusterBidKopecks || r.cluster_bid_kopecks || 0),state:r.clusterState || r.cluster_state || ''});
+    x.views+=Number(r.views||0);x.clicks+=Number(r.clicks||0);x.atbs+=Number(r.atbs||0);x.orders+=Number(r.orders||0);x.shks+=Number(r.shks||0);x.spend+=Number(r.spend||r.spendRub||r.spend_rub||0);
+    if(Number(r.clusterBidKopecks||r.cluster_bid_kopecks||0)>0)x.bidKopecks=Number(r.clusterBidKopecks||r.cluster_bid_kopecks);
+    if(r.clusterState||r.cluster_state)x.state=r.clusterState||r.cluster_state;
+  });
+  var base=Math.max(0,Number(baseContribution||0)), safeCpa=base>0?base*0.8:0, result=[];
+  Object.keys(g).forEach(function(q){
+    var x=g[q], ctr=x.views>0?x.clicks/x.views*100:0, cpc=x.clicks>0?x.spend/x.clicks:0;
+    var cr=x.clicks>0?x.orders/x.clicks:0, cpa=x.orders>0?x.spend/x.orders:null;
+    var safeCpc=safeCpa>0?safeCpa*cr:0, safeCpm=safeCpc>0?safeCpc*(ctr/100)*1000:0;
+    var action='НАБЛЮДАТЬ', reason='Недостаточно данных для жёсткого решения';
+    if(x.orders===0 && x.clicks>=20 && x.spend>=Math.max(250,base*0.5)){
+      action='ИСКЛЮЧИТЬ / МИНУСОВАТЬ';reason='Достаточный объём кликов и расход без заказов';
+    }else if(x.orders>0 && safeCpa>0 && cpa>safeCpa*1.15){
+      action='СНИЗИТЬ СТАВКУ';reason='CPA выше безопасного рекламного бюджета на заказ';
+    }else if(x.orders>=2 && safeCpa>0 && cpa<=safeCpa){
+      action='ОСТАВИТЬ / МАСШТАБИРОВАТЬ';reason='CPA укладывается в базовую экономику товара';
+    }else if(x.orders>0 && (!safeCpa || cpa<=base)){
+      action='ОСТАВИТЬ';reason='Есть подтверждённые заказы; blanket-отключение не требуется';
+    }
+    var ratio=(cpc>0&&safeCpc>0)?Math.min(1,safeCpc/cpc):0;
+    var targetBid=x.bidKopecks>0&&ratio>0?Math.max(1,Math.floor(x.bidKopecks*ratio)):0;
+    result.push({
+      normQuery:q,views:x.views,clicks:x.clicks,atbs:x.atbs,orders:x.orders,shks:x.shks,spend:x.spend,
+      ctr:ctr,cpc:cpc,cr:cr,cpa:cpa,baseContribution:base,safeCpa:safeCpa,safeCpc:safeCpc,safeCpm:safeCpm,
+      currentBidKopecks:x.bidKopecks,targetBidKopecks:targetBid,state:x.state,action:action,reason:reason
+    });
+  });
+  result.sort(function(a,b){return b.spend-a.spend;});
+  return result;
+}
+
+function sellmonitorGithubRefreshAdsClusters_(ss, payload) {
+  payload=payload||{};
+  var auth=sellmonitorGithubResolveWbAuth_(ss), token=auth.token, tz=ss.getSpreadsheetTimeZone();
+  var pairs=sellmonitorGithubCampaignPairs_(ss);
+  if(!pairs.length)return{ok:true,skipped:true,reason:'no active search campaign pairs'};
+  var now=new Date(), fromDate=new Date(now);
+  fromDate.setDate(fromDate.getDate()-Math.max(3,Math.min(31,Number(payload.days||14))));
+  var from=String(payload.from || Utilities.formatDate(fromDate,tz,'yyyy-MM-dd'));
+  var to=String(payload.to || Utilities.formatDate(now,tz,'yyyy-MM-dd'));
+  var pairMap={};pairs.forEach(function(p){pairMap[p.advertId+'|'+p.nmId]=p;});
+  var bidMaps={}, stateMaps={}, rawRows=[];
+  for(var b=0;b<pairs.length;b+=100){
+    var batch=pairs.slice(b,b+100);
+    var snake=batch.map(function(p){return{advert_id:p.advertId,nm_id:p.nmId};});
+    var camel=batch.map(function(p){return{advertId:p.advertId,nmId:p.nmId};});
+    try{
+      var bo=sellmonitorGithubWbJson_('https://advert-api.wildberries.ru/adv/v0/normquery/get-bids','post',token,{items:snake});
+      var parsedBids=sellmonitorGithubParseClusterBidsByPair_(bo);
+      Object.keys(parsedBids).forEach(function(k){bidMaps[k]=parsedBids[k];});
+    }catch(e){}
+    try{
+      var lo=sellmonitorGithubWbJson_('https://advert-api.wildberries.ru/adv/v0/normquery/list','post',token,{items:camel});
+      var parsedStates=sellmonitorGithubParseClusterStatesByPair_(lo);
+      Object.keys(parsedStates).forEach(function(k){stateMaps[k]=parsedStates[k];});
+    }catch(e){}
+    var stats=sellmonitorGithubWbJson_('https://advert-api.wildberries.ru/adv/v1/normquery/stats','post',token,{from:from,to:to,items:camel});
+    var items=stats.items || stats;
+    if(!Array.isArray(items))items=[];
+    items.forEach(function(item){
+      var ad=Number(item.advertId||item.advert_id||0), daily=item.dailyStats||item.daily_stats||[];
+      daily.forEach(function(day){
+        var date=String(day.date||'').slice(0,10), st=day.stat||day.stats||day;
+        var arr=Array.isArray(st)?st:[st];
+        arr.forEach(function(x){
+          if(!x)return;
+          var nm=Number(x.nmId||x.nm_id||item.nmId||item.nm_id||0), key=ad+'|'+nm, p=pairMap[key]||{};
+          var q=String(x.normQuery||x.norm_query||x.query||'').trim();if(!q)return;
+          var bm=bidMaps[key]||{}, sm=stateMaps[key]||{};
+          rawRows.push({
+            storeId:auth.storeId,date:date,advertId:ad,nmId:nm,sellerArticle:p.sellerArticle||'',campaignName:p.campaignName||'',
+            paymentType:p.paymentType||'',bidType:p.bidType||'',normQuery:q,
+            views:Number(x.views||0),clicks:Number(x.clicks||0),atbs:Number(x.atbs||0),orders:Number(x.orders||0),shks:Number(x.shks||0),
+            ctr:Number(x.ctr||0),cpc:Number(x.cpc||0),cpm:Number(x.cpm||0),avgPos:Number(x.avgPos||x.avg_pos||0),
+            spend:Number(x.spend||0),clusterBidKopecks:Number(bm[q]||0),clusterState:String(sm[q]||''),
+            campaignSearchBidKopecks:Number(p.bidSearchKopecks||0),campaignRecommendationsBidKopecks:Number(p.bidRecommendationsKopecks||0),
+            campaignSearch:Boolean(p.search),campaignRecommendations:Boolean(p.recommendations)
+          });
+        });
+      });
+    });
+    Utilities.sleep(6200);
+  }
+
+  var headers=['store_id','date','advert_id','nmId','seller_article','campaign_name','payment_type','bid_type','norm_query','views','clicks','atbs','orders','shks','ctr','cpc','cpm','avg_pos','spend_rub','cluster_bid_kopecks','cluster_state','campaign_search_bid_kopecks','campaign_recommendations_bid_kopecks','source','trust_status','loaded_at','period_from','period_to'];
+  var sh=sellmonitorGithubEnsureSheet_(ss,'90_RAW_ads_clusters',headers), keep=[];
+  if(sh.getLastRow()>1){
+    var old=sh.getRange(2,1,sh.getLastRow()-1,headers.length).getValues();
+    old.forEach(function(r){var d=sellmonitorGithubDateKey_(r[1],tz);if(String(r[0])!==auth.storeId || d<from || d>to)keep.push(r);});
+  }
+  var loaded=new Date();
+  var newRows=rawRows.map(function(x){return[
+    x.storeId,x.date,x.advertId,x.nmId,x.sellerArticle,x.campaignName,x.paymentType,x.bidType,x.normQuery,x.views,x.clicks,x.atbs,x.orders,x.shks,x.ctr,x.cpc,x.cpm,x.avgPos,x.spend,x.clusterBidKopecks,x.clusterState,x.campaignSearchBidKopecks,x.campaignRecommendationsBidKopecks,
+    'WB Promotion /adv/v1/normquery/stats','FACTUAL_WB_ADS_CLUSTER',loaded,from,to
+  ];});
+  var all=keep.concat(newRows);
+  if(sh.getMaxRows()>1)sh.getRange(2,1,sh.getMaxRows()-1,headers.length).clearContent();
+  if(all.length){if(all.length+1>sh.getMaxRows())sh.insertRowsAfter(sh.getMaxRows(),all.length+1-sh.getMaxRows());sh.getRange(2,1,all.length,headers.length).setValues(all);}
+
+  var diagHeaders=['store_id','period_from','period_to','advert_id','nmId','seller_article','campaign_name','norm_query','organic_position','query_frequency','spend_rub','views','clicks','atbs','orders','shks','ctr_pct','cpc_rub','cr_click_order_pct','cpa_rub','base_contribution_per_sale_rub','safe_cpa_rub','safe_cpc_rub','safe_cpm_rub','current_cluster_bid_kopecks','target_cluster_bid_kopecks','cluster_state','action','reason','evidence_status','refreshed_at'];
+  var diag=sellmonitorGithubEnsureSheet_(ss,'84_Реклама_диагностика',diagHeaders), diagRows=[];
+  pairs.forEach(function(p){
+    var subset=rawRows.filter(function(x){return x.advertId===p.advertId&&x.nmId===p.nmId;});
+    if(!subset.length)return;
+    var base=sellmonitorGithubBaseContributionPerSale_(ss,p.nmId), a=sellmonitorGithubAnalyzeAdsClusters_(subset,base);
+    var organic=sellmonitorGithubOrganicSearchMap_(ss,p.nmId);
+    a.forEach(function(x){
+      var org=organic[x.normQuery]||{}, action=x.action, reason=x.reason;
+      if(Number(org.position||0)>0 && Number(org.position)<=10 && action==='ОСТАВИТЬ / МАСШТАБИРОВАТЬ'){
+        action='ОСТАВИТЬ / СНИЗИТЬ ДЛЯ ТЕСТА';
+        reason += '; органическая позиция уже ТОП-' + Math.round(Number(org.position));
+      }
+      diagRows.push([
+        auth.storeId,from,to,p.advertId,p.nmId,p.sellerArticle,p.campaignName,x.normQuery,org.position||'',org.frequency||'',x.spend,x.views,x.clicks,x.atbs,x.orders,x.shks,x.ctr,x.cpc,x.cr*100,x.cpa==null?'':x.cpa,x.baseContribution,x.safeCpa,x.safeCpc,x.safeCpm,x.currentBidKopecks,x.targetBidKopecks,x.state,action,reason,'FACTUAL_WB_CLUSTER + FACTUAL_SEARCH_POSITION + CALCULATED_ECONOMICS',loaded
+      ]);
+    });
+  });
+  if(diag.getMaxRows()>1)diag.getRange(2,1,diag.getMaxRows()-1,diagHeaders.length).clearContent();
+  if(diagRows.length){if(diagRows.length+1>diag.getMaxRows())diag.insertRowsAfter(diag.getMaxRows(),diagRows.length+1-diag.getMaxRows());diag.getRange(2,1,diagRows.length,diagHeaders.length).setValues(diagRows);}
+
+  var traffic=ss.getSheetByName('90_RAW_ads_traffic'), totals={};
+  if(traffic&&traffic.getLastRow()>1){
+    var tw=Math.min(traffic.getLastColumn(),30), th=traffic.getRange(1,1,1,tw).getDisplayValues()[0], ti={};
+    th.forEach(function(x,i){ti[String(x||'').trim()]=i;});
+    var tv=traffic.getRange(2,1,traffic.getLastRow()-1,tw).getValues();
+    tv.forEach(function(r){
+      var d=sellmonitorGithubDateKey_(r[ti.date],tz),ad=Number(r[ti.advert_id]||0),nm=Number(r[ti.nmId]||0);
+      if(d<from||d>to||!ad||!nm)return;var k=ad+'|'+nm,x=totals[k]||(totals[k]={spend:0,orders:0});
+      x.spend+=sellmonitorGithubNumber_(r[ti.spend_rub]);x.orders+=sellmonitorGithubNumber_(r[ti.orders]);
+    });
+  }
+  var zoneHeaders=['store_id','period_from','period_to','advert_id','nmId','seller_article','campaign_name','total_campaign_spend_rub','search_cluster_spend_rub','recommendations_spend_rub','recommendations_spend_status','total_campaign_orders','search_cluster_orders','search_enabled','recommendations_enabled','evidence_status','refreshed_at'];
+  var zone=sellmonitorGithubEnsureSheet_(ss,'84_Реклама_зоны',zoneHeaders), zoneRows=[];
+  pairs.forEach(function(p){
+    var subset=rawRows.filter(function(x){return x.advertId===p.advertId&&x.nmId===p.nmId;}), searchSpend=0,searchOrders=0;
+    subset.forEach(function(x){searchSpend+=Number(x.spend||0);searchOrders+=Number(x.orders||0);});
+    var total=totals[p.advertId+'|'+p.nmId]||{spend:0,orders:0}, rec='', recStatus='Н/Д';
+    if(p.search&&p.recommendations&&total.spend>=searchSpend){rec=Math.max(0,total.spend-searchSpend);recStatus='CALCULATED: total campaign spend - exact search cluster spend';}
+    zoneRows.push([auth.storeId,from,to,p.advertId,p.nmId,p.sellerArticle,p.campaignName,total.spend,searchSpend,rec,recStatus,total.orders,searchOrders,p.search,p.recommendations,'SEARCH=FACTUAL_WB_CLUSTER; RECOMMENDATIONS=CALCULATED_WHEN_POSSIBLE',loaded]);
+  });
+  if(zone.getMaxRows()>1)zone.getRange(2,1,zone.getMaxRows()-1,zoneHeaders.length).clearContent();
+  if(zoneRows.length){if(zoneRows.length+1>zone.getMaxRows())zone.insertRowsAfter(zone.getMaxRows(),zoneRows.length+1-zone.getMaxRows());zone.getRange(2,1,zoneRows.length,zoneHeaders.length).setValues(zoneRows);}
+  SpreadsheetApp.flush();
+  sellmonitorClientProperties_(ss.getId()).setProperty('SMC_ADS_CLUSTER_REFRESH_AT_MS',String(Date.now()));
+  return{ok:true,storeId:auth.storeId,clientId:auth.clientId,from:from,to:to,pairs:pairs.length,rawRows:newRows.length,diagnosticRows:diagRows.length,zoneRows:zoneRows.length,secretsReturned:false};
+}
+
+function sellmonitorGithubEnsureAdsClusterRefresh_(ss, q) {
+  var enabled=String(sellmonitorGithubSetting_(ss,'ADS_CLUSTER_REFRESH_ENABLED','TRUE')).toUpperCase()!=='FALSE';
+  if(!enabled)return{ok:true,enabled:false,queued:false};
+  if(!ss.getSheetByName('90_RAW_ads_campaigns'))return{ok:true,enabled:true,queued:false,reason:'90_RAW_ads_campaigns missing'};
+  var hours=Math.max(1,Number(sellmonitorGithubSetting_(ss,'ADS_CLUSTER_REFRESH_HOURS','6'))||6);
+  var props=sellmonitorClientProperties_(ss.getId()),last=Number(props.getProperty('SMC_ADS_CLUSTER_REFRESH_AT_MS')||0),due=!last||(Date.now()-last)>=hours*3600000;
+  var from=1200,to=Math.min(2023,q.getMaxRows()),active=false;
+  if(to>=from)q.getRange(from,1,to-from+1,8).getValues().forEach(function(r){var st=String(r[4]||''),spec={};try{spec=JSON.parse(String(r[3]||'{}'));}catch(e){}if(String(spec.file||'')==='__central_ads_clusters__'&&['PENDING','NEW','RUNNING','SCHEDULED'].indexOf(st)>=0)active=true;});
+  if(!due||active)return{ok:true,enabled:true,queued:false,active:active,lastRefreshAtMs:last||null,hours:hours};
+  var slot=sellmonitorGithubQueueSlot_(ss,q);if(!slot)return{ok:false,reason:'no queue slot for ads cluster refresh'};
+  var storeId=sellmonitorGithubSetting_(ss,'ACTIVE_STORE_ID',''),stamp=Utilities.formatDate(new Date(),ss.getSpreadsheetTimeZone(),'yyyyMMdd-HHmmss');
+  q.getRange(slot,1,1,8).setValues([['AUTO-ADS-CLUSTERS-'+storeId+'-'+stamp,new Date(),'RUN_REMOTE',JSON.stringify({file:'__central_ads_clusters__',entrypoint:'REMOTE_MAIN',payload:{storeId:storeId,days:14}}),'PENDING','','','Automatic WB search-cluster spend/bids/economics refresh']]);
+  SpreadsheetApp.flush();
+  return{ok:true,enabled:true,queued:true,row:slot,hours:hours};
+}
+
+
 function sellmonitorGithubProcessClient_(spreadsheetId) {
   var authState = sellmonitorGithubEnsureClientAuth_(spreadsheetId);
   var ss = SpreadsheetApp.openById(spreadsheetId);
@@ -605,6 +997,7 @@ function sellmonitorGithubProcessClient_(spreadsheetId) {
   var searchLane = sellmonitorGithubMaintainSearchLane_(ss, q);
   var coreRefresh = sellmonitorGithubEnsureCoreRefresh_(ss, q);
   var searchRefresh = sellmonitorGithubEnsureSearchRefresh_(ss, q);
+  var adsClusterRefresh = sellmonitorGithubEnsureAdsClusterRefresh_(ss, q);
   var operational = sellmonitorGithubEnsureOperationalHistory_(ss, q);
 
   var processed = 0, last = null;
@@ -633,7 +1026,7 @@ function sellmonitorGithubProcessClient_(spreadsheetId) {
     ready = allOk && values.length > 0 && sellmonitorGithubRecentExactReady_(ss, 7);
   }
 
-  return {ok: true, spreadsheetId: spreadsheetId, auth: authState, processedCommands: processed, staleRepaired: staleRepaired, searchLane: searchLane, coreRefresh: coreRefresh, searchRefresh: searchRefresh, operational: operational, last: last, ready: ready};
+  return {ok: true, spreadsheetId: spreadsheetId, auth: authState, processedCommands: processed, staleRepaired: staleRepaired, searchLane: searchLane, coreRefresh: coreRefresh, searchRefresh: searchRefresh, adsClusterRefresh: adsClusterRefresh, operational: operational, last: last, ready: ready};
 }
 
 function sellmonitorGithubRepairStaleRunning_(q) {
@@ -1009,6 +1402,12 @@ function sellmonitorGithubExecuteQueueRow_(ss, q, codeSheet, row) {
     var file = String(spec.file || '').trim();
     var entrypoint = String(spec.entrypoint || 'REMOTE_MAIN').trim();
     if (!file) throw new Error('RUN_REMOTE file missing');
+    if (file === '__central_ads_clusters__') {
+      var adsClusterResult = sellmonitorGithubRefreshAdsClusters_(ss, spec.payload || {});
+      q.getRange(row,5,1,4).setValues([['DONE', data[5] || new Date(), new Date(), sellmonitorGithubJson_(adsClusterResult)]]);
+      sellmonitorGithubLog_(SpreadsheetApp.openById(SMC_GH.CONTROL_CENTER_ID), ss.getId(), file, 'DONE', id, adsClusterResult);
+      return {id:id,file:file,ok:true,result:adsClusterResult};
+    }
     if (file === '__central_inner_catalog__') {
       var centralResult = sellmonitorGithubRefreshInnerCatalog_(ss, String((spec.payload || {}).storeId || ''));
       sellmonitorClientProperties_(ss.getId()).setProperty('SMC_CORE_REFRESH_AT_MS', String(Date.now()));
