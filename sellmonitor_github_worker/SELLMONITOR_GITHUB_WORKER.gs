@@ -248,8 +248,12 @@ function sellmonitorGithubQueueSlot_(ss, q) {
   var archive = ss.getSheetByName('97_Архив_очереди');
   if (archive) {
     var ar = archive.getLastRow() + 1;
+    if (archive.getMaxColumns() < 10) archive.insertColumnsAfter(archive.getMaxColumns(), 10 - archive.getMaxColumns());
     if (ar > archive.getMaxRows()) archive.insertRowsAfter(archive.getMaxRows(), Math.max(100, ar - archive.getMaxRows()));
-    archive.getRange(ar, 1, 1, 8).setValues([reusable.values]);
+    // Canonical archive layout: archived_at, source_row, then original queue A:H.
+    // D-1 gates read id/status/result from C/G/J; raw A:H archival makes
+    // completed source jobs invisible and causes false "PROD not registered".
+    archive.getRange(ar, 1, 1, 10).setValues([[new Date(), reusable.row].concat(reusable.values)]);
   }
   q.getRange(reusable.row, 1, 1, 8).clearContent();
   SpreadsheetApp.flush();
@@ -435,8 +439,9 @@ function sellmonitorGithubMaintainSearchLane_(ss, q) {
   for (var i = 0; i < terminals.length && blanks < 10; i++) {
     if (archive) {
       var ar = archive.getLastRow()+1;
+      if (archive.getMaxColumns() < 10) archive.insertColumnsAfter(archive.getMaxColumns(), 10 - archive.getMaxColumns());
       if (ar > archive.getMaxRows()) archive.insertRowsAfter(archive.getMaxRows(),100);
-      archive.getRange(ar,1,1,8).setValues([terminals[i].values]);
+      archive.getRange(ar,1,1,10).setValues([[new Date(), terminals[i].row].concat(terminals[i].values)]);
     }
     q.getRange(terminals[i].row,1,1,8).clearContent();
     recycled++; blanks++;
@@ -712,9 +717,10 @@ function sellmonitorGithubNextPendingRow_(q) {
   var vals = q.getRange(from, 1, to - from + 1, 8).getValues();
   var now = new Date().getTime(), best = null;
 
-  function priority_(id, file) {
+  function priority_(id, file, spec) {
     id = String(id || '');
     file = String(file || '');
+    spec = spec || {};
 
     // Emergency/current facts: never wait behind historical RNP, ads or SEO.
     if (/^FORCE-SEARCH-/.test(id)) return -2;
@@ -726,19 +732,33 @@ function sellmonitorGithubNextPendingRow_(q) {
       || /^AUTO-INNER-CATALOG-/.test(id)
     ) return -1;
 
-    // P0: yesterday-close factual path only. Do not blanket-prioritize every D1-* row:
-    // D1 post-processing (month RNP/ads/etc.) must not starve current stock/search.
+    // P0: dependencies that actually create yesterday's factual finance.
+    // A D-1 gate must never outrank its own source/parser/normalizer.
+    if (file === 'daily_prevday_close_v268') return 0;
+    if (/^D1-/.test(id) && file === 'mcp_inner_call_v183') return 0;
     if ([
-      'd1_gap_watchdog_v310',
-      'daily_prevday_close_v268',
-      'daily_prevday_gate_v269',
-      'daily_prevday_gate_v312',
       'inner_product_harvest_fast_v311',
       'inner_harvest_to_raw_v217',
       'finance_period_normalize_incremental_v227'
     ].indexOf(file) >= 0) return 0;
 
-    // P1: direct operational facts required by the owner dashboard.
+    // P1: D-1 coordination + current operational facts + critical post steps.
+    // Gate retries are intentionally below their dependencies so PROD/PARSE/NORM
+    // and RNP post jobs can finish instead of being starved by a 30s retry loop.
+    if ([
+      'daily_prevday_gate_v269',
+      'daily_prevday_gate_v312',
+      'd1_gap_watchdog_v310',
+      'inner_prevday_preview_v270',
+      'inner_live_today_sync_v260',
+      'rnp_finance_columns_fast_v307',
+      'rnp_latest_period_inner_sync_v224',
+      'rnp_period_headers_sync_v198',
+      'rnp_store_aggregate_v231',
+      'finance_daily_coverage_guard_v226',
+      'coverage_freshness_sync_v161',
+      'connection_status_sync_v192'
+    ].indexOf(file) >= 0) return 1;
     if (/^orders_/.test(file) || file === 'k2_inventory_pool_sync_v246') return 1;
     if ([
       'search_snapshot_config_v235',
@@ -748,19 +768,10 @@ function sellmonitorGithubNextPendingRow_(q) {
       'search_intelligence_qc_v242'
     ].indexOf(file) >= 0) return 1;
 
-    // P2: exact finance/RNP consolidation and freshness guards.
-    if ([
-      'rnp_finance_columns_fast_v307',
-      'rnp_latest_period_inner_sync_v224',
-      'rnp_period_headers_sync_v198',
-      'rnp_store_aggregate_v231',
-      'finance_daily_coverage_guard_v226',
-      'coverage_freshness_sync_v161',
-      'connection_status_sync_v192'
-    ].indexOf(file) >= 0) return 2;
-
-    // P3: ads / traffic. Important, but cannot block products/stocks/search/D-1.
-    if (/^(ads_|calculator_ads_|quality_ads_|traffic_|wb_ads_)/.test(file)) return 3;
+    // P2: ads / traffic and the autopilot that schedules live refreshes.
+    if (file === 'store_autopilot_v207') return 2;
+    // P2: ads / traffic are operational facts and must not sit behind backfills.
+    if (/^(ads_|calculator_ads_|quality_ads_|traffic_|wb_ads_)/.test(file)) return 2;
 
     // P4: orchestration/backfill that can create more work.
     if ([
@@ -791,7 +802,7 @@ function sellmonitorGithubNextPendingRow_(q) {
     try { spec = JSON.parse(String(vals[i][3] || '{}')); } catch (e) {}
     var id = String(vals[i][0] || '');
     var file = String(spec.file || '');
-    var p = priority_(id, file);
+    var p = priority_(id, file, spec);
     var ageKey = isFinite(due) ? due : 0;
 
     if (!best || p < best.priority || (p === best.priority && ageKey < best.ageKey) ||
