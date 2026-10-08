@@ -4,7 +4,7 @@
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.17',
+  VERSION: 'github-worker-1.3.16',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -975,11 +975,11 @@ function sellmonitorGithubEnsureAdsClusterRefresh_(ss, q) {
   var hours=Math.max(1,Number(sellmonitorGithubSetting_(ss,'ADS_CLUSTER_REFRESH_HOURS','6'))||6);
   var props=sellmonitorClientProperties_(ss.getId()),last=Number(props.getProperty('SMC_ADS_CLUSTER_REFRESH_AT_MS')||0),due=!last||(Date.now()-last)>=hours*3600000;
   var from=1200,to=Math.min(2023,q.getMaxRows()),active=false;
-  if(to>=from)q.getRange(from,1,to-from+1,8).getValues().forEach(function(r){var st=String(r[4]||''),spec={};try{spec=JSON.parse(String(r[3]||'{}'));}catch(e){}if(String(spec.file||'')==='__central_ads_clusters__'&&['PENDING','NEW','RUNNING','SCHEDULED'].indexOf(st)>=0)active=true;});
+  if(to>=from)q.getRange(from,1,to-from+1,8).getValues().forEach(function(r){var st=String(r[4]||''),spec={};try{spec=JSON.parse(String(r[3]||'{}'));}catch(e){}if(['__central_ads_clusters__','wb_ads_cluster_intelligence_v1'].indexOf(String(spec.file||''))>=0&&['PENDING','NEW','RUNNING','SCHEDULED'].indexOf(st)>=0)active=true;});
   if(!due||active)return{ok:true,enabled:true,queued:false,active:active,lastRefreshAtMs:last||null,hours:hours};
   var slot=sellmonitorGithubQueueSlot_(ss,q);if(!slot)return{ok:false,reason:'no queue slot for ads cluster refresh'};
   var storeId=sellmonitorGithubSetting_(ss,'ACTIVE_STORE_ID',''),stamp=Utilities.formatDate(new Date(),ss.getSpreadsheetTimeZone(),'yyyyMMdd-HHmmss');
-  q.getRange(slot,1,1,8).setValues([['AUTO-ADS-CLUSTERS-'+storeId+'-'+stamp,new Date(),'RUN_REMOTE',JSON.stringify({file:'__central_ads_clusters__',entrypoint:'REMOTE_MAIN',payload:{storeId:storeId,days:14}}),'PENDING','','','Automatic WB search-cluster spend/bids/economics refresh']]);
+  q.getRange(slot,1,1,8).setValues([['AUTO-ADS-CLUSTERS-'+storeId+'-'+stamp,new Date(),'RUN_REMOTE',JSON.stringify({file:'wb_ads_cluster_intelligence_v1',entrypoint:'REMOTE_MAIN',payload:{storeId:storeId,days:14}}),'PENDING','','','Automatic WB search-cluster spend/bids/economics refresh']]);
   SpreadsheetApp.flush();
   return{ok:true,enabled:true,queued:true,row:slot,hours:hours};
 }
@@ -1404,7 +1404,7 @@ function sellmonitorGithubNextPendingRow_(q) {
     // P2: ads / traffic and the autopilot that schedules live refreshes.
     if (file === 'store_autopilot_v207') return 2;
     // P2: ads / traffic are operational facts and must not sit behind backfills.
-    if (/^(ads_|calculator_ads_|quality_ads_|traffic_|wb_ads_)/.test(file)) return 2;
+    if (file === 'wb_ads_cluster_intelligence_v1' || /^(ads_|calculator_ads_|quality_ads_|traffic_|wb_ads_)/.test(file)) return 2;
 
     // P4: orchestration/backfill that can create more work.
     if ([
