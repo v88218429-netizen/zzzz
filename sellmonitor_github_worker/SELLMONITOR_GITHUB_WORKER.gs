@@ -1,5 +1,5 @@
 /**
- * Sellmonitor GitHub Central Worker v1.3.5
+ * Sellmonitor GitHub Central Worker v1.3.17
  * GitHub is source-of-truth/scheduler. This Apps Script project is only
  * the authorized Google adapter. Make is not part of the execution path.
  */
@@ -1758,6 +1758,18 @@ function sellmonitorClientProperties_(spreadsheetId) {
       && String(k) === 'SM_MCP_ACCESS_TOKEN'
     ) {
       v = legacy.getProperty('SM_MCP_ACCESS_TOKEN');
+      if (v != null) {
+        primary.setProperty(kk, String(v));
+        return v;
+      }
+    }
+    // Sanych's WB Promotion token predates per-client property namespacing.
+    // Migrate only its explicit alias, preserve the old value, and never return it.
+    if (
+      String(spreadsheetId) === '1-aBDZ7c5xfmVwwiNmUi9-DyfIANXmfiM5-Ti2_zg4zI'
+      && String(k) === 'FBS_CLIENT__SANYCH__WB_API_TOKEN'
+    ) {
+      v = legacy.getProperty('FBS_CLIENT__SANYCH__WB_API_TOKEN');
       if (v != null) {
         primary.setProperty(kk, String(v));
         return v;
