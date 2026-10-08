@@ -755,32 +755,43 @@ function sellmonitorGithubCampaignPairs_(ss) {
   return list;
 }
 
-function sellmonitorGithubParseClusterBids_(obj) {
+function sellmonitorGithubParseClusterBidsByPair_(obj) {
   var out={};
   function walk(x) {
     if (!x) return;
     if (Array.isArray(x)) { x.forEach(walk); return; }
     if (typeof x !== 'object') return;
+    var ad=Number(x.advertId || x.advert_id || 0), nm=Number(x.nmId || x.nm_id || 0);
     var q=String(x.normQuery || x.norm_query || x.query || '').trim();
-    var bid=x.bidKopecks!=null?x.bidKopecks:(x.bid_kopecks!=null?x.bid_kopecks:x.bid);
-    if (q && bid!=null && isFinite(Number(bid))) out[q]=Number(bid);
+    var bid=x.bidKopecks!=null?x.bidKopecks:(x.bid_kopecks!=null?x.bid_kopecks:(x.id_kopecks!=null?x.id_kopecks:x.bid));
+    if (ad && nm && q && bid!=null && isFinite(Number(bid))) {
+      var key=ad+'|'+nm;
+      if(!out[key])out[key]={};
+      out[key][q]=Number(bid);
+    }
     Object.keys(x).forEach(function(k){ if (typeof x[k]==='object') walk(x[k]); });
   }
   walk(obj);
   return out;
 }
 
-function sellmonitorGithubParseClusterStates_(obj) {
+function sellmonitorGithubParseClusterStatesByPair_(obj) {
   var out={};
-  function put(arr,state) {
+  function put(key,arr,state) {
+    if(!out[key])out[key]={};
     (arr || []).forEach(function(x){
       var q=typeof x==='string'?x:String((x||{}).normQuery || (x||{}).norm_query || (x||{}).query || '');
-      if(q)out[q]=state;
+      if(q)out[key][q]=state;
     });
   }
   function walk(x) {
     if(!x || typeof x!=='object')return;
-    if(x.normQueries){put(x.normQueries.active,'active');put(x.normQueries.excluded,'excluded');}
+    var ad=Number(x.advertId || x.advert_id || 0), nm=Number(x.nmId || x.nm_id || 0);
+    if(ad && nm && x.normQueries){
+      var key=ad+'|'+nm;
+      put(key,x.normQueries.active,'active');
+      put(key,x.normQueries.excluded,'excluded');
+    }
     Object.keys(x).forEach(function(k){if(typeof x[k]==='object')walk(x[k]);});
   }
   walk(obj);
@@ -841,12 +852,13 @@ function sellmonitorGithubRefreshAdsClusters_(ss, payload) {
     var camel=batch.map(function(p){return{advertId:p.advertId,nmId:p.nmId};});
     try{
       var bo=sellmonitorGithubWbJson_('https://advert-api.wildberries.ru/adv/v0/normquery/get-bids','post',token,{items:snake});
-      batch.forEach(function(p){bidMaps[p.advertId+'|'+p.nmId]=sellmonitorGithubParseClusterBids_(bo);});
+      var parsedBids=sellmonitorGithubParseClusterBidsByPair_(bo);
+      Object.keys(parsedBids).forEach(function(k){bidMaps[k]=parsedBids[k];});
     }catch(e){}
     try{
       var lo=sellmonitorGithubWbJson_('https://advert-api.wildberries.ru/adv/v0/normquery/list','post',token,{items:camel});
-      var commonStates=sellmonitorGithubParseClusterStates_(lo);
-      batch.forEach(function(p){stateMaps[p.advertId+'|'+p.nmId]=commonStates;});
+      var parsedStates=sellmonitorGithubParseClusterStatesByPair_(lo);
+      Object.keys(parsedStates).forEach(function(k){stateMaps[k]=parsedStates[k];});
     }catch(e){}
     var stats=sellmonitorGithubWbJson_('https://advert-api.wildberries.ru/adv/v1/normquery/stats','post',token,{from:from,to:to,items:camel});
     var items=stats.items || stats;
