@@ -4,7 +4,7 @@
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.13',
+  VERSION: 'github-worker-1.3.14',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -838,7 +838,7 @@ function sellmonitorGithubEnsureOperationalHistory_(ss, q) {
 
   var enrAt = Number(props.getProperty('SMC_RNP_ENRICH_AT_MS') || 0);
   if ((!enrAt || now-enrAt >= 4*3600000) && !active.rnp_enrichment_sync_v305) {
-    var er=queue_('RNP-ENRICH','rnp_enrichment_sync_v305',{storeId:storeId,sheetIndex:0,offset:0,chunkRows:1200});
+    var er=queue_('RNP-ENRICH','rnp_enrichment_sync_v305',{storeId:storeId,sheetIndex:0,offset:0,chunkRows:500});
     if (er) { queued.enrichment=er; props.setProperty('SMC_RNP_ENRICH_AT_MS',String(now)); }
   }
 
