@@ -4,7 +4,7 @@
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.9',
+  VERSION: 'github-worker-1.3.10',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -445,6 +445,86 @@ function sellmonitorGithubMaintainSearchLane_(ss, q) {
   return {ok:true, blanks:blanks, recycled:recycled};
 }
 
+function sellmonitorGithubEnsureSearchRefresh_(ss, q) {
+  var cfg = ss.getSheetByName('99_Настройки');
+  if (!cfg) return {ok:false, reason:'settings missing'};
+  var vals = cfg.getRange(1,1,Math.max(1,cfg.getLastRow()),2).getDisplayValues();
+  function setting_(key, def) {
+    for (var i=0;i<vals.length;i++) if (String(vals[i][0] || '').trim()===key) return String(vals[i][1] || '').trim();
+    return def || '';
+  }
+  var enabled=String(setting_('SEARCH_REFRESH_ENABLED','TRUE')).toUpperCase()!=='FALSE';
+  var storeId=setting_('ACTIVE_STORE_ID','');
+  if (!enabled || !storeId) return {ok:true, enabled:enabled, queued:false, storeId:storeId};
+
+  var props=sellmonitorClientProperties_(ss.getId());
+  var publicToken=String(props.getProperty('SM_MCP_ACCESS_TOKEN') || '');
+  var merchantId=setting_('SELLMONITOR_MERCHANT_ID','');
+  if (!publicToken || !merchantId) {
+    return {ok:true, queued:false, storeId:storeId, source:'runtime_wb_search', reason:'public Sellmonitor search unavailable; runtime WB search remains authoritative'};
+  }
+
+  var hours=Math.max(1,Number(setting_('SEARCH_REFRESH_HOURS','6')) || 6);
+  var lastMs=Number(props.getProperty('SMC_SEARCH_REFRESH_AT_MS') || 0);
+  var now=Date.now();
+  var due=!lastMs || (now-lastMs)>=hours*3600000;
+  if (!due) return {ok:true,queued:false,storeId:storeId,lastRefreshAtMs:lastMs,hours:hours};
+
+  var from=1200,to=Math.min(2023,q.getMaxRows()),active=false;
+  if (to>=from) {
+    q.getRange(from,1,to-from+1,8).getValues().forEach(function(r) {
+      var st=String(r[4] || ''), spec={};
+      try { spec=JSON.parse(String(r[3] || '{}')); } catch(e) {}
+      var file=String(spec.file || '');
+      if (file!=='search_snapshot_config_v235' && file!=='search_position_monitor_sync_v238') return;
+      if (st==='PENDING'||st==='NEW'||st==='RUNNING'||st==='SCHEDULED') active=true;
+    });
+  }
+  if (active) return {ok:true,queued:false,active:true,storeId:storeId,hours:hours};
+
+  var slot=sellmonitorGithubQueueSlot_(ss,q);
+  if (!slot) return {ok:false,reason:'no queue slot for search refresh',storeId:storeId};
+  var stamp=Utilities.formatDate(new Date(),ss.getSpreadsheetTimeZone(),'yyyyMMdd-HHmmss');
+  q.getRange(slot,1,1,8).setValues([[
+    'AUTO-SEARCH-SNAPSHOT-'+storeId+'-'+stamp,
+    new Date(),
+    'RUN_REMOTE',
+    JSON.stringify({file:'search_snapshot_config_v235',entrypoint:'REMOTE_MAIN',payload:{storeId:storeId}}),
+    'PENDING','','',
+    'Automatic factual search snapshot; monitor is chained only after snapshot success'
+  ]]);
+  SpreadsheetApp.flush();
+  return {ok:true,queued:true,row:slot,storeId:storeId,hours:hours};
+}
+
+function sellmonitorGithubChainSearchMonitor_(ss,q,storeId) {
+  var from=1200,to=Math.min(2023,q.getMaxRows());
+  if (to>=from) {
+    var rows=q.getRange(from,1,to-from+1,8).getValues();
+    for (var i=0;i<rows.length;i++) {
+      var st=String(rows[i][4] || ''), spec={};
+      try { spec=JSON.parse(String(rows[i][3] || '{}')); } catch(e) {}
+      if (String(spec.file || '')==='search_position_monitor_sync_v238' &&
+          ['PENDING','NEW','RUNNING','SCHEDULED'].indexOf(st)>=0) {
+        return {ok:true,queued:false,active:true,row:from+i};
+      }
+    }
+  }
+  var slot=sellmonitorGithubQueueSlot_(ss,q);
+  if (!slot) return {ok:false,reason:'no queue slot for search monitor'};
+  var stamp=Utilities.formatDate(new Date(),ss.getSpreadsheetTimeZone(),'yyyyMMdd-HHmmss');
+  q.getRange(slot,1,1,8).setValues([[
+    'AUTO-SEARCH-MONITOR-'+storeId+'-'+stamp,
+    new Date(),
+    'RUN_REMOTE',
+    JSON.stringify({file:'search_position_monitor_sync_v238',entrypoint:'REMOTE_MAIN',payload:{storeId:storeId}}),
+    'PENDING','','',
+    'Chained after successful factual search snapshot'
+  ]]);
+  SpreadsheetApp.flush();
+  return {ok:true,queued:true,row:slot};
+}
+
 function sellmonitorGithubEnsureCoreRefresh_(ss, q) {
   var set = ss.getSheetByName('99_Настройки');
   var stocks = ss.getSheetByName('06_Остатки');
@@ -519,6 +599,7 @@ function sellmonitorGithubProcessClient_(spreadsheetId) {
   var staleRepaired = sellmonitorGithubRepairStaleRunning_(q);
   var searchLane = sellmonitorGithubMaintainSearchLane_(ss, q);
   var coreRefresh = sellmonitorGithubEnsureCoreRefresh_(ss, q);
+  var searchRefresh = sellmonitorGithubEnsureSearchRefresh_(ss, q);
 
   var processed = 0, last = null;
   while (processed < SMC_GH.MAX_COMMANDS_PER_CLIENT) {
@@ -546,7 +627,7 @@ function sellmonitorGithubProcessClient_(spreadsheetId) {
     ready = allOk && values.length > 0 && sellmonitorGithubRecentExactReady_(ss, 7);
   }
 
-  return {ok: true, spreadsheetId: spreadsheetId, auth: authState, processedCommands: processed, staleRepaired: staleRepaired, searchLane: searchLane, coreRefresh: coreRefresh, last: last, ready: ready};
+  return {ok: true, spreadsheetId: spreadsheetId, auth: authState, processedCommands: processed, staleRepaired: staleRepaired, searchLane: searchLane, coreRefresh: coreRefresh, searchRefresh: searchRefresh, last: last, ready: ready};
 }
 
 function sellmonitorGithubRepairStaleRunning_(q) {
@@ -815,6 +896,13 @@ function sellmonitorGithubExecuteQueueRow_(ss, q, codeSheet, row) {
     }
     if (file === 'snapshot_products_safe_v129' && result && result.ok === true) {
       sellmonitorClientProperties_(ss.getId()).setProperty('SMC_CORE_REFRESH_AT_MS', String(Date.now()));
+    }
+    if (file === 'search_snapshot_config_v235' && result && result.ok === true) {
+      var searchStoreId=String((spec.payload || {}).storeId || '');
+      result.chainedMonitor=sellmonitorGithubChainSearchMonitor_(ss,q,searchStoreId);
+    }
+    if (file === 'search_position_monitor_sync_v238' && result && result.ok === true) {
+      sellmonitorClientProperties_(ss.getId()).setProperty('SMC_SEARCH_REFRESH_AT_MS', String(Date.now()));
     }
     var resultText = sellmonitorGithubJson_(result);
 
