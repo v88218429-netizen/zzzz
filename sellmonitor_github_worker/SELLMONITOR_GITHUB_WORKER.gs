@@ -4,7 +4,7 @@
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.24',
+  VERSION: 'github-worker-1.3.25',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -1119,8 +1119,9 @@ function sellmonitorGithubEnsureAdsClusterRefresh_(ss, q) {
   }
   var hours=Math.max(1,Number(sellmonitorGithubSetting_(ss,'ADS_CLUSTER_REFRESH_HOURS','6'))||6);
   var props=sellmonitorClientProperties_(ss.getId()),last=Number(props.getProperty('SMC_ADS_CLUSTER_REFRESH_AT_MS')||0),due=!last||(Date.now()-last)>=hours*3600000;
-  var from=1200,to=Math.min(2023,q.getMaxRows()),active=false;
-  if(to>=from)q.getRange(from,1,to-from+1,8).getValues().forEach(function(r){var st=String(r[4]||''),spec={};try{spec=JSON.parse(String(r[3]||'{}'));}catch(e){}if(['__central_ads_clusters__','wb_ads_cluster_intelligence_v1'].indexOf(String(spec.file||''))>=0&&['PENDING','NEW','RUNNING','SCHEDULED'].indexOf(st)>=0)active=true;});
+  var from=1200,to=Math.min(2023,q.getMaxRows()),active=false,factualAdsActive=false;
+  if(to>=from)q.getRange(from,1,to-from+1,8).getValues().forEach(function(r){var st=String(r[4]||''),id=String(r[0]||''),spec={};try{spec=JSON.parse(String(r[3]||'{}'));}catch(e){}var file=String(spec.file||''),isActive=['PENDING','NEW','RUNNING','SCHEDULED'].indexOf(st)>=0;if(!isActive)return;if(['__central_ads_clusters__','wb_ads_cluster_intelligence_v1'].indexOf(file)>=0)active=true;if(file==='wb_ads_bulk_ingest_v167'||/^ADS-VERIFY-/.test(id))factualAdsActive=true;});
+  if(factualAdsActive)return{ok:true,enabled:true,queued:false,active:active,skipped:true,reason:'FACTUAL_ADS_PRIORITY'};
   if(!due||active)return{ok:true,enabled:true,queued:false,active:active,lastRefreshAtMs:last||null,hours:hours};
   var slot=sellmonitorGithubQueueSlot_(ss,q);if(!slot)return{ok:false,reason:'no queue slot for ads cluster refresh'};
   var storeId=sellmonitorGithubSetting_(ss,'ACTIVE_STORE_ID',''),stamp=Utilities.formatDate(new Date(),ss.getSpreadsheetTimeZone(),'yyyyMMdd-HHmmss');
@@ -1498,6 +1499,7 @@ function sellmonitorGithubNextPendingRow_(q) {
     spec = spec || {};
 
     // Emergency/current facts: never wait behind historical RNP, ads or SEO.
+    if (/^ADS-VERIFY-/.test(id)) return -3;
     if (/^FORCE-SEARCH-/.test(id)) return -2;
     if (
       file === 'snapshot_products_safe_v129'
