@@ -20,7 +20,7 @@ permissions:
   actions: read
 
 concurrency:
-  group: wb-github-runtime
+  group: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.conclusion != 'success' && format('wb-github-runtime-skip-{0}', github.run_id) || 'wb-github-runtime' }}
   cancel-in-progress: true
 
 jobs:
