@@ -4,7 +4,7 @@
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.14',
+  VERSION: 'github-worker-1.3.15',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -1176,6 +1176,86 @@ function sellmonitorGithubHydrateCurrentSnapshot_(ss, storeId) {
   return {ok:true, storeId:storeId, changed:changed, productCount:Object.keys(pm).length, stockSkuCount:stockCount};
 }
 
+
+function sellmonitorGithubSyncCoverageBoard_(ss, storeId) {
+  var sh=ss.getSheetByName('00_Покрытие_фактов');
+  var fin=ss.getSheetByName('84_Финансы_периоды');
+  var set=ss.getSheetByName('99_Настройки');
+  if (!sh || !fin || !set) return {ok:true,skipped:true,reason:'coverage inputs missing'};
+
+  var tz=ss.getSpreadsheetTimeZone();
+  var sv=set.getRange(1,1,Math.max(1,set.getLastRow()),2).getDisplayValues(), cfg={};
+  sv.forEach(function(r){ if(r[0]) cfg[String(r[0]).trim()]=String(r[1]||'').trim(); });
+  var storeName=cfg.STORE_NAME || storeId;
+  function dk(v) {
+    if (v instanceof Date) return Utilities.formatDate(v,tz,'yyyy-MM-dd');
+    var s=String(v||'').trim();
+    if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0,10);
+    var m=s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/);
+    return m ? m[3]+'-'+('0'+m[2]).slice(-2)+'-'+('0'+m[1]).slice(-2) : '';
+  }
+  function dateObj(s){ return new Date(s+'T12:00:00'); }
+
+  var byDay={}, n=Math.max(0,fin.getLastRow()-1);
+  if (n) {
+    var core=fin.getRange(2,1,n,7).getValues();
+    var trust=fin.getRange(2,39,n,1).getDisplayValues();
+    for (var i=0;i<n;i++) {
+      if (String(core[i][0]||'')!==storeId || String(trust[i][0]||'')!=='FACTUAL_INNER_ANALYTICS') continue;
+      var f=dk(core[i][3]), t=dk(core[i][4]), days=Number(core[i][5]||0), nm=String(core[i][6]||'').trim();
+      if (!f || !nm || days!==1) continue;
+      var expected=new Date(dateObj(f)); expected.setDate(expected.getDate()+1);
+      if (dk(expected)!==t) continue;
+      (byDay[f]||(byDay[f]={}))[nm]=1;
+    }
+  }
+
+  var today=new Date(), end=new Date(today.getFullYear(),today.getMonth(),today.getDate()-1,12);
+  var start=new Date(end); start.setDate(start.getDate()-29);
+  var days=[], maxSku=0, lastTrusted='', problem=[];
+  for(var d=new Date(start); d<=end; d.setDate(d.getDate()+1)){
+    var key=Utilities.formatDate(d,tz,'yyyy-MM-dd');
+    var cnt=byDay[key]?Object.keys(byDay[key]).length:0;
+    if(cnt>maxSku) maxSku=cnt;
+    if(cnt>0) lastTrusted=key;
+    days.push({key:key,count:cnt});
+  }
+  days.forEach(function(x){ if(!x.count) problem.push(x.key); });
+
+  sh.getRange('B2').setValue(storeName);
+  sh.getRange('E2').setValue(lastTrusted?dateObj(lastTrusted):'');
+  sh.getRange('H2').setValue(problem.length);
+  sh.getRange('A3').setValue('Окно контроля');
+  sh.getRange('B3').setValue('Последние 30 дней');
+  sh.getRange('D3').setValue('Макс. SKU-строк/день');
+  sh.getRange('E3').setValue(maxSku);
+  sh.getRange('G3').setValue('Проблемных дней');
+  sh.getRange('H3').setValue(problem.length);
+  sh.getRange('A4').setValue('Проблемные даты · 30 дней');
+  sh.getRange('B4').setValue(problem.length?problem.slice(-12).map(function(x){return x.slice(8,10)+'.'+x.slice(5,7)+' 🔴 НЕТ ФАКТА';}).join('  |  '):'—');
+
+  var hdr=[['Дата','Магазин','SKU-строк факта','Дневной max','Покрытие SKU','Статус факта','Strict fallback','Комментарий','Что делать','Источник']];
+  sh.getRange(8,1,1,10).setValues(hdr);
+  if (sh.getLastRow()>8) sh.getRange(9,1,sh.getLastRow()-8,10).clearContent();
+
+  var out=[];
+  days.slice().reverse().forEach(function(x){
+    var pct=maxSku?x.count/maxSku:0;
+    out.push([
+      dateObj(x.key),storeName,x.count,maxSku,pct,
+      x.count?'🟢 ФАКТ':'🔴 НЕТ ФАКТА','—',
+      x.count?'Trusted daily Sellmonitor Inner':'Нет trusted daily FACTUAL_INNER_ANALYTICS',
+      x.count?'—':'D-1/backfill должен восстановить день',
+      'Sellmonitor Inner · FACTUAL_INNER_ANALYTICS'
+    ]);
+  });
+  if(out.length) sh.getRange(9,1,out.length,10).setValues(out);
+  sh.getRange(9,1,out.length,1).setNumberFormat('dd.mm.yyyy');
+  sh.getRange(9,5,out.length,1).setNumberFormat('0.0%');
+  SpreadsheetApp.flush();
+  return {ok:true,storeId:storeId,lastTrusted:lastTrusted,maxSku:maxSku,problemDays:problem.length,windowDays:days.length};
+}
+
 function sellmonitorGithubEnsureOperationalHistory_(ss, q) {
   var set = ss.getSheetByName('99_Настройки');
   if (!set) return {ok:true, skipped:true, reason:'settings missing'};
@@ -1187,6 +1267,12 @@ function sellmonitorGithubEnsureOperationalHistory_(ss, q) {
 
   var props = sellmonitorClientProperties_(ss.getId());
   var now = Date.now();
+  var coverage = {ok:true,skipped:true,reason:'fresh'};
+  var coverageAt = Number(props.getProperty('SMC_COVERAGE_BOARD_AT_MS') || 0);
+  if (!coverageAt || now-coverageAt >= 15*60000) {
+    coverage = sellmonitorGithubSyncCoverageBoard_(ss, storeId);
+    props.setProperty('SMC_COVERAGE_BOARD_AT_MS', String(now));
+  }
   var lastHydrate = Number(props.getProperty('SMC_OPERATIONAL_HYDRATE_AT_MS') || 0);
   var hydrate = {ok:true, skipped:true, reason:'fresh'};
   if (!lastHydrate || now-lastHydrate >= 30*60000) {
@@ -1236,7 +1322,7 @@ function sellmonitorGithubEnsureOperationalHistory_(ss, q) {
   }
 
   SpreadsheetApp.flush();
-  return {ok:true,storeId:storeId,hydrate:hydrate,queued:queued};
+  return {ok:true,storeId:storeId,coverage:coverage,hydrate:hydrate,queued:queued};
 }
 
 function sellmonitorGithubNextPendingRow_(q) {
