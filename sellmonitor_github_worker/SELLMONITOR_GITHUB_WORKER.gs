@@ -1,10 +1,10 @@
 /**
- * Sellmonitor GitHub Central Worker v1.3.20
+ * Sellmonitor GitHub Central Worker v1.3.21
  * GitHub is source-of-truth/scheduler. This Apps Script project is only
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.20',
+  VERSION: 'github-worker-1.3.21',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -541,6 +541,38 @@ function sellmonitorGithubRefreshWbSearch_(ss, payload) {
   };
 }
 
+function sellmonitorGithubRefreshGithubSearch_(ss, payload) {
+  payload = payload || {};
+  var storeId = String(payload.storeId || '').trim();
+  var map = {
+    air_wb: {cabinet:'air', file:'air.json'},
+    hozyayushka_wb: {cabinet:'hozyushka', file:'hozyushka.json'}
+  };
+  var cfg = map[storeId];
+  if (!cfg) throw new Error('GitHub search snapshot unsupported store: ' + storeId);
+  var url = 'https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_data/search/' + cfg.file + '?t=' + Date.now();
+  var r = UrlFetchApp.fetch(url, {method:'get', muteHttpExceptions:true, followRedirects:true, headers:{Accept:'application/json'}});
+  var code = r.getResponseCode();
+  var text = r.getContentText();
+  if (code !== 200) throw new Error('GitHub search snapshot HTTP ' + code + ' ' + String(text || '').slice(0,250));
+  var snap = {};
+  try { snap = JSON.parse(text || '{}'); }
+  catch(e) { throw new Error('GitHub search snapshot non-JSON'); }
+  if (String(snap.trust_status || '') !== 'FACTUAL_WB_ANALYTICS') throw new Error('GitHub search snapshot trust gate failed');
+  var createdAt = new Date(String(snap.created_at || ''));
+  if (!(createdAt instanceof Date) || isNaN(createdAt)) throw new Error('GitHub search snapshot created_at invalid');
+  var ageHours = (Date.now() - createdAt.getTime()) / 3600000;
+  if (ageHours > 24) throw new Error('GitHub search snapshot stale: ' + Math.round(ageHours) + 'h');
+  var result = sellmonitorGithubPublishRuntimeSearch_(cfg.cabinet, snap);
+  if (!result || result.ok !== true || Number(result.search_rows || 0) <= 0) {
+    throw new Error('GitHub search snapshot materialization failed: ' + sellmonitorGithubJson_(result || {}));
+  }
+  result.github_source = url.replace(/\?t=.*/, '');
+  result.age_hours = Math.round(ageHours * 10) / 10;
+  result.store_id = storeId;
+  return result;
+}
+
 function sellmonitorGithubEnsureSearchRefresh_(ss, q) {
   var cfg = ss.getSheetByName('99_Настройки');
   if (!cfg) return {ok:false, reason:'settings missing'};
@@ -557,7 +589,7 @@ function sellmonitorGithubEnsureSearchRefresh_(ss, q) {
   var publicToken=String(props.getProperty('SM_MCP_ACCESS_TOKEN') || '');
   var merchantId=setting_('SELLMONITOR_MERCHANT_ID','');
   var legacy=Boolean(publicToken&&merchantId);
-  var snapshotFile=legacy?'search_snapshot_config_v235':'__central_wb_search__';
+  var snapshotFile=legacy?'search_snapshot_config_v235':'__central_github_search__';
 
   var hours=Math.max(1,Number(setting_('SEARCH_REFRESH_HOURS','6')) || 6);
   var lastMs=Number(props.getProperty('SMC_SEARCH_REFRESH_AT_MS') || 0);
@@ -576,11 +608,6 @@ function sellmonitorGithubEnsureSearchRefresh_(ss, q) {
     });
   }
   if (active) return {ok:true,queued:false,active:true,storeId:storeId,hours:hours,source:snapshotFile};
-
-  if(!legacy){
-    try{sellmonitorGithubResolveWbAuth_(ss);}
-    catch(e){return {ok:false,queued:false,storeId:storeId,source:snapshotFile,reason:String(e&&e.message||e)};}
-  }
 
   var slot=sellmonitorGithubQueueSlot_(ss,q);
   if (!slot) return {ok:false,reason:'no queue slot for search refresh',storeId:storeId};
@@ -1508,6 +1535,7 @@ function sellmonitorGithubNextPendingRow_(q) {
     ].indexOf(file) >= 0) return 1;
     if (/^orders_/.test(file) || file === 'k2_inventory_pool_sync_v246') return 1;
     if ([
+      '__central_github_search__',
       '__central_wb_search__',
       'search_snapshot_config_v235',
       'search_position_monitor_sync_v238',
@@ -1622,6 +1650,12 @@ function sellmonitorGithubExecuteQueueRow_(ss, q, codeSheet, row) {
       q.getRange(row,5,1,4).setValues([['DONE', data[5] || new Date(), new Date(), sellmonitorGithubJson_(adsClusterResult)]]);
       sellmonitorGithubLog_(SpreadsheetApp.openById(SMC_GH.CONTROL_CENTER_ID), ss.getId(), file, 'DONE', id, adsClusterResult);
       return {id:id,file:file,ok:true,result:adsClusterResult};
+    }
+    if (file === '__central_github_search__') {
+      var githubSearchResult = sellmonitorGithubRefreshGithubSearch_(ss, spec.payload || {});
+      q.getRange(row,5,1,4).setValues([['DONE', data[5] || new Date(), new Date(), sellmonitorGithubJson_(githubSearchResult)]]);
+      sellmonitorGithubLog_(SpreadsheetApp.openById(SMC_GH.CONTROL_CENTER_ID), ss.getId(), file, 'DONE', id, githubSearchResult);
+      return {id:id,file:file,ok:true,result:githubSearchResult};
     }
     if (file === '__central_wb_search__') {
       var wbSearchResult = sellmonitorGithubRefreshWbSearch_(ss, spec.payload || {});
