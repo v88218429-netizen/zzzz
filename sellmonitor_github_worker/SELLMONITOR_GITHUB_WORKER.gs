@@ -4,7 +4,7 @@
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.26',
+  VERSION: 'github-worker-1.3.27',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -456,89 +456,74 @@ function sellmonitorGithubMaintainSearchLane_(ss, q) {
 function sellmonitorGithubRefreshWbSearch_(ss, payload) {
   payload=payload||{};
   var auth=sellmonitorGithubResolveWbAuth_(ss), token=auth.token, tz=ss.getSpreadsheetTimeZone();
-  var prod=ss.getSheetByName('04_Товары');
-  var out=ss.getSheetByName('07_Поиск');
+  var prod=ss.getSheetByName('04_Товары'),out=ss.getSheetByName('07_Поиск');
   if(!prod||!out)throw new Error('WB search: 04_Товары/07_Поиск missing');
 
-  var catalog={}, ids=[];
+  var catalog={},activeIds=[],allIds=[];
   if(prod.getLastRow()>1){
     prod.getRange(2,1,prod.getLastRow()-1,21).getValues().forEach(function(r){
-      var nm=String(r[1]||'').trim();
-      if(!/^\\d+$/.test(nm))return;
+      var nm=String(r[1]||'').trim();if(!/^\d+$/.test(nm))return;
       var status=String(r[17]||'').trim().toLowerCase();
-      if(status==='архив')return;
-      catalog[nm]={title:String(r[2]||''),brand:String(r[3]||''),sellerArticle:String(r[20]||'')};
-      ids.push(Number(nm));
+      catalog[nm]={title:String(r[2]||r[20]||''),brand:String(r[3]||''),sellerArticle:String(r[20]||''),status:status};
+      allIds.push(Number(nm));if(status!=='архив')activeIds.push(Number(nm));
     });
   }
-  if(!ids.length)throw new Error('WB search: no active numeric nmIds');
+  var ids=activeIds.length?activeIds:allIds;
+  if(!ids.length)throw new Error('WB search: no numeric nmIds in current catalog');
 
-  var now=new Date(), endDate=new Date(now.getFullYear(),now.getMonth(),now.getDate()-1,12);
-  var startDate=new Date(endDate); startDate.setDate(startDate.getDate()-6);
-  var pastEnd=new Date(startDate); pastEnd.setDate(pastEnd.getDate()-1);
-  var pastStart=new Date(pastEnd); pastStart.setDate(pastStart.getDate()-6);
-  var from=String(payload.from||Utilities.formatDate(startDate,tz,'yyyy-MM-dd'));
-  var to=String(payload.to||Utilities.formatDate(endDate,tz,'yyyy-MM-dd'));
-  var pastFrom=String(payload.pastFrom||Utilities.formatDate(pastStart,tz,'yyyy-MM-dd'));
-  var pastTo=String(payload.pastTo||Utilities.formatDate(pastEnd,tz,'yyyy-MM-dd'));
-  var maxSku=Math.max(1,Math.min(ids.length,Number(payload.maxSku||ids.length)||ids.length));
-  ids=ids.slice(0,maxSku);
+  var now=new Date(),endDate=new Date(now.getFullYear(),now.getMonth(),now.getDate()-1,12),startDate=new Date(endDate);startDate.setDate(startDate.getDate()-6);
+  var pastEnd=new Date(startDate);pastEnd.setDate(pastEnd.getDate()-1);var pastStart=new Date(pastEnd);pastStart.setDate(pastStart.getDate()-6);
+  var from=String(payload.from||Utilities.formatDate(startDate,tz,'yyyy-MM-dd')),to=String(payload.to||Utilities.formatDate(endDate,tz,'yyyy-MM-dd')),
+      pastFrom=String(payload.pastFrom||Utilities.formatDate(pastStart,tz,'yyyy-MM-dd')),pastTo=String(payload.pastTo||Utilities.formatDate(pastEnd,tz,'yyyy-MM-dd'));
 
-  var rows=[], seen={}, calls=0;
-  for(var off=0;off<ids.length;off+=50){
-    var batch=ids.slice(off,off+50);
-    var body={
-      currentPeriod:{start:from,end:to},
-      pastPeriod:{start:pastFrom,end:pastTo},
-      nmIds:batch,
-      topOrderBy:'openCard',
-      includeSubstitutedSKUs:true,
-      includeSearchTexts:true,
-      orderBy:{field:'avgPosition',mode:'asc'},
-      limit:30
-    };
-    var res=sellmonitorGithubWbJson_(
-      'https://seller-analytics-api.wildberries.ru/api/v2/search-report/product/search-texts',
-      'post',token,body
-    );
-    calls++;
-    var items=res&&res.data&&Array.isArray(res.data.items)?res.data.items:[];
-    items.forEach(function(x){
-      var nm=String(x.nmId||'').trim(), q=String(x.text||'').trim();
-      if(!/^\\d+$/.test(nm)||!q)return;
-      var key=nm+'|'+q.toLowerCase();
-      var pos=x.avgPosition&&x.avgPosition.current!=null?Number(x.avgPosition.current):'';
-      var freq=x.frequency&&x.frequency.current!=null?Number(x.frequency.current):'';
-      if(pos!==''&&!isFinite(pos))pos='';
-      if(freq!==''&&!isFinite(freq))freq='';
-      var old=seen[key];
-      if(old&&Number(old[4]||0)>=Number(freq||0))return;
-      var zone=pos===''?'Н/Д':pos<=3?'ТОП-3':pos<=10?'ТОП-10':pos<=30?'11–30':pos<=100?'31–100':'>100';
-      var pri=pos!==''&&pos<=10?'УДЕРЖИВАТЬ':Number(freq||0)>=1000?'ВЫСОКИЙ · частотный запрос вне ТОП-10':Number(freq||0)>=300?'СРЕДНИЙ · есть потенциал роста':'НИЗКИЙ';
-      var c=catalog[nm]||{};
-      var r=[nm,String(x.name||c.title||''),q,pos,freq,'','',to,now,'','',zone,pri];
-      seen[key]=r;
-    });
+  var rows=[],seen={},calls=0,officialError='';
+  try {
+    for(var off=0;off<ids.length;off+=50){
+      var batch=ids.slice(off,off+50),body={currentPeriod:{start:from,end:to},pastPeriod:{start:pastFrom,end:pastTo},nmIds:batch,topOrderBy:'openCard',includeSubstitutedSKUs:true,includeSearchTexts:true,orderBy:{field:'avgPosition',mode:'asc'},limit:30};
+      var res=sellmonitorGithubWbJson_('https://seller-analytics-api.wildberries.ru/api/v2/search-report/product/search-texts','post',token,body);calls++;
+      var items=res&&res.data&&Array.isArray(res.data.items)?res.data.items:[];
+      items.forEach(function(x){
+        var nm=String(x.nmId||'').trim(),q=String(x.text||'').trim();if(!/^\d+$/.test(nm)||!q)return;
+        var pos=x.avgPosition&&x.avgPosition.current!=null?Number(x.avgPosition.current):'',freq=x.frequency&&x.frequency.current!=null?Number(x.frequency.current):'';
+        if(pos!==''&&!isFinite(pos))pos='';if(freq!==''&&!isFinite(freq))freq='';
+        var key=nm+'|'+q.toLowerCase(),old=seen[key];if(old&&Number(old[4]||0)>=Number(freq||0))return;
+        var zone=pos===''?'Н/Д':pos<=3?'ТОП-3':pos<=10?'ТОП-10':pos<=30?'11–30':pos<=100?'31–100':'>100',
+            pri=pos!==''&&pos<=10?'УДЕРЖИВАТЬ':Number(freq||0)>=1000?'ВЫСОКИЙ · частотный запрос вне ТОП-10':Number(freq||0)>=300?'СРЕДНИЙ · есть потенциал роста':'НИЗКИЙ',cc=catalog[nm]||{};
+        seen[key]=[nm,String(x.name||cc.title||''),q,pos,freq,'','',to,now,'','',zone,pri];
+      });
+      if(off+50<ids.length)Utilities.sleep(1200);
+    }
+  } catch(e) {
+    officialError=String(e&&e.message||e);
+    if(!/Jam subscription|Authorization error|HTTP 403/.test(officialError))throw e;
   }
+
+  var trust='FACTUAL_WB_ANALYTICS',source='WB Analytics /api/v2/search-report/product/search-texts';
+  if(officialError){
+    trust='FACTUAL_PUBLIC_SERP';source='WB public SERP';
+    function normalizeQuery(s){s=String(s||'').toLowerCase().replace(/ё/g,'е').replace(/[^0-9a-zа-я]+/g,' ');s=s.replace(/\b\d+(?:[.,]\d+)?\s*(?:шт|штук|кг|г|л|мл|м|см|мм)\b/g,' ').replace(/\b(?:набор|комплект|упаковка|уп)\b/g,' ');return s.split(/\s+/).filter(function(x){return x.length>1&&['для','из','на','по','с'].indexOf(x)<0;}).slice(0,7).join(' ').trim();}
+    function products_(o){if(!o||typeof o!=='object')return[];var a=[o.products,o.data&&o.data.products,o.data&&o.data.items,o.result&&o.result.products,o.result&&o.result.items];for(var i=0;i<a.length;i++)if(Array.isArray(a[i]))return a[i];return[];}
+    function pid_(o){var n=Number(o&&(o.id||o.nmId||o.nmID));return isFinite(n)&&n>0?n:0;}
+    function publicGet_(query,page){
+      var bases=['https://search.wb.ru/exactmatch/ru/common/v4/search','https://search.wb.ru/exactmatch/ru/common/v5/search','https://www.wildberries.ru/__internal/search/exactmatch/ru/common/v18/search'],last='';
+      var qs='?appType=1&curr=rub&dest=-1257786&query='+encodeURIComponent(query)+'&resultset=catalog&limit=100&page='+page+'&sort=popular&spp=30&suppressSpellcheck=false';
+      for(var bi=0;bi<bases.length;bi++){for(var at=0;at<3;at++){try{var rr=UrlFetchApp.fetch(bases[bi]+qs,{method:'get',muteHttpExceptions:true,followRedirects:true,headers:{Accept:'application/json,text/plain,*/*','User-Agent':'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/129 Safari/537.36',Referer:'https://www.wildberries.ru/'}}),code=rr.getResponseCode(),txt=rr.getContentText();if(code===200){try{return JSON.parse(txt||'{}');}catch(j){last='non-json';break;}}last='HTTP '+code;if((code===429||code>=500)&&at<2){Utilities.sleep(800*Math.pow(2,at));continue;}break;}catch(ex){last=String(ex&&ex.message||ex);if(at<2){Utilities.sleep(800*Math.pow(2,at));continue;}}}}throw new Error('PUBLIC_SERP_BLOCKED '+last);
+    }
+    var limit=Math.min(ids.length,Math.max(10,Math.min(60,Number(payload.publicMaxSku||60)||60))),publicIds=ids.slice(0,limit),queries={};
+    publicIds.forEach(function(n){var q=normalizeQuery((catalog[String(n)]||{}).title||'');if(q)(queries[q]||(queries[q]=[])).push(n);});
+    var qkeys=Object.keys(queries),publicCalls=0;
+    for(var qi=0;qi<qkeys.length;qi++){var q=qkeys[qi],targets=queries[q],found={};for(var page=1;page<=2;page++){var obj=publicGet_(q,page),ps=products_(obj);publicCalls++;if(!ps.length)break;for(var pi=0;pi<ps.length;pi++){var nm=pid_(ps[pi]);if(targets.indexOf(nm)>=0&&!found[nm])found[nm]={position:(page-1)*ps.length+pi+1,name:String(ps[pi].name||ps[pi].title||'')};}if(Object.keys(found).length===targets.length)break;Utilities.sleep(120);}Object.keys(found).forEach(function(nm){var x=found[nm],cc=catalog[nm]||{},pos=x.position,zone=pos<=3?'ТОП-3':pos<=10?'ТОП-10':pos<=30?'11–30':pos<=100?'31–100':'>100',pri=pos<=10?'УДЕРЖИВАТЬ':'PUBLIC SERP · контролировать';seen[nm+'|'+q.toLowerCase()]=[nm,x.name||cc.title||'',q,pos,'','','',to,now,'','',zone,pri];});if(qi<qkeys.length-1)Utilities.sleep(180);}
+    calls=publicCalls;
+    if(Object.keys(seen).length<3)throw new Error('PUBLIC_SERP_BLOCKED too few factual rows='+Object.keys(seen).length);
+  }
+
   Object.keys(seen).forEach(function(k){rows.push(seen[k]);});
   rows.sort(function(a,b){return Number(a[0])-Number(b[0])||Number(b[4]||0)-Number(a[4]||0)||Number(a[3]||9999)-Number(b[3]||9999);});
-
   var headers=['Артикул WB','Товар','Поисковый запрос','Позиция · SNAPSHOT','Частотность · SNAPSHOT','Конкуренция · SNAPSHOT','Товаров в выдаче · SNAPSHOT','Дата позиции · SNAPSHOT','Обновлено запроса · SNAPSHOT','Продажи товара rolling 30д · SNAPSHOT','Выручка товара rolling 30д, ₽ · SNAPSHOT','Зона позиции · расчёт из SNAPSHOT','Приоритет SEO · расчёт из SNAPSHOT'];
-  out.getRange(1,1,1,headers.length).setValues([headers]);
-  if(out.getMaxRows()>1)out.getRange(2,1,out.getMaxRows()-1,headers.length).clearContent();
-  if(rows.length){
-    if(rows.length+1>out.getMaxRows())out.insertRowsAfter(out.getMaxRows(),rows.length+1-out.getMaxRows());
-    out.getRange(2,1,rows.length,headers.length).setValues(rows);
-  }
-  out.setFrozenRows(1);
-  SpreadsheetApp.flush();
-  sellmonitorClientProperties_(ss.getId()).setProperty('SMC_WB_SEARCH_SNAPSHOT_AT_MS',String(Date.now()));
-  return {
-    ok:true,storeId:auth.storeId,clientId:auth.clientId,from:from,to:to,pastFrom:pastFrom,pastTo:pastTo,
-    skuCount:ids.length,apiCalls:calls,positionRows:rows.length,
-    source:'WB Analytics /api/v2/search-report/product/search-texts',
-    trustStatus:'FACTUAL_WB_ANALYTICS',secretsReturned:false
-  };
+  out.getRange(1,1,1,headers.length).setValues([headers]);if(out.getMaxRows()>1)out.getRange(2,1,out.getMaxRows()-1,headers.length).clearContent();
+  if(rows.length){if(rows.length+1>out.getMaxRows())out.insertRowsAfter(out.getMaxRows(),rows.length+1-out.getMaxRows());out.getRange(2,1,rows.length,headers.length).setValues(rows);}
+  out.setFrozenRows(1);SpreadsheetApp.flush();sellmonitorClientProperties_(ss.getId()).setProperty('SMC_WB_SEARCH_SNAPSHOT_AT_MS',String(Date.now()));
+  return{ok:true,storeId:auth.storeId,clientId:auth.clientId,from:from,to:to,pastFrom:pastFrom,pastTo:pastTo,skuCount:ids.length,apiCalls:calls,positionRows:rows.length,source:source,trustStatus:trust,officialError:officialError?officialError.slice(0,220):'',secretsReturned:false};
 }
 
 function sellmonitorGithubRefreshGithubSearch_(ss, payload) {
