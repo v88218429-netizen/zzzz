@@ -4,7 +4,7 @@
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.30',
+  VERSION: 'github-worker-1.3.31',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -1146,7 +1146,7 @@ function sellmonitorGithubCoreBacklog_(q, ss) {
       if(coverageGaps){count+=coverageGaps;if(files.indexOf('COVERAGE_GAP')<0)files.push('COVERAGE_GAP');}
     }
   }
-  return{count:count,files:files,coverageGaps:coverageGaps};
+  return{count:count,activeCount:Math.max(0,count-coverageGaps),files:files,coverageGaps:coverageGaps};
 }
 
 function sellmonitorGithubSyncCoreQc_(ss,storeId) {
@@ -1164,7 +1164,7 @@ function sellmonitorGithubSyncCoreQc_(ss,storeId) {
   setRow('RAW / normalized finance',trustedRows+' trusted SKU-day · last '+(last||'NO_DATA'),last?'OK · FACTUAL_INNER_ANALYTICS':'БЛОКЕР','Trusted daily finance only; partial periods are excluded.');
   var y=new Date();y.setDate(y.getDate()-1);var yk=Utilities.formatDate(y,tz,'yyyy-MM-dd');
   setRow('Последний trusted Inner день',last||'NO_DATA',last===yk?'OK':'ОЖИДАЕТ ЗАКРЫТИЯ INNER','Actual latest FACTUAL_INNER_ANALYTICS daily period.');
-  setRow('Активная очередь CORE',backlog.count,backlog.count?'В РАБОТЕ':'OK','Current factual/D-1/traffic backlog only; derived search/cluster excluded.');
+  setRow('Активная очередь CORE',backlog.activeCount+' active · '+backlog.coverageGaps+' coverage gaps',backlog.activeCount?'В РАБОТЕ':(backlog.coverageGaps?'ОЖИДАЕТ ИСТОЧНИК':'OK'),'Active factual jobs are distinct from source-lag coverage gaps; derived work waits only for active core.');
   if(ads)setRow('WB Ads factual source',Object.keys(adDays).length+' exact days · до '+(lastAds||'NO_DATA'),lastAds?'OK · FACTUAL_WB_ADS':'НЕТ ФАКТА','Official WB Promotion factual status.');
   return{ok:true,lastTrusted:last,lastAds:lastAds,coreBacklog:backlog.count};
 }
@@ -1217,8 +1217,8 @@ function sellmonitorGithubProcessClient_(spreadsheetId) {
   var operational = sellmonitorGithubEnsureOperationalHistory_(ss, q);
   var qcSync = sellmonitorGithubSyncCoreQc_(ss, String(sellmonitorGithubSetting_(ss,'ACTIVE_STORE_ID','')));
   var coreBacklog = sellmonitorGithubCoreBacklog_(q,ss);
-  var searchRefresh = coreBacklog.count ? {ok:true,queued:false,skipped:true,reason:'CORE_BACKLOG',count:coreBacklog.count} : sellmonitorGithubEnsureSearchRefresh_(ss, q);
-  var adsClusterRefresh = coreBacklog.count ? {ok:true,queued:false,skipped:true,reason:'CORE_BACKLOG',count:coreBacklog.count} : sellmonitorGithubEnsureAdsClusterRefresh_(ss, q);
+  var searchRefresh = coreBacklog.activeCount ? {ok:true,queued:false,skipped:true,reason:'ACTIVE_CORE_BACKLOG',count:coreBacklog.activeCount} : sellmonitorGithubEnsureSearchRefresh_(ss, q);
+  var adsClusterRefresh = coreBacklog.activeCount ? {ok:true,queued:false,skipped:true,reason:'ACTIVE_CORE_BACKLOG',count:coreBacklog.activeCount} : sellmonitorGithubEnsureAdsClusterRefresh_(ss, q);
 
   var processed = 0, last = null;
   while (processed < SMC_GH.MAX_COMMANDS_PER_CLIENT) {
