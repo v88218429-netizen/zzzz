@@ -107,6 +107,25 @@ def owner_dashboard(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def publish_runtime_search(cabinet: str, snapshot: dict[str, Any]) -> dict[str, Any]:
+    """Publish factual WB search rows for cabinets whose Sheets search layer is otherwise empty."""
+    url = (os.environ.get("GOOGLE_SHEETS_BRIDGE_URL") or "").strip()
+    key = (os.environ.get("GOOGLE_SHEETS_BRIDGE_KEY") or "").strip()
+    if not url or not key:
+        return {"ok": False, "error": "search bridge not configured"}
+    body = {
+        "token": key,
+        "action": "publish_search_positions",
+        "cabinet": cabinet,
+        "snapshot": snapshot or {},
+    }
+    with httpx.Client(timeout=httpx.Timeout(90.0, connect=10.0), follow_redirects=True) as client:
+        resp = client.post(url, json=body)
+        resp.raise_for_status()
+        result = resp.json()
+    return result if isinstance(result, dict) else {"ok": False, "error": "invalid search publish response"}
+
+
 def publish_private_dashboard(dashboard: dict[str, Any]) -> dict[str, Any]:
     url = (os.environ.get("GOOGLE_SHEETS_BRIDGE_URL") or "").strip()
     key = (os.environ.get("GOOGLE_SHEETS_BRIDGE_KEY") or "").strip()
@@ -274,6 +293,19 @@ async def run() -> int:
             cabinets[slug] = cab
             cabinet_snapshots[slug] = snap
 
+    search_publish: dict[str, Any] = {}
+    for slug in ("air", "hozyushka"):
+        search_agent = (cabinet_snapshots.get(slug) or {}).get("search_positions") or {}
+        position_snapshot = search_agent.get("positions") if isinstance(search_agent, dict) else None
+        if not isinstance(position_snapshot, dict):
+            search_publish[slug] = {"ok": True, "skipped": True, "reason": "no_search_positions_snapshot"}
+            continue
+        try:
+            search_publish[slug] = publish_runtime_search(slug, position_snapshot)
+        except Exception as exc:
+            search_publish[slug] = {"ok": False, "error": str(exc)}
+            source_errors.append({"stage": f"search.publish.{slug}", "error": str(exc)})
+
     q = query_manager(portfolio_snapshot, cabinet_snapshots.get("sanych") or {})
     healthy_cabs = sum(1 for c in cabinets.values() if c.get("wb_connected"))
     clean_cabs = sum(1 for c in cabinets.values() if c.get("status") == "ok")
@@ -288,6 +320,7 @@ async def run() -> int:
         "source_errors": source_errors,
         "portfolio": portfolio_snapshot,
         "query_manager": q,
+        "search_publish": search_publish,
         "cabinets": cabinets,
     }
     dashboard = owner_dashboard(payload)
@@ -321,6 +354,7 @@ async def run() -> int:
         "fresh_query_rows": (q.get("summary") or {}).get("fresh_query_rows"),
         "blocked_query_rows": (q.get("summary") or {}).get("blocked_query_rows"),
         "ready_query_actions": (q.get("summary") or {}).get("ready_query_actions"),
+        "search_publish": search_publish,
         "source_error_stages": [x.get("stage") for x in source_errors],
     }
     dump("health.json", public_health)

@@ -4,7 +4,7 @@
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.10',
+  VERSION: 'github-worker-1.3.11',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -1677,6 +1677,54 @@ function sellmonitorGithubPortfolioSnapshot_(mode) {
 }
 
 
+function sellmonitorGithubPublishRuntimeSearch_(cabinet, snapshot) {
+  var map = {
+    air: {spreadsheet_id:'1SmsoG8zKx3hbTtTzS-zLekTFiWEQN8eIwHOxXq-5RHo', store_id:'air_wb', name:'AIR'},
+    hozyushka: {spreadsheet_id:'1cVT_H_e8a519k_Gtph6fALWnBbtBrAQ2Jb_gFO3bM64', store_id:'hozyayushka_wb', name:'Хозяюшка'}
+  };
+  var cfg = map[String(cabinet || '').toLowerCase()];
+  if (!cfg) return {ok:true, skipped:true, reason:'cabinet_not_runtime_search_target'};
+  snapshot = snapshot || {};
+  var observedAt = String(snapshot.created_at || new Date().toISOString());
+  var data = snapshot.data && typeof snapshot.data === 'object' ? snapshot.data : {};
+  var rows = [];
+  Object.keys(data).forEach(function(k) {
+    var x = data[k] || {};
+    if (String(x.source || '') !== 'wb_search_report') return;
+    var nm = String(x.nm_id || x.nmId || '').trim();
+    var query = String(x.query || '').trim();
+    var pos = Number(x.position);
+    if (!/^\d+$/.test(nm) || !query || !isFinite(pos)) return;
+    rows.push([true,nm,'',query,'',pos,observedAt,'','','','','WB LIVE','','','','5',false,'WB runtime search_positions · factual']);
+  });
+  rows.sort(function(a,b){return Number(a[1])-Number(b[1]) || String(a[3]).localeCompare(String(b[3]));});
+  if (!rows.length) return {ok:true, skipped:true, reason:'wb_search_report_no_query_rows', cabinet:cabinet, observed_at:observedAt};
+
+  var ss=SpreadsheetApp.openById(cfg.spreadsheet_id);
+  var sh=ss.getSheetByName('07_Контроль_позиций');
+  if (!sh) sh=ss.insertSheet('07_Контроль_позиций');
+  if (sh.getMaxColumns()<18) sh.insertColumnsAfter(sh.getMaxColumns(),18-sh.getMaxColumns());
+  if (sh.getMaxRows()<rows.length+3) sh.insertRowsAfter(sh.getMaxRows(),rows.length+3-sh.getMaxRows());
+
+  sh.getRange(1,1,Math.max(3,sh.getMaxRows()),18).clearContent();
+  sh.getRange('A1:R1').merge().setValue('КОНТРОЛЬ ПОИСКОВЫХ ПОЗИЦИЙ · WB LIVE RUNTIME');
+  sh.getRange(2,1,1,18).setValues([[
+    'Обновление','обновлено '+Utilities.formatDate(new Date(),ss.getSpreadsheetTimeZone(),'dd.MM.yyyy HH:mm')+' · строк '+rows.length,
+    'Источник','WB Analytics runtime','Активных',rows.length,'','','','','','','','','','','',''
+  ]]);
+  sh.getRange(3,1,1,18).setValues([[
+    'Активен','nmId','Товар','Поисковый запрос','Частотность','Текущая позиция','Дата снимка',
+    'Рекомендуемая цель','Плановая позиция','Эффективная цель','Отклонение','Статус',
+    'Предыдущая позиция','Δ к прошлому','Дней вне цели','Порог алерта','Нужен алерт','Комментарий'
+  ]]);
+  sh.getRange(4,1,rows.length,18).setValues(rows);
+  sh.getRange(4,1,rows.length,1).insertCheckboxes();
+  sh.getRange(4,17,rows.length,1).insertCheckboxes();
+  sh.setFrozenRows(3);
+  SpreadsheetApp.flush();
+  return {ok:true,cabinet:cabinet,store_id:cfg.store_id,rows:rows.length,observed_at:observedAt,source:'wb_search_report'};
+}
+
 function sellmonitorGithubPublishDashboard_(dashboard) {
   dashboard = dashboard || {};
   var cc = SpreadsheetApp.openById(SMC_GH.CONTROL_CENTER_ID);
@@ -1866,6 +1914,9 @@ function doPost(e) {
       return sellmonitorGithubWebJson_(sellmonitorGithubPublishDashboard_(body.dashboard || {}));
     }
 
+    if (action === 'publish_search_positions') {
+      return sellmonitorGithubWebJson_(sellmonitorGithubPublishRuntimeSearch_(body.cabinet || '', body.snapshot || {}));
+    }
 
     if (action === 'all' || action === 'portfolio_snapshot') {
       return sellmonitorGithubWebJson_(sellmonitorGithubPortfolioSnapshot_('fast'));
