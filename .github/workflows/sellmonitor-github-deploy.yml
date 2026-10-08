@@ -24,6 +24,9 @@ jobs:
       SCRIPT_ID: "15tH3jwOa5hKJFahIyPX5AIXO7KRf1O4jusfDfPIdX6KeH_GqMUC71hNT"
       CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
       WEBHOOK_SECRET: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
+      WB_API_TOKEN_AP: ${{ secrets.WB_API_TOKEN_AP }}
+      WB_API_TOKEN_AA: ${{ secrets.WB_API_TOKEN_AA }}
+      WB_API_TOKEN_YV: ${{ secrets.WB_API_TOKEN_YV }}
       WEBAPP_DEPLOYMENT_ID: AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw
     steps:
       - uses: actions/checkout@v4
@@ -37,6 +40,9 @@ jobs:
           set -euo pipefail
           test -n "$CLASPRC_JSON"
           test -n "$WEBHOOK_SECRET"
+          test -n "$WB_API_TOKEN_AP"
+          test -n "$WB_API_TOKEN_AA"
+          test -n "$WB_API_TOKEN_YV"
           test -n "$WEBAPP_DEPLOYMENT_ID"
 
       - name: Install clasp and auth
@@ -147,6 +153,37 @@ jobs:
               "trigger_count": health.get("trigger_count"),
               "clients": health.get("clients") or [],
           }, ensure_ascii=False, indent=2))
+          PY
+
+      - name: Seed client WB tokens from GitHub Secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, urllib.request
+          url=f"https://script.google.com/macros/s/{os.environ['WEBAPP_DEPLOYMENT_ID']}/exec"
+          body={
+              "token": os.environ["WEBHOOK_SECRET"],
+              "action": "seed_wb_tokens",
+              "tokens": {
+                  "SANYCH": os.environ["WB_API_TOKEN_AP"],
+                  "AIR": os.environ["WB_API_TOKEN_AA"],
+                  "FBS_14I5XGBA9NIG": os.environ["WB_API_TOKEN_YV"],
+              },
+          }
+          req=urllib.request.Request(
+              url,
+              data=json.dumps(body).encode("utf-8"),
+              headers={"Content-Type":"application/json"},
+              method="POST",
+          )
+          with urllib.request.urlopen(req,timeout=120) as r:
+              obj=json.loads(r.read().decode("utf-8"))
+          assert obj.get("ok") is True, obj
+          result=obj.get("result") or {}
+          assert result.get("count")==3, result
+          assert set(result.get("seeded") or [])=={"SANYCH","AIR","FBS_14I5XGBA9NIG"}, result
+          print("WB_CLIENT_TOKENS_SEEDED=3")
           PY
 
       - name: Run one authenticated worker tick
