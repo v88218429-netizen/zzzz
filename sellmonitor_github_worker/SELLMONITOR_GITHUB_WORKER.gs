@@ -4,7 +4,7 @@
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.11',
+  VERSION: 'github-worker-1.3.12',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -1695,7 +1695,9 @@ function sellmonitorGithubPublishRuntimeSearch_(cabinet, snapshot) {
     var query = String(x.query || '').trim();
     var pos = Number(x.position);
     if (!/^\d+$/.test(nm) || !query || !isFinite(pos)) return;
-    rows.push([true,nm,'',query,'',pos,observedAt,'','','','','WB LIVE','','','','5',false,'WB runtime search_positions · factual']);
+    var freq = x.frequency == null || x.frequency === '' ? '' : Number(x.frequency);
+    if (freq !== '' && !isFinite(freq)) freq = '';
+    rows.push([true,nm,'',query,freq,pos,observedAt,'','','','','WB LIVE','','','','5',false,'WB runtime search_positions · factual']);
   });
   rows.sort(function(a,b){return Number(a[1])-Number(b[1]) || String(a[3]).localeCompare(String(b[3]));});
   if (!rows.length) return {ok:true, skipped:true, reason:'wb_search_report_no_query_rows', cabinet:cabinet, observed_at:observedAt};
