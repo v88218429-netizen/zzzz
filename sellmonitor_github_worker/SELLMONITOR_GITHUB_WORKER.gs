@@ -4,7 +4,7 @@
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.25',
+  VERSION: 'github-worker-1.3.26',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -593,7 +593,7 @@ function sellmonitorGithubEnsureSearchRefresh_(ss, q) {
   if (!legacy && storeId === 'sanych_wb') {
     return {ok:true,queued:false,storeId:storeId,source:'existing_sanych_search',reason:'Preserve proven Sanych search lane; GitHub snapshot lane targets AIR/Хозяюшка'};
   }
-  var snapshotFile=legacy?'search_snapshot_config_v235':'__central_github_search__';
+  var snapshotFile=legacy?'search_snapshot_config_v235':'__central_wb_search__';
 
   var hours=Math.max(1,Number(setting_('SEARCH_REFRESH_HOURS','6')) || 6);
   var lastMs=Number(props.getProperty('SMC_SEARCH_REFRESH_AT_MS') || 0);
@@ -1131,6 +1131,84 @@ function sellmonitorGithubEnsureAdsClusterRefresh_(ss, q) {
 }
 
 
+
+function sellmonitorGithubCoreBacklog_(q) {
+  var from=1200,to=Math.min(2023,q.getMaxRows()),now=Date.now(),count=0,files=[];
+  if(to<from)return{count:0,files:[]};
+  q.getRange(from,1,to-from+1,8).getValues().forEach(function(r){
+    var st=String(r[4]||'');
+    if(['PENDING','NEW','RUNNING','SCHEDULED'].indexOf(st)<0)return;
+    var due=r[1] instanceof Date?r[1].getTime():Date.parse(String(r[1]||''));
+    if(st==='SCHEDULED'&&isFinite(due)&&due>now)return;
+    var id=String(r[0]||''),spec={};try{spec=JSON.parse(String(r[3]||'{}'));}catch(e){}
+    var f=String(spec.file||'');
+    var critical=/^D1-/.test(id)||/^D1-GAP-/.test(id)||[
+      'daily_prevday_close_v268','daily_prevday_gate_v269','daily_prevday_gate_v312','d1_gap_watchdog_v310',
+      'mcp_inner_call_v183','inner_product_harvest_fast_v311','inner_harvest_to_raw_v217','finance_period_normalize_incremental_v227',
+      'inner_live_today_sync_v260','orders_live_fast_v261',
+      'traffic_refresh_enqueue_v256','traffic_refresh_gate_v257','traffic_daily_sync_v255','wb_ads_bulk_ingest_v167',
+      'rnp_finance_columns_fast_v307','rnp_latest_period_inner_sync_v224','rnp_period_headers_sync_v198','rnp_store_aggregate_v231',
+      'finance_daily_coverage_guard_v226','coverage_freshness_sync_v161','connection_status_sync_v192'
+    ].indexOf(f)>=0;
+    if(critical){count++;if(files.indexOf(f)<0)files.push(f);}
+  });
+  return{count:count,files:files};
+}
+
+function sellmonitorGithubSyncCoreQc_(ss,storeId) {
+  var qc=ss.getSheetByName('13_Контроль_качества'),fin=ss.getSheetByName('84_Финансы_периоды'),ads=ss.getSheetByName('84_Статус_реклама_WB'),q=ss.getSheetByName('97_Управление');
+  if(!qc||!fin||!q)return{ok:true,skipped:true};
+  var tz=ss.getSpreadsheetTimeZone();
+  function dk(v){if(v instanceof Date)return Utilities.formatDate(v,tz,'yyyy-MM-dd');var s=String(v||'');if(/^\d{4}-\d{2}-\d{2}/.test(s))return s.slice(0,10);var m=s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/);return m?m[3]+'-'+('0'+m[2]).slice(-2)+'-'+('0'+m[1]).slice(-2):'';}
+  var days={},n=Math.max(0,fin.getLastRow()-1);
+  if(n){var core=fin.getRange(2,1,n,7).getValues(),trust=fin.getRange(2,39,n,1).getDisplayValues();for(var i=0;i<n;i++){if(String(core[i][0]||'')!==storeId||String(trust[i][0]||'')!=='FACTUAL_INNER_ANALYTICS'||Number(core[i][5]||0)!==1)continue;var f=dk(core[i][3]),t=dk(core[i][4]),nm=String(core[i][6]||'');if(!f||!nm)continue;var nx=new Date(f+'T12:00:00');nx.setDate(nx.getDate()+1);if(dk(nx)!==t)continue;(days[f]||(days[f]={}))[nm]=1;}}
+  var dkeys=Object.keys(days).sort(),last=dkeys.length?dkeys[dkeys.length-1]:'',trustedRows=0;dkeys.forEach(function(d){trustedRows+=Object.keys(days[d]).length;});
+  var adDays={},lastAds='';if(ads&&ads.getLastRow()>1){ads.getRange(2,1,ads.getLastRow()-1,4).getValues().forEach(function(r){if(String(r[0]||'')!==storeId)return;var st=String(r[2]||''),d=dk(r[1]);if(d&&/ТОЧНО WB ADS/.test(st))adDays[d]=1;});var ak=Object.keys(adDays).sort();lastAds=ak.length?ak[ak.length-1]:'';}
+  var backlog=sellmonitorGithubCoreBacklog_(q);
+  var labels=qc.getRange(1,1,Math.max(1,qc.getLastRow()),1).getDisplayValues();
+  function setRow(label,value,status,meaning){for(var i=0;i<labels.length;i++){if(String(labels[i][0]||'')===label){qc.getRange(i+1,2,1,3).setValues([[value,status,meaning]]);return;}}}
+  setRow('RAW / normalized finance',trustedRows+' trusted SKU-day · last '+(last||'NO_DATA'),last?'OK · FACTUAL_INNER_ANALYTICS':'БЛОКЕР','Trusted daily finance only; partial periods are excluded.');
+  var y=new Date();y.setDate(y.getDate()-1);var yk=Utilities.formatDate(y,tz,'yyyy-MM-dd');
+  setRow('Последний trusted Inner день',last||'NO_DATA',last===yk?'OK':'ОЖИДАЕТ ЗАКРЫТИЯ INNER','Actual latest FACTUAL_INNER_ANALYTICS daily period.');
+  setRow('Активная очередь CORE',backlog.count,backlog.count?'В РАБОТЕ':'OK','Current factual/D-1/traffic backlog only; derived search/cluster excluded.');
+  if(ads)setRow('WB Ads factual source',Object.keys(adDays).length+' exact days · до '+(lastAds||'NO_DATA'),lastAds?'OK · FACTUAL_WB_ADS':'НЕТ ФАКТА','Official WB Promotion factual status.');
+  return{ok:true,lastTrusted:last,lastAds:lastAds,coreBacklog:backlog.count};
+}
+
+function sellmonitorGithubCaptureHourlyLive_(ss,storeId) {
+  var live=ss.getSheetByName('84_Live_сегодня');
+  if(!live||live.getLastRow()<2)return{ok:true,skipped:true,reason:'live sheet empty'};
+  var tz=ss.getSpreadsheetTimeZone(),now=new Date(),day=Utilities.formatDate(now,tz,'yyyy-MM-dd'),hour=Number(Utilities.formatDate(now,tz,'H')),hourKey=day+' '+('0'+hour).slice(-2)+':00';
+  function dk(v){if(v instanceof Date)return Utilities.formatDate(v,tz,'yyyy-MM-dd');var s=String(v||'');return /^\d{4}-\d{2}-\d{2}/.test(s)?s.slice(0,10):'';}
+  function N(v){if(v===''||v==null)return 0;var n=Number(v);return isFinite(n)?n:0;}
+  var a=live.getRange(2,1,live.getLastRow()-1,22).getValues(),agg={rows:0,orders:0,orderRub:0,paid:0,sales:0,returns:0,revenue:0,innerAd:0,prime:0,expenses:0,profit:0,payout:0,stock:0},trust={},fresh='';
+  a.forEach(function(r){if(String(r[1]||'')!==storeId||dk(r[0])!==day)return;agg.rows++;agg.orders+=N(r[4]);agg.orderRub+=N(r[5]);agg.paid+=N(r[6]);agg.sales+=N(r[7]);agg.returns+=N(r[8]);agg.revenue+=N(r[9]);agg.innerAd+=N(r[10]);agg.prime+=N(r[11]);agg.expenses+=N(r[12]);agg.profit+=N(r[13]);agg.payout+=N(r[16]);agg.stock+=N(r[17]);trust[String(r[19]||'')]=1;try{var j=JSON.parse(String(r[21]||'{}')),x=j&&j.accounts&&j.accounts[0]&&j.accounts[0].dataIsUpTo;if(x&&String(x)>fresh)fresh=String(x);}catch(e){}});
+  if(!agg.rows)return{ok:true,skipped:true,reason:'no current store live rows'};
+
+  var ad={available:false,views:0,clicks:0,spend:0,atbs:0,orders:0,shks:0,salesRub:0},ar=ss.getSheetByName('90_RAW_ads_traffic');
+  if(ar&&ar.getLastRow()>1){var av=ar.getRange(2,1,ar.getLastRow()-1,20).getValues(),ded={};av.forEach(function(r){if(String(r[0]||'')!==storeId||dk(r[1])!==day||String(r[16]||'')!=='FACTUAL_WB_ADS')return;var k=String(r[2]||'')+'|'+String(r[3]||''),tm=r[17] instanceof Date?r[17].getTime():Date.parse(String(r[17]||''));if(!ded[k]||tm>=ded[k].tm)ded[k]={tm:isFinite(tm)?tm:0,r:r};});Object.keys(ded).forEach(function(k){var r=ded[k].r;ad.available=true;ad.views+=N(r[5]);ad.clicks+=N(r[6]);ad.spend+=N(r[9]);ad.atbs+=N(r[10]);ad.orders+=N(r[11]);ad.shks+=N(r[13]);ad.salesRub+=N(r[14]);});}
+
+  var tr={available:false,open:0,cart:0,orders:0,organic:0},ts=ss.getSheetByName('84_Трафик_дни');
+  if(ts&&ts.getLastRow()>1){ts.getRange(2,1,ts.getLastRow()-1,20).getValues().forEach(function(r){if(String(r[0]||'')!==storeId||dk(r[1])!==day)return;var src=String(r[4]||''),zone=String(r[5]||'');if(src==='TOTAL'&&zone==='ALL_ENTRYPOINTS'){tr.available=true;tr.open+=N(r[8]);tr.cart+=N(r[9]);tr.orders+=N(r[10]);}else if(src==='ORGANIC_DERIVED'&&zone==='ALL_ENTRYPOINTS'){tr.organic+=N(r[8]);}});}
+
+  var headers=['hour_key','snapshot_at','date','hour','store_id','live_rows','orders_count','orders_sum_rub','paid_orders_count','sales_count','returns_count','revenue_rub','inner_ad_rub','prime_cost_rub','expenses_rub','profit_rub','payout_rub','stock_count_sum','live_trust','source_data_is_up_to','ads_fact_available','ads_views','ads_clicks','ads_spend_rub','ads_atbs','ads_orders','ads_shks','ads_sales_rub','traffic_fact_available','traffic_open','traffic_cart','traffic_orders','organic_clicks','baseline_same_hour_n','baseline_orders_median','baseline_revenue_median','orders_vs_baseline_pct','revenue_vs_baseline_pct','alert_level','alert_reason'];
+  var sh=sellmonitorGithubEnsureSheet_(ss,'84_Live_часы',headers),last=sh.getLastRow(),hist=last>1?sh.getRange(2,1,last-1,headers.length).getValues():[];
+  var same=[],prev=null,rowIndex=0;
+  hist.forEach(function(r,i){if(String(r[4]||'')!==storeId)return;if(String(r[0]||'')===hourKey)rowIndex=i+2;var rd=dk(r[2]),rh=Number(r[3]);if(rd<day&&rh===hour)same.push(r);if(rd===day&&rh===hour-1)prev=r;});
+  same=same.slice(-14);
+  function med(vals){vals=vals.filter(function(x){return isFinite(Number(x));}).map(Number).sort(function(a,b){return a-b;});if(!vals.length)return'';var m=Math.floor(vals.length/2);return vals.length%2?vals[m]:(vals[m-1]+vals[m])/2;}
+  var bOrd=med(same.map(function(r){return r[6];})),bRev=med(same.map(function(r){return r[11];})),op=bOrd!==''&&bOrd>0?(agg.orders/bOrd-1):'',rp=bRev!==''&&bRev>0?(agg.revenue/bRev-1):'',level=same.length?'OK':'BASELINE_PENDING',reasons=[];
+  if(prev&&N(prev[6])>agg.orders){level='DATA_ANOMALY';reasons.push('cumulative orders decreased vs previous hour');}
+  if(hour>=8&&same.length){if(bOrd>=5&&op!==''&&op<=-0.40){level='CRITICAL';reasons.push('orders '+Math.round(op*100)+'% vs same-hour median');}else if(bOrd>=5&&op!==''&&op<=-0.25&&level!=='CRITICAL'){level='WARNING';reasons.push('orders '+Math.round(op*100)+'% vs same-hour median');}if(bRev>=5000&&rp!==''&&rp<=-0.40){level='CRITICAL';reasons.push('revenue '+Math.round(rp*100)+'% vs same-hour median');}else if(bRev>=5000&&rp!==''&&rp<=-0.25&&level==='OK'){level='WARNING';reasons.push('revenue '+Math.round(rp*100)+'% vs same-hour median');}}
+  var row=[hourKey,now,new Date(day+'T12:00:00'),hour,storeId,agg.rows,agg.orders,agg.orderRub,agg.paid,agg.sales,agg.returns,agg.revenue,agg.innerAd,agg.prime,agg.expenses,agg.profit,agg.payout,agg.stock,Object.keys(trust).join(','),fresh,ad.available,ad.available?ad.views:'',ad.available?ad.clicks:'',ad.available?ad.spend:'',ad.available?ad.atbs:'',ad.available?ad.orders:'',ad.available?ad.shks:'',ad.available?ad.salesRub:'',tr.available,tr.available?tr.open:'',tr.available?tr.cart:'',tr.available?tr.orders:'',tr.available?tr.organic:'',same.length,bOrd,bRev,op,rp,level,reasons.join('; ')];
+  if(rowIndex)sh.getRange(rowIndex,1,1,row.length).setValues([row]);else sh.getRange(Math.max(2,sh.getLastRow()+1),1,1,row.length).setValues([row]);
+  sh.setFrozenRows(1);sh.getRange('B:B').setNumberFormat('dd.MM.yyyy HH:mm');sh.getRange('C:C').setNumberFormat('dd.MM.yyyy');sh.getRange('AK:AL').setNumberFormat('0.0%');
+
+  if(['WARNING','CRITICAL','DATA_ANOMALY'].indexOf(level)>=0){var ah=['alert_key','created_at','store_id','date','hour','level','reason','orders','revenue','ads_spend','baseline_n','ack'];var al=sellmonitorGithubEnsureSheet_(ss,'84_Live_алерты',ah),key=storeId+'|'+hourKey,found=0;if(al.getLastRow()>1){var keys=al.getRange(2,1,al.getLastRow()-1,1).getDisplayValues();for(var i=0;i<keys.length;i++)if(String(keys[i][0])===key){found=i+2;break;}}var rr=[key,now,storeId,new Date(day+'T12:00:00'),hour,level,reasons.join('; '),agg.orders,agg.revenue,ad.available?ad.spend:'',same.length,false];if(found)al.getRange(found,1,1,rr.length).setValues([rr]);else al.getRange(Math.max(2,al.getLastRow()+1),1,1,rr.length).setValues([rr]);}
+  SpreadsheetApp.flush();
+  return{ok:true,storeId:storeId,hourKey:hourKey,orders:agg.orders,revenue:agg.revenue,profit:agg.profit,adsFact:ad.available,trafficFact:tr.available,baselineN:same.length,alertLevel:level,alertReason:reasons.join('; ')};
+}
+
 function sellmonitorGithubProcessClient_(spreadsheetId) {
   var authState = sellmonitorGithubEnsureClientAuth_(spreadsheetId);
   var ss = SpreadsheetApp.openById(spreadsheetId);
@@ -1142,9 +1220,11 @@ function sellmonitorGithubProcessClient_(spreadsheetId) {
   var staleRepaired = sellmonitorGithubRepairStaleRunning_(q);
   var searchLane = sellmonitorGithubMaintainSearchLane_(ss, q);
   var coreRefresh = sellmonitorGithubEnsureCoreRefresh_(ss, q);
-  var searchRefresh = sellmonitorGithubEnsureSearchRefresh_(ss, q);
-  var adsClusterRefresh = sellmonitorGithubEnsureAdsClusterRefresh_(ss, q);
   var operational = sellmonitorGithubEnsureOperationalHistory_(ss, q);
+  var qcSync = sellmonitorGithubSyncCoreQc_(ss, String(sellmonitorGithubSetting_(ss,'ACTIVE_STORE_ID','')));
+  var coreBacklog = sellmonitorGithubCoreBacklog_(q);
+  var searchRefresh = coreBacklog.count ? {ok:true,queued:false,skipped:true,reason:'CORE_BACKLOG',count:coreBacklog.count} : sellmonitorGithubEnsureSearchRefresh_(ss, q);
+  var adsClusterRefresh = coreBacklog.count ? {ok:true,queued:false,skipped:true,reason:'CORE_BACKLOG',count:coreBacklog.count} : sellmonitorGithubEnsureAdsClusterRefresh_(ss, q);
 
   var processed = 0, last = null;
   while (processed < SMC_GH.MAX_COMMANDS_PER_CLIENT) {
@@ -1172,33 +1252,41 @@ function sellmonitorGithubProcessClient_(spreadsheetId) {
     ready = allOk && values.length > 0 && sellmonitorGithubRecentExactReady_(ss, 7);
   }
 
-  return {ok: true, spreadsheetId: spreadsheetId, auth: authState, processedCommands: processed, staleRepaired: staleRepaired, searchLane: searchLane, coreRefresh: coreRefresh, searchRefresh: searchRefresh, adsClusterRefresh: adsClusterRefresh, operational: operational, last: last, ready: ready};
+  return {ok: true, spreadsheetId: spreadsheetId, auth: authState, processedCommands: processed, staleRepaired: staleRepaired, searchLane: searchLane, coreRefresh: coreRefresh, operational: operational, qcSync: qcSync, coreBacklog: coreBacklog, searchRefresh: searchRefresh, adsClusterRefresh: adsClusterRefresh, last: last, ready: ready};
 }
 
 function sellmonitorGithubRepairStaleRunning_(q) {
   var from = 1200, to = Math.min(2023, q.getMaxRows());
   if (to < from) return 0;
   var vals = q.getRange(from, 1, to - from + 1, 8).getValues();
-  var now = new Date(), repaired = 0;
+  var now = new Date(), repaired = 0, retried = 0;
 
-  function limitMinutes_(file) {
-    file = String(file || '');
-    if (file === 'wb_ads_bulk_ingest_v167' || file === 'rnp_enrichment_sync_v305') return 20;
-    if ([
-      'mcp_inner_call_v183',
-      'inner_harvest_to_raw_v217',
-      'inner_product_harvest_fast_v311',
-      'finance_period_normalize_incremental_v227',
-      'rnp_store_aggregate_v231',
-      'rnp_latest_period_inner_sync_v224',
-      'calculator_full_sync_chunked_v211',
-      'search_intelligence_sync_v240',
-      'search_traffic_intelligence_v271',
-      'search_intelligence_qc_v242',
-      'traffic_daily_sync_v255'
-    ].indexOf(file) >= 0) return 8;
-    return 6;
-  }
+  // A new central tick owns the same ScriptLock as the previous tick. Therefore
+  // a pre-existing RUNNING row older than a short grace period cannot still be
+  // executing in the central worker; it is an orphan left by timeout/termination.
+  var retrySafe = {
+    mcp_inner_call_v183:1,
+    inner_product_harvest_fast_v311:1,
+    inner_harvest_to_raw_v217:1,
+    finance_period_normalize_incremental_v227:1,
+    inner_live_today_sync_v260:1,
+    orders_live_fast_v261:1,
+    traffic_daily_sync_v255:1,
+    wb_ads_bulk_ingest_v167:1,
+    rnp_enrichment_sync_v305:1,
+    rnp_snapshot_history_v304:1,
+    rnp_finance_columns_fast_v307:1,
+    rnp_latest_period_inner_sync_v224:1,
+    rnp_store_aggregate_v231:1,
+    search_position_monitor_sync_v238:1,
+    search_intelligence_sync_v240:1,
+    search_traffic_intelligence_v271:1,
+    search_intelligence_qc_v242:1,
+    wb_ads_cluster_intelligence_v1:1,
+    __central_github_search__:1,
+    __central_wb_search__:1,
+    __central_ads_clusters__:1
+  };
 
   for (var i = 0; i < vals.length; i++) {
     if (String(vals[i][4] || '') !== 'RUNNING') continue;
@@ -1208,17 +1296,25 @@ function sellmonitorGithubRepairStaleRunning_(q) {
     var started = vals[i][5] instanceof Date ? vals[i][5] :
       (vals[i][1] instanceof Date ? vals[i][1] : new Date(vals[i][5] || vals[i][1]));
     var age = started instanceof Date && !isNaN(started) ? (now.getTime() - started.getTime()) / 60000 : 999999;
-    var lim = limitMinutes_(file);
-    if (age < lim) continue;
+    if (age < 2) continue;
 
     var row = from + i;
-    q.getRange(row, 5).setValue('CANCELLED_STALE_WORKER');
-    q.getRange(row, 7).setValue(now);
-    q.getRange(row, 8).setValue('Central worker stale guard: ' + file + ' RUNNING ' + Math.round(age) + 'm >= ' + lim + 'm; task released for idempotent retry');
+    if (retrySafe[file]) {
+      q.getRange(row, 5, 1, 4).setValues([[
+        'PENDING','',new Date(),
+        'Recovered orphan RUNNING after '+Math.round(age)+'m; same canonical id requeued, no duplicate task.'
+      ]]);
+      retried++;
+    } else {
+      q.getRange(row, 5, 1, 4).setValues([[
+        'CANCELLED_INTERRUPTED_WORKER','',new Date(),
+        'Interrupted RUNNING recovered after '+Math.round(age)+'m; non-idempotent job not auto-replayed.'
+      ]]);
+    }
     repaired++;
   }
   if (repaired) SpreadsheetApp.flush();
-  return repaired;
+  return {repaired:repaired,retriedSameId:retried};
 }
 
 function sellmonitorGithubRecentExactReady_(ss, lookbackDays) {
@@ -1478,7 +1574,7 @@ function sellmonitorGithubEnsureOperationalHistory_(ss, q) {
 
   var enrAt = Number(props.getProperty('SMC_RNP_ENRICH_AT_MS') || 0);
   if ((!enrAt || now-enrAt >= 60*60000) && !active.rnp_enrichment_sync_v305) {
-    var er=queue_('RNP-ENRICH','rnp_enrichment_sync_v305',{storeId:storeId,sheetIndex:0,offset:0,chunkRows:500});
+    var er=queue_('RNP-ENRICH','rnp_enrichment_sync_v305',{storeId:storeId,sheetIndex:0,offset:0,chunkRows:150});
     if (er) { queued.enrichment=er; props.setProperty('SMC_RNP_ENRICH_AT_MS',String(now)); }
   }
 
@@ -1516,9 +1612,7 @@ function sellmonitorGithubNextPendingRow_(q) {
     if ([
       'inner_product_harvest_fast_v311',
       'inner_harvest_to_raw_v217',
-      'finance_period_normalize_incremental_v227',
-      'traffic_daily_sync_v255',
-      'wb_ads_bulk_ingest_v167'
+      'finance_period_normalize_incremental_v227'
     ].indexOf(file) >= 0) return 0;
 
     // P1: D-1 coordination + current operational facts + critical post steps.
@@ -1536,11 +1630,19 @@ function sellmonitorGithubNextPendingRow_(q) {
       'rnp_store_aggregate_v231',
       'finance_daily_coverage_guard_v226',
       'coverage_freshness_sync_v161',
-      'connection_status_sync_v192',
-      'rnp_snapshot_history_v304',
-      'rnp_enrichment_sync_v305'
+      'connection_status_sync_v192'
     ].indexOf(file) >= 0) return 1;
     if (/^orders_/.test(file) || file === 'k2_inventory_pool_sync_v246') return 1;
+
+    // P2: current factual advertising/traffic + snapshot history.
+    if (['traffic_daily_sync_v255','wb_ads_bulk_ingest_v167','traffic_refresh_enqueue_v256','traffic_refresh_gate_v257','rnp_snapshot_history_v304'].indexOf(file) >= 0) return 2;
+    if (/^(ads_|calculator_ads_|quality_ads_|traffic_|wb_ads_)/.test(file) && file !== 'wb_ads_cluster_intelligence_v1') return 2;
+
+    // P3: historical enrichment is useful but must never delay live/D-1.
+    if (file === 'rnp_enrichment_sync_v305') return 3;
+    if (file === 'store_autopilot_v207') return 3;
+
+    // P5: search snapshots/intelligence are derived monitoring work.
     if ([
       '__central_github_search__',
       '__central_wb_search__',
@@ -1549,12 +1651,10 @@ function sellmonitorGithubNextPendingRow_(q) {
       'search_intelligence_sync_v240',
       'search_traffic_intelligence_v271',
       'search_intelligence_qc_v242'
-    ].indexOf(file) >= 0) return 1;
+    ].indexOf(file) >= 0) return 5;
 
-    // P2: ads / traffic and the autopilot that schedules live refreshes.
-    if (file === 'store_autopilot_v207') return 2;
-    // P2: ads / traffic are operational facts and must not sit behind backfills.
-    if (file === 'wb_ads_cluster_intelligence_v1' || /^(ads_|calculator_ads_|quality_ads_|traffic_|wb_ads_)/.test(file)) return 2;
+    // P6: ads-cluster/competitor/cosmetic derived work stays last.
+    if (file === 'wb_ads_cluster_intelligence_v1' || file === '__central_ads_clusters__') return 6;
 
     // P4: orchestration/backfill that can create more work.
     if ([
@@ -1704,6 +1804,9 @@ function sellmonitorGithubExecuteQueueRow_(ss, q, codeSheet, row) {
     var __SM_PAYLOAD__ = payload;
     var wrapped = '(function(__payload){\n' + source + '\n;return ' + entrypoint + '(__payload);\n})(__SM_PAYLOAD__)';
     var result = eval(wrapped);
+    if (file === 'inner_live_today_sync_v260' && result && result.ok === true) {
+      result.hourly = sellmonitorGithubCaptureHourlyLive_(ss, String((spec.payload || {}).storeId || sellmonitorGithubSetting_(ss,'ACTIVE_STORE_ID','')));
+    }
     if (file === 'inner_sku_rnp_layout_v300' && result && result.ok === true) {
       result.innerStocks = sellmonitorGithubSyncStocksFromInner_(ss);
     }
