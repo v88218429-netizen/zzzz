@@ -1,10 +1,10 @@
 /**
- * Sellmonitor GitHub Central Worker v1.3.18
+ * Sellmonitor GitHub Central Worker v1.3.19
  * GitHub is source-of-truth/scheduler. This Apps Script project is only
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.18',
+  VERSION: 'github-worker-1.3.19',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -2698,12 +2698,35 @@ function doGet(e) {
   }
 }
 
+function sellmonitorGithubSeedWbTokens_(payload) {
+  payload = payload || {};
+  var tokens = payload.tokens || {};
+  var specs = [
+    {sheetId:'1SmsoG8zKx3hbTtTzS-zLekTFiWEQN8eIwHOxXq-5RHo', clientId:'AIR', key:'FBS_CLIENT__AIR__WB_API_TOKEN', token:String(tokens.AIR || '')},
+    {sheetId:'1cVT_H_e8a519k_Gtph6fALWnBbtBrAQ2Jb_gFO3bM64', clientId:'FBS_14I5XGBA9NIG', key:'FBS_CLIENT__FBS_14I5XGBA9NIG__WB_API_TOKEN', token:String(tokens.FBS_14I5XGBA9NIG || '')},
+    {sheetId:'1-aBDZ7c5xfmVwwiNmUi9-DyfIANXmfiM5-Ti2_zg4zI', clientId:'SANYCH', key:'FBS_CLIENT__SANYCH__WB_API_TOKEN', token:String(tokens.SANYCH || '')}
+  ];
+  var seeded = [];
+  specs.forEach(function(x) {
+    if (!x.token) return;
+    if (x.token.length < 20) throw new Error('WB token payload invalid for ' + x.clientId);
+    sellmonitorClientProperties_(x.sheetId).setProperty(x.key, x.token);
+    seeded.push(x.clientId);
+  });
+  return {ok:true, action:'seed_wb_tokens', seeded:seeded, count:seeded.length, secretsReturned:false};
+}
+
+
 function doPost(e) {
   try {
     var body = JSON.parse((e && e.postData && e.postData.contents) || '{}');
     var action = String(body.action || 'tick');
 
     sellmonitorGithubWebAuth_(body.token || body.key);
+
+    if (action === 'seed_wb_tokens') {
+      return sellmonitorGithubWebJson_(sellmonitorGithubSeedWbTokens_(body));
+    }
 
     if (action === 'health') {
       return sellmonitorGithubWebJson_({
