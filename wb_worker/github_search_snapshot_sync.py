@@ -11,22 +11,30 @@ def req(url, token, payload=None, params=None):
     if params:
         url += ("&" if "?" in url else "?")+urllib.parse.urlencode(params)
     data=None if payload is None else json.dumps(payload,ensure_ascii=False).encode()
-    headers={"Accept":"application/json","Authorization":token}
-    if data is not None: headers["Content-Type"]="application/json"
+    base_headers={"Accept":"application/json"}
+    if data is not None: base_headers["Content-Type"]="application/json"
     last=None
-    for n in range(6):
-        try:
-            r=urllib.request.Request(url,data=data,headers=headers,method="POST" if data is not None else "GET")
-            with urllib.request.urlopen(r,timeout=120) as h:
-                raw=h.read().decode()
-                return json.loads(raw) if raw else {}
-        except urllib.error.HTTPError as e:
-            last=e
-            if e.code==429 or 500<=e.code<=599:
-                time.sleep(min(45,3*(2**n))); continue
-            raise
-        except (urllib.error.URLError,TimeoutError) as e:
-            last=e; time.sleep(min(30,2*(2**n)))
+    for auth in (token, f"Bearer {token}"):
+        headers=dict(base_headers)
+        headers["Authorization"]=auth
+        for n in range(6):
+            try:
+                r=urllib.request.Request(url,data=data,headers=headers,method="POST" if data is not None else "GET")
+                with urllib.request.urlopen(r,timeout=120) as h:
+                    raw=h.read().decode()
+                    return json.loads(raw) if raw else {}
+            except urllib.error.HTTPError as e:
+                last=e
+                if e.code in (401,403):
+                    detail=e.read().decode("utf-8",errors="replace")[:500]
+                    last=RuntimeError(f"HTTP {e.code}: {detail}")
+                    break
+                if e.code==429 or 500<=e.code<=599:
+                    time.sleep(min(45,3*(2**n))); continue
+                detail=e.read().decode("utf-8",errors="replace")[:500]
+                raise RuntimeError(f"HTTP {e.code}: {detail}") from e
+            except (urllib.error.URLError,TimeoutError) as e:
+                last=e; time.sleep(min(30,2*(2**n)))
     raise RuntimeError(f"request failed: {last}")
 
 def nm_ids(token):
@@ -80,6 +88,7 @@ def main():
         if not token: raise RuntimeError(f"{env} missing")
         ids=nm_ids(token)
         if not ids: raise RuntimeError(f"{name}: no nmIds")
+        print(f"{name}: discovered {len(ids)} nmIds")
         snap=snapshot(token,ids)
         (out/f"{cabinet}.json").write_text(json.dumps(snap,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
         manifest[cabinet]={"name":name,"nm_ids":len(ids),"query_rows":len(snap["data"]),"period_end":snap["period_end"],"created_at":snap["created_at"]}
