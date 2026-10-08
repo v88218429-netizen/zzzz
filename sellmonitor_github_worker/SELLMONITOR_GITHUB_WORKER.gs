@@ -4,7 +4,7 @@
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.19',
+  VERSION: 'github-worker-1.3.20',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -2487,29 +2487,47 @@ function sellmonitorGithubPublishRuntimeSearch_(cabinet, snapshot) {
   if (!cfg) return {ok:true, skipped:true, reason:'cabinet_not_runtime_search_target'};
   snapshot = snapshot || {};
   var observedAt = String(snapshot.created_at || new Date().toISOString());
+  var periodEnd = String(snapshot.period_end || observedAt.slice(0,10));
   var data = snapshot.data && typeof snapshot.data === 'object' ? snapshot.data : {};
-  var rows = [];
+  var rows = [], searchRows = [];
   Object.keys(data).forEach(function(k) {
     var x = data[k] || {};
     if (String(x.source || '') !== 'wb_search_report') return;
     var nm = String(x.nm_id || x.nmId || '').trim();
+    var title = String(x.name || x.title || '').trim();
     var query = String(x.query || '').trim();
     var pos = Number(x.position);
     if (!/^\d+$/.test(nm) || !query || !isFinite(pos)) return;
     var freq = x.frequency == null || x.frequency === '' ? '' : Number(x.frequency);
     if (freq !== '' && !isFinite(freq)) freq = '';
-    rows.push([true,nm,'',query,freq,pos,observedAt,'','','','','WB LIVE','','','','5',false,'WB runtime search_positions · factual']);
+    var zone = pos <= 3 ? 'ТОП-3' : pos <= 10 ? 'ТОП-10' : pos <= 30 ? '11–30' : pos <= 100 ? '31–100' : '>100';
+    var pri = pos <= 10 ? 'УДЕРЖИВАТЬ' : Number(freq || 0) >= 1000 ? 'ВЫСОКИЙ · частотный запрос вне ТОП-10' : Number(freq || 0) >= 300 ? 'СРЕДНИЙ · есть потенциал роста' : 'НИЗКИЙ';
+    searchRows.push([nm,title,query,pos,freq,'','',periodEnd,observedAt,'','',zone,pri]);
+    rows.push([true,nm,title,query,freq,pos,observedAt,'','','','','WB LIVE','','','','5',false,'WB runtime search_positions · factual']);
   });
+  searchRows.sort(function(a,b){return Number(a[0])-Number(b[0]) || Number(b[4]||0)-Number(a[4]||0) || Number(a[3])-Number(b[3]);});
   rows.sort(function(a,b){return Number(a[1])-Number(b[1]) || String(a[3]).localeCompare(String(b[3]));});
   if (!rows.length) return {ok:true, skipped:true, reason:'wb_search_report_no_query_rows', cabinet:cabinet, observed_at:observedAt};
 
   var ss=SpreadsheetApp.openById(cfg.spreadsheet_id);
+
+  var search=ss.getSheetByName('07_Поиск');
+  if (!search) search=ss.insertSheet('07_Поиск');
+  var searchHeaders=['Артикул WB','Товар','Поисковый запрос','Позиция · SNAPSHOT','Частотность · SNAPSHOT','Конкуренция · SNAPSHOT','Товаров в выдаче · SNAPSHOT','Дата позиции · SNAPSHOT','Обновлено запроса · SNAPSHOT','Продажи товара rolling 30д · SNAPSHOT','Выручка товара rolling 30д, ₽ · SNAPSHOT','Зона позиции · расчёт из SNAPSHOT','Приоритет SEO · расчёт из SNAPSHOT'];
+  if (search.getMaxColumns()<searchHeaders.length) search.insertColumnsAfter(search.getMaxColumns(),searchHeaders.length-search.getMaxColumns());
+  if (search.getMaxRows()<searchRows.length+1) search.insertRowsAfter(search.getMaxRows(),searchRows.length+1-search.getMaxRows());
+  search.getRange(1,1,1,searchHeaders.length).setValues([searchHeaders]);
+  if (search.getMaxRows()>1) search.getRange(2,1,search.getMaxRows()-1,searchHeaders.length).clearContent();
+  search.getRange(2,1,searchRows.length,searchHeaders.length).setValues(searchRows);
+  search.setFrozenRows(1);
+
   var sh=ss.getSheetByName('07_Контроль_позиций');
   if (!sh) sh=ss.insertSheet('07_Контроль_позиций');
   if (sh.getMaxColumns()<18) sh.insertColumnsAfter(sh.getMaxColumns(),18-sh.getMaxColumns());
   if (sh.getMaxRows()<rows.length+3) sh.insertRowsAfter(sh.getMaxRows(),rows.length+3-sh.getMaxRows());
 
   sh.getRange(1,1,Math.max(3,sh.getMaxRows()),18).clearContent();
+  sh.getRange('A1:R1').breakApart();
   sh.getRange('A1:R1').merge().setValue('КОНТРОЛЬ ПОИСКОВЫХ ПОЗИЦИЙ · WB LIVE RUNTIME');
   sh.getRange(2,1,1,18).setValues([[
     'Обновление','обновлено '+Utilities.formatDate(new Date(),ss.getSpreadsheetTimeZone(),'dd.MM.yyyy HH:mm')+' · строк '+rows.length,
@@ -2524,8 +2542,17 @@ function sellmonitorGithubPublishRuntimeSearch_(cabinet, snapshot) {
   sh.getRange(4,1,rows.length,1).insertCheckboxes();
   sh.getRange(4,17,rows.length,1).insertCheckboxes();
   sh.setFrozenRows(3);
+
+  var props=sellmonitorClientProperties_(ss.getId());
+  props.setProperty('SMC_WB_SEARCH_SNAPSHOT_AT_MS',String(Date.now()));
+  var q=ss.getSheetByName('97_Управление');
+  var chained=q ? sellmonitorGithubChainSearchMonitor_(ss,q,cfg.store_id) : {ok:false,queued:false,reason:'97_Управление missing'};
   SpreadsheetApp.flush();
-  return {ok:true,cabinet:cabinet,store_id:cfg.store_id,rows:rows.length,observed_at:observedAt,source:'wb_search_report'};
+  return {
+    ok:true,cabinet:cabinet,store_id:cfg.store_id,rows:rows.length,search_rows:searchRows.length,
+    observed_at:observedAt,period_end:periodEnd,source:'wb_search_report',
+    trust_status:'FACTUAL_WB_ANALYTICS',chained_monitor:chained,secretsReturned:false
+  };
 }
 
 function sellmonitorGithubPublishDashboard_(dashboard) {
