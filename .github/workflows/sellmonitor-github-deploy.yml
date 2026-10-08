@@ -179,10 +179,25 @@ jobs:
           )
           with urllib.request.urlopen(req,timeout=120) as r:
               obj=json.loads(r.read().decode("utf-8"))
-          assert obj.get("ok") is True, obj
           result=obj.get("result") or {}
-          assert result.get("count")==3, result
-          assert set(result.get("seeded") or [])=={"SANYCH","AIR","FBS_14I5XGBA9NIG"}, result
+          expected={"SANYCH","AIR","FBS_14I5XGBA9NIG"}
+          seeded=result.get("seeded") or []
+          safe_seeded=sorted(x for x in seeded if isinstance(x,str) and x in expected)
+          summary={
+              "ok": obj.get("ok") is True,
+              "action": obj.get("action"),
+              "result_ok": result.get("ok") is True,
+              "count": result.get("count"),
+              "expected_clients_seeded": len(set(safe_seeded)),
+              "error_present": bool(obj.get("error")),
+          }
+          print("WB_CLIENT_TOKEN_SEED_SUMMARY="+json.dumps(summary,sort_keys=True))
+          if not (
+              summary["ok"] and summary["action"]=="seed_wb_tokens"
+              and summary["result_ok"] and summary["count"]==3
+              and summary["expected_clients_seeded"]==3
+          ):
+              raise SystemExit("WB_CLIENT_TOKENS_SEED_ACCEPTANCE_FAILED")
           print("WB_CLIENT_TOKENS_SEEDED=3")
           PY
 
