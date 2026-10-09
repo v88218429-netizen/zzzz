@@ -69,6 +69,9 @@ def _publish() -> None:
         result = response.json()
     if not isinstance(result, dict) or result.get("ok") is not True or result.get("action") != "publish_wb_traffic":
         raise RuntimeError("Google Sheets bridge rejected traffic publication")
+    quality = result.get("quality") or {}
+    if quality.get("written") != 3:
+        raise RuntimeError("Traffic quality status row-count mismatch")
     counts = result.get("datasets") or {}
     for name, expected in (("ads", len(ads)), ("funnel", len(funnel)),
                            ("ads_poll", len(ads_poll)), ("funnel_poll", len(funnel_poll))):
