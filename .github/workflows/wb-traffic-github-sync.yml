@@ -86,7 +86,7 @@ jobs:
             -in "$RUNNER_TEMP/traffic.tar.gz" \
             -out "$RUNNER_TEMP/wb-traffic-publish/state/traffic.tar.gz.enc"
           python - <<'PY'
-          import json, os, pathlib
+          import json, os, pathlib, re
           root=pathlib.Path(os.environ['DATA_DIR'])/'traffic'
           status_path=root/'status.json'
           status=json.loads(status_path.read_text(encoding='utf-8')) if status_path.exists() else {}
@@ -100,6 +100,15 @@ jobs:
               f"- Advertising window: {status.get('period','unknown')}",
               f"- Funnel window: {status.get('funnel_period','unknown')}",
           ]
+          if status.get('error'):
+              safe_error=re.sub(r'\\b\\d{6,}\\b', '[id]', str(status['error']))[:180]
+              lines.append(f"- Collector error: {safe_error}")
+          for shop, detail in sorted((status.get('shops') or {}).items()):
+              state='OK' if detail.get('ok') else 'FAILED'
+              lines.append(f"- {shop}: {state}")
+              for source, error in sorted((detail.get('errors') or {}).items()):
+                  safe_error=re.sub(r'\\b\\d{6,}\\b', '[id]', str(error))[:180]
+                  lines.append(f"  - {source}: {safe_error}")
           (pathlib.Path(os.environ['RUNNER_TEMP'])/'wb-traffic-publish'/'README.md').write_text(
               '\n'.join(lines)+'\n', encoding='utf-8')
           PY
