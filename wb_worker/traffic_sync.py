@@ -19,10 +19,13 @@ PROMO = "https://advert-api.wildberries.ru"
 ANALYTICS = "https://seller-analytics-api.wildberries.ru"
 COLUMNS = ["shop", "date", "advert_id", "nm_id", "views", "clicks", "atbs", "orders", "spend_rub", "order_sum_rub", "source", "quality", "seller_article"]
 FUNNEL_COLUMNS = ["shop", "date", "nm_id", "vendor_code", "open_count", "cart_count", "order_count", "order_sum_rub", "source"]
+ADS_POLL_COLUMNS = ["shop", "observed_at", "date", "campaign_sku_rows", "campaigns_with_rows", "views", "clicks", "cart_adds", "orders", "spend_rub", "order_sum_rub", "ctr", "cpc_rub", "drr", "roas", "source", "measurement_grain"]
+FUNNEL_POLL_COLUMNS = ["shop", "observed_at", "date", "sku_rows", "open_count", "cart_count", "order_count", "order_sum_rub", "open_to_cart", "cart_to_order", "open_to_order", "source", "measurement_grain"]
+POLL_GRAIN = "DAILY_CUMULATIVE_OBSERVED_AT_POLL"
 PRICES = "https://discounts-prices-api.wildberries.ru"
 FULLSTATS_DAYS = 31
 FUNNEL_BATCH_SIZE = 20
-INTERVAL = max(60, int(os.environ.get("TRAFFIC_SYNC_INTERVAL_MIN", "360")))
+INTERVAL = max(60, int(os.environ.get("TRAFFIC_SYNC_INTERVAL_MIN", "60")))
 _last_fullstats = 0.0
 
 
@@ -159,6 +162,42 @@ def _funnel_rows(shop, payload):
     return rows
 
 
+def _number_sum(rows, index):
+    return sum(float(row[index] or 0) for row in rows)
+
+
+def _ratio(numerator, denominator):
+    return round(numerator / denominator, 6) if denominator else ""
+
+
+def _current_day_poll_rows(now, day, ad_rows, funnel_rows, successful_ads, successful_funnels):
+    observed_at = now.isoformat()
+    ads = []
+    funnel = []
+    for shop in SHOPS:
+        if shop in successful_ads:
+            day_rows = [r for r in ad_rows if r[0] == shop and r[1] == day]
+            views, clicks = _number_sum(day_rows, 4), _number_sum(day_rows, 5)
+            atbs, orders = _number_sum(day_rows, 6), _number_sum(day_rows, 7)
+            spend, revenue = _number_sum(day_rows, 8), _number_sum(day_rows, 9)
+            campaigns = len({str(r[2]) for r in day_rows})
+            ads.append([shop, observed_at, day, len(day_rows), campaigns, views, clicks, atbs,
+                        orders, spend, revenue, _ratio(clicks, views), _ratio(spend, clicks),
+                        _ratio(spend, revenue), _ratio(revenue, spend), "WB /adv/v3/fullstats", POLL_GRAIN])
+        if shop in successful_funnels:
+            day_rows = [r for r in funnel_rows if r[0] == shop and r[1] == day]
+            # If today's date is absent, keep the snapshot unknown rather than
+            # turning a missing day into zero activity.
+            if not day_rows:
+                continue
+            opens, carts = _number_sum(day_rows, 4), _number_sum(day_rows, 5)
+            orders, revenue = _number_sum(day_rows, 6), _number_sum(day_rows, 7)
+            funnel.append([shop, observed_at, day, len({str(r[2]) for r in day_rows}), opens,
+                           carts, orders, revenue, _ratio(carts, opens), _ratio(orders, carts),
+                           _ratio(orders, opens), "WB Analytics products/history", POLL_GRAIN])
+    return ads, funnel
+
+
 async def sync_once():
     global _last_fullstats
     now = datetime.now(ZoneInfo("Europe/Moscow"))
@@ -269,7 +308,15 @@ async def sync_once():
                   "advertising_window_days": FULLSTATS_DAYS,
                   "funnel_window_days": 7,
                   "history_policy": "upsert; retain collected rows outside rolling source windows"})
-    status["finishedAt"] = datetime.now(ZoneInfo("Europe/Moscow")).isoformat()
+    finished_at = datetime.now(ZoneInfo("Europe/Moscow"))
+    status["finishedAt"] = finished_at.isoformat()
+    ad_poll_rows, funnel_poll_rows = _current_day_poll_rows(
+        finished_at, end, ad_rows, funnel_rows, successful_ads, successful_funnels
+    )
+    _atomic_csv(DATA_DIR / "ads_poll_snapshot.csv", ADS_POLL_COLUMNS, ad_poll_rows)
+    _atomic_csv(DATA_DIR / "funnel_poll_snapshot.csv", FUNNEL_POLL_COLUMNS, funnel_poll_rows)
+    status["ads_poll_rows"] = len(ad_poll_rows)
+    status["funnel_poll_rows"] = len(funnel_poll_rows)
     status["ok"] = all(s["ok"] for s in status["shops"].values())
     _atomic_json(DATA_DIR / "status.json", status)
     print("WB_TRAFFIC_SYNC_DONE " + json.dumps(status, ensure_ascii=False), flush=True)

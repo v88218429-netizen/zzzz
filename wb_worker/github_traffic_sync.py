@@ -9,7 +9,8 @@ from pathlib import Path
 
 import httpx
 
-from traffic_sync import COLUMNS, DATA_DIR, FUNNEL_COLUMNS, sync_once
+from traffic_sync import (ADS_POLL_COLUMNS, COLUMNS, DATA_DIR, FUNNEL_COLUMNS,
+                          FUNNEL_POLL_COLUMNS, sync_once)
 
 BRIDGE_URL = "https://script.google.com/macros/s/AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw/exec"
 MAX_REQUEST_BYTES = 15_000_000
@@ -42,6 +43,8 @@ def _publish() -> None:
 
     ads = _read_rows(DATA_DIR / "campaign_sku_day.csv", COLUMNS)
     funnel = _read_rows(DATA_DIR / "funnel_sku_day.csv", FUNNEL_COLUMNS)
+    ads_poll = _read_rows(DATA_DIR / "ads_poll_snapshot.csv", ADS_POLL_COLUMNS)
+    funnel_poll = _read_rows(DATA_DIR / "funnel_poll_snapshot.csv", FUNNEL_POLL_COLUMNS)
     key = os.environ.get("GOOGLE_SHEETS_BRIDGE_KEY", "").strip()
     if not key:
         raise RuntimeError("Google Sheets bridge key is not configured")
@@ -49,7 +52,12 @@ def _publish() -> None:
         "token": key,
         "action": "publish_wb_traffic",
         "sync_status": status,
-        "datasets": {"ads": ads, "funnel": funnel},
+        "datasets": {
+            "ads": ads,
+            "funnel": funnel,
+            "ads_poll": ads_poll,
+            "funnel_poll": funnel_poll,
+        },
     }
     encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     if len(encoded) > MAX_REQUEST_BYTES:
@@ -62,7 +70,8 @@ def _publish() -> None:
     if not isinstance(result, dict) or result.get("ok") is not True or result.get("action") != "publish_wb_traffic":
         raise RuntimeError("Google Sheets bridge rejected traffic publication")
     counts = result.get("datasets") or {}
-    for name, expected in (("ads", len(ads)), ("funnel", len(funnel))):
+    for name, expected in (("ads", len(ads)), ("funnel", len(funnel)),
+                           ("ads_poll", len(ads_poll)), ("funnel_poll", len(funnel_poll))):
         item = counts.get(name) or {}
         if expected and (item.get("written") != expected or item.get("skipped")):
             raise RuntimeError(f"Google Sheets bridge row-count mismatch for {name}")
@@ -75,6 +84,10 @@ def _publish() -> None:
         "ads_max_date": counts.get("ads", {}).get("max_date", ""),
         "funnel_rows": len(funnel),
         "funnel_max_date": counts.get("funnel", {}).get("max_date", ""),
+        "ads_poll_rows": len(ads_poll),
+        "funnel_poll_rows": len(funnel_poll),
+        "ads_poll_observations_added": counts.get("ads_poll", {}).get("added", 0),
+        "funnel_poll_observations_added": counts.get("funnel_poll", {}).get("added", 0),
     }, ensure_ascii=False, sort_keys=True))
 
 

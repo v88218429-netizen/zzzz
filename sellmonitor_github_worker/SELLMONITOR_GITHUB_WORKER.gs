@@ -1638,8 +1638,9 @@ function sellmonitorGithubNextPendingRow_(q) {
     ].indexOf(file) >= 0) return 1;
     if (/^orders_/.test(file) || file === 'k2_inventory_pool_sync_v246') return 1;
 
-    // P2: current factual advertising/traffic + snapshot history.
-    if (['traffic_daily_sync_v255','wb_ads_bulk_ingest_v167','traffic_refresh_enqueue_v256','traffic_refresh_gate_v257','rnp_snapshot_history_v304'].indexOf(file) >= 0) return 2;
+    // P2: current factual advertising/traffic + snapshot history. Materializing an
+    // already-fetched search snapshot into the store-aware history is local and cheap.
+    if (['traffic_daily_sync_v255','wb_ads_bulk_ingest_v167','traffic_refresh_enqueue_v256','traffic_refresh_gate_v257','rnp_snapshot_history_v304','search_position_monitor_sync_v238'].indexOf(file) >= 0) return 2;
     if (/^(ads_|calculator_ads_|quality_ads_|traffic_|wb_ads_)/.test(file) && file !== 'wb_ads_cluster_intelligence_v1') return 2;
 
     // P3: historical enrichment is useful but must never delay live/D-1.
@@ -1651,7 +1652,6 @@ function sellmonitorGithubNextPendingRow_(q) {
       '__central_github_search__',
       '__central_wb_search__',
       'search_snapshot_config_v235',
-      'search_position_monitor_sync_v238',
       'search_intelligence_sync_v240',
       'search_traffic_intelligence_v271',
       'search_intelligence_qc_v242'
@@ -2489,6 +2489,30 @@ const SMC_WB_TRAFFIC = Object.freeze({
       quality: null,
       numeric_columns: [2, 4, 5, 6, 7],
       headers: ['store_id','date','nmId','vendorCode','open_count','cart_count','order_count','order_sum_rub','source','load_timestamp','coverage_status']
+    },
+    ads_poll: {
+      sheet: '15_ADS_POLL_SNAPSHOT',
+      width: 19,
+      source_width: 17,
+      key_columns: [0, 1, 2],
+      source: 'WB /adv/v3/fullstats',
+      grain: 'DAILY_CUMULATIVE_OBSERVED_AT_POLL',
+      source_column: 15,
+      grain_column: 16,
+      numeric_columns: [3,4,5,6,7,8,9,10,11,12,13,14],
+      headers: ['store_id','observed_at','date','campaign_sku_rows','campaigns_with_rows','views','clicks','cart_adds','orders','spend_rub','order_sum_rub','ctr','cpc_rub','drr','roas','source','measurement_grain','load_timestamp','coverage_status']
+    },
+    funnel_poll: {
+      sheet: '16_FUNNEL_POLL_SNAPSHOT',
+      width: 15,
+      source_width: 13,
+      key_columns: [0, 1, 2],
+      source: 'WB Analytics products/history',
+      grain: 'DAILY_CUMULATIVE_OBSERVED_AT_POLL',
+      source_column: 11,
+      grain_column: 12,
+      numeric_columns: [3,4,5,6,7,8,9,10],
+      headers: ['store_id','observed_at','date','sku_rows','open_count','cart_count','order_count','order_sum_rub','open_to_cart','cart_to_order','open_to_order','source','measurement_grain','load_timestamp','coverage_status']
     }
   }
 });
@@ -2549,6 +2573,101 @@ function sellmonitorGithubNormalizeWbTrafficRows_(dataset, inputRows, observedAt
 }
 
 
+function sellmonitorGithubNormalizeWbPollRows_(dataset, inputRows, loadedAt) {
+  var cfg = SMC_WB_TRAFFIC.DATASETS[dataset];
+  if (!cfg || !cfg.grain) throw new Error('WB_TRAFFIC_UNKNOWN_POLL_DATASET');
+  if (!Array.isArray(inputRows)) throw new Error('WB_TRAFFIC_POLL_ROWS_NOT_ARRAY');
+  if (inputRows.length > 25000) throw new Error('WB_TRAFFIC_POLL_ROW_LIMIT_EXCEEDED');
+  var stores = {ap:true, aa:true, yv:true}, seen = {};
+  var loadDate = new Date(loadedAt);
+  if (!(loadDate instanceof Date) || isNaN(loadDate.getTime())) throw new Error('WB_TRAFFIC_POLL_LOAD_TIME_INVALID');
+  var rows = inputRows.map(function(sourceRow, rowIndex) {
+    if (!Array.isArray(sourceRow) || sourceRow.length !== cfg.source_width) throw new Error('WB_TRAFFIC_POLL_INVALID_ROW_WIDTH:' + rowIndex);
+    var storeId = String(sourceRow[0] || '').trim();
+    var observed = new Date(String(sourceRow[1] || ''));
+    var day = String(sourceRow[2] || '').trim();
+    if (!stores[storeId]) throw new Error('WB_TRAFFIC_POLL_UNKNOWN_STORE:' + rowIndex);
+    if (!(observed instanceof Date) || isNaN(observed.getTime())) throw new Error('WB_TRAFFIC_POLL_INVALID_OBSERVED_AT:' + rowIndex);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || isNaN(new Date(day + 'T00:00:00Z').getTime()) ||
+        new Date(day + 'T00:00:00Z').toISOString().slice(0,10) !== day) throw new Error('WB_TRAFFIC_POLL_INVALID_DATE:' + rowIndex);
+    if (String(sourceRow[cfg.source_column] || '') !== cfg.source) throw new Error('WB_TRAFFIC_POLL_SOURCE_MISMATCH:' + rowIndex);
+    if (String(sourceRow[cfg.grain_column] || '') !== cfg.grain) throw new Error('WB_TRAFFIC_POLL_GRAIN_MISMATCH:' + rowIndex);
+    var key = storeId + '|' + observed.toISOString() + '|' + day;
+    if (seen[key]) throw new Error('WB_TRAFFIC_POLL_DUPLICATE_KEY:' + key);
+    seen[key] = true;
+    var row = sourceRow.slice();
+    cfg.numeric_columns.forEach(function(i) {
+      if (row[i] === '' || row[i] == null) row[i] = '';
+      else {
+        var n = Number(row[i]);
+        if (!isFinite(n)) throw new Error('WB_TRAFFIC_POLL_INVALID_NUMBER:' + rowIndex + ':' + i);
+        row[i] = n;
+      }
+    });
+    row[1] = observed;
+    row[2] = new Date(day + 'T12:00:00+03:00');
+    row.push(loadDate, 'SOURCE_OK');
+    return row;
+  });
+  return {rows:rows};
+}
+
+
+function sellmonitorGithubAppendWbPollRows_(ss, dataset, table) {
+  var cfg = SMC_WB_TRAFFIC.DATASETS[dataset];
+  var sh = ss.getSheetByName(cfg.sheet);
+  if (!sh) sh = ss.insertSheet(cfg.sheet);
+  if (sh.getMaxColumns() < cfg.width) sh.insertColumnsAfter(sh.getMaxColumns(), cfg.width - sh.getMaxColumns());
+  if (sh.getMaxRows() < table.rows.length + 1) sh.insertRowsAfter(sh.getMaxRows(), table.rows.length + 1 - sh.getMaxRows());
+  if (!sh.getLastRow()) sh.getRange(1,1,1,cfg.width).setValues([cfg.headers]);
+  var headers = sh.getRange(1,1,1,cfg.width).getDisplayValues()[0];
+  if (cfg.headers.some(function(h,i){return String(headers[i]||'').trim() !== h;})) throw new Error('WB_TRAFFIC_POLL_HEADER_MISMATCH:' + cfg.sheet);
+
+  function iso_(value) {
+    var d = value instanceof Date ? value : new Date(value);
+    if (!(d instanceof Date) || isNaN(d.getTime())) throw new Error('WB_TRAFFIC_POLL_EXISTING_TIME_INVALID');
+    return d.toISOString();
+  }
+  function day_(value) {
+    if (value instanceof Date && !isNaN(value.getTime())) return Utilities.formatDate(value, ss.getSpreadsheetTimeZone(), 'yyyy-MM-dd');
+    var s = String(value||'').trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+    var d = new Date(s);
+    if (!(d instanceof Date) || isNaN(d.getTime())) throw new Error('WB_TRAFFIC_POLL_EXISTING_DATE_INVALID');
+    return Utilities.formatDate(d, ss.getSpreadsheetTimeZone(), 'yyyy-MM-dd');
+  }
+  function key_(row) { return String(row[0]||'') + '|' + iso_(row[1]) + '|' + day_(row[2]); }
+
+  var last = sh.getLastRow(), existing = {};
+  if (last > 1) {
+    sh.getRange(2,1,last-1,3).getValues().forEach(function(row,i){
+      if (!row[0]) return;
+      var key = key_(row);
+      if (existing[key]) throw new Error('WB_TRAFFIC_POLL_DUPLICATE_EXISTING_KEY:' + key);
+      existing[key] = i + 2;
+    });
+  }
+  var additions = [], updates = [];
+  table.rows.forEach(function(row){
+    var key = key_(row), target = existing[key];
+    if (target) updates.push({row:target,values:row});
+    else additions.push(row);
+  });
+  updates.forEach(function(x){sh.getRange(x.row,1,1,cfg.width).setValues([x.values]);});
+  if (additions.length) {
+    var first = sh.getLastRow() + 1;
+    if (sh.getMaxRows() < first + additions.length - 1) sh.insertRowsAfter(sh.getMaxRows(), first + additions.length - 1 - sh.getMaxRows());
+    sh.getRange(first,1,additions.length,cfg.width).setValues(additions);
+    if (sh.getRange(first,2,additions.length,1).setNumberFormat) {
+      sh.getRange(first,2,additions.length,1).setNumberFormat('dd.MM.yyyy HH:mm:ss');
+      sh.getRange(first,3,additions.length,1).setNumberFormat('dd.MM.yyyy');
+      sh.getRange(first,cfg.width-1,additions.length,1).setNumberFormat('dd.MM.yyyy HH:mm:ss');
+    }
+  }
+  return {written:table.rows.length,added:additions.length,updated:updates.length,skipped:false};
+}
+
+
 function sellmonitorGithubPublishWbTraffic_(body) {
   body = body || {};
   var status = body.sync_status || {};
@@ -2567,6 +2686,11 @@ function sellmonitorGithubPublishWbTraffic_(body) {
     var sourceRows = datasets[name];
     if (sourceRows == null) sourceRows = [];
     prepared[name] = sellmonitorGithubNormalizeWbTrafficRows_(name, sourceRows, status.finishedAt);
+  });
+  ['ads_poll','funnel_poll'].forEach(function(name) {
+    var sourceRows = datasets[name];
+    if (sourceRows == null) sourceRows = [];
+    prepared[name] = sellmonitorGithubNormalizeWbPollRows_(name, sourceRows, status.finishedAt);
   });
   var ss = SpreadsheetApp.openById(SMC_WB_TRAFFIC.SPREADSHEET_ID);
   var result = {ok:true, action:'publish_wb_traffic', sync_finished_at:status.finishedAt, datasets:{}};
@@ -2591,6 +2715,14 @@ function sellmonitorGithubPublishWbTraffic_(body) {
       sh.getRange(lastNeeded + 1, 1, oldLastRow - lastNeeded, cfg.width).clearContent();
     }
     result.datasets[name] = {written:table.rows.length, skipped:false, max_date:table.max_date};
+  });
+  ['ads_poll','funnel_poll'].forEach(function(name) {
+    var table = prepared[name];
+    if (!table.rows.length) {
+      result.datasets[name] = {written:0,added:0,updated:0,skipped:true,reason:'no_verified_current_day_observation'};
+      return;
+    }
+    result.datasets[name] = sellmonitorGithubAppendWbPollRows_(ss, name, table);
   });
   SpreadsheetApp.flush();
   return result;
