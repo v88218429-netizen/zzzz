@@ -83,7 +83,17 @@ async def _request(client, token, method, url, **kwargs):
     raise RuntimeError("retry exhausted")
 
 
-async def _fullstats_batch(client, token, campaign_ids, begin, end):
+def _is_no_statistics_response(payload):
+    if isinstance(payload, dict):
+        text = " ".join(str(payload.get(key) or "")
+                         for key in ("detail", "message", "title", "error", "description"))
+    else:
+        text = str(payload or "")
+    return "there are no statistics for this advertising period" in text.casefold()
+
+
+async def _fullstats_batch(client, token, campaign_ids, begin, end,
+                           no_statistics_campaign_ids=None):
     """Fetch fullstats, splitting transient server-failing batches without losing the cabinet."""
     global _last_fullstats
     if not campaign_ids:
@@ -94,12 +104,25 @@ async def _fullstats_batch(client, token, campaign_ids, begin, end):
     if _last_fullstats and delay > 0:
         await asyncio.sleep(delay)
 
+    no_statistics_campaign_ids = [] if no_statistics_campaign_ids is None else no_statistics_campaign_ids
+
     try:
         raw = await _request(
             client, token, "GET", PROMO + "/adv/v3/fullstats",
             params={"ids": ",".join(map(str, campaign_ids)),
                     "beginDate": begin, "endDate": end})
     except httpx.HTTPStatusError as exc:
+        try:
+            error_payload = exc.response.json()
+        except ValueError:
+            error_payload = exc.response.text
+        if _is_no_statistics_response(error_payload):
+            # WB uses this explicit response when the requested campaign set
+            # has no facts in the selected window. Keep it as a known gap,
+            # never synthesize zero-valued campaign/day rows.
+            _last_fullstats = loop.time()
+            no_statistics_campaign_ids.extend(campaign_ids)
+            return []
         # _request has already exhausted its normal retries. WB may still fail
         # on a large request, so isolate the failing campaign by bisecting only
         # transient server errors. Do not fan out on rate limits or client/auth
@@ -108,13 +131,24 @@ async def _fullstats_batch(client, token, campaign_ids, begin, end):
         if exc.response.status_code not in (500, 502, 503, 504) or len(campaign_ids) == 1:
             raise
         middle = len(campaign_ids) // 2
-        left = await _fullstats_batch(client, token, campaign_ids[:middle], begin, end)
-        right = await _fullstats_batch(client, token, campaign_ids[middle:], begin, end)
+        left = await _fullstats_batch(client, token, campaign_ids[:middle], begin, end,
+                                      no_statistics_campaign_ids)
+        right = await _fullstats_batch(client, token, campaign_ids[middle:], begin, end,
+                                       no_statistics_campaign_ids)
         return [*left, *right]
     else:
         _last_fullstats = loop.time()
         if not isinstance(raw, list):
-            raise RuntimeError("WB advertising fullstats returned an invalid payload")
+            if _is_no_statistics_response(raw):
+                no_statistics_campaign_ids.extend(campaign_ids)
+                return []
+            keys = sorted(map(str, raw.keys()))[:12] if isinstance(raw, dict) else []
+            detail = raw.get("detail") if isinstance(raw, dict) else None
+            detail = str(detail)[:180] if detail is not None else ""
+            raise RuntimeError(
+                "WB advertising fullstats returned an invalid payload "
+                f"(type={type(raw).__name__}, keys={keys}, detail={detail!r})"
+            )
         return raw
 
 
@@ -254,6 +288,7 @@ async def sync_once():
             state = {"ok": True, "campaigns": 0, "ad_rows": 0, "funnel_rows": 0, "errors": {}}
             # Each source has independent health. An error never promotes stale data.
             shop_rows = []
+            no_statistics_campaign_ids = []
             try:
                 listing = await _request(client, token, "GET", PROMO + "/adv/v1/promotion/count")
                 ids = _campaign_ids(listing)
@@ -261,15 +296,22 @@ async def sync_once():
                 shop_rows = []
                 for start in range(0, len(ids), 50):
                     batch = ids[start:start + 50]
-                    raw = await _fullstats_batch(client, token, batch, begin, end)
+                    raw = await _fullstats_batch(client, token, batch, begin, end,
+                                                 no_statistics_campaign_ids)
                     _atomic_json(DATA_DIR / shop / f"fullstats_{start // 50}.json", raw)
                     shop_rows.extend(_stats_rows(shop, raw))
                 ad_rows.extend(shop_rows)
                 state["ad_rows"] = len(shop_rows)
+                state["campaigns_without_period_statistics"] = len(no_statistics_campaign_ids)
+                if no_statistics_campaign_ids:
+                    state["campaigns_without_period_statistics_sample"] = no_statistics_campaign_ids[:20]
                 successful_ads.add(shop)
             except Exception as exc:
                 state["ok"] = False
                 state["errors"]["promotion"] = f"{type(exc).__name__}: {exc}"
+                state["campaigns_without_period_statistics"] = len(no_statistics_campaign_ids)
+                if no_statistics_campaign_ids:
+                    state["campaigns_without_period_statistics_sample"] = no_statistics_campaign_ids[:20]
             try:
                 # The daily history endpoint accepts 1..20 nmIds per call and
                 # only covers the recent seven days. Enumerate the whole seller
