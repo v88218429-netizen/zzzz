@@ -2724,6 +2724,56 @@ function sellmonitorGithubPublishWbTraffic_(body) {
     }
     result.datasets[name] = sellmonitorGithubAppendWbPollRows_(ss, name, table);
   });
+  var qualitySheetName = '17_TRAFFIC_QUALITY';
+  var qualityHeaders = [
+    'Магазин','Время сбора','Общий статус','Период рекламы','Статус рекламы',
+    'Пояснение рекламы','Период воронки','Статус воронки','Пояснение воронки',
+    'Кампании с пустым ответом','Идентификаторы кампаний'
+  ];
+  var qualitySheet = ss.getSheetByName(qualitySheetName);
+  if (!qualitySheet) qualitySheet = ss.insertSheet(qualitySheetName);
+  if (!qualitySheet.getLastRow()) {
+    qualitySheet.getRange(1,1,1,qualityHeaders.length).setValues([qualityHeaders]);
+  }
+  var liveQualityHeaders = qualitySheet.getRange(1,1,1,qualityHeaders.length).getDisplayValues()[0];
+  if (qualityHeaders.some(function(h,i){return String(liveQualityHeaders[i]||'').trim()!==h;})) {
+    throw new Error('WB_TRAFFIC_QUALITY_HEADER_MISMATCH');
+  }
+  var qualityRows = [];
+  ['ap','aa','yv'].forEach(function(shop) {
+    var detail = shops[shop] || {};
+    var errors = detail.errors || {};
+    var warnings = detail.warnings || {};
+    var nullCount = Number(detail.campaigns_with_null_payload || 0);
+    var adsStatus = errors.promotion ? 'СБОЙ' : (nullCount ? 'ЧАСТИЧНО' : 'АКТУАЛЬНО');
+    var adsNote = String(errors.promotion || warnings.promotion || '');
+    if (!errors.promotion && nullCount) {
+      adsNote = 'WB вернул пустой ответ для ' + nullCount +
+        ' кампании/кампаний; строки не дополнялись нулями.';
+    }
+    var funnelStatus = errors.funnel ? 'СБОЙ' : 'АКТУАЛЬНО';
+    var funnelNote = String(errors.funnel || warnings.funnel || '');
+    var overall = status.complete === true ? 'ПОЛНО' :
+      (status.ok === true ? 'ЧАСТИЧНО' : 'СБОЙ');
+    qualityRows.push([
+      shop, status.finishedAt, overall,
+      Array.isArray(status.period) ? status.period.join(' — ') : '',
+      adsStatus, adsNote,
+      Array.isArray(status.funnel_period) ? status.funnel_period.join(' — ') : '',
+      funnelStatus, funnelNote,
+      nullCount,
+      (detail.campaigns_with_null_payload_sample || []).join(', ')
+    ]);
+  });
+  var oldQualityLastRow = qualitySheet.getLastRow();
+  if (qualitySheet.getMaxRows() < qualityRows.length + 1) {
+    qualitySheet.insertRowsAfter(qualitySheet.getMaxRows(), qualityRows.length + 1 - qualitySheet.getMaxRows());
+  }
+  qualitySheet.getRange(2,1,qualityRows.length,qualityHeaders.length).setValues(qualityRows);
+  if (oldQualityLastRow > qualityRows.length + 1) {
+    qualitySheet.getRange(qualityRows.length + 2,1,oldQualityLastRow-qualityRows.length-1,qualityHeaders.length).clearContent();
+  }
+  result.quality = {sheet:qualitySheetName,written:qualityRows.length,complete:status.complete === true};
   SpreadsheetApp.flush();
   return result;
 }
