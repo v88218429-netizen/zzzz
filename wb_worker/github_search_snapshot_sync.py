@@ -379,44 +379,176 @@ def build_snapshot(cabinet: str, token: str, ids: list[int]) -> dict[str, Any]:
         if "Jam subscription" not in message:
             raise
         print(f"{cabinet}: seller Analytics requires Jam; switching to factual public SERP fallback")
-        return public_serp_snapshot(token, ids)
+        try:
+            return public_serp_snapshot(token, ids)
+        except Exception as fallback_error:
+            # Do not keep probing blocked public endpoints or turn an access
+            # denial into guessed positions. The caller records an explicit
+            # unavailable state while allowing other cabinets to continue.
+            message = str(fallback_error).casefold()
+            code = "JAM_REQUIRED_PUBLIC_SERP_BLOCKED" if "403" in message or "forbidden" in message else "JAM_REQUIRED_PUBLIC_SERP_UNAVAILABLE"
+            raise RuntimeError(code) from fallback_error
 
 
-def main() -> None:
-    out = pathlib.Path(os.environ.get("SEARCH_GITHUB_OUT", "wb_data/search"))
+def _unavailable_code(exc: Exception) -> str:
+    message = str(exc).casefold()
+    if "jam_required_public_serp_blocked" in message:
+        return "JAM_REQUIRED_PUBLIC_SERP_BLOCKED"
+    if "jam_required_public_serp_unavailable" in message:
+        return "JAM_REQUIRED_PUBLIC_SERP_UNAVAILABLE"
+    if "jam subscription" in message or "available only in a jam" in message:
+        return "JAM_REQUIRED"
+    if "public wb search failed" in message or "http error 403" in message:
+        return "PUBLIC_SEARCH_ACCESS_DENIED"
+    if "token_missing" in message:
+        return "TOKEN_MISSING"
+    if "no nmid" in message:
+        return "PRODUCT_CATALOG_EMPTY"
+    return "SOURCE_ERROR"
+
+
+def collect_snapshots(out: pathlib.Path) -> dict[str, Any]:
+    """Collect cabinets independently; a blocked shop must not discard good facts."""
     out.mkdir(parents=True, exist_ok=True)
-    manifest: dict[str, Any] = {}
+    manifest: dict[str, Any] = {"generated_at": dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat(), "cabinets": {}}
+    _, period_end, _, _ = periods()
+    available = 0
     for cabinet, (name, env_name) in SHOPS.items():
         token = os.environ.get(env_name, "").strip()
         if not token:
-            raise RuntimeError(f"{env_name} missing")
-        ids = nm_ids(token)
-        if not ids:
-            raise RuntimeError(f"{name}: no nmIds")
-        print(f"{name}: discovered {len(ids)} nmIds")
-        snap = build_snapshot(cabinet, token, ids)
+            error = RuntimeError("TOKEN_MISSING")
+            ids = []
+            snap = None
+        else:
+            try:
+                ids = nm_ids(token)
+                if not ids:
+                    raise RuntimeError("no nmIds")
+                print(f"{name}: discovered {len(ids)} nmIds")
+                snap = build_snapshot(cabinet, token, ids)
+                if snap.get("trust_status") not in {"FACTUAL_WB_ANALYTICS", "FACTUAL_PUBLIC_SERP"} or not snap.get("data"):
+                    raise RuntimeError("snapshot failed factual-data validation")
+                available += 1
+                error = None
+            except Exception as exc:
+                error = exc
+                snap = None
+
+        state: dict[str, Any]
+        if snap is None:
+            snap = {
+                "created_at": dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat(),
+                "period_end": period_end,
+                "trust_status": "UNAVAILABLE",
+                "data": {},
+            }
+            state = {
+                "name": name,
+                "status": "UNAVAILABLE",
+                "query_rows": 0,
+                "period_end": period_end,
+                "created_at": snap["created_at"],
+                "reason_code": _unavailable_code(error or RuntimeError("unknown source error")),
+            }
+            print(f"{cabinet}: UNAVAILABLE reason={state['reason_code']}; no rows published")
+        else:
+            state = {
+                "name": name,
+                "status": "FACTUAL",
+                "nm_ids": len(ids),
+                "query_rows": len(snap["data"]),
+                "period_end": snap["period_end"],
+                "created_at": snap["created_at"],
+                "trust_status": snap["trust_status"],
+            }
+            print(f"{cabinet}: query_rows={len(snap['data'])} trust={snap['trust_status']}")
         (out / f"{cabinet}.json").write_text(
             json.dumps(snap, ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",
         )
-        manifest[cabinet] = {
-            "name": name,
-            "nm_ids": len(ids),
-            "query_rows": len(snap["data"]),
-            "period_end": snap["period_end"],
-            "created_at": snap["created_at"],
-            "trust_status": snap["trust_status"],
-        }
-        print(
-            f"{name}: query_rows={len(snap['data'])} "
-            f"trust={snap['trust_status']}"
-        )
+        manifest["cabinets"][cabinet] = state
     (out / "manifest.json").write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
-    print("WB_SEARCH_SNAPSHOT=ok")
+    return {**manifest, "available_cabinets": available}
+
+
+def publish_snapshots(out: pathlib.Path, bridge_url: str, bridge_key: str) -> dict[str, int]:
+    """Send only factual rows to the authenticated Sheets bridge, never Git."""
+    if not bridge_url or not bridge_key:
+        raise RuntimeError("authenticated Sheets bridge configuration missing")
+    manifest = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
+    counts: dict[str, int] = {}
+    for cabinet, (name, _) in SHOPS.items():
+        snap = json.loads((out / f"{cabinet}.json").read_text(encoding="utf-8"))
+        state = (manifest.get("cabinets") or {}).get(cabinet, {})
+        if state.get("status") != "FACTUAL":
+            print(f"{cabinet}: publication skipped; source={state.get('reason_code', 'UNAVAILABLE')}")
+            continue
+        rows = snap.get("data") or {}
+        if snap.get("trust_status") not in {"FACTUAL_WB_ANALYTICS", "FACTUAL_PUBLIC_SERP"} or not rows:
+            raise RuntimeError(f"{cabinet}: refusing to publish non-factual or empty snapshot")
+        body = json.dumps({
+            "token": bridge_key,
+            "action": "publish_search_positions",
+            "cabinet": cabinet,
+            "snapshot": snap,
+        }, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        request = urllib.request.Request(
+            bridge_url,
+            data=body,
+            headers={"Accept": "application/json", "Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=180) as response:
+                result = json.loads(response.read().decode("utf-8"))
+        except Exception as exc:
+            raise RuntimeError(f"{cabinet}: authenticated search publication failed: {type(exc).__name__}") from exc
+        written = int(result.get("search_rows") or 0) if isinstance(result, dict) else 0
+        if not isinstance(result, dict) or result.get("ok") is not True or result.get("skipped") or written != len(rows):
+            raise RuntimeError(f"{cabinet}: search publication row-count or acceptance mismatch")
+        counts[cabinet] = written
+        print(f"{cabinet}: published factual position rows={written}; source={snap['trust_status']}")
+    return counts
+
+
+def require_all_sources(out: pathlib.Path) -> None:
+    manifest = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
+    states = manifest.get("cabinets") or {}
+    unavailable = [f"{cabinet}:{(states.get(cabinet) or {}).get('reason_code', 'MISSING')}"
+                   for cabinet in SHOPS if (states.get(cabinet) or {}).get("status") != "FACTUAL"]
+    if unavailable:
+        raise RuntimeError("search source acceptance failed: " + ", ".join(unavailable))
+
+
+def main(argv: list[str] | None = None) -> int:
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--publish", action="store_true", help="publish factual snapshots through the authenticated Sheets bridge")
+    parser.add_argument("--require-all", action="store_true", help="fail unless both cabinets have factual search rows")
+    args = parser.parse_args(argv)
+    out = pathlib.Path(os.environ.get("SEARCH_GITHUB_OUT", "wb_data/search"))
+    if args.publish:
+        publish_snapshots(
+            out,
+            os.environ.get("GOOGLE_SHEETS_BRIDGE_URL", "").strip(),
+            os.environ.get("GOOGLE_SHEETS_BRIDGE_KEY", "").strip(),
+        )
+        return 0
+    if args.require_all:
+        require_all_sources(out)
+        print("WB_SEARCH_SNAPSHOT_ACCEPTANCE=FACTUAL_ALL_CABINETS")
+        return 0
+    result = collect_snapshots(out)
+    print(json.dumps({
+        "manifest": result,
+        "all_cabinets_factual": result["available_cabinets"] == len(SHOPS),
+    }, ensure_ascii=False, sort_keys=True))
+    return 0 if result["available_cabinets"] > 0 else 1
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
