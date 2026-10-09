@@ -83,6 +83,41 @@ async def _request(client, token, method, url, **kwargs):
     raise RuntimeError("retry exhausted")
 
 
+async def _fullstats_batch(client, token, campaign_ids, begin, end):
+    """Fetch fullstats, splitting transient server-failing batches without losing the cabinet."""
+    global _last_fullstats
+    if not campaign_ids:
+        return []
+
+    loop = asyncio.get_running_loop()
+    delay = 20 - (loop.time() - _last_fullstats)
+    if _last_fullstats and delay > 0:
+        await asyncio.sleep(delay)
+
+    try:
+        raw = await _request(
+            client, token, "GET", PROMO + "/adv/v3/fullstats",
+            params={"ids": ",".join(map(str, campaign_ids)),
+                    "beginDate": begin, "endDate": end})
+    except httpx.HTTPStatusError as exc:
+        # _request has already exhausted its normal retries. WB may still fail
+        # on a large request, so isolate the failing campaign by bisecting only
+        # transient server errors. Do not fan out on rate limits or client/auth
+        # errors, and never treat a failed leaf as a complete snapshot.
+        _last_fullstats = loop.time()
+        if exc.response.status_code not in (500, 502, 503, 504) or len(campaign_ids) == 1:
+            raise
+        middle = len(campaign_ids) // 2
+        left = await _fullstats_batch(client, token, campaign_ids[:middle], begin, end)
+        right = await _fullstats_batch(client, token, campaign_ids[middle:], begin, end)
+        return [*left, *right]
+    else:
+        _last_fullstats = loop.time()
+        if not isinstance(raw, list):
+            raise RuntimeError("WB advertising fullstats returned an invalid payload")
+        return raw
+
+
 def _campaign_ids(payload):
     ids = set()
     for group in payload.get("adverts", []):
@@ -225,14 +260,8 @@ async def sync_once():
                 state["campaigns"] = len(ids)
                 shop_rows = []
                 for start in range(0, len(ids), 50):
-                    loop = asyncio.get_running_loop()
-                    delay = 20 - (loop.time() - _last_fullstats)
-                    if _last_fullstats and delay > 0:
-                        await asyncio.sleep(delay)
-                    raw = await _request(client, token, "GET", PROMO + "/adv/v3/fullstats",
-                                         params={"ids": ",".join(map(str, ids[start:start + 50])),
-                                                 "beginDate": begin, "endDate": end})
-                    _last_fullstats = loop.time()
+                    batch = ids[start:start + 50]
+                    raw = await _fullstats_batch(client, token, batch, begin, end)
                     _atomic_json(DATA_DIR / shop / f"fullstats_{start // 50}.json", raw)
                     shop_rows.extend(_stats_rows(shop, raw))
                 ad_rows.extend(shop_rows)

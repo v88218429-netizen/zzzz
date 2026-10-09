@@ -4,8 +4,9 @@ import os
 import tempfile
 from datetime import date, datetime
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
+import httpx
 import traffic_sync
 from traffic_sync import _campaign_ids, _stats_rows, _funnel_rows, _upsert_rows
 
@@ -79,6 +80,61 @@ class TrafficParsingTest(unittest.TestCase):
 
 
 class TrafficSyncPersistenceTest(unittest.IsolatedAsyncioTestCase):
+    async def test_fullstats_splits_transient_server_error_batches(self):
+        requested_sizes = []
+
+        async def fake_request(client, token, method, url, **kwargs):
+            campaign_ids = [int(value) for value in kwargs["params"]["ids"].split(",")]
+            requested_sizes.append(len(campaign_ids))
+            if len(campaign_ids) > 25:
+                request = httpx.Request(method, url)
+                response = httpx.Response(500, request=request)
+                raise httpx.HTTPStatusError("temporary WB error", request=request, response=response)
+            return [{"advertId": campaign_id, "days": []} for campaign_id in campaign_ids]
+
+        with patch.object(traffic_sync, "_request", side_effect=fake_request), \
+             patch.object(traffic_sync.asyncio, "sleep", new=AsyncMock()):
+            traffic_sync._last_fullstats = 0
+            payload = await traffic_sync._fullstats_batch(
+                object(), "test-token", list(range(1, 51)), "2026-09-09", "2026-10-09"
+            )
+
+        self.assertEqual(requested_sizes, [50, 25, 25])
+        self.assertEqual([item["advertId"] for item in payload], list(range(1, 51)))
+
+    async def test_failed_single_campaign_keeps_last_good_ads_history(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            data_dir = Path(temp_dir) / "traffic"
+            shop_dir = data_dir / "ap"
+            shop_dir.mkdir(parents=True)
+            previous = ["ap", "2026-10-08", "7", "20", "10", "1", "0", "0", "0", "0",
+                        "WB /adv/v3/fullstats", "EXACT_CAMPAIGN_NM_DAY", "SKU20"]
+            traffic_sync._atomic_csv(shop_dir / "campaign_sku_day.csv", traffic_sync.COLUMNS, [previous])
+
+            async def fake_request(client, token, method, url, **kwargs):
+                if url.endswith("/adv/v1/promotion/count"):
+                    return {"adverts": [{"status": 9, "advert_list": [{"advertId": 7}]}]}
+                if url.endswith("/adv/v3/fullstats"):
+                    request = httpx.Request(method, url)
+                    response = httpx.Response(500, request=request)
+                    raise httpx.HTTPStatusError("temporary WB error", request=request, response=response)
+                if url.endswith("/api/v2/list/goods/filter"):
+                    return {"data": {"listGoods": []}}
+                raise AssertionError(f"Unexpected URL: {url}")
+
+            with patch.object(traffic_sync, "DATA_DIR", data_dir), \
+                 patch.object(traffic_sync, "SHOPS", {"ap": ("ИП АП", "WB_API_TOKEN_AP")}), \
+                 patch.object(traffic_sync, "_request", side_effect=fake_request), \
+                 patch.dict(os.environ, {"WB_API_TOKEN_AP": "test-token"}):
+                traffic_sync._last_fullstats = 0
+                result = await traffic_sync.sync_once()
+
+            with (shop_dir / "campaign_sku_day.csv").open("r", encoding="utf-8-sig", newline="") as stream:
+                saved = list(csv.reader(stream))[1:]
+            self.assertFalse(result["ok"])
+            self.assertFalse(result["shops"]["ap"]["ok"])
+            self.assertEqual(saved, [previous])
+
     async def test_catalog_funnel_and_incremental_history_persistence(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             data_dir = Path(temp_dir) / "traffic"
