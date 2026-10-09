@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 40184)
-Total output lines: 3239
-
 /**
  * Sellmonitor GitHub Central Worker v1.3.22
  * GitHub is source-of-truth/scheduler. This Apps Script project is only
@@ -1397,7 +1394,29 @@ function sellmonitorGithubHydrateCurrentSnapshot_(ss, storeId) {
       v = stockSum;
     } else if (level === 'SKU' && nm && code === 'rating_rating' && pm[nm] && pm[nm].rating !== '') {
       v = pm[nm].rating;
-    } else if (level === 'SKU' && nm && /^rating_[1-5]$/.test(code) && star[nm] && star[nm][code] !== '' && star[nm…184 tokens truncated…ы_периоды');
+    } else if (level === 'SKU' && nm && /^rating_[1-5]$/.test(code) && star[nm] && star[nm][code] !== '' && star[nm][code] != null) {
+      v = star[nm][code];
+    } else if (level === 'SKU' && nm && code === 'rating_rating' && star[nm] && star[nm].rating_rating !== '' && star[nm].rating_rating != null) {
+      v = star[nm].rating_rating;
+    } else {
+      continue;
+    }
+    if (String(cur[i][0]) !== String(v)) {
+      cur[i][0] = v;
+      changed++;
+    }
+  }
+  if (changed) {
+    days.getRange(3,13,n,1).setValues(cur);
+    SpreadsheetApp.flush();
+  }
+  return {ok:true, storeId:storeId, changed:changed, productCount:Object.keys(pm).length, stockSkuCount:stockCount};
+}
+
+
+function sellmonitorGithubSyncCoverageBoard_(ss, storeId) {
+  var sh=ss.getSheetByName('00_Покрытие_фактов');
+  var fin=ss.getSheetByName('84_Финансы_периоды');
   var set=ss.getSheetByName('99_Настройки');
   if (!sh || !fin || !set) return {ok:true,skipped:true,reason:'coverage inputs missing'};
 
