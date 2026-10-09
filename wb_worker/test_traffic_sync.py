@@ -59,6 +59,24 @@ class TrafficParsingTest(unittest.TestCase):
         self.assertEqual(merged[0][1], "2026-09-01")
         self.assertEqual(merged[1][4:], ["30", "40"])
 
+    def test_poll_snapshots_are_daily_cumulative_not_hourly_facts(self):
+        day = "2026-10-09"
+        observed = datetime.fromisoformat("2026-10-09T13:00:00+03:00")
+        ads = [["ap", day, 1, 20, 100, 10, 2, 1, 50, 200,
+                "WB /adv/v3/fullstats", "EXACT_CAMPAIGN_NM_DAY", "SKU20"]]
+        funnel = [["ap", day, 20, "SKU20", 10, 2, 1, 50,
+                   "WB Analytics products/history"]]
+        ad_poll, funnel_poll = traffic_sync._current_day_poll_rows(
+            observed, day, ads, funnel, {"ap"}, {"ap"}
+        )
+        self.assertEqual(len(ad_poll), 1)
+        self.assertEqual(ad_poll[0][11:15], [0.1, 5.0, 0.25, 4.0])
+        self.assertEqual(ad_poll[0][-1], "DAILY_CUMULATIVE_OBSERVED_AT_POLL")
+        self.assertEqual(funnel_poll[0][8:11], [0.2, 0.5, 0.1])
+        # A missing source date stays absent instead of being filled with zero.
+        _, no_day_funnel = traffic_sync._current_day_poll_rows(observed, day, ads, [], {"ap"}, {"ap"})
+        self.assertEqual(no_day_funnel, [])
+
 
 class TrafficSyncPersistenceTest(unittest.IsolatedAsyncioTestCase):
     async def test_catalog_funnel_and_incremental_history_persistence(self):
@@ -109,8 +127,15 @@ class TrafficSyncPersistenceTest(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual((date.fromisoformat(first["funnel_period"][1]) -
                                   date.fromisoformat(first["funnel_period"][0])).days, 6)
                 self.assertEqual(first["shops"]["ap"]["funnel_nm_ids"], 2)
+                self.assertEqual(first["ads_poll_rows"], 1)
+                self.assertEqual(first["funnel_poll_rows"], 1)
                 self.assertEqual(len(rows(shop_dir / "campaign_sku_day.csv")), 2)
                 self.assertEqual(len(rows(shop_dir / "funnel_sku_day.csv")), 3)
+                ads_poll = rows(data_dir / "ads_poll_snapshot.csv")
+                funnel_poll = rows(data_dir / "funnel_poll_snapshot.csv")
+                self.assertEqual(len(ads_poll), 1)
+                self.assertEqual(len(funnel_poll), 1)
+                self.assertEqual(ads_poll[0][16], "DAILY_CUMULATIVE_OBSERVED_AT_POLL")
 
                 traffic_sync._last_fullstats = 0
                 second = await traffic_sync.sync_once()
