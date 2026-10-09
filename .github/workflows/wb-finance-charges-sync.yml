@@ -40,19 +40,36 @@ jobs:
           WB_API_TOKEN_YV: ${{ secrets.WB_API_TOKEN_YV }}
           FINANCE_LOOKBACK_DAYS: "30"
           FINANCE_MIN_REQUEST_INTERVAL_SEC: "61"
-          FINANCE_GITHUB_OUT: "${{ github.workspace }}/wb_data/finance"
+          FINANCE_GITHUB_OUT: "${{ runner.temp }}/wb-finance"
         run: python wb_worker/github_finance_charges_sync.py
 
-      - name: Publish fresh CSV
+      - name: Encrypt finance export
+        id: archive
         shell: bash
+        env:
+          STATE_SECRET: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
         run: |
           set -euo pipefail
-          git config user.name "wb-finance-bot"
-          git config user.email "wb-finance-bot@users.noreply.github.com"
-          git add wb_data/finance/charges_all.csv wb_data/finance/penalties_sheet.csv
-          if git diff --cached --quiet; then
-            echo "No finance changes"
-            exit 0
-          fi
-          git commit -m "wb finance: refresh charges"
-          git push
+          test -n "$STATE_SECRET"
+          test -s "$RUNNER_TEMP/wb-finance/charges_all.csv"
+          test -s "$RUNNER_TEMP/wb-finance/penalties_sheet.csv"
+          mkdir -p "$RUNNER_TEMP/wb-finance-publish/state"
+          tar -czf "$RUNNER_TEMP/finance.tar.gz" -C "$RUNNER_TEMP" wb-finance
+          openssl enc -aes-256-cbc -salt -pbkdf2 \
+            -pass env:STATE_SECRET \
+            -in "$RUNNER_TEMP/finance.tar.gz" \
+            -out "$RUNNER_TEMP/wb-finance-publish/state/finance.tar.gz.enc"
+          printf '%s\n' \
+            '# WB finance encrypted snapshot' \
+            '' \
+            '> Finance detail rows are encrypted; this branch contains no plain CSV data or API tokens.' \
+            > "$RUNNER_TEMP/wb-finance-publish/README.md"
+          git worktree add --detach "$RUNNER_TEMP/wb-finance-state-branch" HEAD
+          git -C "$RUNNER_TEMP/wb-finance-state-branch" switch --orphan finance-state-next
+          git -C "$RUNNER_TEMP/wb-finance-state-branch" rm -rf . >/dev/null 2>&1 || true
+          cp -R "$RUNNER_TEMP/wb-finance-publish/." "$RUNNER_TEMP/wb-finance-state-branch/"
+          git -C "$RUNNER_TEMP/wb-finance-state-branch" config user.name "wb-finance-bot"
+          git -C "$RUNNER_TEMP/wb-finance-state-branch" config user.email "wb-finance-bot@users.noreply.github.com"
+          git -C "$RUNNER_TEMP/wb-finance-state-branch" add README.md state/finance.tar.gz.enc
+          git -C "$RUNNER_TEMP/wb-finance-state-branch" commit -m "finance: encrypted rolling export"
+          git -C "$RUNNER_TEMP/wb-finance-state-branch" push origin HEAD:finance-state --force
