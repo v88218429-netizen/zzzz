@@ -127,9 +127,26 @@ assert.equal(empty.datasets.ads.skipped, true);
 assert.equal(sheets['12_ADS_CAMPAIGN_DAY'].values.length, 2, 'empty refresh must preserve last-good data');
 assert.equal(sheets['15_ADS_POLL_SNAPSHOT'].values.length, 2, 'empty refresh must preserve poll history');
 
+const queueRows = new Map();
+function queued(file, createdAt) {
+  return ['queue-' + file, createdAt, 'RUN_REMOTE', JSON.stringify({file}), 'PENDING', '', '', ''];
+}
+const nowMs = Date.now();
+queueRows.set(1200, queued('traffic_refresh_enqueue_v256', new Date(nowMs)));
+queueRows.set(1780, queued('wb_ads_cluster_intelligence_v1', new Date(nowMs - 20 * 60 * 60 * 1000)));
+queueRows.set(1783, queued('search_position_monitor_sync_v238', new Date(nowMs - 15 * 60 * 60 * 1000)));
+const queue = {
+  getMaxRows: () => 2023,
+  getRange(startRow, _startColumn, rowCount) {
+    return {getValues: () => Array.from({length: rowCount}, (_, offset) => queueRows.get(startRow + offset) || new Array(8).fill(''))};
+  }
+};
+assert.equal(sandbox.sellmonitorGithubNextPendingRow_(queue), 1783, 'factual search history materialization must not starve behind derivative jobs');
+
 console.log('WB_TRAFFIC_PUBLISH_FIXTURE_OK', JSON.stringify({
   ads_rows: result.datasets.ads.written,
   funnel_rows: result.datasets.funnel.written,
   poll_rows: {ads:result.datasets.ads_poll.written,funnel:result.datasets.funnel_poll.written},
-  empty_refresh_preserved: empty.datasets.ads.skipped
+  empty_refresh_preserved: empty.datasets.ads.skipped,
+  search_history_priority: 1783
 }));
