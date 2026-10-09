@@ -19,6 +19,9 @@ PROMO = "https://advert-api.wildberries.ru"
 ANALYTICS = "https://seller-analytics-api.wildberries.ru"
 COLUMNS = ["shop", "date", "advert_id", "nm_id", "views", "clicks", "atbs", "orders", "spend_rub", "order_sum_rub", "source", "quality", "seller_article"]
 FUNNEL_COLUMNS = ["shop", "date", "nm_id", "vendor_code", "open_count", "cart_count", "order_count", "order_sum_rub", "source"]
+PRICES = "https://discounts-prices-api.wildberries.ru"
+FULLSTATS_DAYS = 31
+FUNNEL_BATCH_SIZE = 20
 INTERVAL = max(60, int(os.environ.get("TRAFFIC_SYNC_INTERVAL_MIN", "360")))
 _last_fullstats = 0.0
 
@@ -38,6 +41,27 @@ def _atomic_csv(path, header, rows):
         writer.writerow(header)
         writer.writerows(rows)
     temp.replace(path)
+
+
+def _read_csv_rows(path):
+    if not path.exists():
+        return []
+    with path.open("r", encoding="utf-8-sig", newline="") as stream:
+        reader = csv.reader(stream)
+        next(reader, None)
+        return [row for row in reader if row]
+
+
+def _upsert_rows(existing, incoming, key_columns):
+    """Merge snapshots by their natural grain, retaining data outside API windows."""
+    rows = {}
+    for row in (*existing, *incoming):
+        if len(row) <= max(key_columns):
+            continue
+        key = tuple(str(row[index]) for index in key_columns)
+        if all(key):
+            rows[key] = row
+    return sorted(rows.values(), key=lambda row: tuple(str(row[i]) for i in key_columns))
 
 
 async def _request(client, token, method, url, **kwargs):
@@ -64,6 +88,40 @@ def _campaign_ids(payload):
         for item in group.get("advert_list", []):
             if item.get("advertId"):
                 ids.add(int(item["advertId"]))
+    return sorted(ids)
+
+
+async def _catalog_nm_ids(client, token):
+    """List every seller SKU; ads-only IDs omit organic products from the funnel."""
+    url = PRICES + "/api/v2/list/goods/filter"
+    limit = 1000
+    offset = 0
+    ids = set()
+    while True:
+        payload = await _request(client, token, "GET", url,
+                                 params={"limit": limit, "offset": offset})
+        data = payload.get("data", payload) if isinstance(payload, dict) else {}
+        goods = (data.get("listGoods") or data.get("goods") or payload.get("listGoods") or []) \
+            if isinstance(data, dict) and isinstance(payload, dict) else []
+        if not isinstance(goods, list):
+            raise RuntimeError("WB product catalog returned an invalid page")
+        previous_count = len(ids)
+        page_ids = set()
+        for item in goods:
+            if not isinstance(item, dict):
+                continue
+            try:
+                nm_id = int(item.get("nmID") or item.get("nmId") or item.get("nm"))
+            except (TypeError, ValueError):
+                continue
+            if nm_id > 0:
+                page_ids.add(nm_id)
+        ids.update(page_ids)
+        if len(goods) < limit or not goods:
+            break
+        if len(ids) == previous_count:
+            raise RuntimeError("WB product catalog pagination did not advance")
+        offset += limit
     return sorted(ids)
 
 
@@ -104,9 +162,13 @@ def _funnel_rows(shop, payload):
 async def sync_once():
     global _last_fullstats
     now = datetime.now(ZoneInfo("Europe/Moscow"))
-    begin = (now.date() - timedelta(days=6)).isoformat()
+    # Advertising fullstats supports a 31-day window. Re-read the overlap on
+    # each poll, then merge it into the durable local history below.
+    begin = (now.date() - timedelta(days=FULLSTATS_DAYS - 1)).isoformat()
     end = now.date().isoformat()
-    status = {"startedAt": now.isoformat(), "period": [begin, end], "shops": {}}
+    funnel_begin = (now.date() - timedelta(days=6)).isoformat()
+    status = {"startedAt": now.isoformat(), "period": [begin, end],
+              "funnel_period": [funnel_begin, end], "shops": {}}
     ad_rows, funnel_rows = [], []
     successful_ads, successful_funnels = set(), set()
     async with httpx.AsyncClient(timeout=90) as client:
@@ -141,17 +203,19 @@ async def sync_once():
                 state["ok"] = False
                 state["errors"]["promotion"] = f"{type(exc).__name__}: {exc}"
             try:
-                # History requires 1..20 explicit nmIds; [] is a WB 400.
-                nm_ids = sorted({int(row[3]) for row in shop_rows})
+                # The daily history endpoint accepts 1..20 nmIds per call and
+                # only covers the recent seven days. Enumerate the whole seller
+                # catalog so organic-only products are included as well.
+                nm_ids = await _catalog_nm_ids(client, token)
                 shop_funnel = []
-                for start in range(0, len(nm_ids), 20):
+                for start in range(0, len(nm_ids), FUNNEL_BATCH_SIZE):
                     if start:
                         await asyncio.sleep(20)
                     raw = await _request(
                         client, token, "POST",
                         ANALYTICS + "/api/analytics/v3/sales-funnel/products/history",
-                        json={"selectedPeriod": {"start": begin, "end": end},
-                              "nmIds": nm_ids[start:start + 20],
+                        json={"selectedPeriod": {"start": funnel_begin, "end": end},
+                              "nmIds": nm_ids[start:start + FUNNEL_BATCH_SIZE],
                               "skipDeletedNm": True, "aggregationLevel": "day"})
                     _atomic_json(DATA_DIR / shop / f"funnel_{start // 20}.json", raw)
                     shop_funnel.extend(_funnel_rows(shop, raw))
@@ -163,7 +227,14 @@ async def sync_once():
                 state["ok"] = False
                 state["errors"]["funnel"] = f"{type(exc).__name__}: {exc}"
             status["shops"][shop] = state
-    vendor_map = {(r[0], str(r[2])): r[3] for r in funnel_rows if r[3]}
+    # Reuse labels learned from previous days, including products removed from
+    # the current catalog, then let the fresh funnel snapshot take precedence.
+    vendor_map = {}
+    for shop in SHOPS:
+        for row in _read_csv_rows(DATA_DIR / shop / "funnel_sku_day.csv"):
+            if len(row) > 3 and row[3]:
+                vendor_map[(row[0], str(row[2]))] = row[3]
+    vendor_map.update({(r[0], str(r[2])): r[3] for r in funnel_rows if r[3]})
     for row in ad_rows:
         row[-1] = vendor_map.get((row[0], str(row[3])), "")
     # Keep verified last-good per-shop datasets on partial API failure.
@@ -171,31 +242,33 @@ async def sync_once():
     for shop in SHOPS:
         shop_dir = DATA_DIR / shop
         if shop in successful_ads:
-            _atomic_csv(shop_dir / "campaign_sku_day.csv", COLUMNS,
-                        [r for r in ad_rows if r[0] == shop])
+            current = _read_csv_rows(shop_dir / "campaign_sku_day.csv")
+            merged = _upsert_rows(current, [r for r in ad_rows if r[0] == shop], (0, 1, 2, 3))
+            _atomic_csv(shop_dir / "campaign_sku_day.csv", COLUMNS, merged)
             _atomic_json(shop_dir / "ad_refresh.json", {"refreshedAt": now.isoformat(),
                           "period": [begin, end], "quality": "LIVE_API",
-                          "rows": sum(r[0] == shop for r in ad_rows)})
+                          "rows_in_refresh": sum(r[0] == shop for r in ad_rows),
+                          "rows_in_history": len(merged)})
         if shop in successful_funnels:
-            _atomic_csv(shop_dir / "funnel_sku_day.csv", FUNNEL_COLUMNS,
-                        [r for r in funnel_rows if r[0] == shop])
+            current = _read_csv_rows(shop_dir / "funnel_sku_day.csv")
+            merged = _upsert_rows(current, [r for r in funnel_rows if r[0] == shop], (0, 1, 2))
+            _atomic_csv(shop_dir / "funnel_sku_day.csv", FUNNEL_COLUMNS, merged)
         if shop in successful_ads or shop in successful_funnels:
             _atomic_json(shop_dir / "latest_poll.json",
                          {"polledAt": now.isoformat(), "state": status["shops"][shop]})
     def _persisted_rows(shop, filename):
-        path = DATA_DIR / shop / filename
-        if not path.exists():
-            return []
-        with path.open("r", encoding="utf-8-sig", newline="") as stream:
-            return list(csv.reader(stream))[1:]
+        return _read_csv_rows(DATA_DIR / shop / filename)
     all_ads = [r for shop in SHOPS for r in _persisted_rows(shop, "campaign_sku_day.csv")]
     all_funnels = [r for shop in SHOPS for r in _persisted_rows(shop, "funnel_sku_day.csv")]
     _atomic_csv(DATA_DIR / "campaign_sku_day.csv", COLUMNS, all_ads)
     _atomic_csv(DATA_DIR / "funnel_sku_day.csv", FUNNEL_COLUMNS, all_funnels)
-    # Hourly observation: never mislabel a rolling seven-day API report as hourly spend.
+    # Poll timestamp is not the data grain: disclose the source windows explicitly.
     _atomic_json(DATA_DIR / "latest_poll.json", {"polledAt": now.isoformat(),
                   "coverage": status["shops"], "ad_rows": len(all_ads),
-                  "funnel_rows": len(all_funnels), "grain": "campaign_x_sku_x_day"})
+                  "funnel_rows": len(all_funnels), "grain": "campaign_x_sku_x_day",
+                  "advertising_window_days": FULLSTATS_DAYS,
+                  "funnel_window_days": 7,
+                  "history_policy": "upsert; retain collected rows outside rolling source windows"})
     status["finishedAt"] = datetime.now(ZoneInfo("Europe/Moscow")).isoformat()
     status["ok"] = all(s["ok"] for s in status["shops"].values())
     _atomic_json(DATA_DIR / "status.json", status)

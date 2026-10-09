@@ -2467,6 +2467,136 @@ function sellmonitorGithubWebAuth_(token) {
 }
 
 
+const SMC_WB_TRAFFIC = Object.freeze({
+  SPREADSHEET_ID: '11ULokTx74QjziZjThJ0lfxFiMQW42-WV4315cG7eIuU',
+  DATASETS: {
+    ads: {
+      sheet: '12_ADS_CAMPAIGN_DAY',
+      width: 15,
+      source_width: 13,
+      key_columns: [0, 1, 2, 3],
+      source: 'WB /adv/v3/fullstats',
+      quality: 'EXACT_CAMPAIGN_NM_DAY',
+      numeric_columns: [2, 3, 4, 5, 6, 7, 8, 9],
+      headers: ['store_id','date','advert_id','nmId','views','clicks','atbs','orders','spend_rub','order_sum_rub','source','quality','seller_article','load_timestamp','coverage_status']
+    },
+    funnel: {
+      sheet: '13_FUNNEL_DAY',
+      width: 11,
+      source_width: 9,
+      key_columns: [0, 1, 2],
+      source: 'WB Analytics products/history',
+      quality: null,
+      numeric_columns: [2, 4, 5, 6, 7],
+      headers: ['store_id','date','nmId','vendorCode','open_count','cart_count','order_count','order_sum_rub','source','load_timestamp','coverage_status']
+    }
+  }
+});
+
+
+function sellmonitorGithubNormalizeWbTrafficRows_(dataset, inputRows, observedAt) {
+  var cfg = SMC_WB_TRAFFIC.DATASETS[dataset];
+  if (!cfg) throw new Error('WB_TRAFFIC_UNKNOWN_DATASET');
+  if (!Array.isArray(inputRows)) throw new Error('WB_TRAFFIC_ROWS_NOT_ARRAY');
+  if (inputRows.length > 25000) throw new Error('WB_TRAFFIC_ROW_LIMIT_EXCEEDED');
+  var stores = {ap:true, aa:true, yv:true};
+  var seen = {};
+  var maxDate = '';
+  var rows = inputRows.map(function(sourceRow, rowIndex) {
+    if (!Array.isArray(sourceRow) || sourceRow.length !== cfg.source_width) {
+      throw new Error('WB_TRAFFIC_INVALID_ROW_WIDTH:' + rowIndex);
+    }
+    var storeId = String(sourceRow[0] || '').trim();
+    var day = String(sourceRow[1] || '').trim();
+    var nmId = Number(sourceRow[dataset === 'ads' ? 3 : 2]);
+    if (!stores[storeId]) throw new Error('WB_TRAFFIC_UNKNOWN_STORE:' + rowIndex);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day) ||
+        isNaN(new Date(day + 'T00:00:00Z').getTime()) ||
+        new Date(day + 'T00:00:00Z').toISOString().slice(0, 10) !== day) {
+      throw new Error('WB_TRAFFIC_INVALID_DATE:' + rowIndex);
+    }
+    if (!isFinite(nmId) || nmId <= 0 || Math.floor(nmId) !== nmId) {
+      throw new Error('WB_TRAFFIC_INVALID_NMID:' + rowIndex);
+    }
+    if (String(sourceRow[dataset === 'ads' ? 10 : 8] || '') !== cfg.source) {
+      throw new Error('WB_TRAFFIC_SOURCE_MISMATCH:' + rowIndex);
+    }
+    if (cfg.quality && String(sourceRow[11] || '') !== cfg.quality) {
+      throw new Error('WB_TRAFFIC_QUALITY_MISMATCH:' + rowIndex);
+    }
+    var key = cfg.key_columns.map(function(i) { return String(sourceRow[i] || ''); }).join('|');
+    if (seen[key]) throw new Error('WB_TRAFFIC_DUPLICATE_KEY:' + key);
+    seen[key] = true;
+    var row = sourceRow.slice();
+    var textColumn = dataset === 'ads' ? 12 : 3;
+    var textValue = String(row[textColumn] == null ? '' : row[textColumn]);
+    if (/^[=+\-@]/.test(textValue)) row[textColumn] = "'" + textValue;
+    cfg.numeric_columns.forEach(function(i) {
+      if (row[i] === '' || row[i] == null) {
+        row[i] = '';
+      } else {
+        var n = Number(row[i]);
+        if (!isFinite(n)) throw new Error('WB_TRAFFIC_INVALID_NUMBER:' + rowIndex + ':' + i);
+        row[i] = n;
+      }
+    });
+    row[1] = new Date(day + 'T12:00:00+03:00');
+    row.push(new Date(observedAt), 'SOURCE_OK');
+    if (day > maxDate) maxDate = day;
+    return row;
+  });
+  return {rows: rows, max_date: maxDate};
+}
+
+
+function sellmonitorGithubPublishWbTraffic_(body) {
+  body = body || {};
+  var status = body.sync_status || {};
+  var shops = status.shops || {};
+  ['ap','aa','yv'].forEach(function(shop) {
+    if (!shops[shop] || shops[shop].ok !== true) {
+      throw new Error('WB_TRAFFIC_SHOP_NOT_VERIFIED:' + shop);
+    }
+  });
+  if (status.ok !== true || !status.finishedAt || isNaN(new Date(status.finishedAt).getTime())) {
+    throw new Error('WB_TRAFFIC_SYNC_NOT_VERIFIED');
+  }
+  var datasets = body.datasets || {};
+  var prepared = {};
+  ['ads','funnel'].forEach(function(name) {
+    var sourceRows = datasets[name];
+    if (sourceRows == null) sourceRows = [];
+    prepared[name] = sellmonitorGithubNormalizeWbTrafficRows_(name, sourceRows, status.finishedAt);
+  });
+  var ss = SpreadsheetApp.openById(SMC_WB_TRAFFIC.SPREADSHEET_ID);
+  var result = {ok:true, action:'publish_wb_traffic', sync_finished_at:status.finishedAt, datasets:{}};
+  ['ads','funnel'].forEach(function(name) {
+    var cfg = SMC_WB_TRAFFIC.DATASETS[name];
+    var table = prepared[name];
+    if (!table.rows.length) {
+      result.datasets[name] = {written:0, skipped:true, reason:'empty_snapshot_preserved', max_date:''};
+      return;
+    }
+    var sh = ss.getSheetByName(cfg.sheet);
+    if (!sh) throw new Error('WB_TRAFFIC_TARGET_TAB_MISSING:' + cfg.sheet);
+    var liveHeaders = sh.getRange(1, 1, 1, cfg.width).getDisplayValues()[0];
+    if (cfg.headers.some(function(h, i) { return String(liveHeaders[i] || '').trim() !== h; })) {
+      throw new Error('WB_TRAFFIC_HEADER_MISMATCH:' + cfg.sheet);
+    }
+    var oldLastRow = sh.getLastRow();
+    var lastNeeded = table.rows.length + 1;
+    if (sh.getMaxRows() < lastNeeded) sh.insertRowsAfter(sh.getMaxRows(), lastNeeded - sh.getMaxRows());
+    sh.getRange(2, 1, table.rows.length, cfg.width).setValues(table.rows);
+    if (oldLastRow > lastNeeded) {
+      sh.getRange(lastNeeded + 1, 1, oldLastRow - lastNeeded, cfg.width).clearContent();
+    }
+    result.datasets[name] = {written:table.rows.length, skipped:false, max_date:table.max_date};
+  });
+  SpreadsheetApp.flush();
+  return result;
+}
+
+
 const SMC_PORTFOLIO_SOURCES = Object.freeze({
   weekly_summary: {
     spreadsheet_id: '1hU24PrecF2hbeLbKfPEKRQbjXhdd8kONLTMsR4yNIug',
@@ -2932,6 +3062,10 @@ function doPost(e) {
 
     if (action === 'publish_search_positions') {
       return sellmonitorGithubWebJson_(sellmonitorGithubPublishRuntimeSearch_(body.cabinet || '', body.snapshot || {}));
+    }
+
+    if (action === 'publish_wb_traffic') {
+      return sellmonitorGithubWebJson_(sellmonitorGithubPublishWbTraffic_(body));
     }
 
     if (action === 'all' || action === 'portfolio_snapshot') {

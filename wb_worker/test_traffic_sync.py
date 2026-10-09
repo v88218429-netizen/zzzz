@@ -1,5 +1,13 @@
 import unittest
-from traffic_sync import _campaign_ids, _stats_rows, _funnel_rows
+import csv
+import os
+import tempfile
+from datetime import date, datetime
+from pathlib import Path
+from unittest.mock import patch
+
+import traffic_sync
+from traffic_sync import _campaign_ids, _stats_rows, _funnel_rows, _upsert_rows
 
 
 class TrafficParsingTest(unittest.TestCase):
@@ -39,6 +47,76 @@ class TrafficParsingTest(unittest.TestCase):
                               "cartCount": 2, "orderCount": 1, "orderSum": 500}]}]
         rows = _funnel_rows("ap", data)
         self.assertEqual(rows[0][2:7], [42, "MY-42", 12, 2, 1])
+
+    def test_upsert_retains_older_history_and_replaces_overlap(self):
+        old = [
+            ["ap", "2026-09-01", "10", "20", "1", "2"],
+            ["ap", "2026-10-08", "10", "20", "3", "4"],
+        ]
+        new = [["ap", "2026-10-08", "10", "20", "30", "40"]]
+        merged = _upsert_rows(old, new, (0, 1, 2, 3))
+        self.assertEqual(len(merged), 2)
+        self.assertEqual(merged[0][1], "2026-09-01")
+        self.assertEqual(merged[1][4:], ["30", "40"])
+
+
+class TrafficSyncPersistenceTest(unittest.IsolatedAsyncioTestCase):
+    async def test_catalog_funnel_and_incremental_history_persistence(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            data_dir = Path(temp_dir) / "traffic"
+            shop_dir = data_dir / "ap"
+            shop_dir.mkdir(parents=True)
+            traffic_sync._atomic_csv(shop_dir / "campaign_sku_day.csv", traffic_sync.COLUMNS, [
+                ["ap", "2026-09-01", 1, 20, 10, 1, 0, 0, 0, 0,
+                 "WB /adv/v3/fullstats", "EXACT_CAMPAIGN_NM_DAY", "SKU20"]
+            ])
+            traffic_sync._atomic_csv(shop_dir / "funnel_sku_day.csv", traffic_sync.FUNNEL_COLUMNS, [
+                ["ap", "2026-09-01", 20, "SKU20", 4, 1, 0, 0, "WB Analytics products/history"]
+            ])
+
+            def rows(path):
+                with path.open("r", encoding="utf-8-sig", newline="") as stream:
+                    return list(csv.reader(stream))[1:]
+
+            poll_date = datetime.now(traffic_sync.ZoneInfo("Europe/Moscow")).date().isoformat()
+
+            async def fake_request(client, token, method, url, **kwargs):
+                if url.endswith("/adv/v1/promotion/count"):
+                    return {"adverts": [{"status": 9, "advert_list": [{"advertId": 7}]}]}
+                if url.endswith("/adv/v3/fullstats"):
+                    return [{"advertId": 7, "days": [{"date": poll_date, "apps": [{
+                        "nms": [{"nmId": 20, "views": 5, "clicks": 1}]
+                    }]}]}]
+                if url.endswith("/api/v2/list/goods/filter"):
+                    return {"data": {"listGoods": [{"nmID": 20}, {"nmID": 30}]}}
+                if url.endswith("/api/analytics/v3/sales-funnel/products/history"):
+                    requested_ids = kwargs["json"]["nmIds"]
+                    return [{"product": {"nmId": nm_id, "vendorCode": f"SKU{nm_id}"},
+                             "history": [{"date": poll_date, "openCount": 10,
+                                          "cartCount": 2, "orderCount": 1, "orderSum": 50}]}
+                            for nm_id in requested_ids]
+                raise AssertionError(f"Unexpected URL: {url}")
+
+            with patch.object(traffic_sync, "DATA_DIR", data_dir), \
+                 patch.object(traffic_sync, "SHOPS", {"ap": ("ИП АП", "WB_API_TOKEN_AP")}), \
+                 patch.object(traffic_sync, "_request", side_effect=fake_request), \
+                 patch.dict(os.environ, {"WB_API_TOKEN_AP": "test-token"}):
+                traffic_sync._last_fullstats = 0
+                first = await traffic_sync.sync_once()
+                self.assertTrue(first["ok"])
+                self.assertEqual((date.fromisoformat(first["period"][1]) -
+                                  date.fromisoformat(first["period"][0])).days, 30)
+                self.assertEqual((date.fromisoformat(first["funnel_period"][1]) -
+                                  date.fromisoformat(first["funnel_period"][0])).days, 6)
+                self.assertEqual(first["shops"]["ap"]["funnel_nm_ids"], 2)
+                self.assertEqual(len(rows(shop_dir / "campaign_sku_day.csv")), 2)
+                self.assertEqual(len(rows(shop_dir / "funnel_sku_day.csv")), 3)
+
+                traffic_sync._last_fullstats = 0
+                second = await traffic_sync.sync_once()
+                self.assertTrue(second["ok"])
+                self.assertEqual(len(rows(shop_dir / "campaign_sku_day.csv")), 2)
+                self.assertEqual(len(rows(shop_dir / "funnel_sku_day.csv")), 3)
 
 
 if __name__ == "__main__":
