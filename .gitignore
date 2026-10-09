@@ -1,0 +1,2 @@
+# Seller finance exports are transient in runners; never track them in the public repository.
+wb_data/finance/*.csv

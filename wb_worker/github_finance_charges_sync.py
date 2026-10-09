@@ -9,7 +9,10 @@ from typing import Any
 import httpx
 
 BASE_URL = "https://finance-api.wildberries.ru"
-OUT_DIR = Path(os.environ.get("FINANCE_GITHUB_OUT", "../wb_data/finance")).resolve()
+OUT_DIR = Path(os.environ.get(
+    "FINANCE_GITHUB_OUT",
+    str(Path(os.environ.get("RUNNER_TEMP", "/tmp")) / "wb-finance"),
+)).resolve()
 LOOKBACK_DAYS = max(2, min(31, int(os.environ.get("FINANCE_LOOKBACK_DAYS", "30"))))
 MIN_REQUEST_INTERVAL_SEC = float(os.environ.get("FINANCE_MIN_REQUEST_INTERVAL_SEC", "61"))
 

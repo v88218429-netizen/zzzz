@@ -1,0 +1,121 @@
+name: WB traffic GitHub sync
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "37 */6 * * *"
+  workflow_run:
+    workflows: ["Sellmonitor GitHub worker deploy"]
+    types: [completed]
+  push:
+    branches: [mainggg]
+    paths:
+      - "wb_worker/traffic_sync.py"
+      - "wb_worker/github_traffic_sync.py"
+      - ".github/workflows/wb-traffic-github-sync.yml"
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: wb-traffic-github-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: mainggg
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Restore encrypted traffic history
+        shell: bash
+        env:
+          STATE_SECRET: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
+        run: |
+          set -euo pipefail
+          test -n "$STATE_SECRET"
+          mkdir -p "$RUNNER_TEMP/wb-traffic/data"
+          if git ls-remote --exit-code --heads origin traffic-state >/dev/null 2>&1; then
+            git fetch --depth=1 origin traffic-state
+            if git cat-file -e "FETCH_HEAD:state/traffic.tar.gz.enc" 2>/dev/null; then
+              git show "FETCH_HEAD:state/traffic.tar.gz.enc" > "$RUNNER_TEMP/traffic.tar.gz.enc"
+              openssl enc -d -aes-256-cbc -pbkdf2 \
+                -pass env:STATE_SECRET \
+                -in "$RUNNER_TEMP/traffic.tar.gz.enc" \
+                -out "$RUNNER_TEMP/traffic.tar.gz"
+              tar -xzf "$RUNNER_TEMP/traffic.tar.gz" -C "$RUNNER_TEMP/wb-traffic/data"
+            fi
+          fi
+
+      - name: Install collector dependency
+        run: python -m pip install --disable-pip-version-check httpx
+
+      - name: Collect advertising and funnel facts from WB
+        id: collect
+        env:
+          DATA_DIR: ${{ runner.temp }}/wb-traffic/data
+          WB_API_TOKEN_AP: ${{ secrets.WB_API_TOKEN_AP }}
+          WB_API_TOKEN_AA: ${{ secrets.WB_API_TOKEN_AA }}
+          WB_API_TOKEN_YV: ${{ secrets.WB_API_TOKEN_YV }}
+        run: python wb_worker/github_traffic_sync.py
+
+      - name: Encrypt and save traffic history
+        id: archive
+        if: always() && steps.collect.outcome != 'cancelled'
+        shell: bash
+        env:
+          STATE_SECRET: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
+          DATA_DIR: ${{ runner.temp }}/wb-traffic/data
+        run: |
+          set -euo pipefail
+          test -n "$STATE_SECRET"
+          test -d "$DATA_DIR/traffic"
+          mkdir -p "$RUNNER_TEMP/wb-traffic-publish/state"
+          tar -czf "$RUNNER_TEMP/traffic.tar.gz" -C "$DATA_DIR" .
+          openssl enc -aes-256-cbc -salt -pbkdf2 \
+            -pass env:STATE_SECRET \
+            -in "$RUNNER_TEMP/traffic.tar.gz" \
+            -out "$RUNNER_TEMP/wb-traffic-publish/state/traffic.tar.gz.enc"
+          python - <<'PY'
+          import json, os, pathlib
+          root=pathlib.Path(os.environ['DATA_DIR'])/'traffic'
+          status_path=root/'status.json'
+          status=json.loads(status_path.read_text(encoding='utf-8')) if status_path.exists() else {}
+          lines=[
+              '# WB traffic encrypted state',
+              '',
+              '> Business rows are AES-256 encrypted. This branch contains no plain traffic rows or API tokens.',
+              '',
+              f"- Last collector finish: {status.get('finishedAt','unknown')}",
+              f"- Last collector complete: {status.get('ok',False)}",
+              f"- Advertising window: {status.get('period','unknown')}",
+              f"- Funnel window: {status.get('funnel_period','unknown')}",
+          ]
+          (pathlib.Path(os.environ['RUNNER_TEMP'])/'wb-traffic-publish'/'README.md').write_text(
+              '\n'.join(lines)+'\n', encoding='utf-8')
+          PY
+          git worktree add --detach "$RUNNER_TEMP/wb-traffic-state-branch" HEAD
+          git -C "$RUNNER_TEMP/wb-traffic-state-branch" switch --orphan traffic-state-next
+          git -C "$RUNNER_TEMP/wb-traffic-state-branch" rm -rf . >/dev/null 2>&1 || true
+          cp -R "$RUNNER_TEMP/wb-traffic-publish/." "$RUNNER_TEMP/wb-traffic-state-branch/"
+          git -C "$RUNNER_TEMP/wb-traffic-state-branch" config user.name "wb-traffic-bot"
+          git -C "$RUNNER_TEMP/wb-traffic-state-branch" config user.email "wb-traffic-bot@users.noreply.github.com"
+          git -C "$RUNNER_TEMP/wb-traffic-state-branch" add README.md state/traffic.tar.gz.enc
+          git -C "$RUNNER_TEMP/wb-traffic-state-branch" commit -m "traffic: encrypted collected history"
+          git -C "$RUNNER_TEMP/wb-traffic-state-branch" push origin HEAD:traffic-state --force
+
+      - name: Publish verified facts to WB AI HUB
+        if: steps.collect.outcome == 'success' && steps.archive.outcome == 'success'
+        env:
+          DATA_DIR: ${{ runner.temp }}/wb-traffic/data
+          GOOGLE_SHEETS_BRIDGE_KEY: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
+        run: python wb_worker/github_traffic_sync.py --publish
