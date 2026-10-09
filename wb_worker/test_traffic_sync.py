@@ -152,6 +152,29 @@ class TrafficSyncPersistenceTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([item["advertId"] for item in payload], [42])
         self.assertEqual(no_statistics, [41])
 
+    async def test_fullstats_isolates_null_payload_campaign_without_zero_fill(self):
+        requested_sizes = []
+
+        async def fake_request(client, token, method, url, **kwargs):
+            campaign_ids = [int(value) for value in kwargs["params"]["ids"].split(",")]
+            requested_sizes.append(len(campaign_ids))
+            if 51 in campaign_ids:
+                return None
+            return [{"advertId": campaign_id, "days": []} for campaign_id in campaign_ids]
+
+        null_payload_campaigns = []
+        with patch.object(traffic_sync, "_request", side_effect=fake_request), \
+             patch.object(traffic_sync.asyncio, "sleep", new=AsyncMock()):
+            traffic_sync._last_fullstats = 0
+            payload = await traffic_sync._fullstats_batch(
+                object(), "test-token", [51, 52], "2026-09-09", "2026-10-09",
+                null_payload_campaign_ids=null_payload_campaigns
+            )
+
+        self.assertEqual(requested_sizes, [2, 1, 1])
+        self.assertEqual([item["advertId"] for item in payload], [52])
+        self.assertEqual(null_payload_campaigns, [51])
+
     async def test_fullstats_reports_unrecognized_success_payload_shape(self):
         async def fake_request(client, token, method, url, **kwargs):
             return {"errorCode": "unexpected", "detail": "unknown provider response"}
