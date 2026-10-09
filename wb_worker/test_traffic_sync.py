@@ -102,6 +102,43 @@ class TrafficSyncPersistenceTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(requested_sizes, [50, 25, 25])
         self.assertEqual([item["advertId"] for item in payload], list(range(1, 51)))
 
+    async def test_fullstats_records_explicit_no_statistics_without_zero_rows(self):
+        requested_sizes = []
+
+        async def fake_request(client, token, method, url, **kwargs):
+            requested_sizes.append(len(kwargs["params"]["ids"].split(",")))
+            request = httpx.Request(method, url)
+            response = httpx.Response(400, request=request, json={
+                "detail": "there are no statistics for this advertising period",
+                "status": 400,
+                "title": "invalid payload",
+            })
+            raise httpx.HTTPStatusError("no statistics", request=request, response=response)
+
+        no_statistics = []
+        with patch.object(traffic_sync, "_request", side_effect=fake_request), \
+             patch.object(traffic_sync.asyncio, "sleep", new=AsyncMock()):
+            traffic_sync._last_fullstats = 0
+            payload = await traffic_sync._fullstats_batch(
+                object(), "test-token", [31, 32], "2026-09-09", "2026-10-09", no_statistics
+            )
+
+        self.assertEqual(requested_sizes, [2])
+        self.assertEqual(payload, [])
+        self.assertEqual(no_statistics, [31, 32])
+
+    async def test_fullstats_reports_unrecognized_success_payload_shape(self):
+        async def fake_request(client, token, method, url, **kwargs):
+            return {"errorCode": "unexpected", "detail": "unknown provider response"}
+
+        with patch.object(traffic_sync, "_request", side_effect=fake_request), \
+             patch.object(traffic_sync.asyncio, "sleep", new=AsyncMock()):
+            traffic_sync._last_fullstats = 0
+            with self.assertRaisesRegex(RuntimeError, "keys=.*errorCode"):
+                await traffic_sync._fullstats_batch(
+                    object(), "test-token", [33], "2026-09-09", "2026-10-09"
+                )
+
     async def test_failed_single_campaign_keeps_last_good_ads_history(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             data_dir = Path(temp_dir) / "traffic"
