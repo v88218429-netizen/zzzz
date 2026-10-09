@@ -96,7 +96,7 @@ jobs:
               '> Business rows are AES-256 encrypted. This branch contains no plain traffic rows or API tokens.',
               '',
               f"- Last collector finish: {status.get('finishedAt','unknown')}",
-              f"- Last collector complete: {status.get('ok',False)}",
+              f"- Last collector complete: {status.get('complete',status.get('ok',False))}",
               f"- Advertising window: {status.get('period','unknown')}",
               f"- Funnel window: {status.get('funnel_period','unknown')}",
           ]
@@ -109,6 +109,9 @@ jobs:
               for source, error in sorted((detail.get('errors') or {}).items()):
                   safe_error=re.sub(r'\b\d{6,}\b', '[id]', str(error))[:180]
                   lines.append(f"  - {source}: {safe_error}")
+              for source, warning in sorted((detail.get('warnings') or {}).items()):
+                  safe_warning=re.sub(r'\b\d{6,}\b', '[id]', str(warning))[:180]
+                  lines.append(f"  - {source} warning: {safe_warning}")
           (pathlib.Path(os.environ['RUNNER_TEMP'])/'wb-traffic-publish'/'README.md').write_text(
               '\n'.join(lines)+'\n', encoding='utf-8')
           PY

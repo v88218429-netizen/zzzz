@@ -93,7 +93,8 @@ def _is_no_statistics_response(payload):
 
 
 async def _fullstats_batch(client, token, campaign_ids, begin, end,
-                           no_statistics_campaign_ids=None):
+                           no_statistics_campaign_ids=None,
+                           null_payload_campaign_ids=None):
     """Fetch fullstats, isolating server errors and campaigns with empty windows."""
     global _last_fullstats
     if not campaign_ids:
@@ -105,13 +106,14 @@ async def _fullstats_batch(client, token, campaign_ids, begin, end,
         await asyncio.sleep(delay)
 
     no_statistics_campaign_ids = [] if no_statistics_campaign_ids is None else no_statistics_campaign_ids
+    null_payload_campaign_ids = [] if null_payload_campaign_ids is None else null_payload_campaign_ids
 
     async def split_batch():
         middle = len(campaign_ids) // 2
         left = await _fullstats_batch(client, token, campaign_ids[:middle], begin, end,
-                                      no_statistics_campaign_ids)
+                                      no_statistics_campaign_ids, null_payload_campaign_ids)
         right = await _fullstats_batch(client, token, campaign_ids[middle:], begin, end,
-                                       no_statistics_campaign_ids)
+                                       no_statistics_campaign_ids, null_payload_campaign_ids)
         return [*left, *right]
 
     try:
@@ -143,6 +145,14 @@ async def _fullstats_batch(client, token, campaign_ids, begin, end,
     else:
         _last_fullstats = loop.time()
         if not isinstance(raw, list):
+            if raw is None:
+                # WB sometimes answers HTTP 200 with JSON null instead of the
+                # documented campaign list. Isolate it to one campaign and
+                # preserve good sibling facts without inventing zero rows.
+                if len(campaign_ids) == 1:
+                    null_payload_campaign_ids.append(campaign_ids[0])
+                    return []
+                return await split_batch()
             if _is_no_statistics_response(raw):
                 if len(campaign_ids) == 1:
                     no_statistics_campaign_ids.append(campaign_ids[0])
@@ -295,6 +305,7 @@ async def sync_once():
             # Each source has independent health. An error never promotes stale data.
             shop_rows = []
             no_statistics_campaign_ids = []
+            null_payload_campaign_ids = []
             try:
                 listing = await _request(client, token, "GET", PROMO + "/adv/v1/promotion/count")
                 ids = _campaign_ids(listing)
@@ -303,7 +314,8 @@ async def sync_once():
                 for start in range(0, len(ids), 50):
                     batch = ids[start:start + 50]
                     raw = await _fullstats_batch(client, token, batch, begin, end,
-                                                 no_statistics_campaign_ids)
+                                                 no_statistics_campaign_ids,
+                                                 null_payload_campaign_ids)
                     _atomic_json(DATA_DIR / shop / f"fullstats_{start // 50}.json", raw)
                     shop_rows.extend(_stats_rows(shop, raw))
                 ad_rows.extend(shop_rows)
@@ -311,6 +323,15 @@ async def sync_once():
                 state["campaigns_without_period_statistics"] = len(no_statistics_campaign_ids)
                 if no_statistics_campaign_ids:
                     state["campaigns_without_period_statistics_sample"] = no_statistics_campaign_ids[:20]
+                state["campaigns_with_null_payload"] = len(null_payload_campaign_ids)
+                if null_payload_campaign_ids:
+                    state["campaigns_with_null_payload_sample"] = null_payload_campaign_ids[:20]
+                    state["warnings"] = {
+                        "promotion": (
+                            f"WB returned JSON null for {len(null_payload_campaign_ids)} individual "
+                            "campaign(s); excluded without zero-fill."
+                        )
+                    }
                 successful_ads.add(shop)
             except Exception as exc:
                 state["ok"] = False
@@ -318,6 +339,15 @@ async def sync_once():
                 state["campaigns_without_period_statistics"] = len(no_statistics_campaign_ids)
                 if no_statistics_campaign_ids:
                     state["campaigns_without_period_statistics_sample"] = no_statistics_campaign_ids[:20]
+                state["campaigns_with_null_payload"] = len(null_payload_campaign_ids)
+                if null_payload_campaign_ids:
+                    state["campaigns_with_null_payload_sample"] = null_payload_campaign_ids[:20]
+                    state["warnings"] = {
+                        "promotion": (
+                            f"WB returned JSON null for {len(null_payload_campaign_ids)} individual "
+                            "campaign(s); excluded without zero-fill."
+                        )
+                    }
             try:
                 # The daily history endpoint accepts 1..20 nmIds per call and
                 # only covers the recent seven days. Enumerate the whole seller
@@ -395,6 +425,9 @@ async def sync_once():
     status["ads_poll_rows"] = len(ad_poll_rows)
     status["funnel_poll_rows"] = len(funnel_poll_rows)
     status["ok"] = all(s["ok"] for s in status["shops"].values())
+    status["complete"] = status["ok"] and not any(
+        shop.get("warnings") for shop in status["shops"].values()
+    )
     _atomic_json(DATA_DIR / "status.json", status)
     print("WB_TRAFFIC_SYNC_DONE " + json.dumps(status, ensure_ascii=False), flush=True)
     return status

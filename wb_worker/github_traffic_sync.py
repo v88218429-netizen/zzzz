@@ -101,12 +101,14 @@ def main() -> int:
     status = asyncio.run(sync_once())
     print(json.dumps({
         "ok": status.get("ok"),
+        "complete": status.get("complete"),
         "period": status.get("period"),
         "funnel_period": status.get("funnel_period"),
         "shops": {
             shop: {
                 "ok": value.get("ok"),
                 "campaigns": value.get("campaigns"),
+                "campaigns_with_null_payload": value.get("campaigns_with_null_payload"),
                 "ad_rows": value.get("ad_rows"),
                 "funnel_rows": value.get("funnel_rows"),
                 "funnel_nm_ids": value.get("funnel_nm_ids"),
