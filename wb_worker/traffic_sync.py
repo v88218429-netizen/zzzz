@@ -94,7 +94,7 @@ def _is_no_statistics_response(payload):
 
 async def _fullstats_batch(client, token, campaign_ids, begin, end,
                            no_statistics_campaign_ids=None):
-    """Fetch fullstats, splitting transient server-failing batches without losing the cabinet."""
+    """Fetch fullstats, isolating server errors and campaigns with empty windows."""
     global _last_fullstats
     if not campaign_ids:
         return []
@@ -105,6 +105,14 @@ async def _fullstats_batch(client, token, campaign_ids, begin, end,
         await asyncio.sleep(delay)
 
     no_statistics_campaign_ids = [] if no_statistics_campaign_ids is None else no_statistics_campaign_ids
+
+    async def split_batch():
+        middle = len(campaign_ids) // 2
+        left = await _fullstats_batch(client, token, campaign_ids[:middle], begin, end,
+                                      no_statistics_campaign_ids)
+        right = await _fullstats_batch(client, token, campaign_ids[middle:], begin, end,
+                                       no_statistics_campaign_ids)
+        return [*left, *right]
 
     try:
         raw = await _request(
@@ -117,12 +125,13 @@ async def _fullstats_batch(client, token, campaign_ids, begin, end,
         except ValueError:
             error_payload = exc.response.text
         if _is_no_statistics_response(error_payload):
-            # WB uses this explicit response when the requested campaign set
-            # has no facts in the selected window. Keep it as a known gap,
-            # never synthesize zero-valued campaign/day rows.
             _last_fullstats = loop.time()
-            no_statistics_campaign_ids.extend(campaign_ids)
-            return []
+            if len(campaign_ids) == 1:
+                # Record only a campaign that WB individually confirms has no
+                # facts for this window; never synthesize zero-valued rows.
+                no_statistics_campaign_ids.append(campaign_ids[0])
+                return []
+            return await split_batch()
         # _request has already exhausted its normal retries. WB may still fail
         # on a large request, so isolate the failing campaign by bisecting only
         # transient server errors. Do not fan out on rate limits or client/auth
@@ -130,18 +139,15 @@ async def _fullstats_batch(client, token, campaign_ids, begin, end,
         _last_fullstats = loop.time()
         if exc.response.status_code not in (500, 502, 503, 504) or len(campaign_ids) == 1:
             raise
-        middle = len(campaign_ids) // 2
-        left = await _fullstats_batch(client, token, campaign_ids[:middle], begin, end,
-                                      no_statistics_campaign_ids)
-        right = await _fullstats_batch(client, token, campaign_ids[middle:], begin, end,
-                                       no_statistics_campaign_ids)
-        return [*left, *right]
+        return await split_batch()
     else:
         _last_fullstats = loop.time()
         if not isinstance(raw, list):
             if _is_no_statistics_response(raw):
-                no_statistics_campaign_ids.extend(campaign_ids)
-                return []
+                if len(campaign_ids) == 1:
+                    no_statistics_campaign_ids.append(campaign_ids[0])
+                    return []
+                return await split_batch()
             keys = sorted(map(str, raw.keys()))[:12] if isinstance(raw, dict) else []
             detail = raw.get("detail") if isinstance(raw, dict) else None
             detail = str(detail)[:180] if detail is not None else ""
