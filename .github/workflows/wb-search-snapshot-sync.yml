@@ -3,7 +3,7 @@ name: WB search snapshot sync
 on:
   workflow_dispatch:
   schedule:
-    - cron: "23 */6 * * *"
+    - cron: "23 * * * *"
   push:
     branches: [mainggg]
     paths:
@@ -11,7 +11,7 @@ on:
       - ".github/workflows/wb-search-snapshot-sync.yml"
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: wb-search-snapshot-sync
@@ -30,49 +30,24 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Generate factual WB search snapshots
+      - name: Generate factual WB search snapshots independently
+        id: collect
         env:
           WB_API_TOKEN_AA: ${{ secrets.WB_API_TOKEN_AA }}
           WB_API_TOKEN_YV: ${{ secrets.WB_API_TOKEN_YV }}
-          SEARCH_GITHUB_OUT: "${{ github.workspace }}/wb_data/search"
-        run: |
-          set -euo pipefail
-          test -n "$WB_API_TOKEN_AA"
-          test -n "$WB_API_TOKEN_YV"
-          python wb_worker/github_search_snapshot_sync.py
+          SEARCH_GITHUB_OUT: ${{ runner.temp }}/wb-search
+        run: python wb_worker/github_search_snapshot_sync.py
 
-      - name: Validate derived output
-        run: |
-          set -euo pipefail
-          python - <<'PY'
-          import json, pathlib
-          root=pathlib.Path("wb_data/search")
-          allowed_trust={"FACTUAL_WB_ANALYTICS","FACTUAL_PUBLIC_SERP"}
-          allowed_sources={"wb_search_report","wb_public_search"}
-          for name in ("air.json","hozyushka.json"):
-              obj=json.loads((root/name).read_text(encoding="utf-8"))
-              rows=obj.get("data") or {}
-              assert obj.get("trust_status") in allowed_trust, obj
-              assert len(rows)>=10, (name,len(rows))
-              sources=set()
-              for x in rows.values():
-                  assert x.get("source") in allowed_sources
-                  assert x.get("query")
-                  assert isinstance(x.get("nm_id"), int)
-                  assert float(x.get("position"))>=1
-                  sources.add(x.get("source"))
-              print(name, "rows=", len(rows), "trust=", obj.get("trust_status"), "sources=", sorted(sources), "period_end=", obj.get("period_end"))
-          PY
+      - name: Publish available factual snapshots to private Sellmonitor sheets
+        if: always() && steps.collect.outcome != 'cancelled'
+        env:
+          SEARCH_GITHUB_OUT: ${{ runner.temp }}/wb-search
+          GOOGLE_SHEETS_BRIDGE_URL: "https://script.google.com/macros/s/AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw/exec"
+          GOOGLE_SHEETS_BRIDGE_KEY: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
+        run: python wb_worker/github_search_snapshot_sync.py --publish
 
-      - name: Publish non-secret snapshots
-        run: |
-          set -euo pipefail
-          git config user.name "wb-search-bot"
-          git config user.email "wb-search-bot@users.noreply.github.com"
-          git add wb_data/search/air.json wb_data/search/hozyushka.json wb_data/search/manifest.json
-          if git diff --cached --quiet; then
-            echo "No WB search changes"
-            exit 0
-          fi
-          git commit -m "wb search: refresh factual snapshots"
-          git push
+      - name: Require factual search sources for both cabinets
+        if: always() && steps.collect.outcome != 'cancelled'
+        env:
+          SEARCH_GITHUB_OUT: ${{ runner.temp }}/wb-search
+        run: python wb_worker/github_search_snapshot_sync.py --require-all
