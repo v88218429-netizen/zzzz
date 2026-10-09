@@ -1638,8 +1638,9 @@ function sellmonitorGithubNextPendingRow_(q) {
     ].indexOf(file) >= 0) return 1;
     if (/^orders_/.test(file) || file === 'k2_inventory_pool_sync_v246') return 1;
 
-    // P2: current factual advertising/traffic + snapshot history.
-    if (['traffic_daily_sync_v255','wb_ads_bulk_ingest_v167','traffic_refresh_enqueue_v256','traffic_refresh_gate_v257','rnp_snapshot_history_v304'].indexOf(file) >= 0) return 2;
+    // P2: current factual advertising/traffic + snapshot history. Materializing an
+    // already-fetched search snapshot into the store-aware history is local and cheap.
+    if (['traffic_daily_sync_v255','wb_ads_bulk_ingest_v167','traffic_refresh_enqueue_v256','traffic_refresh_gate_v257','rnp_snapshot_history_v304','search_position_monitor_sync_v238'].indexOf(file) >= 0) return 2;
     if (/^(ads_|calculator_ads_|quality_ads_|traffic_|wb_ads_)/.test(file) && file !== 'wb_ads_cluster_intelligence_v1') return 2;
 
     // P3: historical enrichment is useful but must never delay live/D-1.
@@ -1651,7 +1652,6 @@ function sellmonitorGithubNextPendingRow_(q) {
       '__central_github_search__',
       '__central_wb_search__',
       'search_snapshot_config_v235',
-      'search_position_monitor_sync_v238',
       'search_intelligence_sync_v240',
       'search_traffic_intelligence_v271',
       'search_intelligence_qc_v242'
