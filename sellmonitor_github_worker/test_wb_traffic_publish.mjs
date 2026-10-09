@@ -81,8 +81,15 @@ vm.runInContext(source, sandbox);
 const publish = sandbox.sellmonitorGithubPublishWbTraffic_;
 const status = {
   ok: true,
+  complete: false,
   finishedAt: '2026-10-09T12:00:00+03:00',
-  shops: {ap: {ok:true}, aa: {ok:true}, yv: {ok:true}}
+  period: ['2026-09-10','2026-10-10'],
+  funnel_period: ['2026-10-04','2026-10-10'],
+  shops: {
+    ap: {ok:true},
+    aa: {ok:true,campaigns_with_null_payload:1,campaigns_with_null_payload_sample:[12345678]},
+    yv: {ok:true}
+  }
 };
 const observedAt = '2026-10-09T13:00:00+03:00';
 const result = publish({
@@ -106,6 +113,12 @@ assert.equal(sheets['12_ADS_CAMPAIGN_DAY'].values[1][14], 'SOURCE_OK');
 assert.equal(sheets['13_FUNNEL_DAY'].values[1][3], "'@formula-like");
 assert.equal(result.datasets.ads_poll.added, 1);
 assert.equal(result.datasets.funnel_poll.added, 1);
+assert.equal(result.quality.written, 3);
+assert.equal(result.quality.complete, false);
+assert.equal(sheets['17_TRAFFIC_QUALITY'].values[1][2], 'ЧАСТИЧНО');
+assert.equal(sheets['17_TRAFFIC_QUALITY'].values[2][4], 'ЧАСТИЧНО');
+assert.match(sheets['17_TRAFFIC_QUALITY'].values[2][5], /не дополнялись нулями/);
+assert.equal(sheets['17_TRAFFIC_QUALITY'].values[2][10], '12345678');
 assert.equal(sheets['15_ADS_POLL_SNAPSHOT'].values[1][16], 'DAILY_CUMULATIVE_OBSERVED_AT_POLL');
 assert.equal(sheets['16_FUNNEL_POLL_SNAPSHOT'].values[1][14], 'SOURCE_OK');
 
