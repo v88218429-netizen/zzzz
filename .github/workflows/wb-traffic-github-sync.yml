@@ -3,7 +3,7 @@ name: WB traffic GitHub sync
 on:
   workflow_dispatch:
   schedule:
-    - cron: "37 */6 * * *"
+    - cron: "37 * * * *"
   workflow_run:
     workflows: ["Sellmonitor GitHub worker deploy"]
     types: [completed]
