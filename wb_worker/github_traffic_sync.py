@@ -11,6 +11,7 @@ import httpx
 
 from traffic_sync import (ADS_POLL_COLUMNS, COLUMNS, DATA_DIR, FUNNEL_COLUMNS,
                           FUNNEL_POLL_COLUMNS, sync_once)
+from query_clusters import collect as collect_query_clusters, publish as publish_query_clusters
 
 BRIDGE_URL = "https://script.google.com/macros/s/AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw/exec"
 MAX_REQUEST_BYTES = 15_000_000
@@ -99,9 +100,20 @@ def main() -> int:
     parser.add_argument("--publish", action="store_true", help="publish previously collected exports")
     args = parser.parse_args()
     if args.publish:
+        # Advertising/funnel publication succeeds independently. A failure to
+        # publish search clusters still fails this run rather than masking it.
         _publish()
+        key = os.environ.get("GOOGLE_SHEETS_BRIDGE_KEY", "").strip()
+        publish_query_clusters(BRIDGE_URL, key)
         return 0
     status = asyncio.run(sync_once())
+    # Same hourly job, same encrypted history, no duplicate worker/deployment.
+    # Cluster errors are recorded per shop; publication gate verifies later.
+    try:
+        cluster_status = asyncio.run(collect_query_clusters())
+    except Exception as exc:
+        cluster_status = {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+    print("WB_AD_CLUSTER_COLLECTION " + json.dumps(cluster_status, ensure_ascii=False))
     print(json.dumps({
         "ok": status.get("ok"),
         "complete": status.get("complete"),

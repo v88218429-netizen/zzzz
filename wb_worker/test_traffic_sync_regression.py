@@ -1,7 +1,7 @@
 """Regression checks for traffic collection aggregation and campaign selection."""
 import unittest
 
-from wb_worker.traffic_sync import _campaign_ids, _stats_rows
+from traffic_sync import _campaign_ids, _stats_rows
 
 
 class TrafficSyncTests(unittest.TestCase):

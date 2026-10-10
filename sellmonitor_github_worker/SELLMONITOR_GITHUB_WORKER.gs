@@ -2668,6 +2668,110 @@ function sellmonitorGithubAppendWbPollRows_(ss, dataset, table) {
 }
 
 
+
+// JEM-independent, factual WB advertising search-cluster history.
+// These are advertising clusters, NEVER organic search rank or individual queries.
+function sellmonitorGithubPublishAdClusters_(body) {
+  body = body || {};
+  var shop = String(body.cabinet || '').trim();
+  if (['ap','aa','yv'].indexOf(shop) < 0) throw new Error('WB_CLUSTER_UNKNOWN_STORE');
+  if (String(body.source || '') !== 'WB /adv/v1/normquery/stats' ||
+      String(body.quality || '') !== 'FACT_AD_CLUSTER_DAY_NOT_SEARCH_PHRASE') {
+    throw new Error('WB_CLUSTER_PROVENANCE_MISMATCH');
+  }
+  var input = body.rows;
+  if (!Array.isArray(input) || !input.length || input.length > 1000) {
+    throw new Error('WB_CLUSTER_INVALID_BATCH');
+  }
+  var observedAt = new Date(String(body.observed_at || ''));
+  if (isNaN(observedAt.getTime())) throw new Error('WB_CLUSTER_INVALID_OBSERVED_AT');
+  var ss = SpreadsheetApp.openById(SMC_WB_TRAFFIC.SPREADSHEET_ID);
+  var headers = ['store_id','date','advert_id','nmId','norm_query',
+    'views','clicks','atbs','orders','ordered_units','spend_rub','ad_avg_pos',
+    'ctr_percent','cpc_rub','cpm_rub','source','quality','load_timestamp','coverage_status'];
+  var sheetName = '18_AD_CLUSTERS_DAY';
+  var sh = ss.getSheetByName(sheetName);
+  if (!sh) sh = ss.insertSheet(sheetName);
+  if (sh.getMaxColumns() < headers.length) {
+    sh.insertColumnsAfter(sh.getMaxColumns(), headers.length - sh.getMaxColumns());
+  }
+  if (sh.getLastRow() === 0) sh.getRange(1,1,1,headers.length).setValues([headers]);
+  var actual = sh.getRange(1,1,1,headers.length).getDisplayValues()[0];
+  if (actual.some(function(h,i){return h !== headers[i];})) throw new Error('WB_CLUSTER_HEADER_MISMATCH');
+  var tz = ss.getSpreadsheetTimeZone();
+  function dateText(v) {
+    if (v instanceof Date && !isNaN(v.getTime())) return Utilities.formatDate(v, tz, 'yyyy-MM-dd');
+    return String(v || '').trim();
+  }
+  function rowKey(row) {
+    return [String(row[0]),dateText(row[1]),String(row[2]),String(row[3]),
+            String(row[4]).trim().toLowerCase()].join('|');
+  }
+  var existing = {};
+  var last = sh.getLastRow();
+  if (last > 1) {
+    sh.getRange(2,1,last-1,5).getValues().forEach(function(row,i){
+      if (!row[0]) return;
+      var key = rowKey(row);
+      if (Object.prototype.hasOwnProperty.call(existing,key)) throw new Error('WB_CLUSTER_EXISTING_DUPLICATE');
+      existing[key] = i + 2;
+    });
+  }
+  var incoming = {}, rows = [];
+  input.forEach(function(row, i) {
+    if (!Array.isArray(row) || row.length !== 17 || row[0] !== shop ||
+        row[15] !== body.source || row[16] !== body.quality) {
+      throw new Error('WB_CLUSTER_ROW_INVALID:' + i);
+    }
+    var date = String(row[1] || '');
+    var asDate = new Date(date + 'T12:00:00+03:00');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) ||
+        isNaN(asDate.getTime()) || asDate.toISOString().slice(0,10) !== date) {
+      throw new Error('WB_CLUSTER_DATE_INVALID:' + i);
+    }
+    [2,3].forEach(function(col){
+      var n=Number(row[col]);
+      if (!isFinite(n)||n<=0||Math.floor(n)!==n) throw new Error('WB_CLUSTER_ID_INVALID:' + i);
+    });
+    var query=String(row[4]||'').trim();
+    if (!query) throw new Error('WB_CLUSTER_QUERY_EMPTY:' + i);
+    var data=row.slice();
+    if (/^[=+\-@]/.test(query)) data[4]="'"+query;
+    for(var col=5;col<=14;col++){
+      if(data[col]==null||data[col]===''){data[col]='';continue;}
+      var value=Number(data[col]);
+      if(!isFinite(value)||value<0) throw new Error('WB_CLUSTER_NUMBER_INVALID:' + i + ':' + col);
+      data[col]=value;
+    }
+    data[1] = asDate;
+    data.push(observedAt, 'SOURCE_OK');
+    var key = rowKey(row);
+    if (Object.prototype.hasOwnProperty.call(incoming,key)) throw new Error('WB_CLUSTER_DUPLICATE_INPUT:' + i);
+    incoming[key] = true;
+    rows.push({key:key, values:data});
+  });
+  var appended=[], updated=0;
+  rows.forEach(function(item) {
+    var location = existing[item.key];
+    if (location) {
+      sh.getRange(location,1,1,headers.length).setValues([item.values]);
+      updated++;
+    } else {
+      appended.push(item.values);
+    }
+  });
+  if (appended.length) {
+    var first=sh.getLastRow()+1;
+    if (sh.getMaxRows()<first+appended.length-1)
+      sh.insertRowsAfter(sh.getMaxRows(),first+appended.length-1-sh.getMaxRows());
+    sh.getRange(first,1,appended.length,headers.length).setValues(appended);
+  }
+  SpreadsheetApp.flush();
+  return {ok:true,action:'publish_ad_clusters',cabinet:shop,
+          written:rows.length,added:appended.length,updated:updated,
+          source:body.source,quality:body.quality};
+}
+
 function sellmonitorGithubPublishWbTraffic_(body) {
   body = body || {};
   var status = body.sync_status || {};
@@ -3244,6 +3348,10 @@ function doPost(e) {
 
     if (action === 'publish_search_positions') {
       return sellmonitorGithubWebJson_(sellmonitorGithubPublishRuntimeSearch_(body.cabinet || '', body.snapshot || {}));
+    }
+
+    if (action === 'publish_ad_clusters') {
+      return sellmonitorGithubWebJson_(sellmonitorGithubPublishAdClusters_(body));
     }
 
     if (action === 'publish_wb_traffic') {
