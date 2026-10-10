@@ -94,7 +94,8 @@ def _is_no_statistics_response(payload):
 
 async def _fullstats_batch(client, token, campaign_ids, begin, end,
                            no_statistics_campaign_ids=None,
-                           null_payload_campaign_ids=None):
+                           null_payload_campaign_ids=None,
+                           null_retry_used=False):
     """Fetch fullstats, isolating server errors and campaigns with empty windows."""
     global _last_fullstats
     if not campaign_ids:
@@ -111,9 +112,9 @@ async def _fullstats_batch(client, token, campaign_ids, begin, end,
     async def split_batch():
         middle = len(campaign_ids) // 2
         left = await _fullstats_batch(client, token, campaign_ids[:middle], begin, end,
-                                      no_statistics_campaign_ids, null_payload_campaign_ids)
+                                      no_statistics_campaign_ids, null_payload_campaign_ids, False)
         right = await _fullstats_batch(client, token, campaign_ids[middle:], begin, end,
-                                       no_statistics_campaign_ids, null_payload_campaign_ids)
+                                       no_statistics_campaign_ids, null_payload_campaign_ids, False)
         return [*left, *right]
 
     try:
@@ -146,13 +147,16 @@ async def _fullstats_batch(client, token, campaign_ids, begin, end,
         _last_fullstats = loop.time()
         if not isinstance(raw, list):
             if raw is None:
-                # WB sometimes answers HTTP 200 with JSON null instead of the
-                # documented campaign list. Isolate it to one campaign and
-                # preserve good sibling facts without inventing zero rows.
-                if len(campaign_ids) == 1:
-                    null_payload_campaign_ids.append(campaign_ids[0])
-                    return []
-                return await split_batch()
+                # Retry the same group once. If WB still sends JSON null, do not
+                # fan out into dozens of rate-limited requests or guess which
+                # campaign lacks facts. Omit the unresolved group and disclose it.
+                if not null_retry_used:
+                    return await _fullstats_batch(
+                        client, token, campaign_ids, begin, end,
+                        no_statistics_campaign_ids, null_payload_campaign_ids, True
+                    )
+                null_payload_campaign_ids.extend(campaign_ids)
+                return []
             if _is_no_statistics_response(raw):
                 if len(campaign_ids) == 1:
                     no_statistics_campaign_ids.append(campaign_ids[0])
@@ -328,8 +332,8 @@ async def sync_once():
                     state["campaigns_with_null_payload_sample"] = null_payload_campaign_ids[:20]
                     state["warnings"] = {
                         "promotion": (
-                            f"WB returned JSON null for {len(null_payload_campaign_ids)} individual "
-                            "campaign(s); excluded without zero-fill."
+                            f"WB returned JSON null twice for a batch containing "
+                            f"{len(null_payload_campaign_ids)} campaign(s); batch excluded without zero-fill."
                         )
                     }
                 successful_ads.add(shop)
@@ -417,8 +421,14 @@ async def sync_once():
                   "history_policy": "upsert; retain collected rows outside rolling source windows"})
     finished_at = datetime.now(ZoneInfo("Europe/Moscow"))
     status["finishedAt"] = finished_at.isoformat()
+    # Partial advertising refreshes may contribute verified rows to the daily
+    # table, but must not create an undercounted or zero-filled poll observation.
+    pollable_ads = {
+        shop for shop in successful_ads
+        if not status["shops"][shop].get("campaigns_with_null_payload")
+    }
     ad_poll_rows, funnel_poll_rows = _current_day_poll_rows(
-        finished_at, end, ad_rows, funnel_rows, successful_ads, successful_funnels
+        finished_at, end, ad_rows, funnel_rows, pollable_ads, successful_funnels
     )
     _atomic_csv(DATA_DIR / "ads_poll_snapshot.csv", ADS_POLL_COLUMNS, ad_poll_rows)
     _atomic_csv(DATA_DIR / "funnel_poll_snapshot.csv", FUNNEL_POLL_COLUMNS, funnel_poll_rows)

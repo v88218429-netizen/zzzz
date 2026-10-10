@@ -72,6 +72,10 @@ class TrafficParsingTest(unittest.TestCase):
         )
         self.assertEqual(len(ad_poll), 1)
         self.assertEqual(ad_poll[0][11:15], [0.1, 5.0, 0.25, 4.0])
+        partial_ad_poll, _ = traffic_sync._current_day_poll_rows(
+            observed, day, ads, funnel, set(), {"ap"}
+        )
+        self.assertEqual(partial_ad_poll, [])
         self.assertEqual(ad_poll[0][-1], "DAILY_CUMULATIVE_OBSERVED_AT_POLL")
         self.assertEqual(funnel_poll[0][8:11], [0.2, 0.5, 0.1])
         # A missing source date stays absent instead of being filled with zero.
@@ -152,13 +156,34 @@ class TrafficSyncPersistenceTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([item["advertId"] for item in payload], [42])
         self.assertEqual(no_statistics, [41])
 
-    async def test_fullstats_isolates_null_payload_campaign_without_zero_fill(self):
-        requested_sizes = []
+    async def test_fullstats_retries_null_batch_once_then_quarantines_without_zero_fill(self):
+        requested_ids = []
 
         async def fake_request(client, token, method, url, **kwargs):
             campaign_ids = [int(value) for value in kwargs["params"]["ids"].split(",")]
-            requested_sizes.append(len(campaign_ids))
-            if 51 in campaign_ids:
+            requested_ids.append(campaign_ids)
+            return None
+
+        null_payload_campaigns = []
+        with patch.object(traffic_sync, "_request", side_effect=fake_request), \
+             patch.object(traffic_sync.asyncio, "sleep", new=AsyncMock()):
+            traffic_sync._last_fullstats = 0
+            payload = await traffic_sync._fullstats_batch(
+                object(), "test-token", [51, 52], "2026-09-09", "2026-10-09",
+                null_payload_campaign_ids=null_payload_campaigns
+            )
+
+        self.assertEqual(requested_ids, [[51, 52], [51, 52]])
+        self.assertEqual(payload, [])
+        self.assertEqual(null_payload_campaigns, [51, 52])
+
+    async def test_fullstats_recovers_when_null_batch_retry_succeeds(self):
+        requested_ids = []
+
+        async def fake_request(client, token, method, url, **kwargs):
+            campaign_ids = [int(value) for value in kwargs["params"]["ids"].split(",")]
+            requested_ids.append(campaign_ids)
+            if len(requested_ids) == 1:
                 return None
             return [{"advertId": campaign_id, "days": []} for campaign_id in campaign_ids]
 
@@ -171,9 +196,9 @@ class TrafficSyncPersistenceTest(unittest.IsolatedAsyncioTestCase):
                 null_payload_campaign_ids=null_payload_campaigns
             )
 
-        self.assertEqual(requested_sizes, [2, 1, 1])
-        self.assertEqual([item["advertId"] for item in payload], [52])
-        self.assertEqual(null_payload_campaigns, [51])
+        self.assertEqual(requested_ids, [[51, 52], [51, 52]])
+        self.assertEqual([item["advertId"] for item in payload], [51, 52])
+        self.assertEqual(null_payload_campaigns, [])
 
     async def test_fullstats_reports_unrecognized_success_payload_shape(self):
         async def fake_request(client, token, method, url, **kwargs):
