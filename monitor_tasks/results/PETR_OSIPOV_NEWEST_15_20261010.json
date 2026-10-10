@@ -1,0 +1,131 @@
+{
+  "task_id": "PETR_OSIPOV_NEWEST_15_20261010",
+  "channel": "https://www.youtube.com/channel/UCN0eBAqEfUYXXEw77Q5QRZg",
+  "selection": "newest_public_long_form_videos",
+  "requested": 15,
+  "videos": [
+    {
+      "index": 1,
+      "id": "9_bgi_96H6o",
+      "title": "How to Find Your Strengths and Turn Them Into Profit",
+      "url": "https://www.youtube.com/watch?v=9_bgi_96H6o",
+      "transcript": "transcripts/PETR_OSIPOV_NEWEST_15_20261010_01_9_bgi_96H6o.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "index": 2,
+      "id": "z7kim0dwX8g",
+      "title": "How to Shift From a Strategy of Suffering to a Strategy of Action | Pyotr Osipov",
+      "url": "https://www.youtube.com/watch?v=z7kim0dwX8g",
+      "transcript": "transcripts/PETR_OSIPOV_NEWEST_15_20261010_02_z7kim0dwX8g.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "index": 3,
+      "id": "3rT8lpjW6ZI",
+      "title": "What Is Authenticity and How to Find It | Private Lecture",
+      "url": "https://www.youtube.com/watch?v=3rT8lpjW6ZI",
+      "transcript": "transcripts/PETR_OSIPOV_NEWEST_15_20261010_03_3rT8lpjW6ZI.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "index": 4,
+      "id": "MTfO68pRpRs",
+      "title": "Как найти мотивацию, когда старые цели больше не работают",
+      "url": "https://www.youtube.com/watch?v=MTfO68pRpRs",
+      "transcript": "transcripts/PETR_OSIPOV_NEWEST_15_20261010_04_MTfO68pRpRs.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "index": 5,
+      "id": "y2_p7Ce3HYU",
+      "title": "How to stop living for others and start living your own life",
+      "url": "https://www.youtube.com/watch?v=y2_p7Ce3HYU",
+      "transcript": "transcripts/PETR_OSIPOV_NEWEST_15_20261010_05_y2_p7Ce3HYU.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "index": 6,
+      "id": "fSR2R2-hSzU",
+      "title": "How to Stop Saving Others and Finally Figure Out What You Want",
+      "url": "https://www.youtube.com/watch?v=fSR2R2-hSzU",
+      "transcript": "transcripts/PETR_OSIPOV_NEWEST_15_20261010_06_fSR2R2-hSzU.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "index": 7,
+      "id": "oNBF8G_md28",
+      "title": "How to FIND YOUR CALLING that brings both money and joy?",
+      "url": "https://www.youtube.com/watch?v=oNBF8G_md28",
+      "transcript": "transcripts/PETR_OSIPOV_NEWEST_15_20261010_07_oNBF8G_md28.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "index": 8,
+      "id": "3_nGyf--wi0",
+      "title": "Why Your Search for Self-Discovery Is Holding You Back from Making Money and Growing",
+      "url": "https://www.youtube.com/watch?v=3_nGyf--wi0",
+      "transcript": "transcripts/PETR_OSIPOV_NEWEST_15_20261010_08_3_nGyf--wi0.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "index": 9,
+      "id": "YSsi7zfWzcY",
+      "title": "How to Cope with AGGRESSION and Stop RUINING RELATIONSHIPS",
+      "url": "https://www.youtube.com/watch?v=YSsi7zfWzcY",
+      "transcript": "transcripts/PETR_OSIPOV_NEWEST_15_20261010_09_YSsi7zfWzcY.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "index": 10,
+      "id": "IiyRMomN3Os",
+      "title": "Why won't your husband give you money? Petr Osipov's breakdown",
+      "url": "https://www.youtube.com/watch?v=IiyRMomN3Os",
+      "transcript": "transcripts/PETR_OSIPOV_NEWEST_15_20261010_10_IiyRMomN3Os.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "index": 11,
+      "id": "jVFRqwvFpjs",
+      "title": "What Is Holding You Back From Reaching the Next Level? | PYOTR OSIPOV WORKSHOP",
+      "url": "https://www.youtube.com/watch?v=jVFRqwvFpjs",
+      "transcript": "transcripts/PETR_OSIPOV_NEWEST_15_20261010_11_jVFRqwvFpjs.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "index": 12,
+      "id": "GOGedVUhFIw",
+      "title": "700,000 rubles, a new relationship, traveling — and it’s still not enough",
+      "url": "https://www.youtube.com/watch?v=GOGedVUhFIw",
+      "transcript": "transcripts/PETR_OSIPOV_NEWEST_15_20261010_12_GOGedVUhFIw.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "index": 13,
+      "id": "zbNRqFdy08g",
+      "title": "\"I'm a stay-at-home mom on maternity leave and I want to start earning my own money\" - a powerful...",
+      "url": "https://www.youtube.com/watch?v=zbNRqFdy08g",
+      "transcript": "transcripts/PETR_OSIPOV_NEWEST_15_20261010_13_zbNRqFdy08g.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "index": 14,
+      "id": "CHDGGfNiEcE",
+      "title": "At 45, she realized she hadn't started living yet | Pyotr Osipov",
+      "url": "https://www.youtube.com/watch?v=CHDGGfNiEcE",
+      "transcript": "transcripts/PETR_OSIPOV_NEWEST_15_20261010_14_CHDGGfNiEcE.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "index": 15,
+      "id": "ZUYzlKd6518",
+      "title": "How to Build a Healthy Relationship | A Complete 17-Minute Guide",
+      "url": "https://www.youtube.com/watch?v=ZUYzlKd6518",
+      "transcript": "transcripts/PETR_OSIPOV_NEWEST_15_20261010_15_ZUYzlKd6518.md",
+      "method": "FreeTranscriptAPI"
+    }
+  ],
+  "errors": [],
+  "completed": true,
+  "generated_at": "2026-10-10T08:40:29.624373+00:00"
+}
