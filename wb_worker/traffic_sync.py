@@ -3,7 +3,7 @@ import asyncio
 import csv
 import json
 import os
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -23,6 +23,7 @@ ADS_POLL_COLUMNS = ["shop", "observed_at", "date", "campaign_sku_rows", "campaig
 FUNNEL_POLL_COLUMNS = ["shop", "observed_at", "date", "sku_rows", "open_count", "cart_count", "order_count", "order_sum_rub", "open_to_cart", "cart_to_order", "open_to_order", "source", "measurement_grain"]
 POLL_GRAIN = "DAILY_CUMULATIVE_OBSERVED_AT_POLL"
 PRICES = "https://discounts-prices-api.wildberries.ru"
+MONITORING_START = date(2026, 10, 1)
 FULLSTATS_DAYS = 31
 FUNNEL_BATCH_SIZE = 20
 INTERVAL = max(60, int(os.environ.get("TRAFFIC_SYNC_INTERVAL_MIN", "60")))
@@ -65,6 +66,13 @@ def _upsert_rows(existing, incoming, key_columns):
         if all(key):
             rows[key] = row
     return sorted(rows.values(), key=lambda row: tuple(str(row[i]) for i in key_columns))
+
+
+def _rows_from_monitoring_start(rows, date_index=1):
+    """Keep only explicitly collected facts from the monitor's start date."""
+    cutoff = MONITORING_START.isoformat()
+    return [row for row in rows
+            if len(row) > date_index and str(row[date_index])[:10] >= cutoff]
 
 
 async def _request(client, token, method, url, **kwargs):
@@ -290,13 +298,14 @@ def _current_day_poll_rows(now, day, ad_rows, funnel_rows, successful_ads, succe
 async def sync_once():
     global _last_fullstats
     now = datetime.now(ZoneInfo("Europe/Moscow"))
-    # Advertising fullstats supports a 31-day window. Re-read the overlap on
-    # each poll, then merge it into the durable local history below.
-    begin = (now.date() - timedelta(days=FULLSTATS_DAYS - 1)).isoformat()
+    # Start factual monitoring on 1 October 2026. Keep the overlap within
+    # WB's limits, and never retain or republish earlier dates.
+    monitoring_start = min(MONITORING_START, now.date())
+    begin = max(now.date() - timedelta(days=FULLSTATS_DAYS - 1), monitoring_start).isoformat()
     end = now.date().isoformat()
-    funnel_begin = (now.date() - timedelta(days=6)).isoformat()
-    status = {"startedAt": now.isoformat(), "period": [begin, end],
-              "funnel_period": [funnel_begin, end], "shops": {}}
+    funnel_begin = max(now.date() - timedelta(days=6), monitoring_start).isoformat()
+    status = {"startedAt": now.isoformat(), "monitoring_start": monitoring_start.isoformat(),
+              "period": [begin, end], "funnel_period": [funnel_begin, end], "shops": {}}
     ad_rows, funnel_rows = [], []
     successful_ads, successful_funnels = set(), set()
     async with httpx.AsyncClient(timeout=90) as client:
@@ -391,17 +400,23 @@ async def sync_once():
     # The combined exports are reconstructed from these persisted datasets.
     for shop in SHOPS:
         shop_dir = DATA_DIR / shop
+        current_ads = _read_csv_rows(shop_dir / "campaign_sku_day.csv")
+        eligible_ads = _rows_from_monitoring_start(current_ads)
+        if eligible_ads != current_ads:
+            _atomic_csv(shop_dir / "campaign_sku_day.csv", COLUMNS, eligible_ads)
+        current_funnels = _read_csv_rows(shop_dir / "funnel_sku_day.csv")
+        eligible_funnels = _rows_from_monitoring_start(current_funnels)
+        if eligible_funnels != current_funnels:
+            _atomic_csv(shop_dir / "funnel_sku_day.csv", FUNNEL_COLUMNS, eligible_funnels)
         if shop in successful_ads:
-            current = _read_csv_rows(shop_dir / "campaign_sku_day.csv")
-            merged = _upsert_rows(current, [r for r in ad_rows if r[0] == shop], (0, 1, 2, 3))
+            merged = _upsert_rows(eligible_ads, [r for r in ad_rows if r[0] == shop], (0, 1, 2, 3))
             _atomic_csv(shop_dir / "campaign_sku_day.csv", COLUMNS, merged)
             _atomic_json(shop_dir / "ad_refresh.json", {"refreshedAt": now.isoformat(),
                           "period": [begin, end], "quality": "LIVE_API",
                           "rows_in_refresh": sum(r[0] == shop for r in ad_rows),
                           "rows_in_history": len(merged)})
         if shop in successful_funnels:
-            current = _read_csv_rows(shop_dir / "funnel_sku_day.csv")
-            merged = _upsert_rows(current, [r for r in funnel_rows if r[0] == shop], (0, 1, 2))
+            merged = _upsert_rows(eligible_funnels, [r for r in funnel_rows if r[0] == shop], (0, 1, 2))
             _atomic_csv(shop_dir / "funnel_sku_day.csv", FUNNEL_COLUMNS, merged)
         if shop in successful_ads or shop in successful_funnels:
             _atomic_json(shop_dir / "latest_poll.json",
@@ -418,7 +433,8 @@ async def sync_once():
                   "funnel_rows": len(all_funnels), "grain": "campaign_x_sku_x_day",
                   "advertising_window_days": FULLSTATS_DAYS,
                   "funnel_window_days": 7,
-                  "history_policy": "upsert; retain collected rows outside rolling source windows"})
+                  "monitoring_start": MONITORING_START.isoformat(),
+                  "history_policy": "upsert within source windows; retain collected rows from monitoring start"})
     finished_at = datetime.now(ZoneInfo("Europe/Moscow"))
     status["finishedAt"] = finished_at.isoformat()
     # Partial advertising refreshes may contribute verified rows to the daily
