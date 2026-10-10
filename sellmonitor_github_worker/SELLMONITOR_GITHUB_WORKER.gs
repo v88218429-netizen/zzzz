@@ -2674,6 +2674,62 @@ function sellmonitorGithubAppendWbPollRows_(ss, dataset, table) {
 
 // Source-authenticated current campaign/SKU settings, stored separately
 // from historical day-grained advertising metrics.
+
+// Dedicated per-cabinet view. Ads clusters are query families, NOT measured
+// organic ranking; the separate organic position sheet remains untouched.
+function sellmonitorGithubPublishCabinetAdClusters_(shop, records, observedAt) {
+  var bookId = ({
+    aa:'1SmsoG8zKx3hbTtTzS-zLekTFiWEQN8eIwHOxXq-5RHo',
+    yv:'1cVT_H_e8a519k_Gtph6fALWnBbtBrAQ2Jb_gFO3bM64'
+  })[shop];
+  if (!bookId) return {ok:true,skipped:true,reason:'central_hub_is_sanych_view'};
+  var ss=SpreadsheetApp.openById(bookId);
+  var headers=['Дата','Артикул WB','Кампания','Рекламный поисковый кластер',
+    'Показы','Клики','Корзины','Заказы','Единиц','Расход ₽',
+    'Средняя позиция рекламы','CTR %','CPC ₽','CPM ₽',
+    'Источник','Достоверность','Время наблюдения'];
+  var name='18_WB_Рекламные_кластеры';
+  var sh=ss.getSheetByName(name);
+  if (!sh) sh=ss.insertSheet(name);
+  if (sh.getMaxColumns()<headers.length)
+    sh.insertColumnsAfter(sh.getMaxColumns(),headers.length-sh.getMaxColumns());
+  if (!sh.getLastRow()) sh.getRange(1,1,1,headers.length).setValues([headers]);
+  var current=sh.getRange(1,1,1,headers.length).getDisplayValues()[0];
+  if (headers.some(function(h,i){return h!==String(current[i]||'');}))
+    throw new Error('WB_CABINET_CLUSTER_HEADER_MISMATCH');
+  function key(row){return [row[0],row[1],row[2],String(row[3]||'').toLowerCase()].join('|');}
+  var seen={};
+  if (sh.getLastRow()>1) sh.getRange(2,1,sh.getLastRow()-1,4).getValues().forEach(function(row,i){
+    if (!row[0]) return;
+    var rawDate=row[0] instanceof Date ? Utilities.formatDate(row[0],ss.getSpreadsheetTimeZone(),'yyyy-MM-dd') : String(row[0]||'');
+    var k=[rawDate,row[1],row[2],String(row[3]||'').toLowerCase()].join('|');
+    if (Object.prototype.hasOwnProperty.call(seen,k)) throw new Error('WB_CABINET_CLUSTER_EXISTING_DUPLICATE');
+    seen[k]=i+2;
+  });
+  var updates=[],adds=[];
+  records.forEach(function(r){
+    // Source CSV order: shop, date, advert, nm, query, 10 stats, source, quality.
+    var day=String(r[1]||'');
+    var cluster=String(r[4]||'');
+    var values=[day,Number(r[3]),Number(r[2]),cluster].concat(r.slice(5,17)).concat([observedAt]);
+    if (/^[=+\-@]/.test(cluster)) values[3]="'"+cluster;
+    var k=key([day,Number(r[3]),Number(r[2]),cluster]);
+    var found=seen[k];
+    if(found) updates.push({index:found,row:values});
+    else adds.push(values);
+  });
+  updates.forEach(function(it){sh.getRange(it.index,1,1,headers.length).setValues([it.row]);});
+  if (adds.length){
+    var first=sh.getLastRow()+1;
+    if (sh.getMaxRows()<first+adds.length-1)
+      sh.insertRowsAfter(sh.getMaxRows(),first+adds.length-1-sh.getMaxRows());
+    sh.getRange(first,1,adds.length,headers.length).setValues(adds);
+  }
+  sh.setFrozenRows(1);
+  SpreadsheetApp.flush();
+  return {ok:true,shop:shop,written:records.length,added:adds.length,updated:updates.length};
+}
+
 function sellmonitorGithubPublishCampaignSettings_(body) {
   body = body || {};
   var shop = String(body.shop || '');
@@ -2853,9 +2909,13 @@ function sellmonitorGithubPublishAdClusters_(body) {
       sh.insertRowsAfter(sh.getMaxRows(),first+appended.length-1-sh.getMaxRows());
     sh.getRange(first,1,appended.length,headers.length).setValues(appended);
   }
+  var cabinet= sellmonitorGithubPublishCabinetAdClusters_(shop,input,body.observed_at);
+  if (cabinet.written !== input.length && !cabinet.skipped)
+    throw new Error('WB_CABINET_CLUSTER_COUNT_MISMATCH');
   SpreadsheetApp.flush();
   return {ok:true,action:'publish_ad_clusters',cabinet:shop,
           written:rows.length,added:appended.length,updated:updated,
+          cabinet_publish:cabinet,
           source:body.source,quality:body.quality};
 }
 

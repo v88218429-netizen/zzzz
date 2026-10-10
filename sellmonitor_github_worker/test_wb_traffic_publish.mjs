@@ -18,6 +18,7 @@ function makeSheet(headers) {
       return 0;
     },
     insertColumnsAfter() {},
+    setFrozenRows() {},
     insertRowsAfter(_after, count) { maxRows += count; },
     getRange(startRow, startColumn, rowCount, columnCount) {
       return {
@@ -170,10 +171,13 @@ assert.equal(clusterPublish.ok,true);
 assert.equal(clusterPublish.written,1);
 assert.equal(clusterPublish.added,1);
 assert.equal(sheets['18_AD_CLUSTERS_DAY'].values[1][4],'таз строительный 90 л');
+assert.equal(sheets['18_WB_Рекламные_кластеры'].values[1][3],'таз строительный 90 л');
+assert.equal(sheets['18_WB_Рекламные_кластеры'].values[1][10],7.9,'ad position must remain a distinct advertising metric');
 assert.equal(sheets['18_AD_CLUSTERS_DAY'].values[1][18],'SOURCE_OK');
 const clusterReplay=sandbox.sellmonitorGithubPublishAdClusters_(clusterPayload);
 assert.equal(clusterReplay.added,0,'cluster replay must not duplicate');
 assert.equal(clusterReplay.updated,1,'cluster replay must update the same grain');
+assert.equal(sheets['18_WB_Рекламные_кластеры'].values.length,2,'per-cabinet replay must not create duplicate history');
 assert.equal(sheets['18_AD_CLUSTERS_DAY'].values.length,2);
 assert.throws(
   () => sandbox.sellmonitorGithubPublishAdClusters_({...clusterPayload,cabinet:'aa'}),
