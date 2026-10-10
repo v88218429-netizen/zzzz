@@ -105,9 +105,23 @@ def main() -> int:
         # publish search clusters still fails this run rather than masking it.
         _publish()
         key = os.environ.get("GOOGLE_SHEETS_BRIDGE_KEY", "").strip()
-        publish_query_clusters(BRIDGE_URL, key)
-        settings_published = publish_campaign_state(BRIDGE_URL, key)
-        print("WB_CAMPAIGN_SETTINGS_PUBLISHED " + json.dumps(settings_published, ensure_ascii=False))
+        errors = []
+        try:
+            cluster_published = publish_query_clusters(BRIDGE_URL, key)
+            print("WB_AD_CLUSTER_PUBLISHED " + json.dumps(cluster_published, ensure_ascii=False))
+        except Exception as exc:
+            errors.append(f"clusters: {type(exc).__name__}: {exc}")
+        try:
+            settings_published = publish_campaign_state(BRIDGE_URL, key)
+            print("WB_CAMPAIGN_SETTINGS_PUBLISHED " + json.dumps(settings_published, ensure_ascii=False))
+            missing_settings = [shop for shop, row in settings_published.items()
+                                if not row.get("published")]
+            if missing_settings:
+                errors.append("campaign settings missing: " + ", ".join(missing_settings))
+        except Exception as exc:
+            errors.append(f"campaign settings: {type(exc).__name__}: {exc}")
+        if errors:
+            raise RuntimeError("WB_PUBLISH_INCOMPLETE: " + "; ".join(errors))
         return 0
     status = asyncio.run(sync_once())
     # Same hourly job, same encrypted history, no duplicate worker/deployment.
