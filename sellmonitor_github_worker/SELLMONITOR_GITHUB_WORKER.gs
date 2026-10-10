@@ -2756,6 +2756,63 @@ function sellmonitorGithubPublishCabinetAdClusters_(shop, records, observedAt) {
   return {ok:true,shop:shop,written:records.length,added:adds.length,updated:updates.length};
 }
 
+// Feed existing AIR/Hozyushka campaign diagnostics using official facts,
+// never interpreting advertising settings as JEM search position statistics.
+function sellmonitorGithubPublishClientCampaignCatalog_(shop, input, observedAt) {
+  var id=({aa:'1SmsoG8zKx3hbTtTzS-zLekTFiWEQN8eIwHOxXq-5RHo',
+    yv:'1cVT_H_e8a519k_Gtph6fALWnBbtBrAQ2Jb_gFO3bM64'})[shop];
+  if(!id)return {ok:true,skipped:true};
+  var ss=SpreadsheetApp.openById(id);
+  var headers=['advert_id','nmId','seller_article','campaign_name','status',
+    'payment_type','bid_type','search','recommendations','bid_search_kopecks',
+    'bid_recommendations_kopecks','subject_id','subject_name','updated_at',
+    'catalog_status','loaded_at'];
+  var sh=ss.getSheetByName('90_RAW_ads_campaigns');
+  if(!sh)sh=ss.insertSheet('90_RAW_ads_campaigns');
+  if(sh.getMaxColumns()<headers.length)
+    sh.insertColumnsAfter(sh.getMaxColumns(),headers.length-sh.getMaxColumns());
+  if(!sh.getLastRow())sh.getRange(1,1,1,headers.length).setValues([headers]);
+  var actual=sh.getRange(1,1,1,headers.length).getDisplayValues()[0];
+  if(headers.some(function(h,i){return String(actual[i]||'')!==h;}))
+    throw new Error('WB_CLIENT_CAMPAIGN_HEADER_MISMATCH');
+  var previous={},positions={};
+  if(sh.getLastRow()>1)sh.getRange(2,1,sh.getLastRow()-1,headers.length).getValues().forEach(function(r,i){
+    if(!r[0]||!r[1])return;
+    var key=String(r[0])+'|'+String(r[1]);
+    if(Object.prototype.hasOwnProperty.call(previous,key))throw new Error('WB_CLIENT_CAMPAIGN_EXISTING_DUPLICATE');
+    previous[key]=r;positions[key]=i+2;
+  });
+  var newKeys={},updates=[],adds=[];
+  (input||[]).forEach(function(row,i){
+    if(!Array.isArray(row)||row.length!==16||row[0]!==shop)throw new Error('WB_CLIENT_CAMPAIGN_BAD_ROW:'+i);
+    var ad=Number(row[1]),nm=Number(row[2]),status=Number(row[4]);
+    if(!Number.isSafeInteger(ad)||ad<=0||!Number.isSafeInteger(nm)||nm<=0||!Number.isInteger(status))
+      throw new Error('WB_CLIENT_CAMPAIGN_BAD_ID:'+i);
+    var key=ad+'|'+nm;
+    if(Object.prototype.hasOwnProperty.call(newKeys,key))throw new Error('WB_CLIENT_CAMPAIGN_DUPLICATE:'+i);
+    newKeys[key]=true;
+    var old=previous[key]||[];
+    var name=String(row[3]||'');
+    if(/^[=+@-]/.test(name))name="'"+name;
+    function bid(v){if(v==null||v==='')return '';var n=Number(v);if(!Number.isSafeInteger(n)||n<0)throw new Error('WB_CLIENT_CAMPAIGN_BAD_BID');return n;}
+    var r=[ad,nm,old[2]||'',name,status,String(row[6]||''),String(row[5]||''),
+      row[10]===true||String(row[10]).toLowerCase()==='true',
+      row[11]===true||String(row[11]).toLowerCase()==='true',
+      bid(row[8]),bid(row[9]),old[11]||'',old[12]||'',String(row[12]||''),
+      'LIVE_WB_V2_NO_JEM',new Date(observedAt)];
+    if(positions[key])updates.push({index:positions[key],row:r});else adds.push(r);
+  });
+  sellmonitorGithubBatchUpdateRows_(sh,updates,headers.length);
+  if(adds.length){
+    var start=sh.getLastRow()+1;
+    if(sh.getMaxRows()<start+adds.length-1)
+      sh.insertRowsAfter(sh.getMaxRows(),start+adds.length-1-sh.getMaxRows());
+    sh.getRange(start,1,adds.length,headers.length).setValues(adds);
+  }
+  SpreadsheetApp.flush();
+  return {ok:true,written:input.length,updated:updates.length,added:adds.length};
+}
+
 function sellmonitorGithubPublishCampaignSettings_(body) {
   body = body || {};
   var shop = String(body.shop || '');
@@ -2826,18 +2883,20 @@ function sellmonitorGithubPublishCampaignSettings_(body) {
       updates.push({index:existing[key],row:normalized});
     else additions.push(normalized);
   });
-  updates.forEach(function(entry){
-    sh.getRange(entry.index,1,1,headers.length).setValues([entry.row]);
-  });
+  sellmonitorGithubBatchUpdateRows_(sh,updates,headers.length);
   if (additions.length) {
     var first=sh.getLastRow()+1;
     if (sh.getMaxRows()<first+additions.length-1)
       sh.insertRowsAfter(sh.getMaxRows(),first+additions.length-1-sh.getMaxRows());
     sh.getRange(first,1,additions.length,headers.length).setValues(additions);
   }
+  var clientCatalog=sellmonitorGithubPublishClientCampaignCatalog_(shop,input,body.observed_at);
+  if(!clientCatalog.skipped&&clientCatalog.written!==input.length)
+    throw new Error('WB_CLIENT_CAMPAIGN_ROW_COUNT_MISMATCH');
   SpreadsheetApp.flush();
   return {ok:true, action:'publish_campaign_settings', shop:shop,
-          written:input.length, added:additions.length, updated:updates.length};
+          written:input.length, added:additions.length, updated:updates.length,
+          client_catalog:clientCatalog};
 }
 
 function sellmonitorGithubPublishAdClusters_(body) {
