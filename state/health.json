@@ -1,0 +1,32 @@
+{
+  "generated_at": "2026-10-10T18:57:51.589559+00:00",
+  "health": "degraded",
+  "connected_cabinets": 3,
+  "clean_cabinets": 3,
+  "expected_cabinets": 3,
+  "sheets_live": true,
+  "dashboard_published": true,
+  "query_status": "needs_refresh",
+  "query_facts_status": "blocked",
+  "query_operational_ready": false,
+  "query_rows": 2440,
+  "fresh_query_rows": 0,
+  "blocked_query_rows": 2440,
+  "ready_query_actions": 0,
+  "search_publish": {
+    "air": {
+      "ok": false,
+      "error": "Client error '404 Not Found' for url 'https://script.googleusercontent.com/macros/echo?user_content_key=AUkAhnQ3YNhYyuKsJR58qmJn6qcH_YCxKLdHI1d4ZwoRSpak4LBoLcc-JmpCKJwJxZ2WWp3H_jGgIz6jfv1mKD4nmstm7d0unuBPsznsIcdGWDnHKaDB-CLg6Tqu3Ui43MJJpbWPU-jNdwSFQZqIKLaIrgowQmgGEJY8FQkqbYf-el9izxjNy2yQKHJO1_sON5r1V77P3QbxeZyVWTkqkCUCDfASCcHbtdgdnPCAu19Qc1tOmM36DC8D6VcHt7KnlDYB1DOsvCWZGaBKGo9Ui_1mCUPGx9VKgg&lib=MWWOrsVnOVQa-wp4LCQdzSfDt0s_ajYCR'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404"
+    },
+    "hozyushka": {
+      "ok": true,
+      "skipped": true,
+      "reason": "wb_search_no_query_rows",
+      "cabinet": "hozyushka",
+      "observed_at": "2026-10-10T18:59:08.381006+00:00"
+    }
+  },
+  "source_error_stages": [
+    "search.publish.air"
+  ]
+}
