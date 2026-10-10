@@ -26,6 +26,20 @@ assert.ok(by['органайзер пластиковый'].targetBidKopecks > 0
 assert.ok(by['органайзер пластиковый'].targetBidKopecks < by['органайзер пластиковый'].currentBidKopecks);
 assert.ok(new Set(out.map(x => x.action)).size > 1, 'Нельзя давать blanket-решение всей кампании');
 
+// CPC campaigns do not supply impressions, CTR or CPM. Unknown is not zero.
+const noImpressions=analyze([{normQuery:'таз 90 л',views:null,clicks:15,orders:1,atbs:3,shks:1,spend:250,clusterBidKopecks:1000}],400)[0];
+assert.equal(noImpressions.views,null);
+assert.equal(noImpressions.ctr,null);
+assert.equal(noImpressions.safeCpm,null);
+assert.equal(noImpressions.cpc,250/15);
+const noSpend=analyze([{normQuery:'ведро 15 л',views:120,clicks:25,orders:0,spend:null}],400)[0];
+assert.equal(noSpend.spend,null);
+assert.equal(noSpend.cpc,null);
+assert.equal(noSpend.action,'ТРЕБУЕТ ДАННЫХ');
+const noOrders=analyze([{normQuery:'ведро 15 л',views:120,clicks:25,orders:null,spend:350}],400)[0];
+assert.equal(noOrders.orders,null);
+assert.equal(noOrders.action,'ТРЕБУЕТ ДАННЫХ');
+
 const sumSpend = out.reduce((a,x)=>a+x.spend,0);
 assert.equal(sumSpend, 2100);
 console.log('ADS_CLUSTER_FIXTURE_OK', JSON.stringify({
