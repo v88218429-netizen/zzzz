@@ -1,0 +1,130 @@
+{
+  "task_id": "PETR_OSIPOV_OLDEST_15_20261010",
+  "channel": "https://www.youtube.com/channel/UCN0eBAqEfUYXXEw77Q5QRZg",
+  "requested": 15,
+  "videos": [
+    {
+      "index": 1,
+      "id": "N_azGv9RRZI",
+      "title": "How to be joyful right today?",
+      "url": "https://www.youtube.com/watch?v=N_azGv9RRZI",
+      "transcript": "transcripts/PETR_OSIPOV_OLDEST_15_20261010_01_N_azGv9RRZI.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "index": 2,
+      "id": "7MdMyiD0iHo",
+      "title": "Момент, когда долго не получалось и начинает получаться",
+      "url": "https://www.youtube.com/watch?v=7MdMyiD0iHo",
+      "transcript": "transcripts/PETR_OSIPOV_OLDEST_15_20261010_02_7MdMyiD0iHo.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "index": 3,
+      "id": "c4ZCXHfuob8",
+      "title": "Your life is already good, and it’s getting better every day",
+      "url": "https://www.youtube.com/watch?v=c4ZCXHfuob8",
+      "transcript": "transcripts/PETR_OSIPOV_OLDEST_15_20261010_03_c4ZCXHfuob8.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "index": 4,
+      "id": "z80quDHYO6k",
+      "title": "What happens if you allow yourself to make mistakes?",
+      "url": "https://www.youtube.com/watch?v=z80quDHYO6k",
+      "transcript": "transcripts/PETR_OSIPOV_OLDEST_15_20261010_04_z80quDHYO6k.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "index": 5,
+      "id": "vqwB3yMzams",
+      "title": "Петр Осипов. Да, я сейчас на самом дне. Стих",
+      "url": "https://www.youtube.com/watch?v=vqwB3yMzams",
+      "transcript": "transcripts/PETR_OSIPOV_OLDEST_15_20261010_05_vqwB3yMzams.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "index": 6,
+      "id": "9Pf2eidg9p4",
+      "title": "Как перейти от развития через боль в развитие через радость?",
+      "url": "https://www.youtube.com/watch?v=9Pf2eidg9p4",
+      "transcript": "transcripts/PETR_OSIPOV_OLDEST_15_20261010_06_9Pf2eidg9p4.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "index": 7,
+      "id": "KrC0FuAUq6o",
+      "title": "Pyotr Osipov. What happens if you stop chasing perfection? Motivation",
+      "url": "https://www.youtube.com/watch?v=KrC0FuAUq6o",
+      "transcript": "transcripts/PETR_OSIPOV_OLDEST_15_20261010_07_KrC0FuAUq6o.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "index": 8,
+      "id": "jUqXFn2u5_I",
+      "title": "What if you stopped getting in your own way? Pyotr Osipov.",
+      "url": "https://www.youtube.com/watch?v=jUqXFn2u5_I",
+      "transcript": "transcripts/PETR_OSIPOV_OLDEST_15_20261010_08_jUqXFn2u5_I.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "index": 9,
+      "id": "y88XXPUfB18",
+      "title": "Что будет, если перестать думать и начать делать? Петр Осипов",
+      "url": "https://www.youtube.com/watch?v=y88XXPUfB18",
+      "transcript": "transcripts/PETR_OSIPOV_OLDEST_15_20261010_09_y88XXPUfB18.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "index": 10,
+      "id": "AGn7FmL7c74",
+      "title": "Что будет, если ты пойдешь навстречу страху? Петр Осипов",
+      "url": "https://www.youtube.com/watch?v=AGn7FmL7c74",
+      "transcript": "transcripts/PETR_OSIPOV_OLDEST_15_20261010_10_AGn7FmL7c74.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "index": 11,
+      "id": "CXa1sxN1CjQ",
+      "title": "Что будет, если ты станешь уверенным в себе? Петр Осипов.",
+      "url": "https://www.youtube.com/watch?v=CXa1sxN1CjQ",
+      "transcript": "transcripts/PETR_OSIPOV_OLDEST_15_20261010_11_CXa1sxN1CjQ.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "index": 12,
+      "id": "OEdNNf5oZrU",
+      "title": "Что будет, если ты не найдешь себя? Петр Осипов",
+      "url": "https://www.youtube.com/watch?v=OEdNNf5oZrU",
+      "transcript": "transcripts/PETR_OSIPOV_OLDEST_15_20261010_12_OEdNNf5oZrU.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "index": 13,
+      "id": "ArN-aHHCVXw",
+      "title": "Как начать бизнес? 4 конкретных шага для перехода от раздумий к результатам. Петр Осипов",
+      "url": "https://www.youtube.com/watch?v=ArN-aHHCVXw",
+      "transcript": "transcripts/PETR_OSIPOV_OLDEST_15_20261010_13_ArN-aHHCVXw.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "index": 14,
+      "id": "1Y7kz5bMj94",
+      "title": "How to Develop Personal Power? by Petr Osipov",
+      "url": "https://www.youtube.com/watch?v=1Y7kz5bMj94",
+      "transcript": "transcripts/PETR_OSIPOV_OLDEST_15_20261010_14_1Y7kz5bMj94.md",
+      "method": "youtube-transcript.ai"
+    },
+    {
+      "index": 15,
+      "id": "9yvWtrKD3Ig",
+      "title": "Как избавиться от страданий? Петр Осипов",
+      "url": "https://www.youtube.com/watch?v=9yvWtrKD3Ig",
+      "transcript": "transcripts/PETR_OSIPOV_OLDEST_15_20261010_15_9yvWtrKD3Ig.md",
+      "method": "youtube-transcript.ai"
+    }
+  ],
+  "errors": [],
+  "completed": true,
+  "generated_at": "2026-10-10T08:36:01.614658+00:00"
+}
