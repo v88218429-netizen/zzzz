@@ -12,7 +12,7 @@
       "published": null,
       "duration_seconds": 1944,
       "transcript": "transcripts/DASHKIEV_20261010_01_zJoZmwwLHsc.md",
-      "method": "youtube-transcript.ai",
+      "method": "existing",
       "status": "COMPLETE_VERIFIED",
       "coverage_pct": 99.5,
       "verification": "timestamps and transcript content present; end coverage checked"
@@ -25,7 +25,7 @@
       "published": null,
       "duration_seconds": 5509,
       "transcript": "transcripts/DASHKIEV_20261010_02_DsJmSYuFjUI.md",
-      "method": "youtube-transcript.ai",
+      "method": "existing",
       "status": "COMPLETE_VERIFIED",
       "coverage_pct": 99.6,
       "verification": "timestamps and transcript content present; end coverage checked"
@@ -38,7 +38,7 @@
       "published": null,
       "duration_seconds": 5521,
       "transcript": "transcripts/DASHKIEV_20261010_03_hMSh-M4GK_I.md",
-      "method": "youtube-transcript.ai",
+      "method": "existing",
       "status": "COMPLETE_VERIFIED",
       "coverage_pct": 99.3,
       "verification": "timestamps and transcript content present; end coverage checked"
@@ -51,7 +51,7 @@
       "published": null,
       "duration_seconds": 1150,
       "transcript": "transcripts/DASHKIEV_20261010_04_xHUatJfOd9w.md",
-      "method": "youtube-transcript.ai",
+      "method": "existing",
       "status": "COMPLETE_VERIFIED",
       "coverage_pct": 97.2,
       "verification": "timestamps and transcript content present; end coverage checked"
@@ -64,7 +64,7 @@
       "published": null,
       "duration_seconds": 1172,
       "transcript": "transcripts/DASHKIEV_20261010_05_XarWEN9GPxg.md",
-      "method": "youtube-transcript.ai",
+      "method": "existing",
       "status": "COMPLETE_VERIFIED",
       "coverage_pct": 98.2,
       "verification": "timestamps and transcript content present; end coverage checked"
@@ -77,7 +77,7 @@
       "published": null,
       "duration_seconds": 1374,
       "transcript": "transcripts/DASHKIEV_20261010_06_KaQsmFq_UZI.md",
-      "method": "youtube-transcript.ai",
+      "method": "existing",
       "status": "COMPLETE_VERIFIED",
       "coverage_pct": 98.1,
       "verification": "timestamps and transcript content present; end coverage checked"
@@ -90,7 +90,7 @@
       "published": null,
       "duration_seconds": 851,
       "transcript": "transcripts/DASHKIEV_20261010_07_vNPBbHCgm5U.md",
-      "method": "youtube-transcript.ai",
+      "method": "existing",
       "status": "COMPLETE_VERIFIED",
       "coverage_pct": 99.2,
       "verification": "timestamps and transcript content present; end coverage checked"
@@ -103,7 +103,7 @@
       "published": null,
       "duration_seconds": 987,
       "transcript": "transcripts/DASHKIEV_20261010_08_IR21zdroD50.md",
-      "method": "youtube-transcript.ai",
+      "method": "existing",
       "status": "COMPLETE_VERIFIED",
       "coverage_pct": 97.2,
       "verification": "timestamps and transcript content present; end coverage checked"
@@ -116,7 +116,7 @@
       "published": null,
       "duration_seconds": 1343,
       "transcript": "transcripts/DASHKIEV_20261010_09_MOwS4ceLHls.md",
-      "method": "youtube-transcript.ai",
+      "method": "existing",
       "status": "COMPLETE_VERIFIED",
       "coverage_pct": 97.5,
       "verification": "timestamps and transcript content present; end coverage checked"
@@ -129,7 +129,7 @@
       "published": null,
       "duration_seconds": 1587,
       "transcript": "transcripts/DASHKIEV_20261010_10_xLzRYbasKLM.md",
-      "method": "youtube-transcript.ai",
+      "method": "existing",
       "status": "COMPLETE_VERIFIED",
       "coverage_pct": 98.6,
       "verification": "timestamps and transcript content present; end coverage checked"
@@ -142,7 +142,7 @@
       "published": null,
       "duration_seconds": 2293,
       "transcript": "transcripts/DASHKIEV_20261010_11_GG4hv8Pj09g.md",
-      "method": "youtube-transcript.ai",
+      "method": "existing",
       "status": "COMPLETE_VERIFIED",
       "coverage_pct": 98.6,
       "verification": "timestamps and transcript content present; end coverage checked"
@@ -155,7 +155,7 @@
       "published": null,
       "duration_seconds": 804,
       "transcript": "transcripts/DASHKIEV_20261010_12_u2rgoRkZZD8.md",
-      "method": "youtube-transcript.ai",
+      "method": "existing",
       "status": "COMPLETE_VERIFIED",
       "coverage_pct": 97.5,
       "verification": "timestamps and transcript content present; end coverage checked"
@@ -168,7 +168,7 @@
       "published": null,
       "duration_seconds": 635,
       "transcript": "transcripts/DASHKIEV_20261010_13_H91CPFiV9jc.md",
-      "method": "youtube-transcript.ai",
+      "method": "existing",
       "status": "COMPLETE_VERIFIED",
       "coverage_pct": 98.6,
       "verification": "timestamps and transcript content present; end coverage checked"
@@ -181,7 +181,7 @@
       "published": null,
       "duration_seconds": 666,
       "transcript": "transcripts/DASHKIEV_20261010_14_b1Az2AGuPv4.md",
-      "method": "youtube-transcript.ai",
+      "method": "existing",
       "status": "COMPLETE_VERIFIED",
       "coverage_pct": 98.2,
       "verification": "timestamps and transcript content present; end coverage checked"
@@ -194,7 +194,7 @@
       "published": null,
       "duration_seconds": 1543,
       "transcript": "transcripts/DASHKIEV_20261010_15_i1-pSQl4UKA.md",
-      "method": "youtube-transcript.ai",
+      "method": "existing",
       "status": "COMPLETE_VERIFIED",
       "coverage_pct": 99.5,
       "verification": "timestamps and transcript content present; end coverage checked"
@@ -207,7 +207,7 @@
       "published": null,
       "duration_seconds": 2134,
       "transcript": "transcripts/DASHKIEV_20261010_16_NVd0LMm8DbQ.md",
-      "method": "youtube-transcript.ai",
+      "method": "existing",
       "status": "COMPLETE_VERIFIED",
       "coverage_pct": 98.5,
       "verification": "timestamps and transcript content present; end coverage checked"
@@ -220,7 +220,7 @@
       "published": null,
       "duration_seconds": 711,
       "transcript": "transcripts/DASHKIEV_20261010_17_Wu7EVFLvXyw.md",
-      "method": "youtube-transcript.ai",
+      "method": "existing",
       "status": "COMPLETE_VERIFIED",
       "coverage_pct": 99.4,
       "verification": "timestamps and transcript content present; end coverage checked"
@@ -233,7 +233,7 @@
       "published": null,
       "duration_seconds": 1857,
       "transcript": "transcripts/DASHKIEV_20261010_18__eLA4OM5ac4.md",
-      "method": "youtube-transcript.ai",
+      "method": "existing",
       "status": "COMPLETE_VERIFIED",
       "coverage_pct": 98.4,
       "verification": "timestamps and transcript content present; end coverage checked"
@@ -246,7 +246,7 @@
       "published": null,
       "duration_seconds": 2439,
       "transcript": "transcripts/DASHKIEV_20261010_19_KENaz0Ouv6w.md",
-      "method": "youtube-transcript.ai",
+      "method": "existing",
       "status": "COMPLETE_VERIFIED",
       "coverage_pct": 98.9,
       "verification": "timestamps and transcript content present; end coverage checked"
@@ -259,20 +259,46 @@
       "published": null,
       "duration_seconds": 2053,
       "transcript": "transcripts/DASHKIEV_20261010_20_8F_BnQw2vL8.md",
-      "method": "youtube-transcript.ai",
+      "method": "existing",
       "status": "COMPLETE_VERIFIED",
       "coverage_pct": 99.1,
       "verification": "timestamps and transcript content present; end coverage checked"
     },
     {
+      "index": 21,
+      "id": "lCDIAGB3jZw",
+      "title": "What to do if you don't see new opportunities around you...",
+      "url": "https://www.youtube.com/watch?v=lCDIAGB3jZw",
+      "published": null,
+      "duration_seconds": 777,
+      "transcript": "transcripts/DASHKIEV_20261010_21_lCDIAGB3jZw.md",
+      "method": "youtube-transcript.ai",
+      "status": "COMPLETE_VERIFIED",
+      "coverage_pct": 95.4,
+      "verification": "timestamps and transcript content present; end coverage checked"
+    },
+    {
+      "index": 22,
+      "id": "ETTleC99D7M",
+      "title": "Ваше РАЗВИТИЕ зависит от ЭТИХ решений. Вы перейдете на другой уровень",
+      "url": "https://www.youtube.com/watch?v=ETTleC99D7M",
+      "published": null,
+      "duration_seconds": 2694,
+      "transcript": "transcripts/DASHKIEV_20261010_22_ETTleC99D7M.md",
+      "method": "youtube-transcript.ai",
+      "status": "COMPLETE_VERIFIED",
+      "coverage_pct": 100,
+      "verification": "timestamps and transcript content present; end coverage checked"
+    },
+    {
       "index": 23,
       "id": "Wc_5ffxdxjs",
-      "title": "Почему мы не умеем отдыхать?",
+      "title": "Why can't we rest?",
       "url": "https://www.youtube.com/watch?v=Wc_5ffxdxjs",
       "published": null,
       "duration_seconds": 738,
       "transcript": "transcripts/DASHKIEV_20261010_23_Wc_5ffxdxjs.md",
-      "method": "FreeTranscriptAPI",
+      "method": "existing",
       "status": "COMPLETE_VERIFIED",
       "coverage_pct": 98.5,
       "verification": "timestamps and transcript content present; end coverage checked"
@@ -285,7 +311,7 @@
       "published": null,
       "duration_seconds": 669,
       "transcript": "transcripts/DASHKIEV_20261010_24_gIWG0UhFRKM.md",
-      "method": "FreeTranscriptAPI",
+      "method": "existing",
       "status": "COMPLETE_VERIFIED",
       "coverage_pct": 98.4,
       "verification": "timestamps and transcript content present; end coverage checked"
@@ -298,7 +324,7 @@
       "published": null,
       "duration_seconds": 713,
       "transcript": "transcripts/DASHKIEV_20261010_25_FK21kDPIplE.md",
-      "method": "FreeTranscriptAPI",
+      "method": "existing",
       "status": "COMPLETE_VERIFIED",
       "coverage_pct": 99.4,
       "verification": "timestamps and transcript content present; end coverage checked"
@@ -311,7 +337,7 @@
       "published": null,
       "duration_seconds": 868,
       "transcript": "transcripts/DASHKIEV_20261010_26_jk1s5-YnUu8.md",
-      "method": "FreeTranscriptAPI",
+      "method": "existing",
       "status": "COMPLETE_VERIFIED",
       "coverage_pct": 99.7,
       "verification": "timestamps and transcript content present; end coverage checked"
@@ -324,7 +350,7 @@
       "published": null,
       "duration_seconds": 1089,
       "transcript": "transcripts/DASHKIEV_20261010_27_8RHWQw66FGA.md",
-      "method": "FreeTranscriptAPI",
+      "method": "existing",
       "status": "COMPLETE_VERIFIED",
       "coverage_pct": 99.6,
       "verification": "timestamps and transcript content present; end coverage checked"
@@ -337,7 +363,7 @@
       "published": null,
       "duration_seconds": 1111,
       "transcript": "transcripts/DASHKIEV_20261010_28_4ahpQI_OEAY.md",
-      "method": "FreeTranscriptAPI",
+      "method": "existing",
       "status": "COMPLETE_VERIFIED",
       "coverage_pct": 99.8,
       "verification": "timestamps and transcript content present; end coverage checked"
@@ -350,7 +376,7 @@
       "published": null,
       "duration_seconds": 2542,
       "transcript": "transcripts/DASHKIEV_20261010_29_XIrq886HQic.md",
-      "method": "FreeTranscriptAPI",
+      "method": "existing",
       "status": "COMPLETE_VERIFIED",
       "coverage_pct": 99.9,
       "verification": "timestamps and transcript content present; end coverage checked"
@@ -363,24 +389,13 @@
       "published": null,
       "duration_seconds": 6935,
       "transcript": "transcripts/DASHKIEV_20261010_30_vCi_rr2OR5E.md",
-      "method": "FreeTranscriptAPI",
+      "method": "existing",
       "status": "COMPLETE_VERIFIED",
       "coverage_pct": 99.9,
       "verification": "timestamps and transcript content present; end coverage checked"
     }
   ],
-  "errors": [
-    {
-      "index": 21,
-      "id": "lCDIAGB3jZw",
-      "error": "The read operation timed out"
-    },
-    {
-      "index": 22,
-      "id": "ETTleC99D7M",
-      "error": "The read operation timed out"
-    }
-  ],
-  "completed": false,
-  "generated_at": "2026-10-10T13:52:34.197882+00:00"
+  "errors": [],
+  "completed": true,
+  "generated_at": "2026-10-10T13:53:38.647973+00:00"
 }
