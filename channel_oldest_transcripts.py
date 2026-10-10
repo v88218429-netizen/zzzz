@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Transcribe the 15 oldest public long-form uploads of a YouTube channel."""
+"""Transcribe the newest public long-form uploads of a YouTube channel."""
 import json, pathlib, re, subprocess, datetime, time, sys
 from urllib.request import Request, urlopen
 ROOT=pathlib.Path(__file__).resolve().parent
@@ -35,16 +35,16 @@ def main():
   try:
    raw=cmd(["yt-dlp","--flat-playlist","--dump-single-json","--no-warnings",channel+"/videos"])
    entries=[e for e in json.loads(raw).get("entries",[]) if e and e.get("id") and e.get("id")!= "NA"]
-   # Channel /videos playlist is newest-first, so its last items are oldest.
+   # Channel /videos playlist is newest-first.
    if len(entries)<count:raise RuntimeError(f"Only {len(entries)} video entries retrieved; expected at least {count}")
-   selected=list(reversed(entries[-count:]))
+   selected=entries[:count]
    for idx,e in enumerate(selected,1):
     vid=e["id"]; target=OUT/f"{task}_{idx:02d}_{vid}.md"
     try:
      if target.exists() and "## Transcript" in target.read_text():method="existing"
      else:
       body,method=transcript(vid)
-      target.write_text(f"# {e.get('title',vid)}\n\n- Source: https://www.youtube.com/watch?v={vid}\n- Channel: {channel}\n- Oldest-first index: {idx}\n- Transcript method: {method}\n\n## Transcript\n\n{body}\n",encoding="utf-8")
+      target.write_text(f"# {e.get('title',vid)}\n\n- Source: https://www.youtube.com/watch?v={vid}\n- Channel: {channel}\n- Newest-first index: {idx}\n- Transcript method: {method}\n\n## Transcript\n\n{body}\n",encoding="utf-8")
      result["videos"].append({"index":idx,"id":vid,"title":e.get("title"),"url":f"https://www.youtube.com/watch?v={vid}","transcript":str(target.relative_to(ROOT)),"method":method})
     except Exception as exc:
      failed=True;result["errors"].append({"index":idx,"id":vid,"error":str(exc)[:500]})
