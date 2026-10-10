@@ -1,5 +1,10 @@
 name: WB traffic collector checks
 on:
+  push:
+    branches: [mainggg]
+    paths:
+      - 'wb_worker/**'
+      - '.github/workflows/wb-traffic-check.yml'
   pull_request:
     paths:
       - 'wb_worker/**'
@@ -18,7 +23,7 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install httpx
-      - run: python -m py_compile traffic_sync.py github_traffic_sync.py github_finance_charges_sync.py github_search_snapshot_sync.py main.py
-      - run: python -m unittest -v test_traffic_sync.py test_github_search_snapshot_sync.py
+      - run: python -m py_compile traffic_sync.py query_clusters.py campaign_state.py github_traffic_sync.py github_finance_charges_sync.py github_search_snapshot_sync.py main.py
+      - run: python -m unittest -v test_traffic_sync.py test_traffic_sync_regression.py test_query_clusters.py test_campaign_state.py test_github_search_snapshot_sync.py
       - name: Reject public finance exports
         run: test -z "$(git -C .. ls-files 'wb_data/finance/*.csv')"
