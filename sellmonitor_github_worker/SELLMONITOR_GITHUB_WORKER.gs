@@ -2677,6 +2677,23 @@ function sellmonitorGithubAppendWbPollRows_(ss, dataset, table) {
 
 // Dedicated per-cabinet view. Ads clusters are query families, NOT measured
 // organic ranking; the separate organic position sheet remains untouched.
+// Batch adjacent updates to avoid thousands of individual spreadsheet RPCs.
+function sellmonitorGithubBatchUpdateRows_(sh, updates, width) {
+  if (!updates.length) return;
+  updates.sort(function(a,b){ return a.index-b.index; });
+  var first=0, buffer=[];
+  function flush_() {
+    if(buffer.length) sh.getRange(first,1,buffer.length,width).setValues(buffer);
+    buffer=[];
+  }
+  updates.forEach(function(entry) {
+    if(buffer.length && entry.index !== first+buffer.length) flush_();
+    if(!buffer.length) first=entry.index;
+    buffer.push(entry.row);
+  });
+  flush_();
+}
+
 function sellmonitorGithubPublishCabinetAdClusters_(shop, records, observedAt) {
   var bookId = ({
     aa:'1SmsoG8zKx3hbTtTzS-zLekTFiWEQN8eIwHOxXq-5RHo',
@@ -2718,7 +2735,7 @@ function sellmonitorGithubPublishCabinetAdClusters_(shop, records, observedAt) {
     if(found) updates.push({index:found,row:values});
     else adds.push(values);
   });
-  updates.forEach(function(it){sh.getRange(it.index,1,1,headers.length).setValues([it.row]);});
+  sellmonitorGithubBatchUpdateRows_(sh,updates,headers.length);
   if (adds.length){
     var first=sh.getLastRow()+1;
     if (sh.getMaxRows()<first+adds.length-1)
@@ -2893,16 +2910,17 @@ function sellmonitorGithubPublishAdClusters_(body) {
     incoming[key] = true;
     rows.push({key:key, values:data});
   });
-  var appended=[], updated=0;
+  var appended=[], updates=[];
   rows.forEach(function(item) {
     var location = existing[item.key];
     if (location) {
-      sh.getRange(location,1,1,headers.length).setValues([item.values]);
-      updated++;
+      updates.push({index:location,row:item.values});
     } else {
       appended.push(item.values);
     }
   });
+  sellmonitorGithubBatchUpdateRows_(sh,updates,headers.length);
+  var updated=updates.length;
   if (appended.length) {
     var first=sh.getLastRow()+1;
     if (sh.getMaxRows()<first+appended.length-1)
