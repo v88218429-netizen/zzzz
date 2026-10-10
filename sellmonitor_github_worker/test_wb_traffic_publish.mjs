@@ -209,10 +209,19 @@ assert.equal(campaignPublish.written,1);
 assert.equal(campaignPublish.added,1);
 assert.equal(sheets['19_AD_CAMPAIGN_SETTINGS'].values[1][3],"'=Campaign 1");
 assert.equal(sheets['19_AD_CAMPAIGN_SETTINGS'].values[1][8],1100);
+assert.equal(campaignPublish.client_catalog.written,1);
+assert.equal(sheets['90_RAW_ads_campaigns'].values[1][0],123);
+assert.equal(sheets['90_RAW_ads_campaigns'].values[1][1],456);
+assert.equal(sheets['90_RAW_ads_campaigns'].values[1][3],"'=Campaign 1");
+assert.equal(sheets['90_RAW_ads_campaigns'].values[1][9],1100);
+assert.equal(sheets['90_RAW_ads_campaigns'].values[1][14],'LIVE_WB_V2_NO_JEM');
 const campaignReplay=sandbox.sellmonitorGithubPublishCampaignSettings_(campaignPayload);
 assert.equal(campaignReplay.added,0);
 assert.equal(campaignReplay.updated,1);
 assert.equal(sheets['19_AD_CAMPAIGN_SETTINGS'].values.length,2);
+assert.equal(campaignReplay.client_catalog.added,0,'client replay cannot duplicate campaign records');
+assert.equal(campaignReplay.client_catalog.updated,1);
+assert.equal(sheets['90_RAW_ads_campaigns'].values.length,2);
 const campaignBad=[...campaignRow];campaignBad[8]=-5;
 assert.throws(
   () => sandbox.sellmonitorGithubPublishCampaignSettings_({...campaignPayload,rows:[campaignBad]}),
