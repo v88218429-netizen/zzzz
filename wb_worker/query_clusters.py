@@ -177,49 +177,61 @@ def publish(bridge_url: str, bridge_key: str) -> dict:
     if len(window) != 2:
         raise RuntimeError("Cluster window missing")
     counts = {}
-    for shop in SHOPS:
+    failed = {}
+    # Prioritize the cabinet without JEM and the most recent observations.
+    for shop in ("yv", "aa", "ap"):
         shop_state = status.get("shops", {}).get(shop) or {}
         if not shop_state.get("factual"):
             counts[shop] = {"published_rows": 0, "skipped": True,
                             "reason": "no_verified_current_batch"}
             continue
-        rows = [r for r in existing_rows(shop) if window[0] <= r[1] <= window[1]]
+        rows = sorted((r for r in existing_rows(shop) if window[0] <= r[1] <= window[1]),
+                      key=lambda r: r[1], reverse=True)
         counts[shop] = {"source_rows": len(rows), "published_rows": 0, "chunks": 0}
         if not rows:
             continue
-        with httpx.Client(timeout=httpx.Timeout(170.0, connect=15.0), follow_redirects=True) as client:
-            for start in range(0, len(rows), 250):
-                chunk = rows[start:start+250]
-                payload = {
-                    "token": bridge_key, "action": "publish_ad_clusters",
-                    "cabinet": shop, "source": SOURCE, "quality": QUALITY,
-                    "observed_at": status["observed_at"], "rows": chunk,
-                }
-                data = None
-                for attempt in range(4):
-                    try:
-                        response = client.post(bridge_url, json=payload)
-                        if response.status_code in (404, 408, 429, 500, 502, 503, 504):
-                            raise RuntimeError(f"GAS_TRANSIENT_HTTP_{response.status_code}")
-                        if response.status_code >= 400:
-                            raise RuntimeError(f"GAS_BRIDGE_HTTP_{response.status_code}")
+        try:
+            with httpx.Client(timeout=httpx.Timeout(170.0, connect=15.0), follow_redirects=True) as client:
+                for start in range(0, len(rows), 250):
+                    chunk = rows[start:start+250]
+                    payload = {
+                        "token": bridge_key, "action": "publish_ad_clusters",
+                        "cabinet": shop, "source": SOURCE, "quality": QUALITY,
+                        "observed_at": status["observed_at"], "rows": chunk,
+                    }
+                    data = None
+                    for attempt in range(4):
                         try:
-                            data = response.json()
-                        except ValueError:
-                            raise RuntimeError("GAS_BRIDGE_RETURNED_NON_JSON")
-                        break
-                    except (httpx.TransportError, RuntimeError) as exc:
-                        retryable = isinstance(exc, httpx.TransportError) or str(exc).startswith("GAS_TRANSIENT_HTTP_")
-                        if not retryable or attempt == 3:
-                            raise RuntimeError(f"{shop} chunk {start}: {type(exc).__name__}: {exc}") from None
-                        time.sleep([2, 5, 10][attempt])
-                if not isinstance(data, dict) or data.get("ok") is not True or data.get("action") != "publish_ad_clusters":
-                    raise RuntimeError(f"{shop}: clusters bridge rejected publication")
-                if int(data.get("written", -1)) != len(chunk):
-                    raise RuntimeError(f"{shop}: cluster row-count mismatch")
-                counts[shop]["published_rows"] += len(chunk)
-                counts[shop]["chunks"] += 1
+                            response = client.post(bridge_url, json=payload)
+                            if response.status_code in (404, 408, 429, 500, 502, 503, 504):
+                                raise RuntimeError(f"GAS_TRANSIENT_HTTP_{response.status_code}")
+                            if response.status_code >= 400:
+                                raise RuntimeError(f"GAS_BRIDGE_HTTP_{response.status_code}")
+                            try:
+                                data = response.json()
+                            except ValueError:
+                                raise RuntimeError("GAS_BRIDGE_RETURNED_NON_JSON")
+                            break
+                        except (httpx.TransportError, RuntimeError) as exc:
+                            retryable = isinstance(exc, httpx.TransportError) or str(exc).startswith("GAS_TRANSIENT_HTTP_")
+                            if not retryable or attempt == 3:
+                                raise RuntimeError(f"{shop} chunk {start}: {type(exc).__name__}: {exc}") from None
+                            time.sleep([2, 5, 10][attempt])
+                    if not isinstance(data, dict) or data.get("ok") is not True or data.get("action") != "publish_ad_clusters":
+                        raise RuntimeError(f"{shop}: clusters bridge rejected publication")
+                    if int(data.get("written", -1)) != len(chunk):
+                        raise RuntimeError(f"{shop}: cluster row-count mismatch")
+                    counts[shop]["published_rows"] += len(chunk)
+                    counts[shop]["chunks"] += 1
+        except Exception as exc:
+            # Keep publishing verified rows for other cabinets. No one shop
+            # is allowed to erase or starve the others after a bridge failure.
+            detail = f"{type(exc).__name__}: {exc}"
+            counts[shop]["error"] = detail
+            failed[shop] = detail
     print(json.dumps({"published": counts, "period": window}, ensure_ascii=False))
+    if failed:
+        raise RuntimeError("Incomplete cluster publication for: " + ", ".join(sorted(failed)))
     return counts
 
 
