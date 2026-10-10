@@ -933,18 +933,27 @@ function sellmonitorGithubAnalyzeAdsClusters_(rows, baseContribution) {
   (rows || []).forEach(function(r){
     var q=String(r.normQuery || r.norm_query || '').trim();
     if(!q)return;
-    var x=g[q] || (g[q]={normQuery:q,views:0,clicks:0,atbs:0,orders:0,shks:0,spend:0,bidKopecks:Number(r.clusterBidKopecks || r.cluster_bid_kopecks || 0),state:r.clusterState || r.cluster_state || ''});
-    x.views+=Number(r.views||0);x.clicks+=Number(r.clicks||0);x.atbs+=Number(r.atbs||0);x.orders+=Number(r.orders||0);x.shks+=Number(r.shks||0);x.spend+=Number(r.spend||r.spendRub||r.spend_rub||0);
+    var x=g[q] || (g[q]={normQuery:q,views:0,viewsComplete:true,spendComplete:true,ordersComplete:true,clicks:0,atbs:0,orders:0,shks:0,spend:0,bidKopecks:Number(r.clusterBidKopecks || r.cluster_bid_kopecks || 0),state:r.clusterState || r.cluster_state || ''});
+    if(r.views==null||r.views==='')x.viewsComplete=false;
+    else x.views+=Number(r.views);
+    if(r.orders==null||r.orders==='')x.ordersComplete=false;
+    else x.orders+=Number(r.orders);
+    var spendValue=r.spend!=null&&r.spend!==''?r.spend:(r.spendRub!=null&&r.spendRub!==''?r.spendRub:r.spend_rub);
+    if(spendValue==null||spendValue==='')x.spendComplete=false;
+    else x.spend+=Number(spendValue);
+    x.clicks+=Number(r.clicks||0);x.atbs+=Number(r.atbs||0);x.shks+=Number(r.shks||0);
     if(Number(r.clusterBidKopecks||r.cluster_bid_kopecks||0)>0)x.bidKopecks=Number(r.clusterBidKopecks||r.cluster_bid_kopecks);
     if(r.clusterState||r.cluster_state)x.state=r.clusterState||r.cluster_state;
   });
   var base=Math.max(0,Number(baseContribution||0)), safeCpa=base>0?base*0.8:0, result=[];
   Object.keys(g).forEach(function(q){
-    var x=g[q], ctr=x.views>0?x.clicks/x.views*100:0, cpc=x.clicks>0?x.spend/x.clicks:0;
-    var cr=x.clicks>0?x.orders/x.clicks:0, cpa=x.orders>0?x.spend/x.orders:null;
-    var safeCpc=safeCpa>0?safeCpa*cr:0, safeCpm=safeCpc>0?safeCpc*(ctr/100)*1000:0;
+    var x=g[q], ctr=x.viewsComplete&&x.views>0?x.clicks/x.views*100:null, cpc=x.spendComplete&&x.clicks>0?x.spend/x.clicks:null;
+    var cr=x.ordersComplete&&x.clicks>0?x.orders/x.clicks:null, cpa=x.spendComplete&&x.ordersComplete&&x.orders>0?x.spend/x.orders:null;
+    var safeCpc=safeCpa>0&&cr!=null?safeCpa*cr:null, safeCpm=safeCpc!=null&&ctr!=null?safeCpc*(ctr/100)*1000:null;
     var action='НАБЛЮДАТЬ', reason='Недостаточно данных для жёсткого решения';
-    if(x.orders===0 && x.clicks>=20 && x.spend>=Math.max(250,base*0.5)){
+    if(!x.spendComplete||!x.ordersComplete){
+      action='ТРЕБУЕТ ДАННЫХ';reason='Недоступны точные расходы или заказы рекламного кластера';
+    }else if(x.orders===0 && x.clicks>=20 && x.spend>=Math.max(250,base*0.5)){
       action='ИСКЛЮЧИТЬ / МИНУСОВАТЬ';reason='Достаточный объём кликов и расход без заказов';
     }else if(x.orders>0 && safeCpa>0 && cpa>safeCpa*1.15){
       action='СНИЗИТЬ СТАВКУ';reason='CPA выше безопасного рекламного бюджета на заказ';
@@ -953,10 +962,10 @@ function sellmonitorGithubAnalyzeAdsClusters_(rows, baseContribution) {
     }else if(x.orders>0 && (!safeCpa || cpa<=base)){
       action='ОСТАВИТЬ';reason='Есть подтверждённые заказы; blanket-отключение не требуется';
     }
-    var ratio=(cpc>0&&safeCpc>0)?Math.min(1,safeCpc/cpc):0;
+    var ratio=(cpc!=null&&cpc>0&&safeCpc!=null&&safeCpc>0)?Math.min(1,safeCpc/cpc):0;
     var targetBid=x.bidKopecks>0&&ratio>0?Math.max(1,Math.floor(x.bidKopecks*ratio)):0;
     result.push({
-      normQuery:q,views:x.views,clicks:x.clicks,atbs:x.atbs,orders:x.orders,shks:x.shks,spend:x.spend,
+      normQuery:q,views:x.viewsComplete?x.views:null,clicks:x.clicks,atbs:x.atbs,orders:x.ordersComplete?x.orders:null,shks:x.shks,spend:x.spendComplete?x.spend:null,
       ctr:ctr,cpc:cpc,cr:cr,cpa:cpa,baseContribution:base,safeCpa:safeCpa,safeCpc:safeCpc,safeCpm:safeCpm,
       currentBidKopecks:x.bidKopecks,targetBidKopecks:targetBid,state:x.state,action:action,reason:reason
     });
@@ -1015,9 +1024,9 @@ function sellmonitorGithubRefreshAdsClusters_(ss, payload) {
           rawRows.push({
             storeId:auth.storeId,date:date,advertId:ad,nmId:nm,sellerArticle:p.sellerArticle||'',campaignName:p.campaignName||'',
             paymentType:p.paymentType||'',bidType:p.bidType||'',normQuery:q,
-            views:Number(x.views||0),clicks:Number(x.clicks||0),atbs:Number(x.atbs||0),orders:Number(x.orders||0),shks:Number(x.shks||0),
-            ctr:Number(x.ctr||0),cpc:Number(x.cpc||0),cpm:Number(x.cpm||0),avgPos:Number(x.avgPos||x.avg_pos||0),
-            spend:Number(x.spend||0),clusterBidKopecks:Number(bm[q]||0),clusterState:String(sm[q]||''),
+            views:x.views==null?null:Number(x.views),clicks:Number(x.clicks||0),atbs:Number(x.atbs||0),orders:x.orders==null?null:Number(x.orders),shks:Number(x.shks||0),
+            ctr:x.ctr==null?null:Number(x.ctr),cpc:x.cpc==null?null:Number(x.cpc),cpm:x.cpm==null?null:Number(x.cpm),avgPos:x.avgPos==null&&x.avg_pos==null?null:Number(x.avgPos==null?x.avg_pos:x.avgPos),
+            spend:x.spend==null?null:Number(x.spend),clusterBidKopecks:Number(bm[q]||0),clusterState:String(sm[q]||''),
             campaignSearchBidKopecks:Number(p.bidSearchKopecks||0),campaignRecommendationsBidKopecks:Number(p.bidRecommendationsKopecks||0),
             campaignSearch:Boolean(p.search),campaignRecommendations:Boolean(p.recommendations)
           });
@@ -1056,7 +1065,7 @@ function sellmonitorGithubRefreshAdsClusters_(ss, payload) {
         reason += '; органическая позиция уже ТОП-' + Math.round(Number(org.position));
       }
       diagRows.push([
-        auth.storeId,from,to,p.advertId,p.nmId,p.sellerArticle,p.campaignName,x.normQuery,org.position||'',org.frequency||'',x.spend,x.views,x.clicks,x.atbs,x.orders,x.shks,x.ctr,x.cpc,x.cr*100,x.cpa==null?'':x.cpa,x.baseContribution,x.safeCpa,x.safeCpc,x.safeCpm,x.currentBidKopecks,x.targetBidKopecks,x.state,action,reason,'FACTUAL_WB_CLUSTER + FACTUAL_SEARCH_POSITION + CALCULATED_ECONOMICS',loaded
+        auth.storeId,from,to,p.advertId,p.nmId,p.sellerArticle,p.campaignName,x.normQuery,org.position||'',org.frequency||'',x.spend,x.views,x.clicks,x.atbs,x.orders,x.shks,x.ctr,x.cpc,x.cr*100,x.cpa==null?'':x.cpa,x.baseContribution,x.safeCpa,x.safeCpc,x.safeCpm,x.currentBidKopecks,x.targetBidKopecks,x.state,action,reason,'FACTUAL_WB_CLUSTER; ORGANIC_POSITION='+ (Number(org.position||0)>0?'OBSERVED':'UNAVAILABLE') +'; ECONOMICS='+ (base>0?'DERIVED':'INCOMPLETE'),loaded
       ]);
     });
   });
