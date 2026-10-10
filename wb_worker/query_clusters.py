@@ -115,21 +115,40 @@ async def collect() -> dict:
                     # Empty campaign stats are not evidence of absent search traffic.
                     raise RuntimeError("No campaign x SKU pairs in current verified ads window")
                 incoming = []
+                successful_batches = 0
+                batch_errors = []
                 for i in range(0, len(pairs), 100):
                     loop = asyncio.get_running_loop()
                     if _last_request:
                         await asyncio.sleep(max(0, MIN_INTERVAL_SECONDS - (loop.time() - _last_request)))
                     _last_request = loop.time()
-                    payload = await _request(
-                        client, token, "POST", PROMO + "/adv/v1/normquery/stats",
-                        json={"from": begin, "to": end, "items": pairs[i:i + 100]})
-                    incoming.extend(parse_rows(shop, payload))
-                prior = existing_rows(shop)
-                merged = _upsert_rows(prior, incoming, (0, 1, 2, 3, 4))
-                _atomic_csv(DATA_DIR / shop / "ad_clusters_day.csv", COLUMNS, merged)
-                info.update({"ok": True, "new_rows": len(incoming), "history_rows": len(merged),
-                             "factual": bool(incoming),
-                             "note": "Empty valid API response retained as empty; not imputed"})
+                    try:
+                        payload = await _request(
+                            client, token, "POST", PROMO + "/adv/v1/normquery/stats",
+                            json={"from": begin, "to": end, "items": pairs[i:i + 100]})
+                        incoming.extend(parse_rows(shop, payload))
+                        successful_batches += 1
+                    except Exception as batch_error:
+                        # Preserve successful prior chunks; never pretend to have
+                        # complete campaign coverage when rate-limited.
+                        batch_errors.append(f"{type(batch_error).__name__}: {batch_error}")
+                        # Stop after a rate or API failure; further calls can
+                        # worsen a seller's quota or create repeat delays.
+                        break
+                if successful_batches:
+                    prior = existing_rows(shop)
+                    merged = _upsert_rows(prior, incoming, (0, 1, 2, 3, 4))
+                    _atomic_csv(DATA_DIR / shop / "ad_clusters_day.csv", COLUMNS, merged)
+                    info.update({"ok": not batch_errors, "new_rows": len(incoming),
+                                 "history_rows": len(merged), "factual": bool(incoming),
+                                 "batches_collected": successful_batches,
+                                 "batches_expected": (len(pairs)+99)//100,
+                                 "note": "Empty valid API response retained as empty; not imputed"})
+                if batch_errors:
+                    info["error"] = batch_errors[0]
+                    info["coverage"] = "PARTIAL_SOURCE_WINDOW"
+                elif not successful_batches:
+                    raise RuntimeError("No verified cluster API batches")
             except Exception as exc:
                 info["error"] = f"{type(exc).__name__}: {exc}"
             state["shops"][shop] = info
@@ -159,9 +178,9 @@ def publish(bridge_url: str, bridge_key: str) -> dict:
     counts = {}
     for shop in SHOPS:
         shop_state = status.get("shops", {}).get(shop) or {}
-        if not shop_state.get("ok"):
+        if not shop_state.get("factual"):
             counts[shop] = {"published_rows": 0, "skipped": True,
-                            "reason": "source_not_verified"}
+                            "reason": "no_verified_current_batch"}
             continue
         rows = [r for r in existing_rows(shop) if window[0] <= r[1] <= window[1]]
         counts[shop] = {"source_rows": len(rows), "published_rows": 0, "chunks": 0}
@@ -199,7 +218,7 @@ def main() -> int:
             raise RuntimeError("Cluster collection status missing")
         status = json.loads(path.read_text(encoding="utf-8"))
         missing = [shop for shop in SHOPS if
-                   not (status.get("shops", {}).get(shop) or {}).get("factual")]
+                   not all((status.get("shops", {}).get(shop) or {}).get(k) for k in ("factual", "ok"))]
         if missing:
             raise RuntimeError("Missing factual cluster rows in: " + ", ".join(missing))
         print("WB_AD_CLUSTERS_VERIFIED_ALL_CABINETS")

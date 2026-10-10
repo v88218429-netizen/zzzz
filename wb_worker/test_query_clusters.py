@@ -1,8 +1,9 @@
 import csv
+import asyncio
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import patch, AsyncMock
 
 import query_clusters as qc
 
@@ -36,6 +37,43 @@ class QueryClustersTest(unittest.TestCase):
             with self.subTest(payload=payload):
                 with self.assertRaises(ValueError):
                     qc.parse_rows("aa",payload)
+
+    def test_partial_rate_limited_collection_retains_verified_chunk(self):
+        from datetime import datetime
+        class StubClient:
+            async def __aenter__(self): return self
+            async def __aexit__(self, *args): return False
+        now=datetime.now().date()
+        with tempfile.TemporaryDirectory() as temp:
+            tmp=Path(temp)/"traffic"
+            base_pairs=[{"advertId":i,"nmId":10+i} for i in range(101)]
+            response={"items":[{"advertId":1,"nmId":11,"dailyStats":[
+                {"date":now.isoformat(),"stat":{"normQuery":"таз","clicks":4,"spend":19}}]}]}
+            calls=0
+            async def fake_request(*args,**kwargs):
+                nonlocal calls
+                calls+=1
+                if calls==1:
+                    return response
+                raise RuntimeError("HTTP 429 basic token hourly limit")
+            def pairs(shop,_start,_end):
+                return base_pairs if shop=="yv" else []
+            with patch.object(qc,"DATA_DIR",tmp), \
+                 patch.object(qc,"SHOPS",{"yv":("test","TOKEN")}), \
+                 patch.dict("os.environ",{"TOKEN":"test-token"}), \
+                 patch.object(qc,"active_pairs",side_effect=pairs), \
+                 patch.object(qc.httpx,"AsyncClient",return_value=StubClient()), \
+                 patch.object(qc,"_request",side_effect=fake_request), \
+                 patch.object(qc,"MIN_INTERVAL_SECONDS",0.0), \
+                 patch.object(qc,"_last_request",0.0):
+                result=asyncio.run(qc.collect())
+                self.assertFalse(result["ok"])
+                self.assertEqual(result["shops"]["yv"]["coverage"],"PARTIAL_SOURCE_WINDOW")
+                self.assertEqual(result["shops"]["yv"]["batches_collected"],1)
+                self.assertEqual(result["shops"]["yv"]["batches_expected"],2)
+                self.assertEqual(result["shops"]["yv"]["new_rows"],1)
+                self.assertEqual(len(qc.existing_rows("yv")),1)
+                self.assertEqual(calls,2)
 
     def test_pairs_are_scoped_to_correct_shop_and_period(self):
         with tempfile.TemporaryDirectory() as temp:
