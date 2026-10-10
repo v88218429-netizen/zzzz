@@ -2,13 +2,14 @@ import unittest
 import csv
 import os
 import tempfile
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import httpx
 import traffic_sync
-from traffic_sync import _campaign_ids, _stats_rows, _funnel_rows, _upsert_rows
+from traffic_sync import (_campaign_ids, _stats_rows, _funnel_rows, _upsert_rows,
+                          _rows_from_monitoring_start, MONITORING_START)
 
 
 class TrafficParsingTest(unittest.TestCase):
@@ -48,6 +49,18 @@ class TrafficParsingTest(unittest.TestCase):
                               "cartCount": 2, "orderCount": 1, "orderSum": 500}]}]
         rows = _funnel_rows("ap", data)
         self.assertEqual(rows[0][2:7], [42, "MY-42", 12, 2, 1])
+
+    def test_monitoring_history_excludes_dates_before_october(self):
+        rows = [
+            ["ap", "2026-09-30", "old"],
+            ["ap", "2026-10-01", "start"],
+            ["ap", "2026-10-10", "current"],
+            ["ap", "", "missing"],
+        ]
+        self.assertEqual(
+            _rows_from_monitoring_start(rows),
+            [["ap", "2026-10-01", "start"], ["ap", "2026-10-10", "current"]],
+        )
 
     def test_upsert_retains_older_history_and_replaces_overlap(self):
         old = [
@@ -288,15 +301,21 @@ class TrafficSyncPersistenceTest(unittest.IsolatedAsyncioTestCase):
                 traffic_sync._last_fullstats = 0
                 first = await traffic_sync.sync_once()
                 self.assertTrue(first["ok"])
-                self.assertEqual((date.fromisoformat(first["period"][1]) -
-                                  date.fromisoformat(first["period"][0])).days, 30)
-                self.assertEqual((date.fromisoformat(first["funnel_period"][1]) -
-                                  date.fromisoformat(first["funnel_period"][0])).days, 6)
+                today = date.fromisoformat(first["period"][1])
+                expected_begin = max(today - timedelta(days=30), MONITORING_START)
+                expected_funnel_begin = max(today - timedelta(days=6), MONITORING_START)
+                self.assertEqual(first["period"][0], expected_begin.isoformat())
+                self.assertEqual(first["funnel_period"][0], expected_funnel_begin.isoformat())
+                self.assertEqual(first["monitoring_start"], MONITORING_START.isoformat())
                 self.assertEqual(first["shops"]["ap"]["funnel_nm_ids"], 2)
                 self.assertEqual(first["ads_poll_rows"], 1)
                 self.assertEqual(first["funnel_poll_rows"], 1)
-                self.assertEqual(len(rows(shop_dir / "campaign_sku_day.csv")), 2)
-                self.assertEqual(len(rows(shop_dir / "funnel_sku_day.csv")), 3)
+                saved_ads = rows(shop_dir / "campaign_sku_day.csv")
+                saved_funnel = rows(shop_dir / "funnel_sku_day.csv")
+                self.assertEqual(len(saved_ads), 1)
+                self.assertGreaterEqual(saved_ads[0][1], MONITORING_START.isoformat())
+                self.assertEqual(len(saved_funnel), 2)
+                self.assertTrue(all(row[1] >= MONITORING_START.isoformat() for row in saved_funnel))
                 ads_poll = rows(data_dir / "ads_poll_snapshot.csv")
                 funnel_poll = rows(data_dir / "funnel_poll_snapshot.csv")
                 self.assertEqual(len(ads_poll), 1)
@@ -306,8 +325,8 @@ class TrafficSyncPersistenceTest(unittest.IsolatedAsyncioTestCase):
                 traffic_sync._last_fullstats = 0
                 second = await traffic_sync.sync_once()
                 self.assertTrue(second["ok"])
-                self.assertEqual(len(rows(shop_dir / "campaign_sku_day.csv")), 2)
-                self.assertEqual(len(rows(shop_dir / "funnel_sku_day.csv")), 3)
+                self.assertEqual(len(rows(shop_dir / "campaign_sku_day.csv")), 1)
+                self.assertEqual(len(rows(shop_dir / "funnel_sku_day.csv")), 2)
 
 
 if __name__ == "__main__":
