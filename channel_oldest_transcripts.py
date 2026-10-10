@@ -16,7 +16,7 @@ def transcript(vid):
  for url in (f"https://youtube-transcript.ai/transcript/{vid}.txt?lang=ru",f"https://youtube-transcript.ai/transcript/{vid}.txt"):
   try:
    with urlopen(Request(url,headers={"User-Agent":"Mozilla/5.0"}),timeout=90) as r:text=r.read().decode("utf-8","replace")
-   match=re.search(r"(?m)^\\[\\d{1,2}:\\d{2}(?::\\d{2})?\\]",text)
+   match=re.search(r"(?m)^\[\d{1,2}:\d{2}(?::\d{2})?\]",text)
    if match and "higher rate limits" not in text.lower():return text[match.start():].strip(),"youtube-transcript.ai"
   except Exception as exc:errors.append(str(exc))
  try:
@@ -44,7 +44,7 @@ def main():
      if target.exists() and "## Transcript" in target.read_text():method="existing"
      else:
       body,method=transcript(vid)
-      target.write_text(f"# {e.get('title',vid)}\\n\\n- Source: https://www.youtube.com/watch?v={vid}\\n- Channel: {channel}\\n- Oldest-first index: {idx}\\n- Transcript method: {method}\\n\\n## Transcript\\n\\n{body}\\n",encoding="utf-8")
+      target.write_text(f"# {e.get('title',vid)}\n\n- Source: https://www.youtube.com/watch?v={vid}\n- Channel: {channel}\n- Oldest-first index: {idx}\n- Transcript method: {method}\n\n## Transcript\n\n{body}\n",encoding="utf-8")
      result["videos"].append({"index":idx,"id":vid,"title":e.get("title"),"url":f"https://www.youtube.com/watch?v={vid}","transcript":str(target.relative_to(ROOT)),"method":method})
     except Exception as exc:
      failed=True;result["errors"].append({"index":idx,"id":vid,"error":str(exc)[:500]})
@@ -53,7 +53,7 @@ def main():
   except Exception as exc:
    failed=True;result["errors"].append({"stage":"discovery","error":str(exc)[:1000]})
   result["generated_at"]=datetime.datetime.now(datetime.timezone.utc).isoformat()
-  done.write_text(json.dumps(result,ensure_ascii=False,indent=2)+"\\n",encoding="utf-8")
+  done.write_text(json.dumps(result,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
   if not result["completed"]:failed=True
  if failed:sys.exit(1)
 if __name__=="__main__":main()
