@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Transcribe the newest public long-form uploads of a YouTube channel."""
+"""Transcribe the newest or oldest public long-form uploads of a YouTube channel."""
 import json, pathlib, re, subprocess, datetime, time, sys
 from urllib.request import Request, urlopen
 ROOT=pathlib.Path(__file__).resolve().parent
@@ -29,22 +29,27 @@ def main():
  for req in sorted(REQ.glob("*.json")):
   config=json.loads(req.read_text())
   task=config["task_id"]; channel=config["channel_url"].rstrip("/"); count=int(config.get("count",15))
+  selection=config.get("selection","newest_public_long_form_videos")
+  if selection not in ("newest_public_long_form_videos","oldest_public_long_form_videos"):
+   raise ValueError(f"Unsupported selection: {selection}")
   done=REPORT/(req.stem+".json")
   if done.exists() and json.loads(done.read_text()).get("completed"):continue
-  result={"task_id":task,"channel":channel,"requested":count,"videos":[],"errors":[],"completed":False}
+  result={"task_id":task,"channel":channel,"selection":selection,"requested":count,"videos":[],"errors":[],"completed":False}
   try:
    raw=cmd(["yt-dlp","--flat-playlist","--dump-single-json","--no-warnings",channel+"/videos"])
    entries=[e for e in json.loads(raw).get("entries",[]) if e and e.get("id") and e.get("id")!= "NA"]
-   # Channel /videos playlist is newest-first.
-   if len(entries)<count:raise RuntimeError(f"Only {len(entries)} video entries retrieved; expected at least {count}")
-   selected=entries[:count]
+   # The /videos tab excludes Shorts. Skip any short clips that still appear.
+   entries=[e for e in entries if not (e.get("duration") is not None and float(e["duration"])<=180)]
+   if len(entries)<count:raise RuntimeError(f"Only {len(entries)} long-video entries retrieved; expected {count}")
+   # YouTube lists latest uploads first. Preserve newest-first ordering inside each group.
+   selected=entries[:count] if selection.startswith("newest") else list(reversed(entries[-count:]))
    for idx,e in enumerate(selected,1):
     vid=e["id"]; target=OUT/f"{task}_{idx:02d}_{vid}.md"
     try:
      if target.exists() and "## Transcript" in target.read_text():method="existing"
      else:
       body,method=transcript(vid)
-      target.write_text(f"# {e.get('title',vid)}\n\n- Source: https://www.youtube.com/watch?v={vid}\n- Channel: {channel}\n- Newest-first index: {idx}\n- Transcript method: {method}\n\n## Transcript\n\n{body}\n",encoding="utf-8")
+      target.write_text(f"# {e.get('title',vid)}\n\n- Source: https://www.youtube.com/watch?v={vid}\n- Channel: {channel}\n- Group index: {idx}\n- Transcript method: {method}\n\n## Transcript\n\n{body}\n",encoding="utf-8")
      result["videos"].append({"index":idx,"id":vid,"title":e.get("title"),"url":f"https://www.youtube.com/watch?v={vid}","transcript":str(target.relative_to(ROOT)),"method":method})
     except Exception as exc:
      failed=True;result["errors"].append({"index":idx,"id":vid,"error":str(exc)[:500]})
