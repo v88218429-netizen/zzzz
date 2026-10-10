@@ -12,6 +12,7 @@ import httpx
 from traffic_sync import (ADS_POLL_COLUMNS, COLUMNS, DATA_DIR, FUNNEL_COLUMNS,
                           FUNNEL_POLL_COLUMNS, sync_once)
 from query_clusters import collect as collect_query_clusters, publish as publish_query_clusters
+from campaign_state import collect as collect_campaign_state, publish as publish_campaign_state
 
 BRIDGE_URL = "https://script.google.com/macros/s/AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw/exec"
 MAX_REQUEST_BYTES = 15_000_000
@@ -105,6 +106,8 @@ def main() -> int:
         _publish()
         key = os.environ.get("GOOGLE_SHEETS_BRIDGE_KEY", "").strip()
         publish_query_clusters(BRIDGE_URL, key)
+        settings_published = publish_campaign_state(BRIDGE_URL, key)
+        print("WB_CAMPAIGN_SETTINGS_PUBLISHED " + json.dumps(settings_published, ensure_ascii=False))
         return 0
     status = asyncio.run(sync_once())
     # Same hourly job, same encrypted history, no duplicate worker/deployment.
@@ -114,6 +117,11 @@ def main() -> int:
     except Exception as exc:
         cluster_status = {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
     print("WB_AD_CLUSTER_COLLECTION " + json.dumps(cluster_status, ensure_ascii=False))
+    try:
+        campaign_status = asyncio.run(collect_campaign_state())
+    except Exception as exc:
+        campaign_status = {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+    print("WB_CAMPAIGN_SETTINGS_COLLECTION " + json.dumps(campaign_status, ensure_ascii=False))
     print(json.dumps({
         "ok": status.get("ok"),
         "complete": status.get("complete"),

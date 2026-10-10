@@ -2671,6 +2671,93 @@ function sellmonitorGithubAppendWbPollRows_(ss, dataset, table) {
 
 // JEM-independent, factual WB advertising search-cluster history.
 // These are advertising clusters, NEVER organic search rank or individual queries.
+
+// Source-authenticated current campaign/SKU settings, stored separately
+// from historical day-grained advertising metrics.
+function sellmonitorGithubPublishCampaignSettings_(body) {
+  body = body || {};
+  var shop = String(body.shop || '');
+  if (['ap','aa','yv'].indexOf(shop) < 0 ||
+      body.source !== 'WB /api/advert/v2/adverts' ||
+      body.quality !== 'FACT_CURRENT_CAMPAIGN_SKU_SETTINGS') {
+    throw new Error('WB_CAMPAIGN_SETTINGS_PROVENANCE_INVALID');
+  }
+  var input = body.rows;
+  if (!Array.isArray(input) || input.length < 1 || input.length > 30000) {
+    throw new Error('WB_CAMPAIGN_SETTINGS_INVALID_ROWS');
+  }
+  var observedAt = new Date(String(body.observed_at || ''));
+  if (isNaN(observedAt.getTime())) throw new Error('WB_CAMPAIGN_SETTINGS_OBSERVATION_INVALID');
+  var ss = SpreadsheetApp.openById(SMC_WB_TRAFFIC.SPREADSHEET_ID);
+  var headers = ['store_id','advert_id','nmId','campaign_name','status',
+    'bid_type','payment_type','currency','search_bid_kopecks',
+    'recommendation_bid_kopecks','search_placement','recommendation_placement',
+    'updated_at','observed_at','source','quality','loaded_at'];
+  var name = '19_AD_CAMPAIGN_SETTINGS';
+  var sh = ss.getSheetByName(name);
+  if (!sh) sh = ss.insertSheet(name);
+  if (sh.getMaxColumns() < headers.length)
+    sh.insertColumnsAfter(sh.getMaxColumns(),headers.length-sh.getMaxColumns());
+  if (!sh.getLastRow()) sh.getRange(1,1,1,headers.length).setValues([headers]);
+  var actual = sh.getRange(1,1,1,headers.length).getDisplayValues()[0];
+  if (headers.some(function(h,i){return h!==String(actual[i]||'');}))
+    throw new Error('WB_CAMPAIGN_SETTINGS_HEADER_MISMATCH');
+  var existing={};
+  if (sh.getLastRow()>1) {
+    sh.getRange(2,1,sh.getLastRow()-1,3).getValues().forEach(function(row,i){
+      if (!row[0]) return;
+      var key=[row[0],row[1],row[2]].join('|');
+      if (Object.prototype.hasOwnProperty.call(existing,key))
+        throw new Error('WB_CAMPAIGN_SETTINGS_EXISTING_DUPLICATE');
+      existing[key]=i+2;
+    });
+  }
+  var seen={}, updates=[], additions=[];
+  input.forEach(function(row,i){
+    if (!Array.isArray(row)||row.length!==16||row[0]!==shop||
+        row[14]!==body.source||row[15]!==body.quality)
+      throw new Error('WB_CAMPAIGN_SETTINGS_INVALID_ROW:'+i);
+    var advert=Number(row[1]), nm=Number(row[2]), status=Number(row[4]);
+    if (!Number.isSafeInteger(advert)||advert<=0||!Number.isSafeInteger(nm)||nm<=0||
+        !Number.isInteger(status)) throw new Error('WB_CAMPAIGN_SETTINGS_INVALID_ID:'+i);
+    [8,9].forEach(function(col){
+      if (row[col]!=='' && row[col]!==null && row[col]!==undefined &&
+          (!Number.isSafeInteger(Number(row[col])) || Number(row[col])<0))
+        throw new Error('WB_CAMPAIGN_SETTINGS_INVALID_BID:'+i);
+    });
+    if (String(row[13]) !== body.observed_at)
+      throw new Error('WB_CAMPAIGN_SETTINGS_TIME_MISMATCH:'+i);
+    var normalized=row.slice();
+    normalized[1]=advert; normalized[2]=nm; normalized[4]=status;
+    normalized[3]=String(normalized[3]||'');
+    if (/^[=+\-@]/.test(normalized[3])) normalized[3]="'"+normalized[3];
+    [8,9].forEach(function(col) {
+      normalized[col]=row[col]==='' || row[col]==null ? '' : Number(row[col]);
+    });
+    normalized[13]=observedAt;
+    normalized.push(new Date());
+    var key=[shop,advert,nm].join('|');
+    if (Object.prototype.hasOwnProperty.call(seen,key))
+      throw new Error('WB_CAMPAIGN_SETTINGS_DUPLICATE:'+i);
+    seen[key]=true;
+    if (Object.prototype.hasOwnProperty.call(existing,key))
+      updates.push({index:existing[key],row:normalized});
+    else additions.push(normalized);
+  });
+  updates.forEach(function(entry){
+    sh.getRange(entry.index,1,1,headers.length).setValues([entry.row]);
+  });
+  if (additions.length) {
+    var first=sh.getLastRow()+1;
+    if (sh.getMaxRows()<first+additions.length-1)
+      sh.insertRowsAfter(sh.getMaxRows(),first+additions.length-1-sh.getMaxRows());
+    sh.getRange(first,1,additions.length,headers.length).setValues(additions);
+  }
+  SpreadsheetApp.flush();
+  return {ok:true, action:'publish_campaign_settings', shop:shop,
+          written:input.length, added:additions.length, updated:updates.length};
+}
+
 function sellmonitorGithubPublishAdClusters_(body) {
   body = body || {};
   var shop = String(body.cabinet || '').trim();
@@ -3348,6 +3435,10 @@ function doPost(e) {
 
     if (action === 'publish_search_positions') {
       return sellmonitorGithubWebJson_(sellmonitorGithubPublishRuntimeSearch_(body.cabinet || '', body.snapshot || {}));
+    }
+
+    if (action === 'publish_campaign_settings') {
+      return sellmonitorGithubWebJson_(sellmonitorGithubPublishCampaignSettings_(body));
     }
 
     if (action === 'publish_ad_clusters') {
