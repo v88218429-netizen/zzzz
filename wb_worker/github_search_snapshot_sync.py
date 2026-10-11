@@ -13,6 +13,7 @@ import os
 import pathlib
 import re
 import time
+import httpx
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -495,15 +496,24 @@ def publish_snapshots(out: pathlib.Path, bridge_url: str, bridge_key: str) -> di
             "cabinet": cabinet,
             "snapshot": snap,
         }, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-        request = urllib.request.Request(
-            bridge_url,
-            data=body,
-            headers={"Accept": "application/json", "Content-Type": "application/json"},
-            method="POST",
-        )
         try:
-            with urllib.request.urlopen(request, timeout=180) as response:
-                result = json.loads(response.read().decode("utf-8"))
+            with httpx.Client(
+                timeout=httpx.Timeout(180.0, connect=15.0),
+                follow_redirects=True,
+            ) as client:
+                response = client.post(
+                    bridge_url,
+                    content=body,
+                    headers={"Accept": "application/json", "Content-Type": "application/json"},
+                )
+                response.raise_for_status()
+                result = response.json()
+        except httpx.HTTPStatusError as exc:
+            redirects = len(exc.response.history)
+            raise RuntimeError(
+                f"{cabinet}: authenticated search publication failed: "
+                f"HTTP {exc.response.status_code} after {redirects} redirect(s)"
+            ) from exc
         except Exception as exc:
             raise RuntimeError(f"{cabinet}: authenticated search publication failed: {type(exc).__name__}") from exc
         written = int(result.get("search_rows") or 0) if isinstance(result, dict) else 0
