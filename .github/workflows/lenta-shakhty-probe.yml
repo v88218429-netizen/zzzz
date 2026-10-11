@@ -1,27 +1,32 @@
 name: Lenta Shakhty catalog probe
 on:
   push:
-    paths:
-      - '.github/workflows/lenta-shakhty-probe.yml'
+    paths: ['.github/workflows/lenta-shakhty-probe.yml']
   workflow_dispatch:
 jobs:
   probe:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
     steps:
-      - name: Inspect catalog connectivity
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test catalog in real browser
         shell: bash
         run: |
-          python - <<'PY'
-          import urllib.request, urllib.error, re, json
-          urls=["https://lenta.com/catalog/","https://lenta.com/"]
-          for url in urls:
-              try:
-                  req=urllib.request.Request(url,headers={"User-Agent":"Mozilla/5.0 (compatible; LentaCatalogAudit/1.0)"})
-                  with urllib.request.urlopen(req,timeout=25) as f:
-                      body=f.read(1500000).decode("utf-8","replace")
-                      print(json.dumps({"url":url,"status":f.status,"final_url":f.url,"length":len(body),"title":re.findall(r"<title[^>]*>(.*?)</title>",body,re.I|re.S)[:1],"has_catalog":'каталог' in body.lower(),"has_city":'шахты' in body.lower(),"has_prices":'price' in body.lower()},ensure_ascii=False))
-                      print("SNIPPET",re.sub(r"\\s+"," ",body[:500]))
-              except Exception as e:
-                  print(json.dumps({"url":url,"error":str(e)},ensure_ascii=False))
-          PY
+          npm install --no-save playwright
+          npx playwright install chromium --with-deps >/dev/null
+          node <<'JS'
+          const {chromium}=require('playwright');
+          (async()=>{
+            const browser=await chromium.launch({headless:true});
+            const page=await browser.newPage({locale:'ru-RU',timezoneId:'Europe/Moscow'});
+            page.on('response',r=>{if(r.url().includes('lenta.com') && (r.status()===401||r.status()===403))console.log('BLOCKED_RESPONSE',r.status(),r.url().slice(0,180))});
+            try{
+              const r=await page.goto('https://lenta.com/catalog/',{waitUntil:'domcontentloaded',timeout:45000});
+              await page.waitForTimeout(5000);
+              console.log('BROWSER_RESULT',JSON.stringify({status:r?.status(),url:page.url(),title:await page.title(),body:(await page.locator('body').innerText()).slice(0,1200)}));
+            }catch(e){console.log('BROWSER_ERROR',e.message)}
+            await browser.close();
+          })();
+          JS
