@@ -1212,35 +1212,75 @@ function sellmonitorGithubCaptureHourlyLive_(ss,storeId) {
   return{ok:true,storeId:storeId,hourKey:hourKey,orders:agg.orders,revenue:agg.revenue,profit:agg.profit,adsFact:ad.available,trafficFact:tr.available,baselineN:same.length,alertLevel:level,alertReason:reasons.join('; ')};
 }
 
+function sellmonitorGithubClientStep_(label, fn) {
+  try {
+    return fn();
+  } catch (e) {
+    var message = String(e && e.message ? e.message : e);
+    if (message.indexOf('CLIENT_STEP[') === 0) throw e;
+    throw new Error('CLIENT_STEP[' + label + ']: ' + message);
+  }
+}
+
 function sellmonitorGithubProcessClient_(spreadsheetId) {
-  var authState = sellmonitorGithubEnsureClientAuth_(spreadsheetId);
-  var ss = SpreadsheetApp.openById(spreadsheetId);
+  var authState = sellmonitorGithubClientStep_('client_auth', function() {
+    return sellmonitorGithubEnsureClientAuth_(spreadsheetId);
+  });
+  var ss = sellmonitorGithubClientStep_('open_client', function() {
+    return SpreadsheetApp.openById(spreadsheetId);
+  });
   var q = ss.getSheetByName('97_Управление');
   var code = ss.getSheetByName('97_Код');
   if (!q || !code) throw new Error('Client missing 97_Управление/97_Код: ' + spreadsheetId);
 
-  sellmonitorGithubEnsureUiOnboarding_(ss, q);
-  var staleRepaired = sellmonitorGithubRepairStaleRunning_(q);
-  var searchLane = sellmonitorGithubMaintainSearchLane_(ss, q);
-  var coreRefresh = sellmonitorGithubEnsureCoreRefresh_(ss, q);
-  var operational = sellmonitorGithubEnsureOperationalHistory_(ss, q);
-  var qcSync = sellmonitorGithubSyncCoreQc_(ss, String(sellmonitorGithubSetting_(ss,'ACTIVE_STORE_ID','')));
-  var coreBacklog = sellmonitorGithubCoreBacklog_(q,ss);
-  var searchRefresh = coreBacklog.activeCount ? {ok:true,queued:false,skipped:true,reason:'ACTIVE_CORE_BACKLOG',count:coreBacklog.activeCount} : sellmonitorGithubEnsureSearchRefresh_(ss, q);
-  var adsClusterRefresh = coreBacklog.activeCount ? {ok:true,queued:false,skipped:true,reason:'ACTIVE_CORE_BACKLOG',count:coreBacklog.activeCount} : sellmonitorGithubEnsureAdsClusterRefresh_(ss, q);
+  sellmonitorGithubClientStep_('ui_onboarding', function() {
+    return sellmonitorGithubEnsureUiOnboarding_(ss, q);
+  });
+  var staleRepaired = sellmonitorGithubClientStep_('stale_queue_repair', function() {
+    return sellmonitorGithubRepairStaleRunning_(q);
+  });
+  var searchLane = sellmonitorGithubClientStep_('search_lane_maintenance', function() {
+    return sellmonitorGithubMaintainSearchLane_(ss, q);
+  });
+  var coreRefresh = sellmonitorGithubClientStep_('core_refresh_schedule', function() {
+    return sellmonitorGithubEnsureCoreRefresh_(ss, q);
+  });
+  var operational = sellmonitorGithubClientStep_('operational_history', function() {
+    return sellmonitorGithubEnsureOperationalHistory_(ss, q);
+  });
+  var qcSync = sellmonitorGithubClientStep_('core_quality_sync', function() {
+    return sellmonitorGithubSyncCoreQc_(ss, String(sellmonitorGithubSetting_(ss,'ACTIVE_STORE_ID','')));
+  });
+  var coreBacklog = sellmonitorGithubClientStep_('core_backlog', function() {
+    return sellmonitorGithubCoreBacklog_(q,ss);
+  });
+  var searchRefresh = coreBacklog.activeCount ? {ok:true,queued:false,skipped:true,reason:'ACTIVE_CORE_BACKLOG'} :
+    sellmonitorGithubClientStep_('search_refresh_schedule', function() {
+      return sellmonitorGithubEnsureSearchRefresh_(ss, q);
+    });
+  var adsClusterRefresh = coreBacklog.activeCount ? {ok:true,queued:false,skipped:true,reason:'ACTIVE_CORE_BACKLOG'} :
+    sellmonitorGithubClientStep_('ads_cluster_refresh_schedule', function() {
+      return sellmonitorGithubEnsureAdsClusterRefresh_(ss, q);
+    });
 
   var processed = 0, last = null;
   while (processed < SMC_GH.MAX_COMMANDS_PER_CLIENT) {
-    var row = sellmonitorGithubNextPendingRow_(q);
+    var row = sellmonitorGithubClientStep_('next_queue_row', function() {
+      return sellmonitorGithubNextPendingRow_(q);
+    });
     if (!row) break;
-    last = sellmonitorGithubExecuteQueueRow_(ss, q, code, row);
+    last = sellmonitorGithubClientStep_('queue_row_' + row, function() {
+      return sellmonitorGithubExecuteQueueRow_(ss, q, code, row);
+    });
     processed++;
   }
 
   var ready = false;
   var connect = ss.getSheetByName('00_API_Подключение');
   if (connect) {
-    var values = connect.getRange('A17:B25').getDisplayValues();
+    var values = sellmonitorGithubClientStep_('read_connection_status', function() {
+      return connect.getRange('A17:B25').getDisplayValues();
+    });
     var allOk = true;
     for (var i = 0; i < values.length; i++) {
       var label = String(values[i][0] || '');
@@ -1252,7 +1292,9 @@ function sellmonitorGithubProcessClient_(spreadsheetId) {
         if (!/(ГОТОВО|READY|OK|ПОДКЛЮЧЕН|ACTIVE)/.test(value)) allOk = false;
       }
     }
-    ready = allOk && values.length > 0 && sellmonitorGithubRecentExactReady_(ss, 7);
+    ready = allOk && values.length > 0 && sellmonitorGithubClientStep_('recent_exact_ready', function() {
+      return sellmonitorGithubRecentExactReady_(ss, 7);
+    });
   }
 
   return {ok: true, spreadsheetId: spreadsheetId, auth: authState, processedCommands: processed, staleRepaired: staleRepaired, searchLane: searchLane, coreRefresh: coreRefresh, operational: operational, qcSync: qcSync, coreBacklog: coreBacklog, searchRefresh: searchRefresh, adsClusterRefresh: adsClusterRefresh, last: last, ready: ready};
