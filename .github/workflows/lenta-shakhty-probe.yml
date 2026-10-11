@@ -1,0 +1,27 @@
+name: Lenta Shakhty catalog probe
+on:
+  push:
+    paths:
+      - '.github/workflows/lenta-shakhty-probe.yml'
+  workflow_dispatch:
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Inspect catalog connectivity
+        shell: bash
+        run: |
+          python - <<'PY'
+          import urllib.request, urllib.error, re, json
+          urls=["https://lenta.com/catalog/","https://lenta.com/"]
+          for url in urls:
+              try:
+                  req=urllib.request.Request(url,headers={"User-Agent":"Mozilla/5.0 (compatible; LentaCatalogAudit/1.0)"})
+                  with urllib.request.urlopen(req,timeout=25) as f:
+                      body=f.read(1500000).decode("utf-8","replace")
+                      print(json.dumps({"url":url,"status":f.status,"final_url":f.url,"length":len(body),"title":re.findall(r"<title[^>]*>(.*?)</title>",body,re.I|re.S)[:1],"has_catalog":'каталог' in body.lower(),"has_city":'шахты' in body.lower(),"has_prices":'price' in body.lower()},ensure_ascii=False))
+                      print("SNIPPET",re.sub(r"\\s+"," ",body[:500]))
+              except Exception as e:
+                  print(json.dumps({"url":url,"error":str(e)},ensure_ascii=False))
+          PY
