@@ -169,7 +169,30 @@ class TrafficSyncPersistenceTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([item["advertId"] for item in payload], [42])
         self.assertEqual(no_statistics, [41])
 
-    async def test_fullstats_retries_null_batch_once_then_quarantines_without_zero_fill(self):
+    async def test_fullstats_isolates_null_campaign_and_preserves_successful_sibling(self):
+        requested_ids = []
+
+        async def fake_request(client, token, method, url, **kwargs):
+            campaign_ids = [int(value) for value in kwargs["params"]["ids"].split(",")]
+            requested_ids.append(campaign_ids)
+            return None if 51 in campaign_ids else [
+                {"advertId": campaign_id, "days": []} for campaign_id in campaign_ids
+            ]
+
+        null_payload_campaigns = []
+        with patch.object(traffic_sync, "_request", side_effect=fake_request), \
+             patch.object(traffic_sync.asyncio, "sleep", new=AsyncMock()):
+            traffic_sync._last_fullstats = 0
+            payload = await traffic_sync._fullstats_batch(
+                object(), "test-token", [51, 52], "2026-09-09", "2026-10-09",
+                null_payload_campaign_ids=null_payload_campaigns
+            )
+
+        self.assertEqual(requested_ids, [[51, 52], [51, 52], [51], [51], [52]])
+        self.assertEqual([item["advertId"] for item in payload], [52])
+        self.assertEqual(null_payload_campaigns, [51])
+
+    async def test_fullstats_bounds_null_isolation_and_never_zero_fills(self):
         requested_ids = []
 
         async def fake_request(client, token, method, url, **kwargs):
@@ -186,7 +209,7 @@ class TrafficSyncPersistenceTest(unittest.IsolatedAsyncioTestCase):
                 null_payload_campaign_ids=null_payload_campaigns
             )
 
-        self.assertEqual(requested_ids, [[51, 52], [51, 52]])
+        self.assertEqual(requested_ids, [[51, 52], [51, 52], [51], [51], [52], [52]])
         self.assertEqual(payload, [])
         self.assertEqual(null_payload_campaigns, [51, 52])
 
