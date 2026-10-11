@@ -1288,7 +1288,7 @@ function sellmonitorGithubProcessClient_(spreadsheetId) {
       if (!label) continue;
       if (/QC/.test(label)) {
         if (value !== 'READY' && value !== 'ГОТОВО' && value !== 'PASS') allOk = false;
-      } else if (/^\\d+\\./.test(label)) {
+      } else if (/^\d+\./.test(label)) {
         if (!/(ГОТОВО|READY|OK|ПОДКЛЮЧЕН|ACTIVE)/.test(value)) allOk = false;
       }
     }
