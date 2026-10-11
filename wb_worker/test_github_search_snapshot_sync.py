@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+import httpx
 import github_search_snapshot_sync as search
 
 
@@ -25,20 +26,6 @@ def factual_snapshot(cabinet: str) -> dict:
             }
         },
     }
-
-
-class _Response:
-    def __init__(self, body: dict):
-        self.body = json.dumps(body).encode("utf-8")
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *_args):
-        return False
-
-    def read(self):
-        return self.body
 
 
 class SearchSnapshotTests(unittest.TestCase):
@@ -82,20 +69,38 @@ class SearchSnapshotTests(unittest.TestCase):
 
             received = []
 
-            def fake_urlopen(request, timeout):
-                self.assertEqual(timeout, 180)
-                payload = json.loads(request.data.decode("utf-8"))
-                received.append(payload)
-                return _Response({"ok": True, "search_rows": len(payload["snapshot"]["data"])})
+            def fake_bridge(request):
+                received.append(request)
+                if len(received) == 1:
+                    return httpx.Response(
+                        302,
+                        headers={"Location": "https://bridge.invalid/exec/echo"},
+                        request=request,
+                    )
+                return httpx.Response(
+                    200,
+                    json={"ok": True, "search_rows": 1},
+                    request=request,
+                )
 
-            with patch.object(search.urllib.request, "urlopen", side_effect=fake_urlopen):
+            real_client = httpx.Client
+
+            def fake_client(**kwargs):
+                self.assertTrue(kwargs["follow_redirects"])
+                return real_client(transport=httpx.MockTransport(fake_bridge), **kwargs)
+
+            with patch.object(search.httpx, "Client", side_effect=fake_client):
                 counts = search.publish_snapshots(Path(tmp), "https://bridge.invalid/exec", "bridge-test-key")
 
             self.assertEqual(counts, {"air": 1})
-            self.assertEqual(len(received), 1)
-            self.assertEqual(received[0]["action"], "publish_search_positions")
-            self.assertEqual(received[0]["cabinet"], "air")
-            self.assertEqual(received[0]["token"], "bridge-test-key")
+            self.assertEqual(len(received), 2)
+            self.assertEqual(received[0].method, "POST")
+            payload = json.loads(received[0].content.decode("utf-8"))
+            self.assertEqual(payload["action"], "publish_search_positions")
+            self.assertEqual(payload["cabinet"], "air")
+            self.assertEqual(payload["token"], "bridge-test-key")
+            self.assertEqual(received[1].method, "GET")
+            self.assertEqual(received[1].url.path, "/exec/echo")
 
     def test_full_acceptance_stays_red_when_one_source_is_unavailable(self):
         with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, {
