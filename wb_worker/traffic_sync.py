@@ -25,6 +25,8 @@ POLL_GRAIN = "DAILY_CUMULATIVE_OBSERVED_AT_POLL"
 PRICES = "https://discounts-prices-api.wildberries.ru"
 MONITORING_START = date(2026, 10, 1)
 FULLSTATS_DAYS = 31
+# Bound retries for JSON-null batch isolation under WB's strict fullstats rate limit.
+MAX_NULL_ISOLATION_DEPTH = 1
 FUNNEL_BATCH_SIZE = 20
 INTERVAL = max(60, int(os.environ.get("TRAFFIC_SYNC_INTERVAL_MIN", "60")))
 _last_fullstats = 0.0
@@ -103,8 +105,9 @@ def _is_no_statistics_response(payload):
 async def _fullstats_batch(client, token, campaign_ids, begin, end,
                            no_statistics_campaign_ids=None,
                            null_payload_campaign_ids=None,
-                           null_retry_used=False):
-    """Fetch fullstats, isolating server errors and campaigns with empty windows."""
+                           null_retry_used=False,
+                           null_isolation_depth=0):
+    """Fetch fullstats, isolating server errors, empty windows, and bounded null groups."""
     global _last_fullstats
     if not campaign_ids:
         return []
@@ -117,12 +120,15 @@ async def _fullstats_batch(client, token, campaign_ids, begin, end,
     no_statistics_campaign_ids = [] if no_statistics_campaign_ids is None else no_statistics_campaign_ids
     null_payload_campaign_ids = [] if null_payload_campaign_ids is None else null_payload_campaign_ids
 
-    async def split_batch():
+    async def split_batch(next_null_depth=None):
         middle = len(campaign_ids) // 2
+        child_depth = null_isolation_depth if next_null_depth is None else next_null_depth
         left = await _fullstats_batch(client, token, campaign_ids[:middle], begin, end,
-                                      no_statistics_campaign_ids, null_payload_campaign_ids, False)
+                                      no_statistics_campaign_ids, null_payload_campaign_ids,
+                                      False, child_depth)
         right = await _fullstats_batch(client, token, campaign_ids[middle:], begin, end,
-                                       no_statistics_campaign_ids, null_payload_campaign_ids, False)
+                                       no_statistics_campaign_ids, null_payload_campaign_ids,
+                                       False, child_depth)
         return [*left, *right]
 
     try:
@@ -161,8 +167,14 @@ async def _fullstats_batch(client, token, campaign_ids, begin, end,
                 if not null_retry_used:
                     return await _fullstats_batch(
                         client, token, campaign_ids, begin, end,
-                        no_statistics_campaign_ids, null_payload_campaign_ids, True
+                        no_statistics_campaign_ids, null_payload_campaign_ids, True,
+                        null_isolation_depth
                     )
+                if (len(campaign_ids) > 1
+                        and null_isolation_depth < MAX_NULL_ISOLATION_DEPTH):
+                    # A bad campaign can poison a mixed request. Split once to
+                    # preserve valid siblings, then disclose any unresolved group.
+                    return await split_batch(null_isolation_depth + 1)
                 null_payload_campaign_ids.extend(campaign_ids)
                 return []
             if _is_no_statistics_response(raw):
