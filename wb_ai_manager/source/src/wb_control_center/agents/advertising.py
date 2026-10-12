@@ -49,6 +49,30 @@ def _nm_ids(row: dict[str, Any]) -> list[int]:
     return sorted(ids)
 
 
+def _deep_scan_limits(runtime: dict[str, Any]) -> tuple[int, int, int]:
+    """Hard-bound supplementary WB API calls; rotate the eligible campaigns over time."""
+    def bounded(name: str, default: int, ceiling: int) -> int:
+        try:
+            value = int(runtime.get(name, default) or default)
+        except (TypeError, ValueError):
+            value = default
+        return max(1, min(ceiling, value))
+
+    return (
+        bounded("max_campaigns_deep_scan", 2, 2),
+        bounded("max_nms_per_campaign", 2, 2),
+        bounded("deep_scan_concurrency", 2, 2),
+    )
+
+
+def _rotating_campaign_window(items: list[dict[str, Any]], limit: int, window: int) -> list[dict[str, Any]]:
+    if not items or limit <= 0:
+        return []
+    count = min(limit, len(items))
+    start = (max(0, int(window)) * count) % len(items)
+    return (items + items)[start : start + count]
+
+
 class AdvertisingMonitorAgent(BaseAgent):
     name = "advertising_monitor"
 
@@ -139,13 +163,8 @@ class AdvertisingOptimizerAgent(BaseAgent):
             return float(to_number(row.get("sum") or row.get("spend") or row.get("cost")) or 0)
         campaigns = sorted(campaigns, key=spend, reverse=True)
         runtime = (self.ctx.policy.raw.get("runtime") or {}).get("advertising", {})
-        max_campaigns = int(runtime.get("max_campaigns_deep_scan", 8) or 8)
-        # GitHub runtime has a hard execution window. Recommendation endpoints can
-        # individually be slow, so isolate failures and fetch a small bounded set
-        # concurrently instead of letting one campaign stall the whole agent.
-        concurrency = max(1, min(4, int(runtime.get("deep_scan_concurrency", 3) or 3)))
+        max_campaigns, max_nms, concurrency = _deep_scan_limits(runtime)
         semaphore = asyncio.Semaphore(concurrency)
-        max_nms = int(runtime.get("max_nms_per_campaign", 8) or 8)
 
         async def limited(tool: str, **kwargs: Any) -> Any:
             async with semaphore:
@@ -175,7 +194,7 @@ class AdvertisingOptimizerAgent(BaseAgent):
                         advert_id=cid,
                         date_from=start,
                         date_to=end,
-                        nm_ids=nms[:10],
+                        nm_ids=selected_nms,
                         daily=True,
                     )
                 )
@@ -203,12 +222,14 @@ class AdvertisingOptimizerAgent(BaseAgent):
                 "cluster_stats": cluster_stats,
             }
 
+        window_id = int(datetime.now(timezone.utc).timestamp() // 900)
+        selected_campaigns = _rotating_campaign_window(campaigns, max_campaigns, window_id)
         results = await asyncio.gather(
-            *(scan_campaign(c) for c in campaigns[:max_campaigns]),
+            *(scan_campaign(c) for c in selected_campaigns),
             return_exceptions=True,
         )
         scanned: list[dict[str, Any]] = []
-        for campaign, result in zip(campaigns[:max_campaigns], results):
+        for campaign, result in zip(selected_campaigns, results):
             if isinstance(result, BaseException):
                 scanned.append({
                     "campaign": campaign,
@@ -219,6 +240,13 @@ class AdvertisingOptimizerAgent(BaseAgent):
             elif result is not None:
                 scanned.append(result)
 
-        out.snapshots.append(("deep_scan", {"generated_for": {"from": start, "to": end}, "campaigns": scanned}))
+        out.snapshots.append(("deep_scan", {
+            "generated_for": {"from": start, "to": end},
+            "scan_window_utc_15m": window_id,
+            "eligible_campaigns": len(campaigns),
+            "campaigns_scanned": len(scanned),
+            "hard_limits": {"campaigns": max_campaigns, "nms_per_campaign": max_nms, "concurrent_calls": concurrency},
+            "campaigns": scanned,
+        }))
         out.snapshots.append(("stats_14d", stats_raw if isinstance(stats_raw, dict) else {"data": stats_raw}))
         return out
