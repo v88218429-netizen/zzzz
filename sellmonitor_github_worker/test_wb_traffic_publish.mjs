@@ -144,6 +144,7 @@ const status = {
 };
 const observedAt = '2026-10-09T13:00:00+03:00';
 const result = publish({
+  partition_only: true,
   sync_status: status,
   datasets: {
     ads: [['ap','2026-10-09','42','9','100','10','2','1','3.5','50','WB /adv/v3/fullstats','EXACT_CAMPAIGN_NM_DAY','=formula-like']],
@@ -153,32 +154,24 @@ const result = publish({
   }
 });
 
-assert.equal(openedId, '11ULokTx74QjziZjThJ0lfxFiMQW42-WV4315cG7eIuU');
+assert.notEqual(openedId, '11ULokTx74QjziZjThJ0lfxFiMQW42-WV4315cG7eIuU',
+  'partition-only publication must not open the crowded aggregate workbook');
 assert.equal(result.ok, true);
-assert.equal(result.datasets.ads.written, 1);
-assert.equal(result.datasets.funnel.written, 1);
+assert.equal(result.action, 'publish_wb_traffic');
+assert.equal(result.datasets, undefined, 'partition-only result has no duplicate aggregate write');
 assert.equal(result.partitions.datasets.ads.written, 1, 'ads must be written to a monthly partition');
 assert.equal(result.partitions.datasets.funnel.written, 1, 'funnel must be written to a monthly partition');
 assert.equal(result.partitions.datasets.ads.parts[0].qc_status, 'PASS');
-assert.equal(sheets['12_ADS_CAMPAIGN_DAY'].values[1].length, 15);
-assert.equal(sheets['12_ADS_CAMPAIGN_DAY'].values[1][2], 42);
-assert.equal(sheets['12_ADS_CAMPAIGN_DAY'].values[1][12], "'=formula-like");
-assert.equal(sheets['12_ADS_CAMPAIGN_DAY'].values[1][14], 'SOURCE_OK');
-assert.equal(sheets['13_FUNNEL_DAY'].values[1][3], "'@formula-like");
-assert.equal(result.datasets.ads_poll.added, 1);
-assert.equal(result.datasets.funnel_poll.added, 1);
-assert.equal(result.quality.written, 3);
-assert.equal(result.quality.complete, false);
-assert.equal(sheets['17_TRAFFIC_QUALITY'].values[1][2], 'ЧАСТИЧНО');
-assert.equal(sheets['17_TRAFFIC_QUALITY'].values[2][4], 'ЧАСТИЧНО');
-assert.match(sheets['17_TRAFFIC_QUALITY'].values[2][5], /не дополнялись нулями/);
-assert.equal(sheets['17_TRAFFIC_QUALITY'].values[2][10], '12345678');
-assert.equal(sheets['15_ADS_POLL_SNAPSHOT'].values[1][16], 'DAILY_CUMULATIVE_OBSERVED_AT_POLL');
-assert.equal(sheets['16_FUNNEL_POLL_SNAPSHOT'].values[1][14], 'SOURCE_OK');
+assert.equal(partitionBooks.size, 4, 'ads, funnel and both observation sets get durable monthly books');
+assert.equal(sheets['12_ADS_CAMPAIGN_DAY'].values.length, 1, 'do not copy facts into the full aggregate book');
+assert.equal(sheets['13_FUNNEL_DAY'].values.length, 1, 'do not copy facts into the full aggregate book');
+assert.equal(sheets['15_ADS_POLL_SNAPSHOT'], undefined);
+assert.equal(sheets['16_FUNNEL_POLL_SNAPSHOT'], undefined);
+assert.equal(sheets['17_TRAFFIC_QUALITY'], undefined);
 
-const replay = publish({sync_status:status,datasets:{ads:[],funnel:[],ads_poll:[['ap',observedAt,'2026-10-09',1,1,100,10,2,1,3.5,50,0.1,0.35,0.07,14,'WB /adv/v3/fullstats','DAILY_CUMULATIVE_OBSERVED_AT_POLL']],funnel_poll:[]}});
-assert.equal(replay.datasets.ads_poll.added, 0, 'replayed poll must not create duplicate history');
-assert.equal(replay.datasets.ads_poll.updated, 1, 'replayed poll must update the existing observation');
+const replay = publish({partition_only:true,sync_status:status,datasets:{ads:[],funnel:[],ads_poll:[['ap',observedAt,'2026-10-09',1,1,100,10,2,1,3.5,50,0.1,0.35,0.07,14,'WB /adv/v3/fullstats','DAILY_CUMULATIVE_OBSERVED_AT_POLL']],funnel_poll:[]}});
+assert.equal(replay.partitions.datasets.ads_poll.parts[0].added, 0, 'replayed poll must not create duplicate history');
+assert.equal(replay.partitions.datasets.ads_poll.parts[0].updated, 1, 'replayed poll must update the existing observation');
 
 assert.throws(() => publish({
   sync_status: {...status, shops: {...status.shops, yv: {ok:false}}},
@@ -189,10 +182,9 @@ assert.throws(() => sandbox.sellmonitorGithubNormalizeWbTrafficRows_('ads', [
   ['ap','2026-10-09','42','9','100','10','2','1','3.5','50','WB /adv/v3/fullstats','EXACT_CAMPAIGN_NM_DAY','a']
 ], status.finishedAt), /WB_TRAFFIC_DUPLICATE_KEY/);
 
-const empty = publish({sync_status:status, datasets:{ads:[], funnel:[]}});
-assert.equal(empty.datasets.ads.skipped, true);
-assert.equal(sheets['12_ADS_CAMPAIGN_DAY'].values.length, 2, 'empty refresh must preserve last-good data');
-assert.equal(sheets['15_ADS_POLL_SNAPSHOT'].values.length, 2, 'empty refresh must preserve poll history');
+const empty = publish({partition_only:true,sync_status:status, datasets:{ads:[], funnel:[]}});
+assert.equal(empty.partitions.datasets.ads.skipped, true);
+assert.equal(sheets['12_ADS_CAMPAIGN_DAY'].values.length, 1, 'empty refresh must leave the aggregate book untouched');
 
 const queueRows = new Map();
 function queued(file, createdAt) {
