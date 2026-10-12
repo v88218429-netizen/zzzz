@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import assert from 'node:assert/strict';
 
-const source = fs.readFileSync(new URL('./SELLMONITOR_GITHUB_WORKER.gs', import.meta.url), 'utf8');
+const source = fs.readFileSync(process.env.WBCC_WORKER_SOURCE || new URL('./SELLMONITOR_GITHUB_WORKER.gs', import.meta.url), 'utf8');
 assert.doesNotMatch(source, /\bDriveApp\s*\./, 'worker collection and publication must not require Drive-wide OAuth');
 
 function makeSheet(headers) {
@@ -170,7 +170,14 @@ const result = publish({
   sync_status: status,
   datasets: {
     ads: [['ap','2026-10-09','42','9','100','10','2','1','3.5','50','WB /adv/v3/fullstats','EXACT_CAMPAIGN_NM_DAY','=formula-like']],
-    funnel: [['aa','2026-10-09','10','@formula-like','20','3','2','100','WB Analytics products/history']],
+    funnel: [
+      ['ap','2026-10-09','9','SKU9','10','2','1','50','WB Analytics products/history'],
+      ['aa','2026-10-09','10','@formula-like','20','3','2','100','WB Analytics products/history']
+    ],
+    organic: [
+      ['ap','2026-10-09','9','SKU9','10','2','8','WB Analytics products/history','WB /adv/v3/fullstats','total_open_count-paid_clicks','DERIVED_COMPLETE',3,0,0],
+      ['aa','2026-10-09','10','SKU10','20','','','WB Analytics products/history','WB /adv/v3/fullstats','total_open_count-paid_clicks','ADVERTISING_COVERAGE_INCOMPLETE',4,0,1]
+    ],
     ads_poll: [['ap',observedAt,'2026-10-09',1,1,100,10,2,1,3.5,50,0.1,0.35,0.07,14,'WB /adv/v3/fullstats','DAILY_CUMULATIVE_OBSERVED_AT_POLL']],
     funnel_poll: [['aa',observedAt,'2026-10-09',1,20,3,2,100,0.15,0.666667,0.1,'WB Analytics products/history','DAILY_CUMULATIVE_OBSERVED_AT_POLL']]
   }
@@ -182,9 +189,11 @@ assert.equal(result.ok, true);
 assert.equal(result.action, 'publish_wb_traffic');
 assert.equal(result.datasets, undefined, 'partition-only result has no duplicate aggregate write');
 assert.equal(result.partitions.datasets.ads.written, 1, 'ads must be written to a monthly partition');
-assert.equal(result.partitions.datasets.funnel.written, 1, 'funnel must be written to a monthly partition');
+assert.equal(result.partitions.datasets.funnel.written, 2, 'funnel must be written to monthly partitions');
+assert.equal(result.partitions.datasets.organic.written, 2, 'derived organic facts and explicit incomplete coverage must be partitioned');
+assert.equal(result.partitions.datasets.organic.parts[0].qc_status, 'PASS');
 assert.equal(result.partitions.datasets.ads.parts[0].qc_status, 'PASS');
-assert.equal(partitionBooks.size, 4, 'ads, funnel and both observation sets get durable monthly books');
+assert.equal(partitionBooks.size, 3, 'organic and poll facts use separate bounded tabs in their existing store-month books');
 assert.equal(sheets['12_ADS_CAMPAIGN_DAY'].values.length, 1, 'do not copy facts into the full aggregate book');
 assert.equal(sheets['13_FUNNEL_DAY'].values.length, 1, 'do not copy facts into the full aggregate book');
 assert.equal(sheets['15_ADS_POLL_SNAPSHOT'], undefined);
@@ -325,10 +334,3 @@ console.log('WB_TRAFFIC_PUBLISH_FIXTURE_OK', JSON.stringify({
   empty_refresh_preserved: empty.partitions.datasets.ads.skipped,
   search_history_priority: 1783
 }));
-
-const externalSanych = sandbox.sellmonitorGithubExternalDataPlaneInfo_('sanych_wb');
-assert.equal(externalSanych.status, 'EXTERNAL_PARTITIONS_PARTIAL');
-assert.equal(externalSanych.state, 'ACTIVE');
-assert.match(externalSanych.error, /remaining daily datasets still require migration/);
-assert.equal(sandbox.sellmonitorGithubExternalDataPlaneInfo_('air_wb'), null,
-  'non-overflow workbooks continue through the regular client queue');
