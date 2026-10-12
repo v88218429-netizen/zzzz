@@ -1222,6 +1222,75 @@ function sellmonitorGithubClientStep_(label, fn) {
   }
 }
 
+function sellmonitorGithubRepairTrafficCapacity_(ss) {
+  var storeId = String(sellmonitorGithubSetting_(ss, 'ACTIVE_STORE_ID', '') || '').trim();
+  if (storeId !== 'sanych_wb') return {ok:true, skipped:true, storeId:storeId, reason:'not_target'};
+  var raw = ss.getSheetByName('90_RAW_traffic');
+  var daily = ss.getSheetByName('84_Трафик_дни');
+  var codeSheet = ss.getSheetByName('97_Код');
+  var backup = ss.getSheetByName('97_Резерв');
+  if (!raw || !daily || !codeSheet || !backup) throw new Error('Traffic capacity repair: required sheets missing');
+
+  var codeRows = codeSheet.getRange(2, 1, Math.max(1, codeSheet.getLastRow() - 1), 5).getValues();
+  var sourceRow = 0, source = '', active = false;
+  for (var i = 0; i < codeRows.length; i++) {
+    if (String(codeRows[i][0] || '').trim() !== 'traffic_daily_sync_v255') continue;
+    sourceRow = i + 2;
+    source = String(codeRows[i][3] || '');
+    active = codeRows[i][4] === true || String(codeRows[i][4]).toUpperCase() === 'TRUE';
+    break;
+  }
+  if (!sourceRow || !active || !source) throw new Error('Traffic capacity repair: active traffic_daily_sync_v255 not found');
+  var patched = source.indexOf('var dailyClear=Math.max(1,daily.getLastRow()-1,norm.length)') >= 0 &&
+    source.indexOf('var viewClear=Math.max(1,view.getLastRow()-2,vr.length)') >= 0;
+  var rawBefore = {rows:raw.getMaxRows(), last:raw.getLastRow()};
+  var dailyBefore = {rows:daily.getMaxRows(), last:daily.getLastRow()};
+
+  // 90_RAW_traffic already grows its grid before appending. Keep a 1,000-row
+  // reserve beyond the last actual record, and never delete a row containing data.
+  var rawTarget = Math.max(10000, rawBefore.last + 1000);
+  if (rawTarget < rawBefore.rows) raw.deleteRows(rawTarget + 1, rawBefore.rows - rawTarget);
+
+  var backupRow = null;
+  if (!patched) {
+    var dailyOld = 'daily.getRange(2,1,Math.max(1,daily.getMaxRows()-1),20).clearContent();if(norm.length)daily.getRange(2,1,norm.length,20).setValues(norm);';
+    var dailyNew = 'var dailyClear=Math.max(1,daily.getLastRow()-1,norm.length);daily.getRange(2,1,dailyClear,20).clearContent();if(norm.length){var dailyNeed=norm.length+1;if(dailyNeed>daily.getMaxRows())daily.insertRowsAfter(daily.getMaxRows(),dailyNeed-daily.getMaxRows());daily.getRange(2,1,norm.length,20).setValues(norm);}';
+    var viewOld = 'view.getRange(3,1,Math.max(1,view.getMaxRows()-2),30).clearContent();if(vr.length)view.getRange(3,1,vr.length,30).setValues(vr);';
+    var viewNew = 'var viewClear=Math.max(1,view.getLastRow()-2,vr.length);view.getRange(3,1,viewClear,30).clearContent();if(vr.length){var viewNeed=vr.length+2;if(viewNeed>view.getMaxRows())view.insertRowsAfter(view.getMaxRows(),viewNeed-view.getMaxRows());view.getRange(3,1,vr.length,30).setValues(vr);}';
+    var marker = "if(!sid||!cid)throw new Error('storeId/clientId missing');";
+    if (source.split(dailyOld).length !== 2 || source.split(viewOld).length !== 2 || source.split(marker).length !== 2) {
+      throw new Error('Traffic capacity repair: source changed; exact safe patch no longer applies');
+    }
+    var next = source.replace(marker, marker + "if(p.dryRun===true)return{ok:true,dryRun:true,storeId:sid,clientId:cid,grid:{raw:{rows:raw.getMaxRows(),last:raw.getLastRow(),cols:raw.getMaxColumns()},daily:{rows:daily.getMaxRows(),last:daily.getLastRow(),cols:daily.getMaxColumns()},view:{rows:view.getMaxRows(),last:view.getLastRow(),cols:view.getMaxColumns()}}};")
+      .replace(dailyOld, dailyNew)
+      .replace(viewOld, viewNew);
+    backupRow = backup.getLastRow() + 1;
+    backup.getRange(backupRow, 1, 1, 6).setValues([[
+      new Date(), 'sheet:' + ss.getId(), 'traffic_daily_sync_v255', 'SERVER_JS', '1', source
+    ]]);
+    SpreadsheetApp.flush();
+    codeSheet.getRange(sourceRow, 4).setValue(next);
+    SpreadsheetApp.flush();
+    source = next;
+    patched = true;
+  }
+
+  // The writer now expands these two sheets before writing, so their unused
+  // preallocated rows can be removed safely without capping future collection.
+  var dailyLast = daily.getLastRow();
+  var dailyTarget = Math.max(10000, dailyLast + 1000);
+  var dailyRowsBefore = daily.getMaxRows();
+  if (dailyTarget < dailyRowsBefore) daily.deleteRows(dailyTarget + 1, dailyRowsBefore - dailyTarget);
+  SpreadsheetApp.flush();
+
+  return {
+    ok:true, storeId:storeId, sourceRow:sourceRow, patched:patched, backupRow:backupRow,
+    raw:{before:rawBefore, after:{rows:raw.getMaxRows(),last:raw.getLastRow()}, reserveRows:raw.getMaxRows()-raw.getLastRow()},
+    daily:{before:dailyBefore, after:{rows:daily.getMaxRows(),last:daily.getLastRow()}, reserveRows:daily.getMaxRows()-daily.getLastRow(), rowsRemoved:dailyRowsBefore-daily.getMaxRows()},
+    writer:'clear only populated cells; extend grids before writes'
+  };
+}
+
 function sellmonitorGithubProcessClient_(spreadsheetId) {
   var authState = sellmonitorGithubClientStep_('client_auth', function() {
     return sellmonitorGithubEnsureClientAuth_(spreadsheetId);
@@ -1232,6 +1301,10 @@ function sellmonitorGithubProcessClient_(spreadsheetId) {
   var q = ss.getSheetByName('97_Управление');
   var code = ss.getSheetByName('97_Код');
   if (!q || !code) throw new Error('Client missing 97_Управление/97_Код: ' + spreadsheetId);
+
+  var trafficCapacity = sellmonitorGithubClientStep_('traffic_capacity_repair', function() {
+    return sellmonitorGithubRepairTrafficCapacity_(ss);
+  });
 
   sellmonitorGithubClientStep_('ui_onboarding', function() {
     return sellmonitorGithubEnsureUiOnboarding_(ss, q);
@@ -1297,7 +1370,7 @@ function sellmonitorGithubProcessClient_(spreadsheetId) {
     });
   }
 
-  return {ok: true, spreadsheetId: spreadsheetId, auth: authState, processedCommands: processed, staleRepaired: staleRepaired, searchLane: searchLane, coreRefresh: coreRefresh, operational: operational, qcSync: qcSync, coreBacklog: coreBacklog, searchRefresh: searchRefresh, adsClusterRefresh: adsClusterRefresh, last: last, ready: ready};
+  return {ok: true, spreadsheetId: spreadsheetId, auth: authState, trafficCapacity: trafficCapacity, processedCommands: processed, staleRepaired: staleRepaired, searchLane: searchLane, coreRefresh: coreRefresh, operational: operational, qcSync: qcSync, coreBacklog: coreBacklog, searchRefresh: searchRefresh, adsClusterRefresh: adsClusterRefresh, last: last, ready: ready};
 }
 
 function sellmonitorGithubRepairStaleRunning_(q) {
