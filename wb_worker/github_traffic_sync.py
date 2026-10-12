@@ -74,6 +74,9 @@ def _publish() -> None:
         "token": key,
         "action": "publish_wb_traffic",
         "sync_status": status,
+        # The monthly parts are the durable facts layer. Do not write a duplicate
+        # unbounded copy into the near-full WB AI HUB workbook.
+        "partition_only": True,
         "datasets": {
             "ads": ads,
             "funnel": funnel,
@@ -90,37 +93,36 @@ def _publish() -> None:
         response.raise_for_status()
         result = response.json()
     if not isinstance(result, dict) or result.get("ok") is not True or result.get("action") != "publish_wb_traffic":
-        raise RuntimeError("Google Sheets bridge rejected traffic publication")
-    quality = result.get("quality") or {}
-    if quality.get("written") != 3:
-        raise RuntimeError("Traffic quality status row-count mismatch")
+        detail = str((result or {}).get("error") or (result or {}).get("message") or (result or {}).get("reason") or "unknown bridge response")[:240]
+        raise RuntimeError(f"Google Sheets bridge rejected traffic publication: {detail}")
     partition_counts = (result.get("partitions") or {}).get("datasets") or {}
-    for name, expected in (("ads", len(ads)), ("funnel", len(funnel)),
-                           ("ads_poll", len(ads_poll)), ("funnel_poll", len(funnel_poll))):
+    expectations = (("ads", len(ads)), ("funnel", len(funnel)),
+                    ("ads_poll", len(ads_poll)), ("funnel_poll", len(funnel_poll)))
+    for name, expected in expectations:
         item = partition_counts.get(name) or {}
         if item.get("written") != expected:
             raise RuntimeError(f"Monthly-partition row-count mismatch for {name}")
         if expected and (item.get("distinct_keys") != expected or item.get("skipped")):
             raise RuntimeError(f"Monthly-partition key-count mismatch for {name}")
-    counts = result.get("datasets") or {}
-    for name, expected in (("ads", len(ads)), ("funnel", len(funnel)),
-                           ("ads_poll", len(ads_poll)), ("funnel_poll", len(funnel_poll))):
-        item = counts.get(name) or {}
-        if expected and (item.get("written") != expected or item.get("skipped")):
-            raise RuntimeError(f"Google Sheets bridge row-count mismatch for {name}")
         if not expected and not item.get("skipped"):
-            raise RuntimeError(f"Google Sheets bridge did not preserve empty {name} snapshot")
+            raise RuntimeError(f"Monthly-partition empty {name} result was not preserved")
+    def latest_date(name):
+        parts = partition_counts.get(name, {}).get("parts") or []
+        return max((str(part.get("max_date") or "") for part in parts), default="")
+    def added(name):
+        return sum(int(part.get("added") or 0) for part in partition_counts.get(name, {}).get("parts") or [])
     print(json.dumps({
         "published": True,
+        "publication_target": "monthly_partitions_only",
         "sync_finished_at": status["finishedAt"],
         "ads_rows": len(ads),
-        "ads_max_date": counts.get("ads", {}).get("max_date", ""),
+        "ads_max_date": latest_date("ads"),
         "funnel_rows": len(funnel),
-        "funnel_max_date": counts.get("funnel", {}).get("max_date", ""),
+        "funnel_max_date": latest_date("funnel"),
         "ads_poll_rows": len(ads_poll),
         "funnel_poll_rows": len(funnel_poll),
-        "ads_poll_observations_added": counts.get("ads_poll", {}).get("added", 0),
-        "funnel_poll_observations_added": counts.get("funnel_poll", {}).get("added", 0),
+        "ads_poll_observations_added": added("ads_poll"),
+        "funnel_poll_observations_added": added("funnel_poll"),
     }, ensure_ascii=False, sort_keys=True))
 
 
