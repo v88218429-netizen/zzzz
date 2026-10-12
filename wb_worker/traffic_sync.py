@@ -192,15 +192,29 @@ async def _fullstats_batch(client, token, campaign_ids, begin, end,
         return raw
 
 
-def _campaign_ids(payload):
-    ids = set()
+def _campaign_status_index(payload):
+    """Map stats-eligible campaign IDs to WB's documented current status."""
+    statuses = {}
     for group in payload.get("adverts", []):
-        if int(group.get("status", 0)) not in (7, 9, 11):
+        try:
+            status = int(group.get("status", 0))
+        except (TypeError, ValueError):
+            continue
+        if status not in (7, 9, 11):
             continue
         for item in group.get("advert_list", []):
             if item.get("advertId"):
-                ids.add(int(item["advertId"]))
-    return sorted(ids)
+                statuses[int(item["advertId"])] = status
+    return statuses
+
+
+def _campaign_status_counts(statuses):
+    return {str(status): sum(value == status for value in statuses.values())
+            for status in (7, 9, 11)}
+
+
+def _campaign_ids(payload):
+    return sorted(_campaign_status_index(payload))
 
 
 async def _catalog_nm_ids(client, token):
@@ -333,8 +347,10 @@ async def sync_once():
             null_payload_campaign_ids = []
             try:
                 listing = await _request(client, token, "GET", PROMO + "/adv/v1/promotion/count")
-                ids = _campaign_ids(listing)
+                campaign_status_index = _campaign_status_index(listing)
+                ids = sorted(campaign_status_index)
                 state["campaigns"] = len(ids)
+                state["campaign_status_counts"] = _campaign_status_counts(campaign_status_index)
                 shop_rows = []
                 for start in range(0, len(ids), 50):
                     batch = ids[start:start + 50]
@@ -349,6 +365,16 @@ async def sync_once():
                 if no_statistics_campaign_ids:
                     state["campaigns_without_period_statistics_sample"] = no_statistics_campaign_ids[:20]
                 state["campaigns_with_null_payload"] = len(null_payload_campaign_ids)
+                state["null_payload_status_counts"] = _campaign_status_counts({
+                    campaign_id: campaign_status_index[campaign_id]
+                    for campaign_id in null_payload_campaign_ids
+                    if campaign_id in campaign_status_index
+                })
+                state["no_statistics_status_counts"] = _campaign_status_counts({
+                    campaign_id: campaign_status_index[campaign_id]
+                    for campaign_id in no_statistics_campaign_ids
+                    if campaign_id in campaign_status_index
+                })
                 if null_payload_campaign_ids:
                     state["campaigns_with_null_payload_sample"] = null_payload_campaign_ids[:20]
                     state["warnings"] = {
@@ -365,6 +391,16 @@ async def sync_once():
                 if no_statistics_campaign_ids:
                     state["campaigns_without_period_statistics_sample"] = no_statistics_campaign_ids[:20]
                 state["campaigns_with_null_payload"] = len(null_payload_campaign_ids)
+                state["null_payload_status_counts"] = _campaign_status_counts({
+                    campaign_id: campaign_status_index[campaign_id]
+                    for campaign_id in null_payload_campaign_ids
+                    if campaign_id in campaign_status_index
+                })
+                state["no_statistics_status_counts"] = _campaign_status_counts({
+                    campaign_id: campaign_status_index[campaign_id]
+                    for campaign_id in no_statistics_campaign_ids
+                    if campaign_id in campaign_status_index
+                })
                 if null_payload_campaign_ids:
                     state["campaigns_with_null_payload_sample"] = null_payload_campaign_ids[:20]
                     state["warnings"] = {

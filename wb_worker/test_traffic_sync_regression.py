@@ -1,7 +1,8 @@
 """Regression checks for traffic collection aggregation and campaign selection."""
 import unittest
 
-from traffic_sync import _campaign_ids, _stats_rows
+from traffic_sync import (_campaign_ids, _campaign_status_counts,
+                           _campaign_status_index, _stats_rows)
 
 
 class TrafficSyncTests(unittest.TestCase):
@@ -12,6 +13,21 @@ class TrafficSyncTests(unittest.TestCase):
             {"status": 11, "advert_list": [{"advertId": 42}]},
         ]}
         self.assertEqual(_campaign_ids(payload), [42])
+
+    def test_status_counts_distinguish_active_completed_and_paused_nulls(self):
+        payload = {"adverts": [
+            {"status": 9, "advert_list": [{"advertId": 42}, {"advertId": 43}]},
+            {"status": 7, "advert_list": [{"advertId": 44}]},
+            {"status": 11, "advert_list": [{"advertId": 45}, {"advertId": 46}]},
+            {"status": 4, "advert_list": [{"advertId": 47}]},
+        ]}
+        index = _campaign_status_index(payload)
+        self.assertEqual(_campaign_ids(payload), [42, 43, 44, 45, 46])
+        self.assertEqual(_campaign_status_counts(index),
+                         {"7": 1, "9": 2, "11": 2})
+        unresolved = {campaign_id: index[campaign_id] for campaign_id in (42, 44, 45)}
+        self.assertEqual(_campaign_status_counts(unresolved),
+                         {"7": 1, "9": 1, "11": 1})
 
     def test_aggregate_platforms_without_double_count(self):
         payload = [{"advertId": 42, "days": [{"date": "2026-10-08",
