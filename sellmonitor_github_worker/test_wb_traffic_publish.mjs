@@ -274,9 +274,9 @@ assert.throws(
 );
 
 console.log('WB_TRAFFIC_PUBLISH_FIXTURE_OK', JSON.stringify({
-  ads_rows: result.datasets.ads.written,
-  funnel_rows: result.datasets.funnel.written,
-  poll_rows: {ads:result.datasets.ads_poll.written,funnel:result.datasets.funnel_poll.written},
-  empty_refresh_preserved: empty.datasets.ads.skipped,
+  ads_rows: result.partitions.datasets.ads.written,
+  funnel_rows: result.partitions.datasets.funnel.written,
+  poll_rows: {ads:result.partitions.datasets.ads_poll.written,funnel:result.partitions.datasets.funnel_poll.written},
+  empty_refresh_preserved: empty.partitions.datasets.ads.skipped,
   search_history_priority: 1783
 }));
