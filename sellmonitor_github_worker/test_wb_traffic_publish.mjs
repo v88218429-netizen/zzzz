@@ -3,6 +3,7 @@ import vm from 'node:vm';
 import assert from 'node:assert/strict';
 
 const source = fs.readFileSync(new URL('./SELLMONITOR_GITHUB_WORKER.gs', import.meta.url), 'utf8');
+assert.doesNotMatch(source, /\bDriveApp\s*\./, 'worker collection and publication must not require Drive-wide OAuth');
 
 function makeSheet(headers) {
   const values = [headers.slice()];
@@ -112,10 +113,6 @@ const sandbox = {
       };
     }
   },
-  DriveApp: {
-    getFileById: id => ({moveTo: folder => { if (!folder || !folder.id) throw new Error('folder missing'); }}),
-    getFolderById: id => ({id})
-  },
   Utilities: {
     DigestAlgorithm: {SHA_256:'SHA_256'},
     Charset: {UTF_8:'UTF_8'},
@@ -132,6 +129,18 @@ assert.equal(sandbox.sellmonitorGithubGridTargetRows_(6988, 1000, 500), 7488,
   'retain every populated traffic row plus a bounded reserve');
 assert.equal(sandbox.sellmonitorGithubGridTargetRows_(0, 1000, 500), 1000,
   'empty traffic sheets retain a minimum writable grid');
+const sanychSettings = {
+  getLastRow: () => 1,
+  getRange: () => ({getDisplayValues: () => [['ACTIVE_STORE_ID', 'sanych_wb']]})
+};
+const sanychCapacity = sandbox.sellmonitorGithubRepairTrafficCapacity_({
+  getSheetByName(name) {
+    assert.equal(name, '99_Настройки');
+    return sanychSettings;
+  }
+});
+assert.equal(sanychCapacity.skipped, true, 'oversized Sanych workbook must not block worker queues');
+assert.equal(sanychCapacity.reason, 'external_monthly_partitions');
 
 const publish = sandbox.sellmonitorGithubPublishWbTraffic_;
 const status = {
