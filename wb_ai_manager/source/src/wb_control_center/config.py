@@ -43,6 +43,9 @@ class Settings(BaseSettings):
     app_host: str = "127.0.0.1"
     app_port: int = 8787
     app_timezone: str = "Europe/Moscow"
+    dashboard_auth_required: bool = False
+    dashboard_auth_user: str = ""
+    dashboard_auth_password: str = ""
     data_dir: str = "./data"
     log_level: str = "INFO"
 

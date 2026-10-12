@@ -1,4 +1,4 @@
-# 19 агентов: detection → cross-contour decision
+# Покрытие агентов: исходные данные → решение общего контура
 
 | Агент | Факт | Куда идёт | Тип решения |
 |---|---|---|---|
@@ -20,6 +20,8 @@
 | Documents | financial/docs | Evidence layer | подтверждающий источник, не самостоятельный бизнес-совет |
 | Competitors | public search/price/rating/reviews | Market + Search + Card | price/offer/card diagnosis |
 | Experiments | test discipline | Decision follow-up | одно изменение → окно → stop-condition |
+| Новости портала WB | новые записи, сроки, исходный текст | Source Guard + Executive | отмечает возможное влияние; вывод сверяется с условиями и товарами магазина |
+| Подписка и опции | состояние «Джем», активные опции и тарифный ответ | Finance + Decision follow-up | показывает данные и изменения; выгоду можно признать только после расчёта на фактических заказах и прибыли |
 | Supervisor | events/decisions | Executive layer | приоритеты и итоговый список действий |
 
 Инфраструктурные агенты (API Health, Documents, Experiments, Supervisor) не обязаны генерировать отдельное коммерческое действие на каждом цикле. Их задача — качество evidence, безопасность, тестирование и приоритизация.
