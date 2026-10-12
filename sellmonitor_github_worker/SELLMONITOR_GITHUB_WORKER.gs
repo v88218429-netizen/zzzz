@@ -18,7 +18,7 @@ const SMC_GH = Object.freeze({
 
 function sellmonitorGithubEnsureTrigger_() {
   var fn = 'sellmonitorGithubTick';
-  var desiredVersion = 'worker-1m-v1';
+  var desiredVersion = 'worker-1m-v2';
   var props = PropertiesService.getScriptProperties();
   var triggers = ScriptApp.getProjectTriggers();
   var found = null;
@@ -2669,6 +2669,16 @@ const SMC_WB_TRAFFIC = Object.freeze({
       numeric_columns: [2, 4, 5, 6, 7],
       headers: ['store_id','date','nmId','vendorCode','open_count','cart_count','order_count','order_sum_rub','source','load_timestamp','coverage_status']
     },
+    organic: {
+      sheet: '19_ORGANIC_DERIVED',
+      width: 16,
+      source_width: 14,
+      key_columns: [0, 1, 2],
+      source: 'WB Analytics products/history + WB /adv/v3/fullstats',
+      quality: null,
+      numeric_columns: [4, 5, 6, 11, 12, 13],
+      headers: ['store_id','date','nmId','vendorCode','total_open_count','paid_clicks','organic_clicks','source_total','source_paid','formula','derivation_status','campaigns_checked','campaigns_without_period_statistics','campaigns_with_null_payload','load_timestamp','coverage_status']
+    },
     ads_poll: {
       sheet: '15_ADS_POLL_SNAPSHOT',
       width: 19,
@@ -2781,8 +2791,29 @@ function sellmonitorGithubTrafficPartFile_(shop, dataset, month, cfg) {
       fileId = found[0];
     }
   }
+  // Keep auxiliary datasets beside their base monthly facts instead of creating
+  // another Drive file for every data type. This also lets the scheduled worker
+  // append organic and polling observations without requesting DriveApp access.
+  var baseDataset = dataset === 'organic' || dataset === 'funnel_poll' ? 'funnel'
+    : dataset === 'ads_poll' ? 'ads' : '';
+  if (!fileId && baseDataset && registrySheet.getLastRow() > 1) {
+    var basePartId = 'WB-' + shopCfg.storeId + '-' + baseDataset + '-' + month + '-v1';
+    var baseMatches = [];
+    registrySheet.getRange(2, 1, registrySheet.getLastRow() - 1, 10).getDisplayValues().forEach(function(row) {
+      if (String(row[0] || '').trim() === basePartId) baseMatches.push(String(row[9] || '').trim());
+    });
+    if (baseMatches.length > 1) throw new Error('WB_TRAFFIC_BASE_PART_REGISTRY_DUPLICATE:' + basePartId);
+    if (baseMatches.length === 1) {
+      if (!baseMatches[0]) throw new Error('WB_TRAFFIC_BASE_PART_FILE_ID_MISSING:' + basePartId);
+      fileId = baseMatches[0];
+      props.setProperty(propKey, fileId);
+    }
+  }
+  if (!fileId && baseDataset) {
+    throw new Error('WB_TRAFFIC_BASE_PART_REQUIRED:' + shopCfg.storeId + ':' + baseDataset + ':' + month);
+  }
   var headers = cfg.headers.concat(['sync_run_id','record_key']);
-  var ss;
+  var ss, created = false;
   if (fileId) {
     ss = SpreadsheetApp.openById(fileId);
   } else {
@@ -2792,12 +2823,20 @@ function sellmonitorGithubTrafficPartFile_(shop, dataset, month, cfg) {
     ss = SpreadsheetApp.create('WB — ' + shopCfg.name + ' — ' + dataset + ' — ' + month);
     fileId = ss.getId();
     props.setProperty(propKey, fileId);
+    created = true;
   }
-  var sheet = ss.getSheetByName('facts');
+  var sheetName = dataset === 'organic' ? 'facts_organic'
+    : dataset === 'ads_poll' ? 'facts_ads_poll'
+    : dataset === 'funnel_poll' ? 'facts_funnel_poll' : 'facts';
+  var sheet = ss.getSheetByName(sheetName);
   if (!sheet) {
-    var tabs = ss.getSheets();
-    sheet = tabs.length ? tabs[0] : ss.insertSheet('facts');
-    if (sheet.setName) sheet.setName('facts');
+    if (sheetName === 'facts' && created) {
+      var tabs = ss.getSheets();
+      sheet = tabs.length ? tabs[0] : ss.insertSheet('facts');
+      if (sheet.setName) sheet.setName('facts');
+    } else {
+      sheet = ss.insertSheet(sheetName);
+    }
   }
   if (sheet.getMaxColumns() < headers.length) {
     sheet.insertColumnsAfter(sheet.getMaxColumns(), headers.length - sheet.getMaxColumns());
@@ -2813,9 +2852,9 @@ function sellmonitorGithubTrafficPartFile_(shop, dataset, month, cfg) {
 
 function sellmonitorGithubWriteWbTrafficPartitions_(prepared, runId) {
   var output = {};
-  ['ads','funnel','ads_poll','funnel_poll'].forEach(function(dataset) {
+  ['ads','funnel','organic','ads_poll','funnel_poll'].forEach(function(dataset) {
     var cfg = SMC_WB_TRAFFIC.DATASETS[dataset], table = prepared[dataset] || {rows:[]};
-    var dateIndex = (dataset === 'ads' || dataset === 'funnel') ? 1 : 2;
+    var dateIndex = (dataset === 'ads' || dataset === 'funnel' || dataset === 'organic') ? 1 : 2;
     var groups = {};
     table.rows.forEach(function(row, index) {
       var rawShop = String(row[0] || '').trim();
@@ -2876,7 +2915,7 @@ function sellmonitorGithubWriteWbTrafficPartitions_(prepared, runId) {
       var registryRow = [
         part.partId,'WB',SMC_WB_TRAFFIC_PARTITIONS.shops[group.shop].storeId,dataset,
         'normalized_source_rows',startDay,endDay,1,SMC_WB_TRAFFIC_PARTITIONS.schemaVersion,
-        part.id,url,cfg.source,'WB_OFFICIAL_API_NORMALIZED',String(runId),new Date(),
+        part.id,url,cfg.source,dataset === 'organic' ? 'DERIVED_FROM_WB_OFFICIAL_APIS' : 'WB_OFFICIAL_API_NORMALIZED',String(runId),new Date(),
         dateFirst.length,Object.keys(byKey).length,dates[0] || '',dates[dates.length - 1] || '',
         digest,'OK','PASS','',''
       ];
@@ -3052,7 +3091,10 @@ function sellmonitorGithubNormalizeWbTrafficRows_(dataset, inputRows, observedAt
     if (!isFinite(nmId) || nmId <= 0 || Math.floor(nmId) !== nmId) {
       throw new Error('WB_TRAFFIC_INVALID_NMID:' + rowIndex);
     }
-    if (String(sourceRow[dataset === 'ads' ? 10 : 8] || '') !== cfg.source) {
+    var actualSource = dataset === 'ads' ? String(sourceRow[10] || '')
+      : dataset === 'organic' ? String(sourceRow[7] || '') + ' + ' + String(sourceRow[8] || '')
+      : String(sourceRow[8] || '');
+    if (actualSource !== cfg.source) {
       throw new Error('WB_TRAFFIC_SOURCE_MISMATCH:' + rowIndex);
     }
     if (cfg.quality && String(sourceRow[11] || '') !== cfg.quality) {
@@ -3520,7 +3562,7 @@ function sellmonitorGithubPublishWbTraffic_(body) {
   }
   var datasets = body.datasets || {};
   var prepared = {};
-  ['ads','funnel'].forEach(function(name) {
+  ['ads','funnel','organic'].forEach(function(name) {
     var sourceRows = datasets[name];
     if (sourceRows == null) sourceRows = [];
     prepared[name] = sellmonitorGithubNormalizeWbTrafficRows_(name, sourceRows, status.finishedAt);
@@ -3990,7 +4032,7 @@ function doGet(e) {
 
     if (action === 'tick_once_v3') {
       var onceProps3 = PropertiesService.getScriptProperties();
-      var onceKey3 = 'SMC_TICK_ONCE_V3_USED';
+      var onceKey3 = 'SMC_TICK_ONCE_V4_USED';
       if (onceProps3.getProperty(onceKey3) === '1') {
         return sellmonitorGithubWebJson_({ok: false, error: 'TICK_ONCE_V3_ALREADY_USED'});
       }
