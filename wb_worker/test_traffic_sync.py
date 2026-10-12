@@ -9,10 +9,44 @@ from unittest.mock import AsyncMock, patch
 import httpx
 import traffic_sync
 from traffic_sync import (_campaign_ids, _stats_rows, _funnel_rows, _upsert_rows,
-                          _rows_from_monitoring_start, MONITORING_START)
+                          _rows_from_monitoring_start, _derive_organic_rows,
+                          _number_sum, MONITORING_START)
 
 
 class TrafficParsingTest(unittest.TestCase):
+    def test_organic_is_derived_only_when_both_sources_are_complete(self):
+        funnel = [
+            ["ap", "2026-10-09", 42, "SKU42", 50, 9, 3, 100, "WB Analytics products/history"],
+            ["aa", "2026-10-09", 43, "SKU43", 15, 2, 1, 50, "WB Analytics products/history"],
+            ["yv", "2026-10-09", 44, "SKU44", 3, 2, 1, 25, "WB Analytics products/history"],
+            ["ap", "2026-10-10", 45, "SKU45", "", 0, 0, 0, "WB Analytics products/history"],
+        ]
+        ads = [
+            ["ap", "2026-10-09", 1, 42, 100, 7, 3, 2, 10, 100, "WB /adv/v3/fullstats", "EXACT_CAMPAIGN_NM_DAY", "SKU42"],
+            ["yv", "2026-10-09", 2, 44, 100, 4, 3, 2, 10, 100, "WB /adv/v3/fullstats", "EXACT_CAMPAIGN_NM_DAY", "SKU44"],
+        ]
+        coverage = {
+            "ap": {"ok": True, "campaigns": 5, "campaigns_without_period_statistics": 1},
+            "aa": {"ok": True, "campaigns": 400, "campaigns_with_null_payload": 400},
+            "yv": {"ok": True, "campaigns": 3},
+        }
+        rows = _derive_organic_rows(funnel, ads, coverage)
+        by_key = {(row[0], row[1], str(row[2])): row for row in rows}
+        self.assertEqual(by_key[("ap", "2026-10-09", "42")][6], 43)
+        self.assertEqual(by_key[("ap", "2026-10-09", "42")][10], "DERIVED_COMPLETE")
+        self.assertEqual(by_key[("aa", "2026-10-09", "43")][5:7], ["", ""])
+        self.assertEqual(by_key[("aa", "2026-10-09", "43")][10], "ADVERTISING_COVERAGE_INCOMPLETE")
+        self.assertEqual(by_key[("yv", "2026-10-09", "44")][10], "MEASUREMENT_MISMATCH")
+        self.assertEqual(by_key[("ap", "2026-10-10", "45")][10], "TOTAL_OPEN_MISSING")
+
+    def test_missing_fullstats_clicks_stays_unknown_not_zero(self):
+        payload = [{"advertId": 12, "days": [{"date": "2026-10-09", "apps": [{
+            "nms": [{"nmId": 42, "views": 10, "sum": 5}]
+        }]}]}]
+        row = _stats_rows("ap", payload)[0]
+        self.assertIsNone(row[5])
+        self.assertIsNone(_number_sum([row], 5))
+
     def test_campaign_status_filter(self):
         payload = {"adverts": [
             {"status": 9, "advert_list": [{"advertId": 12}]},
@@ -335,10 +369,15 @@ class TrafficSyncPersistenceTest(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(first["funnel_poll_rows"], 1)
                 saved_ads = rows(shop_dir / "campaign_sku_day.csv")
                 saved_funnel = rows(shop_dir / "funnel_sku_day.csv")
+                saved_organic = rows(data_dir / "organic_sku_day.csv")
                 self.assertEqual(len(saved_ads), 1)
                 self.assertGreaterEqual(saved_ads[0][1], MONITORING_START.isoformat())
                 self.assertEqual(len(saved_funnel), 2)
                 self.assertTrue(all(row[1] >= MONITORING_START.isoformat() for row in saved_funnel))
+                organic_by_nm = {row[2]: row for row in saved_organic}
+                self.assertEqual(organic_by_nm["20"][6], "9")
+                self.assertEqual(organic_by_nm["20"][10], "DERIVED_COMPLETE")
+                self.assertEqual(organic_by_nm["30"][5:7], ["0", "10"])
                 ads_poll = rows(data_dir / "ads_poll_snapshot.csv")
                 funnel_poll = rows(data_dir / "funnel_poll_snapshot.csv")
                 self.assertEqual(len(ads_poll), 1)
