@@ -9,6 +9,7 @@ function makeSheet(headers) {
   let maxRows = 5;
   return {
     values,
+    setName(name) { this.name = name; },
     getMaxRows: () => maxRows,
     getMaxColumns: () => 20,
     getLastRow() {
@@ -61,15 +62,64 @@ const workbook = {
   insertSheet(name) { sheets[name] = makeSheet([]); return sheets[name]; },
   getSpreadsheetTimeZone: () => 'Europe/Moscow'
 };
+const partitionBooks = new Map();
+const propertyStore = new Map();
+let nextPartition = 0;
+function makeWorkbook(id) {
+  const localSheets = {};
+  return {
+    getSheetByName: name => localSheets[name] || null,
+    insertSheet(name) { const sheet = makeSheet([]); localSheets[name] = sheet; return sheet; },
+    getSheets: () => Object.values(localSheets),
+    getId: () => id,
+    getSpreadsheetTimeZone: () => 'Europe/Moscow'
+  };
+}
+const registryHeaders = ['part_id','platform','shop_id','dataset','layer','period_start','period_end'];
+const registrySheet = makeSheet(registryHeaders);
+const registryWorkbook = {
+  getSheetByName: name => name === 'Части' ? registrySheet : null,
+  getSpreadsheetTimeZone: () => 'Etc/GMT'
+};
 let openedId = '';
 const sandbox = {
   console, Date, Math, JSON, Number, String, Boolean, Array, Object, RegExp, isFinite,
   parseFloat, parseInt,
   SpreadsheetApp: {
-    openById(id) { openedId = id; return workbook; },
+    openById(id) {
+      openedId = id;
+      if (id === '1E7HSGJgamzKZkdNdDNyp0f1iI2mLhhbpfi04-sOytBs') return registryWorkbook;
+      if (id === '11ULokTx74QjziZjThJ0lfxFiMQW42-WV4315cG7eIuU') return workbook;
+      const part = partitionBooks.get(id);
+      if (part) return part;
+      if (String(id).startsWith('traffic-part-')) throw new Error('Spreadsheet not found: ' + id);
+      return workbook;
+    },
+    create(_title) {
+      const id = 'traffic-part-' + (++nextPartition);
+      const book = makeWorkbook(id);
+      book.insertSheet('Sheet1');
+      partitionBooks.set(id, book);
+      return book;
+    },
     flush() {}
   },
+  PropertiesService: {
+    getScriptProperties() {
+      return {
+        getProperty: key => propertyStore.get(key) || '',
+        setProperty: (key, value) => propertyStore.set(key, String(value))
+      };
+    }
+  },
+  DriveApp: {
+    getFileById: id => ({moveTo: folder => { if (!folder || !folder.id) throw new Error('folder missing'); }}),
+    getFolderById: id => ({id})
+  },
   Utilities: {
+    DigestAlgorithm: {SHA_256:'SHA_256'},
+    Charset: {UTF_8:'UTF_8'},
+    computeDigest(_algo, value) { return Array.from({length:32}, (_,i) => value.charCodeAt(i % value.length) || i); },
     formatDate(value, _tz, pattern) {
       const shifted = new Date(value.getTime() + 3 * 60 * 60 * 1000);
       return pattern === 'yyyy-MM-dd' ? shifted.toISOString().slice(0,10) : shifted.toISOString();
@@ -107,6 +157,9 @@ assert.equal(openedId, '11ULokTx74QjziZjThJ0lfxFiMQW42-WV4315cG7eIuU');
 assert.equal(result.ok, true);
 assert.equal(result.datasets.ads.written, 1);
 assert.equal(result.datasets.funnel.written, 1);
+assert.equal(result.partitions.datasets.ads.written, 1, 'ads must be written to a monthly partition');
+assert.equal(result.partitions.datasets.funnel.written, 1, 'funnel must be written to a monthly partition');
+assert.equal(result.partitions.datasets.ads.parts[0].qc_status, 'PASS');
 assert.equal(sheets['12_ADS_CAMPAIGN_DAY'].values[1].length, 15);
 assert.equal(sheets['12_ADS_CAMPAIGN_DAY'].values[1][2], 42);
 assert.equal(sheets['12_ADS_CAMPAIGN_DAY'].values[1][12], "'=formula-like");

@@ -2642,6 +2642,208 @@ const SMC_WB_TRAFFIC = Object.freeze({
 });
 
 
+const SMC_WB_TRAFFIC_PARTITIONS = Object.freeze({
+  registryId: '1E7HSGJgamzKZkdNdDNyp0f1iI2mLhhbpfi04-sOytBs',
+  registrySheet: 'Части',
+  schemaVersion: 'traffic-month-v1',
+  shops: {
+    ap: {storeId:'sanych_wb', name:'Саныч', folderId:'1I_N5-SzqOBhgah7cvoBKbqpRrPgNj9p3'},
+    aa: {storeId:'air_wb', name:'AIR', folderId:'1PpuGRul9m5ePPMaYT8pW8dHGSuMvxtqg'},
+    yv: {storeId:'hozyayushka_wb', name:'Хозяюшка', folderId:'1Z1zYKyvMHv2tGNLMjRLIP_GHQ7qtmKwM'}
+  }
+});
+
+function sellmonitorGithubTrafficPartHeaders_() {
+  return ['part_id','platform','shop_id','dataset','layer','period_start','period_end',
+    'part_number','schema_version','file_id','file_url','source_endpoint','source_kind',
+    'run_id','fetched_at','row_count','distinct_key_count','min_date','max_date',
+    'checksum','status','qc_status','error','supersedes_part_id'];
+}
+
+function sellmonitorGithubTrafficPartKey_(row, indexes) {
+  return indexes.map(function(index) {
+    var value = row[index];
+    if (value instanceof Date && !isNaN(value.getTime())) {
+      return Utilities.formatDate(value, 'GMT', 'yyyy-MM-dd');
+    }
+    return String(value == null ? '' : value).trim();
+  }).join('|');
+}
+
+function sellmonitorGithubTrafficPartChecksum_(rows) {
+  var bytes = Utilities.computeDigest(
+    Utilities.DigestAlgorithm.SHA_256, JSON.stringify(rows), Utilities.Charset.UTF_8
+  );
+  return bytes.map(function(b) { return ('0' + ((b + 256) % 256).toString(16)).slice(-2); }).join('');
+}
+
+function sellmonitorGithubTrafficPartRegistry_(partRow) {
+  var registry = SpreadsheetApp.openById(SMC_WB_TRAFFIC_PARTITIONS.registryId);
+  var sheet = registry.getSheetByName(SMC_WB_TRAFFIC_PARTITIONS.registrySheet);
+  if (!sheet) throw new Error('WB_TRAFFIC_PART_REGISTRY_TAB_MISSING');
+  var headers = sellmonitorGithubTrafficPartHeaders_();
+  if (sheet.getMaxColumns() < headers.length) {
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), headers.length - sheet.getMaxColumns());
+  }
+  var existingHeaders = sheet.getRange(1, 1, 1, headers.length).getDisplayValues()[0];
+  for (var h = 0; h < 7; h++) {
+    if (String(existingHeaders[h] || '').trim() !== headers[h]) {
+      throw new Error('WB_TRAFFIC_PART_REGISTRY_HEADER_MISMATCH:' + (h + 1));
+    }
+  }
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  var last = sheet.getLastRow(), found = [];
+  if (last > 1) {
+    sheet.getRange(2, 1, last - 1, headers.length).getValues().forEach(function(row, i) {
+      if (String(row[0] || '').trim() === String(partRow[0])) found.push(i + 2);
+    });
+  }
+  if (found.length > 1) throw new Error('WB_TRAFFIC_PART_REGISTRY_DUPLICATE_PART_ID:' + partRow[0]);
+  var target = found.length ? found[0] : Math.max(2, last + 1);
+  if (target > sheet.getMaxRows()) sheet.insertRowsAfter(sheet.getMaxRows(), target - sheet.getMaxRows());
+  sheet.getRange(target, 1, 1, headers.length).setValues([partRow]);
+  return {row:target, created:found.length === 0};
+}
+
+function sellmonitorGithubTrafficPartFile_(shop, dataset, month, cfg) {
+  var shopCfg = SMC_WB_TRAFFIC_PARTITIONS.shops[shop];
+  if (!shopCfg) throw new Error('WB_TRAFFIC_PART_UNKNOWN_STORE:' + shop);
+  var partId = 'WB-' + shopCfg.storeId + '-' + dataset + '-' + month + '-v1';
+  var props = PropertiesService.getScriptProperties();
+  var propKey = 'WB_TRAFFIC_PART_V1_' + shopCfg.storeId + '_' + dataset + '_' + month;
+  var fileId = String(props.getProperty(propKey) || '').trim();
+  var registry = SpreadsheetApp.openById(SMC_WB_TRAFFIC_PARTITIONS.registryId);
+  var registrySheet = registry.getSheetByName(SMC_WB_TRAFFIC_PARTITIONS.registrySheet);
+  if (!registrySheet) throw new Error('WB_TRAFFIC_PART_REGISTRY_TAB_MISSING');
+  if (!fileId && registrySheet.getLastRow() > 1) {
+    var found = [];
+    registrySheet.getRange(2, 1, registrySheet.getLastRow() - 1, 10).getDisplayValues().forEach(function(row) {
+      if (String(row[0] || '').trim() === partId) found.push(String(row[9] || '').trim());
+    });
+    if (found.length > 1) throw new Error('WB_TRAFFIC_PART_REGISTRY_DUPLICATE_PART_ID:' + partId);
+    if (found.length === 1) {
+      if (!found[0]) throw new Error('WB_TRAFFIC_PART_REGISTRY_FILE_ID_MISSING:' + partId);
+      fileId = found[0];
+    }
+  }
+  var headers = cfg.headers.concat(['sync_run_id','record_key']);
+  var ss;
+  if (fileId) {
+    ss = SpreadsheetApp.openById(fileId);
+    // Re-apply the parent on retry in case creation succeeded before a move failed.
+    DriveApp.getFileById(fileId).moveTo(DriveApp.getFolderById(shopCfg.folderId));
+  } else {
+    ss = SpreadsheetApp.create('WB — ' + shopCfg.name + ' — ' + dataset + ' — ' + month);
+    fileId = ss.getId();
+    props.setProperty(propKey, fileId);
+    DriveApp.getFileById(fileId).moveTo(DriveApp.getFolderById(shopCfg.folderId));
+  }
+  var sheet = ss.getSheetByName('facts');
+  if (!sheet) {
+    var tabs = ss.getSheets();
+    sheet = tabs.length ? tabs[0] : ss.insertSheet('facts');
+    if (sheet.setName) sheet.setName('facts');
+  }
+  if (sheet.getMaxColumns() < headers.length) {
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), headers.length - sheet.getMaxColumns());
+  }
+  if (sheet.getMaxRows() < 2) sheet.insertRowsAfter(sheet.getMaxRows(), 2 - sheet.getMaxRows());
+  if (!sheet.getLastRow()) sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  var liveHeaders = sheet.getRange(1, 1, 1, headers.length).getDisplayValues()[0];
+  if (headers.some(function(h, i) { return String(liveHeaders[i] || '').trim() !== h; })) {
+    throw new Error('WB_TRAFFIC_PART_HEADER_MISMATCH:' + partId);
+  }
+  return {id:fileId, partId:partId, sheet:sheet, headers:headers};
+}
+
+function sellmonitorGithubWriteWbTrafficPartitions_(prepared, runId) {
+  var output = {};
+  ['ads','funnel','ads_poll','funnel_poll'].forEach(function(dataset) {
+    var cfg = SMC_WB_TRAFFIC.DATASETS[dataset], table = prepared[dataset] || {rows:[]};
+    var dateIndex = (dataset === 'ads' || dataset === 'funnel') ? 1 : 2;
+    var groups = {};
+    table.rows.forEach(function(row, index) {
+      var rawShop = String(row[0] || '').trim();
+      var shopCfg = SMC_WB_TRAFFIC_PARTITIONS.shops[rawShop];
+      if (!shopCfg) throw new Error('WB_TRAFFIC_PART_UNKNOWN_STORE:' + rawShop);
+      var day = row[dateIndex] instanceof Date && !isNaN(row[dateIndex].getTime())
+        ? Utilities.formatDate(row[dateIndex], 'Europe/Moscow', 'yyyy-MM-dd')
+        : String(row[dateIndex] || '').trim();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) throw new Error('WB_TRAFFIC_PART_INVALID_DATE:' + dataset + ':' + index);
+      var month = day.slice(0, 7), groupKey = rawShop + '|' + month;
+      (groups[groupKey] || (groups[groupKey] = {shop:rawShop, month:month, input:[]})).input.push(row);
+    });
+    var groupKeys = Object.keys(groups).sort();
+    var datasetResult = {written:0, added:0, updated:0, distinct_keys:0, parts:[], skipped:groupKeys.length === 0};
+    groupKeys.forEach(function(groupKey) {
+      var group = groups[groupKey], part = sellmonitorGithubTrafficPartFile_(group.shop, dataset, group.month, cfg);
+      var sheet = part.sheet, width = part.headers.length;
+      var keyIndexes = cfg.key_columns.slice();
+      var oldLast = sheet.getLastRow(), byKey = {};
+      if (oldLast > 1) {
+        sheet.getRange(2, 1, oldLast - 1, width).getValues().forEach(function(row, offset) {
+          if (!row[0]) return;
+          var key = sellmonitorGithubTrafficPartKey_(row, keyIndexes);
+          if (!key || Object.prototype.hasOwnProperty.call(byKey, key)) {
+            throw new Error('WB_TRAFFIC_PART_DUPLICATE_EXISTING_KEY:' + part.partId + ':' + key);
+          }
+          byKey[key] = row;
+        });
+      }
+      var added = 0, updated = 0;
+      group.input.forEach(function(row) {
+        var key = sellmonitorGithubTrafficPartKey_(row, keyIndexes);
+        if (!key || key.indexOf('||') >= 0) throw new Error('WB_TRAFFIC_PART_INVALID_KEY:' + part.partId);
+        var full = row.slice();
+        full.push(String(runId), key);
+        if (Object.prototype.hasOwnProperty.call(byKey, key)) updated++;
+        else added++;
+        byKey[key] = full;
+      });
+      var dateFirst = Object.keys(byKey).map(function(key) { return byKey[key]; });
+      dateFirst.sort(function(a,b) {
+        var ad = String(a[dateIndex] instanceof Date ? Utilities.formatDate(a[dateIndex], 'GMT', 'yyyy-MM-dd') : a[dateIndex] || '');
+        var bd = String(b[dateIndex] instanceof Date ? Utilities.formatDate(b[dateIndex], 'GMT', 'yyyy-MM-dd') : b[dateIndex] || '');
+        return ad.localeCompare(bd) || sellmonitorGithubTrafficPartKey_(a,keyIndexes).localeCompare(sellmonitorGithubTrafficPartKey_(b,keyIndexes));
+      });
+      var needed = dateFirst.length + 1;
+      if (sheet.getMaxRows() < needed) sheet.insertRowsAfter(sheet.getMaxRows(), needed - sheet.getMaxRows());
+      if (dateFirst.length) sheet.getRange(2, 1, dateFirst.length, width).setValues(dateFirst);
+      if (oldLast > needed) sheet.getRange(needed + 1, 1, oldLast - needed, width).clearContent();
+      var dates = dateFirst.map(function(row) {
+        return String(row[dateIndex] instanceof Date ? Utilities.formatDate(row[dateIndex], 'GMT', 'yyyy-MM-dd') : row[dateIndex] || '');
+      }).filter(Boolean).sort();
+      var startDay = group.month + '-01';
+      var parts = group.month.split('-'), next = new Date(Date.UTC(Number(parts[0]), Number(parts[1]), 0));
+      var endDay = Utilities.formatDate(next, 'GMT', 'yyyy-MM-dd');
+      var digest = sellmonitorGithubTrafficPartChecksum_(dateFirst);
+      var url = 'https://docs.google.com/spreadsheets/d/' + part.id + '/edit';
+      var registryRow = [
+        part.partId,'WB',SMC_WB_TRAFFIC_PARTITIONS.shops[group.shop].storeId,dataset,
+        'normalized_source_rows',startDay,endDay,1,SMC_WB_TRAFFIC_PARTITIONS.schemaVersion,
+        part.id,url,cfg.source,'WB_OFFICIAL_API_NORMALIZED',String(runId),new Date(),
+        dateFirst.length,Object.keys(byKey).length,dates[0] || '',dates[dates.length - 1] || '',
+        digest,'OK','PASS','',''
+      ];
+      sellmonitorGithubTrafficPartRegistry_(registryRow);
+      var summary = {
+        part_id:part.partId,shop_id:SMC_WB_TRAFFIC_PARTITIONS.shops[group.shop].storeId,
+        dataset:dataset,month:group.month,file_id:part.id,url:url,
+        rows:dateFirst.length,distinct_keys:Object.keys(byKey).length,
+        added:added,updated:updated,min_date:dates[0] || '',max_date:dates[dates.length - 1] || '',
+        checksum:digest,qc_status:'PASS'
+      };
+      datasetResult.parts.push(summary);
+      datasetResult.written += group.input.length;
+      datasetResult.added += added;
+      datasetResult.updated += updated;
+      datasetResult.distinct_keys += group.input.length;
+    });
+    output[dataset] = datasetResult;
+  });
+  return {ok:true, schema_version:SMC_WB_TRAFFIC_PARTITIONS.schemaVersion, run_id:String(runId), datasets:output};
+}
+
 function sellmonitorGithubNormalizeWbTrafficRows_(dataset, inputRows, observedAt) {
   var cfg = SMC_WB_TRAFFIC.DATASETS[dataset];
   if (!cfg) throw new Error('WB_TRAFFIC_UNKNOWN_DATASET');
@@ -3144,8 +3346,14 @@ function sellmonitorGithubPublishWbTraffic_(body) {
     if (sourceRows == null) sourceRows = [];
     prepared[name] = sellmonitorGithubNormalizeWbPollRows_(name, sourceRows, status.finishedAt);
   });
+  var partitions = body.skip_partitions === true
+    ? {ok:true, skipped:true, reason:'already_published_in_bounded_chunks'}
+    : sellmonitorGithubWriteWbTrafficPartitions_(prepared, status.finishedAt);
+  if (body.partition_only === true) {
+    return {ok:partitions.ok === true, action:'publish_wb_traffic', sync_finished_at:status.finishedAt, partitions:partitions};
+  }
   var ss = SpreadsheetApp.openById(SMC_WB_TRAFFIC.SPREADSHEET_ID);
-  var result = {ok:true, action:'publish_wb_traffic', sync_finished_at:status.finishedAt, datasets:{}};
+  var result = {ok:true, action:'publish_wb_traffic', sync_finished_at:status.finishedAt, datasets:{}, partitions:partitions};
   ['ads','funnel'].forEach(function(name) {
     var cfg = SMC_WB_TRAFFIC.DATASETS[name];
     var table = prepared[name];
