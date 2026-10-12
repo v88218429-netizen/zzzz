@@ -19,6 +19,7 @@ PROMO = "https://advert-api.wildberries.ru"
 ANALYTICS = "https://seller-analytics-api.wildberries.ru"
 COLUMNS = ["shop", "date", "advert_id", "nm_id", "views", "clicks", "atbs", "orders", "spend_rub", "order_sum_rub", "source", "quality", "seller_article"]
 FUNNEL_COLUMNS = ["shop", "date", "nm_id", "vendor_code", "open_count", "cart_count", "order_count", "order_sum_rub", "source"]
+ORGANIC_COLUMNS = ["shop", "date", "nm_id", "vendor_code", "total_open_count", "paid_clicks", "organic_clicks", "source_total", "source_paid", "formula", "coverage_status", "campaigns_checked", "campaigns_without_period_statistics", "campaigns_with_null_payload"]
 ADS_POLL_COLUMNS = ["shop", "observed_at", "date", "campaign_sku_rows", "campaigns_with_rows", "views", "clicks", "cart_adds", "orders", "spend_rub", "order_sum_rub", "ctr", "cpc_rub", "drr", "roas", "source", "measurement_grain"]
 FUNNEL_POLL_COLUMNS = ["shop", "observed_at", "date", "sku_rows", "open_count", "cart_count", "order_count", "order_sum_rub", "open_to_cart", "cart_to_order", "open_to_order", "source", "measurement_grain"]
 POLL_GRAIN = "DAILY_CUMULATIVE_OBSERVED_AT_POLL"
@@ -267,7 +268,14 @@ def _stats_rows(shop, payload):
                     key = (shop, date, aid, nm)
                     values = grouped.setdefault(key, [0] * 6)
                     for index, field in enumerate(("views", "clicks", "atbs", "orders", "sum", "sum_price")):
-                        values[index] += item.get(field) or 0
+                        value = item.get(field)
+                        if value is None or isinstance(value, bool) or str(value).strip() == "":
+                            values[index] = None
+                        elif values[index] is not None:
+                            try:
+                                values[index] += float(value)
+                            except (TypeError, ValueError):
+                                values[index] = None
     return [[*key, *values, "WB /adv/v3/fullstats",
              "EXACT_CAMPAIGN_NM_DAY", ""] for key, values in sorted(grouped.items())]
 
@@ -286,11 +294,26 @@ def _funnel_rows(shop, payload):
 
 
 def _number_sum(rows, index):
-    return sum(float(row[index] or 0) for row in rows)
+    if not rows:
+        return 0
+    values = []
+    for row in rows:
+        value = row[index] if len(row) > index else None
+        if value is None or isinstance(value, bool) or str(value).strip() == "":
+            return None
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            return None
+        if number < 0:
+            return None
+        values.append(number)
+    total = sum(values)
+    return int(total) if total.is_integer() else total
 
 
 def _ratio(numerator, denominator):
-    return round(numerator / denominator, 6) if denominator else ""
+    return round(numerator / denominator, 6) if numerator is not None and denominator not in (None, 0) else ""
 
 
 def _current_day_poll_rows(now, day, ad_rows, funnel_rows, successful_ads, successful_funnels):
@@ -319,6 +342,79 @@ def _current_day_poll_rows(now, day, ad_rows, funnel_rows, successful_ads, succe
                            carts, orders, revenue, _ratio(carts, opens), _ratio(orders, carts),
                            _ratio(orders, opens), "WB Analytics products/history", POLL_GRAIN])
     return ads, funnel
+
+
+def _count_value(value):
+    """Return a non-negative integer count, or None for unknown/invalid input."""
+    if value is None or isinstance(value, bool) or str(value).strip() == "":
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not number.is_integer() or number < 0:
+        return None
+    return int(number)
+
+
+def _derive_organic_rows(funnel_rows, ad_rows, coverage):
+    """Derive total card opens minus paid clicks only under complete source coverage.
+
+    A store with any unresolved null fullstats campaign is explicitly partial:
+    its paid count and organic result remain blank. Negative differences and
+    missing funnel counts are also preserved as unknown, never clamped to zero.
+    """
+    paid_by_product_day = {}
+    stores_with_unknown_clicks = set()
+    for row in ad_rows:
+        if len(row) <= 5:
+            continue
+        key = (str(row[0]), str(row[1])[:10], str(row[3]))
+        clicks = _count_value(row[5])
+        if clicks is not None:
+            paid_by_product_day[key] = paid_by_product_day.get(key, 0) + clicks
+        else:
+            stores_with_unknown_clicks.add(key[0])
+
+    result = []
+    seen = set()
+    for row in funnel_rows:
+        if len(row) <= 4:
+            continue
+        shop, day, nm_id = str(row[0]), str(row[1])[:10], str(row[2])
+        key = (shop, day, nm_id)
+        if not all(key) or key in seen:
+            continue
+        seen.add(key)
+        store = coverage.get(shop, {})
+        complete_ads = (store.get("ok") is True
+                        and int(store.get("campaigns_with_null_payload") or 0) == 0
+                        and shop not in stores_with_unknown_clicks)
+        total_opens = _count_value(row[4])
+        paid_clicks = paid_by_product_day.get(key, 0) if complete_ads else None
+        organic_clicks = None
+        if total_opens is None:
+            coverage_status = "TOTAL_OPEN_MISSING"
+        elif not complete_ads:
+            coverage_status = "ADVERTISING_COVERAGE_INCOMPLETE"
+        elif paid_clicks > total_opens:
+            coverage_status = "MEASUREMENT_MISMATCH"
+        else:
+            organic_clicks = total_opens - paid_clicks
+            coverage_status = "DERIVED_COMPLETE"
+        result.append([
+            shop, day, nm_id, row[3] if len(row) > 3 else "",
+            total_opens if total_opens is not None else "",
+            paid_clicks if paid_clicks is not None else "",
+            organic_clicks if organic_clicks is not None else "",
+            "WB Analytics products/history", "WB /adv/v3/fullstats",
+            "total_open_count-paid_clicks",
+            coverage_status,
+            int(store.get("campaigns") or 0),
+            int(store.get("campaigns_without_period_statistics") or 0),
+            int(store.get("campaigns_with_null_payload") or 0),
+        ])
+    return result
 
 
 async def sync_once():
@@ -475,6 +571,8 @@ async def sync_once():
     all_funnels = [r for shop in SHOPS for r in _persisted_rows(shop, "funnel_sku_day.csv")]
     _atomic_csv(DATA_DIR / "campaign_sku_day.csv", COLUMNS, all_ads)
     _atomic_csv(DATA_DIR / "funnel_sku_day.csv", FUNNEL_COLUMNS, all_funnels)
+    organic_rows = _derive_organic_rows(all_funnels, all_ads, status["shops"])
+    _atomic_csv(DATA_DIR / "organic_sku_day.csv", ORGANIC_COLUMNS, organic_rows)
     # Poll timestamp is not the data grain: disclose the source windows explicitly.
     _atomic_json(DATA_DIR / "latest_poll.json", {"polledAt": now.isoformat(),
                   "coverage": status["shops"], "ad_rows": len(all_ads),
