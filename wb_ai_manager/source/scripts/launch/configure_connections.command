@@ -22,14 +22,15 @@ print((m.group(1) if m else '').strip())
 PY
 }
 write_value() {
-  "$PY" - "$1" "$2" <<'PY'
+  local KEY="$1" VALUE="$2"
+  printf '%s' "$VALUE" | "$PY" -c '
 from pathlib import Path
 import re,sys
-p=Path('.env'); s=p.read_text(encoding='utf-8'); k=sys.argv[1]; v=sys.argv[2]
-if re.search(rf'^{re.escape(k)}=.*$',s,re.M): s=re.sub(rf'^{re.escape(k)}=.*$', lambda _m: f'{k}={v}', s, flags=re.M)
-else: s += f'\n{k}={v}\n'
-p.write_text(s,encoding='utf-8')
-PY
+p=Path(".env"); s=p.read_text(encoding="utf-8"); k=sys.argv[1]; v=sys.stdin.read()
+if re.search(rf"^{re.escape(k)}=.*$",s,re.M): s=re.sub(rf"^{re.escape(k)}=.*$", lambda _m: f"{k}={v}", s, flags=re.M)
+else: s += f"\\n{k}={v}\\n"
+p.write_text(s,encoding="utf-8")
+' "$KEY"
 }
 
 WB=$(read_current WB_API_TOKEN)
@@ -67,6 +68,24 @@ if [[ "$ANS" =~ ^[YyДд]$ ]]; then
   IFS= read -r -s KEY; printf '\n'
   [ -n "$URL" ] && write_value GOOGLE_SHEETS_BRIDGE_URL "$URL"
   [ -n "$KEY" ] && write_value GOOGLE_SHEETS_BRIDGE_KEY "$KEY"
+fi
+
+TG=$(read_current TELEGRAM_BOT_TOKEN)
+TGCHAT=$(read_current TELEGRAM_CHAT_ID)
+if [ -n "$TG" ] && [ -n "$TGCHAT" ]; then
+  echo 'Telegram:           ✅ уведомления уже настроены'
+else
+  echo 'Telegram:           ○ уведомления не настроены'
+  printf 'Настроить сообщения в Telegram сейчас? [y/N]: '
+  IFS= read -r ANS
+  if [[ "$ANS" =~ ^[YyДд]$ ]]; then
+    printf 'Вставь токен бота (ввод скрыт): '
+    IFS= read -r -s TG; printf '\\n'
+    printf 'Вставь идентификатор чата: '
+    IFS= read -r TGCHAT
+    [ -n "$TG" ] && write_value TELEGRAM_BOT_TOKEN "$TG"
+    [ -n "$TGCHAT" ] && write_value TELEGRAM_CHAT_ID "$TGCHAT"
+  fi
 fi
 
 write_value FORCE_READ_ONLY true
