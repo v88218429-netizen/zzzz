@@ -9,7 +9,7 @@ from pathlib import Path
 
 import httpx
 
-from traffic_sync import (ADS_POLL_COLUMNS, COLUMNS, DATA_DIR, FUNNEL_COLUMNS,
+from traffic_sync import (ADS_POLL_COLUMNS, COLUMNS, DATA_DIR, FUNNEL_COLUMNS, ORGANIC_COLUMNS,
                           FUNNEL_POLL_COLUMNS, sync_once)
 from query_clusters import collect as collect_query_clusters, publish as publish_query_clusters
 from campaign_state import collect as collect_campaign_state, publish as publish_campaign_state
@@ -65,6 +65,7 @@ def _publish() -> None:
     # publication request stays bounded while each monthly part retains history.
     ads = _rows_in_window(_read_rows(DATA_DIR / "campaign_sku_day.csv", COLUMNS), 1, status.get("period"), "ads")
     funnel = _rows_in_window(_read_rows(DATA_DIR / "funnel_sku_day.csv", FUNNEL_COLUMNS), 1, status.get("funnel_period"), "funnel")
+    organic = _rows_in_window(_read_rows(DATA_DIR / "organic_sku_day.csv", ORGANIC_COLUMNS), 1, status.get("period"), "organic")
     ads_poll = _read_rows(DATA_DIR / "ads_poll_snapshot.csv", ADS_POLL_COLUMNS)
     funnel_poll = _read_rows(DATA_DIR / "funnel_poll_snapshot.csv", FUNNEL_POLL_COLUMNS)
     key = os.environ.get("GOOGLE_SHEETS_BRIDGE_KEY", "").strip()
@@ -80,6 +81,7 @@ def _publish() -> None:
         "datasets": {
             "ads": ads,
             "funnel": funnel,
+            "organic": organic,
             "ads_poll": ads_poll,
             "funnel_poll": funnel_poll,
         },
@@ -96,7 +98,7 @@ def _publish() -> None:
         detail = str((result or {}).get("error") or (result or {}).get("message") or (result or {}).get("reason") or "unknown bridge response")[:240]
         raise RuntimeError(f"Google Sheets bridge rejected traffic publication: {detail}")
     partition_counts = (result.get("partitions") or {}).get("datasets") or {}
-    expectations = (("ads", len(ads)), ("funnel", len(funnel)),
+    expectations = (("ads", len(ads)), ("funnel", len(funnel)), ("organic", len(organic)),
                     ("ads_poll", len(ads_poll)), ("funnel_poll", len(funnel_poll)))
     for name, expected in expectations:
         item = partition_counts.get(name) or {}
@@ -118,6 +120,9 @@ def _publish() -> None:
         "ads_rows": len(ads),
         "ads_max_date": latest_date("ads"),
         "funnel_rows": len(funnel),
+        "organic_rows": len(organic),
+        "organic_derived_complete_rows": sum(row[10] == "DERIVED_COMPLETE" for row in organic),
+        "organic_incomplete_rows": sum(row[10] != "DERIVED_COMPLETE" for row in organic),
         "funnel_max_date": latest_date("funnel"),
         "ads_poll_rows": len(ads_poll),
         "funnel_poll_rows": len(funnel_poll),
