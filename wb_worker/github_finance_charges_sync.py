@@ -59,18 +59,30 @@ def _money_optional(value: Any) -> float | None:
 
 async def _post(client: httpx.AsyncClient, token: str, body: dict) -> tuple[int, Any]:
     global _last_request_at
+    last_error: Exception | None = None
     for attempt in range(5):
-        async with _request_lock:
-            loop = asyncio.get_running_loop()
-            elapsed = loop.time() - _last_request_at
-            if _last_request_at and elapsed < MIN_REQUEST_INTERVAL_SEC:
-                await asyncio.sleep(MIN_REQUEST_INTERVAL_SEC - elapsed)
-            response = await client.post(
-                BASE_URL + "/api/finance/v1/sales-reports/detailed",
-                headers={"Authorization": token, "Content-Type": "application/json"},
-                json=body,
-            )
-            _last_request_at = loop.time()
+        try:
+            async with _request_lock:
+                loop = asyncio.get_running_loop()
+                elapsed = loop.time() - _last_request_at
+                if _last_request_at and elapsed < MIN_REQUEST_INTERVAL_SEC:
+                    await asyncio.sleep(MIN_REQUEST_INTERVAL_SEC - elapsed)
+                try:
+                    response = await client.post(
+                        BASE_URL + "/api/finance/v1/sales-reports/detailed",
+                        headers={"Authorization": token, "Content-Type": "application/json"},
+                        json=body,
+                    )
+                finally:
+                    _last_request_at = loop.time()
+        except (httpx.TimeoutException, httpx.NetworkError) as exc:
+            last_error = exc
+            if attempt >= 4:
+                break
+            delay = min(60, 5 * (2 ** attempt))
+            print(f"WB finance transport retry {attempt + 1}/4 after {type(exc).__name__}; wait {delay}s")
+            await asyncio.sleep(delay)
+            continue
 
         if response.status_code == 204:
             return 204, []
@@ -82,8 +94,15 @@ async def _post(client: httpx.AsyncClient, token: str, body: dict) -> tuple[int,
                 delay = MIN_REQUEST_INTERVAL_SEC
             await asyncio.sleep(delay + 1)
             continue
+        if response.status_code in {500, 502, 503, 504} and attempt < 4:
+            delay = min(60, 5 * (2 ** attempt))
+            print(f"WB finance HTTP {response.status_code} retry {attempt + 1}/4; wait {delay}s")
+            await asyncio.sleep(delay)
+            continue
         response.raise_for_status()
         return response.status_code, response.json()
+    if last_error is not None:
+        raise RuntimeError(f"WB finance transport retries exhausted: {type(last_error).__name__}") from last_error
     raise RuntimeError("WB API rate limit retries exhausted")
 
 
