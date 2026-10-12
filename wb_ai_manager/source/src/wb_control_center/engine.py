@@ -278,4 +278,351 @@ class ControlCenter:
     def _period_snapshot_scope(agent: str, key: str) -> str:
         period_native = {
             ("advertising_monitor", "stats_7d"),
-            ("advertising_optimizer", "stats_14d"
+            ("advertising_optimizer", "stats_14d"),
+            ("funnel", "funnel_7d"),
+            ("search_positions", "positions"),
+            ("finance", "report_7d"),
+            ("cost_guard", "paid_storage"),
+            ("cost_guard", "measurement_penalties"),
+            ("cost_guard", "deductions"),
+            ("cost_guard", "paid_acceptance"),
+            ("documents", "documents_7d"),
+            ("price_margin", "promotions"),
+        }
+        mixed = {
+            ("inventory", "coverage"),
+            ("advertising_optimizer", "deep_scan"),
+        }
+        filterable_exports = {
+            ("finance", "worker_finance"),
+        }
+        if (agent, key) in period_native:
+            return "selected_period"
+        if (agent, key) in mixed:
+            return "current_plus_period"
+        if (agent, key) in filterable_exports:
+            return "period_filterable_export"
+        return "current_snapshot"
+
+    async def _run_period_agent(self, name: str, period: PeriodContext) -> dict[str, Any]:
+        if name == "supervisor":
+            return {"agent": name, "status": "deferred_supervisor", "events": [], "actions": [], "snapshots": {}}
+        token = set_analysis_period(period)
+        started = datetime.now(timezone.utc).isoformat()
+        try:
+            result = await asyncio.wait_for(
+                self.agents[name].run(),
+                timeout=max(1.0, float(self.settings.agent_run_timeout_seconds)),
+            )
+        except Exception as exc:
+            return {
+                "agent": name,
+                "status": "error",
+                "error": f"{type(exc).__name__}: {exc}",
+                "events": [],
+                "actions": [],
+                "snapshots": {},
+                "started_at": started,
+                "finished_at": datetime.now(timezone.utc).isoformat(),
+            }
+        finally:
+            reset_analysis_period(token)
+
+        finished = datetime.now(timezone.utc).isoformat()
+        snapshots: dict[str, Any] = {}
+        for key, raw in result.snapshots:
+            payload = dict(raw) if isinstance(raw, dict) else {"data": raw}
+            payload["_analysis"] = {
+                "mode": "period_audit",
+                "scope": self._period_snapshot_scope(name, key),
+                "period": period.to_dict(),
+                "collected_at": finished,
+            }
+            db_key = f"period::{period.key}::{key}"
+            self.db.save_snapshot(name, db_key, payload, finished)
+            snapshots[key] = {"created_at": finished, "data": payload}
+
+        events = []
+        for idx, event in enumerate(result.events):
+            row = asdict(event)
+            row["event_key"] = row.get("key")
+            row["id"] = f"period:{period.key}:{name}:{idx}"
+            row["payload"] = dict(row.get("payload") or {})
+            row["payload"]["_analysis"] = {
+                "period": period.to_dict(),
+                "mode": "period_audit",
+                "scope": self._period_event_scope(name),
+            }
+            events.append(row)
+
+        actions = []
+        for proposal in result.actions:
+            row = asdict(proposal)
+            row["status"] = "period_read_only"
+            actions.append(row)
+
+        return {
+            "agent": name,
+            "status": "ok",
+            "events": events,
+            "actions": actions,
+            "snapshots": snapshots,
+            "started_at": started,
+            "finished_at": finished,
+        }
+
+    def period_audit_status(self, period: PeriodContext) -> dict[str, Any]:
+        item = self.db.latest_snapshot("period_audit", period.key)
+        if not item:
+            task = self._period_tasks.get(period.key)
+            return {
+                "status": "running" if task and not task.done() else "missing",
+                "period": period.to_dict(),
+            }
+        data = dict(item.get("data") or {})
+        data.setdefault("created_at", item.get("created_at"))
+        task = self._period_tasks.get(period.key)
+        if task and not task.done() and data.get("status") != "completed":
+            data["status"] = "running"
+        return data
+
+    def start_period_audit(self, period: PeriodContext) -> dict[str, Any]:
+        task = self._period_tasks.get(period.key)
+        if task and not task.done():
+            return {"status": "running", "period": period.to_dict()}
+        task = asyncio.create_task(self.run_period_audit(period))
+        self._period_tasks[period.key] = task
+        def _cleanup(_task):
+            if self._period_tasks.get(period.key) is _task:
+                self._period_tasks.pop(period.key, None)
+        task.add_done_callback(_cleanup)
+        return {"status": "started", "period": period.to_dict()}
+
+    async def run_period_audit(self, period: PeriodContext) -> dict[str, Any]:
+        lock = self._period_audit_locks.setdefault(period.key, asyncio.Lock())
+        if lock.locked():
+            return self.period_audit_status(period)
+        async with lock:
+            started = datetime.now(timezone.utc).isoformat()
+            self.db.save_snapshot(
+                "period_audit",
+                period.key,
+                {"status": "running", "period": period.to_dict(), "started_at": started},
+                started,
+            )
+            order = [
+                "api_health", "cards", "advertising_monitor", "advertising_optimizer",
+                "inventory", "supply", "funnel", "search_positions", "price_margin",
+                "finance", "cost_guard", "reviews_questions", "buyer_chats", "orders_fbs",
+                "returns_quality", "documents", "competitors", "experiments", "supervisor",
+            ]
+            agent_results: dict[str, Any] = {}
+            period_snapshots: dict[str, Any] = {}
+            period_events: list[dict[str, Any]] = []
+            errors: list[dict[str, str]] = []
+            try:
+                # Independent read-only agents do not need to run serially.
+                # Keep concurrency bounded so WB endpoints are not hit by all modules
+                # at once and rate-limit risk stays controlled.
+                semaphore = asyncio.Semaphore(4)
+
+                async def run_bounded(agent_name: str) -> dict[str, Any]:
+                    async with semaphore:
+                        return await self._run_period_agent(agent_name, period)
+
+                tasks = [
+                    asyncio.create_task(run_bounded(name))
+                    for name in order
+                    if name != "supervisor"
+                ]
+                for task in asyncio.as_completed(tasks):
+                    row = await task
+                    name = str(row.get("agent") or "")
+                    agent_results[name] = {
+                        "status": row.get("status"),
+                        "started_at": row.get("started_at"),
+                        "finished_at": row.get("finished_at"),
+                        "error": row.get("error"),
+                    }
+                    if row.get("status") == "error":
+                        errors.append({"agent": name, "error": str(row.get("error") or "")})
+                    if row.get("snapshots"):
+                        period_snapshots[name] = row["snapshots"]
+                    period_events.extend(row.get("events") or [])
+                    progress_at = datetime.now(timezone.utc).isoformat()
+                    self.db.save_snapshot(
+                        "period_audit",
+                        period.key,
+                        {
+                            "status": "running",
+                            "period": period.to_dict(),
+                            "started_at": started,
+                            "updated_at": progress_at,
+                            "agents": agent_results,
+                            "events": period_events,
+                            "errors": errors,
+                            "snapshot_groups": sorted(period_snapshots),
+                        },
+                        progress_at,
+                    )
+
+                # Period snapshots describe period-dependent metrics, but
+                # product identity, unit economics and current stock come from the
+                # trusted live portfolio. Do not replace them with an empty shell:
+                # that manufactured false "missing unit economics / nmID" blockers.
+                portfolio = self.portfolio.snapshot()
+                portfolio = dict(portfolio)
+                portfolio["analysis_period"] = period.to_dict()
+                portfolio["period"] = period.label
+                ss = dict(period_snapshots)
+                ss["_events"] = period_events
+                ss["_operating_findings"] = []
+                cards = self.decision_engine.build(portfolio, ss)
+                cards, reviews = self.review_board.review(cards, portfolio, ss)
+
+                period_relevant = [
+                    e for e in period_events
+                    if ((e.get("payload") or {}).get("_analysis") or {}).get("scope") != "current_snapshot"
+                ]
+                current_only = [
+                    e for e in period_events
+                    if ((e.get("payload") or {}).get("_analysis") or {}).get("scope") == "current_snapshot"
+                ]
+                critical = [e for e in period_relevant if e.get("severity") == "critical"]
+                warning = [e for e in period_relevant if e.get("severity") == "warning"]
+                digest_lines = [
+                    f"Анализ периода {period.label}.",
+                    f"Сигналы выбранного периода: критических {len(critical)}, предупреждений {len(warning)}; решений {len(cards)}.",
+                    f"Дополнительно текущих сигналов вне исторического диапазона: {len(current_only)}.",
+                ]
+                for event in (critical + warning)[:8]:
+                    digest_lines.append(f"• {event.get('title')}: {event.get('message')}")
+                supervisor_event = {
+                    "id": f"period:{period.key}:supervisor:0",
+                    "agent": "supervisor",
+                    "severity": "info",
+                    "key": "period_supervisor_digest",
+                    "event_key": "supervisor_digest",
+                    "title": "Сводка управляющего за выбранный период",
+                    "message": "\n".join(digest_lines),
+                    "payload": {"period": period.to_dict(), "decision_count": len(cards)},
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                }
+                period_events.append(supervisor_event)
+                agent_results["supervisor"] = {
+                    "status": "ok",
+                    "started_at": supervisor_event["created_at"],
+                    "finished_at": supervisor_event["created_at"],
+                    "error": None,
+                }
+
+                finished = datetime.now(timezone.utc).isoformat()
+                payload = {
+                    "status": "completed",
+                    "period": period.to_dict(),
+                    "started_at": started,
+                    "finished_at": finished,
+                    "agents": agent_results,
+                    "events": period_events,
+                    "decisions": [asdict(card) for card in cards],
+                    "reviews": [asdict(review) for review in reviews],
+                    "errors": errors,
+                    "snapshot_groups": sorted(period_snapshots),
+                }
+                self.db.save_snapshot("period_audit", period.key, payload, finished)
+                return payload
+            except Exception as exc:
+                finished = datetime.now(timezone.utc).isoformat()
+                payload = {
+                    "status": "error",
+                    "period": period.to_dict(),
+                    "started_at": started,
+                    "finished_at": finished,
+                    "error": f"{type(exc).__name__}: {exc}",
+                    "agents": agent_results,
+                    "events": period_events,
+                    "errors": errors,
+                }
+                self.db.save_snapshot("period_audit", period.key, payload, finished)
+                return payload
+
+    async def execute_action(self, action_id: int, approved_by: str = "user") -> dict[str, Any]:
+        lock=self._action_locks.setdefault(action_id, asyncio.Lock())
+        async with lock:
+            return await self._execute_action_locked(action_id, approved_by)
+
+    async def _execute_action_locked(self, action_id: int, approved_by: str = "user") -> dict[str, Any]:
+        action = self.db.get_action(action_id)
+        if not action:
+            raise KeyError(f"action {action_id} not found")
+        if action["status"] not in {"pending", "approved"}:
+            return {"id": action_id, "status": action["status"]}
+        proposal = ActionProposal(
+            agent=action["agent"],
+            tool=action["tool"],
+            arguments=action["arguments"],
+            reason=action["reason"],
+            risk=action["risk"],
+            status=action["status"],
+            id=action_id,
+            created_at=action["created_at"],
+        )
+        ok, why = self.policy_engine.validate_action(proposal)
+        if not ok:
+            self.db.update_action(action_id, "blocked", error=why)
+            return {"id": action_id, "status": "blocked", "reason": why}
+        allowed, why_exec = self.policy_engine.execution_allowed()
+        if not allowed:
+            self.db.update_action(action_id, "simulated", result={"reason": why_exec, "tool": proposal.tool, "arguments": proposal.arguments})
+            ev = Event(
+                agent=proposal.agent,
+                severity="info",
+                key=f"action_simulated:{action_id}",
+                title=f"Действие #{action_id} симулировано",
+                message=f"{proposal.tool}. {why_exec}. {proposal.reason}",
+                payload={"tool": proposal.tool, "arguments": proposal.arguments},
+            )
+            self.db.save_event(ev)
+            return {"id": action_id, "status": "simulated", "reason": why_exec}
+        self.db.update_action(action_id, "approved")
+        try:
+            args = {k: v for k, v in proposal.arguments.items() if not k.startswith("_")}
+            result = await self.wb.call(proposal.tool, args)
+            self.db.update_action(action_id, "executed", result=result)
+            ev = Event(
+                agent=proposal.agent,
+                severity="info",
+                key=f"action_executed:{action_id}",
+                title=f"Действие #{action_id} выполнено",
+                message=f"{proposal.tool}. Подтверждение: {approved_by}. {proposal.reason}",
+                payload={"tool": proposal.tool, "arguments": args, "result": result},
+            )
+            self.db.save_event(ev)
+            return {"id": action_id, "status": "executed", "result": result}
+        except Exception as e:
+            self.db.update_action(action_id, "error", error=str(e))
+            return {"id": action_id, "status": "error", "error": str(e)}
+
+    async def reject_action(self, action_id: int) -> dict[str, Any]:
+        action = self.db.get_action(action_id)
+        if not action:
+            raise KeyError(action_id)
+        if action["status"] != "pending":
+            return {"id": action_id, "status": action["status"]}
+        self.db.update_action(action_id, "rejected")
+        return {"id": action_id, "status": "rejected"}
+
+    async def approve_action_text(self, action_id: int) -> str:
+        r = await self.execute_action(action_id, approved_by="telegram")
+        return f"Действие #{action_id}: {r.get('status')}" + (f"\n{r.get('error')}" if r.get("error") else "")
+
+    async def reject_action_text(self, action_id: int) -> str:
+        r = await self.reject_action(action_id)
+        return f"Действие #{action_id}: {r.get('status')}"
+
+    async def status_text(self) -> str:
+        pending = self.db.pending_actions(limit=100)
+        events = self.db.recent_events(hours=24, limit=200)
+        critical = sum(1 for e in events if e.get("severity") == "critical")
+        warning = sum(1 for e in events if e.get("severity") == "warning")
+        return f"WB AI Control Center\nКритические события 24ч: {critical}\nПредупреждения 24ч: {warning}\nОжидают подтверждения: {len(pending)}"
