@@ -28,7 +28,7 @@ from pathlib import Path
 import re,sys
 p=Path(".env"); s=p.read_text(encoding="utf-8"); k=sys.argv[1]; v=sys.stdin.read()
 if re.search(rf"^{re.escape(k)}=.*$",s,re.M): s=re.sub(rf"^{re.escape(k)}=.*$", lambda _m: f"{k}={v}", s, flags=re.M)
-else: s += f"\\n{k}={v}\\n"
+else: s += f"\n{k}={v}\n"
 p.write_text(s,encoding="utf-8")
 ' "$KEY"
 }
@@ -80,7 +80,7 @@ else
   IFS= read -r ANS
   if [[ "$ANS" =~ ^[YyДд]$ ]]; then
     printf 'Вставь токен бота (ввод скрыт): '
-    IFS= read -r -s TG; printf '\\n'
+    IFS= read -r -s TG; printf '\n'
     printf 'Вставь идентификатор чата: '
     IFS= read -r TGCHAT
     [ -n "$TG" ] && write_value TELEGRAM_BOT_TOKEN "$TG"
