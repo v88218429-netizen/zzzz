@@ -70,8 +70,8 @@ def test_services_agent_reads_jam_and_selected_options_without_writes(monkeypatc
 
 def test_services_agent_flags_changed_options_without_enabling_anything(monkeypatch):
     previous = {
-        "jam_subscription": {"data": {"state": "active", "level": "premium"}},
-        "tariff_options": {"data": {"activeOptionCount": 0, "options": [], "packages": []}},
+        "jam_subscription": {"data": {"status": "fresh", "data": {"state": "active", "level": "premium"}}},
+        "tariff_options": {"data": {"status": "fresh", "data": {"activeOptionCount": 0, "options": [], "packages": []}}},
     }
     client = _Client({
         JAM_URL: {"state": "active", "level": "premium"},
