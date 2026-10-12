@@ -91,8 +91,9 @@ const sandbox = {
       if (id === '1E7HSGJgamzKZkdNdDNyp0f1iI2mLhhbpfi04-sOytBs') return registryWorkbook;
       if (id === '11ULokTx74QjziZjThJ0lfxFiMQW42-WV4315cG7eIuU') return workbook;
       const part = partitionBooks.get(id);
-      if (!part) throw new Error('Spreadsheet not found: ' + id);
-      return part;
+      if (part) return part;
+      if (String(id).startsWith('traffic-part-')) throw new Error('Spreadsheet not found: ' + id);
+      return workbook;
     },
     create(_title) {
       const id = 'traffic-part-' + (++nextPartition);
