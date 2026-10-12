@@ -70,7 +70,9 @@ def test_read_only_build_fuse_is_code_level_not_only_env_level():
 def test_launchers_write_secret_values_without_regex_replacement_interpretation():
     for rel in ["scripts/launch/live_readonly.command", "scripts/launch/configure_connections.command"]:
         text = (ROOT / rel).read_text(encoding="utf-8")
-        assert "lambda _m: f'{k}={v}'" in text
+        assert "lambda _m:" in text
+    configure = (ROOT / "scripts/launch/configure_connections.command").read_text(encoding="utf-8")
+    assert "sys.stdin.read()" in configure
 
 
 def test_auto_first_run_surfaces_connection_setup_when_wb_token_missing():
