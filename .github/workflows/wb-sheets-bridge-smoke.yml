@@ -72,12 +72,35 @@ jobs:
           for sid,source in sources.items():
               counts[sid]={k:len((v or {}).get("values") or []) for k,v in (source.get("ranges") or {}).items()}
           assert not (d.get("errors") or []), d.get("errors")
+
+          # Hozyushka's official search feed is intentionally not Jam-dependent.
+          # An empty positions sheet is acceptable to the bridge smoke only when
+          # the source itself explicitly marks zero facts; missing/blank metadata
+          # still fails so an unavailable source cannot be mistaken for success.
+          hozy_positions=(sources["hozyushka_sellmonitor"].get("ranges") or {}).get("positions") or {}
+          hozy_values=hozy_positions.get("values") or []
+          hozy_marker=" ".join(str(cell) for row in hozy_values for cell in row if cell is not None)
+          if len(hozy_values) <= 2:
+              assert len(hozy_values) == 2 and "обновлено" in hozy_marker.lower() and "строк 0" in hozy_marker.lower(), {
+                  "hozyushka_positions_rows": len(hozy_values),
+                  "marker": hozy_marker,
+              }
+              hozy_positions_state="empty_marked"
+          else:
+              hozy_positions_state="populated"
+
           assert counts["sanych_sellmonitor"].get("positions",0)>2, counts
           assert counts["air_sellmonitor"].get("positions",0)>2, counts
-          assert counts["hozyushka_sellmonitor"].get("positions",0)>2, counts
           assert counts["sanych_sellmonitor"].get("stocks",0)>1, counts
           assert counts["air_sellmonitor"].get("stocks",0)>1, counts
           assert counts["hozyushka_sellmonitor"].get("stocks",0)>1, counts
           assert counts["own_27"].get("summary",0)>1, counts
-          print(json.dumps({"ok":True,"sources":sorted(sources),"row_counts":counts,"bridge_errors":d.get("errors") or []},ensure_ascii=False,indent=2))
+          print(json.dumps({
+              "ok":True,
+              "sources":sorted(sources),
+              "row_counts":counts,
+              "hozyushka_positions_state":hozy_positions_state,
+              "hozyushka_positions_marker":hozy_marker,
+              "bridge_errors":d.get("errors") or []
+          },ensure_ascii=False,indent=2))
           PY
