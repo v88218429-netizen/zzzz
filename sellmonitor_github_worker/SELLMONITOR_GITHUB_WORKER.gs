@@ -2675,7 +2675,7 @@ const SMC_WB_TRAFFIC_PARTITIONS = Object.freeze({
   shops: {
     ap: {storeId:'sanych_wb', name:'Саныч', folderId:'1y-doxhDKhdDacjIWc1XAJnEftc4IYou-'},
     aa: {storeId:'air_wb', name:'AIR', folderId:'1bw2kki-UhkioKgaoIInZcXNDW5gFkqju'},
-    yv: {storeId:'hozyayushka_wb', name:'Хозяюшка', folderId:'1fblFEVE0pdCtgixamBQq2q9mtqATwJ'}
+    yv: {storeId:'hozyayushka_wb', name:'Хозяюшка', folderId:'1fblFEhpVE0pdCtgixamBQq2q9mtqATwJ'}
   }
 });
 
