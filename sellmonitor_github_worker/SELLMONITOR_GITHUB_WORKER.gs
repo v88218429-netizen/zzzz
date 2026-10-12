@@ -1274,6 +1274,9 @@ function sellmonitorGithubRepairTrafficCapacity_(ss) {
       if (!dailyPatched) next = next.replace(dailyOld, dailyNew);
       if (!viewPatched) next = next.replace(viewOld, viewNew);
       backupRow = backup.getLastRow() + 1;
+      if (backupRow > backup.getMaxRows()) {
+        backup.insertRowsAfter(backup.getMaxRows(), Math.max(100, backupRow - backup.getMaxRows()));
+      }
       backup.getRange(backupRow, 1, 1, 6).setValues([[
         new Date(), 'sheet:' + ss.getId(), 'traffic_daily_sync_v255', 'SERVER_JS', '1', source
       ]]);
