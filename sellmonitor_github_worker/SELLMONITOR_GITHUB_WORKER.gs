@@ -2876,6 +2876,135 @@ function sellmonitorGithubWriteWbTrafficPartitions_(prepared, runId) {
   return {ok:true, schema_version:SMC_WB_TRAFFIC_PARTITIONS.schemaVersion, run_id:String(runId), datasets:output};
 }
 
+function sellmonitorGithubPublishWbFinance_(body) {
+  body = body || {};
+  var shopName = String(body.shop || '').trim();
+  var shops = {
+    'Саныч': {id:'sanych_wb', sourceShop:'AP'},
+    'Хозяюшка': {id:'hozyayushka_wb', sourceShop:'YV'},
+    'AIR': {id:'air_wb', sourceShop:'AA'}
+  };
+  var shopCfg = shops[shopName];
+  if (!shopCfg) throw new Error('WB_FINANCE_UNKNOWN_SHOP');
+  var month = String(body.month || '').trim();
+  if (!/^\d{4}-\d{2}$/.test(month) || Number(month.slice(5)) < 1 || Number(month.slice(5)) > 12) {
+    throw new Error('WB_FINANCE_MONTH_INVALID');
+  }
+  var rows = body.rows;
+  if (!Array.isArray(rows) || !rows.length || rows.length > 10000) throw new Error('WB_FINANCE_BATCH_INVALID');
+  var runId = String(body.sync_run_id || '').trim();
+  if (!runId || isNaN(new Date(runId).getTime())) throw new Error('WB_FINANCE_RUN_ID_INVALID');
+  var columns = [
+    'Магазин','Report ID','Отчет с','Отчет по','Дата создания','RR Date','RRD ID','Тип документа','Операция','Категория',
+    'Штраф, ₽','Удержание, ₽','Хранение, ₽','Приемка, ₽','Доплата, ₽','Всего списаний, ₽','Причина WB','nmId','Артикул продавца','Товар',
+    'Склад','Схема','Order ID','Order UID','SRID','Sticker ID','Дата заказа','Дата продажи','Логистика, ₽','К выплате, ₽','Статус проверки','Комментарий',
+    'sync_run_id','record_key'
+  ];
+  var dateIndex = 5, idIndex = 6;
+  var inputByKey = {}, normalized = [];
+  rows.forEach(function(sourceRow, i) {
+    if (!Array.isArray(sourceRow) || sourceRow.length !== 32 || String(sourceRow[0] || '').trim() !== shopName) {
+      throw new Error('WB_FINANCE_ROW_INVALID:' + i);
+    }
+    var day = String(sourceRow[dateIndex] || '').trim().slice(0, 10);
+    var rrdId = String(sourceRow[idIndex] || '').trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || day.slice(0, 7) !== month || !/^\d+$/.test(rrdId)) {
+      throw new Error('WB_FINANCE_ID_OR_DATE_INVALID:' + i);
+    }
+    var key = [shopCfg.id, day, rrdId].join('|');
+    if (Object.prototype.hasOwnProperty.call(inputByKey, key)) throw new Error('WB_FINANCE_DUPLICATE_INPUT:' + key);
+    var row = sourceRow.map(function(value) { return value == null ? '' : value; });
+    [10,11,12,13,14,15,28,29].forEach(function(col) {
+      if (row[col] === '') return;
+      var value = Number(String(row[col]).replace(',', '.'));
+      if (!isFinite(value)) throw new Error('WB_FINANCE_NUMBER_INVALID:' + i + ':' + col);
+      row[col] = value;
+    });
+    row.forEach(function(value, col) {
+      if (typeof value !== 'string' || [10,11,12,13,14,15,28,29].indexOf(col) >= 0) return;
+      if (/^[=+\-@]/.test(value)) row[col] = "'" + value;
+    });
+    row[dateIndex] = day;
+    row.push(runId, key);
+    inputByKey[key] = row;
+    normalized.push(row);
+  });
+
+  var partId = 'WB-' + shopCfg.id + '-finance-charges-' + month + '-v1';
+  var props = PropertiesService.getScriptProperties();
+  var propKey = 'WB_FINANCE_PART_V1_' + shopCfg.id + '_' + month;
+  var fileId = String(props.getProperty(propKey) || '').trim();
+  var registry = SpreadsheetApp.openById(SMC_WB_TRAFFIC_PARTITIONS.registryId);
+  var registrySheet = registry.getSheetByName(SMC_WB_TRAFFIC_PARTITIONS.registrySheet);
+  if (!registrySheet) throw new Error('WB_FINANCE_PART_REGISTRY_TAB_MISSING');
+  if (!fileId && registrySheet.getLastRow() > 1) {
+    var matches = [];
+    registrySheet.getRange(2, 1, registrySheet.getLastRow() - 1, 10).getDisplayValues().forEach(function(row) {
+      if (String(row[0] || '').trim() === partId) matches.push(String(row[9] || '').trim());
+    });
+    if (matches.length > 1) throw new Error('WB_FINANCE_PART_REGISTRY_DUPLICATE:' + partId);
+    if (matches.length === 1) {
+      if (!matches[0]) throw new Error('WB_FINANCE_PART_FILE_ID_MISSING:' + partId);
+      fileId = matches[0];
+    }
+  }
+  var ss;
+  if (fileId) ss = SpreadsheetApp.openById(fileId);
+  else {
+    ss = SpreadsheetApp.create('WB — ' + shopName + ' — начисления — ' + month);
+    fileId = ss.getId();
+    props.setProperty(propKey, fileId);
+  }
+  var sheet = ss.getSheetByName('facts');
+  if (!sheet) {
+    var existingSheets = ss.getSheets();
+    sheet = existingSheets.length ? existingSheets[0] : ss.insertSheet('facts');
+    if (sheet.setName) sheet.setName('facts');
+  }
+  if (sheet.getMaxColumns() < columns.length) sheet.insertColumnsAfter(sheet.getMaxColumns(), columns.length - sheet.getMaxColumns());
+  if (!sheet.getLastRow()) sheet.getRange(1, 1, 1, columns.length).setValues([columns]);
+  var liveHeaders = sheet.getRange(1, 1, 1, columns.length).getDisplayValues()[0];
+  if (columns.some(function(h, i) { return String(liveHeaders[i] || '').trim() !== h; })) throw new Error('WB_FINANCE_PART_HEADER_MISMATCH:' + partId);
+
+  var oldLast = sheet.getLastRow(), byKey = {}, added = 0, updated = 0;
+  if (oldLast > 1) {
+    sheet.getRange(2, 1, oldLast - 1, columns.length).getValues().forEach(function(row) {
+      if (!row[0]) return;
+      var key = String(row[columns.length - 1] || '').trim();
+      if (!key || Object.prototype.hasOwnProperty.call(byKey, key)) throw new Error('WB_FINANCE_PART_DUPLICATE_EXISTING_KEY:' + partId + ':' + key);
+      byKey[key] = row;
+    });
+  }
+  normalized.forEach(function(row) {
+    var key = String(row[columns.length - 1]);
+    if (Object.prototype.hasOwnProperty.call(byKey, key)) updated++;
+    else added++;
+    byKey[key] = row;
+  });
+  var allRows = Object.keys(byKey).map(function(key) { return byKey[key]; });
+  allRows.sort(function(a,b) {
+    return String(a[dateIndex] || '').localeCompare(String(b[dateIndex] || '')) ||
+      String(a[columns.length - 1] || '').localeCompare(String(b[columns.length - 1] || ''));
+  });
+  if (sheet.getMaxRows() < allRows.length + 1) sheet.insertRowsAfter(sheet.getMaxRows(), allRows.length + 1 - sheet.getMaxRows());
+  if (allRows.length) sheet.getRange(2, 1, allRows.length, columns.length).setValues(allRows);
+  if (oldLast > allRows.length + 1) sheet.getRange(allRows.length + 2, 1, oldLast - allRows.length - 1, columns.length).clearContent();
+  var dates = allRows.map(function(row) { return String(row[dateIndex] || ''); }).filter(Boolean).sort();
+  var monthParts = month.split('-');
+  var monthEnd = Utilities.formatDate(new Date(Date.UTC(Number(monthParts[0]), Number(monthParts[1]), 0)), 'GMT', 'yyyy-MM-dd');
+  var checksum = sellmonitorGithubTrafficPartChecksum_(allRows);
+  sellmonitorGithubTrafficPartRegistry_([
+    partId,'WB',shopCfg.id,'finance_charges','normalized_source_rows',month + '-01',monthEnd,1,
+    'finance-charge-month-v1',fileId,'https://docs.google.com/spreadsheets/d/' + fileId + '/edit',
+    'WB Finance API /api/finance/v1/sales-reports/detailed','WB_OFFICIAL_FINANCE_API',runId,new Date(),
+    allRows.length,Object.keys(byKey).length,dates[0] || '',dates[dates.length - 1] || '',checksum,'OK','PASS','',''
+  ]);
+  SpreadsheetApp.flush();
+  return {ok:true,action:'publish_wb_finance',part_id:partId,shop_id:shopCfg.id,month:month,file_id:fileId,
+    url:'https://docs.google.com/spreadsheets/d/' + fileId + '/edit',written:normalized.length,
+    added:added,updated:updated,distinct_keys:normalized.length,min_date:dates[0] || '',max_date:dates[dates.length - 1] || '',qc_status:'PASS'};
+}
+
 function sellmonitorGithubNormalizeWbTrafficRows_(dataset, inputRows, observedAt) {
   var cfg = SMC_WB_TRAFFIC.DATASETS[dataset];
   if (!cfg) throw new Error('WB_TRAFFIC_UNKNOWN_DATASET');
@@ -3945,6 +4074,10 @@ function doPost(e) {
 
     if (action === 'publish_wb_traffic') {
       return sellmonitorGithubWebJson_(sellmonitorGithubPublishWbTraffic_(body));
+    }
+
+    if (action === 'publish_wb_finance') {
+      return sellmonitorGithubWebJson_(sellmonitorGithubPublishWbFinance_(body));
     }
 
     if (action === 'all' || action === 'portfolio_snapshot') {
