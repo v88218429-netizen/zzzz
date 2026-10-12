@@ -186,6 +186,19 @@ function sellmonitorGithubTick() {
     for (var step = 0; step < clients.length && processedClients < SMC_GH.MAX_CLIENTS_PER_TICK; step++) {
       var item = clients[(start + step) % clients.length];
       var r = item.values, row = item.row;
+      var external = sellmonitorGithubExternalDataPlaneInfo_(item.storeId);
+      if (external) {
+        processedClients++;
+        sellmonitorGithubSetControl_(sh, row, map, {
+          last_seen:new Date(),
+          worker_version:SMC_GH.VERSION,
+          status:external.status,
+          state:external.state,
+          error:external.error,
+          qc_status:external.qcStatus
+        });
+        continue;
+      }
       try {
         var result = sellmonitorGithubProcessClient_(item.spreadsheetId);
         processedClients++;
@@ -1320,6 +1333,16 @@ function sellmonitorGithubRepairTrafficCapacity_(ss) {
     ok:true, storeId:storeId, sourceRow:sourceRow, patchStatus:patchStatus, backupRow:backupRow,
     raw:rawResult, daily:dailyResult, view:viewResult,
     writer:'preserve every populated row; trim only trailing blank grid rows; grow before next write'
+  };
+}
+
+function sellmonitorGithubExternalDataPlaneInfo_(storeId) {
+  if (String(storeId || '').trim() !== 'sanych_wb') return null;
+  return {
+    status:'EXTERNAL_PARTITIONS_PARTIAL',
+    state:'ACTIVE',
+    qcStatus:'BLOCKED',
+    error:'Legacy workbook exceeds Sheets write capacity; client-queue writes are paused. Traffic and finance are partitioned; remaining daily datasets still require migration.'
   };
 }
 

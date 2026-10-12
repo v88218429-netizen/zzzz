@@ -325,3 +325,10 @@ console.log('WB_TRAFFIC_PUBLISH_FIXTURE_OK', JSON.stringify({
   empty_refresh_preserved: empty.partitions.datasets.ads.skipped,
   search_history_priority: 1783
 }));
+
+const externalSanych = sandbox.sellmonitorGithubExternalDataPlaneInfo_('sanych_wb');
+assert.equal(externalSanych.status, 'EXTERNAL_PARTITIONS_PARTIAL');
+assert.equal(externalSanych.state, 'ACTIVE');
+assert.match(externalSanych.error, /remaining daily datasets still require migration/);
+assert.equal(sandbox.sellmonitorGithubExternalDataPlaneInfo_('air_wb'), null,
+  'non-overflow workbooks continue through the regular client queue');
