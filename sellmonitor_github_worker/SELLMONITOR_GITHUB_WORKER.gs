@@ -1233,6 +1233,12 @@ function sellmonitorGithubRepairTrafficCapacity_(ss) {
   var storeId = String(sellmonitorGithubSetting_(ss, 'ACTIVE_STORE_ID', '') || '').trim();
   var stores = {sanych_wb:true, air_wb:true, hozyayushka_wb:true};
   if (!stores[storeId]) return {ok:true, skipped:true, storeId:storeId, reason:'not_target'};
+  // Sanych's historical workbook exceeds the editable Sheets document limit.
+  // Its traffic is now written to bounded monthly partitions; do not let a
+  // best-effort grid trim block unrelated queued work or risk altering history.
+  if (storeId === 'sanych_wb') {
+    return {ok:true, skipped:true, storeId:storeId, reason:'external_monthly_partitions'};
+  }
   var raw = ss.getSheetByName('90_RAW_traffic');
   var daily = ss.getSheetByName('84_Трафик_дни');
   var view = ss.getSheetByName('14_Трафик');
