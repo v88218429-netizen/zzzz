@@ -34,6 +34,7 @@ jobs:
         run: python -m pip install --disable-pip-version-check httpx
 
       - name: Pull WB finance charges
+        id: collect
         env:
           WB_API_TOKEN_AP: ${{ secrets.WB_API_TOKEN_AP }}
           WB_API_TOKEN_AA: ${{ secrets.WB_API_TOKEN_AA }}
