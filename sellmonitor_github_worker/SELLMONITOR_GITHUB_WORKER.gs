@@ -2673,9 +2673,9 @@ const SMC_WB_TRAFFIC_PARTITIONS = Object.freeze({
   registrySheet: 'Части',
   schemaVersion: 'traffic-month-v1',
   shops: {
-    ap: {storeId:'sanych_wb', name:'Саныч', folderId:'1I_N5-SzqOBhgah7cvoBKbqpRrPgNj9p3'},
-    aa: {storeId:'air_wb', name:'AIR', folderId:'1PpuGRul9m5ePPMaYT8pW8dHGSuMvxtqg'},
-    yv: {storeId:'hozyayushka_wb', name:'Хозяюшка', folderId:'1Z1zYKyvMHv2tGNLMjRLIP_GHQ7qtmKwM'}
+    ap: {storeId:'sanych_wb', name:'Саныч', folderId:'1y-doxhDKhdDacjIWc1XAJnEftc4IYou-'},
+    aa: {storeId:'air_wb', name:'AIR', folderId:'1bw2kki-UhkioKgaoIInZcXNDW5gFkqju'},
+    yv: {storeId:'hozyayushka_wb', name:'Хозяюшка', folderId:'1fblFEVE0pdCtgixamBQq2q9mtqATwJ'}
   }
 });
 
