@@ -2766,7 +2766,9 @@ function sellmonitorGithubWriteWbTrafficPartitions_(prepared, runId) {
       var rawShop = String(row[0] || '').trim();
       var shopCfg = SMC_WB_TRAFFIC_PARTITIONS.shops[rawShop];
       if (!shopCfg) throw new Error('WB_TRAFFIC_PART_UNKNOWN_STORE:' + rawShop);
-      var day = String(row[dateIndex] || '').trim();
+      var day = row[dateIndex] instanceof Date && !isNaN(row[dateIndex].getTime())
+        ? Utilities.formatDate(row[dateIndex], 'Europe/Moscow', 'yyyy-MM-dd')
+        : String(row[dateIndex] || '').trim();
       if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) throw new Error('WB_TRAFFIC_PART_INVALID_DATE:' + dataset + ':' + index);
       var month = day.slice(0, 7), groupKey = rawShop + '|' + month;
       (groups[groupKey] || (groups[groupKey] = {shop:rawShop, month:month, input:[]})).input.push(row);
