@@ -18,6 +18,7 @@ from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from .config import Settings
+from .dashboard_auth import DashboardBasicAuthMiddleware
 from .engine import ControlCenter
 from .models import PeriodContext
 from .portfolio import PortfolioService
@@ -94,6 +95,12 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Менеджер WB", version=current_version(PROJECT_ROOT), lifespan=lifespan)
+app.add_middleware(
+    DashboardBasicAuthMiddleware,
+    required=settings.dashboard_auth_required,
+    username=settings.dashboard_auth_user,
+    password=settings.dashboard_auth_password,
+)
 app.mount("/assets", StaticFiles(directory=str(UI_DIR)), name="assets")
 
 
@@ -117,6 +124,8 @@ def _health_payload() -> dict[str, Any]:
 
 @app.get("/health")
 async def health() -> dict[str, Any]:
+    if settings.dashboard_auth_required:
+        return {"status": "ok"}
     return _health_payload()
 
 
@@ -394,6 +403,8 @@ SNAPSHOT_SPEC: dict[str, list[str]] = {
     "orders_fbs": ["new_orders", "reshipment", "worker_fbs"],
     "returns_quality": ["open_claims"],
     "documents": ["documents_7d"],
+    "portal_news": ["news", "news_health"],
+    "seller_services": ["jam_subscription", "tariff_options", "service_health"],
 }
 
 
@@ -645,7 +656,7 @@ async def dashboard_data(days: int = 7, from_date: str | None = None, to_date: s
             "stale_reason": "Google Sheets обновились после последнего расчёта периода." if audit_stale else None,
             "period": period_ctx.to_dict(),
             "agents_done": sum(1 for x in (audit.get("agents") or {}).values() if isinstance(x, dict) and x.get("status") in {"ok", "error"}),
-            "agents_total": 19,
+            "agents_total": len(center.agents),
             "agents_failed": audit_failed,
             "datasets_degraded": dataset_quality.get("datasets_degraded", 0),
             "errors": audit.get("errors") or [],

@@ -64,6 +64,14 @@
           <svg viewBox="0 0 24 24"><path d="M8.5 11A3.5 3.5 0 1 0 8.5 4a3.5 3.5 0 0 0 0 7Zm7-1A3 3 0 1 0 15.5 4a3 3 0 0 0 0 6ZM3 19.5C3 15.9 5.4 13 8.5 13s5.5 2.9 5.5 6.5V20H3v-.5Zm11.8.5c.1-.4.2-.8.2-1.2 0-1.9-.7-3.7-1.8-5  .7-.5 1.5-.8 2.3-.8 2.8 0 5 2.6 5 5.8V20h-5.7Z"/></svg>
           <span>Клиенты и качество</span>
         </button>
+<button class="nav-item" data-page="news">
+          <svg viewBox="0 0 24 24"><path d="M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm0 2v14h14V5H5Zm2 2h10v2H7V7Zm0 4h10v2H7v-2Zm0 4h7v2H7v-2Z"/></svg>
+          <span>Новости WB</span><span class="nav-badge" id="nav-news">0</span>
+        </button>
+<button class="nav-item" data-page="services">
+          <svg viewBox="0 0 24 24"><path d="M4 5h16v3H4V5Zm1 5h14v10H5V10Zm3 2v2h8v-2H8Zm0 4v2h5v-2H8Z"/></svg>
+          <span>Джем и опции</span>
+        </button>
         <div class="nav-divider" aria-hidden="true"></div>
 <button class="nav-item" data-page="control">
           <svg viewBox="0 0 24 24"><path d="M12 2 20 5v6c0 5.4-3.4 9.5-8 11-4.6-1.5-8-5.6-8-11V5l8-3Zm-1 5v6l5 3 .9-1.5-4.1-2.4V7H11Z"/></svg>
@@ -353,6 +361,17 @@
         </div>
       </section>
 
+      <section class="page" data-page-panel="news">
+        <div class="section-intro"><div><span class="section-label">ПЕРВОИСТОЧНИК WB</span><h2>Новости портала продавца</h2><p>Новости забираются автоматически раз в 5 минут. Содержание и отметка времени сохраняются вместе с источником. Операционные изменения остаются рекомендациями.</p></div><span class="pill safe">ТОЛЬКО ЧТЕНИЕ</span></div>
+        <article class="card wide-card hidden" id="portal-news-summary-card"><div class="card-head"><div><span class="section-label">КРАТКО О НОВЫХ ЗАПИСЯХ</span><h3>Что изменилось</h3></div><span class="muted" id="portal-news-analysis-mode"></span></div><p id="portal-news-summary"></p></article>
+        <article class="card wide-card"><div class="card-head"><div><span class="section-label">ПОСЛЕДНЯЯ ВЫГРУЗКА</span><h3 id="portal-news-status">Ожидание первой проверки</h3></div><span class="muted" id="portal-news-source"></span></div><div id="portal-news-feed" class="signal-stack"></div></article>
+      </section>
+
+      <section class="page" data-page-panel="services">
+        <div class="section-intro"><div><span class="section-label">ТОЛЬКО ЧТЕНИЕ</span><h2>Подписка «Джем» и опции конструктора</h2><p>Контур считывает статус подписки и подключённые платные опции. Это не оценка их выгоды: прирост заказов должен быть подтверждён отдельно на фактических данных. Ничего не подключается и не отключается.</p></div><span class="pill safe">ИЗМЕНЕНИЯ WB ЗАБЛОКИРОВАНЫ</span></div>
+        <article class="card wide-card"><div class="card-head"><div><span class="section-label">ИСТОЧНИКИ WB</span><h3 id="seller-services-status">Ожидание первой проверки</h3></div></div><div class="content-grid half"><div><h4>Подписка «Джем»</h4><div id="jam-details" class="signal-stack"></div></div><div><h4>Подключённые платные опции</h4><div id="tariff-options-details" class="signal-stack"></div></div></div></article>
+      </section>
+
       <section class="page" data-page-panel="connections">
         <div class="section-intro"><div><span class="section-label">ИНТЕГРАЦИИ</span><h2>Подключения и доверие к данным</h2><p>Токены не показываются в интерфейсе. Здесь видно только наличие доступа, свежесть источника и его роль.</p></div><span class="pill safe">СЕКРЕТЫ НЕ ПОКАЗЫВАЮТСЯ</span></div>
         <div class="connection-hero">
@@ -392,7 +411,7 @@
       </section>
 
       <section class="page" data-page-panel="agents">
-        <div class="section-intro"><div><span class="section-label">АГЕНТЫ</span><h2>19 специализированных наблюдателей</h2><p>Каждый агент имеет свою зону ответственности и расписание. В этом режиме они только читают данные и формируют сигналы.</p></div><span class="pill safe">19 МОДУЛЕЙ</span></div>
+        <div class="section-intro"><div><span class="section-label">АГЕНТЫ</span><h2>Специализированные наблюдатели</h2><p>Каждый агент имеет свою зону ответственности и расписание. В этом режиме они только читают данные и формируют сигналы.</p></div><span class="pill safe">ТОЛЬКО ЧТЕНИЕ</span></div>
         <div id="agents-grid" class="agents-grid"></div>
         <article class="card"><div class="card-head"><div><span class="section-label">ЖУРНАЛ</span><h3>Последние запуски</h3></div></div><div class="table-wrap"><table class="data-table"><thead><tr><th>Агент</th><th>Статус</th><th>Последний запуск</th><th>Интервал</th></tr></thead><tbody id="agents-table"></tbody></table></div></article>
       </section>
@@ -414,6 +433,6 @@
     </div>
   </div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="/assets/dashboard.js?v=20260929-uxaudit1"></script>
+  <script src="/assets/dashboard.js?v=20261012-vbnews2"></script>
 </body>
 </html>

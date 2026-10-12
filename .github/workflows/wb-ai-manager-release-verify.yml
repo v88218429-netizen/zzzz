@@ -1,7 +1,11 @@
-name: WB AI Manager v1.1.4 verification
+name: WB AI Manager v1.1.5 verification
 
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - "wb_ai_manager/source/**"
+      - ".github/workflows/wb-ai-manager-release-verify.yml"
   push:
     branches: [mainggg]
     paths:
@@ -26,7 +30,7 @@ jobs:
         run: |
           set -euo pipefail
           cd wb_ai_manager/source
-          test "$(cat VERSION)" = "1.1.4"
+          test "$(cat VERSION)" = "1.1.5"
           python -m pip install --upgrade pip
           python -m pip install -e .
           python -m pip install pytest pytest-asyncio
@@ -59,8 +63,8 @@ jobs:
           cd wb_ai_manager/source
           python - <<'PY'
           from wb_control_center.agents import AGENT_CLASSES
-          assert len(AGENT_CLASSES) == 19, sorted(AGENT_CLASSES)
-          print("agents=19")
+          assert {"portal_news", "seller_services"}.issubset(AGENT_CLASSES), sorted(AGENT_CLASSES)
+          print(f"agents={len(AGENT_CLASSES)}")
           PY
 
       - name: Build final archive
@@ -68,15 +72,15 @@ jobs:
         run: |
           set -euo pipefail
           cd wb_ai_manager/source
-          zip -qr "$RUNNER_TEMP/WB_AI_Manager_v1.1.4_CANONICAL.zip" . -x ".venv/*" "__pycache__/*" "*.pyc" ".pytest_cache/*"
-          sha256sum "$RUNNER_TEMP/WB_AI_Manager_v1.1.4_CANONICAL.zip" > "$RUNNER_TEMP/WB_AI_Manager_v1.1.4_CANONICAL.zip.sha256"
+          zip -qr "$RUNNER_TEMP/WB_AI_Manager_v1.1.5_CANONICAL.zip" . -x ".venv/*" "__pycache__/*" "*.pyc" ".pytest_cache/*"
+          sha256sum "$RUNNER_TEMP/WB_AI_Manager_v1.1.5_CANONICAL.zip" > "$RUNNER_TEMP/WB_AI_Manager_v1.1.5_CANONICAL.zip.sha256"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: WB_AI_Manager_v1.1.4_CANONICAL
+          name: WB_AI_Manager_v1.1.5_CANONICAL
           path: |
-            ${{ runner.temp }}/WB_AI_Manager_v1.1.4_CANONICAL.zip
-            ${{ runner.temp }}/WB_AI_Manager_v1.1.4_CANONICAL.zip.sha256
+            ${{ runner.temp }}/WB_AI_Manager_v1.1.5_CANONICAL.zip
+            ${{ runner.temp }}/WB_AI_Manager_v1.1.5_CANONICAL.zip.sha256
           retention-days: 30
 
 # final-source-trigger: 7d859eeb

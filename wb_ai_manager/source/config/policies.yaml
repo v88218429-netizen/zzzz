@@ -91,6 +91,8 @@ schedules:
   cost_guard: 360
   buyer_chats: 15
   documents: 720
+  portal_news: 5
+  seller_services: 360
   supervisor: 15
 
 

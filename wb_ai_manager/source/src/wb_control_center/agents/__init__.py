@@ -16,6 +16,8 @@ from .supervisor import SupervisorAgent
 from .cost_guard import CostGuardAgent
 from .buyer_chats import BuyerChatsAgent
 from .documents import DocumentsAgent
+from .portal_news import PortalNewsAgent
+from .seller_services import SellerServicesAgent
 
 AGENT_CLASSES = {
     cls.name: cls
@@ -39,5 +41,7 @@ AGENT_CLASSES = {
         CostGuardAgent,
         BuyerChatsAgent,
         DocumentsAgent,
+        PortalNewsAgent,
+        SellerServicesAgent,
     ]
 }

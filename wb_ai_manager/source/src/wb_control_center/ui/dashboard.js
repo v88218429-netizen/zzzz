@@ -6,7 +6,7 @@ const agentNames = {
   api_health: 'Состояние API', cards: 'Карточки', advertising_monitor: 'Реклама · монитор', advertising_optimizer: 'Реклама · диагностика',
   search_positions: 'Поисковые позиции', inventory: 'Остатки', supply: 'Поставки', funnel: 'Воронка', price_margin: 'Цена и маржа',
   finance: 'Финансы', cost_guard: 'Контроль расходов', reviews_questions: 'Отзывы и вопросы', buyer_chats: 'Чаты покупателей',
-  orders_fbs: 'FBS-заказы', returns_quality: 'Возвраты и качество', documents: 'Документы', competitors: 'Конкуренты', experiments: 'Эксперименты', supervisor: 'Главный управляющий'
+  orders_fbs: 'FBS-заказы', returns_quality: 'Возвраты и качество', documents: 'Документы', competitors: 'Конкуренты', experiments: 'Эксперименты', supervisor: 'Главный управляющий', portal_news: 'Новости WB', seller_services: 'Джем и опции'
 };
 const agentDescriptions = {
   api_health:'Проверяет токен, WB API и качество источников; отсутствие данных не превращает в ноль.',
@@ -27,11 +27,13 @@ const agentDescriptions = {
   documents:'Контролирует финансовые документы для окончательного подтверждения реализованной экономики.',
   competitors:'Наблюдает изменения конкурентов как внешнюю причину цены, спроса и рекламной эффективности.',
   experiments:'Проверяет гипотезы plan↔fact на следующих окнах и не принимает корреляцию за причинность.',
-  supervisor:'Арбитр основной оси: PRIMARY-план → независимый факт → отклонение → причина → действие.'
+  supervisor:'Арбитр основной оси: PRIMARY-план → независимый факт → отклонение → причина → действие.',
+  portal_news:'Читает новости портала продавца, сохраняет первоисточник и отмечает возможную связь с работой магазина.',
+  seller_services:'Сверяет статус «Джем» и активные платные опции с API WB. Ничего не подключает и не отключает.'
 };
 const domainAgents = {
   'Реклама':['advertising_monitor','advertising_optimizer'], 'Остатки':['inventory','supply'], 'Поиск':['search_positions','funnel'],
-  'Карточки':['cards','price_margin'], 'Финансы':['finance','cost_guard','documents'], 'Клиенты':['reviews_questions','buyer_chats','returns_quality']
+  'Карточки':['cards','price_margin'], 'Финансы':['finance','cost_guard','documents'], 'Клиенты':['reviews_questions','buyer_chats','returns_quality'], 'Новости WB':['portal_news'], 'Тарифы и Джем':['seller_services']
 };
 const agentDomain = Object.fromEntries(Object.entries(domainAgents).flatMap(([domain,agents])=>agents.map(a=>[a,domain])));
 const domainRequiredSnapshots = {
@@ -40,7 +42,9 @@ const domainRequiredSnapshots = {
   'Поиск':[['search_positions','positions']],
   'Карточки':[['cards','card_catalog']],
   'Финансы':[['finance','balance'],['finance','worker_finance']],
-  'Клиенты':[['reviews_questions','seller_rating'],['buyer_chats','chat_events']]
+  'Клиенты':[['reviews_questions','seller_rating'],['buyer_chats','chat_events']],
+  'Новости WB':[['portal_news','news']],
+  'Тарифы и Джем':[['seller_services','jam_subscription'],['seller_services','tariff_options']]
 };
 
 function esc(v){ return String(v ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m])); }
@@ -151,6 +155,11 @@ function eventEntity(e){
 }
 function domainDataQuality(name,agents){
   if(name==='Остатки' && !state.data?.health?.sheets_connected) return {ok:false,text:'Не сверено с ФФ/K2 · Sheets не подключены'};
+  if(name==='Тарифы и Джем'){
+    const health=snap('seller_services','service_health')?.data||{};
+    const missing=['jam_subscription','tariff_options'].filter(key=>health[key]?.status!=='fresh');
+    if(missing.length) return {ok:false,text:`Нет доступа к источникам: ${missing.length}`};
+  }
   const req=domainRequiredSnapshots[name]||[];
   if(req.length && !req.some(([a,k])=>!!snap(a,k))) return {ok:false,text:'Нет подтверждённого снимка данных'};
   const stale=[];
@@ -201,7 +210,7 @@ async function triggerPeriodAudit({silent=false,force=false}={}){
 function renderPeriodAudit(){
   const pa=state.data?.period_audit||{}, box=$('period-audit-banner');
   if(!box) return;
-  const status=pa.status||'missing', done=Number(pa.agents_done||0), total=Number(pa.agents_total||19), failed=Number(pa.agents_failed||0), degraded=Number(pa.datasets_degraded||0);
+  const status=pa.status||'missing', done=Number(pa.agents_done||0), total=Number(pa.agents_total||Object.keys(state.data?.agents||{}).length), failed=Number(pa.agents_failed||0), degraded=Number(pa.datasets_degraded||0);
   box.classList.remove('hidden','done','error');
   $('period-audit-title').textContent=`Анализ периода ${currentPeriodLabel()}`;
   if(status==='completed'){
@@ -356,7 +365,7 @@ function initNav(){
 function setPage(page){
   if(!document.querySelector(`[data-page-panel="${page}"]`)) page='overview'; state.page=page; location.hash=page==='overview'?'':page;
   qa('.nav-item').forEach(b=>b.classList.toggle('active',b.dataset.page===page)); qa('.page').forEach(p=>p.classList.toggle('active',p.dataset.pagePanel===page));
-  const titles={overview:['Операционный центр','Обзор магазина'],stores:['Портфель','Магазины и реальные факты'],decisions:['Решения','Что конкретно делать'],control:['Контроль решений','История, проверка и обучение'],advertising:['Реклама','Рекламная аналитика'],policy:['Редактор правил','Управление логикой агента'],inventory:['Логистика','Остатки и поставки'],search:['Видимость','Поиск и карточки'],finance:['Экономика','Финансы и расходы'],customers:['Качество','Клиенты и возвраты'],connections:['Интеграции','Подключения и источники'],knowledge:['Методология','База знаний и правила'],agents:['Система','Агенты и расписание']};
+  const titles={overview:['Операционный центр','Обзор магазина'],stores:['Портфель','Магазины и реальные факты'],decisions:['Решения','Что конкретно делать'],control:['Контроль решений','История, проверка и обучение'],advertising:['Реклама','Рекламная аналитика'],policy:['Редактор правил','Управление логикой агента'],inventory:['Логистика','Остатки и поставки'],search:['Видимость','Поиск и карточки'],finance:['Экономика','Финансы и расходы'],customers:['Качество','Клиенты и возвраты'],news:['Информация WB','Новости портала продавца'],services:['Подписки WB','Джем и платные опции'],connections:['Интеграции','Подключения и источники'],knowledge:['Методология','База знаний и правила'],agents:['Система','Агенты и расписание']};
   const t=titles[page]||titles.overview; $('page-kicker').textContent=t[0]; $('page-title').textContent=t[1]; $('sidebar').classList.remove('open');
 }
 
@@ -389,7 +398,7 @@ async function runAudit(){
   const b=$('run-audit'); if(b.disabled) return; b.disabled=true; const old=b.innerHTML; b.innerHTML='<span class="spinner" style="width:14px;height:14px;border-color:rgba(255,255,255,.35);border-top-color:white"></span> Проверяю…';
   try{
     if(state.periodFrom&&state.periodTo){
-      showToast(`Пересчитываю ${currentPeriodLabel()} по всем 19 модулям. Никаких изменений в WB не выполняется.`);
+      showToast(`Пересчитываю ${currentPeriodLabel()} по всем зарегистрированным модулям. Никаких изменений в WB не выполняется.`);
       await triggerPeriodAudit({force:true});
       await fetchData();
     }else{
@@ -414,10 +423,11 @@ function renderAll(){
   if($('metric-warning-period')) $('metric-warning-period').textContent=auditReady?`сигналы · ${d.period?.label||'текущий контекст'}`:'текущие решения · период пересчитывается';
   if($('finance-period-label')) $('finance-period-label').textContent=d.period_audit?.ready?`за ${d.period?.label||'выбранный период'}`:'ожидает пересчёта периода';
   $('nav-alerts').textContent=critical+warning; if($('nav-decisions')) $('nav-decisions').textContent=(d.decisions||[]).filter(x=>['critical','high'].includes(x.priority)).length;
+  if($('nav-news')) $('nav-news').textContent=(d.events||[]).filter(x=>x.agent==='portal_news'&&x.key==='news_updates').length;
   const ad=adSummary(); $('metric-ad-spend').textContent=ad.error&&!ad.rows.length?'—':rub(ad.spend); const ratingVal=sellerRating(); $('metric-rating').textContent=ratingVal==null?'Недоступен':num(ratingVal,2);
   renderPeriodAudit();
   if($('metric-ad-period')) $('metric-ad-period').textContent=d.period_audit?.ready?(d.period?.label||'за выбранный период'):'ожидает расчёта периода';
-  renderExecutive(); renderEvents(); renderRecommendations(); renderDecisions(); renderDecisionControl(); renderDomains(); renderPortfolio(); renderConnections(); renderAdvertising(); renderPolicyStudio(); renderInventory(); renderSearch(); renderFinance(); renderCustomers(); renderKnowledge(); renderAgents();
+  renderExecutive(); renderEvents(); renderRecommendations(); renderDecisions(); renderDecisionControl(); renderDomains(); renderPortfolio(); renderConnections(); renderAdvertising(); renderPolicyStudio(); renderInventory(); renderSearch(); renderFinance(); renderCustomers(); renderPortalNews(); renderSellerServices(); renderKnowledge(); renderAgents();
 }
 function snap(source,key){ return state.data?.snapshots?.[source]?.[key] || null; }
 function sellerRating(){
@@ -450,7 +460,7 @@ function renderExecutive(){
   const c=Math.max(evc,dc.critical), w=Math.max(evw,dc.high);
   const hs=$('health-score'); hs.style.setProperty('--health-angle',`${score*3.6}deg`); hs.querySelector('span').textContent=score;
   if(['running','started'].includes(pa.status)){
-    $('executive-title').textContent=`Пересчитываю период: ${Number(pa.agents_done||0)}/${Number(pa.agents_total||19)} модулей`;
+    $('executive-title').textContent=`Пересчитываю период: ${Number(pa.agents_done||0)}/${Number(pa.agents_total||Object.keys(state.data?.agents||{}).length)} модулей`;
     $('executive-summary').textContent=dc.critical||dc.high
       ? `Пока новый расчёт идёт, уже есть ${dc.critical} критичных и ${dc.high} высокоприоритетных решений из актуального операционного контура. Итог обновится после завершения всех модулей.`
       : 'Новый расчёт периода выполняется. До его завершения система не объявляет магазин «штатным».';
@@ -486,7 +496,7 @@ function renderEvents(){
   if(state.eventFilter==='important') events=events.filter(e=>['critical','warning'].includes(e.severity));
   events=events.slice(0,24);
   if(!events.length){ $('event-list').innerHTML=empty('Событий этого типа пока нет.'); return; }
-  const order=['Карточки','Остатки','Реклама','Финансы','Поиск','Клиенты','Система'];
+  const order=['Карточки','Остатки','Реклама','Финансы','Поиск','Клиенты','Новости WB','Тарифы и Джем','Система'];
   const grouped={};
   for(const e of events){
     const domain=agentDomain[e.agent]||'Система';
@@ -500,6 +510,35 @@ function renderEvents(){
     }).join('');
     return `<section class="event-domain-group"><div class="event-domain-title"><strong>${domain}</strong><span>${grouped[domain].length}</span></div>${rows}</section>`;
   }).join('');
+}
+function renderPortalNews(){
+  const snapshot=snap('portal_news','news'), health=snap('portal_news','news_health')?.data||{}, data=snapshot?.data||{}, items=Array.isArray(data.items)?data.items:[];
+  if(!$('portal-news-feed')) return;
+  const retained=snapshot?.created_at?`В сохранённой ленте ${num(data.count??items.length)} новостей · обновлена ${time(snapshot.created_at)}`:'Лента ещё не загружалась';
+  $('portal-news-status').textContent=health.checked_at?`Последняя проверка ${time(health.checked_at)} · ${num(health.new_count||0)} новых · ${retained}`:retained;
+  if(health.status==='unavailable') $('portal-news-status').textContent+=` · проверка не прошла: ${health.error||'причина не передана'}`;
+  $('portal-news-source').textContent=data.source||'Источник пока недоступен';
+  const summaryCard=$('portal-news-summary-card');
+  if(summaryCard){
+    summaryCard.classList.toggle('hidden',!data.summary);
+    $('portal-news-summary').textContent=data.summary||'';
+    $('portal-news-analysis-mode').textContent=data.analysis_mode||'Краткая сводка не сформирована';
+  }
+  $('portal-news-feed').innerHTML=items.length?items.slice(0,100).map(x=>`<article class="signal info"><strong>${esc(x.title||'Новость WB')}</strong><p>${esc(x.text||'Текст новости не передан API.')}</p><span class="source">${esc(x.relevance||'Влияние не установлено')} · ${time(x.published_at)}</span></article>`).join(''):empty('Снимка новостей ещё нет. Проверьте статус агента и подключение токена WB.');
+}
+function renderSellerServices(){
+  if(!$('seller-services-status')) return;
+  const jam=snap('seller_services','jam_subscription')?.data||{}, options=snap('seller_services','tariff_options')?.data||{}, health=snap('seller_services','service_health')?.data||{};
+  const sub=jam.data, tariffs=options.data;
+  const unavailable=['jam_subscription','tariff_options'].filter(key=>health[key]?.status!=='fresh');
+  $('seller-services-status').textContent=unavailable.length?`Нет подтверждения: ${unavailable.map(k=>k==='jam_subscription'?'Джем':'опции').join(', ')}${health.checked_at?` · проверка ${time(health.checked_at)}`:''}${health.error?` · ${health.error}`:''}`:health.checked_at?`Оба источника проверены ${time(health.checked_at)}`:'Ещё не проверялись';
+  $('jam-details').innerHTML=sub?`<article class="signal info"><strong>${esc(sub.level||'Уровень не передан')} · ${esc(sub.state||'Статус не передан')}</strong><p>Подключено: ${esc(sub.since||'—')} · оплачено до: ${esc(sub.till||'—')}</p><span class="source">Источник: API WB · ${time(jam.checked_at)}</span><details><summary>Исходный ответ</summary><pre>${esc(JSON.stringify(sub,null,2))}</pre></details></article>`:jam.status==='fresh'?empty('API WB вернул пустой ответ: подписка «Джем» не подключалась.'):empty(health.jam_subscription?.error||'Нет подтверждённых данных о подписке.');
+  if(tariffs){
+    const groups=[['Подключённые отдельные опции',tariffs.options||[]],['Подключённые пакеты',tariffs.packages||[]]];
+    const html=groups.map(([title,rows])=>`<article class="signal info"><strong>${title} · ${num(rows.length)}</strong>${rows.length?`<div class="table-wrap"><table class="data-table"><thead><tr><th>Название</th><th>Ответ WB</th></tr></thead><tbody>${rows.map(x=>`<tr><td>${esc(x.name||x.title||x.id||'Опция без названия')}</td><td><details><summary>Поля</summary><pre>${esc(JSON.stringify(x,null,2))}</pre></details></td></tr>`).join('')}</tbody></table></div>`:empty('Подключённых записей в этой группе нет.')}</article>`).join('');
+    const rate=tariffs.totalCommissionRate;
+    $('tariff-options-details').innerHTML=`<p class="source">Подключено: опций ${num(tariffs.activeOptionCount??(tariffs.options||[]).length)} · пакетов ${num(tariffs.activePackageCount??(tariffs.packages||[]).length)} · общая ставка из ответа WB: ${missing(rate)?'не передана':esc(rate)} · ${time(options.checked_at)}</p>${html}<details><summary>Полный исходный ответ WB</summary><pre>${esc(JSON.stringify(tariffs,null,2))}</pre></details>`;
+  }else $('tariff-options-details').innerHTML=empty(health.tariff_options?.error||'Нет подтверждённых данных об опциях. Для этого метода WB требует сервисный токен.');
 }
 function toolLabel(t){ const m={wb_advert_pause:'Разобрать и при необходимости поставить кампанию на паузу',wb_prices_set:'Проверить изменение цены',wb_advert_bids_set:'Проверить изменение ставки',wb_advert_cluster_bids:'Проверить ставку кластера'}; return m[t]||`Рекомендация: ${t}`; }
 function renderRecommendations(){
@@ -517,8 +556,8 @@ function renderRecommendations(){
 }
 function eventsForAgents(list){ return (state.data.events||[]).filter(e=>list.includes(e.agent)&&['critical','warning'].includes(e.severity)); }
 function renderDomains(){
-  const symbols={'Реклама':'AD','Остатки':'ST','Поиск':'SR','Карточки':'CD','Финансы':'₽','Клиенты':'CX'};
-  const pages={'Реклама':'advertising','Остатки':'inventory','Поиск':'search','Карточки':'search','Финансы':'finance','Клиенты':'customers'};
+  const symbols={'Реклама':'AD','Остатки':'ST','Поиск':'SR','Карточки':'CD','Финансы':'₽','Клиенты':'CX','Новости WB':'WB','Тарифы и Джем':'₽'};
+  const pages={'Реклама':'advertising','Остатки':'inventory','Поиск':'search','Карточки':'search','Финансы':'finance','Клиенты':'customers','Новости WB':'news','Тарифы и Джем':'services'};
   $('domain-grid').innerHTML=Object.entries(domainAgents).map(([name,agents])=>{
     const es=eventsForAgents(agents), c=es.filter(e=>e.severity==='critical').length,w=es.filter(e=>e.severity==='warning').length, quality=domainDataQuality(name,agents);
     const cls=c?'critical':(w||!quality.ok)?'warn':'';

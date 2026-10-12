@@ -197,7 +197,7 @@ def test_every_agent_has_schedule_and_run_all_covers_every_agent():
                         order=ast.literal_eval(stmt.value)
     assert order is not None
     assert set(order) == set(AGENT_CLASSES)
-    assert len(order) == len(AGENT_CLASSES) == 19
+    assert len(order) == len(AGENT_CLASSES)
 
 
 def test_all_read_only_status_surfaces_include_the_code_level_build_fuse():

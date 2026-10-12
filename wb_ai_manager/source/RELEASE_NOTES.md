@@ -1,4 +1,15 @@
-# WB AI Manager v1.1.4
+# WB AI Manager v1.1.5
+
+## Новое в 1.1.5
+
+- агент читает новые новости портала WB по курсору, сохраняет исходный текст, дату, источник и отметку о возможной связи с работой магазина;
+- агент отдельно сверяет подписку «Джем» и подключённые опции конструктора тарифов; недоступность источника не затирает последний успешный снимок;
+- в панели добавлены разделы новостей, подписки и опций; публичная панель закрывается проверкой имени и пароля;
+- история снимков хранится в подключённом постоянном диске; изменения данных WB по-прежнему запрещены.
+
+Это обновление не включает автоответы покупателям, отправку жалоб, подключение услуг, изменение цен или остатков.
+
+## Исправления в 1.1.4
 
 Iterative stability audit of the standalone v1.1 control-and-learning release. The release gate is no longer a single successful run: any newly discovered defect resets the audit, and the candidate is accepted only after two consecutive independent clean passes.
 
@@ -25,7 +36,7 @@ The final candidate is required to pass, from clean state/extraction:
 - complete Python test suite;
 - compile/shell/JavaScript syntax checks;
 - `update_smoke.py`;
-- deterministic DEMO with all 19 agents and Decision Engine;
+- deterministic DEMO with all registered agents and Decision Engine;
 - API/UI endpoint smoke tests and truthful read-only health state;
 - hard-fuse write-block probe under deliberately permissive runtime settings;
 - duplicate-instance supervisor behavior;

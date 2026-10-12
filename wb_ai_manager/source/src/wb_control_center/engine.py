@@ -215,7 +215,7 @@ class ControlCenter:
             "api_health", "cards", "advertising_monitor", "advertising_optimizer",
             "inventory", "supply", "funnel", "search_positions", "price_margin",
             "finance", "cost_guard", "reviews_questions", "buyer_chats", "orders_fbs", "returns_quality",
-            "documents", "competitors", "experiments", "supervisor",
+            "documents", "competitors", "experiments", "portal_news", "seller_services", "supervisor",
         ]
         results = []
         for name in order:
