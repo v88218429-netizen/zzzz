@@ -52,7 +52,7 @@ plist.parent.mkdir(parents=True,exist_ok=True)
 spec={
   'Label':'com.wb.ai-control-center',
   'ProgramArguments':[
-    str(root/'.venv/bin/python'),'-m','uvicorn',
+    str(root/'.venv/bin/python'),'-m','uvicorn','--loop','asyncio',
     'wb_control_center.api:app','--host','127.0.0.1','--port','8787',
   ],
   'WorkingDirectory':str(root),
