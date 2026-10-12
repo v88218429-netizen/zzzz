@@ -28,6 +28,23 @@ def _read_rows(path: Path, columns: list[str]) -> list[list[str]]:
         return [[row[name] for name in columns] for row in reader]
 
 
+
+def _rows_in_window(rows: list[list[str]], date_index: int, window, label: str) -> list[list[str]]:
+    if not isinstance(window, list) or len(window) != 2:
+        raise RuntimeError(f"Verified source window is missing for {label}")
+    start, end = (str(value or "")[:10] for value in window)
+    if not start or not end or start > end:
+        raise RuntimeError(f"Verified source window is invalid for {label}")
+    selected = []
+    for index, row in enumerate(rows):
+        if len(row) <= date_index or not row[date_index]:
+            raise RuntimeError(f"Traffic date is missing for {label} row {index}")
+        day = str(row[date_index])[:10]
+        if len(day) != 10 or day < start or day > end:
+            continue
+        selected.append(row)
+    return selected
+
 def _load_status() -> dict:
     path = DATA_DIR / "status.json"
     if not path.exists():
@@ -43,8 +60,11 @@ def _publish() -> None:
         if (status.get("shops") or {}).get(shop, {}).get("ok") is not True:
             raise RuntimeError(f"Traffic source is not verified for {shop}; refusing to publish")
 
-    ads = _read_rows(DATA_DIR / "campaign_sku_day.csv", COLUMNS)
-    funnel = _read_rows(DATA_DIR / "funnel_sku_day.csv", FUNNEL_COLUMNS)
+    # The encrypted GitHub history is the long-term archive. Sheets receive only
+    # the live source windows and upsert them into month/store partitions, so the
+    # publication request stays bounded while each monthly part retains history.
+    ads = _rows_in_window(_read_rows(DATA_DIR / "campaign_sku_day.csv", COLUMNS), 1, status.get("period"), "ads")
+    funnel = _rows_in_window(_read_rows(DATA_DIR / "funnel_sku_day.csv", FUNNEL_COLUMNS), 1, status.get("funnel_period"), "funnel")
     ads_poll = _read_rows(DATA_DIR / "ads_poll_snapshot.csv", ADS_POLL_COLUMNS)
     funnel_poll = _read_rows(DATA_DIR / "funnel_poll_snapshot.csv", FUNNEL_POLL_COLUMNS)
     key = os.environ.get("GOOGLE_SHEETS_BRIDGE_KEY", "").strip()
@@ -74,6 +94,14 @@ def _publish() -> None:
     quality = result.get("quality") or {}
     if quality.get("written") != 3:
         raise RuntimeError("Traffic quality status row-count mismatch")
+    partition_counts = (result.get("partitions") or {}).get("datasets") or {}
+    for name, expected in (("ads", len(ads)), ("funnel", len(funnel)),
+                           ("ads_poll", len(ads_poll)), ("funnel_poll", len(funnel_poll))):
+        item = partition_counts.get(name) or {}
+        if item.get("written") != expected:
+            raise RuntimeError(f"Monthly-partition row-count mismatch for {name}")
+        if expected and (item.get("distinct_keys") != expected or item.get("skipped")):
+            raise RuntimeError(f"Monthly-partition key-count mismatch for {name}")
     counts = result.get("datasets") or {}
     for name, expected in (("ads", len(ads)), ("funnel", len(funnel)),
                            ("ads_poll", len(ads_poll)), ("funnel_poll", len(funnel_poll))):
