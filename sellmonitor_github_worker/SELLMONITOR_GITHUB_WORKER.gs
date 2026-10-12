@@ -2673,9 +2673,9 @@ const SMC_WB_TRAFFIC_PARTITIONS = Object.freeze({
   registrySheet: 'Части',
   schemaVersion: 'traffic-month-v1',
   shops: {
-    ap: {storeId:'sanych_wb', name:'Саныч', folderId:'1y-doxhDKhdDacjIWc1XAJnEftc4IYou-'},
-    aa: {storeId:'air_wb', name:'AIR', folderId:'1bw2kki-UhkioKgaoIInZcXNDW5gFkqju'},
-    yv: {storeId:'hozyayushka_wb', name:'Хозяюшка', folderId:'1fblFEhpVE0pdCtgixamBQq2q9mtqATwJ'}
+    ap: {storeId:'sanych_wb', name:'Саныч'},
+    aa: {storeId:'air_wb', name:'AIR'},
+    yv: {storeId:'hozyayushka_wb', name:'Хозяюшка'}
   }
 });
 
@@ -2756,13 +2756,13 @@ function sellmonitorGithubTrafficPartFile_(shop, dataset, month, cfg) {
   var ss;
   if (fileId) {
     ss = SpreadsheetApp.openById(fileId);
-    // Re-apply the parent on retry in case creation succeeded before a move failed.
-    DriveApp.getFileById(fileId).moveTo(DriveApp.getFolderById(shopCfg.folderId));
   } else {
+    // Keep each bounded monthly partition addressable through the storage registry.
+    // SpreadsheetApp.create needs no Drive-wide permission; moving new files into
+    // Drive folders used to block scheduled publication without a broad OAuth grant.
     ss = SpreadsheetApp.create('WB — ' + shopCfg.name + ' — ' + dataset + ' — ' + month);
     fileId = ss.getId();
     props.setProperty(propKey, fileId);
-    DriveApp.getFileById(fileId).moveTo(DriveApp.getFolderById(shopCfg.folderId));
   }
   var sheet = ss.getSheetByName('facts');
   if (!sheet) {
@@ -3599,9 +3599,6 @@ function sellmonitorGithubPortfolioSnapshot_(mode) {
     };
     try {
       var ss = SpreadsheetApp.openById(cfg.spreadsheet_id);
-      try {
-        source.modified_at = DriveApp.getFileById(cfg.spreadsheet_id).getLastUpdated().toISOString();
-      } catch (_ignored) {}
       Object.keys(cfg.ranges).forEach(function(rangeKey) {
         if (mode !== 'full' && sourceId === 'own_27' && heavyOwn27[rangeKey]) return;
         var a1 = cfg.ranges[rangeKey];
