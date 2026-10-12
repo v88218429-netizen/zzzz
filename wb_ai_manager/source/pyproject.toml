@@ -28,10 +28,8 @@ local-vision = [
   "safetensors>=0.4",
   "accelerate>=1.0",
   "transformers>=4.55",
-  "torch==2.5.1; sys_platform != 'linux' or python_version != '3.12' or platform_machine != 'x86_64'",
-  "torch @ https://download.pytorch.org/whl/cpu/torch-2.5.1%2Bcpu-cp312-cp312-linux_x86_64.whl; sys_platform == 'linux' and python_version == '3.12' and platform_machine == 'x86_64'",
-  "torchvision==0.20.1; sys_platform != 'linux' or python_version != '3.12' or platform_machine != 'x86_64'",
-  "torchvision @ https://download.pytorch.org/whl/cpu/torchvision-0.20.1%2Bcpu-cp312-cp312-linux_x86_64.whl; sys_platform == 'linux' and python_version == '3.12' and platform_machine == 'x86_64'",
+  "torch==2.5.1",
+  "torchvision==0.20.1",
   "pillow>=10.4",
 ]
 cloud-llm = ["anthropic>=0.64", "openai>=1.50"]
