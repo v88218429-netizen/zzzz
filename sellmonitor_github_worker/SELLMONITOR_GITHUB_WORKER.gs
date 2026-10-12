@@ -1222,14 +1222,25 @@ function sellmonitorGithubClientStep_(label, fn) {
   }
 }
 
+function sellmonitorGithubGridTargetRows_(lastRow, minimumRows, reserveRows) {
+  var last = Math.max(0, Number(lastRow) || 0);
+  var minimum = Math.max(1, Number(minimumRows) || 1);
+  var reserve = Math.max(0, Number(reserveRows) || 0);
+  return Math.max(minimum, last + reserve);
+}
+
 function sellmonitorGithubRepairTrafficCapacity_(ss) {
   var storeId = String(sellmonitorGithubSetting_(ss, 'ACTIVE_STORE_ID', '') || '').trim();
-  if (storeId !== 'sanych_wb') return {ok:true, skipped:true, storeId:storeId, reason:'not_target'};
+  var stores = {sanych_wb:true, air_wb:true, hozyayushka_wb:true};
+  if (!stores[storeId]) return {ok:true, skipped:true, storeId:storeId, reason:'not_target'};
   var raw = ss.getSheetByName('90_RAW_traffic');
   var daily = ss.getSheetByName('84_Трафик_дни');
+  var view = ss.getSheetByName('14_Трафик');
   var codeSheet = ss.getSheetByName('97_Код');
   var backup = ss.getSheetByName('97_Резерв');
-  if (!raw || !daily || !codeSheet || !backup) throw new Error('Traffic capacity repair: required sheets missing');
+  if (!raw || !daily || !view || !codeSheet || !backup) {
+    throw new Error('Traffic capacity repair: required sheets missing for ' + storeId);
+  }
 
   var codeRows = codeSheet.getRange(2, 1, Math.max(1, codeSheet.getLastRow() - 1), 5).getValues();
   var sourceRow = 0, source = '', active = false;
@@ -1240,54 +1251,69 @@ function sellmonitorGithubRepairTrafficCapacity_(ss) {
     active = codeRows[i][4] === true || String(codeRows[i][4]).toUpperCase() === 'TRUE';
     break;
   }
-  if (!sourceRow || !active || !source) throw new Error('Traffic capacity repair: active traffic_daily_sync_v255 not found');
-  var patched = source.indexOf('var dailyClear=Math.max(1,daily.getLastRow()-1,norm.length)') >= 0 &&
-    source.indexOf('var viewClear=Math.max(1,view.getLastRow()-2,vr.length)') >= 0;
-  var rawBefore = {rows:raw.getMaxRows(), last:raw.getLastRow()};
-  var dailyBefore = {rows:daily.getMaxRows(), last:daily.getLastRow()};
+  if (!sourceRow || !active || !source) {
+    return {ok:true, skipped:true, storeId:storeId, reason:'active traffic_daily_sync_v255 not found'};
+  }
 
-  // 90_RAW_traffic already grows its grid before appending. Keep a 1,000-row
-  // reserve beyond the last actual record, and never delete a row containing data.
-  var rawTarget = Math.max(10000, rawBefore.last + 1000);
-  if (rawTarget < rawBefore.rows) raw.deleteRows(rawTarget + 1, rawBefore.rows - rawTarget);
-
+  var dailyPatched = source.indexOf('var dailyClear=Math.max(1,daily.getLastRow()-1,norm.length)') >= 0 &&
+    source.indexOf('var dailyNeed=norm.length+1') >= 0;
+  var viewPatched = source.indexOf('var viewClear=Math.max(1,view.getLastRow()-2,vr.length)') >= 0 &&
+    source.indexOf('var viewNeed=vr.length+2') >= 0;
+  var patchStatus = dailyPatched && viewPatched ? 'already_patched' : 'not_needed';
   var backupRow = null;
-  if (!patched) {
+  if (!dailyPatched || !viewPatched) {
     var dailyOld = 'daily.getRange(2,1,Math.max(1,daily.getMaxRows()-1),20).clearContent();if(norm.length)daily.getRange(2,1,norm.length,20).setValues(norm);';
     var dailyNew = 'var dailyClear=Math.max(1,daily.getLastRow()-1,norm.length);daily.getRange(2,1,dailyClear,20).clearContent();if(norm.length){var dailyNeed=norm.length+1;if(dailyNeed>daily.getMaxRows())daily.insertRowsAfter(daily.getMaxRows(),dailyNeed-daily.getMaxRows());daily.getRange(2,1,norm.length,20).setValues(norm);}';
     var viewOld = 'view.getRange(3,1,Math.max(1,view.getMaxRows()-2),30).clearContent();if(vr.length)view.getRange(3,1,vr.length,30).setValues(vr);';
     var viewNew = 'var viewClear=Math.max(1,view.getLastRow()-2,vr.length);view.getRange(3,1,viewClear,30).clearContent();if(vr.length){var viewNeed=vr.length+2;if(viewNeed>view.getMaxRows())view.insertRowsAfter(view.getMaxRows(),viewNeed-view.getMaxRows());view.getRange(3,1,vr.length,30).setValues(vr);}';
     var marker = "if(!sid||!cid)throw new Error('storeId/clientId missing');";
-    if (source.split(dailyOld).length !== 2 || source.split(viewOld).length !== 2 || source.split(marker).length !== 2) {
-      throw new Error('Traffic capacity repair: source changed; exact safe patch no longer applies');
+    if ((dailyPatched || source.split(dailyOld).length === 2) &&
+        (viewPatched || source.split(viewOld).length === 2) &&
+        source.split(marker).length === 2) {
+      var next = source.replace(marker, marker + "if(p.dryRun===true)return{ok:true,dryRun:true,storeId:sid,clientId:cid,grid:{raw:{rows:raw.getMaxRows(),last:raw.getLastRow(),cols:raw.getMaxColumns()},daily:{rows:daily.getMaxRows(),last:daily.getLastRow(),cols:daily.getMaxColumns()},view:{rows:view.getMaxRows(),last:view.getLastRow(),cols:view.getMaxColumns()}}};");
+      if (!dailyPatched) next = next.replace(dailyOld, dailyNew);
+      if (!viewPatched) next = next.replace(viewOld, viewNew);
+      backupRow = backup.getLastRow() + 1;
+      if (backupRow > backup.getMaxRows()) {
+        backup.insertRowsAfter(backup.getMaxRows(), Math.max(100, backupRow - backup.getMaxRows()));
+      }
+      backup.getRange(backupRow, 1, 1, 6).setValues([[
+        new Date(), 'sheet:' + ss.getId(), 'traffic_daily_sync_v255', 'SERVER_JS', '1', source
+      ]]);
+      SpreadsheetApp.flush();
+      codeSheet.getRange(sourceRow, 4).setValue(next);
+      SpreadsheetApp.flush();
+      source = next;
+      patchStatus = 'patched_and_backed_up';
+    } else {
+      return {
+        ok:true, skipped:true, storeId:storeId, sourceRow:sourceRow,
+        reason:'traffic source differs from the reviewed writer; no rows or grid cells changed'
+      };
     }
-    var next = source.replace(marker, marker + "if(p.dryRun===true)return{ok:true,dryRun:true,storeId:sid,clientId:cid,grid:{raw:{rows:raw.getMaxRows(),last:raw.getLastRow(),cols:raw.getMaxColumns()},daily:{rows:daily.getMaxRows(),last:daily.getLastRow(),cols:daily.getMaxColumns()},view:{rows:view.getMaxRows(),last:view.getLastRow(),cols:view.getMaxColumns()}}};")
-      .replace(dailyOld, dailyNew)
-      .replace(viewOld, viewNew);
-    backupRow = backup.getLastRow() + 1;
-    backup.getRange(backupRow, 1, 1, 6).setValues([[
-      new Date(), 'sheet:' + ss.getId(), 'traffic_daily_sync_v255', 'SERVER_JS', '1', source
-    ]]);
-    SpreadsheetApp.flush();
-    codeSheet.getRange(sourceRow, 4).setValue(next);
-    SpreadsheetApp.flush();
-    source = next;
-    patched = true;
   }
 
-  // The writer now expands these two sheets before writing, so their unused
-  // preallocated rows can be removed safely without capping future collection.
-  var dailyLast = daily.getLastRow();
-  var dailyTarget = Math.max(10000, dailyLast + 1000);
-  var dailyRowsBefore = daily.getMaxRows();
-  if (dailyTarget < dailyRowsBefore) daily.deleteRows(dailyTarget + 1, dailyRowsBefore - dailyTarget);
+  // Only trailing blank rows are removed. getLastRow includes formulas and values;
+  // the writer expands the sheets before later writes, so collection remains open-ended.
+  function trim_(sheet) {
+    var before = {rows:sheet.getMaxRows(), last:sheet.getLastRow()};
+    var target = sellmonitorGithubGridTargetRows_(before.last, 1000, 500);
+    if (target < before.rows) sheet.deleteRows(target + 1, before.rows - target);
+    return {
+      before:before,
+      after:{rows:sheet.getMaxRows(), last:sheet.getLastRow()},
+      rowsRemoved:Math.max(0, before.rows - sheet.getMaxRows()),
+      reserveRows:Math.max(0, sheet.getMaxRows() - sheet.getLastRow())
+    };
+  }
+  var rawResult = trim_(raw);
+  var dailyResult = trim_(daily);
+  var viewResult = trim_(view);
   SpreadsheetApp.flush();
-
   return {
-    ok:true, storeId:storeId, sourceRow:sourceRow, patched:patched, backupRow:backupRow,
-    raw:{before:rawBefore, after:{rows:raw.getMaxRows(),last:raw.getLastRow()}, reserveRows:raw.getMaxRows()-raw.getLastRow()},
-    daily:{before:dailyBefore, after:{rows:daily.getMaxRows(),last:daily.getLastRow()}, reserveRows:daily.getMaxRows()-daily.getLastRow(), rowsRemoved:dailyRowsBefore-daily.getMaxRows()},
-    writer:'clear only populated cells; extend grids before writes'
+    ok:true, storeId:storeId, sourceRow:sourceRow, patchStatus:patchStatus, backupRow:backupRow,
+    raw:rawResult, daily:dailyResult, view:viewResult,
+    writer:'preserve every populated row; trim only trailing blank grid rows; grow before next write'
   };
 }
 
