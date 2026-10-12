@@ -70,7 +70,16 @@ function makeWorkbook(id) {
   const localSheets = {};
   return {
     getSheetByName: name => localSheets[name] || null,
-    insertSheet(name) { const sheet = makeSheet([]); localSheets[name] = sheet; return sheet; },
+    insertSheet(name) {
+      const sheet = makeSheet([]);
+      localSheets[name] = sheet;
+      sheet.setName = nextName => {
+        delete localSheets[name];
+        localSheets[nextName] = sheet;
+        sheet.name = nextName;
+      };
+      return sheet;
+    },
     getSheets: () => Object.values(localSheets),
     getId: () => id,
     getSpreadsheetTimeZone: () => 'Europe/Moscow'
@@ -194,6 +203,29 @@ assert.throws(() => sandbox.sellmonitorGithubNormalizeWbTrafficRows_('ads', [
   ['ap','2026-10-09','42','9','100','10','2','1','3.5','50','WB /adv/v3/fullstats','EXACT_CAMPAIGN_NM_DAY','a'],
   ['ap','2026-10-09','42','9','100','10','2','1','3.5','50','WB /adv/v3/fullstats','EXACT_CAMPAIGN_NM_DAY','a']
 ], status.finishedAt), /WB_TRAFFIC_DUPLICATE_KEY/);
+
+const financeRow = [
+  'Саныч','rep-1','2026-10-11','2026-10-11','2026-10-12','2026-10-11','12345',
+  'Отчет','Продажа','Начисление','12,50','','0','0','0','12,50','Причина',
+  '42','SKU-42','Товар','Склад','FBS','order-1','uid-1','srid-1','sticker-1',
+  '2026-10-11','2026-10-11','','120,00','Авто GitHub',''
+];
+const financeRun = '2026-10-12T20:00:00.000Z';
+const financeResult = sandbox.sellmonitorGithubPublishWbFinance_({
+  shop:'Саныч',month:'2026-10',sync_run_id:financeRun,rows:[financeRow]
+});
+assert.equal(financeResult.ok,true);
+assert.equal(financeResult.written,1);
+assert.equal(financeResult.distinct_keys,1);
+const financeBook=partitionBooks.get(financeResult.file_id);
+const financeFacts=financeBook.getSheetByName('facts');
+assert.equal(financeFacts.values[1][10],12.5,'localized financial values must become numbers');
+assert.equal(financeFacts.values[1][11],'','missing charges stay blank, never zero-filled');
+const financeReplay=sandbox.sellmonitorGithubPublishWbFinance_({
+  shop:'Саныч',month:'2026-10',sync_run_id:financeRun,rows:[financeRow]
+});
+assert.equal(financeReplay.added,0,'finance replay must not duplicate a stable RRD fact');
+assert.equal(financeReplay.updated,1,'finance replay must update the same natural key');
 
 const empty = publish({partition_only:true,sync_status:status, datasets:{ads:[], funnel:[]}});
 assert.equal(empty.partitions.datasets.ads.skipped, true);

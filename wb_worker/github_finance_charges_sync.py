@@ -1,4 +1,5 @@
 import asyncio
+import argparse
 import csv
 import datetime as dt
 import json
@@ -15,6 +16,11 @@ OUT_DIR = Path(os.environ.get(
 )).resolve()
 LOOKBACK_DAYS = max(2, min(31, int(os.environ.get("FINANCE_LOOKBACK_DAYS", "30"))))
 MIN_REQUEST_INTERVAL_SEC = float(os.environ.get("FINANCE_MIN_REQUEST_INTERVAL_SEC", "61"))
+BRIDGE_URL = os.environ.get(
+    "GOOGLE_SHEETS_BRIDGE_URL",
+    "https://script.google.com/macros/s/AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw/exec",
+).strip()
+MAX_REQUEST_BYTES = 15_000_000
 
 SHOPS = {
     "AP": ("Саныч", "WB_API_TOKEN_AP"),
@@ -42,11 +48,13 @@ _last_request_at = 0.0
 _request_lock = asyncio.Lock()
 
 
-def _money(value: Any) -> float:
+def _money_optional(value: Any) -> float | None:
+    if value is None or value == "":
+        return None
     try:
-        return float(value or 0)
-    except (TypeError, ValueError):
-        return 0.0
+        return float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("invalid numeric value in WB finance source") from exc
 
 
 async def _post(client: httpx.AsyncClient, token: str, body: dict) -> tuple[int, Any]:
@@ -108,12 +116,13 @@ async def _detailed(client: httpx.AsyncClient, token: str, date_from: str, date_
 
 
 def _normalize(shop_name: str, row: dict) -> list[Any]:
-    penalty = _money(row.get("penalty"))
-    deduction = _money(row.get("deduction"))
-    storage = _money(row.get("paidStorage"))
-    acceptance = _money(row.get("paidAcceptance"))
-    extra = _money(row.get("additionalPayment"))
-    logistics = _money(row.get("deliveryService"))
+    penalty = _money_optional(row.get("penalty"))
+    deduction = _money_optional(row.get("deduction"))
+    storage = _money_optional(row.get("paidStorage"))
+    acceptance = _money_optional(row.get("paidAcceptance"))
+    extra = _money_optional(row.get("additionalPayment"))
+    logistics = _money_optional(row.get("deliveryService"))
+    payout = _money_optional(row.get("forPay"))
 
     if penalty:
         category = "Штраф"
@@ -126,7 +135,11 @@ def _normalize(shop_name: str, row: dict) -> list[Any]:
     else:
         category = "Начисление"
 
-    total_debits = penalty + deduction + storage + acceptance
+    total_debits = (
+        round(penalty + deduction + storage + acceptance, 2)
+        if all(value is not None for value in (penalty, deduction, storage, acceptance))
+        else None
+    )
     return [
         shop_name,
         row.get("reportId", ""),
@@ -143,7 +156,7 @@ def _normalize(shop_name: str, row: dict) -> list[Any]:
         storage,
         acceptance,
         extra,
-        round(total_debits, 2),
+        total_debits,
         row.get("bonusTypeName", "") or row.get("sellerOperName", ""),
         row.get("nmId", ""),
         row.get("vendorCode", ""),
@@ -157,18 +170,19 @@ def _normalize(shop_name: str, row: dict) -> list[Any]:
         row.get("orderDt", ""),
         row.get("saleDt", ""),
         logistics,
-        _money(row.get("forPay")),
+        payout,
         "Авто GitHub",
         "",
     ]
 
 
 def _is_charge(row: list[Any]) -> bool:
-    return any(abs(_money(row[idx])) > 0 for idx in (10, 11, 12, 13))
+    return any(row[idx] not in (None, "") and abs(float(row[idx])) > 0 for idx in (10, 11, 12, 13, 14))
 
 
 def _to_penalty_sheet_row(row: list[Any]) -> list[Any]:
-    amount = round(sum(_money(row[idx]) for idx in (10, 11, 12, 13)), 2)
+    components = [row[idx] for idx in (10, 11, 12, 13)]
+    amount = round(sum(float(value) for value in components), 2) if all(value not in (None, "") for value in components) else None
     reason = row[16] or row[8] or row[9]
     return [
         row[0],   # Магазин
@@ -208,7 +222,81 @@ def _write_sheet_csv(path: Path, rows: list[list[Any]]) -> None:
     _write_csv(path, CSV_COLUMNS, rows)
 
 
+def _publish() -> None:
+    path = OUT_DIR / "charges_all.csv"
+    if not path.exists():
+        raise RuntimeError("Finance export is missing: charges_all.csv")
+    groups: dict[tuple[str, str], list[list[str]]] = {}
+    with path.open("r", encoding="utf-8-sig", newline="") as stream:
+        reader = csv.DictReader(stream)
+        if reader.fieldnames != CSV_COLUMNS:
+            raise RuntimeError("Finance export header mismatch")
+        for index, item in enumerate(reader, start=1):
+            row = [item[name] or "" for name in CSV_COLUMNS]
+            shop = row[0]
+            day = row[5][:10]
+            if shop not in {name for name, _token in SHOPS.values()}:
+                raise RuntimeError(f"Finance row has unknown shop at {index}")
+            try:
+                valid_day = dt.date.fromisoformat(day).isoformat() == day
+            except ValueError:
+                valid_day = False
+            if not valid_day:
+                raise RuntimeError(f"Finance row has missing or invalid RR Date at {index}")
+            if not row[6].isdigit():
+                raise RuntimeError(f"Finance row has missing or invalid RRD ID at {index}")
+            groups.setdefault((shop, day[:7]), []).append(row)
+
+    key = os.environ.get("GOOGLE_SHEETS_BRIDGE_KEY", "").strip()
+    if not key:
+        raise RuntimeError("Google Sheets bridge key is not configured")
+    if not BRIDGE_URL:
+        raise RuntimeError("Google Sheets bridge URL is not configured")
+
+    sync_run_id = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
+    with httpx.Client(timeout=httpx.Timeout(180.0, connect=15.0), follow_redirects=True) as client:
+        for (shop, month), rows in sorted(groups.items()):
+            natural_keys = [(row[5][:10], row[6]) for row in rows]
+            if len(set(natural_keys)) != len(natural_keys):
+                raise RuntimeError(f"Duplicate WB finance natural key in {shop}/{month}")
+            payload = {
+                "token": key,
+                "action": "publish_wb_finance",
+                "shop": shop,
+                "month": month,
+                "sync_run_id": sync_run_id,
+                "rows": rows,
+            }
+            encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+            if len(encoded) > MAX_REQUEST_BYTES:
+                raise RuntimeError(f"Finance publication payload exceeds safe limit for {shop}/{month}")
+            response = client.post(BRIDGE_URL, json=payload)
+            response.raise_for_status()
+            result = response.json()
+            if not isinstance(result, dict) or result.get("ok") is not True or result.get("action") != "publish_wb_finance":
+                detail = str((result or {}).get("error") or (result or {}).get("message") or "unknown bridge response")[:240]
+                raise RuntimeError(f"Google Sheets bridge rejected finance publication for {shop}/{month}: {detail}")
+            if result.get("written") != len(rows) or result.get("distinct_keys") != len(rows):
+                raise RuntimeError(f"WB finance partition row-count mismatch for {shop}/{month}")
+            print(json.dumps({
+                "finance_partition": "OK",
+                "shop": shop,
+                "month": month,
+                "rows": len(rows),
+                "added": result.get("added"),
+                "updated": result.get("updated"),
+                "min_date": result.get("min_date"),
+                "max_date": result.get("max_date"),
+            }, ensure_ascii=False, sort_keys=True), flush=True)
+
+
 async def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--publish", action="store_true", help="publish collected finance facts to monthly Sheets parts")
+    args = parser.parse_args()
+    if args.publish:
+        _publish()
+        return 0
     today = dt.datetime.now(dt.timezone.utc).date()
     date_from = (today - dt.timedelta(days=LOOKBACK_DAYS - 1)).isoformat()
     date_to = today.isoformat()

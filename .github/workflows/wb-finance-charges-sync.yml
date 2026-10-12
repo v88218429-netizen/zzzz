@@ -73,3 +73,10 @@ jobs:
           git -C "$RUNNER_TEMP/wb-finance-state-branch" add README.md state/finance.tar.gz.enc
           git -C "$RUNNER_TEMP/wb-finance-state-branch" commit -m "finance: encrypted rolling export"
           git -C "$RUNNER_TEMP/wb-finance-state-branch" push origin HEAD:finance-state --force
+
+      - name: Publish finance charges to monthly store partitions
+        if: steps.collect.outcome == 'success' && steps.archive.outcome == 'success'
+        env:
+          FINANCE_GITHUB_OUT: "${{ runner.temp }}/wb-finance"
+          GOOGLE_SHEETS_BRIDGE_KEY: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
+        run: python wb_worker/github_finance_charges_sync.py --publish
