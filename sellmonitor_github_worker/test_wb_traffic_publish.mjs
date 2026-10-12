@@ -128,6 +128,10 @@ const sandbox = {
 };
 vm.createContext(sandbox);
 vm.runInContext(source, sandbox);
+assert.equal(sandbox.sellmonitorGithubGridTargetRows_(6988, 1000, 500), 7488,
+  'retain every populated traffic row plus a bounded reserve');
+assert.equal(sandbox.sellmonitorGithubGridTargetRows_(0, 1000, 500), 1000,
+  'empty traffic sheets retain a minimum writable grid');
 
 const publish = sandbox.sellmonitorGithubPublishWbTraffic_;
 const status = {
