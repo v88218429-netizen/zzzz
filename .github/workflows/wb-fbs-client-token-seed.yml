@@ -32,57 +32,82 @@ jobs:
           test -n "$WB_API_TOKEN_AA"
           test -n "$WB_API_TOKEN_YV"
 
-      - name: Install clasp credentials
+      - name: Transfer keys through the private Apps Script API
         shell: bash
         run: |
           set -euo pipefail
-          npm install -g @google/clasp
-          umask 077
-          printf '%s' "$CLASPRC_JSON" > "$HOME/.clasprc.json"
-
-      - name: Transfer and validate each store key
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p /tmp/fbs-air /tmp/fbs-hoz
-          printf '{"scriptId":"1snEntW5W9KZ_zKHP5bT4D-fmr-sbDdjV4-izjRxf46l8HWcrt3GJqU9V","rootDir":".","projectId":"wb-fbs-clients"}\n' > /tmp/fbs-air/.clasp.json
-          printf '{"scriptId":"1c7CIF9OE-PSVYpj9d9c6LuzsORWVV13o7AuAq6Ds6LlogoLX69gmisZi","rootDir":".","projectId":"wb-fbs-clients"}\n' > /tmp/fbs-hoz/.clasp.json
-          AIR_API_EXEC_ID="AKfycbwGKBniZxxHrACCDuxQwfd-sAs8FMBxlDKvUbXCEAkZMAqeyynt9eRNpL-1ty3wZluw"
-          HOZ_API_EXEC_ID="AKfycbzcu_Y1hQnq5BPGz5eTzc0D9hXbNwVeeQXB_q86Qd3F5xRTM7IbzUjOxSIfZyZnRCYr3Q"
-          export AIR_API_EXEC_ID HOZ_API_EXEC_ID
           node <<'NODE'
-          const { spawnSync } = require('node:child_process');
-          const clients = [
-            {name:'AIR', dir:'/tmp/fbs-air', token:process.env.WB_API_TOKEN_AA},
-            {name:'HOZYAYUSHKA', dir:'/tmp/fbs-hoz', token:process.env.WB_API_TOKEN_YV},
-          ];
-          for (const client of clients) {
-            if (!client.token) throw new Error(client.name + ': token secret missing');
-            const run = spawnSync('clasp', [
-              'run', 'setWbApiTokenFromGitHubV1',
-              '--params', JSON.stringify([client.token]), '--json',
-            ], {cwd:client.dir, encoding:'utf8', env:process.env});
-            const raw = String(run.stdout || '') + '\n' + String(run.stderr || '');
-            const first = raw.indexOf('{');
-            const last = raw.lastIndexOf('}');
-            let envelope = null;
-            if (first >= 0 && last > first) {
-              try { envelope = JSON.parse(raw.slice(first, last + 1)); } catch (_) {}
+          const root = JSON.parse(process.env.CLASPRC_JSON);
+          const entries = [root, ...Object.values(root).filter(x => x && typeof x === 'object')];
+          let auth = null;
+          for (const entry of entries) {
+            const token = entry.token && typeof entry.token === 'object' ? entry.token : entry;
+            const settings = entry.oauth2ClientSettings || entry.oauth2Client || root.oauth2ClientSettings || {};
+            const refreshToken = token.refresh_token || entry.refresh_token;
+            const clientId = settings.clientId || settings.client_id || entry.client_id;
+            const clientSecret = settings.clientSecret || settings.client_secret || entry.client_secret;
+            if (refreshToken && clientId && clientSecret) {
+              auth = {refreshToken, clientId, clientSecret};
+              break;
             }
-            if (run.status !== 0 || !envelope) {
-              process.stderr.write(client.name + ': Apps Script call did not return a valid result (status ' + String(run.status) + ')\n');
-              process.exit(1);
-            }
-            if (envelope.error) {
-              const code = Number(envelope.error.code || 0);
-              process.stderr.write(client.name + ': Apps Script returned error code ' + (Number.isFinite(code) ? code : 0) + '\n');
-              process.exit(1);
-            }
-            const result = envelope.response || {};
-            if (result.ok !== true || result.tokenStored !== true || result.apiVerified !== true) {
-              process.stderr.write(client.name + ': WB token was not confirmed by the API check\n');
-              process.exit(1);
-            }
-            process.stdout.write(client.name + ': WB token stored; WB API accepted it\n');
           }
+          if (!auth) {
+            process.stderr.write('CLASPRC_SHAPE_INVALID\n');
+            process.exit(1);
+          }
+          (async () => {
+            const refresh = await fetch('https://oauth2.googleapis.com/token', {
+              method:'POST',
+              headers:{'content-type':'application/x-www-form-urlencoded'},
+              body:new URLSearchParams({
+                client_id:auth.clientId,
+                client_secret:auth.clientSecret,
+                refresh_token:auth.refreshToken,
+                grant_type:'refresh_token',
+              }),
+            });
+            if (!refresh.ok) {
+              process.stderr.write('GOOGLE_OAUTH_REFRESH_HTTP=' + refresh.status + '\n');
+              process.exit(1);
+            }
+            const refreshed = await refresh.json();
+            if (!refreshed.access_token) {
+              process.stderr.write('GOOGLE_OAUTH_REFRESH_NO_ACCESS_TOKEN\n');
+              process.exit(1);
+            }
+            const clients = [
+              {name:'AIR', deployment:'AKfycbwGKBniZxxHrACCDuxQwfd-sAs8FMBxlDKvUbXCEAkZMAqeyynt9eRNpL-1ty3wZluw', token:process.env.WB_API_TOKEN_AA},
+              {name:'HOZYAYUSHKA', deployment:'AKfycbzcu_Y1hQnq5BPGz5eTzc0D9hXbNwVeeQXB_q86Qd3F5xRTM7IbzUjOxSIfZyZnRCYr3Q', token:process.env.WB_API_TOKEN_YV},
+            ];
+            for (const client of clients) {
+              const response = await fetch('https://script.googleapis.com/v1/scripts/' + client.deployment + ':run', {
+                method:'POST',
+                headers:{
+                  'authorization':'Bearer ' + refreshed.access_token,
+                  'content-type':'application/json',
+                },
+                body:JSON.stringify({
+                  function:'setWbApiTokenFromGitHubV1',
+                  parameters:[client.token],
+                  devMode:true,
+                }),
+              });
+              let result = {};
+              try { result = await response.json(); } catch (_) {}
+              if (!response.ok) {
+                const code = Number(result.error && result.error.code || response.status);
+                process.stderr.write(client.name + ': APPS_SCRIPT_HTTP=' + response.status + ' API_CODE=' + (Number.isFinite(code) ? code : 0) + '\n');
+                process.exit(1);
+              }
+              const value = result.response && result.response.result || {};
+              if (result.error || value.ok !== true || value.tokenStored !== true || value.apiVerified !== true) {
+                process.stderr.write(client.name + ': SCRIPT_EXECUTION_OR_WB_API_CHECK_FAILED\n');
+                process.exit(1);
+              }
+              process.stdout.write(client.name + ': WB token stored; WB API accepted it\n');
+            }
+          })().catch(() => {
+            process.stderr.write('APPS_SCRIPT_CALL_FAILED\n');
+            process.exit(1);
+          });
           NODE
