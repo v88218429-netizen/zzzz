@@ -225,6 +225,69 @@ def _public_status_summary(status):
     }
 
 
+def _campaign_scope_is_complete(store):
+    if "business_scope_campaigns" in store:
+        try:
+            missing = int(store.get("business_scope_missing") or 0)
+            unexpected = int(store.get("business_scope_unexpected_responses") or 0)
+        except (TypeError, ValueError):
+            return False
+        return (store.get("business_scope_verified") is True
+                and missing == 0 and unexpected == 0)
+    try:
+        return int(store.get("campaigns_with_null_payload") or 0) == 0
+    except (TypeError, ValueError):
+        return False
+
+
+def _bootstrap_business_campaign_scope(previous_status, shop, campaign_ids,
+                                      no_statistics_campaign_ids,
+                                      null_payload_campaign_ids,
+                                      status_counts, now):
+    """Bootstrap AIR's private scope from two matching, recent verified polls."""
+    if shop != "aa" or not isinstance(previous_status, dict):
+        return None
+    try:
+        finished_at = datetime.fromisoformat(
+            str(previous_status.get("finishedAt") or "").replace("Z", "+00:00")
+        )
+        age = now - finished_at
+        previous = (previous_status.get("shops") or {}).get(shop) or {}
+        previous_campaigns = int(previous.get("campaigns") or 0)
+        previous_null = int(previous.get("campaigns_with_null_payload") or 0)
+        previous_no_statistics = int(
+            previous.get("campaigns_without_period_statistics") or 0
+        )
+    except (AttributeError, TypeError, ValueError):
+        return None
+    if (finished_at.tzinfo is None
+            or age < -timedelta(minutes=5)
+            or age > timedelta(hours=24)
+            or previous.get("ok") is not True
+            or previous.get("errors")
+            or previous.get("campaign_status_counts") != status_counts
+            or len(campaign_ids) != previous_campaigns
+            or len(null_payload_campaign_ids) != previous_null
+            or len(no_statistics_campaign_ids) != previous_no_statistics):
+        return None
+    raw_null_sample = previous.get("campaigns_with_null_payload_sample") or []
+    if not isinstance(raw_null_sample, list):
+        return None
+    previous_null_sample = {str(value) for value in raw_null_sample}
+    current_null_ids = {str(value) for value in null_payload_campaign_ids}
+    if previous_null_sample and not previous_null_sample.issubset(current_null_ids):
+        return None
+    active_ids = (
+        {int(value) for value in campaign_ids}
+        - {int(value) for value in no_statistics_campaign_ids}
+        - {int(value) for value in null_payload_campaign_ids}
+    )
+    expected_count = previous_campaigns - previous_null - previous_no_statistics
+    if expected_count <= 0 or len(active_ids) != expected_count:
+        return None
+    return sorted(active_ids)
+
+
 def _campaign_ids(payload):
     return sorted(_campaign_status_index(payload))
 
@@ -371,9 +434,9 @@ def _count_value(value):
 def _derive_organic_rows(funnel_rows, ad_rows, coverage):
     """Derive total card opens minus paid clicks only under complete source coverage.
 
-    A store with any unresolved null fullstats campaign is explicitly partial:
-    its paid count and organic result remain blank. Negative differences and
-    missing funnel counts are also preserved as unknown, never clamped to zero.
+    A store with an unresolved null response inside its confirmed business scope
+    remains partial. Out-of-scope nulls do not poison the derivation. Negative
+    differences and missing funnel counts remain unknown, never clamped to zero.
     """
     paid_by_product_day = {}
     stores_with_unknown_clicks = set()
@@ -399,7 +462,7 @@ def _derive_organic_rows(funnel_rows, ad_rows, coverage):
         seen.add(key)
         store = coverage.get(shop, {})
         complete_ads = (store.get("ok") is True
-                        and int(store.get("campaigns_with_null_payload") or 0) == 0
+                        and _campaign_scope_is_complete(store)
                         and shop not in stores_with_unknown_clicks)
         total_opens = _count_value(row[4])
         paid_clicks = paid_by_product_day.get(key, 0) if complete_ads else None
@@ -437,6 +500,28 @@ async def sync_once():
     begin = max(now.date() - timedelta(days=FULLSTATS_DAYS - 1), monitoring_start).isoformat()
     end = now.date().isoformat()
     funnel_begin = max(now.date() - timedelta(days=6), monitoring_start).isoformat()
+    previous_status = {}
+    previous_status_path = DATA_DIR / "status.json"
+    if previous_status_path.exists():
+        try:
+            previous_status = json.loads(previous_status_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            previous_status = {}
+    scope_path = DATA_DIR / "air_active_campaign_scope.json"
+    active_scope_ids = None
+    scope_config_error = False
+    if scope_path.exists():
+        try:
+            scope_config = json.loads(scope_path.read_text(encoding="utf-8"))
+            raw_scope = scope_config.get("campaign_ids")
+            if (scope_config.get("version") != 1 or not isinstance(raw_scope, list)
+                    or not raw_scope):
+                raise ValueError("invalid scope structure")
+            active_scope_ids = sorted({int(value) for value in raw_scope})
+            if any(value <= 0 for value in active_scope_ids):
+                raise ValueError("invalid campaign id")
+        except (AttributeError, OSError, TypeError, ValueError):
+            scope_config_error = True
     status = {"startedAt": now.isoformat(), "monitoring_start": monitoring_start.isoformat(),
               "period": [begin, end], "funnel_period": [funnel_begin, end], "shops": {}}
     ad_rows, funnel_rows = [], []
@@ -452,6 +537,8 @@ async def sync_once():
             shop_rows = []
             no_statistics_campaign_ids = []
             null_payload_campaign_ids = []
+            campaign_status_index = {}
+            ids = []
             try:
                 listing = await _request(client, token, "GET", PROMO + "/adv/v1/promotion/count")
                 campaign_status_index = _campaign_status_index(listing)
@@ -466,8 +553,6 @@ async def sync_once():
                                                  null_payload_campaign_ids)
                     _atomic_json(DATA_DIR / shop / f"fullstats_{start // 50}.json", raw)
                     shop_rows.extend(_stats_rows(shop, raw))
-                ad_rows.extend(shop_rows)
-                state["ad_rows"] = len(shop_rows)
                 state["campaigns_without_period_statistics"] = len(no_statistics_campaign_ids)
                 if no_statistics_campaign_ids:
                     state["campaigns_without_period_statistics_sample"] = no_statistics_campaign_ids[:20]
@@ -484,12 +569,6 @@ async def sync_once():
                 })
                 if null_payload_campaign_ids:
                     state["campaigns_with_null_payload_sample"] = null_payload_campaign_ids[:20]
-                    state["warnings"] = {
-                        "promotion": (
-                            f"WB returned JSON null twice for a batch containing "
-                            f"{len(null_payload_campaign_ids)} campaign(s); batch excluded without zero-fill."
-                        )
-                    }
                 successful_ads.add(shop)
             except Exception as exc:
                 state["ok"] = False
@@ -510,12 +589,65 @@ async def sync_once():
                 })
                 if null_payload_campaign_ids:
                     state["campaigns_with_null_payload_sample"] = null_payload_campaign_ids[:20]
-                    state["warnings"] = {
-                        "promotion": (
-                            f"WB returned JSON null for {len(null_payload_campaign_ids)} individual "
-                            "campaign(s); excluded without zero-fill."
+            if shop == "aa" and state.get("ok"):
+                if scope_config_error:
+                    state["ok"] = False
+                    state["errors"]["campaign_scope"] = "Protected active campaign scope is unreadable."
+                else:
+                    if active_scope_ids is None:
+                        active_scope_ids = _bootstrap_business_campaign_scope(
+                            previous_status, shop, ids, no_statistics_campaign_ids,
+                            null_payload_campaign_ids,
+                            state.get("campaign_status_counts", {}), now
                         )
-                    }
+                        if active_scope_ids:
+                            _atomic_json(scope_path, {
+                                "version": 1,
+                                "capturedAt": now.isoformat(),
+                                "campaign_ids": active_scope_ids,
+                            })
+                    if active_scope_ids is None:
+                        state["business_scope_campaigns"] = 0
+                        state["business_scope_missing"] = 0
+                        state["business_scope_unexpected_responses"] = 0
+                        state["business_scope_verified"] = False
+                        state["warnings"] = {
+                            "campaign_scope": "Protected active campaign scope is not initialized."
+                        }
+                    else:
+                        scope_ids = set(active_scope_ids)
+                        listed_ids = {int(value) for value in ids}
+                        null_ids = {int(value) for value in null_payload_campaign_ids}
+                        missing_ids = (scope_ids - listed_ids) | (scope_ids & null_ids)
+                        observed_row_ids = {
+                            int(row[2]) for row in shop_rows
+                            if len(row) > 2 and str(row[2]).isdigit()
+                        }
+                        unexpected_ids = observed_row_ids - scope_ids
+                        state["business_scope_campaigns"] = len(scope_ids)
+                        state["business_scope_missing"] = len(missing_ids)
+                        state["business_scope_unexpected_responses"] = len(unexpected_ids)
+                        state["business_scope_verified"] = not missing_ids and not unexpected_ids
+                        shop_rows = [
+                            row for row in shop_rows
+                            if len(row) > 2 and str(row[2]).isdigit()
+                            and int(row[2]) in scope_ids
+                        ]
+                        if state["business_scope_verified"]:
+                            state.pop("warnings", None)
+                        else:
+                            state["warnings"] = {
+                                "campaign_scope": "Protected active campaign coverage needs review."
+                            }
+            elif shop == "aa":
+                state["business_scope_verified"] = False
+            elif null_payload_campaign_ids:
+                state["warnings"] = {
+                    "promotion": "WB returned an unresolved fullstats payload."
+                }
+            if state.get("ok"):
+                ad_rows.extend(shop_rows)
+                state["ad_rows"] = len(shop_rows)
             try:
                 # The daily history endpoint accepts 1..20 nmIds per call and
                 # only covers the recent seven days. Enumerate the whole seller
@@ -598,7 +730,7 @@ async def sync_once():
     # table, but must not create an undercounted or zero-filled poll observation.
     pollable_ads = {
         shop for shop in successful_ads
-        if not status["shops"][shop].get("campaigns_with_null_payload")
+        if _campaign_scope_is_complete(status["shops"][shop])
     }
     ad_poll_rows, funnel_poll_rows = _current_day_poll_rows(
         finished_at, end, ad_rows, funnel_rows, pollable_ads, successful_funnels
