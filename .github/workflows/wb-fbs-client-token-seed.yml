@@ -87,4 +87,39 @@ jobs:
             }
             process.stdout.write(client.name + ': WB token stored; WB API accepted it\n');
           }
+          NODE          node <<'NODE'
+          const { spawnSync } = require('node:child_process');
+          const clients = [
+            {name:'AIR', dir:'/tmp/fbs-air', token:process.env.WB_API_TOKEN_AA},
+            {name:'HOZYAYUSHKA', dir:'/tmp/fbs-hoz', token:process.env.WB_API_TOKEN_YV},
+          ];
+          for (const client of clients) {
+            if (!client.token) throw new Error(client.name + ': token secret missing');
+            const run = spawnSync('clasp', [
+              'run', 'setWbApiTokenFromGitHubV1',
+              '--params', JSON.stringify([client.token]), '--json',
+            ], {cwd:client.dir, encoding:'utf8', env:process.env});
+            const raw = String(run.stdout || '') + '\n' + String(run.stderr || '');
+            const first = raw.indexOf('{');
+            const last = raw.lastIndexOf('}');
+            let envelope = null;
+            if (first >= 0 && last > first) {
+              try { envelope = JSON.parse(raw.slice(first, last + 1)); } catch (_) {}
+            }
+            if (run.status !== 0 || !envelope) {
+              process.stderr.write(client.name + ': Apps Script call did not return a valid result (status ' + String(run.status) + ')\n');
+              process.exit(1);
+            }
+            if (envelope.error) {
+              const code = Number(envelope.error.code || 0);
+              process.stderr.write(client.name + ': Apps Script returned error code ' + (Number.isFinite(code) ? code : 0) + '\n');
+              process.exit(1);
+            }
+            const result = envelope.response || {};
+            if (result.ok !== true || result.tokenStored !== true || result.apiVerified !== true) {
+              process.stderr.write(client.name + ': WB token was not confirmed by the API check\n');
+              process.exit(1);
+            }
+            process.stdout.write(client.name + ': WB token stored; WB API accepted it\n');
+          }
           NODE
