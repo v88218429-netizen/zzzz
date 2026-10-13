@@ -40,6 +40,56 @@ class TrafficParsingTest(unittest.TestCase):
         self.assertEqual(by_key[("yv", "2026-10-09", "44")][10], "MEASUREMENT_MISMATCH")
         self.assertEqual(by_key[("ap", "2026-10-10", "45")][10], "TOTAL_OPEN_MISSING")
 
+    def test_organic_uses_confirmed_business_scope_despite_out_of_scope_nulls(self):
+        funnel = [["aa", "2026-10-09", 43, "SKU43", 15, 2, 1, 50, "WB Analytics products/history"]]
+        ads = [["aa", "2026-10-09", 3, 43, 100, 2, 1, 1, 10, 50,
+                "WB /adv/v3/fullstats", "EXACT_CAMPAIGN_NM_DAY", "SKU43"]]
+        coverage = {"aa": {
+            "ok": True,
+            "campaigns": 12,
+            "campaigns_with_null_payload": 9,
+            "business_scope_campaigns": 3,
+            "business_scope_missing": 0,
+            "business_scope_unexpected_responses": 0,
+            "business_scope_verified": True,
+        }}
+        row = _derive_organic_rows(funnel, ads, coverage)[0]
+        self.assertEqual(row[5:7], [2, 13])
+        self.assertEqual(row[10], "DERIVED_COMPLETE")
+        self.assertTrue(traffic_sync._campaign_scope_is_complete(coverage["aa"]))
+
+        coverage["aa"]["business_scope_missing"] = 1
+        coverage["aa"]["business_scope_verified"] = False
+        row = _derive_organic_rows(funnel, ads, coverage)[0]
+        self.assertEqual(row[5:7], ["", ""])
+        self.assertEqual(row[10], "ADVERTISING_COVERAGE_INCOMPLETE")
+
+    def test_business_scope_bootstrap_requires_recent_matching_verified_poll(self):
+        now = datetime.fromisoformat("2026-10-13T12:00:00+03:00")
+        previous = {
+            "finishedAt": "2026-10-13T11:00:00+03:00",
+            "shops": {"aa": {
+                "ok": True,
+                "errors": {},
+                "campaigns": 6,
+                "campaigns_with_null_payload": 2,
+                "campaigns_without_period_statistics": 0,
+                "campaign_status_counts": {"7": 3, "9": 2, "11": 1},
+                "campaigns_with_null_payload_sample": [5, 6],
+            }},
+        }
+        candidate = traffic_sync._bootstrap_business_campaign_scope(
+            previous, "aa", [1, 2, 3, 4, 5, 6], [], [5, 6],
+            {"7": 3, "9": 2, "11": 1}, now
+        )
+        self.assertEqual(candidate, [1, 2, 3, 4])
+
+        changed = traffic_sync._bootstrap_business_campaign_scope(
+            previous, "aa", [1, 2, 3, 4, 5, 6], [], [4, 6],
+            {"7": 3, "9": 2, "11": 1}, now
+        )
+        self.assertIsNone(changed)
+
     def test_public_status_summary_omits_campaign_identifiers_and_business_counts(self):
         summary = traffic_sync._public_status_summary({
             "ok": True,
@@ -311,6 +361,114 @@ class TrafficSyncPersistenceTest(unittest.IsolatedAsyncioTestCase):
                 await traffic_sync._fullstats_batch(
                     object(), "test-token", [33], "2026-09-09", "2026-10-09"
                 )
+
+    async def test_sync_bootstraps_and_persists_air_scope_in_encrypted_state_input(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            data_dir = Path(temp_dir) / "traffic"
+            data_dir.mkdir()
+            now = datetime.now(traffic_sync.ZoneInfo("Europe/Moscow"))
+            traffic_sync._atomic_json(data_dir / "status.json", {
+                "finishedAt": (now - timedelta(minutes=30)).isoformat(),
+                "shops": {"aa": {
+                    "ok": True,
+                    "errors": {},
+                    "campaigns": 2,
+                    "campaigns_with_null_payload": 1,
+                    "campaigns_without_period_statistics": 0,
+                    "campaign_status_counts": {"7": 2, "9": 0, "11": 0},
+                    "campaigns_with_null_payload_sample": [8],
+                }},
+            })
+            day = now.date().isoformat()
+
+            async def fake_request(client, token, method, url, **kwargs):
+                if url.endswith("/adv/v1/promotion/count"):
+                    return {"adverts": [{"status": 7, "advert_list": [
+                        {"advertId": 7}, {"advertId": 8}
+                    ]}]}
+                if url.endswith("/adv/v3/fullstats"):
+                    ids = [int(value) for value in kwargs["params"]["ids"].split(",")]
+                    if 8 in ids:
+                        return None
+                    return [{"advertId": 7, "days": [{"date": day, "apps": [{
+                        "nms": [{"nmId": 42, "views": 5, "clicks": 2, "sum": 10}]
+                    }]}]}]
+                if url.endswith("/api/v2/list/goods/filter"):
+                    return {"data": {"listGoods": [{"nmID": 42}]}}
+                if url.endswith("/api/analytics/v3/sales-funnel/products/history"):
+                    return [{"product": {"nmId": 42, "vendorCode": "SKU42"},
+                             "history": [{"date": day, "openCount": 5,
+                                          "cartCount": 1, "orderCount": 1, "orderSum": 20}]}]
+                raise AssertionError(f"Unexpected URL: {url}")
+
+            with patch.object(traffic_sync, "DATA_DIR", data_dir), \
+                 patch.object(traffic_sync, "SHOPS", {"aa": ("ИП АА", "WB_API_TOKEN_AA")}), \
+                 patch.object(traffic_sync, "_request", side_effect=fake_request), \
+                 patch.object(traffic_sync.asyncio, "sleep", new=AsyncMock()), \
+                 patch.dict(os.environ, {"WB_API_TOKEN_AA": "test-token"}):
+                traffic_sync._last_fullstats = 0
+                result = await traffic_sync.sync_once()
+
+            shop = result["shops"]["aa"]
+            self.assertTrue(result["ok"])
+            self.assertTrue(result["complete"])
+            self.assertEqual(shop["campaigns_with_null_payload"], 1)
+            self.assertTrue(shop["business_scope_verified"])
+            self.assertEqual(shop["business_scope_campaigns"], 1)
+            self.assertEqual(shop["business_scope_missing"], 0)
+            self.assertEqual(shop["ad_rows"], 1)
+            with (data_dir / "aa" / "campaign_sku_day.csv").open(
+                    encoding="utf-8-sig", newline="") as stream:
+                saved_ads = list(csv.reader(stream))[1:]
+            self.assertEqual([row[2] for row in saved_ads], ["7"])
+            with (data_dir / "air_active_campaign_scope.json").open(encoding="utf-8") as stream:
+                scope = json.load(stream)
+            self.assertEqual(scope["campaign_ids"], [7])
+
+    async def test_sync_excludes_untracked_air_campaign_rows_and_keeps_scope_incomplete(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            data_dir = Path(temp_dir) / "traffic"
+            data_dir.mkdir()
+            now = datetime.now(traffic_sync.ZoneInfo("Europe/Moscow"))
+            traffic_sync._atomic_json(data_dir / "air_active_campaign_scope.json", {
+                "version": 1, "capturedAt": now.isoformat(), "campaign_ids": [7]
+            })
+            day = now.date().isoformat()
+
+            async def fake_request(client, token, method, url, **kwargs):
+                if url.endswith("/adv/v1/promotion/count"):
+                    return {"adverts": [{"status": 7, "advert_list": [
+                        {"advertId": 7}, {"advertId": 8}
+                    ]}]}
+                if url.endswith("/adv/v3/fullstats"):
+                    return [{"advertId": campaign_id, "days": [{"date": day, "apps": [{
+                        "nms": [{"nmId": 42, "views": 5, "clicks": campaign_id, "sum": 10}]
+                    }]}]} for campaign_id in [7, 8]]
+                if url.endswith("/api/v2/list/goods/filter"):
+                    return {"data": {"listGoods": [{"nmID": 42}]}}
+                if url.endswith("/api/analytics/v3/sales-funnel/products/history"):
+                    return [{"product": {"nmId": 42, "vendorCode": "SKU42"},
+                             "history": [{"date": day, "openCount": 20,
+                                          "cartCount": 2, "orderCount": 1, "orderSum": 20}]}]
+                raise AssertionError(f"Unexpected URL: {url}")
+
+            with patch.object(traffic_sync, "DATA_DIR", data_dir), \
+                 patch.object(traffic_sync, "SHOPS", {"aa": ("ИП АА", "WB_API_TOKEN_AA")}), \
+                 patch.object(traffic_sync, "_request", side_effect=fake_request), \
+                 patch.object(traffic_sync.asyncio, "sleep", new=AsyncMock()), \
+                 patch.dict(os.environ, {"WB_API_TOKEN_AA": "test-token"}):
+                traffic_sync._last_fullstats = 0
+                result = await traffic_sync.sync_once()
+
+            shop = result["shops"]["aa"]
+            self.assertTrue(result["ok"])
+            self.assertFalse(result["complete"])
+            self.assertEqual(shop["business_scope_unexpected_responses"], 1)
+            self.assertFalse(shop["business_scope_verified"])
+            with (data_dir / "aa" / "campaign_sku_day.csv").open(
+                    encoding="utf-8-sig", newline="") as stream:
+                saved_ads = list(csv.reader(stream))[1:]
+            self.assertEqual([row[2] for row in saved_ads], ["7"])
 
     async def test_failed_single_campaign_keeps_last_good_ads_history(self):
         with tempfile.TemporaryDirectory() as temp_dir:
