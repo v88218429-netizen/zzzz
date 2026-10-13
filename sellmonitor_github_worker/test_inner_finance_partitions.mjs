@@ -11,6 +11,13 @@ vm.runInNewContext(source + `
     );
   };
   globalThis.__headers = SMC_INNER_FINANCE_HEADERS;
+  globalThis.__checksum = sellmonitorGithubInnerFinanceChecksum_;
+  globalThis.__dateChecksums = function(a, b) {
+    return [
+      sellmonitorGithubInnerFinanceChecksum_([[new Date(a)]]),
+      sellmonitorGithubInnerFinanceChecksum_([[new Date(b)]])
+    ];
+  };
 `, context, { timeout: 3000 });
 
 const stores = ['sanych_wb', 'air_wb', 'hozyayushka_wb'];
@@ -39,5 +46,17 @@ assert.throws(() => context.__innerRows('air_wb', [
 assert.throws(() => context.__innerRows('air_wb', [
   { id: 1 }
 ], '2026-10-06', '2026-10-08'), /INNER_FINANCE_DAILY_PERIOD_REQUIRED/);
+
+context.Utilities = {
+  DigestAlgorithm: { SHA_256: 'test' },
+  Charset: { UTF_8: 'test' },
+  formatDate: (date) => date.toISOString().slice(0, 19) + 'Z',
+  computeDigest: (_algorithm, value) => Array.from(String(value), x => x.charCodeAt(0) & 255)
+};
+const [olderDateChecksum, roundedDateChecksum] = context.__dateChecksums(
+  '2026-10-13T17:18:52.100Z', '2026-10-13T17:18:52.900Z'
+);
+assert.equal(olderDateChecksum, roundedDateChecksum,
+  'Sheets date precision must not make a correct read-back fail');
 
 console.log('INNER_FINANCE_PARTITION_FIXTURE_OK', JSON.stringify({stores:stores.length,columns:context.__headers.length}));
