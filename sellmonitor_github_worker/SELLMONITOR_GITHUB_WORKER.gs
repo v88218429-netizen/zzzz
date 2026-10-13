@@ -19,7 +19,7 @@ const SMC_INNER_FINANCE = Object.freeze({
   initialDate: '2026-10-07',
   historicalStartDate: '2026-09-01',
   historicalEndDateExclusive: '2026-10-07',
-  retryIntervalMs: 15 * 60 * 1000,
+  retryIntervalMs: 60 * 1000,
   schemaVersion: 'inner-finance-month-v1',
   endpoint: 'https://sellmonitor.com/mcp/inner-analytics'
 });
@@ -3041,9 +3041,18 @@ function sellmonitorGithubInnerFinanceRows_(cfg, from, to, products, loadedAt) {
 
 function sellmonitorGithubInnerFinanceChecksum_(rows) {
   var canonical = rows.map(function(row) {
-    return row.map(function(value) {
-      if (value instanceof Date && !isNaN(value.getTime())) {
+    return row.map(function(value,index) {
+      if (index === 40 && value !== '' && value != null) {
+        var loadedAt = value instanceof Date ? value : new Date(value);
+        if (loadedAt instanceof Date && !isNaN(loadedAt.getTime())) {
+          return Utilities.formatDate(loadedAt,'GMT',"yyyy-MM-dd'T'HH:mm:ss'Z'");
+        }
+      } else if (value instanceof Date && !isNaN(value.getTime())) {
         return Utilities.formatDate(value,'GMT',"yyyy-MM-dd'T'HH:mm:ss'Z'");
+      }
+      if (typeof value === 'number' && isFinite(value)) {
+        var rounded = Math.round(value * 1000000) / 1000000;
+        return Object.is(rounded,-0) ? 0 : rounded;
       }
       return value;
     });
