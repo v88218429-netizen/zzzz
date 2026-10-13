@@ -188,7 +188,7 @@ function sellmonitorGithubTick() {
       var r = item.values, row = item.row;
       var external = sellmonitorGithubExternalDataPlaneInfo_(item.storeId);
       if (external) {
-        processedClients++;
+        // Keep paused clients visible without spending a productive worker slot.
         sellmonitorGithubSetControl_(sh, row, map, {
           last_seen:new Date(),
           worker_version:SMC_GH.VERSION,

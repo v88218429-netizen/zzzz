@@ -36,6 +36,8 @@ jobs:
           set -euo pipefail
           cp sellmonitor_github_worker/SELLMONITOR_GITHUB_WORKER.gs /tmp/sellmonitor_worker.js
           node --check /tmp/sellmonitor_worker.js
+      - name: Paused-client worker slot regression
+        run: node sellmonitor_github_worker/test_worker_capacity.mjs
       - name: WB traffic publisher fixture
         run: node sellmonitor_github_worker/test_wb_traffic_publish.mjs
       - name: WB ads cluster analysis fixture
