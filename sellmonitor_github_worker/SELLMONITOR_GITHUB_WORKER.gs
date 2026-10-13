@@ -4199,7 +4199,7 @@ function doPost(e) {
     }
 
     if (action === 'publish_wb_penalties_snapshot') {
-      return sellmonitorGithubPublishWbPenaltySnapshot_(body);
+      return sellmonitorGithubWebJson_(sellmonitorGithubPublishWbPenaltySnapshot_(body));
     }
 
     if (action === 'publish_wb_finance') {
