@@ -54,12 +54,33 @@ function sellmonitorGithubEnsureTrigger_() {
     if (mustRecreate || found) ScriptApp.deleteTrigger(triggers[i]);
     else found = triggers[i];
   }
+  var created = false;
   if (mustRecreate || !found) {
     ScriptApp.newTrigger(fn).timeBased().everyMinutes(1).create();
     props.setProperty('SMC_GH_TRIGGER_VERSION', desiredVersion);
-    return {ok: true, created: true, intervalMinutes: 1};
+    created = true;
   }
-  return {ok: true, created: false, intervalMinutes: 1};
+
+  var financeFn = 'sellmonitorGithubInnerFinanceTick';
+  var financeVersion = 'inner-finance-1m-v1';
+  var financeTriggers = ScriptApp.getProjectTriggers();
+  var financeFound = null;
+  var financeMustRecreate = props.getProperty('SMC_INNER_FINANCE_TRIGGER_VERSION') !== financeVersion;
+  for (var j = 0; j < financeTriggers.length; j++) {
+    if (financeTriggers[j].getHandlerFunction() !== financeFn) continue;
+    if (financeMustRecreate || financeFound) ScriptApp.deleteTrigger(financeTriggers[j]);
+    else financeFound = financeTriggers[j];
+  }
+  var financeCreated = false;
+  if (financeMustRecreate || !financeFound) {
+    ScriptApp.newTrigger(financeFn).timeBased().everyMinutes(1).create();
+    props.setProperty('SMC_INNER_FINANCE_TRIGGER_VERSION', financeVersion);
+    financeCreated = true;
+  }
+  return {
+    ok:true,created:created,intervalMinutes:1,
+    innerFinanceCreated:financeCreated,innerFinanceIntervalMinutes:1
+  };
 }
 
 function sellmonitorGithubBootstrap() {
@@ -77,8 +98,12 @@ function sellmonitorGithubBootstrap() {
 
 function sellmonitorGithubHealth() {
   var triggerState = sellmonitorGithubEnsureTrigger_();
-  var triggerCount = ScriptApp.getProjectTriggers().filter(function(t) {
+  var triggers = ScriptApp.getProjectTriggers();
+  var triggerCount = triggers.filter(function(t) {
     return t.getHandlerFunction() === 'sellmonitorGithubTick';
+  }).length;
+  var innerFinanceTriggerCount = triggers.filter(function(t) {
+    return t.getHandlerFunction() === 'sellmonitorGithubInnerFinanceTick';
   }).length;
   var cc = SpreadsheetApp.openById(SMC_GH.CONTROL_CENTER_ID);
   var clients = cc.getSheetByName(SMC_GH.CLIENTS_SHEET);
@@ -161,7 +186,8 @@ function sellmonitorGithubHealth() {
     runtime: 'GITHUB_ACTIONS',
     trigger: triggerState,
     trigger_count: triggerCount,
-    trigger_ok: triggerCount === 1
+    inner_finance_trigger_count:innerFinanceTriggerCount,
+    trigger_ok: triggerCount === 1 && innerFinanceTriggerCount === 1
   };
 }
 
@@ -251,28 +277,6 @@ function sellmonitorGithubTick() {
       }
     }
 
-    var innerFinanceSyncs = [];
-    Object.keys(SMC_INNER_FINANCE_STORES).forEach(function(storeId) {
-      var cfg = SMC_INNER_FINANCE_STORES[storeId], sync = null;
-      try {
-        sync = sellmonitorGithubMaybeSyncInnerFinance_(cfg);
-      } catch (financeError) {
-        sync = {ok:false,attempted:true,error:String(financeError.message || financeError).slice(0,1500)};
-      }
-      innerFinanceSyncs.push(Object.assign({store_id:storeId}, sync || {}));
-      if (sync && sync.attempted) {
-        sellmonitorGithubLog_(
-          cc,
-          cfg.spreadsheetId,
-          'INNER_FINANCE_MONTHLY_PARTITION',
-          sync.ok ? 'DONE' : 'ERROR',
-          sync.ok ? sync.date : sync.error,
-          sync
-        );
-        if (!sync.ok) errors.push({spreadsheetId:cfg.spreadsheetId,error:String(sync.error || 'INNER_FINANCE_SYNC_FAILED')});
-      }
-    });
-
     SpreadsheetApp.flush();
     return {
       ok: errors.length === 0,
@@ -280,9 +284,42 @@ function sellmonitorGithubTick() {
       startClient: clients.length ? clients[start].storeId : '',
       processedClients: processedClients,
       processedCommands: processedCommands,
-      innerFinance: innerFinanceSyncs,
       errors: errors
     };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function sellmonitorGithubInnerFinanceTick() {
+  var lock = LockService.getUserLock();
+  if (!lock.tryLock(5000)) return {ok:true,skipped:true,reason:'inner_finance_lock_busy'};
+  var cc = null;
+  var cfg = null;
+  try {
+    cc = SpreadsheetApp.openById(SMC_GH.CONTROL_CENTER_ID);
+    var storeIds = Object.keys(SMC_INNER_FINANCE_STORES);
+    if (!storeIds.length) return {ok:true,processed:false,reason:'no_inner_finance_stores'};
+    var props = PropertiesService.getScriptProperties();
+    var cursor = Number(props.getProperty('SMC_INNER_FINANCE_STORE_CURSOR') || 0);
+    if (!isFinite(cursor) || cursor < 0) cursor = 0;
+    cursor = Math.floor(cursor) % storeIds.length;
+    var storeId = storeIds[cursor];
+    props.setProperty('SMC_INNER_FINANCE_STORE_CURSOR',String((cursor + 1) % storeIds.length));
+    cfg = SMC_INNER_FINANCE_STORES[storeId];
+    var sync = sellmonitorGithubMaybeSyncInnerFinance_(cfg,cc) || {};
+    if (sync.attempted) {
+      sellmonitorGithubLog_(
+        cc,cfg.spreadsheetId,'INNER_FINANCE_MONTHLY_PARTITION',
+        sync.ok ? 'DONE' : 'ERROR',sync.ok ? sync.date : sync.error,sync
+      );
+    }
+    SpreadsheetApp.flush();
+    return Object.assign({ok:sync.ok !== false,version:SMC_GH.VERSION,store_id:storeId},sync);
+  } catch (e) {
+    var message = String(e && e.message ? e.message : e).slice(0,1500);
+    if (cc && cfg) sellmonitorGithubLog_(cc,cfg.spreadsheetId,'INNER_FINANCE_MONTHLY_PARTITION','ERROR',message,{});
+    return {ok:false,version:SMC_GH.VERSION,store_id:cfg ? cfg.storeId : '',error:message};
   } finally {
     lock.releaseLock();
   }
@@ -2435,6 +2472,76 @@ function sellmonitorGithubMcpData_(response) {
   return result.structuredContent || result;
 }
 
+function sellmonitorGithubStartInnerFinanceOAuth_(cfg) {
+  var props = sellmonitorClientProperties_(cfg.spreadsheetId);
+  var existingUrl = String(props.getProperty('SM_INNER_MCP_AUTH_URL') || '').trim();
+  if (existingUrl && props.getProperty('SM_INNER_MCP_STATE') &&
+      props.getProperty('SM_INNER_MCP_CODE_VERIFIER') && props.getProperty('SM_INNER_MCP_CLIENT_ID')) {
+    return existingUrl;
+  }
+
+  var base = SMC_INNER_FINANCE.endpoint, metadata = {};
+  var metadataResponse = UrlFetchApp.fetch(base + '/.well-known/oauth-authorization-server', {
+    method:'get',headers:{Accept:'application/json'},muteHttpExceptions:true,followRedirects:true
+  });
+  if (metadataResponse.getResponseCode() < 200 || metadataResponse.getResponseCode() >= 300) {
+    throw new Error('INNER_OAUTH_METADATA_HTTP_' + metadataResponse.getResponseCode());
+  }
+  try { metadata = JSON.parse(metadataResponse.getContentText() || '{}'); }
+  catch (e) { throw new Error('INNER_OAUTH_METADATA_INVALID'); }
+
+  var redirect = String(ScriptApp.getService().getUrl() || '').trim();
+  if (!/^https:\/\/script\.google\.com\/macros\/s\//.test(redirect)) {
+    throw new Error('CENTRAL_OAUTH_REDIRECT_URL_INVALID');
+  }
+  var cid = String(props.getProperty('SM_INNER_MCP_CLIENT_ID') || '').trim();
+  var tokenEndpoint = String(props.getProperty('SM_INNER_MCP_TOKEN_ENDPOINT') || metadata.token_endpoint || '').trim();
+  if (!cid) {
+    var registerEndpoint = String(metadata.registration_endpoint || (base + '/oauth/register'));
+    var registration = UrlFetchApp.fetch(registerEndpoint, {
+      method:'post',contentType:'application/json',
+      payload:JSON.stringify({
+        client_name:'Sellmonitor Control Center · ' + cfg.storeName,
+        redirect_uris:[redirect],
+        token_endpoint_auth_method:'none',
+        grant_types:['authorization_code','refresh_token'],
+        response_types:['code'],
+        scope:'mcp'
+      }),
+      headers:{Accept:'application/json'},muteHttpExceptions:true,followRedirects:false
+    });
+    var registrationBody = {};
+    try { registrationBody = JSON.parse(registration.getContentText() || '{}'); } catch (e) {}
+    if (registration.getResponseCode() < 200 || registration.getResponseCode() >= 300 || !registrationBody.client_id) {
+      throw new Error('INNER_OAUTH_REGISTRATION_HTTP_' + registration.getResponseCode());
+    }
+    cid = String(registrationBody.client_id);
+  }
+  if (!tokenEndpoint) throw new Error('INNER_OAUTH_TOKEN_ENDPOINT_MISSING');
+
+  var verifier = Utilities.getUuid().replace(/-/g,'') + Utilities.getUuid().replace(/-/g,'');
+  var challengeBytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,verifier,Utilities.Charset.UTF_8);
+  var challenge = Utilities.base64EncodeWebSafe(challengeBytes).replace(/=+$/,'');
+  var state = cfg.spreadsheetId + '.' + Utilities.getUuid().replace(/-/g,'') + Utilities.getUuid().replace(/-/g,'');
+  var authorizeEndpoint = String(metadata.authorization_endpoint || (base + '/oauth/authorize'));
+  var query = {
+    response_type:'code',client_id:cid,redirect_uri:redirect,scope:'mcp',state:state,
+    code_challenge:challenge,code_challenge_method:'S256'
+  };
+  var url = authorizeEndpoint + '?' + Object.keys(query).map(function(k) {
+    return encodeURIComponent(k) + '=' + encodeURIComponent(query[k]);
+  }).join('&');
+  props.setProperties({
+    SM_INNER_MCP_CLIENT_ID:cid,
+    SM_INNER_MCP_REDIRECT_URI:redirect,
+    SM_INNER_MCP_CODE_VERIFIER:verifier,
+    SM_INNER_MCP_STATE:state,
+    SM_INNER_MCP_TOKEN_ENDPOINT:tokenEndpoint,
+    SM_INNER_MCP_AUTH_URL:url
+  },false);
+  return url;
+}
+
 function sellmonitorGithubInnerMcpCallWithToken_(token, tool, args) {
   var endpoint = SMC_INNER_FINANCE.endpoint;
   function post(body, sessionId) {
@@ -2579,6 +2686,10 @@ function sellmonitorGithubOAuthCallback_(e) {
     props.setProperty('SM_INNER_MCP_ACCESS_TOKEN', tj.access_token);
     if (tj.refresh_token) props.setProperty('SM_INNER_MCP_REFRESH_TOKEN', tj.refresh_token);
     if (tj.expires_in) props.setProperty('SM_INNER_MCP_EXPIRES_AT', String(Date.now() + Number(tj.expires_in) * 1000 - 60000));
+    props.deleteProperty('SM_INNER_MCP_STATE');
+    props.deleteProperty('SM_INNER_MCP_CODE_VERIFIER');
+    props.deleteProperty('SM_INNER_MCP_AUTH_URL');
+    props.deleteProperty('SMC_INNER_FINANCE_OAUTH_URL_LOGGED');
 
     var token = tj.access_token;
     function post(body, sid) {
@@ -3042,12 +3153,12 @@ function sellmonitorGithubInnerFinanceRows_(cfg, from, to, products, loadedAt) {
 function sellmonitorGithubInnerFinanceChecksum_(rows) {
   var canonical = rows.map(function(row) {
     return row.map(function(value,index) {
-      if (index === 40 && value !== '' && value != null) {
-        var loadedAt = value instanceof Date ? value : new Date(value);
-        if (loadedAt instanceof Date && !isNaN(loadedAt.getTime())) {
-          return Utilities.formatDate(loadedAt,'GMT',"yyyy-MM-dd'T'HH:mm:ss'Z'");
-        }
-      } else if (value instanceof Date && !isNaN(value.getTime())) {
+      // loaded_at (40) and sync_run_id (44) change on a safe retry; neither
+      // is source data. Excluding them keeps read-back checks stable while
+      // every business field and the immutable record_key remain covered.
+      if (index === 40 || index === 44) return '';
+      if (value == null || value === '') return '';
+      if (value instanceof Date && !isNaN(value.getTime())) {
         return Utilities.formatDate(value,'GMT',"yyyy-MM-dd'T'HH:mm:ss'Z'");
       }
       if (typeof value === 'number' && isFinite(value)) {
@@ -3136,11 +3247,24 @@ function sellmonitorGithubNextDate_(dateKey) {
   return Utilities.formatDate(new Date(Date.UTC(parts[0],parts[1] - 1,parts[2] + 1)),'GMT','yyyy-MM-dd');
 }
 
-function sellmonitorGithubMaybeSyncInnerFinance_(cfg) {
+function sellmonitorGithubMaybeSyncInnerFinance_(cfg,cc) {
   var props = sellmonitorClientProperties_(cfg.spreadsheetId);
   var auth = sellmonitorGithubEnsureClientAuth_(cfg.spreadsheetId);
   if (!auth.ok || !auth.refresh_token || !props.getProperty('SM_INNER_MCP_CLIENT_ID')) {
-    return {skipped:true,reason:'inner_auth_or_refresh_token_required'};
+    try {
+      var authorizationUrl = sellmonitorGithubStartInnerFinanceOAuth_(cfg);
+      if (cc && String(props.getProperty('SMC_INNER_FINANCE_OAUTH_URL_LOGGED') || '') !== authorizationUrl) {
+        sellmonitorGithubLog_(cc,cfg.spreadsheetId,'INNER_OAUTH_REQUIRED','WAITING_USER',
+          'Sellmonitor Inner требует подтверждения доступа для продолжения выгрузки.',
+          {store_id:cfg.storeId,authorization_url:authorizationUrl});
+        props.setProperty('SMC_INNER_FINANCE_OAUTH_URL_LOGGED',authorizationUrl);
+      }
+      return {skipped:true,reason:'authorization_required'};
+    } catch (authError) {
+      var authMessage = String(authError && authError.message ? authError.message : authError).slice(0,1000);
+      if (cc) sellmonitorGithubLog_(cc,cfg.spreadsheetId,'INNER_OAUTH_REQUIRED','ERROR',authMessage,{store_id:cfg.storeId});
+      return {skipped:true,reason:'authorization_setup_failed',error:authMessage};
+    }
   }
   var dateKey = String(props.getProperty('SMC_INNER_FINANCE_NEXT_DATE') || SMC_INNER_FINANCE.initialDate);
   var cutoff = Utilities.formatDate(new Date(Date.now() - 86400000),'Europe/Moscow','yyyy-MM-dd');
@@ -4510,6 +4634,15 @@ function doPost(e) {
         ok: true,
         action: action,
         result: sellmonitorGithubHealth()
+      });
+    }
+
+    if (action === 'inner_finance_tick') {
+      var financeTick = sellmonitorGithubInnerFinanceTick();
+      return sellmonitorGithubWebJson_({
+        ok:financeTick && financeTick.ok === true,
+        action:action,
+        tick:financeTick
       });
     }
 
