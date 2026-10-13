@@ -241,6 +241,51 @@ def _write_sheet_csv(path: Path, rows: list[list[Any]]) -> None:
     _write_csv(path, CSV_COLUMNS, rows)
 
 
+
+def _publish_legacy_penalties(key: str, sync_run_id: str) -> None:
+    path = OUT_DIR / "penalties_sheet.csv"
+    if not path.exists():
+        raise RuntimeError("Penalty export is missing: penalties_sheet.csv")
+    rows: list[list[str]] = []
+    with path.open("r", encoding="utf-8-sig", newline="") as stream:
+        reader = csv.reader(stream)
+        header = next(reader, None)
+        if header != PENALTY_SHEET_COLUMNS:
+            raise RuntimeError("Penalty export header mismatch")
+        for row in reader:
+            if len(row) != len(PENALTY_SHEET_COLUMNS):
+                raise RuntimeError("Penalty export row width mismatch")
+            rows.append(row)
+    if not rows:
+        raise RuntimeError("Penalty export is empty; refusing to erase the live sheet")
+    payload = {
+        "token": key,
+        "action": "publish_wb_penalties_snapshot",
+        "sync_run_id": sync_run_id,
+        "rows": rows,
+    }
+    encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    if len(encoded) > MAX_REQUEST_BYTES:
+        raise RuntimeError("Penalty publication payload exceeds safe limit")
+    with httpx.Client(timeout=httpx.Timeout(180.0, connect=15.0), follow_redirects=True) as client:
+        response = client.post(BRIDGE_URL, json=payload)
+        response.raise_for_status()
+        result = response.json()
+    if not isinstance(result, dict) or result.get("ok") is not True or result.get("action") != "publish_wb_penalties_snapshot":
+        detail = str((result or {}).get("error") or (result or {}).get("message") or "unknown bridge response")[:240]
+        raise RuntimeError(f"Google Sheets bridge rejected penalty publication: {detail}")
+    if result.get("written") != len(rows) or result.get("distinct_keys") != len(rows):
+        raise RuntimeError("Penalty publication row-count mismatch")
+    print(json.dumps({
+        "penalty_snapshot": "OK",
+        "spreadsheet_id": result.get("spreadsheet_id"),
+        "sheet": result.get("sheet"),
+        "rows": result.get("written"),
+        "min_date": result.get("min_date"),
+        "max_date": result.get("max_date"),
+        "sync_run_id": sync_run_id,
+    }, ensure_ascii=False, sort_keys=True), flush=True)
+
 def _publish() -> None:
     path = OUT_DIR / "charges_all.csv"
     if not path.exists():
@@ -308,6 +353,7 @@ def _publish() -> None:
                 "max_date": result.get("max_date"),
             }, ensure_ascii=False, sort_keys=True), flush=True)
 
+    _publish_legacy_penalties(key, sync_run_id)
 
 async def main() -> int:
     parser = argparse.ArgumentParser()
