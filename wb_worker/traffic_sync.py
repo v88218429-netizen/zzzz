@@ -258,7 +258,7 @@ def _bootstrap_business_campaign_scope(previous_status, shop, campaign_ids,
         previous_no_statistics = int(
             previous.get("campaigns_without_period_statistics") or 0
         )
-    except (TypeError, ValueError):
+    except (AttributeError, TypeError, ValueError):
         return None
     if (finished_at.tzinfo is None
             or age < -timedelta(minutes=5)
@@ -270,10 +270,10 @@ def _bootstrap_business_campaign_scope(previous_status, shop, campaign_ids,
             or len(null_payload_campaign_ids) != previous_null
             or len(no_statistics_campaign_ids) != previous_no_statistics):
         return None
-    previous_null_sample = {
-        str(value)
-        for value in previous.get("campaigns_with_null_payload_sample", [])
-    }
+    raw_null_sample = previous.get("campaigns_with_null_payload_sample") or []
+    if not isinstance(raw_null_sample, list):
+        return None
+    previous_null_sample = {str(value) for value in raw_null_sample}
     current_null_ids = {str(value) for value in null_payload_campaign_ids}
     if previous_null_sample and not previous_null_sample.issubset(current_null_ids):
         return None
@@ -520,7 +520,7 @@ async def sync_once():
             active_scope_ids = sorted({int(value) for value in raw_scope})
             if any(value <= 0 for value in active_scope_ids):
                 raise ValueError("invalid campaign id")
-        except (OSError, TypeError, ValueError):
+        except (AttributeError, OSError, TypeError, ValueError):
             scope_config_error = True
     status = {"startedAt": now.isoformat(), "monitoring_start": monitoring_start.isoformat(),
               "period": [begin, end], "funnel_period": [funnel_begin, end], "shops": {}}
