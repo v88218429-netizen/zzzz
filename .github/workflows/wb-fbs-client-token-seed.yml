@@ -98,8 +98,8 @@ jobs:
               if (!response.ok) {
                 const code = Number(result.error && result.error.code || response.status);
                 const reason = String(result.error && result.error.status || 'UNKNOWN').replace(/[^A-Z0-9_]/g, '').slice(0,40);
-        const message = String(result.error && result.error.message || '').replace(/[\\r\\n]+/g, ' ').slice(0,180);
-        process.stderr.write(client.name + ': APPS_SCRIPT_HTTP=' + response.status + ' API_CODE=' + (Number.isFinite(code) ? code : 0) + ' REASON=' + reason + ' MESSAGE=' + message + '\n');
+                const message = String(result.error && result.error.message || '').replace(/[\\r\\n]+/g, ' ').slice(0,180);
+                process.stderr.write(client.name + ': APPS_SCRIPT_HTTP=' + response.status + ' API_CODE=' + (Number.isFinite(code) ? code : 0) + ' REASON=' + reason + ' MESSAGE=' + message + '\n');
                 process.exit(1);
               }
               const value = result.response && result.response.result || {};
