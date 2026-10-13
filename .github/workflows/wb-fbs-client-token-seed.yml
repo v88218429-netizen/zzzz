@@ -16,8 +16,8 @@ jobs:
     timeout-minutes: 10
     env:
       CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
-      WB_API_TOKEN_AA: \${{ secrets.WB_API_TOKEN_AA }}
-      WB_API_TOKEN_YV: \${{ secrets.WB_API_TOKEN_YV }}
+      WB_API_TOKEN_AA: ${{ secrets.WB_API_TOKEN_AA }}
+      WB_API_TOKEN_YV: ${{ secrets.WB_API_TOKEN_YV }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
