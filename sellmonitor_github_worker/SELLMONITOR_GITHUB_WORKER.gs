@@ -1,10 +1,10 @@
 /**
- * Sellmonitor GitHub Central Worker v1.3.22
+ * Sellmonitor GitHub Central Worker v1.3.34
  * GitHub is source-of-truth/scheduler. This Apps Script project is only
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.33',
+  VERSION: 'github-worker-1.3.34',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -14,6 +14,32 @@ const SMC_GH = Object.freeze({
   WEBHOOK_SECRET: '__SELLMONITOR_GITHUB_WEBHOOK_SECRET__',
   WEBHOOK_SECRET_SHA256: '__SELLMONITOR_GITHUB_WEBHOOK_SECRET_SHA256__'
 });
+
+const SMC_INNER_FINANCE = Object.freeze({
+  initialDate: '2026-10-07',
+  historicalStartDate: '2026-09-01',
+  historicalEndDateExclusive: '2026-10-07',
+  retryIntervalMs: 15 * 60 * 1000,
+  schemaVersion: 'inner-finance-month-v1',
+  endpoint: 'https://sellmonitor.com/mcp/inner-analytics'
+});
+
+const SMC_INNER_FINANCE_STORES = Object.freeze({
+  sanych_wb: {spreadsheetId:'1-aBDZ7c5xfmVwwiNmUi9-DyfIANXmfiM5-Ti2_zg4zI',storeId:'sanych_wb',shopKey:'ap',storeName:'Дом Саныча',accountId:17410},
+  air_wb: {spreadsheetId:'1SmsoG8zKx3hbTtTzS-zLekTFiWEQN8eIwHOxXq-5RHo',storeId:'air_wb',shopKey:'aa',storeName:'AIR',accountId:9562},
+  hozyayushka_wb: {spreadsheetId:'1cVT_H_e8a519k_Gtph6fALWnBbtBrAQ2Jb_gFO3bM64',storeId:'hozyayushka_wb',shopKey:'yv',storeName:'Хозяюшка',accountId:27179}
+});
+
+const SMC_INNER_FINANCE_HEADERS = [
+  'store_id','account_id','mall','period_from','period_to_exclusive','days','nmId','seller_article',
+  'orders_qty','orders_revenue_rub','paid_order_qty','net_sales_qty','returns_qty','returns_revenue_rub',
+  'revenue_rub','customer_revenue_rub','marketplace_discount_rub','prime_cost_rub','commission_rub',
+  'logistic_rub','delivery_logistic_rub','return_logistic_rub','storage_rub','ad_rub','fines_rub',
+  'paid_acceptance_rub','deduction_rub','tax_rub','other_expenses_rub','expenses_total_rub','profit_rub',
+  'payout_rub','margin','roi','buyout','avg_profit_per_unit_rub','stock_qty_snapshot',
+  'stock_prime_cost_snapshot_rub','trust_status','source','loaded_at','product_group','product_subgroup',
+  'store_name'
+];
 
 
 function sellmonitorGithubEnsureTrigger_() {
@@ -225,6 +251,28 @@ function sellmonitorGithubTick() {
       }
     }
 
+    var innerFinanceSyncs = [];
+    Object.keys(SMC_INNER_FINANCE_STORES).forEach(function(storeId) {
+      var cfg = SMC_INNER_FINANCE_STORES[storeId], sync = null;
+      try {
+        sync = sellmonitorGithubMaybeSyncInnerFinance_(cfg);
+      } catch (financeError) {
+        sync = {ok:false,attempted:true,error:String(financeError.message || financeError).slice(0,1500)};
+      }
+      innerFinanceSyncs.push(Object.assign({store_id:storeId}, sync || {}));
+      if (sync && sync.attempted) {
+        sellmonitorGithubLog_(
+          cc,
+          cfg.spreadsheetId,
+          'INNER_FINANCE_MONTHLY_PARTITION',
+          sync.ok ? 'DONE' : 'ERROR',
+          sync.ok ? sync.date : sync.error,
+          sync
+        );
+        if (!sync.ok) errors.push({spreadsheetId:cfg.spreadsheetId,error:String(sync.error || 'INNER_FINANCE_SYNC_FAILED')});
+      }
+    });
+
     SpreadsheetApp.flush();
     return {
       ok: errors.length === 0,
@@ -232,6 +280,7 @@ function sellmonitorGithubTick() {
       startClient: clients.length ? clients[start].storeId : '',
       processedClients: processedClients,
       processedCommands: processedCommands,
+      innerFinance: innerFinanceSyncs,
       errors: errors
     };
   } finally {
@@ -2358,6 +2407,75 @@ function sellmonitorGithubOAuthHtml_(ok, title, detail) {
   );
 }
 
+function sellmonitorGithubParseInnerMcp_(text) {
+  text = String(text || '').trim();
+  try { return JSON.parse(text); } catch (ignored) {}
+  var messages = [];
+  text.split(/\r?\n/).forEach(function(line) {
+    if (line.indexOf('data:') !== 0) return;
+    var payload = line.slice(5).trim();
+    if (!payload || payload === '[DONE]') return;
+    try { messages.push(JSON.parse(payload)); } catch (ignored) {}
+  });
+  return messages.length ? messages[0] : null;
+}
+
+function sellmonitorGithubMcpData_(response) {
+  var item = response;
+  if (Array.isArray(item)) item = item.filter(function(x) { return x && x.id === 2; })[0] || item[0];
+  if (item && item.error) throw new Error('INNER_MCP_RPC_ERROR');
+  var result = item && item.result ? item.result : {};
+  if (Array.isArray(result.content)) {
+    for (var i = 0; i < result.content.length; i++) {
+      var part = result.content[i];
+      if (!part || part.type !== 'text' || !part.text) continue;
+      try { return JSON.parse(part.text); } catch (ignored) { throw new Error('INNER_MCP_RESPONSE_NOT_JSON'); }
+    }
+  }
+  return result.structuredContent || result;
+}
+
+function sellmonitorGithubInnerMcpCallWithToken_(token, tool, args) {
+  var endpoint = SMC_INNER_FINANCE.endpoint;
+  function post(body, sessionId) {
+    var headers = {Authorization:'Bearer ' + token,Accept:'application/json, text/event-stream'};
+    if (sessionId) headers['Mcp-Session-Id'] = sessionId;
+    var response = UrlFetchApp.fetch(endpoint, {
+      method:'post',contentType:'application/json',payload:JSON.stringify(body),
+      headers:headers,muteHttpExceptions:true
+    });
+    var responseHeaders = response.getAllHeaders();
+    var session = String(responseHeaders['Mcp-Session-Id'] || responseHeaders['mcp-session-id'] || sessionId || '');
+    return {http:response.getResponseCode(),session:session,json:sellmonitorGithubParseInnerMcp_(response.getContentText())};
+  }
+  var init = post({
+    jsonrpc:'2.0',id:1,method:'initialize',
+    params:{protocolVersion:'2025-06-18',capabilities:{},clientInfo:{name:'Sellmonitor Control Center',version:SMC_GH.VERSION}}
+  },'');
+  if (init.http < 200 || init.http >= 300) throw new Error('INNER_MCP_INITIALIZE_HTTP_' + init.http);
+  post({jsonrpc:'2.0',method:'notifications/initialized',params:{}},init.session);
+  var call = post({jsonrpc:'2.0',id:2,method:'tools/call',params:{name:tool,arguments:args || {}}},init.session);
+  if (call.http < 200 || call.http >= 300) throw new Error('INNER_MCP_CALL_HTTP_' + call.http);
+  return sellmonitorGithubMcpData_(call.json);
+}
+
+function sellmonitorGithubInnerMcpCall_(spreadsheetId, tool, args) {
+  var props = sellmonitorClientProperties_(spreadsheetId);
+  var auth = sellmonitorGithubEnsureClientAuth_(spreadsheetId);
+  if (!auth.ok) throw new Error('INNER_MCP_AUTH_REQUIRED');
+  var token = String(props.getProperty('SM_INNER_MCP_ACCESS_TOKEN') || '');
+  try {
+    return sellmonitorGithubInnerMcpCallWithToken_(token,tool,args);
+  } catch (e) {
+    if (!/HTTP_401/.test(String(e.message || e))) throw e;
+    props.deleteProperty('SM_INNER_MCP_ACCESS_TOKEN');
+    auth = sellmonitorGithubEnsureClientAuth_(spreadsheetId);
+    if (!auth.ok) throw new Error('INNER_MCP_REFRESH_REQUIRED');
+    token = String(props.getProperty('SM_INNER_MCP_ACCESS_TOKEN') || '');
+    return sellmonitorGithubInnerMcpCallWithToken_(token,tool,args);
+  }
+}
+
 function sellmonitorGithubOAuthCallback_(e) {
   try {
     var p = e && e.parameter ? e.parameter : {};
@@ -2848,6 +2966,200 @@ function sellmonitorGithubTrafficPartFile_(shop, dataset, month, cfg) {
     throw new Error('WB_TRAFFIC_PART_HEADER_MISMATCH:' + partId);
   }
   return {id:fileId, partId:partId, sheet:sheet, headers:headers};
+}
+
+function sellmonitorGithubInnerMetric_(object, path, divisor) {
+  var value = object;
+  for (var i = 0; i < path.length; i++) {
+    if (value == null || !Object.prototype.hasOwnProperty.call(value,path[i])) return '';
+    value = value[path[i]];
+  }
+  if (value == null || value === '') return '';
+  var number = Number(value);
+  return isFinite(number) ? number / (divisor || 1) : '';
+}
+
+function sellmonitorGithubInnerFinanceRows_(cfg, from, to, products, loadedAt) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(from)) || !/^\d{4}-\d{2}-\d{2}$/.test(String(to))) {
+    throw new Error('INNER_FINANCE_DATE_INVALID');
+  }
+  var days = Math.round((new Date(to + 'T12:00:00Z') - new Date(from + 'T12:00:00Z')) / 86400000);
+  if (days !== 1) throw new Error('INNER_FINANCE_DAILY_PERIOD_REQUIRED');
+  if (!Array.isArray(products) || !products.length) throw new Error('INNER_FINANCE_EMPTY_PRODUCTS');
+  var now = loadedAt || new Date(), rows = [], seen = {};
+  products.forEach(function(product) {
+    var nmId = String(product && (product.id != null ? product.id : product.article) || '').trim();
+    if (!nmId) throw new Error('INNER_FINANCE_PRODUCT_ID_MISSING');
+    if (seen[nmId]) throw new Error('INNER_FINANCE_DUPLICATE_PRODUCT:' + nmId);
+    seen[nmId] = true;
+    var other = sellmonitorGithubInnerMetric_(product,['otherExpenses','price'],100);
+    var additional = sellmonitorGithubInnerMetric_(product,['additionalExpenses','price'],100);
+    var otherTotal = other === '' || additional === '' ? '' : other + additional;
+    rows.push([
+      cfg.storeId,cfg.accountId,'wb',from,to,days,nmId,
+      String(product.supplierArticle || ''),
+      sellmonitorGithubInnerMetric_(product,['orderedAmount','count']),
+      sellmonitorGithubInnerMetric_(product,['orderedAmount','price'],100),
+      sellmonitorGithubInnerMetric_(product,['payedAmountFromOrders','count']),
+      sellmonitorGithubInnerMetric_(product,['netSalesAmount','count']),
+      sellmonitorGithubInnerMetric_(product,['returnedAmount','count']),
+      sellmonitorGithubInnerMetric_(product,['returnedAmount','price'],100),
+      sellmonitorGithubInnerMetric_(product,['revenueAmount','price'],100),
+      sellmonitorGithubInnerMetric_(product,['revenueWithMarketplaceDiscount','price'],100),
+      sellmonitorGithubInnerMetric_(product,['marketplaceDiscountAmount','price'],100),
+      sellmonitorGithubInnerMetric_(product,['primeCostExpenses','price'],100),
+      sellmonitorGithubInnerMetric_(product,['commission','price'],100),
+      sellmonitorGithubInnerMetric_(product,['logistic','price'],100),
+      sellmonitorGithubInnerMetric_(product,['deliveryLogistic','price'],100),
+      sellmonitorGithubInnerMetric_(product,['returnLogistic','price'],100),
+      sellmonitorGithubInnerMetric_(product,['storage','price'],100),
+      sellmonitorGithubInnerMetric_(product,['ad','price'],100),
+      sellmonitorGithubInnerMetric_(product,['fines','price'],100),
+      sellmonitorGithubInnerMetric_(product,['paidAcceptance','price'],100),
+      sellmonitorGithubInnerMetric_(product,['deduction','price'],100),
+      sellmonitorGithubInnerMetric_(product,['tax','price'],100),
+      otherTotal,
+      sellmonitorGithubInnerMetric_(product,['expensesAmount','price'],100),
+      sellmonitorGithubInnerMetric_(product,['profitAmount','price'],100),
+      sellmonitorGithubInnerMetric_(product,['payoutAmount','price'],100),
+      sellmonitorGithubInnerMetric_(product,['marginality','percent'],100),
+      sellmonitorGithubInnerMetric_(product,['returnOnInvestment','percent'],100),
+      sellmonitorGithubInnerMetric_(product,['payedAmountFromOrders','percent'],100),
+      sellmonitorGithubInnerMetric_(product,['averageProfitPrice'],100),
+      sellmonitorGithubInnerMetric_(product,['stock','count']),
+      sellmonitorGithubInnerMetric_(product,['stockPrimeCost'],100),
+      'FACTUAL_INNER_ANALYTICS','SELLMONITOR_INNER_MCP',now,'','',cfg.storeName
+    ]);
+  });
+  if (rows.some(function(row) { return row.length !== SMC_INNER_FINANCE_HEADERS.length; })) {
+    throw new Error('INNER_FINANCE_SCHEMA_WIDTH_MISMATCH');
+  }
+  return rows;
+}
+
+function sellmonitorGithubWriteInnerFinancePart_(cfg, rows, from, runId) {
+  if (!rows.length) throw new Error('INNER_FINANCE_EMPTY_WRITE_REFUSED');
+  var month = String(from).slice(0,7);
+  var partCfg = {
+    headers:SMC_INNER_FINANCE_HEADERS,
+    schemaVersion:SMC_INNER_FINANCE.schemaVersion,
+    key_columns:[0,3,4,6],
+    source:'Sellmonitor Inner product analytics',
+    sourceKind:'SELLMONITOR_INNER_MCP'
+  };
+  var part = sellmonitorGithubTrafficPartFile_(cfg.shopKey,'inner_finance',month,partCfg);
+  var sheet = part.sheet, width = part.headers.length, oldLast = sheet.getLastRow(), byKey = {};
+  if (oldLast > 1) {
+    sheet.getRange(2,1,oldLast - 1,width).getValues().forEach(function(row) {
+      if (!row[0]) return;
+      var key = sellmonitorGithubTrafficPartKey_(row,partCfg.key_columns);
+      if (!key || Object.prototype.hasOwnProperty.call(byKey,key)) throw new Error('INNER_FINANCE_DUPLICATE_STORED_KEY:' + key);
+      byKey[key] = row;
+    });
+  }
+  var added = 0, updated = 0;
+  rows.forEach(function(row) {
+    if (row.length !== SMC_INNER_FINANCE_HEADERS.length || row[0] !== cfg.storeId || row[3] !== from) {
+      throw new Error('INNER_FINANCE_ROW_OUTSIDE_TARGET_PERIOD');
+    }
+    var key = sellmonitorGithubTrafficPartKey_(row,partCfg.key_columns);
+    if (!key || key.indexOf('||') >= 0) throw new Error('INNER_FINANCE_ROW_KEY_INVALID');
+    if (Object.prototype.hasOwnProperty.call(byKey,key)) updated++;
+    else added++;
+    byKey[key] = row.concat([String(runId),key]);
+  });
+  var merged = Object.keys(byKey).map(function(key) { return byKey[key]; });
+  merged.sort(function(a,b) {
+    return String(a[3]).localeCompare(String(b[3])) || String(a[6]).localeCompare(String(b[6]));
+  });
+  var needed = merged.length + 1;
+  if (sheet.getMaxRows() < needed) sheet.insertRowsAfter(sheet.getMaxRows(),needed - sheet.getMaxRows());
+  sheet.getRange(2,1,merged.length,width).setValues(merged);
+  if (oldLast > needed) sheet.getRange(needed + 1,1,oldLast - needed,width).clearContent();
+  SpreadsheetApp.flush();
+  var readback = sheet.getRange(2,1,merged.length,width).getValues();
+  var digest = sellmonitorGithubTrafficPartChecksum_(merged);
+  if (sellmonitorGithubTrafficPartChecksum_(readback) !== digest) throw new Error('INNER_FINANCE_PART_READBACK_CHECKSUM_MISMATCH');
+  var dates = merged.map(function(row) { return String(row[3] || ''); }).filter(Boolean).sort();
+  var monthParts = month.split('-');
+  var monthEnd = Utilities.formatDate(new Date(Date.UTC(Number(monthParts[0]),Number(monthParts[1]),0)),'GMT','yyyy-MM-dd');
+  var url = 'https://docs.google.com/spreadsheets/d/' + part.id + '/edit';
+  var registryRow = [
+    part.partId,'WB',cfg.storeId,'inner_finance','trusted_inner_daily_rows',
+    month + '-01',monthEnd,1,SMC_INNER_FINANCE.schemaVersion,part.id,url,
+    'get_product_list','SELLMONITOR_INNER_MCP',String(runId),new Date(),merged.length,
+    Object.keys(byKey).length,dates[0] || '',dates[dates.length - 1] || '',digest,'OK','PASS','',''
+  ];
+  sellmonitorGithubTrafficPartRegistry_(registryRow);
+  return {
+    part_id:part.partId,file_id:part.id,url:url,rows:merged.length,distinct_keys:Object.keys(byKey).length,
+    added:added,updated:updated,min_date:dates[0] || '',max_date:dates[dates.length - 1] || '',
+    checksum:digest,qc_status:'PASS'
+  };
+}
+
+function sellmonitorGithubInnerProducts_(data) {
+  if (!data || data.partial === true) throw new Error('INNER_FINANCE_SOURCE_PARTIAL');
+  var value = data.data;
+  if (Array.isArray(value)) return value;
+  if (value && Array.isArray(value.products)) return value.products;
+  if (value && Array.isArray(value.items)) return value.items;
+  if (Array.isArray(data.products)) return data.products;
+  return [];
+}
+
+function sellmonitorGithubNextDate_(dateKey) {
+  var parts = String(dateKey).split('-').map(Number);
+  return Utilities.formatDate(new Date(Date.UTC(parts[0],parts[1] - 1,parts[2] + 1)),'GMT','yyyy-MM-dd');
+}
+
+function sellmonitorGithubMaybeSyncInnerFinance_(cfg) {
+  var props = sellmonitorClientProperties_(cfg.spreadsheetId);
+  var auth = sellmonitorGithubEnsureClientAuth_(cfg.spreadsheetId);
+  if (!auth.ok || !auth.refresh_token || !props.getProperty('SM_INNER_MCP_CLIENT_ID')) {
+    return {skipped:true,reason:'inner_auth_or_refresh_token_required'};
+  }
+  var dateKey = String(props.getProperty('SMC_INNER_FINANCE_NEXT_DATE') || SMC_INNER_FINANCE.initialDate);
+  var cutoff = Utilities.formatDate(new Date(Date.now() - 86400000),'Europe/Moscow','yyyy-MM-dd');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) throw new Error('INNER_FINANCE_NEXT_DATE_INVALID');
+  var isHistorical = false;
+  if (dateKey > cutoff) {
+    dateKey = String(props.getProperty('SMC_INNER_FINANCE_BACKFILL_NEXT_DATE') || SMC_INNER_FINANCE.historicalStartDate);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) throw new Error('INNER_FINANCE_BACKFILL_DATE_INVALID');
+    if (dateKey >= SMC_INNER_FINANCE.historicalEndDateExclusive) {
+      return {skipped:true,reason:'caught_up',next_date:String(props.getProperty('SMC_INNER_FINANCE_NEXT_DATE') || SMC_INNER_FINANCE.initialDate),latest_complete_date:cutoff};
+    }
+    isHistorical = true;
+  }
+  var now = Date.now();
+  var lastAttempt = Number(props.getProperty('SMC_INNER_FINANCE_LAST_ATTEMPT_MS') || 0);
+  if (lastAttempt && now - lastAttempt < SMC_INNER_FINANCE.retryIntervalMs) {
+    return {skipped:true,reason:'retry_cooldown',next_date:dateKey};
+  }
+
+  props.setProperty('SMC_INNER_FINANCE_LAST_ATTEMPT_MS',String(now));
+  try {
+    var nextDay = sellmonitorGithubNextDate_(dateKey);
+    var data = sellmonitorGithubInnerMcpCall_(cfg.spreadsheetId,'get_product_list',{
+      marketplaceCode:'wb',marketplaceAccountId:cfg.accountId,
+      from:dateKey,to:nextDay,after:0,limit:2000
+    });
+    var products = sellmonitorGithubInnerProducts_(data);
+    var minimum = Number(cfg.minProductCount || 50);
+    if (products.length < minimum) throw new Error('INNER_FINANCE_SOURCE_COVERAGE_LOW:' + products.length + '<' + minimum);
+    var rows = sellmonitorGithubInnerFinanceRows_(cfg,dateKey,nextDay,products,new Date());
+    var runId = 'INNER-' + cfg.storeId + '-' + dateKey + '-' + now;
+    var part = sellmonitorGithubWriteInnerFinancePart_(cfg,rows,dateKey,runId);
+    if (isHistorical) props.setProperty('SMC_INNER_FINANCE_BACKFILL_NEXT_DATE',nextDay);
+    else props.setProperty('SMC_INNER_FINANCE_NEXT_DATE',nextDay);
+    props.setProperty('SMC_INNER_FINANCE_LAST_SUCCESS_AT',new Date().toISOString());
+    props.setProperty('SMC_INNER_FINANCE_LAST_ERROR','');
+    return {ok:true,attempted:true,date:dateKey,next_date:nextDay,historical:isHistorical,source_rows:products.length,finance_rows:rows.length,part:part};
+  } catch (e) {
+    var message = String(e && e.message ? e.message : e).slice(0,1000);
+    props.setProperty('SMC_INNER_FINANCE_LAST_ERROR',message);
+    return {ok:false,attempted:true,date:dateKey,error:message};
+  }
 }
 
 function sellmonitorGithubWriteWbTrafficPartitions_(prepared, runId) {
