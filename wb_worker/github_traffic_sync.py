@@ -10,7 +10,7 @@ from pathlib import Path
 import httpx
 
 from traffic_sync import (ADS_POLL_COLUMNS, COLUMNS, DATA_DIR, FUNNEL_COLUMNS, ORGANIC_COLUMNS,
-                          FUNNEL_POLL_COLUMNS, sync_once)
+                          FUNNEL_POLL_COLUMNS, _public_status_summary, sync_once)
 from query_clusters import collect as collect_query_clusters, publish as publish_query_clusters
 from campaign_state import collect as collect_campaign_state, publish as publish_campaign_state
 
@@ -95,8 +95,7 @@ def _publish() -> None:
         response.raise_for_status()
         result = response.json()
     if not isinstance(result, dict) or result.get("ok") is not True or result.get("action") != "publish_wb_traffic":
-        detail = str((result or {}).get("error") or (result or {}).get("message") or (result or {}).get("reason") or "unknown bridge response")[:240]
-        raise RuntimeError(f"Google Sheets bridge rejected traffic publication: {detail}")
+        raise RuntimeError("Google Sheets bridge rejected traffic publication")
     partition_counts = (result.get("partitions") or {}).get("datasets") or {}
     expectations = (("ads", len(ads)), ("funnel", len(funnel)), ("organic", len(organic)),
                     ("ads_poll", len(ads_poll)), ("funnel_poll", len(funnel_poll)))
@@ -108,26 +107,9 @@ def _publish() -> None:
             raise RuntimeError(f"Monthly-partition key-count mismatch for {name}")
         if not expected and not item.get("skipped"):
             raise RuntimeError(f"Monthly-partition empty {name} result was not preserved")
-    def latest_date(name):
-        parts = partition_counts.get(name, {}).get("parts") or []
-        return max((str(part.get("max_date") or "") for part in parts), default="")
-    def added(name):
-        return sum(int(part.get("added") or 0) for part in partition_counts.get(name, {}).get("parts") or [])
     print(json.dumps({
         "published": True,
         "publication_target": "monthly_partitions_only",
-        "sync_finished_at": status["finishedAt"],
-        "ads_rows": len(ads),
-        "ads_max_date": latest_date("ads"),
-        "funnel_rows": len(funnel),
-        "organic_rows": len(organic),
-        "organic_derived_complete_rows": sum(row[10] == "DERIVED_COMPLETE" for row in organic),
-        "organic_incomplete_rows": sum(row[10] != "DERIVED_COMPLETE" for row in organic),
-        "funnel_max_date": latest_date("funnel"),
-        "ads_poll_rows": len(ads_poll),
-        "funnel_poll_rows": len(funnel_poll),
-        "ads_poll_observations_added": added("ads_poll"),
-        "funnel_poll_observations_added": added("funnel_poll"),
     }, ensure_ascii=False, sort_keys=True))
 
 
@@ -142,19 +124,19 @@ def main() -> int:
         key = os.environ.get("GOOGLE_SHEETS_BRIDGE_KEY", "").strip()
         errors = []
         try:
-            cluster_published = publish_query_clusters(BRIDGE_URL, key)
-            print("WB_AD_CLUSTER_PUBLISHED " + json.dumps(cluster_published, ensure_ascii=False))
+            publish_query_clusters(BRIDGE_URL, key)
+            print("WB_AD_CLUSTER_PUBLISHED " + json.dumps({"completed": True}, ensure_ascii=False))
         except Exception as exc:
-            errors.append(f"clusters: {type(exc).__name__}: {exc}")
+            errors.append(f"clusters: {type(exc).__name__}")
         try:
             settings_published = publish_campaign_state(BRIDGE_URL, key)
-            print("WB_CAMPAIGN_SETTINGS_PUBLISHED " + json.dumps(settings_published, ensure_ascii=False))
+            print("WB_CAMPAIGN_SETTINGS_PUBLISHED " + json.dumps({"completed": True}, ensure_ascii=False))
             missing_settings = [shop for shop, row in settings_published.items()
                                 if not row.get("published")]
             if missing_settings:
-                errors.append("campaign settings missing: " + ", ".join(missing_settings))
+                errors.append("campaign settings publication incomplete")
         except Exception as exc:
-            errors.append(f"campaign settings: {type(exc).__name__}: {exc}")
+            errors.append(f"campaign settings: {type(exc).__name__}")
         if errors:
             raise RuntimeError("WB_PUBLISH_INCOMPLETE: " + "; ".join(errors))
         return 0
@@ -165,30 +147,13 @@ def main() -> int:
         cluster_status = asyncio.run(collect_query_clusters())
     except Exception as exc:
         cluster_status = {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
-    print("WB_AD_CLUSTER_COLLECTION " + json.dumps(cluster_status, ensure_ascii=False))
+    print("WB_AD_CLUSTER_COLLECTION " + json.dumps({"ok": cluster_status.get("ok") is True}, ensure_ascii=False))
     try:
         campaign_status = asyncio.run(collect_campaign_state())
     except Exception as exc:
         campaign_status = {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
-    print("WB_CAMPAIGN_SETTINGS_COLLECTION " + json.dumps(campaign_status, ensure_ascii=False))
-    print(json.dumps({
-        "ok": status.get("ok"),
-        "complete": status.get("complete"),
-        "period": status.get("period"),
-        "funnel_period": status.get("funnel_period"),
-        "shops": {
-            shop: {
-                "ok": value.get("ok"),
-                "campaigns": value.get("campaigns"),
-                "campaigns_with_null_payload": value.get("campaigns_with_null_payload"),
-                "ad_rows": value.get("ad_rows"),
-                "funnel_rows": value.get("funnel_rows"),
-                "funnel_nm_ids": value.get("funnel_nm_ids"),
-                "errors": value.get("errors"),
-            }
-            for shop, value in (status.get("shops") or {}).items()
-        },
-    }, ensure_ascii=False, sort_keys=True))
+    print("WB_CAMPAIGN_SETTINGS_COLLECTION " + json.dumps({"ok": campaign_status.get("ok") is True}, ensure_ascii=False))
+    print(json.dumps(_public_status_summary(status), ensure_ascii=False, sort_keys=True))
     return 0 if status.get("ok") is True else 1
 
 
