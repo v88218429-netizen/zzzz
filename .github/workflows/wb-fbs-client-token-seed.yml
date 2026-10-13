@@ -52,34 +52,39 @@ jobs:
           export AIR_API_EXEC_ID HOZ_API_EXEC_ID
           node <<'NODE'
           const { execFileSync } = require('node:child_process');
-          const fs = require('node:fs');
-          const path = require('node:path');
           const clients = [
             {name:'AIR', dir:'/tmp/fbs-air', token:process.env.WB_API_TOKEN_AA},
             {name:'HOZYAYUSHKA', dir:'/tmp/fbs-hoz', token:process.env.WB_API_TOKEN_YV},
           ];
           for (const client of clients) {
             if (!client.token) throw new Error(client.name + ': token secret missing');
-            let output;
+            let raw;
             try {
-              output = execFileSync('clasp', [
+              raw = execFileSync('clasp', [
                 'run', 'setWbApiTokenFromGitHubV1',
-                '--params', JSON.stringify([client.token]),
+                '--params', JSON.stringify([client.token]), '--json',
               ], {cwd:client.dir, encoding:'utf8', stdio:['ignore','pipe','pipe']});
-            } catch (e) {
-              let raw = String(e.stdout || '') + String(e.stderr || '');
-              for (const item of clients) if (item.token) raw = raw.split(item.token).join('[REDACTED]');
-              const safe = raw.replace(/\b(?:AKfy[a-zA-Z0-9_-]{20,}|ya29\.[a-zA-Z0-9._-]+)\b/g, '[REDACTED]');
-              process.stderr.write(client.name + ': Apps Script call failed\n' + safe.slice(-5000) + '\n');
+            } catch (_) {
+              process.stderr.write(client.name + ': Apps Script request failed before a verified result\n');
               process.exit(1);
             }
-            let sanitized = String(output || '');
-            for (const item of clients) if (item.token) sanitized = sanitized.split(item.token).join('[REDACTED]');
-            if (!sanitized.includes('apiVerified') && !sanitized.includes('apiVerified=true')) {
-              process.stderr.write(client.name + ': no API verification result returned\n');
+            let envelope;
+            try {
+              envelope = JSON.parse(String(raw || '').trim());
+            } catch (_) {
+              process.stderr.write(client.name + ': Apps Script returned no machine-readable result\n');
               process.exit(1);
             }
-            fs.writeFileSync('/tmp/' + client.name + '-verified.txt', 'ok\n');
-            process.stdout.write(client.name + ': WB API token accepted and API verified\n');
+            if (envelope.error) {
+              const code = Number(envelope.error.code || 0);
+              process.stderr.write(client.name + ': Apps Script returned error code ' + (Number.isFinite(code) ? code : 0) + '\n');
+              process.exit(1);
+            }
+            const result = envelope.response || {};
+            if (result.ok !== true || result.tokenStored !== true || result.apiVerified !== true) {
+              process.stderr.write(client.name + ': WB token was not confirmed by the API check\n');
+              process.exit(1);
+            }
+            process.stdout.write(client.name + ': WB token stored; WB API accepted it\n');
           }
           NODE
