@@ -4,7 +4,7 @@
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.31',
+  VERSION: 'github-worker-1.3.32',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -3067,6 +3067,62 @@ function sellmonitorGithubPublishWbFinance_(body) {
     added:added,updated:updated,distinct_keys:normalized.length,min_date:dates[0] || '',max_date:dates[dates.length - 1] || '',qc_status:'PASS'};
 }
 
+
+function sellmonitorGithubPublishWbPenaltySnapshot_(body) {
+  body = body || {};
+  var targetId = '1Hj6jxJGN1cnJQbcsov0P2kbysNkO_EbERRgNMcajd74';
+  var headers = [
+    'Магазин','Дата штрафа','Причина / категория','Артикул продавца','Артикул WB',
+    'Сумма штрафа, ₽','Стикер МП','Что было заказано','Что пришло',
+    'Фото 1','Фото 2','Фото 3','Фото 4','Фото 5','Order ID','Report ID','RRD ID'
+  ];
+  var input = body.rows;
+  var runId = String(body.sync_run_id || '').trim();
+  if (!runId || isNaN(new Date(runId).getTime())) throw new Error('WB_PENALTY_RUN_ID_INVALID');
+  if (!Array.isArray(input) || !input.length || input.length > 25000) throw new Error('WB_PENALTY_ROWS_INVALID');
+  var seen = {}, rows = [];
+  input.forEach(function(sourceRow, i) {
+    if (!Array.isArray(sourceRow) || sourceRow.length !== headers.length) throw new Error('WB_PENALTY_ROW_WIDTH:' + i);
+    var row = sourceRow.map(function(v) { return v == null ? '' : v; });
+    if (!String(row[0] || '').trim()) throw new Error('WB_PENALTY_SHOP_MISSING:' + i);
+    var dateText = String(row[1] || '').trim().slice(0, 10);
+    var date;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateText)) {
+      date = new Date(dateText + 'T12:00:00+03:00');
+    } else if (/^\d{2}\.\d{2}\.\d{4}$/.test(dateText)) {
+      var p = dateText.split('.');
+      date = new Date(p[2] + '-' + p[1] + '-' + p[0] + 'T12:00:00+03:00');
+    }
+    if (!(date instanceof Date) || isNaN(date.getTime())) throw new Error('WB_PENALTY_DATE_INVALID:' + i);
+    row[1] = date;
+    [4,5,14,15,16].forEach(function(col) {
+      if (row[col] === '') return;
+      var n = Number(String(row[col]).replace(',', '.'));
+      if (!isFinite(n)) throw new Error('WB_PENALTY_NUMBER_INVALID:' + i + ':' + col);
+      row[col] = n;
+    });
+    var key = [row[0], dateText, row[15], row[16]].join('|');
+    if (seen[key]) throw new Error('WB_PENALTY_DUPLICATE_KEY:' + i);
+    seen[key] = true;
+    rows.push(row);
+  });
+  var ss = SpreadsheetApp.openById(targetId);
+  var sheet = ss.getSheetByName('_FF_14д');
+  if (!sheet) throw new Error('WB_PENALTY_TARGET_TAB_MISSING');
+  if (sheet.getMaxColumns() < headers.length) sheet.insertColumnsAfter(sheet.getMaxColumns(), headers.length - sheet.getMaxColumns());
+  var needed = rows.length + 1;
+  if (sheet.getMaxRows() < needed) sheet.insertRowsAfter(sheet.getMaxRows(), needed - sheet.getMaxRows());
+  var oldLast = sheet.getLastRow();
+  if (oldLast > 0) sheet.getRange(1, 1, oldLast, headers.length).clearContent();
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  sheet.getRange(2, 1, rows.length, headers.length).setValues(rows);
+  SpreadsheetApp.flush();
+  var dates = rows.map(function(row) { return row[1]; }).sort(function(a,b) { return a.getTime() - b.getTime(); });
+  return {ok:true,action:'publish_wb_penalties_snapshot',spreadsheet_id:targetId,sheet:'_FF_14д',
+    written:rows.length,distinct_keys:Object.keys(seen).length,min_date:Utilities.formatDate(dates[0],ss.getSpreadsheetTimeZone(),'yyyy-MM-dd'),
+    max_date:Utilities.formatDate(dates[dates.length - 1],ss.getSpreadsheetTimeZone(),'yyyy-MM-dd'),sync_run_id:runId};
+}
+
 function sellmonitorGithubNormalizeWbTrafficRows_(dataset, inputRows, observedAt) {
   var cfg = SMC_WB_TRAFFIC.DATASETS[dataset];
   if (!cfg) throw new Error('WB_TRAFFIC_UNKNOWN_DATASET');
@@ -4139,6 +4195,10 @@ function doPost(e) {
 
     if (action === 'publish_wb_traffic') {
       return sellmonitorGithubWebJson_(sellmonitorGithubPublishWbTraffic_(body));
+    }
+
+    if (action === 'publish_wb_penalties_snapshot') {
+      return sellmonitorGithubPublishWbPenaltySnapshot_(body);
     }
 
     if (action === 'publish_wb_finance') {
