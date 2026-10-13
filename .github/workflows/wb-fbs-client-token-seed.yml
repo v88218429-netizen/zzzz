@@ -76,14 +76,6 @@ jobs:
               process.stderr.write('GOOGLE_OAUTH_REFRESH_NO_ACCESS_TOKEN\n');
               process.exit(1);
             }
-            const sheetProbe = await fetch('https://sheets.googleapis.com/v4/spreadsheets/1f9dxXeZxkDth8h2C9GA7L7WqAr1-Ok-Oi5YtufLYOOk?fields=spreadsheetId,properties.title', {
-              headers:{'authorization':'Bearer ' + refreshed.access_token},
-            });
-            if (!sheetProbe.ok) {
-              process.stderr.write('SHEETS_API_HTTP=' + sheetProbe.status + '\\n');
-              process.exit(1);
-            }
-            process.stdout.write('SHEETS_API_READ_OK\\n');
             const clients = [
               {name:'AIR', scriptId:'1snEntW5W9KZ_zKHP5bT4D-fmr-sbDdjV4-izjRxf46l8HWcrt3GJqU9V', token:process.env.WB_API_TOKEN_AA},
               {name:'HOZYAYUSHKA', scriptId:'1c7CIF9OE-PSVYpj9d9c6LuzsORWVV13o7AuAq6Ds6LlogoLX69gmisZi', token:process.env.WB_API_TOKEN_YV},
