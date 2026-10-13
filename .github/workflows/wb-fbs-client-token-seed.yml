@@ -51,43 +51,6 @@ jobs:
           HOZ_API_EXEC_ID="AKfycbzcu_Y1hQnq5BPGz5eTzc0D9hXbNwVeeQXB_q86Qd3F5xRTM7IbzUjOxSIfZyZnRCYr3Q"
           export AIR_API_EXEC_ID HOZ_API_EXEC_ID
           node <<'NODE'
-          const { execFileSync } = require('node:child_process');
-          const clients = [
-            {name:'AIR', dir:'/tmp/fbs-air', token:process.env.WB_API_TOKEN_AA},
-            {name:'HOZYAYUSHKA', dir:'/tmp/fbs-hoz', token:process.env.WB_API_TOKEN_YV},
-          ];
-          for (const client of clients) {
-            if (!client.token) throw new Error(client.name + ': token secret missing');
-            let raw;
-            try {
-              raw = execFileSync('clasp', [
-                'run', 'setWbApiTokenFromGitHubV1',
-                '--params', JSON.stringify([client.token]), '--json',
-              ], {cwd:client.dir, encoding:'utf8', stdio:['ignore','pipe','pipe']});
-            } catch (_) {
-              process.stderr.write(client.name + ': Apps Script request failed before a verified result\n');
-              process.exit(1);
-            }
-            let envelope;
-            try {
-              envelope = JSON.parse(String(raw || '').trim());
-            } catch (_) {
-              process.stderr.write(client.name + ': Apps Script returned no machine-readable result\n');
-              process.exit(1);
-            }
-            if (envelope.error) {
-              const code = Number(envelope.error.code || 0);
-              process.stderr.write(client.name + ': Apps Script returned error code ' + (Number.isFinite(code) ? code : 0) + '\n');
-              process.exit(1);
-            }
-            const result = envelope.response || {};
-            if (result.ok !== true || result.tokenStored !== true || result.apiVerified !== true) {
-              process.stderr.write(client.name + ': WB token was not confirmed by the API check\n');
-              process.exit(1);
-            }
-            process.stdout.write(client.name + ': WB token stored; WB API accepted it\n');
-          }
-          NODE          node <<'NODE'
           const { spawnSync } = require('node:child_process');
           const clients = [
             {name:'AIR', dir:'/tmp/fbs-air', token:process.env.WB_API_TOKEN_AA},
