@@ -2986,7 +2986,9 @@ function sellmonitorGithubInnerFinanceRows_(cfg, from, to, products, loadedAt) {
   var days = Math.round((new Date(to + 'T12:00:00Z') - new Date(from + 'T12:00:00Z')) / 86400000);
   if (days !== 1) throw new Error('INNER_FINANCE_DAILY_PERIOD_REQUIRED');
   if (!Array.isArray(products) || !products.length) throw new Error('INNER_FINANCE_EMPTY_PRODUCTS');
-  var now = loadedAt || new Date(), rows = [], seen = {};
+  var now = loadedAt || new Date();
+  var loadedAtValue = now instanceof Date && !isNaN(now.getTime()) ? now.toISOString() : String(now);
+  var rows = [], seen = {};
   products.forEach(function(product) {
     var nmId = String(product && (product.id != null ? product.id : product.article) || '').trim();
     if (!nmId) throw new Error('INNER_FINANCE_PRODUCT_ID_MISSING');
@@ -3028,13 +3030,25 @@ function sellmonitorGithubInnerFinanceRows_(cfg, from, to, products, loadedAt) {
       sellmonitorGithubInnerMetric_(product,['averageProfitPrice'],100),
       sellmonitorGithubInnerMetric_(product,['stock','count']),
       sellmonitorGithubInnerMetric_(product,['stockPrimeCost'],100),
-      'FACTUAL_INNER_ANALYTICS','SELLMONITOR_INNER_MCP',now,'','',cfg.storeName
+      'FACTUAL_INNER_ANALYTICS','SELLMONITOR_INNER_MCP',loadedAtValue,'','',cfg.storeName
     ]);
   });
   if (rows.some(function(row) { return row.length !== SMC_INNER_FINANCE_HEADERS.length; })) {
     throw new Error('INNER_FINANCE_SCHEMA_WIDTH_MISMATCH');
   }
   return rows;
+}
+
+function sellmonitorGithubInnerFinanceChecksum_(rows) {
+  var canonical = rows.map(function(row) {
+    return row.map(function(value) {
+      if (value instanceof Date && !isNaN(value.getTime())) {
+        return Utilities.formatDate(value,'GMT',"yyyy-MM-dd'T'HH:mm:ss'Z'");
+      }
+      return value;
+    });
+  });
+  return sellmonitorGithubTrafficPartChecksum_(canonical);
 }
 
 function sellmonitorGithubWriteInnerFinancePart_(cfg, rows, from, runId) {
@@ -3078,8 +3092,8 @@ function sellmonitorGithubWriteInnerFinancePart_(cfg, rows, from, runId) {
   if (oldLast > needed) sheet.getRange(needed + 1,1,oldLast - needed,width).clearContent();
   SpreadsheetApp.flush();
   var readback = sheet.getRange(2,1,merged.length,width).getValues();
-  var digest = sellmonitorGithubTrafficPartChecksum_(merged);
-  if (sellmonitorGithubTrafficPartChecksum_(readback) !== digest) throw new Error('INNER_FINANCE_PART_READBACK_CHECKSUM_MISMATCH');
+  var digest = sellmonitorGithubInnerFinanceChecksum_(merged);
+  if (sellmonitorGithubInnerFinanceChecksum_(readback) !== digest) throw new Error('INNER_FINANCE_PART_READBACK_CHECKSUM_MISMATCH');
   var dates = merged.map(function(row) { return String(row[3] || ''); }).filter(Boolean).sort();
   var monthParts = month.split('-');
   var monthEnd = Utilities.formatDate(new Date(Date.UTC(Number(monthParts[0]),Number(monthParts[1]),0)),'GMT','yyyy-MM-dd');
