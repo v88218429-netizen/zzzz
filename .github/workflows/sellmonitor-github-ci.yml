@@ -42,3 +42,5 @@ jobs:
         run: node sellmonitor_github_worker/test_wb_traffic_publish.mjs
       - name: WB ads cluster analysis fixture
         run: node sellmonitor_github_worker/test_ads_analysis.mjs
+      - name: Sellmonitor Inner monthly partition fixture
+        run: node sellmonitor_github_worker/test_inner_finance_partitions.mjs
