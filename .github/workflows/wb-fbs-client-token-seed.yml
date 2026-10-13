@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      CLASPRC_JSON: \${{ secrets.CLASPRC_JSON }}
+      CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
