@@ -18,6 +18,18 @@ vm.runInNewContext(source + `
       sellmonitorGithubInnerFinanceChecksum_([[new Date(b)]])
     ];
   };
+  globalThis.__loadedAtChecksums = function(a, b) {
+    var rowA = Array(41).fill(''), rowB = Array(41).fill('');
+    rowA[40] = a;
+    rowB[40] = b;
+    return [
+      sellmonitorGithubInnerFinanceChecksum_([rowA]),
+      sellmonitorGithubInnerFinanceChecksum_([rowB])
+    ];
+  };
+  globalThis.__numberChecksums = function(a, b) {
+    return [sellmonitorGithubInnerFinanceChecksum_([[a]]),sellmonitorGithubInnerFinanceChecksum_([[b]])];
+  };
 `, context, { timeout: 3000 });
 
 const stores = ['sanych_wb', 'air_wb', 'hozyayushka_wb'];
@@ -58,5 +70,12 @@ const [olderDateChecksum, roundedDateChecksum] = context.__dateChecksums(
 );
 assert.equal(olderDateChecksum, roundedDateChecksum,
   'Sheets date precision must not make a correct read-back fail');
+const [dateObjectChecksum, dateTextChecksum] = context.__loadedAtChecksums(
+  '2026-10-13T17:18:52.100Z', '2026-10-13T17:18:52.900Z'
+);
+assert.equal(dateObjectChecksum, dateTextChecksum,
+  'loaded_at may be read back as a date instead of its original text');
+const [precisionA, precisionB] = context.__numberChecksums(1.2345670001, 1.2345670002);
+assert.equal(precisionA, precisionB, 'Sheets numeric precision must not make a correct read-back fail');
 
 console.log('INNER_FINANCE_PARTITION_FIXTURE_OK', JSON.stringify({stores:stores.length,columns:context.__headers.length}));
