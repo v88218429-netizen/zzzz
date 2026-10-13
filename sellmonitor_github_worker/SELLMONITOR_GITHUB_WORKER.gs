@@ -4,7 +4,7 @@
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.32',
+  VERSION: 'github-worker-1.3.33',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -3095,7 +3095,7 @@ function sellmonitorGithubPublishWbPenaltySnapshot_(body) {
     }
     if (!(date instanceof Date) || isNaN(date.getTime())) throw new Error('WB_PENALTY_DATE_INVALID:' + i);
     row[1] = date;
-    [4,5,14,15,16].forEach(function(col) {
+    [4,5,14,16].forEach(function(col) {
       if (row[col] === '') return;
       var n = Number(String(row[col]).replace(',', '.'));
       if (!isFinite(n)) throw new Error('WB_PENALTY_NUMBER_INVALID:' + i + ':' + col);
@@ -3113,10 +3113,11 @@ function sellmonitorGithubPublishWbPenaltySnapshot_(body) {
   var needed = rows.length + 1;
   if (sheet.getMaxRows() < needed) sheet.insertRowsAfter(sheet.getMaxRows(), needed - sheet.getMaxRows());
   var oldLast = sheet.getLastRow();
-  if (oldLast > 0) sheet.getRange(1, 1, oldLast, headers.length).clearContent();
+  var headerCell = sheet.getRange(1, 1);
+  if (headerCell.getFormula()) headerCell.clearContent();
   sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
   sheet.getRange(2, 1, rows.length, headers.length).setValues(rows);
-  SpreadsheetApp.flush();
+  if (oldLast > needed) sheet.getRange(needed + 1, 1, oldLast - needed, headers.length).clearContent();
   var dates = rows.map(function(row) { return row[1]; }).sort(function(a,b) { return a.getTime() - b.getTime(); });
   return {ok:true,action:'publish_wb_penalties_snapshot',spreadsheet_id:targetId,sheet:'_FF_14д',
     written:rows.length,distinct_keys:Object.keys(seen).length,min_date:Utilities.formatDate(dates[0],ss.getSpreadsheetTimeZone(),'yyyy-MM-dd'),
