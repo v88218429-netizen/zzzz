@@ -1,0 +1,85 @@
+name: WB FBS client token seed
+
+on:
+  push:
+    branches: [mainggg]
+    paths:
+      - ".github/workflows/wb-fbs-client-token-seed.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+      WB_API_TOKEN_AA: ${{ secrets.WB_API_TOKEN_AA }}
+      WB_API_TOKEN_YV: ${{ secrets.WB_API_TOKEN_YV }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Validate configured credentials without displaying them
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$CLASPRC_JSON"
+          test -n "$WB_API_TOKEN_AA"
+          test -n "$WB_API_TOKEN_YV"
+
+      - name: Install clasp credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install -g @google/clasp
+          umask 077
+          printf '%s' "$CLASPRC_JSON" > "$HOME/.clasprc.json"
+
+      - name: Transfer and validate each store key
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/fbs-air /tmp/fbs-hoz
+          printf '{"scriptId":"1snEntW5W9KZ_zKHP5bT4D-fmr-sbDdjV4-izjRxf46l8HWcrt3GJqU9V","rootDir":".","projectId":"wb-fbs-clients"}\n' > /tmp/fbs-air/.clasp.json
+          printf '{"scriptId":"1c7CIF9OE-PSVYpj9d9c6LuzsORWVV13o7AuAq6Ds6LlogoLX69gmisZi","rootDir":".","projectId":"wb-fbs-clients"}\n' > /tmp/fbs-hoz/.clasp.json
+          AIR_API_EXEC_ID="AKfycbwGKBniZxxHrACCDuxQwfd-sAs8FMBxlDKvUbXCEAkZMAqeyynt9eRNpL-1ty3wZluw"
+          HOZ_API_EXEC_ID="AKfycbzcu_Y1hQnq5BPGz5eTzc0D9hXbNwVeeQXB_q86Qd3F5xRTM7IbzUjOxSIfZyZnRCYr3Q"
+          export AIR_API_EXEC_ID HOZ_API_EXEC_ID
+          node <<'NODE'
+          const { execFileSync } = require('node:child_process');
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const clients = [
+            {name:'AIR', dir:'/tmp/fbs-air', token:process.env.WB_API_TOKEN_AA},
+            {name:'HOZYAYUSHKA', dir:'/tmp/fbs-hoz', token:process.env.WB_API_TOKEN_YV},
+          ];
+          for (const client of clients) {
+            if (!client.token) throw new Error(client.name + ': token secret missing');
+            let output;
+            try {
+              output = execFileSync('clasp', [
+                'run', 'setWbApiTokenFromGitHubV1',
+                '--params', JSON.stringify([client.token]),
+              ], {cwd:client.dir, encoding:'utf8', stdio:['ignore','pipe','pipe']});
+            } catch (e) {
+              let raw = String(e.stdout || '') + String(e.stderr || '');
+              for (const item of clients) if (item.token) raw = raw.split(item.token).join('[REDACTED]');
+              const safe = raw.replace(/\b(?:AKfy[a-zA-Z0-9_-]{20,}|ya29\.[a-zA-Z0-9._-]+)\b/g, '[REDACTED]');
+              process.stderr.write(client.name + ': Apps Script call failed\n' + safe.slice(-5000) + '\n');
+              process.exit(1);
+            }
+            let sanitized = String(output || '');
+            for (const item of clients) if (item.token) sanitized = sanitized.split(item.token).join('[REDACTED]');
+            if (!sanitized.includes('apiVerified') && !sanitized.includes('apiVerified=true')) {
+              process.stderr.write(client.name + ': no API verification result returned\n');
+              process.exit(1);
+            }
+            fs.writeFileSync('/tmp/' + client.name + '-verified.txt', 'ok\n');
+            process.stdout.write(client.name + ': WB API token accepted and API verified\n');
+          }
+          NODE
