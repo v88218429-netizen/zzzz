@@ -30,6 +30,14 @@ vm.runInNewContext(source + `
   globalThis.__numberChecksums = function(a, b) {
     return [sellmonitorGithubInnerFinanceChecksum_([[a]]),sellmonitorGithubInnerFinanceChecksum_([[b]])];
   };
+  globalThis.__ephemeralChecksums = function(a, b) {
+    var rowA = Array(46).fill(''), rowB = Array(46).fill('');
+    rowA[6] = rowB[6] = '123456';
+    rowA[45] = rowB[45] = 'air_wb|2026-10-07|2026-10-08|123456';
+    rowA[40] = a[0]; rowB[40] = b[0];
+    rowA[44] = a[1]; rowB[44] = b[1];
+    return [sellmonitorGithubInnerFinanceChecksum_([rowA]),sellmonitorGithubInnerFinanceChecksum_([rowB])];
+  };
 `, context, { timeout: 3000 });
 
 const stores = ['sanych_wb', 'air_wb', 'hozyayushka_wb'];
@@ -75,6 +83,12 @@ const [dateObjectChecksum, dateTextChecksum] = context.__loadedAtChecksums(
 );
 assert.equal(dateObjectChecksum, dateTextChecksum,
   'loaded_at may be read back as a date instead of its original text');
+const [sourceWriteChecksum, safeRetryChecksum] = context.__ephemeralChecksums(
+  ['2026-10-13T17:18:52.100Z','INNER-air_wb-first-run'],
+  [46308.84643517361,'INNER-air_wb-retry']
+);
+assert.equal(sourceWriteChecksum, safeRetryChecksum,
+  'loaded_at and sync_run_id may change after an idempotent retry');
 const [precisionA, precisionB] = context.__numberChecksums(1.2345670001, 1.2345670002);
 assert.equal(precisionA, precisionB, 'Sheets numeric precision must not make a correct read-back fail');
 
