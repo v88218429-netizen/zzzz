@@ -1,5 +1,6 @@
 import unittest
 import csv
+import json
 import os
 import tempfile
 from datetime import date, datetime, timedelta
@@ -38,6 +39,35 @@ class TrafficParsingTest(unittest.TestCase):
         self.assertEqual(by_key[("aa", "2026-10-09", "43")][10], "ADVERTISING_COVERAGE_INCOMPLETE")
         self.assertEqual(by_key[("yv", "2026-10-09", "44")][10], "MEASUREMENT_MISMATCH")
         self.assertEqual(by_key[("ap", "2026-10-10", "45")][10], "TOTAL_OPEN_MISSING")
+
+    def test_public_status_summary_omits_campaign_identifiers_and_business_counts(self):
+        summary = traffic_sync._public_status_summary({
+            "ok": True,
+            "complete": False,
+            "period": ["2026-10-01", "2026-10-02"],
+            "funnel_period": ["2026-10-02", "2026-10-02"],
+            "ads_poll_rows": 9,
+            "shops": {
+                "aa": {
+                    "campaigns": 8,
+                    "campaigns_with_null_payload": 3,
+                    "campaigns_with_null_payload_sample": [12345],
+                    "ad_rows": 20,
+                }
+            },
+        })
+        self.assertEqual(summary, {
+            "ok": True,
+            "complete": False,
+            "period": ["2026-10-01", "2026-10-02"],
+            "funnel_period": ["2026-10-02", "2026-10-02"],
+            "finishedAt": None,
+        })
+        serialized = json.dumps(summary)
+        self.assertNotIn("12345", serialized)
+        self.assertNotIn("campaigns", serialized)
+        self.assertNotIn("ad_rows", serialized)
+
 
     def test_missing_fullstats_clicks_stays_unknown_not_zero(self):
         payload = [{"advertId": 12, "days": [{"date": "2026-10-09", "apps": [{

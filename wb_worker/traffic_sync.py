@@ -214,6 +214,17 @@ def _campaign_status_counts(statuses):
             for status in (7, 9, 11)}
 
 
+def _public_status_summary(status):
+    """Return only non-business outcome fields for public workflow logs."""
+    return {
+        "ok": status.get("ok") is True,
+        "complete": status.get("complete") is True,
+        "period": status.get("period"),
+        "funnel_period": status.get("funnel_period"),
+        "finishedAt": status.get("finishedAt"),
+    }
+
+
 def _campaign_ids(payload):
     return sorted(_campaign_status_index(payload))
 
@@ -601,7 +612,7 @@ async def sync_once():
         shop.get("warnings") for shop in status["shops"].values()
     )
     _atomic_json(DATA_DIR / "status.json", status)
-    print("WB_TRAFFIC_SYNC_DONE " + json.dumps(status, ensure_ascii=False), flush=True)
+    print("WB_TRAFFIC_SYNC_DONE " + json.dumps(_public_status_summary(status), ensure_ascii=False), flush=True)
     return status
 
 
