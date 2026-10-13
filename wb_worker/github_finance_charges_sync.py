@@ -268,9 +268,18 @@ def _publish_legacy_penalties(key: str, sync_run_id: str) -> None:
     if len(encoded) > MAX_REQUEST_BYTES:
         raise RuntimeError("Penalty publication payload exceeds safe limit")
     with httpx.Client(timeout=httpx.Timeout(180.0, connect=15.0), follow_redirects=True) as client:
-        response = client.post(BRIDGE_URL, json=payload)
-        response.raise_for_status()
-        result = response.json()
+        result = None
+        for attempt in range(2):
+            response = client.post(BRIDGE_URL, json=payload)
+            response.raise_for_status()
+            try:
+                result = response.json()
+                break
+            except json.JSONDecodeError:
+                if attempt:
+                    raise RuntimeError("Google Sheets bridge returned an empty or invalid response twice")
+                import time
+                time.sleep(5)
     if not isinstance(result, dict) or result.get("ok") is not True or result.get("action") != "publish_wb_penalties_snapshot":
         detail = str((result or {}).get("error") or (result or {}).get("message") or "unknown bridge response")[:240]
         raise RuntimeError(f"Google Sheets bridge rejected penalty publication: {detail}")
