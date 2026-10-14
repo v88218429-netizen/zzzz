@@ -19,6 +19,25 @@ jobs:
         run: |
           python - <<'PY'
           from ai_video_monitor_autonomous import Sheets
+          import os, json, requests
+          from google.oauth2.credentials import Credentials
+          from google.auth.transport.requests import Request
+          from pathlib import Path
+          cfg = json.loads(os.environ["CLASPRC_JSON"])["tokens"]["default"]
+          auth = Credentials(token=cfg.get("access_token"), refresh_token=cfg.get("refresh_token"),
+              token_uri="https://oauth2.googleapis.com/token",
+              client_id=cfg.get("client_id"), client_secret=cfg.get("client_secret"))
+          auth.refresh(Request())
+          script_id = "1RlfYnnnC9Hd8uZFeELF39TZOWxPK_gP-8qFrdge4PsYY-uoJzKC7oi49"
+          deploy_id = json.loads(Path("google_apps_script_ai_monitor/bridge_deployment.json").read_text())["deploymentId"]
+          meta = requests.get("https://script.googleapis.com/v1/projects/"+script_id+
+              "/deployments/"+deploy_id, headers={"Authorization":"Bearer "+auth.token}, timeout=30)
+          print("BRIDGE_DEPLOYMENT_META="+str(meta.status_code))
+          if meta.ok:
+              obj=meta.json()
+              print("BRIDGE_ENTRYPOINTS="+json.dumps(obj.get("entryPoints",[]), ensure_ascii=False)[:900])
+          else:
+              print("BRIDGE_META_ERROR="+str(meta.json().get("error",{}).get("status","unknown")))
           sh = Sheets()
           result = sh.bridge({"op": "ping"})
           print("BRIDGE_PING=OK", result.get("service"))
