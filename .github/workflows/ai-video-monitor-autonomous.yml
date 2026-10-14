@@ -1,0 +1,61 @@
+name: AI Video Monitor autonomous
+on:
+  workflow_dispatch:
+    inputs:
+      task_id:
+        description: Optional task ID to run now (for testing)
+        required: false
+        type: string
+      dry_run:
+        description: Plan only, without fetching or writing
+        required: false
+        default: 'false'
+        type: choice
+        options: ['false', 'true']
+  schedule:
+    # 06:45 / 10:45 / 14:45 Moscow, independent of user's Mac
+    - cron: '45 3,7,11 * * *'
+permissions:
+  contents: write
+  models: read
+concurrency:
+  group: ai-video-monitor-autonomous
+  cancel-in-progress: false
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 48
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install discovery and transcription engines
+        run: |
+          python -m pip install --quiet --upgrade yt-dlp youtube-transcript-api google-auth requests
+      - name: Validate worker syntax
+        run: python -m py_compile ai_video_monitor_autonomous.py
+      - name: Run live active tasks, transcript and personalize
+        env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+          GITHUB_TOKEN: ${{ github.token }}
+          TASK_ID: ${{ inputs.task_id }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          args=()
+          if [ -n "$TASK_ID" ]; then args+=(--force-task "$TASK_ID"); fi
+          if [ "$DRY_RUN" = 'true' ]; then args+=(--dry-run); fi
+          python ai_video_monitor_autonomous.py "${args[@]}"
+      - name: Persist verified public-video transcripts
+        if: success() && inputs.dry_run != 'true'
+        run: |
+          git config user.name 'AI Video Monitor'
+          git config user.email 'actions@users.noreply.github.com'
+          git add transcripts/
+          if ! git diff --cached --quiet; then
+            git commit -m 'AI Video Monitor verified transcripts'
+            git pull --rebase origin "${GITHUB_REF_NAME}"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          fi
