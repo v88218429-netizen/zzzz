@@ -1,5 +1,5 @@
 /**
- * WB OS / K2 Evolution Engine v0.1.17
+ * WB OS / K2 Evolution Engine v0.1.18
  *
  * Integrated mode: NO separate time trigger.
  * The existing finalAutomationTick master remains the only clock.
@@ -14,7 +14,7 @@
  */
 
 var K2_EV = {
-  VERSION: '0.1.17',
+  VERSION: '0.1.18',
   AUTOMATION_SHEET: 'Автоматизация',
   LAST_HASH_KEY: 'K2_EV_LAST_SNAPSHOT_HASH',
   LAST_COUNT_KEY: 'K2_EV_LAST_COUNT',
@@ -39,11 +39,18 @@ var K2_EV = {
  * On those failures the trusted live stock sheet is NOT overwritten.
  */
 function k2EvolutionFetchAndApply_() {
-  var lock = LockService.getScriptLock();
+  var lock = LockService.getDocumentLock();
+
+  if (!lock) {
+    throw new Error(
+      'K2_EV_LOCK_UNAVAILABLE: синхронизация требует запуска из таблицы. ' +
+      'Доверенный лист не изменён.'
+    );
+  }
 
   if (!lock.tryLock(30000)) {
     throw new Error(
-      'K2_EV_LOCK_BUSY: другой K2/FF writer уже выполняется. ' +
+      'K2_EV_LOCK_BUSY: другой запуск K2 для этой таблицы уже выполняется. ' +
       'Доверенный лист не изменён.'
     );
   }
