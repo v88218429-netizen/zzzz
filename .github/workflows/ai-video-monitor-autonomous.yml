@@ -37,6 +37,8 @@ jobs:
           python -m pip install --quiet --upgrade yt-dlp youtube-transcript-api google-auth requests
       - name: Validate worker syntax
         run: python -m py_compile ai_video_monitor_autonomous.py
+      - name: Offline unit tests
+        run: python -m unittest -v test_ai_video_monitor_autonomous.py
       - name: Run live active tasks, transcript and personalize
         env:
           CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
