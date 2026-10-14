@@ -80,7 +80,10 @@ jobs:
                 store: input.store,
                 httpStatus: response.status,
                 verified,
-                duplicate: Boolean(result && result.duplicate === true)
+                duplicate: Boolean(result && result.duplicate === true),
+                jsonParsed: result !== null,
+                errorCode: result && ["LOCK_BUSY","BAD_BODY","BAD_STORE","BAD_CREDENTIALS","GITHUB_INSTALLATION_HTTP","GITHUB_REPOSITORY_DENIED","GITHUB_RUN_HTTP","GITHUB_RUN_MISMATCH","WB_TOKEN_REJECTED","INGRESS_FAILED"].includes(result.error) ? result.error : null,
+                contentType: response.headers.get("content-type") || "unknown"
               }));
               return verified;
             } catch (error) {
