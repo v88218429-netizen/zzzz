@@ -43,7 +43,7 @@ jobs:
           const runId = process.env.GITHUB_RUN_ID;
           const runAttempt = process.env.GITHUB_RUN_ATTEMPT;
           const invalidFields = [];
-          if (!/^ghs_[A-Za-z0-9_]+$/.test(githubToken || "")) invalidFields.push("github_token");
+          if (!/^ghs_[A-Za-z0-9_-]+$/.test(githubToken || "")) invalidFields.push("github_token");
           if (!/^[0-9]{1,20}$/.test(runId || "")) invalidFields.push("run_id");
           if (!Number.isInteger(Number(runAttempt)) || Number(runAttempt) < 1) invalidFields.push("run_attempt");
           for (const input of inputs) {
