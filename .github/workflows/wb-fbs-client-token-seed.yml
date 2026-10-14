@@ -61,7 +61,7 @@ jobs:
                 headers: { "content-type": "application/json", "cache-control": "no-store" },
                 body: JSON.stringify({
                   store: input.store,
-                  wb_api_token: input.wbToken,
+                  wb_token: input.wbToken,
                   github_token: githubToken,
                   run_id: runId,
                   run_attempt: runAttempt
