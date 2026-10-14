@@ -57,7 +57,7 @@ jobs:
             process.exit(1);
           }
 
-          const expectedProject = '1072944905499';
+          const expectedProject = '435346549124';
           const clientProject = (auth.clientId.match(/^(\d+)-[^.]+\.apps\.googleusercontent\.com$/) || [])[1] || '';
           if (clientProject !== expectedProject) {
             process.stderr.write('BLOCKED_OAUTH_CLIENT_PROJECT_MISMATCH: expected ' + expectedProject +
