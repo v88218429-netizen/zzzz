@@ -1,0 +1,29 @@
+name: AI Video Monitor - Google bridge smoke
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install --quiet google-auth requests
+      - name: Check original Google Sheet via deployed Apps Script
+        env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+        run: |
+          python - <<'PY'
+          from ai_video_monitor_autonomous import Sheets
+          sh = Sheets()
+          result = sh.bridge({"op": "ping"})
+          print("BRIDGE_PING=OK", result.get("service"))
+          rows = sh.get("Задания", "A1:C3")
+          assert len(rows) >= 2, "No tasks in original Sheet"
+          assert rows[0][0] == "ID", "Unexpected original task header"
+          print("BRIDGE_READ=OK", "rows="+str(len(rows)), "first_task="+str(rows[1][0]))
+          PY
