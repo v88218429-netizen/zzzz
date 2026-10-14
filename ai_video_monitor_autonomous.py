@@ -312,7 +312,7 @@ def transcript_for(vid):
         if "## Transcript" not in saved:
             continue
         body = saved.split("## Transcript", 1)[1].strip()
-        if len(body) >= 250 and re.search(r"\\[\\d{1,2}:\\d{2}", body):
+        if len(body) >= 250 and re.search(r"\[\d{1,2}:\d{2}", body):
             return body, "verified GitHub transcript cache"
     err = []
     for attempt in range(2):
