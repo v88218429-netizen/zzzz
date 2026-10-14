@@ -6,6 +6,11 @@ on:
         description: Optional task ID to run now (for testing)
         required: false
         type: string
+      max_videos:
+        description: Limit new videos per task (1–10)
+        required: false
+        default: '2'
+        type: string
       dry_run:
         description: Plan only, without fetching or writing
         required: false
@@ -54,10 +59,12 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           TASK_ID: ${{ inputs.task_id }}
           DRY_RUN: ${{ inputs.dry_run }}
+          MAX_VIDEOS: ${{ inputs.max_videos }}
         run: |
           args=()
           if [ -n "$TASK_ID" ]; then args+=(--force-task "$TASK_ID"); fi
           if [ "$DRY_RUN" = 'true' ]; then args+=(--dry-run); fi
+          if [ -n "$MAX_VIDEOS" ]; then args+=(--videos-per-task "$MAX_VIDEOS"); fi
           python ai_video_monitor_autonomous.py "${args[@]}"
       - name: Persist verified public-video transcripts
         if: success() && inputs.dry_run != 'true'
