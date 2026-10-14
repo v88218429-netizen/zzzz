@@ -45,4 +45,10 @@ jobs:
           assert len(rows) >= 2, "No tasks in original Sheet"
           assert rows[0][0] == "ID", "Unexpected original task header"
           print("BRIDGE_READ=OK", "rows="+str(len(rows)), "first_task="+str(rows[1][0]))
+          # No-op write to the exact existing header, then read back.
+          # Exercises actual write access without introducing test records.
+          result=sh.bridge({"op":"write","data":[{"range":"'Задания'!A1","values":[["ID"]]}]})
+          assert result["updatedCells"] == 1
+          assert sh.get("Задания","A1:A1") == [["ID"]]
+          print("BRIDGE_WRITE_READBACK=OK cells=1")
           PY
