@@ -3158,6 +3158,8 @@ function sellmonitorGithubInnerFinanceChecksum_(rows) {
       // every business field and the immutable record_key remain covered.
       if (index === 40 || index === 44) return '';
       if (value == null || value === '') return '';
+      // Sheets may store numeric-looking WB nmId strings as numbers; hash the ID consistently.
+      if (index === 6) return String(value).trim();
       if (value instanceof Date && !isNaN(value.getTime())) {
         return Utilities.formatDate(value,'GMT',"yyyy-MM-dd'T'HH:mm:ss'Z'");
       }
