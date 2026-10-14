@@ -195,6 +195,22 @@ jobs:
           test "$COUNT" -gt 0
           echo "LIVE pull-back verified: K2 v0.1.17 + credential fallback + master."
 
+      - name: Remove legacy K2 clocks and run one real sync
+        shell: bash
+        env:
+          PROJECT_DIR: ${{ steps.discover.outputs.project_dir }}
+        run: |
+          set -euo pipefail
+          cd "$PROJECT_DIR"
+          if command -v clasp >/dev/null 2>&1; then
+            clasp run setupK2EvolutionIntegrated
+            clasp run syncK2StocksOnly
+          else
+            npx --yes @google/clasp run setupK2EvolutionIntegrated
+            npx --yes @google/clasp run syncK2StocksOnly
+          fi
+          echo "Legacy K2 trigger cleanup and one immediate K2 sync completed."
+
       - name: Ensure master trigger if Execution API is available
         shell: bash
         env:
