@@ -246,10 +246,29 @@ def youtube_transcript_ai(vid):
     fail("youtube-transcript.ai unavailable")
 
 
+def free_transcript_api(vid):
+    response = SESSION.get("https://api.freetranscriptapi.com/v1/transcript",
+                           params={"video_url": vid, "lang": "ru"}, timeout=35)
+    if not response.ok:
+        fail("FreeTranscriptAPI HTTP " + str(response.status_code))
+    data = response.json()
+    segments = data.get("transcript") or data.get("segments") or []
+    parts = []
+    for item in segments:
+        seconds = int(float(item.get("start", 0) or 0))
+        body = re.sub(r"\s+", " ", str(item.get("text", ""))).strip()
+        if body:
+            parts.append(f"[{seconds // 60}:{seconds % 60:02d}] {body}")
+    text = "\n".join(parts)
+    if len(text) < 250:
+        fail("FreeTranscriptAPI empty")
+    return text, "FreeTranscriptAPI"
+
+
 def transcript_for(vid):
     err = []
     for attempt in range(2):
-        for provider in (youtube_transcript_api, youtube_transcript_ai, ytdlp_captions):
+        for provider in (youtube_transcript_api, youtube_transcript_ai, free_transcript_api, ytdlp_captions):
             try:
                 return provider(vid)
             except Exception as exc:
@@ -260,9 +279,6 @@ def transcript_for(vid):
 
 
 def model_json(task, video, transcript, goals, rules):
-    token = os.environ.get("GITHUB_TOKEN", "")
-    if not token:
-        fail("GITHUB_TOKEN absent")
     filtered_goals = [
         {"code": cell(g, 0), "area": cell(g, 1), "outcome": cell(g, 2),
          "questions": cell(g, 3)}
@@ -281,35 +297,25 @@ def model_json(task, video, transcript, goals, rules):
         " из предоставленного транскрипта; без неё идея недействительна."
         " goal_code должен точно совпасть с одним кодом из целей."
     )
-    payload = {
-        "model": "openai/gpt-4.1-mini",
-        "messages": [{"role": "system", "content": instruction},
-                     {"role": "user", "content": json.dumps({
-                         "task": {"area": cell(task, 2), "extract": cell(task, 14),
-                                  "tag": cell(task, 15)},
-                         "video": video["title"],
-                         "goals": filtered_goals,
-                         "rules": [cell(r, 1) for r in rules[1:12] if cell(r, 1)],
-                         "transcript": transcript[:19000],
-                     }, ensure_ascii=False)}],
-        "max_tokens": 1000,
-        "temperature": 0.1,
-    }
-    response = SESSION.post("https://models.github.ai/inference/chat/completions",
-        json=payload, timeout=65, headers={
-            "Authorization": "Bearer " + token,
-            "Accept": "application/vnd.github+json",
-            "Content-Type": "application/json",
-        })
+    messages = [{"role": "system", "content": instruction},
+                {"role": "user", "content": json.dumps({
+                    "task": {"area": cell(task, 2), "extract": cell(task, 14),
+                             "tag": cell(task, 15)},
+                    "video": video["title"],
+                    "goals": filtered_goals,
+                    "rules": [cell(r, 1) for r in rules[1:12] if cell(r, 1)],
+                    "transcript": transcript[:12000],
+                }, ensure_ascii=False)}]
+    # GitHub Models was retired in July 2026. Local CPU model needs no API key
+    # and runs entirely within the cloud job; content is never sent to unknown APIs.
+    response = SESSION.post("http://127.0.0.1:11434/api/chat", json={
+        "model": os.environ.get("VIDEO_LOCAL_MODEL", "qwen2.5:1.5b"),
+        "messages": messages, "stream": False, "format": "json",
+        "options": {"temperature": 0.1, "num_predict": 850, "num_ctx": 8192},
+    }, timeout=300)
     if not response.ok:
-        fail("GitHub Models HTTP " + str(response.status_code))
-    try:
-        obj = response.json()
-        output = obj.get("choices", [{}])[0].get("message", {}).get("content", "")
-    except ValueError:
-        output = response.text
-    if isinstance(output, list):
-        output = " ".join(str(i.get("text", "")) for i in output if isinstance(i, dict))
+        fail("Local AI HTTP " + str(response.status_code))
+    output = response.json().get("message", {}).get("content", "")
     match = re.search(r"\{[\s\S]*\}", str(output))
     if not match:
         fail("AI returned no JSON")
