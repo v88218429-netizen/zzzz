@@ -24,7 +24,7 @@ def google_probe():
             body = json.load(res)
         print("GOOGLE_SHEETS_READ=OK", "rows=" + str(len(body.get("values", []))))
     except urllib.error.HTTPError as ex:
-        print("GOOGLE_SHEETS_READ=HTTP_"+str(ex.code))
+        print("GOOGLE_SHEETS_READ=HTTP_"+str(ex.code), "reason="+str(json.loads(ex.read().decode()).get("error", {}).get("status", "unknown")) if ex.code != 429 else "rate_limited")
     except Exception as ex:
         print("GOOGLE_SHEETS_READ=ERROR_"+type(ex).__name__)
 
@@ -39,10 +39,12 @@ def models_probe():
         headers={"Authorization": "Bearer "+token, "Content-Type": "application/json", "Accept": "application/vnd.github+json"})
     try:
         with urllib.request.urlopen(req, timeout=30) as res:
-            answer = json.load(res)
+            raw = res.read()
+            print("AI_HTTP=",res.status,"CT=",res.headers.get("Content-Type"),"BYTES=",len(raw),"PREVIEW=",repr(raw[:90]))
+            answer = json.loads(raw)
         print("AI_MODELS=OK", "choices=" + str(len(answer.get("choices", []))))
     except urllib.error.HTTPError as ex:
-        print("AI_MODELS=HTTP_"+str(ex.code))
+        print("AI_MODELS=HTTP_"+str(ex.code), "RESPONSE="+ex.read().decode("utf-8","replace")[:120])
     except Exception as ex:
         print("AI_MODELS=ERROR_"+type(ex).__name__)
 
