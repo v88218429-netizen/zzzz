@@ -1,0 +1,61 @@
+name: AI Video Monitor - Deploy Google Sheets Bridge
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'ai_video_bridge_auth.py'
+      - 'google_apps_script_ai_monitor/Code.gs'
+      - 'google_apps_script_ai_monitor/appsscript.json'
+      - 'google_apps_script_ai_monitor/.clasp.json'
+      - '.github/workflows/ai-video-monitor-deploy-bridge.yml'
+permissions:
+  contents: write
+concurrency:
+  group: ai-video-monitor-bridge-deployment
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Google Apps Script CLI
+        run: npm install --global @google/clasp@3.3.0
+      - name: Prepare authenticated bridge without exposing Google secrets
+        env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+        run: python ai_video_bridge_auth.py
+      - name: Deploy into original spreadsheet
+        run: |
+          clasp -A /tmp/ai_video_monitor_oauth -P /tmp/ai_video_monitor_clasp push --force
+          clasp -A /tmp/ai_video_monitor_oauth -P /tmp/ai_video_monitor_clasp deploy --description "AI Video Monitor secure GitHub bridge" | tee /tmp/ai_video_monitor_deploy.log
+          python - <<'PY'
+          import json, re
+          from pathlib import Path
+          raw = Path("/tmp/ai_video_monitor_deploy.log").read_text()
+          hit = re.search(r"AKfy[A-Za-z0-9_-]{18,}", raw)
+          if not hit:
+              raise SystemExit("Deployment ID not returned by Google Apps Script")
+          url = "https://script.google.com/macros/s/" + hit.group(0) + "/exec"
+          dest = Path("google_apps_script_ai_monitor/bridge_deployment.json")
+          dest.write_text(json.dumps({"url": url, "deploymentId": hit.group(0)}, indent=2) + "\n")
+          print("BRIDGE_DEPLOYMENT_URL=" + url)
+          PY
+      - name: Persist non-secret deployment URL for cloud monitor
+        run: |
+          git config user.name "AI Video Monitor"
+          git config user.email "actions@users.noreply.github.com"
+          git add google_apps_script_ai_monitor/bridge_deployment.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Record Google Apps Script bridge deployment"
+            git pull --rebase origin "${GITHUB_REF_NAME}"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          fi
