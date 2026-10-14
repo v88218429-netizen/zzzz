@@ -485,7 +485,9 @@ load('apps_script/K2_EVOLUTION_ENGINE.gs');
     priceFn.indexOf('.setValues(output)')
   );
 
-  assert.ok(k2Source.includes('LockService.getScriptLock()'));
+  assert.ok(k2Source.includes('LockService.getDocumentLock()'));
+  assert.ok(k2Source.includes('K2_EV_LOCK_UNAVAILABLE'));
+  assert.ok(k2Source.includes("VERSION: '0.1.18'"));
   assert.ok(k2Source.includes('K2_EV_LOCK_BUSY'));
   assert.ok(k2Source.includes('K2_EV_CUTOVER_DONE'));
   assert.ok(k2Source.includes('ensureFinalAutomationTrigger_'));
