@@ -46,6 +46,13 @@ class Sheets:
         raw = os.environ.get("CLASPRC_JSON", "")
         if not raw:
             fail("CLASPRC_JSON is absent; Sheets automation blocked")
+        deploy = ROOT / "google_apps_script_ai_monitor" / "bridge_deployment.json"
+        self.bridge_url = ""
+        if deploy.exists():
+            from ai_video_bridge_auth import bridge_token
+            self.bridge_url = json.loads(deploy.read_text())["url"]
+            self.bridge_key = bridge_token()
+            return
         cfg = json.loads(raw)["tokens"]["default"]
         credentials = Credentials(
             token=cfg.get("access_token"),
@@ -69,17 +76,39 @@ class Sheets:
             fail(f"Sheets API {response.status_code} ({reason})")
         return response.json()
 
+    def bridge(self, payload):
+        try:
+            response = SESSION.post(self.bridge_url,
+                json={"token": self.bridge_key, **payload}, timeout=65)
+        except requests.RequestException as exc:
+            fail("Apps Script transport: " + type(exc).__name__)
+        if response.status_code != 200:
+            fail("Apps Script bridge HTTP " + str(response.status_code))
+        try:
+            response_json = response.json()
+        except ValueError:
+            fail("Apps Script bridge returned HTML; check deployment access")
+        if not response_json.get("ok"):
+            fail("Apps Script bridge: " + str(response_json.get("error", "unknown"))[:120])
+        return response_json
+
     def get(self, name, end="A1:Z1000"):
         a1 = f"'{name}'!{end}"
+        if getattr(self, "bridge_url", ""):
+            return self.bridge({"op": "read", "ranges": [a1]})["values"][0]
         return self.req("GET", "/values/" + quote(a1, safe="")).get("values", [])
 
     def batch(self, blocks):
         if not blocks:
             return
+        data = [{"range": f"'{name}'!{cell}", "values": [
+            values if isinstance(values, list) else [values]]}
+            for name, cell, values in blocks]
+        if getattr(self, "bridge_url", ""):
+            self.bridge({"op": "write", "data": data})
+            return
         self.req("POST", "/values:batchUpdate", json={
-            "valueInputOption": "RAW",
-            "data": [{"range": f"'{name}'!{cell}", "values": [values if isinstance(values, list) else [values]]}
-                     for name, cell, values in blocks],
+            "valueInputOption": "RAW", "data": data,
         })
 
 
