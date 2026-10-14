@@ -84,7 +84,7 @@ jobs:
           changed=sorted(p for p in set(before)|set(after) if p not in before or p not in after or digest(before[p])!=digest(after[p]))
           if len(changed)>1:
               raise SystemExit('More than one Apps Script source changed: '+repr(changed))
-          if changed and ('MASTER_DIAGNOSTICS' not in after[changed[0]].read_text(encoding='utf-8')):
+          if changed and ('WB_OS_MASTER_ERROR_DIAGNOSTICS_V1' not in after[changed[0]].read_text(encoding='utf-8')):
               raise SystemExit('The sole source change is not Master diagnostics: '+changed[0])
           print('Changed source files:',repr(changed))
           PY
@@ -128,7 +128,7 @@ jobs:
           a,b=sources(before),sources(after)
           if set(a)!=set(b): raise SystemExit('Live source file set changed during Master-only deploy')
           changed=[name for name in sorted(a) if hashlib.sha256(a[name].read_bytes()).digest()!=hashlib.sha256(b[name].read_bytes()).digest()]
-          if len(changed)>1 or (changed and 'MASTER_DIAGNOSTICS' not in b[changed[0]].read_text(encoding='utf-8')):
+          if len(changed)>1 or (changed and 'WB_OS_MASTER_ERROR_DIAGNOSTICS_V1' not in b[changed[0]].read_text(encoding='utf-8')):
               raise SystemExit('Unexpected live source changes: '+repr(changed))
           print('Live source files changed:',repr(changed))
           PY

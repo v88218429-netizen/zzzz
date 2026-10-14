@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Expose the existing Master error and clock count in the free status column.
+"""Remove the dangling Ozon hook and expose Master errors in the status sheet.
 
-This patch intentionally changes only the Master status renderer. It does not
-run, reschedule, or modify K2 or any source module.
+Only the Master source file is changed. The patch does not run, reschedule, or
+modify K2, the FBS scanner, or any source task.
 """
 
 from __future__ import annotations
@@ -49,6 +49,20 @@ BLOCK = r"""    /* WB_OS_MASTER_ERROR_DIAGNOSTICS_V1 */
       );
     }
 """
+MISSING_OZON_HOOK = r"""    /* Ozon LIVE radar · ensure dedicated 1-minute trigger */
+    try {
+      ensureOzonRadarServerTrigger_();
+    } catch (ozonRadarTriggerError) {
+      cycleErrors.push(
+        'Ozon radar trigger: ' + ozonRadarTriggerError.message
+      );
+      Logger.log(
+        'Ozon radar trigger: ' +
+        (ozonRadarTriggerError.stack || ozonRadarTriggerError.message)
+      );
+    }
+"""
+OZON_COMMENT = "    /* Ozon Radar bridge is not present in this Apps Script project. */\n\n"
 
 
 def patch_project(root: pathlib.Path) -> pathlib.Path:
@@ -71,25 +85,37 @@ def patch_project(root: pathlib.Path) -> pathlib.Path:
 
     path, content = candidates[0]
     marker_count = content.count(MARKER)
-    if marker_count == 1:
-        print("MASTER_DIAGNOSTICS_ALREADY_PRESENT:", path.relative_to(root))
-        return path
-    if marker_count:
+    if marker_count > 1:
         raise SystemExit("MASTER_DIAGNOSTICS_FAIL: duplicate marker")
+
+    changed = False
+    if MISSING_OZON_HOOK in content:
+        content = content.replace(MISSING_OZON_HOOK, OZON_COMMENT, 1)
+        changed = True
+    elif "ensureOzonRadarServerTrigger_();" in content and OZON_COMMENT not in content:
+        raise SystemExit(
+            "MASTER_DIAGNOSTICS_FAIL: Ozon hook found but its surrounding block differs"
+        )
 
     start = content.index("function refreshAutomationStatusSheet_()")
     end = content.find("\nfunction ", start + 1)
     if end < 0:
         end = len(content)
     function = content[start:end]
-    if function.count(INSERT_BEFORE) != 1:
-        raise SystemExit(
-            "MASTER_DIAGNOSTICS_FAIL: status renderer insertion point is ambiguous"
-        )
+    if marker_count == 0:
+        if function.count(INSERT_BEFORE) != 1:
+            raise SystemExit(
+                "MASTER_DIAGNOSTICS_FAIL: status renderer insertion point is ambiguous"
+            )
+        function = function.replace(INSERT_BEFORE, BLOCK + "\n" + INSERT_BEFORE, 1)
+        changed = True
 
-    function = function.replace(INSERT_BEFORE, BLOCK + "\n" + INSERT_BEFORE, 1)
-    path.write_text(content[:start] + function + content[end:], encoding="utf-8")
-    print("MASTER_DIAGNOSTICS_PATCHED:", path.relative_to(root))
+    updated = content[:start] + function + content[end:]
+    if changed:
+        path.write_text(updated, encoding="utf-8")
+        print("MASTER_DIAGNOSTICS_PATCHED:", path.relative_to(root))
+    else:
+        print("MASTER_DIAGNOSTICS_ALREADY_PRESENT:", path.relative_to(root))
     return path
 
 

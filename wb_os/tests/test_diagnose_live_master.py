@@ -10,6 +10,18 @@ SOURCE = r"""
 function runFinalAutomationCycle_(forceTelegram, forceAll) {
   var cycleErrors = [];
   cycleErrors.push('K2: do not rewrite this cycle');
+    /* Ozon LIVE radar · ensure dedicated 1-minute trigger */
+    try {
+      ensureOzonRadarServerTrigger_();
+    } catch (ozonRadarTriggerError) {
+      cycleErrors.push(
+        'Ozon radar trigger: ' + ozonRadarTriggerError.message
+      );
+      Logger.log(
+        'Ozon radar trigger: ' +
+        (ozonRadarTriggerError.stack || ozonRadarTriggerError.message)
+      );
+    }
 }
 
 function refreshAutomationStatusSheet_() {
@@ -44,6 +56,8 @@ def main() -> None:
         assert result.returncode == 0, result.stdout + result.stderr
         first = master.read_text(encoding="utf-8")
         assert first.count("WB_OS_MASTER_ERROR_DIAGNOSTICS_V1") == 1
+        assert "ensureOzonRadarServerTrigger_();" not in first
+        assert "Ozon Radar bridge is not present" in first
         assert "MASTER_LAST_ERROR" in first
         assert "finalAutomationTick" in first
         assert "sheet.getRange(7, 5)" in first
