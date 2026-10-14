@@ -78,7 +78,7 @@ class Sheets:
             return
         self.req("POST", "/values:batchUpdate", json={
             "valueInputOption": "RAW",
-            "data": [{"range": f"'{name}'!{cell}", "values": [values]}
+            "data": [{"range": f"'{name}'!{cell}", "values": [values if isinstance(values, list) else [values]]}
                      for name, cell, values in blocks],
         })
 
@@ -431,7 +431,7 @@ def run(args):
                     print(f"RETRY_PENDING task={task_id} vid={v['id']} error={type(ex).__name__}")
             # Atomic cross-tab value update: no fabricated rows on failure.
             elapsed = int(time.monotonic() - start)
-            status = "Готово" if collected and not errors else "Частично" if collected else "Ошибка"
+            status = "Активно" if not errors or collected else "Ошибка"
             digest = f"транскриптов {collected}; новых идей {nideas}; ошибок {len(errors)}; {elapsed}с"
             runid = f"AUTOV3_{valid_id(task_id)}_{now.strftime('%Y%m%d_%H%M%S')}"
             hr = [runid, task_id, day, now_msk().strftime("%Y-%m-%d %H:%M"),
@@ -447,11 +447,11 @@ def run(args):
             addmany("База знаний", newkb, len(knowledge))
             addmany("Идеи для владельца", newideas, len(ideas))
             values = {
-                "Q": day if collected else str(cell(task, 16)),
-                "R": next_run(task, now) if collected else day,
+                "Q": day,
+                "R": next_run(task, now),
                 "S": status,
-                "T": collected,
-                "U": sum(1 for r in newvid if r[3] == "short"),
+                "T": int(collected),
+                "U": int(sum(1 for r in newvid if r[3] == "short")),
                 "V": "; ".join(errors)[:600] if errors else "",
                 "Y": runid,
             }
