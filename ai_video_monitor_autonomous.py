@@ -327,11 +327,23 @@ def transcript_for(vid):
 
 
 def model_json(task, video, transcript, goals, rules):
-    filtered_goals = [
+    all_goals = [
         {"code": cell(g, 0), "area": cell(g, 1), "outcome": cell(g, 2),
          "questions": cell(g, 3)}
         for g in goals[1:] if cell(g, 0)
     ]
+    context = (" ".join((str(video.get("title", "")),
+                         str(cell(task, 2)), str(cell(task, 14))))).lower()
+    business_words = ("бизнес", "business", "выруч", "доход", "клиент", "контент",
+                      "продаж", "прибыл", "автомат", "реклам", "рынок", "маркетплейс")
+    if any(word in context for word in business_words):
+        preferred = ("BUSINESS", "INCOME", "FREEDOM", "LIFE")
+        filtered_goals = [g for code in preferred for g in all_goals if g["code"] == code]
+    else:
+        filtered_goals = [g for g in all_goals if g["code"] in
+                          ("LIFE", "FAMILY", "HOME", "LOCATION", "TRAVEL", "BUSINESS")]
+    if not filtered_goals:
+        filtered_goals = all_goals[:4]
     # Evidence is selected by segment ID so small local models do not have to
     # reproduce long, punctuated Russian quotes exactly. We copy the evidence
     # from the original transcript after validating the model's segment ID.
@@ -363,7 +375,7 @@ def model_json(task, video, transcript, goals, rules):
                              "tag": cell(task, 15)},
                     "video": video["title"],
                     "goals": filtered_goals,
-                    "rules": [cell(r, 1) for r in rules[1:12] if cell(r, 1)],
+                    "rules": [cell(r, 1) for r in rules[1:7] if cell(r, 1)],
                     "segments": [{"index": i, "text": segment} for i, segment in enumerate(segments)],
                 }, ensure_ascii=False)}]
     # GitHub Models was retired in July 2026. Local CPU model needs no API key
@@ -382,6 +394,7 @@ def model_json(task, video, transcript, goals, rules):
     data = json.loads(match.group())
     allowed = {cell(g, 0) for g in goals[1:] if cell(g, 0)}
     clean = []
+    rejected = {"goal": 0, "evidence": 0, "substance": 0}
     t_norm = re.sub(r"\s+", " ", transcript).lower()
     for idea in data.get("ideas", [])[:2]:
         evidence = re.sub(r"\s+", " ", str(idea.get("evidence", ""))).strip()
@@ -393,15 +406,21 @@ def model_json(task, video, transcript, goals, rules):
                 evidence = re.sub(r"^\[[^]]+\]\s*", "", segments[index])[:150].strip()
             except (TypeError, KeyError, ValueError):
                 continue
-        if (idea.get("goal_code") not in allowed or len(evidence) < 25
-                or evidence.lower() not in t_norm or len(str(idea.get("idea", ""))) < 25
-                or len(str(idea.get("action", ""))) < 20):
+        if idea.get("goal_code") not in allowed:
+            rejected["goal"] += 1
+            continue
+        if len(evidence) < 25 or evidence.lower() not in t_norm:
+            rejected["evidence"] += 1
+            continue
+        if len(str(idea.get("idea", ""))) < 25 or len(str(idea.get("action", ""))) < 20:
+            rejected["substance"] += 1
             continue
         item = {k: str(idea.get(k, "")).strip() for k in (
             "goal_code", "idea", "why_for_owner", "action", "metric",
             "fact", "evidence", "confidence")}
         item["evidence"] = evidence
         clean.append(item)
+    print(f"AI_GROUNDING proposed={len(data.get('ideas', []))} accepted={len(clean)} rejected={rejected}")
     return clean
 
 
