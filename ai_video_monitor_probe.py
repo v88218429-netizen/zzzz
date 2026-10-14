@@ -24,7 +24,9 @@ def google_probe():
             body = json.load(res)
         print("GOOGLE_SHEETS_READ=OK", "rows=" + str(len(body.get("values", []))))
     except urllib.error.HTTPError as ex:
-        print("GOOGLE_SHEETS_READ=HTTP_"+str(ex.code), "reason="+str(json.loads(ex.read().decode()).get("error", {}).get("status", "unknown")) if ex.code != 429 else "rate_limited")
+        body = json.loads(ex.read().decode()).get("error", {})
+        msg = body.get("message", "")
+        print("GOOGLE_SHEETS_READ=HTTP_"+str(ex.code), "reason="+str(body.get("status", "unknown")), "message="+str(msg)[:170])
     except Exception as ex:
         print("GOOGLE_SHEETS_READ=ERROR_"+type(ex).__name__)
 
