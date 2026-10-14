@@ -48,7 +48,15 @@ function doPost(e) {
         const m = parseA1(ref);
         const tab = book.getSheetByName(m[1]);
         if (!tab) throw new Error('Missing tab');
-        return tab.getRange(ref.split('!')[1]).getDisplayValues();
+        const rows = tab.getRange(ref.split('!')[1]).getDisplayValues();
+        // Match Google Sheets values.get semantics: omit empty trailing rows
+        // and trailing cells. Otherwise 1000 blank lines are mistaken for
+        // existing records and appends go beyond the physical grid.
+        rows.forEach(function(row) {
+          while (row.length && String(row[row.length - 1]).trim() === '') row.pop();
+        });
+        while (rows.length && rows[rows.length - 1].length === 0) rows.pop();
+        return rows;
       });
       return respond({ok:true, values:values, timestamp:new Date().toISOString()});
     }
