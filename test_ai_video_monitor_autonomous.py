@@ -43,6 +43,11 @@ class MonitorTests(unittest.TestCase):
         task[1] = False
         self.assertFalse(vm.due(task, datetime(2026, 10, 14, 15, tzinfo=TZ)))
 
+    def test_used_count_ignores_formatted_trailing_rows(self):
+        rows = [["ID", "Task"], ["A", "Active"], ["", "formula-like tail"],
+                ["", ""], []]
+        self.assertEqual(vm.used_count(rows), 2)
+
     def test_atomic_values_payload(self):
         sh = object.__new__(vm.Sheets)
         seen = {}
