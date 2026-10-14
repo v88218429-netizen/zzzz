@@ -17,7 +17,6 @@ on:
     - cron: '45 3,7,11 * * *'
 permissions:
   contents: write
-  models: read
 concurrency:
   group: ai-video-monitor-autonomous
   cancel-in-progress: false
@@ -39,6 +38,15 @@ jobs:
         run: python -m py_compile ai_video_monitor_autonomous.py
       - name: Offline unit tests
         run: python -m unittest -v test_ai_video_monitor_autonomous.py
+      - name: Install CPU-local AI model
+        run: |
+          curl -fsSL https://ollama.com/install.sh | sh
+          ollama serve > /tmp/ai-video-ollama.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl --silent --fail http://127.0.0.1:11434/api/tags >/dev/null; then break; fi
+            sleep 2
+          done
+          ollama pull qwen2.5:1.5b
       - name: Run live active tasks, transcript and personalize
         env:
           CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
