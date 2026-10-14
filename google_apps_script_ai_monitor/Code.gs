@@ -87,3 +87,12 @@ function doPost(e) {
     return respond({ok:false, error:String(error.message || 'Bridge error').slice(0,180)});
   }
 }
+
+/** Run once from Apps Script editor to grant the script owner permission.
+ * No modifications to sheet content; only reads the spreadsheet title.
+ */
+function authorizeBridge() {
+  const name = SpreadsheetApp.openById(SHEET_ID).getName();
+  console.log('AI Video Monitor bridge authorized for ' + name);
+  return name;
+}
