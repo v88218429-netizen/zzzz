@@ -336,8 +336,8 @@ def model_json(task, video, transcript, goals, rules):
     # reproduce long, punctuated Russian quotes exactly. We copy the evidence
     # from the original transcript after validating the model's segment ID.
     segments = []
-    for part in re.split(r"(?=\\[\\d{1,2}:\\d{2}(?::\\d{2})?\\])", transcript[:18000]):
-        content = re.sub(r"\\s+", " ", part).strip()
+    for part in re.split(r"(?=\[\d{1,2}:\d{2}(?::\d{2})?\])", transcript[:18000]):
+        content = re.sub(r"\s+", " ", part).strip()
         if len(content) >= 80:
             segments.append(content[:250])
         if len(segments) >= 48:
