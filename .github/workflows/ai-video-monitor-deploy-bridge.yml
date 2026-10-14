@@ -35,8 +35,8 @@ jobs:
         run: python ai_video_bridge_auth.py
       - name: Deploy into original spreadsheet
         run: |
-          clasp -A /tmp/ai_video_monitor_oauth -P /tmp/ai_video_monitor_clasp push --force
-          clasp -A /tmp/ai_video_monitor_oauth -P /tmp/ai_video_monitor_clasp deploy --description "AI Video Monitor secure GitHub bridge" | tee /tmp/ai_video_monitor_deploy.log
+          clasp -A /tmp/ai_video_monitor_oauth/.clasprc.json -P /tmp/ai_video_monitor_clasp/.clasp.json push --force
+          clasp -A /tmp/ai_video_monitor_oauth/.clasprc.json -P /tmp/ai_video_monitor_clasp/.clasp.json deploy --description "AI Video Monitor secure GitHub bridge" | tee /tmp/ai_video_monitor_deploy.log
           python - <<'PY'
           import json, re
           from pathlib import Path
