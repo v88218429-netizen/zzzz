@@ -436,8 +436,10 @@ def run(args):
     print(f"GOOGLE_SHEETS_READ=OK tasks={used_count(raw)-1} goals={used_count(goals)-1}")
     if not raw or not goals or not rules or not ideas:
         fail("Missing expected sheet data")
-    existing = {(str(cell(r, 0)), str(cell(r, 1))) for r in videos[1:]
-                if str(cell(r, 10)) in ("Обработано AI", "Проанализировано")}
+    existing_rows = {(str(cell(r, 0)), str(cell(r, 1))): (index, str(cell(r, 10)))
+                     for index, r in enumerate(videos[1:], start=2) if cell(r, 0)}
+    existing = {key for key, (_, status) in existing_rows.items()
+                if status in ("Обработано AI", "Проанализировано")}
     idea_urls = {str(cell(r, 7)) for r in ideas[1:] if cell(r, 7)}
     now = now_msk()
     tasks = [(i, r) for i, r in enumerate(raw[1:], start=2)
@@ -456,7 +458,7 @@ def run(args):
         task_id = str(cell(task, 0))
         day = now_msk().strftime("%Y-%m-%d %H:%M")
         start = time.monotonic()
-        collected, nideas, errors, newvid, newkb, newideas = 0, 0, [], [], [], []
+        collected, nideas, errors, newvid, newkb, newideas, video_updates = 0, 0, [], [], [], [], []
         try:
             base = str(cell(task, 3)).strip()
             extra = [s.strip() for s in str(cell(task, 4)).split("|") if s.strip()]
@@ -470,12 +472,28 @@ def run(args):
                     transcript, provider = transcript_for(v["id"])
                     t_url = transcript_path(task_id, v["id"], v["title"], transcript,
                                             provider, now.strftime("%Y-%m-%d"))
-                    extracted = model_json(task, v, transcript, goals, rules)
+                    try:
+                        extracted = model_json(task, v, transcript, goals, rules)
+                        ai_ok = True
+                    except Exception as ex:
+                        # Never throw away a verified transcript due to AI timeout,
+                        # invalid JSON or temporary model unavailability.
+                        extracted = []
+                        ai_ok = False
+                        errors.append(f"AI_RETRY:{v['id']}:{type(ex).__name__}")
+                        print(f"AI_RETRY_PENDING task={task_id} vid={v['id']} error={type(ex).__name__}")
                     if f"https://www.youtube.com/watch?v={v['id']}" in idea_urls:
                         extracted = []
                     vrow, kbrows, idearows = result_rows(task, v, extracted, t_url,
                                                           now.strftime("%Y-%m-%d"))
-                    newvid.append(vrow)
+                    if not ai_ok:
+                        vrow[10] = "AI_RETRY_PENDING"
+                        vrow[11] = "TRANSCRIPT_VERIFIED"
+                    old_video = existing_rows.get((v['id'], task_id))
+                    if old_video:
+                        video_updates.append((old_video[0], vrow))
+                    else:
+                        newvid.append(vrow)
                     newkb.extend(kbrows)
                     newideas.extend(idearows)
                     collected += 1
@@ -498,6 +516,9 @@ def run(args):
                     blocks.append((name, f"A{previous+offset+1}:{end_col}{previous+offset+1}", rr))
             addmany("История", [hr], used_count(history))
             addmany("Видео", newvid, used_count(videos))
+            for old_row_index, rr in video_updates:
+                blocks.append(("Видео", f"J{old_row_index}", rr[9]))
+                blocks.append(("Видео", f"K{old_row_index}:O{old_row_index}", rr[10:15]))
             addmany("База знаний", newkb, used_count(knowledge))
             addmany("Идеи для владельца", newideas, used_count(ideas))
             values = {
@@ -517,7 +538,8 @@ def run(args):
             videos.extend(newvid)
             knowledge.extend(newkb)
             ideas.extend(newideas)
-            existing.update((r[0], r[1]) for r in newvid)
+            existing.update((r[0], r[1]) for r in newvid if r[10] == "Обработано AI")
+            existing.update((rr[0], rr[1]) for _, rr in video_updates if rr[10] == "Обработано AI")
             idea_urls.update(r[7] for r in newideas)
             print(f"COMMITTED task={task_id} transcripts={collected} ideas={nideas} errors={len(errors)}")
         except Exception as ex:
