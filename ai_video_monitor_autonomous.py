@@ -332,17 +332,29 @@ def model_json(task, video, transcript, goals, rules):
          "questions": cell(g, 3)}
         for g in goals[1:] if cell(g, 0)
     ]
+    # Evidence is selected by segment ID so small local models do not have to
+    # reproduce long, punctuated Russian quotes exactly. We copy the evidence
+    # from the original transcript after validating the model's segment ID.
+    segments = []
+    for part in re.split(r"(?=\\[\\d{1,2}:\\d{2}(?::\\d{2})?\\])", transcript[:18000]):
+        content = re.sub(r"\\s+", " ", part).strip()
+        if len(content) >= 80:
+            segments.append(content[:250])
+        if len(segments) >= 48:
+            break
     instruction = (
         "Ты аналитик владельца бизнеса. Общайся на русском. Не пересказывай видео."
         " Цель — выделить не больше 2 НОВЫХ и конкретных применимых идей,"
         " напрямую привязанных к целям владельца. Если нет нового, верни пустой список."
         " Не выдумывай цифры, ссылки и факты. Утверждения автора помечай как гипотезы."
         " Верни СТРОГО JSON: {\"ideas\":[{\"goal_code\":\"BUSINESS\","
-        "\"idea\":\"...\", \"why_for_owner\":\"...\", \"action\":\"...\","
-        "\"metric\":\"...\", \"fact\":\"...\", \"evidence\":\"...\","
+        "\"idea\":\"конкретная бизнес-гипотеза\", \"why_for_owner\":\"почему лично ему\","
+        "\"action\":\"что выполнить за 1 день\", \"metric\":\"числовой критерий\","
+        "\"fact\":\"что утверждает источник\", \"evidence_index\":3,"
         "\"confidence\":\"TEST\"}]}."
-        " Evidence — ДОСЛОВНАЯ непрерывная цитата длиной 25–150 символов"
-        " из предоставленного транскрипта; без неё идея недействительна."
+        " evidence_index — индекс ОДНОГО реального сегмента из входного массива segments."
+        " Выбирай только индекс, содержащий текстовый факт в поддержку идеи."
+        " Не копируй цитату самостоятельно; программа возьмёт её из исходника."
         " goal_code должен точно совпасть с одним кодом из целей."
     )
     messages = [{"role": "system", "content": instruction},
@@ -352,7 +364,7 @@ def model_json(task, video, transcript, goals, rules):
                     "video": video["title"],
                     "goals": filtered_goals,
                     "rules": [cell(r, 1) for r in rules[1:12] if cell(r, 1)],
-                    "transcript": transcript[:12000],
+                    "segments": [{"index": i, "text": segment} for i, segment in enumerate(segments)],
                 }, ensure_ascii=False)}]
     # GitHub Models was retired in July 2026. Local CPU model needs no API key
     # and runs entirely within the cloud job; content is never sent to unknown APIs.
@@ -373,13 +385,23 @@ def model_json(task, video, transcript, goals, rules):
     t_norm = re.sub(r"\s+", " ", transcript).lower()
     for idea in data.get("ideas", [])[:2]:
         evidence = re.sub(r"\s+", " ", str(idea.get("evidence", ""))).strip()
+        if not evidence:
+            try:
+                index = int(idea["evidence_index"])
+                if not 0 <= index < len(segments):
+                    continue
+                evidence = re.sub(r"^\[[^]]+\]\s*", "", segments[index])[:150].strip()
+            except (TypeError, KeyError, ValueError):
+                continue
         if (idea.get("goal_code") not in allowed or len(evidence) < 25
                 or evidence.lower() not in t_norm or len(str(idea.get("idea", ""))) < 25
                 or len(str(idea.get("action", ""))) < 20):
             continue
-        clean.append({k: str(idea.get(k, "")).strip() for k in (
+        item = {k: str(idea.get(k, "")).strip() for k in (
             "goal_code", "idea", "why_for_owner", "action", "metric",
-            "fact", "evidence", "confidence")})
+            "fact", "evidence", "confidence")}
+        item["evidence"] = evidence
+        clean.append(item)
     return clean
 
 
