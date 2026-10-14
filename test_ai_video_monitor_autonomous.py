@@ -80,6 +80,28 @@ class MonitorTests(unittest.TestCase):
         self.assertEqual(seen["data"][1]["values"], [[2]])
         self.assertEqual(seen["data"][2]["values"], [["run", "AI_BUSINESS", "2026-10-14"]])
 
+    def test_ai_evidence_index_maps_to_real_transcript_quote(self):
+        transcript = ("[0:03] Сначала проверяйте устойчивый спрос на маленькой партии "
+                      "и сравнивайте прибыль с полными затратами на логистику, налог и рекламу.")
+        payload = {"ideas": [{
+            "goal_code": "BUSINESS",
+            "idea": "Проверять новый товар маленькой партией до крупных закупок",
+            "why_for_owner": "Нужно уменьшить кассовый риск WB",
+            "action": "Запустить тест из 10 изделий и записывать фактическую маржу",
+            "metric": "Чистая прибыль на единицу после расходов",
+            "fact": "Рекомендован поэтапный запуск", "evidence_index": 0, "confidence": "TEST"}]}
+        class Response:
+            ok = True
+            def json(self):
+                return {"message": {"content": json.dumps(payload, ensure_ascii=False)}}
+        goals = [["Код", "Направление", "Цель"],
+                 ["BUSINESS", "Бизнес", "Автономный прибыльный бизнес"]]
+        with patch.object(vm.SESSION, "post", return_value=Response()):
+            ideas = vm.model_json(row(), {"title": "Бизнес"}, transcript,
+                                  goals, [["№", "Правило"]])
+        self.assertEqual(len(ideas), 1)
+        self.assertIn("Сначала проверяйте", ideas[0]["evidence"])
+
     def test_grounded_ai_accepts_only_evidence(self):
         transcript = "[0:00] У нас есть конкретный способ: сначала считайте затраты на замену владельца."
         data = {"ideas": [
