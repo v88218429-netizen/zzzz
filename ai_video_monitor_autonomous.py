@@ -118,6 +118,12 @@ def cell(row, index):
     return row[index] if index < len(row) else ""
 
 
+def used_count(rows):
+    # The Apps Script display API can return trailing formatted/formula rows.
+    # Count meaningful records by their primary key (column A), not by array length.
+    return max((i for i, row in enumerate(rows, start=1) if str(cell(row, 0)).strip()), default=0)
+
+
 def active(row):
     return str(cell(row, 1)).strip().lower() in ("true", "1", "yes", "да")
 
@@ -297,6 +303,17 @@ def free_transcript_api(vid):
 
 
 def transcript_for(vid):
+    # Prefer existing transcripts already verified by prior GitHub workflows.
+    # This makes repeat runs resilient to YouTube throttling / HTTP 429.
+    for file in SOURCE_DIR.glob(f"*_{vid}.md"):
+        if not file.is_file():
+            continue
+        saved = file.read_text(encoding="utf-8", errors="replace")
+        if "## Transcript" not in saved:
+            continue
+        body = saved.split("## Transcript", 1)[1].strip()
+        if len(body) >= 250 and re.search(r"\\[\\d{1,2}:\\d{2}", body):
+            return body, "verified GitHub transcript cache"
     err = []
     for attempt in range(2):
         for provider in (youtube_transcript_api, youtube_transcript_ai, free_transcript_api, ytdlp_captions):
@@ -416,7 +433,7 @@ def run(args):
     knowledge = sh.get("База знаний", "A1:O1000")
     ideas = sh.get("Идеи для владельца", "A1:J200")
     history = sh.get("История", "A1:K1000")
-    print(f"GOOGLE_SHEETS_READ=OK tasks={len(raw)-1} goals={len(goals)-1}")
+    print(f"GOOGLE_SHEETS_READ=OK tasks={used_count(raw)-1} goals={used_count(goals)-1}")
     if not raw or not goals or not rules or not ideas:
         fail("Missing expected sheet data")
     existing = {(str(cell(r, 0)), str(cell(r, 1))) for r in videos[1:]
@@ -479,10 +496,10 @@ def run(args):
                 for offset, rr in enumerate(matrix):
                     end_col = chr(ord("A") + len(rr) - 1)
                     blocks.append((name, f"A{previous+offset+1}:{end_col}{previous+offset+1}", rr))
-            addmany("История", [hr], len(history))
-            addmany("Видео", newvid, len(videos))
-            addmany("База знаний", newkb, len(knowledge))
-            addmany("Идеи для владельца", newideas, len(ideas))
+            addmany("История", [hr], used_count(history))
+            addmany("Видео", newvid, used_count(videos))
+            addmany("База знаний", newkb, used_count(knowledge))
+            addmany("Идеи для владельца", newideas, used_count(ideas))
             values = {
                 "Q": day,
                 "R": next_run(task, now),
