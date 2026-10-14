@@ -70,8 +70,8 @@ class MonitorTests(unittest.TestCase):
         ]}
         class Resp:
             ok = True
-            def json(self): raise ValueError("plaintext")
             text = json.dumps(data, ensure_ascii=False)
+            def json(self): raise ValueError("plaintext")
         goals = [["Код", "Направление", "Цель"], ["BUSINESS", "Бизнес", "Автономность"]]
         with patch.dict(vm.os.environ, {"GITHUB_TOKEN": "unit-test-nonsecret"}), patch.object(vm.SESSION, "post", return_value=Resp()):
             ideas = vm.model_json(row(), {"title": "Бизнес"}, transcript, goals, [["№", "Правило"]])
