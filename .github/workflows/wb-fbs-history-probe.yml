@@ -48,7 +48,7 @@ jobs:
           for(const store of stores) {
             await safeProbe(store,'/api/v3/orders?limit=1000&next=0&dateFrom='+start+'&dateTo='+end,'recent_7d');
             await sleep(500);
-            await safeProbe(store,'/api/marketplace/v3/fbs/orders/archive?year=2026&month=7&next=0','archive_july');
+            await safeProbe(store,'/api/marketplace/v3/fbs/orders/archive?year=2026&month=7&next=0&limit=1000','archive_july');
             await sleep(500);
           }
           try {
