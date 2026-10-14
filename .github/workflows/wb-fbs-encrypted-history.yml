@@ -19,6 +19,7 @@ jobs:
           set -euo pipefail
           mkdir -p .wb-fbs
           node <<'NODE'
+          (async () => {
           const fs = require('node:fs');
           const crypto = require('node:crypto');
           const pubKey = "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwcsZkoVl3HxquHQfG/LU\nV+LuQl9q/v+buZF4eUEHSVOAhv7rODg29WKpZ8zycxl/dBkuGRn5f9dL1KRf3Guh\n/HCB6W8tf+vaS+H4K25+Pgw9enCX95+QM9gDuKEfsExwpeozWpW6YKLiwFs70VT0\n4fvq9Anq0ljxrV2bdm1qGIWlF1HCRkGcj1m52A2alTtQ7pRX+shpMhB3BDDeASNk\n2pGYbiEsn4ZPv9LQcxfYl1AXujB8EnJK+0by9kVsRMgDNVr3W3ito6lRwVB7KJbQ\n5nDpUAH7Ad0bDje0n8r+8Pj4Gxt5vxF67ra9xyL+5QXoA91WDq93PnmwYg+1arrB\nyQIDAQAB\n-----END PUBLIC KEY-----";
@@ -143,6 +144,7 @@ jobs:
           };
           fs.writeFileSync('.wb-fbs/encrypted.json',JSON.stringify(envelope),{mode:0o600});
           console.log(JSON.stringify({summary:report,errors:output.errors,encryptedBytes:encrypted.length,plaintextPersisted:false}));
+          })().catch(e => { console.error(e?.name || 'ExportFailure'); process.exitCode = 1; });
           NODE
       - name: Upload encrypted payload only
         uses: actions/upload-artifact@v4
