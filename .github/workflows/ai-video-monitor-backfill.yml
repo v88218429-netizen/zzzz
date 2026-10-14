@@ -1,0 +1,55 @@
+name: AI Video Monitor archived knowledge backfill
+on:
+  workflow_dispatch:
+    inputs:
+      video_id:
+        description: Optional 11-character YouTube ID to analyze from verified archive
+        required: false
+        type: string
+      max_videos:
+        description: Number of archived videos to analyze
+        required: false
+        default: '1'
+        type: string
+  schedule:
+    # Daily at 15:15 Moscow; use verified transcripts when YouTube HTTP 429 blocks downloads
+    - cron: '15 12 * * *'
+permissions:
+  contents: read
+concurrency:
+  group: ai-video-monitor-autonomous
+  cancel-in-progress: false
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install tools
+        run: pip install --quiet google-auth requests youtube-transcript-api yt-dlp
+      - name: Check code and grounding contracts
+        run: |
+          python -m py_compile ai_video_monitor_autonomous.py ai_video_monitor_backfill.py
+          python -m unittest -q test_ai_video_monitor_autonomous.py
+      - name: Start local independent AI
+        run: |
+          curl -fsSL https://ollama.com/install.sh | sh
+          ollama serve >/tmp/ai-video-backfill-ollama.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl --silent --fail http://127.0.0.1:11434/api/tags >/dev/null; then break; fi
+            sleep 2
+          done
+          ollama pull qwen2.5:1.5b
+      - name: Analyze verified archived sources and commit ideas into original Google Sheet
+        env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+          ARCHIVE_VIDEO: ${{ inputs.video_id }}
+          MAX_VIDEOS: ${{ inputs.max_videos }}
+        run: |
+          args=()
+          if [ -n "$ARCHIVE_VIDEO" ]; then args+=(--video-id "$ARCHIVE_VIDEO"); fi
+          if [ -n "$MAX_VIDEOS" ]; then args+=(--max-videos "$MAX_VIDEOS"); fi
+          python ai_video_monitor_backfill.py "${args[@]}"
