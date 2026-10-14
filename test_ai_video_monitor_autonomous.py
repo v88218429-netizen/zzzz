@@ -2,6 +2,8 @@
 """Offline contract tests. No Google, GitHub or YouTube calls."""
 import json
 import unittest
+from tempfile import TemporaryDirectory
+from pathlib import Path
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from unittest.mock import patch
@@ -42,6 +44,23 @@ class MonitorTests(unittest.TestCase):
         task = row()
         task[1] = False
         self.assertFalse(vm.due(task, datetime(2026, 10, 14, 15, tzinfo=TZ)))
+
+    def test_existing_transcript_is_used_before_network(self):
+        with TemporaryDirectory() as temporary:
+            original = vm.SOURCE_DIR
+            try:
+                vm.SOURCE_DIR = Path(temporary)
+                (vm.SOURCE_DIR / "20261014_test_QhKuo6meaTs.md").write_text(
+                    "# Title\n\n## Transcript\n\n"
+                    "[00:12] Эффективная аналитика начинается с проверяемого действия. " * 7,
+                    encoding="utf-8")
+                with patch.object(vm, "youtube_transcript_api",
+                                  side_effect=AssertionError("Network should not be called")):
+                    content, method = vm.transcript_for("QhKuo6meaTs")
+                self.assertIn("проверяемого", content)
+                self.assertIn("cache", method)
+            finally:
+                vm.SOURCE_DIR = original
 
     def test_used_count_ignores_formatted_trailing_rows(self):
         rows = [["ID", "Task"], ["A", "Active"], ["", "formula-like tail"],
