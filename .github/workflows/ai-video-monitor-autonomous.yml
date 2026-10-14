@@ -39,6 +39,7 @@ jobs:
       - name: Offline unit tests
         run: python -m unittest -v test_ai_video_monitor_autonomous.py
       - name: Install CPU-local AI model
+        if: inputs.dry_run != 'true'
         run: |
           curl -fsSL https://ollama.com/install.sh | sh
           ollama serve > /tmp/ai-video-ollama.log 2>&1 &
