@@ -83,7 +83,9 @@ class Sheets:
         except requests.RequestException as exc:
             fail("Apps Script transport: " + type(exc).__name__)
         if response.status_code != 200:
-            fail("Apps Script bridge HTTP " + str(response.status_code))
+            from urllib.parse import urlsplit
+            host = urlsplit(response.url).hostname
+            fail("Apps Script bridge HTTP " + str(response.status_code) + " host=" + str(host) + " redirects=" + str(len(response.history)) + " type=" + str(response.headers.get("content-type", "")))
         try:
             response_json = response.json()
         except ValueError:
