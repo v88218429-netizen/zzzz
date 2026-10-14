@@ -1,0 +1,153 @@
+name: WB FBS encrypted historical export
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 28
+    steps:
+      - name: Export paginated WB history encrypted for local recovery
+        env:
+          WB_API_TOKEN_AA: ${{ secrets.WB_API_TOKEN_AA }}
+          WB_API_TOKEN_YV: ${{ secrets.WB_API_TOKEN_YV }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .wb-fbs
+          node <<'NODE'
+          const fs = require('node:fs');
+          const crypto = require('node:crypto');
+          const pubKey = "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwcsZkoVl3HxquHQfG/LU\nV+LuQl9q/v+buZF4eUEHSVOAhv7rODg29WKpZ8zycxl/dBkuGRn5f9dL1KRf3Guh\n/HCB6W8tf+vaS+H4K25+Pgw9enCX95+QM9gDuKEfsExwpeozWpW6YKLiwFs70VT0\n4fvq9Anq0ljxrV2bdm1qGIWlF1HCRkGcj1m52A2alTtQ7pRX+shpMhB3BDDeASNk\n2pGYbiEsn4ZPv9LQcxfYl1AXujB8EnJK+0by9kVsRMgDNVr3W3ito6lRwVB7KJbQ\n5nDpUAH7Ad0bDje0n8r+8Pj4Gxt5vxF67ra9xyL+5QXoA91WDq93PnmwYg+1arrB\nyQIDAQAB\n-----END PUBLIC KEY-----";
+          const B = 'https://marketplace-api.wildberries.ru';
+          const stores = [
+            {name:'AIR', token:process.env.WB_API_TOKEN_AA},
+            {name:'HOZYAYUSHKA',token:process.env.WB_API_TOKEN_YV}
+          ];
+          const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+          async function api(token,path,method='GET',data=null) {
+            for(let attempt=0;attempt<5;attempt++) {
+              let resp;
+              try {
+                resp=await fetch(B+path, {
+                  method,
+                  headers:{Authorization:token,...(data?{'Content-Type':'application/json'}:{})},
+                  body:data?JSON.stringify(data):undefined,
+                  signal:AbortSignal.timeout(60000)
+                });
+              } catch(e) {
+                if(attempt===4)throw new Error('network_retry_exhausted');
+                await sleep(1200*(attempt+1));continue;
+              }
+              if(resp.status===429||resp.status>=500){
+                if(attempt===4)throw new Error('api_'+resp.status);
+                const wait=Number(resp.headers.get('retry-after')||0);
+                await sleep(Math.max(1200*(attempt+1),Math.min(wait*1000,15000)));continue;
+              }
+              if(!resp.ok)throw new Error('api_'+resp.status);
+              await sleep(280);
+              return resp.json();
+            }
+          }
+          function normalize(o,source) {
+            const archived=source.startsWith('archive');
+            const product=archived ? (o.product||{}) : o;
+            const priceInfo=archived ? (o.priceInfo||{}) : o;
+            const st=archived ? (o.status||{}) : {};
+            const id=String(o.id??o.orderId??o.orderID??'');
+            if(!/^\d+$/.test(id))return null;
+            return {
+              id,source,
+              createdAt:String(o.createdAt||''),
+              article:String(product.article||''),
+              nmId:String(product.nmId||''),
+              priceKopecks:Number(priceInfo.convertedPrice??priceInfo.price??0),
+              supplyId:String(o.supplyId??o.supplyID??''),
+              warehouseId:String(o.warehouseId??''),
+              officeId:String(o.officeId??''),
+              deliveryType:String(o.deliveryType||'fbs'),
+              cargoType:String(o.cargoType||''),
+              orderUid:String(o.orderUid||''),
+              rid:String(o.rid||''),
+              barcode:String(Array.isArray(product.skus)?product.skus[0]||'':''),
+              supplierStatus:String(st.supplierStatus||''),
+              wbStatus:String(st.wbStatus||'')
+            };
+          }
+          const output={generatedAt:new Date().toISOString(),stores:{},errors:[]};
+          const report={};
+          for(const s of stores){
+            if(!s.token||s.token.length<30)throw new Error('token_not_configured_'+s.name);
+            const all=new Map();
+            const stats={recent:0,archived:0,statusMatched:0,pages:0};
+            const now=Date.now();
+            const start=Date.UTC(2026,6,14);
+            for(let from=start;from<now;from+=28*86400000) {
+              const to=Math.min(now,from+28*86400000-1000);
+              let next=0;
+              const seen=new Set();
+              for(let page=0;page<250;page++) {
+                const path='/api/v3/orders?limit=1000&next='+next+
+                  '&dateFrom='+Math.floor(from/1000)+'&dateTo='+Math.floor(to/1000);
+                try {
+                  const z=await api(s.token,path);
+                  const orders=Array.isArray(z.orders)?z.orders:[];
+                  for(const o of orders){const p=normalize(o,'recent');if(p){all.set(p.id,p);stats.recent++;}}
+                  stats.pages++;
+                  const cursor=Number(z.next||0);
+                  if(!orders.length||!cursor||seen.has(cursor))break;
+                  seen.add(cursor);next=cursor;
+                } catch(e) {output.errors.push({store:s.name,window:new Date(from).toISOString().slice(0,10),endpoint:'recent',reason:e.message});break;}
+              }
+            }
+            for(const month of [5,6,7]){
+              let next=0;const seen=new Set();
+              for(let page=0;page<250;page++){
+                try {
+                  const z=await api(s.token,'/api/marketplace/v3/fbs/orders/archive?year=2026&month='+month+'&next='+next+'&limit=1000');
+                  const orders=Array.isArray(z.orders)?z.orders:[];
+                  for(const o of orders){const p=normalize(o,'archive_'+month);if(p){all.set(p.id,p);stats.archived++;}}
+                  stats.pages++;
+                  const cursor=Number(z.next||0);
+                  if(!orders.length||!cursor||seen.has(cursor))break;
+                  seen.add(cursor);next=cursor;
+                } catch(e) {output.errors.push({store:s.name,window:'2026-'+String(month).padStart(2,'0'),endpoint:'archive',reason:e.message});break;}
+              }
+            }
+            const entries=Array.from(all.values());
+            for(let pos=0;pos<entries.length;pos+=1000){
+              const batch=entries.slice(pos,pos+1000).filter(e=>!e.source.startsWith('archive'));
+              if(!batch.length)continue;
+              try{
+                const z=await api(s.token,'/api/v3/orders/status','POST',{orders:batch.map(e=>Number(e.id))});
+                const byId=new Map((Array.isArray(z.orders)?z.orders:[]).map(x=>[String(x.id??x.orderId??x.orderID??''),x]));
+                for(const p of batch){const st=byId.get(p.id);if(st){p.supplierStatus=String(st.supplierStatus||'');p.wbStatus=String(st.wbStatus||'');if(st.supplyId)p.supplyId=String(st.supplyId);stats.statusMatched++;}}
+              }catch(e){output.errors.push({store:s.name,endpoint:'status',batch:pos,reason:e.message});}
+            }
+            output.stores[s.name]=entries;
+            report[s.name]={...stats,unique:entries.length};
+          }
+          const raw=Buffer.from(JSON.stringify(output));
+          const key=crypto.randomBytes(32);
+          const iv=crypto.randomBytes(12);
+          const aes=crypto.createCipheriv('aes-256-gcm',key,iv);
+          const encrypted=Buffer.concat([aes.update(raw),aes.final()]);
+          const wrapped=crypto.publicEncrypt({key:pubKey,padding:crypto.constants.RSA_PKCS1_OAEP_PADDING,oaepHash:'sha256'},key);
+          const envelope={
+            version:1,algorithm:'RSA-OAEP-SHA256+AES-256-GCM',
+            key:wrapped.toString('base64'),iv:iv.toString('base64'),
+            tag:aes.getAuthTag().toString('base64'),data:encrypted.toString('base64')
+          };
+          fs.writeFileSync('.wb-fbs/encrypted.json',JSON.stringify(envelope),{mode:0o600});
+          console.log(JSON.stringify({summary:report,errors:output.errors,encryptedBytes:encrypted.length,plaintextPersisted:false}));
+          NODE
+      - name: Upload encrypted payload only
+        uses: actions/upload-artifact@v4
+        with:
+          name: wb-fbs-history-encrypted
+          path: .wb-fbs/encrypted.json
+          retention-days: 1
+          if-no-files-found: error
