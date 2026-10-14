@@ -1,0 +1,77 @@
+name: WB FBS history availability probe
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Check WB history endpoints and Google Sheet OAuth without exposing data
+        env:
+          WB_API_TOKEN_AA: ${{ secrets.WB_API_TOKEN_AA }}
+          WB_API_TOKEN_YV: ${{ secrets.WB_API_TOKEN_YV }}
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const start = Math.floor(Date.parse('2026-09-01T00:00:00Z')/1000);
+          const end = Math.floor(Date.parse('2026-09-08T00:00:00Z')/1000);
+          const stores = [
+            {label: 'AIR', token: process.env.WB_API_TOKEN_AA},
+            {label: 'HOZYAYUSHKA', token: process.env.WB_API_TOKEN_YV}
+          ];
+          const sleep = n => new Promise(r=>setTimeout(r,n));
+          async function safeProbe(store, route, name) {
+            let status = 'NO_TOKEN', count = null, hasNext = false;
+            if (store.token && store.token.length>30) {
+              try {
+                const r = await fetch('https://marketplace-api.wildberries.ru'+route,{
+                  headers:{Authorization:store.token},signal:AbortSignal.timeout(25000)
+                });
+                status=r.status;
+                if(r.ok){
+                  const body=await r.json();
+                  const list=Array.isArray(body.orders)?body.orders:
+                     Array.isArray(body.data?.orders)?body.data.orders: [];
+                  count=list.length;
+                  hasNext=Boolean(body.next && body.next!==0 && body.next!=='0');
+                }
+              } catch(e) {status='FETCH_'+e.name;}
+            }
+            console.log(JSON.stringify({store:store.label,endpoint:name,status,pageCount:count,hasNext}));
+          }
+          for(const store of stores) {
+            await safeProbe(store,'/api/v3/orders?limit=1000&next=0&dateFrom='+start+'&dateTo='+end,'recent_7d');
+            await sleep(500);
+            await safeProbe(store,'/api/marketplace/v3/fbs/orders/archive?year=2026&month=7&next=0','archive_july');
+            await sleep(500);
+          }
+          try {
+            const content=JSON.parse(process.env.CLASPRC_JSON||'{}');
+            const token=content.tokens?.default;
+            if(!token||!token.refresh_token)throw new Error('NO_CLASP_REFRESH');
+            const p=new URLSearchParams({
+              client_id:token.client_id,client_secret:token.client_secret,
+              refresh_token:token.refresh_token,grant_type:'refresh_token'
+            });
+            const r=await fetch('https://oauth2.googleapis.com/token',{
+              method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},
+              body:p,signal:AbortSignal.timeout(20000)
+            });
+            if(!r.ok){console.log(JSON.stringify({google:'oauth_refresh',status:r.status}));}
+            else {
+              const access=(await r.json()).access_token;
+              for(const [label,id] of [
+                ['AIR','1qJvhEOIku7sOMydfrUz0PR5dkcU0sLjv433pa1MFBcM'],
+                ['HOZYAYUSHKA','1f9dxXeZxkDth8h2C9GA7L7WqAr1-Ok-Oi5YtufLYOOk']]){
+                const x=await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+id+'?fields=spreadsheetId',{headers:{Authorization:'Bearer '+access},signal:AbortSignal.timeout(20000)});
+                console.log(JSON.stringify({google:'sheets_read',store:label,status:x.status}));
+              }
+            }
+          } catch(e){console.log(JSON.stringify({google:'auth_probe',errorType:e.name}));}
+          NODE
