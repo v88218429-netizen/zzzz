@@ -1,0 +1,20 @@
+name: AI Video Monitor real smoke
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  models: read
+jobs:
+  test-real:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install --quiet --upgrade requests yt-dlp youtube-transcript-api google-auth
+      - name: Exercise real search, transcript and grounded model
+        run: python ai_video_monitor_smoke.py
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
