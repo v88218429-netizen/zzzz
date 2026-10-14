@@ -3214,15 +3214,28 @@ function sellmonitorGithubWriteInnerFinancePart_(cfg, rows, from, runId) {
       byKey[key] = row;
     });
   }
-  var added = 0, updated = 0;
+  var added = 0, updated = 0, partialPreserved = 0;
   rows.forEach(function(row) {
     if (row.length !== SMC_INNER_FINANCE_HEADERS.length || row[0] !== cfg.storeId || row[3] !== from) {
       throw new Error('INNER_FINANCE_ROW_OUTSIDE_TARGET_PERIOD');
     }
     var key = sellmonitorGithubTrafficPartKey_(row,partCfg.key_columns);
     if (!key || key.indexOf('||') >= 0) throw new Error('INNER_FINANCE_ROW_KEY_INVALID');
-    if (Object.prototype.hasOwnProperty.call(byKey,key)) updated++;
-    else added++;
+    if (Object.prototype.hasOwnProperty.call(byKey,key)) {
+      var existing = byKey[key];
+      if (row[38] === 'PARTIAL_INNER_ANALYTICS' && String(existing[38] || '') === 'FACTUAL_INNER_ANALYTICS') {
+        partialPreserved++;
+        return;
+      }
+      if (row[38] === 'PARTIAL_INNER_ANALYTICS') {
+        for (var metricIndex = 8; metricIndex <= 37; metricIndex++) {
+          if (row[metricIndex] === '' && existing[metricIndex] !== '') row[metricIndex] = existing[metricIndex];
+        }
+      }
+      updated++;
+    } else {
+      added++;
+    }
     byKey[key] = row.concat([String(runId),key]);
   });
   var merged = Object.keys(byKey).map(function(key) { return byKey[key]; });
@@ -3254,7 +3267,7 @@ function sellmonitorGithubWriteInnerFinancePart_(cfg, rows, from, runId) {
   return {
     part_id:part.partId,file_id:part.id,url:url,rows:merged.length,distinct_keys:Object.keys(byKey).length,
     added:added,updated:updated,min_date:dates[0] || '',max_date:dates[dates.length - 1] || '',
-    checksum:digest,qc_status:'PASS',trusted_rows:merged.length - partialRows,partial_rows:partialRows
+    checksum:digest,qc_status:'PASS',trusted_rows:merged.length - partialRows,partial_rows:partialRows,partial_preserved:partialPreserved
   };
 }
 
