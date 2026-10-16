@@ -1,0 +1,46 @@
+{
+  "task_id": "WB_MONETIZATION",
+  "request": "WB_MONETIZATION_20261016_1951_RETRY.json",
+  "query": "сервис для селлеров Wildberries бизнес модель автоматизация",
+  "knowledge_tag": "WB_MONETIZATION",
+  "generated_at": "2026-10-16T16:52:59.624456+00:00",
+  "videos": [
+    {
+      "video_id": "cIZ9XEYtI2c",
+      "url": "https://www.youtube.com/watch?v=cIZ9XEYtI2c",
+      "title": "Как продвигать товары на Wildberries и OZON | Вячеслав Малых и Полина Иванова #РЕКЛАМА #MPSELLERS",
+      "channel": "От селлеров для селлеров",
+      "duration": 877,
+      "timestamp": null,
+      "query": "сервис для селлеров Wildberries бизнес модель автоматизация",
+      "kind": "video",
+      "transcript": "transcripts/2026-10-16_WB_MONETIZATION_video_cIZ9XEYtI2c.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "At_8HRYvPYs",
+      "url": "https://www.youtube.com/watch?v=At_8HRYvPYs",
+      "title": "Сервис юнит-экономики ПОРЯДОК ПРО - онбоардинг пользователя | ознакомление и обучение для селлера WB",
+      "channel": "ПОРЯДОЧНЫЕ",
+      "duration": 1947,
+      "timestamp": null,
+      "query": "сервис для селлеров Wildberries бизнес модель автоматизация",
+      "kind": "video",
+      "transcript": "transcripts/2026-10-16_WB_MONETIZATION_video_At_8HRYvPYs.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "iC4Iz4AGzmI",
+      "url": "https://www.youtube.com/watch?v=iC4Iz4AGzmI",
+      "title": "Как выйти и продавать на маркетплейсах в 2022 году? Бизнес модель и автоматизация - новый тренд?",
+      "channel": "Иван Калин",
+      "duration": 945,
+      "timestamp": null,
+      "query": "сервис для селлеров Wildberries бизнес модель автоматизация",
+      "kind": "video",
+      "transcript": "transcripts/2026-10-16_WB_MONETIZATION_video_iC4Iz4AGzmI.md",
+      "method": "FreeTranscriptAPI"
+    }
+  ],
+  "errors": []
+}
