@@ -3643,7 +3643,47 @@ function sellmonitorGithubWriteWbTrafficDailyView_(prepared, runId) {
   var check=sheet.getRange(2,1,allRows.length,headers.length).getValues(), seen={};
   check.forEach(function(row){var key=String(row[1]||'')+'|'+String(row[0]||'');if(seen[key])throw new Error('WB_TRAFFIC_DAILY_VIEW_READBACK_DUPLICATE:' + key);seen[key]=true;});
   if (check.length!==allRows.length) throw new Error('WB_TRAFFIC_DAILY_VIEW_READBACK_ROW_COUNT');
-  return {ok:true,rows:allRows.length,added:added,updated:updated,max_date:allRows.length?String(allRows[allRows.length-1][0]):'',reconciled:freshRows.filter(function(row){return row[12]==='ПОЛНЫЙ РАСЧЁТ';}).length};
+  var dashboard = sellmonitorGithubWriteWbTrafficDashboards_(freshRows, runId);
+  return {ok:true,rows:allRows.length,added:added,updated:updated,max_date:allRows.length?String(allRows[allRows.length-1][0]):'',
+    reconciled:freshRows.filter(function(row){return row[12]==='ПОЛНЫЙ РАСЧЁТ';}).length,dashboard:dashboard};
+}
+
+function sellmonitorGithubWriteWbTrafficDashboards_(dailyRows, runId) {
+  var stores = {
+    'Саныч':'1-aBDZ7c5xfmVwwiNmUi9-DyfIANXmfiM5-Ti2_zg4zI',
+    'AIR':'1SmsoG8zKx3hbTtTzS-zLekTFiWEQN8eIwHOxXq-5RHo',
+    'Хозяюшка':'1cVT_H_e8a519k_Gtph6fALWnBbtBrAQ2Jb_gFO3bM64'
+  };
+  var expectedLabels = ['Трафик всего','Органика','Реклама · переходы','Реклама, ₽'];
+  var runDate = Utilities.formatDate(new Date(runId), 'Europe/Moscow', 'yyyy-MM-dd');
+  var byStore = {};
+  dailyRows.forEach(function(row) { if (String(row[0])===runDate) byStore[String(row[1])] = row; });
+  var written = 0, missing = [];
+  Object.keys(stores).forEach(function(name) {
+    var ss = SpreadsheetApp.openById(stores[name]);
+    var sheet = ss.getSheetByName('00_Дашборд');
+    if (!sheet) throw new Error('WB_TRAFFIC_DASHBOARD_TAB_MISSING:' + name);
+    var labels = sheet.getRange(7,9,4,1).getDisplayValues().map(function(row){return String(row[0]||'').trim();});
+    if (labels.some(function(label,index){return label!==expectedLabels[index];})) {
+      throw new Error('WB_TRAFFIC_DASHBOARD_LABEL_MISMATCH:' + name);
+    }
+    var row = byStore[name] || null;
+    var complete = row && row[12] === 'ПОЛНЫЙ РАСЧЁТ';
+    function valueOrDash(value) { return value === '' || value == null ? '—' : Number(value); }
+    var values = [
+      [row ? valueOrDash(row[6]) : '—', row ? 'WB Analytics · ' + runDate : 'Нет строк за ' + runDate],
+      [complete ? valueOrDash(row[11]) : '—', complete ? 'Расчёт из воронки минус реклама · ' + runDate : 'Неполные исходные клики · ' + runDate],
+      [row ? valueOrDash(row[3]) : '—', row ? 'WB /adv/v3/fullstats · ' + runDate : 'Нет строк за ' + runDate],
+      [row ? valueOrDash(row[4]) : '—', row ? 'WB /adv/v3/fullstats · ' + runDate : 'Нет строк за ' + runDate]
+    ];
+    sheet.getRange(7,10,4,2).setValues(values);
+    SpreadsheetApp.flush();
+    var readback = sheet.getRange(7,10,4,2).getValues();
+    if (JSON.stringify(readback)!==JSON.stringify(values)) throw new Error('WB_TRAFFIC_DASHBOARD_READBACK_MISMATCH:' + name);
+    written++;
+    if (!row || !complete) missing.push(name);
+  });
+  return {ok:missing.length===0,written:written,date:runDate,partial_stores:missing};
 }
 
 function sellmonitorGithubPublishWbFinance_(body) {
