@@ -223,7 +223,7 @@ const replay = publish({partition_only:true,sync_status:status,datasets:{
 assert.equal(replay.partitions.datasets.ads_poll.parts[0].added, 0, 'replayed poll must not create duplicate history');
 assert.equal(replay.partitions.datasets.ads_poll.parts[0].updated, 1, 'replayed poll must update the existing observation');
 assert.equal(replay.partitions.datasets.daily_view.rows, 2, 'replayed traffic updates the same bounded daily rows');
-assert.equal(replay.partitions.datasets.daily_view.updated, 2, 'replayed daily facts must upsert without duplication');
+assert.equal(replay.partitions.datasets.daily_view.updated, 1, 'the replayed Sanych daily fact must upsert without duplication');
 assert.equal(registryViews['Дневная_витрина'].values.length, 3, 'daily replay must not append duplicate rows');
 
 assert.throws(() => publish({
