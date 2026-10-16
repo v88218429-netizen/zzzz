@@ -88,6 +88,19 @@ function makeWorkbook(id) {
 const registryHeaders = ['part_id','platform','shop_id','dataset','layer','period_start','period_end'];
 const registrySheet = makeSheet(registryHeaders);
 const registryViews = {};
+const dashboardBooks = new Map();
+const dashboardIds = [
+  '1-aBDZ7c5xfmVwwiNmUi9-DyfIANXmfiM5-Ti2_zg4zI',
+  '1SmsoG8zKx3hbTtTzS-zLekTFiWEQN8eIwHOxXq-5RHo',
+  '1cVT_H_e8a519k_Gtph6fALWnBbtBrAQ2Jb_gFO3bM64'
+];
+dashboardIds.forEach(id => {
+  const dashboard = makeSheet([]);
+  dashboard.getRange(7,9,4,1).setValues([
+    ['Трафик всего'],['Органика'],['Реклама · переходы'],['Реклама, ₽']
+  ]);
+  dashboardBooks.set(id,{getSheetByName:name=>name==='00_Дашборд'?dashboard:null,dashboard});
+});
 const registryWorkbook = {
   getSheetByName(name) { return name === 'Части' ? registrySheet : registryViews[name] || null; },
   insertSheet(name) { const sheet = makeSheet([]); registryViews[name] = sheet; return sheet; },
@@ -101,6 +114,7 @@ const sandbox = {
     openById(id) {
       openedId = id;
       if (id === '1E7HSGJgamzKZkdNdDNyp0f1iI2mLhhbpfi04-sOytBs') return registryWorkbook;
+      if (dashboardBooks.has(id)) return dashboardBooks.get(id);
       if (id === '11ULokTx74QjziZjThJ0lfxFiMQW42-WV4315cG7eIuU') return workbook;
       const part = partitionBooks.get(id);
       if (part) return part;
@@ -206,6 +220,12 @@ assert.equal(completeRow[11], 0, 'a valid zero organic result remains zero');
 assert.equal(incompleteRow[10], '', 'incomplete paid-click source remains blank');
 assert.equal(incompleteRow[11], '', 'incomplete organic result remains blank, not zero');
 assert.equal(incompleteRow[12], 'НЕПОЛНО · не считать нулём');
+assert.equal(result.partitions.datasets.daily_view.dashboard.written, 3, 'traffic tiles update all store dashboards');
+assert.equal(result.partitions.datasets.daily_view.dashboard.date, '2026-10-09');
+assert.equal(dashboardBooks.get(dashboardIds[0]).dashboard.values[6][9], 10, 'Sanych tile gets funnel visits');
+assert.equal(dashboardBooks.get(dashboardIds[0]).dashboard.values[7][9], 0, 'valid zero organic stays zero');
+assert.equal(dashboardBooks.get(dashboardIds[1]).dashboard.values[7][9], '—', 'incomplete AIR organic stays unavailable');
+assert.equal(dashboardBooks.get(dashboardIds[2]).dashboard.values[6][9], '—', 'missing Hozy traffic stays unavailable');
 assert.equal(partitionBooks.size, 3, 'organic and poll facts use separate bounded tabs in their existing store-month books');
 assert.equal(sheets['12_ADS_CAMPAIGN_DAY'].values.length, 1, 'do not copy facts into the full aggregate book');
 assert.equal(sheets['13_FUNNEL_DAY'].values.length, 1, 'do not copy facts into the full aggregate book');
