@@ -99,7 +99,15 @@ dashboardIds.forEach(id => {
   dashboard.getRange(7,9,4,1).setValues([
     ['Трафик всего'],['Органика'],['Реклама · переходы'],['Реклама, ₽']
   ]);
-  dashboardBooks.set(id,{getSheetByName:name=>name==='00_Дашборд'?dashboard:null,dashboard});
+  const localSheets = {'00_Дашборд':dashboard};
+  dashboardBooks.set(id,{
+    getSheetByName:name=>localSheets[name]||null,
+    insertSheet(name){const sheet=makeSheet([]);localSheets[name]=sheet;return sheet;},
+    getSheets:()=>Object.values(localSheets),
+    getId:()=>id,
+    getSpreadsheetTimeZone:()=> 'Europe/Moscow',
+    dashboard
+  });
 });
 const registryWorkbook = {
   getSheetByName(name) { return name === 'Части' ? registrySheet : registryViews[name] || null; },
