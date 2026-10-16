@@ -87,8 +87,10 @@ function makeWorkbook(id) {
 }
 const registryHeaders = ['part_id','platform','shop_id','dataset','layer','period_start','period_end'];
 const registrySheet = makeSheet(registryHeaders);
+const registryViews = {};
 const registryWorkbook = {
-  getSheetByName: name => name === 'Части' ? registrySheet : null,
+  getSheetByName(name) { return name === 'Части' ? registrySheet : registryViews[name] || null; },
+  insertSheet(name) { const sheet = makeSheet([]); registryViews[name] = sheet; return sheet; },
   getSpreadsheetTimeZone: () => 'Etc/GMT'
 };
 let openedId = '';
@@ -175,7 +177,7 @@ const result = publish({
       ['aa','2026-10-09','10','@formula-like','20','3','2','100','WB Analytics products/history']
     ],
     organic: [
-      ['ap','2026-10-09','9','SKU9','10','2','8','WB Analytics products/history','WB /adv/v3/fullstats','total_open_count-paid_clicks','DERIVED_COMPLETE',3,0,0],
+      ['ap','2026-10-09','9','SKU9','10','10','0','WB Analytics products/history','WB /adv/v3/fullstats','total_open_count-paid_clicks','DERIVED_COMPLETE',3,0,0],
       ['aa','2026-10-09','10','SKU10','20','','','WB Analytics products/history','WB /adv/v3/fullstats','total_open_count-paid_clicks','ADVERTISING_COVERAGE_INCOMPLETE',4,0,1]
     ],
     ads_poll: [['ap',observedAt,'2026-10-09',1,1,100,10,2,1,3.5,50,0.1,0.35,0.07,14,'WB /adv/v3/fullstats','DAILY_CUMULATIVE_OBSERVED_AT_POLL']],
@@ -193,6 +195,15 @@ assert.equal(result.partitions.datasets.funnel.written, 2, 'funnel must be writt
 assert.equal(result.partitions.datasets.organic.written, 2, 'derived organic facts and explicit incomplete coverage must be partitioned');
 assert.equal(result.partitions.datasets.organic.parts[0].qc_status, 'PASS');
 assert.equal(result.partitions.datasets.ads.parts[0].qc_status, 'PASS');
+assert.equal(result.partitions.datasets.daily_view.rows, 2, 'compact view must contain one daily row per store with source facts');
+const dailyView = registryViews['Дневная_витрина'];
+assert.ok(dailyView, 'compact daily view must be published in the shared registry');
+assert.equal(dailyView.values.length, 3, 'daily view contains one header and two store/date rows');
+assert.equal(dailyView.values[1][12], 'ПОЛНЫЙ РАСЧЁТ', 'organic is visible only after clicks and funnel totals reconcile');
+assert.equal(dailyView.values[1][11], 0, 'a valid zero organic result remains zero');
+assert.equal(dailyView.values[2][10], '', 'incomplete paid-click source remains blank');
+assert.equal(dailyView.values[2][11], '', 'incomplete organic result remains blank, not zero');
+assert.equal(dailyView.values[2][12], 'НЕПОЛНО · не считать нулём');
 assert.equal(partitionBooks.size, 3, 'organic and poll facts use separate bounded tabs in their existing store-month books');
 assert.equal(sheets['12_ADS_CAMPAIGN_DAY'].values.length, 1, 'do not copy facts into the full aggregate book');
 assert.equal(sheets['13_FUNNEL_DAY'].values.length, 1, 'do not copy facts into the full aggregate book');
@@ -203,6 +214,9 @@ assert.equal(sheets['17_TRAFFIC_QUALITY'], undefined);
 const replay = publish({partition_only:true,sync_status:status,datasets:{ads:[],funnel:[],ads_poll:[['ap',observedAt,'2026-10-09',1,1,100,10,2,1,3.5,50,0.1,0.35,0.07,14,'WB /adv/v3/fullstats','DAILY_CUMULATIVE_OBSERVED_AT_POLL']],funnel_poll:[]}});
 assert.equal(replay.partitions.datasets.ads_poll.parts[0].added, 0, 'replayed poll must not create duplicate history');
 assert.equal(replay.partitions.datasets.ads_poll.parts[0].updated, 1, 'replayed poll must update the existing observation');
+assert.equal(replay.partitions.datasets.daily_view.rows, 2, 'replayed traffic updates the same bounded daily rows');
+assert.equal(replay.partitions.datasets.daily_view.updated, 2, 'replayed daily facts must upsert without duplication');
+assert.equal(registryViews['Дневная_витрина'].values.length, 3, 'daily replay must not append duplicate rows');
 
 assert.throws(() => publish({
   sync_status: {...status, shops: {...status.shops, yv: {ok:false}}},
