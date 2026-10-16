@@ -213,7 +213,13 @@ assert.equal(sheets['15_ADS_POLL_SNAPSHOT'], undefined);
 assert.equal(sheets['16_FUNNEL_POLL_SNAPSHOT'], undefined);
 assert.equal(sheets['17_TRAFFIC_QUALITY'], undefined);
 
-const replay = publish({partition_only:true,sync_status:status,datasets:{ads:[],funnel:[],ads_poll:[['ap',observedAt,'2026-10-09',1,1,100,10,2,1,3.5,50,0.1,0.35,0.07,14,'WB /adv/v3/fullstats','DAILY_CUMULATIVE_OBSERVED_AT_POLL']],funnel_poll:[]}});
+const replay = publish({partition_only:true,sync_status:status,datasets:{
+  ads:[['ap','2026-10-09','42','9','100','10','2','1','3.5','50','WB /adv/v3/fullstats','EXACT_CAMPAIGN_NM_DAY','=formula-like']],
+  funnel:[['ap','2026-10-09','9','SKU9','10','2','1','50','WB Analytics products/history']],
+  organic:[['ap','2026-10-09','9','SKU9','10','10','0','WB Analytics products/history','WB /adv/v3/fullstats','total_open_count-paid_clicks','DERIVED_COMPLETE',3,0,0]],
+  ads_poll:[['ap',observedAt,'2026-10-09',1,1,100,10,2,1,3.5,50,0.1,0.35,0.07,14,'WB /adv/v3/fullstats','DAILY_CUMULATIVE_OBSERVED_AT_POLL']],
+  funnel_poll:[]
+}});
 assert.equal(replay.partitions.datasets.ads_poll.parts[0].added, 0, 'replayed poll must not create duplicate history');
 assert.equal(replay.partitions.datasets.ads_poll.parts[0].updated, 1, 'replayed poll must update the existing observation');
 assert.equal(replay.partitions.datasets.daily_view.rows, 2, 'replayed traffic updates the same bounded daily rows');
