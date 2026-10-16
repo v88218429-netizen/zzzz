@@ -102,7 +102,7 @@ dashboardIds.forEach(id => {
   const localSheets = {'00_Дашборд':dashboard};
   dashboardBooks.set(id,{
     getSheetByName:name=>localSheets[name]||null,
-    insertSheet(name){const sheet=makeSheet([]);localSheets[name]=sheet;return sheet;},
+    insertSheet(name){const sheet=makeSheet([]);localSheets[name]=sheet;sheets[name]=sheet;return sheet;},
     getSheets:()=>Object.values(localSheets),
     getId:()=>id,
     getSpreadsheetTimeZone:()=> 'Europe/Moscow',
