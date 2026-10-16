@@ -1,0 +1,14 @@
+{
+  "task_id": "WB_MONETIZATION",
+  "query": "сервис для селлеров Wildberries бизнес модель автоматизация",
+  "extra_queries": [
+    "AI SaaS для селлеров Wildberries кейс экономика",
+    "агентство Wildberries масштабирование автоматизация"
+  ],
+  "content": "Видео",
+  "limit_video": 3,
+  "limit_shorts": 1,
+  "depth_days": 30,
+  "knowledge_tag": "WB_MONETIZATION",
+  "language": "ru"
+}
