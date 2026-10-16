@@ -3550,7 +3550,7 @@ function sellmonitorGithubWriteWbTrafficDailyView_(prepared, runId) {
     var day = row[1] instanceof Date && !isNaN(row[1].getTime())
       ? Utilities.formatDate(row[1], 'Europe/Moscow', 'yyyy-MM-dd')
       : String(row[1] || '').trim().slice(0,10);
-    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(day)) throw new Error('WB_TRAFFIC_DAILY_VIEW_INVALID_DATE:' + day);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) throw new Error('WB_TRAFFIC_DAILY_VIEW_INVALID_DATE:' + day);
     var key = alias + '|' + day;
     if (!grouped[key]) grouped[key] = {
       alias:alias, day:day, name:shopNames[alias], runId:String(runId),
@@ -3594,8 +3594,10 @@ function sellmonitorGithubWriteWbTrafficDailyView_(prepared, runId) {
   var freshRows=[];
   Object.keys(grouped).sort(function(a,b){return grouped[a].day.localeCompare(grouped[b].day)||grouped[a].name.localeCompare(grouped[b].name);}).forEach(function(key){
     var g=grouped[key], organicStatus='НЕПОЛНО · не считать нулём', paidClicks='', organicClicks='';
-    var reconciles = g.ads.rows>0 && g.funnel.rows>0 && g.organic.rows>0 &&
-      allKnown(g.ads) && allKnown(g.funnel) && allKnown(g.organic) && g.organic.complete &&
+    var trafficMetricsKnown = g.ads.rows>0 && !g.ads.values.clicks.unknown &&
+      g.funnel.rows>0 && !g.funnel.values.opens.unknown && g.organic.rows>0 && g.organic.complete &&
+      !g.organic.values.total.unknown && !g.organic.values.paid.unknown && !g.organic.values.clicks.unknown;
+    var reconciles = trafficMetricsKnown &&
       sumOf(g.ads,'clicks')===sumOf(g.organic,'paid') &&
       sumOf(g.funnel,'opens')===sumOf(g.organic,'total') &&
       sumOf(g.organic,'clicks')===sumOf(g.organic,'total')-sumOf(g.organic,'paid');
