@@ -3515,7 +3515,133 @@ function sellmonitorGithubWriteWbTrafficPartitions_(prepared, runId) {
     });
     output[dataset] = datasetResult;
   });
+  output.daily_view = sellmonitorGithubWriteWbTrafficDailyView_(prepared, runId);
   return {ok:true, schema_version:SMC_WB_TRAFFIC_PARTITIONS.schemaVersion, run_id:String(runId), datasets:output};
+}
+
+function sellmonitorGithubWriteWbTrafficDailyView_(prepared, runId) {
+  var headers = ['Дата','Магазин','Показы рекламы','Клики рекламы','Расход рекламы, ₽','Заказы рекламы',
+    'Переходы в карточку','В корзину','Заказы воронки','Сумма заказов воронки, ₽',
+    'Платные клики · сверка','Органические клики · расчёт','Статус органики',
+    'Строк рекламы','Строк воронки','Строк органики','Идентификатор сбора'];
+  var registry = SpreadsheetApp.openById(SMC_WB_TRAFFIC_PARTITIONS.registryId);
+  var sheet = registry.getSheetByName('Дневная_витрина');
+  if (!sheet) sheet = registry.insertSheet('Дневная_витрина');
+  if (sheet.getMaxColumns() < headers.length) sheet.insertColumnsAfter(sheet.getMaxColumns(), headers.length - sheet.getMaxColumns());
+  var last = sheet.getLastRow();
+  if (!last) {
+    if (sheet.getMaxRows() < 1) sheet.insertRowsAfter(sheet.getMaxRows(), 1 - sheet.getMaxRows());
+    sheet.getRange(1,1,1,headers.length).setValues([headers]);
+    last = 1;
+  } else {
+    var existingHeaders = sheet.getRange(1,1,1,headers.length).getDisplayValues()[0];
+    if (headers.some(function(value,index){return String(existingHeaders[index]||'').trim()!==value;})) {
+      throw new Error('WB_TRAFFIC_DAILY_VIEW_HEADER_MISMATCH');
+    }
+  }
+  var shopNames = {};
+  Object.keys(SMC_WB_TRAFFIC_PARTITIONS.shops).forEach(function(alias){
+    shopNames[alias] = SMC_WB_TRAFFIC_PARTITIONS.shops[alias].name;
+  });
+  var grouped = {};
+  function keyFor(row) {
+    var alias = String(row[0] || '').trim();
+    if (!shopNames[alias]) throw new Error('WB_TRAFFIC_DAILY_VIEW_UNKNOWN_STORE:' + alias);
+    var day = row[1] instanceof Date && !isNaN(row[1].getTime())
+      ? Utilities.formatDate(row[1], 'Europe/Moscow', 'yyyy-MM-dd')
+      : String(row[1] || '').trim().slice(0,10);
+    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(day)) throw new Error('WB_TRAFFIC_DAILY_VIEW_INVALID_DATE:' + day);
+    var key = alias + '|' + day;
+    if (!grouped[key]) grouped[key] = {
+      alias:alias, day:day, name:shopNames[alias], runId:String(runId),
+      ads:{rows:0,values:{views:{sum:0,unknown:false},clicks:{sum:0,unknown:false},spend:{sum:0,unknown:false},orders:{sum:0,unknown:false}}},
+      funnel:{rows:0,values:{opens:{sum:0,unknown:false},carts:{sum:0,unknown:false},orders:{sum:0,unknown:false},rub:{sum:0,unknown:false}}},
+      organic:{rows:0,complete:true,values:{total:{sum:0,unknown:false},paid:{sum:0,unknown:false},clicks:{sum:0,unknown:false}}}
+    };
+    return grouped[key];
+  }
+  function addMetric(target, raw) {
+    if (raw === '' || raw == null || typeof raw === 'boolean' || !isFinite(Number(raw))) {
+      target.unknown = true;
+      return;
+    }
+    target.sum += Number(raw);
+  }
+  (prepared.ads && prepared.ads.rows || []).forEach(function(row){
+    var group=keyFor(row); group.ads.rows++;
+    addMetric(group.ads.values.views,row[4]); addMetric(group.ads.values.clicks,row[5]);
+    addMetric(group.ads.values.orders,row[7]); addMetric(group.ads.values.spend,row[8]);
+  });
+  (prepared.funnel && prepared.funnel.rows || []).forEach(function(row){
+    var group=keyFor(row); group.funnel.rows++;
+    addMetric(group.funnel.values.opens,row[4]); addMetric(group.funnel.values.carts,row[5]);
+    addMetric(group.funnel.values.orders,row[6]); addMetric(group.funnel.values.rub,row[7]);
+  });
+  (prepared.organic && prepared.organic.rows || []).forEach(function(row){
+    var group=keyFor(row); group.organic.rows++;
+    if (String(row[10] || '') !== 'DERIVED_COMPLETE') group.organic.complete=false;
+    addMetric(group.organic.values.total,row[4]); addMetric(group.organic.values.paid,row[5]);
+    addMetric(group.organic.values.clicks,row[6]);
+  });
+  function metricValue(dataset, name) {
+    var item=dataset.values[name];
+    return dataset.rows && !item.unknown ? item.sum : '';
+  }
+  function sumOf(dataset,name) { return dataset.values[name].sum; }
+  function allKnown(dataset) {
+    return dataset.rows>0 && Object.keys(dataset.values).every(function(name){return !dataset.values[name].unknown;});
+  }
+  var freshRows=[];
+  Object.keys(grouped).sort(function(a,b){return grouped[a].day.localeCompare(grouped[b].day)||grouped[a].name.localeCompare(grouped[b].name);}).forEach(function(key){
+    var g=grouped[key], organicStatus='НЕПОЛНО · не считать нулём', paidClicks='', organicClicks='';
+    var reconciles = g.ads.rows>0 && g.funnel.rows>0 && g.organic.rows>0 &&
+      allKnown(g.ads) && allKnown(g.funnel) && allKnown(g.organic) && g.organic.complete &&
+      sumOf(g.ads,'clicks')===sumOf(g.organic,'paid') &&
+      sumOf(g.funnel,'opens')===sumOf(g.organic,'total') &&
+      sumOf(g.organic,'clicks')===sumOf(g.organic,'total')-sumOf(g.organic,'paid');
+    if (reconciles) {
+      organicStatus='ПОЛНЫЙ РАСЧЁТ'; paidClicks=sumOf(g.organic,'paid'); organicClicks=sumOf(g.organic,'clicks');
+    } else if (g.ads.rows && g.funnel.rows && g.organic.rows && allKnown(g.ads) && allKnown(g.funnel) && allKnown(g.organic) && g.organic.complete) {
+      organicStatus='РАСХОЖДЕНИЕ · значения скрыты';
+    }
+    freshRows.push([
+      g.day,g.name,
+      metricValue(g.ads,'views'),metricValue(g.ads,'clicks'),metricValue(g.ads,'spend'),metricValue(g.ads,'orders'),
+      metricValue(g.funnel,'opens'),metricValue(g.funnel,'carts'),metricValue(g.funnel,'orders'),metricValue(g.funnel,'rub'),
+      paidClicks,organicClicks,organicStatus,g.ads.rows,g.funnel.rows,g.organic.rows,String(runId)
+    ]);
+  });
+  if (!freshRows.length) return {ok:true,skipped:true,reason:'no_daily_facts',rows:last>1?last-1:0};
+  var byKey={};
+  if (last>1) sheet.getRange(2,1,last-1,headers.length).getValues().forEach(function(row,index){
+    if (String(row[0]||'').trim()==='') return;
+    var date=row[0] instanceof Date && !isNaN(row[0].getTime())
+      ? Utilities.formatDate(row[0], 'Europe/Moscow', 'yyyy-MM-dd') : String(row[0]).trim().slice(0,10);
+    var name=String(row[1]||'').trim(), key=name+'|'+date;
+    if (!date || !name || Object.prototype.hasOwnProperty.call(byKey,key)) throw new Error('WB_TRAFFIC_DAILY_VIEW_DUPLICATE_KEY:' + key);
+    byKey[key]=row;
+  });
+  var added=0,updated=0;
+  freshRows.forEach(function(row){
+    var key=row[1]+'|'+row[0];
+    if (Object.prototype.hasOwnProperty.call(byKey,key)) updated++; else added++;
+    byKey[key]=row;
+  });
+  var allRows=Object.keys(byKey).map(function(key){return byKey[key];});
+  allRows.sort(function(a,b){
+    var ad=a[0] instanceof Date?Utilities.formatDate(a[0],'Europe/Moscow','yyyy-MM-dd'):String(a[0]||'');
+    var bd=b[0] instanceof Date?Utilities.formatDate(b[0],'Europe/Moscow','yyyy-MM-dd'):String(b[0]||'');
+    return ad.localeCompare(bd)||String(a[1]||'').localeCompare(String(b[1]||''));
+  });
+  var needed=allRows.length+1;
+  if (sheet.getMaxRows()<needed) sheet.insertRowsAfter(sheet.getMaxRows(),needed-sheet.getMaxRows());
+  sheet.getRange(2,1,allRows.length,headers.length).setValues(allRows);
+  if (last>needed) sheet.getRange(needed+1,1,last-needed,headers.length).clearContent();
+  SpreadsheetApp.flush();
+  var check=sheet.getRange(2,1,allRows.length,headers.length).getValues(), seen={};
+  check.forEach(function(row){var key=String(row[1]||'')+'|'+String(row[0]||'');if(seen[key])throw new Error('WB_TRAFFIC_DAILY_VIEW_READBACK_DUPLICATE:' + key);seen[key]=true;});
+  if (check.length!==allRows.length) throw new Error('WB_TRAFFIC_DAILY_VIEW_READBACK_ROW_COUNT');
+  return {ok:true,rows:allRows.length,added:added,updated:updated,max_date:allRows.length?String(allRows[allRows.length-1][0]):'',reconciled:freshRows.filter(function(row){return row[12]==='ПОЛНЫЙ РАСЧЁТ';}).length};
 }
 
 function sellmonitorGithubPublishWbFinance_(body) {
