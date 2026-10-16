@@ -3667,7 +3667,7 @@ function sellmonitorGithubWriteWbTrafficDashboards_(dailyRows, runId) {
     if (labels.some(function(label,index){return label!==expectedLabels[index];})) {
       throw new Error('WB_TRAFFIC_DASHBOARD_LABEL_MISMATCH:' + name);
     }
-    var row = byStore[name] || null, stamp = 'Источник · сбор ' + String(runId);
+    var row = byStore[name] || null;
     var complete = row && row[12] === 'ПОЛНЫЙ РАСЧЁТ';
     function valueOrDash(value) { return value === '' || value == null ? '—' : Number(value); }
     var values = [
