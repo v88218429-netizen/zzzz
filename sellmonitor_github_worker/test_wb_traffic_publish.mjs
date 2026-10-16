@@ -199,11 +199,13 @@ assert.equal(result.partitions.datasets.daily_view.rows, 2, 'compact view must c
 const dailyView = registryViews['Дневная_витрина'];
 assert.ok(dailyView, 'compact daily view must be published in the shared registry');
 assert.equal(dailyView.values.length, 3, 'daily view contains one header and two store/date rows');
-assert.equal(dailyView.values[1][12], 'ПОЛНЫЙ РАСЧЁТ', 'organic is visible only after clicks and funnel totals reconcile');
-assert.equal(dailyView.values[1][11], 0, 'a valid zero organic result remains zero');
-assert.equal(dailyView.values[2][10], '', 'incomplete paid-click source remains blank');
-assert.equal(dailyView.values[2][11], '', 'incomplete organic result remains blank, not zero');
-assert.equal(dailyView.values[2][12], 'НЕПОЛНО · не считать нулём');
+const completeRow = dailyView.values.find(row => row[1] === 'Саныч');
+const incompleteRow = dailyView.values.find(row => row[1] === 'AIR');
+assert.equal(completeRow[12], 'ПОЛНЫЙ РАСЧЁТ', 'organic is visible only after clicks and funnel totals reconcile');
+assert.equal(completeRow[11], 0, 'a valid zero organic result remains zero');
+assert.equal(incompleteRow[10], '', 'incomplete paid-click source remains blank');
+assert.equal(incompleteRow[11], '', 'incomplete organic result remains blank, not zero');
+assert.equal(incompleteRow[12], 'НЕПОЛНО · не считать нулём');
 assert.equal(partitionBooks.size, 3, 'organic and poll facts use separate bounded tabs in their existing store-month books');
 assert.equal(sheets['12_ADS_CAMPAIGN_DAY'].values.length, 1, 'do not copy facts into the full aggregate book');
 assert.equal(sheets['13_FUNNEL_DAY'].values.length, 1, 'do not copy facts into the full aggregate book');
