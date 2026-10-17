@@ -1,0 +1,13 @@
+{
+  "task_id": "MUSIC_STUDIO",
+  "query": "домашняя студия звукозаписи шумоизоляция комнаты обзор",
+  "extra_queries": [
+    "домашняя музыкальная студия в частном доме акустика планировка"
+  ],
+  "content": "Видео",
+  "limit_video": 1,
+  "limit_shorts": 1,
+  "depth_days": 90,
+  "knowledge_tag": "MUSIC",
+  "language": "ru"
+}
