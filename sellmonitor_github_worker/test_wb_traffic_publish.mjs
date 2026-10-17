@@ -88,6 +88,17 @@ function makeWorkbook(id) {
 const registryHeaders = ['part_id','platform','shop_id','dataset','layer','period_start','period_end'];
 const registrySheet = makeSheet(registryHeaders);
 const registryViews = {};
+const liteBooks = new Map();
+const liteIds = [
+  '1kdeQ-N80Ul0WvekuPxM1QS8FRz0I3g5eOpsgcK0g9Ls',
+  '1H_UpoQa0ZsY3hnnS6R4cM2xXiqezFRYa0ZDLhVYfZbQ',
+  '1fc6fYdNojj02T597-T0pyCjpiWmhvAr45r1_jiyabIk'
+];
+liteIds.forEach(id => {
+  const traffic = makeSheet([]);
+  const localSheets = {'04_Трафик':traffic};
+  liteBooks.set(id,{getSheetByName:name=>localSheets[name]||null,insertSheet(name){const sheet=makeSheet([]);localSheets[name]=sheet;return sheet;},traffic});
+});
 const dashboardBooks = new Map();
 const dashboardIds = [
   '1-aBDZ7c5xfmVwwiNmUi9-DyfIANXmfiM5-Ti2_zg4zI',
@@ -122,6 +133,7 @@ const sandbox = {
     openById(id) {
       openedId = id;
       if (id === '1E7HSGJgamzKZkdNdDNyp0f1iI2mLhhbpfi04-sOytBs') return registryWorkbook;
+      if (liteBooks.has(id)) return liteBooks.get(id);
       if (dashboardBooks.has(id)) return dashboardBooks.get(id);
       if (id === '11ULokTx74QjziZjThJ0lfxFiMQW42-WV4315cG7eIuU') return workbook;
       const part = partitionBooks.get(id);
@@ -228,6 +240,13 @@ assert.equal(completeRow[11], 0, 'a valid zero organic result remains zero');
 assert.equal(incompleteRow[10], '', 'incomplete paid-click source remains blank');
 assert.equal(incompleteRow[11], '', 'incomplete organic result remains blank, not zero');
 assert.equal(incompleteRow[12], 'НЕПОЛНО · не считать нулём');
+assert.equal(result.partitions.datasets.daily_view.lite_tables.written, 2, 'available store facts update their separate lightweight tables');
+assert.deepEqual(result.partitions.datasets.daily_view.lite_tables.skipped, ['Хозяюшка'], 'a store without rows is left blank, not written as zero');
+assert.equal(liteBooks.get(liteIds[0]).traffic.values.length, 2, 'Sanych lightweight table receives one real day');
+assert.equal(liteBooks.get(liteIds[0]).traffic.values[1][0], '2026-10-09');
+assert.equal(liteBooks.get(liteIds[0]).traffic.values[1][10], 0, 'valid organic zero remains zero in lightweight table');
+assert.equal(liteBooks.get(liteIds[1]).traffic.values.length, 1, 'missing Hozy facts do not become zero rows');
+assert.equal(liteBooks.get(liteIds[2]).traffic.values[1][10], '', 'incomplete AIR organic remains blank in lightweight table');
 assert.equal(result.partitions.datasets.daily_view.dashboard.written, 3, 'traffic tiles update all store dashboards');
 assert.equal(result.partitions.datasets.daily_view.dashboard.date, '2026-10-09');
 assert.equal(dashboardBooks.get(dashboardIds[0]).dashboard.values[6][9], 10, 'Sanych tile gets funnel visits');
@@ -379,6 +398,7 @@ assert.throws(
 
 console.log('WB_TRAFFIC_PUBLISH_FIXTURE_OK', JSON.stringify({
   ads_rows: result.partitions.datasets.ads.written,
+  lite_tables_written: result.partitions.datasets.daily_view.lite_tables.written,
   funnel_rows: result.partitions.datasets.funnel.written,
   poll_rows: {ads:result.partitions.datasets.ads_poll.written,funnel:result.partitions.datasets.funnel_poll.written},
   empty_refresh_preserved: empty.partitions.datasets.ads.skipped,
