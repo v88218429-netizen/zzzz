@@ -1,0 +1,22 @@
+{
+  "task_id": "MUSIC_STUDIO",
+  "request": "MUSIC_STUDIO_20261017_1947_RECOVERY.json",
+  "query": "домашняя музыкальная студия в частном доме обзор шумоизоляция",
+  "knowledge_tag": "MUSIC",
+  "generated_at": "2026-10-17T16:49:23.219172+00:00",
+  "videos": [],
+  "errors": [
+    {
+      "video_id": "yWeLVZTE4cc",
+      "url": "https://www.youtube.com/watch?v=yWeLVZTE4cc",
+      "title": "Домашняя музыкальная студия. Часть 1: Звукоизоляция",
+      "error": "transcript_ai: HTTP Error 401: Unauthorized | free_api: HTTP Error 404: Not Found"
+    },
+    {
+      "video_id": "QMJqxbaGL9E",
+      "url": "https://www.youtube.com/watch?v=QMJqxbaGL9E",
+      "title": "Алёна Свиридова: звукоизоляция студии в жилом доме",
+      "error": "transcript_ai: HTTP Error 401: Unauthorized | free_api: HTTP Error 404: Not Found"
+    }
+  ]
+}

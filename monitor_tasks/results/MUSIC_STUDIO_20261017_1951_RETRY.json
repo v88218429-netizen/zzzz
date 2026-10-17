@@ -1,0 +1,16 @@
+{
+  "task_id": "MUSIC_STUDIO",
+  "request": "MUSIC_STUDIO_20261017_1951_RETRY.json",
+  "query": "домашняя студия звукозаписи шумоизоляция комнаты обзор",
+  "knowledge_tag": "MUSIC",
+  "generated_at": "2026-10-17T16:49:37.788142+00:00",
+  "videos": [],
+  "errors": [
+    {
+      "video_id": "AuiOoDSIBtg",
+      "url": "https://www.youtube.com/watch?v=AuiOoDSIBtg",
+      "title": "ЗВУКОИЗОЛЯЦИЯ ДОМАШНЕЙ СТУДИИ ЗВУКОЗАПИСИ. ПЕРЕДЕЛАЛ ЖИЛУЮ КОМНАТУ. Шумоизоляция стен и потолка",
+      "error": "transcript_ai: HTTP Error 401: Unauthorized | free_api: HTTP Error 500: Internal Server Error"
+    }
+  ]
+}
