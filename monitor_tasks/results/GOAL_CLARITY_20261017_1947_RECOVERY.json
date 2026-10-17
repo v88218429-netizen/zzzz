@@ -1,0 +1,34 @@
+{
+  "task_id": "GOAL_CLARITY",
+  "request": "GOAL_CLARITY_20261017_1947_RECOVERY.json",
+  "query": "как понять чего я хочу от жизни упражнения психолога идеальная жизнь",
+  "knowledge_tag": "LIFE",
+  "generated_at": "2026-10-17T16:46:56.618262+00:00",
+  "videos": [
+    {
+      "video_id": "aYIZOkrWUP4",
+      "url": "https://www.youtube.com/watch?v=aYIZOkrWUP4",
+      "title": "Как понять, что я хочу? Как найти себя?",
+      "channel": "Психолог Лєна Дяченко",
+      "duration": 597,
+      "timestamp": null,
+      "query": "как понять чего я хочу от жизни упражнения психолога идеальная жизнь",
+      "kind": "video",
+      "transcript": "transcripts/2026-10-17_GOAL_CLARITY_video_aYIZOkrWUP4.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "SgbsdVKR2Ec",
+      "url": "https://www.youtube.com/watch?v=SgbsdVKR2Ec",
+      "title": "Как понять чего я хочу!",
+      "channel": "Психолог Артур Тищук",
+      "duration": 865,
+      "timestamp": null,
+      "query": "как понять чего я хочу от жизни упражнения психолога идеальная жизнь",
+      "kind": "video",
+      "transcript": "transcripts/2026-10-17_GOAL_CLARITY_video_SgbsdVKR2Ec.md",
+      "method": "FreeTranscriptAPI"
+    }
+  ],
+  "errors": []
+}
