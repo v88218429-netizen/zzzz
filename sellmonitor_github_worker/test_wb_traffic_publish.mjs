@@ -241,7 +241,7 @@ assert.equal(incompleteRow[10], '', 'incomplete paid-click source remains blank'
 assert.equal(incompleteRow[11], '', 'incomplete organic result remains blank, not zero');
 assert.equal(incompleteRow[12], 'НЕПОЛНО · не считать нулём');
 assert.equal(result.partitions.datasets.daily_view.lite_tables.written, 2, 'available store facts update their separate lightweight tables');
-assert.deepEqual(result.partitions.datasets.daily_view.lite_tables.skipped, ['Хозяюшка'], 'a store without rows is left blank, not written as zero');
+assert.equal(JSON.stringify(result.partitions.datasets.daily_view.lite_tables.skipped), JSON.stringify(['Хозяюшка']), 'a store without rows is left blank, not written as zero');
 assert.equal(liteBooks.get(liteIds[0]).traffic.values.length, 2, 'Sanych lightweight table receives one real day');
 assert.equal(liteBooks.get(liteIds[0]).traffic.values[1][0], '2026-10-09');
 assert.equal(liteBooks.get(liteIds[0]).traffic.values[1][10], 0, 'valid organic zero remains zero in lightweight table');
