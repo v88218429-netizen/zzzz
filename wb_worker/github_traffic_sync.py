@@ -95,8 +95,13 @@ def _publish() -> None:
         response.raise_for_status()
         result = response.json()
     if not isinstance(result, dict) or result.get("ok") is not True or result.get("action") != "publish_wb_traffic":
-        raise RuntimeError("Google Sheets bridge rejected traffic publication")
+        detail = str(result.get("error", "unknown bridge response"))[:500] if isinstance(result, dict) else "invalid bridge response"
+        raise RuntimeError(f"Google Sheets bridge rejected traffic publication: {detail}")
     partition_counts = (result.get("partitions") or {}).get("datasets") or {}
+    daily_view = partition_counts.get("daily_view") or {}
+    lite_tables = daily_view.get("lite_tables") or {}
+    if lite_tables.get("ok") is not True or lite_tables.get("failed"):
+        raise RuntimeError("WB_TRAFFIC_LITE_PUBLICATION_INCOMPLETE")
     expectations = (("ads", len(ads)), ("funnel", len(funnel)), ("organic", len(organic)),
                     ("ads_poll", len(ads_poll)), ("funnel_poll", len(funnel_poll)))
     for name, expected in expectations:
@@ -109,7 +114,9 @@ def _publish() -> None:
             raise RuntimeError(f"Monthly-partition empty {name} result was not preserved")
     print(json.dumps({
         "published": True,
-        "publication_target": "monthly_partitions_only",
+        "publication_target": "monthly_partitions_plus_light_store_tables",
+        "lite_tables": lite_tables,
+        "dashboards": daily_view.get("dashboard", {}),
     }, ensure_ascii=False, sort_keys=True))
 
 
