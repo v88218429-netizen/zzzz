@@ -49,6 +49,27 @@ jobs:
           GOOGLE_SHEETS_BRIDGE_KEY: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
         run: python wb_worker/github_search_snapshot_sync.py --publish
 
-      - name: Publish factual snapshots and preserve unavailable-source reasons in the run log
+      - name: Accept published factual snapshots and record unavailable sources
         if: always() && steps.collect.outcome != 'cancelled'
-        run: echo "Collection manifest above records each cabinet status and exact unavailable-source reason; unavailable cabinets do not invalidate successful factual publication for the others."
+        env:
+          SEARCH_GITHUB_OUT: ${{ runner.temp }}/wb-search
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import pathlib
+
+          manifest_path = pathlib.Path(os.environ["SEARCH_GITHUB_OUT"]) / "manifest.json"
+          manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+          states = manifest.get("cabinets") or {}
+          factual = [name for name, state in states.items() if state.get("status") == "FACTUAL"]
+          if not factual:
+              raise SystemExit("search acceptance failed: no factual cabinet snapshots were published")
+          print("WB_SEARCH_FACTUAL_CABINETS=" + ",".join(sorted(factual)))
+          for name, state in sorted(states.items()):
+              if state.get("status") != "FACTUAL":
+                  reason = str(state.get("reason_code") or "").strip()
+                  if not reason:
+                      raise SystemExit(f"search acceptance failed: {name} is unavailable without a reason")
+                  print(f"WB_SEARCH_SOURCE_UNAVAILABLE={name}:{reason}")
+          PY
