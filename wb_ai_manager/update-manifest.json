@@ -2,25 +2,25 @@
   "schema": 1,
   "channels": {
     "stable": {
-      "version": "1.1.8",
+      "version": "1.1.9",
       "channel": "stable",
-      "notes": "Финансовые страницы запрашиваются по пределу WB; повышенный предел ответа позволяет получать полные срезы без ложного обрезания.",
+      "notes": "Полный недельный финансовый отчёт и чтение настроек таблицы из локального файла.",
       "minimum_current_version": "1.0.0",
       "files": [
         {
           "path": "VERSION",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/VERSION",
-          "sha256": "333d89aa068c7ab9eb7fe7ba55387e02b26fafdcfa06b62d2e45e3d0a43c3b9a"
+          "sha256": "7ac07fd87814a73947308b1c213e9df852eceab6c18e7c3df9d07b892c176b0d"
         },
         {
           "path": "pyproject.toml",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/pyproject.toml",
-          "sha256": "33d8effd308ee478ce839b16048f19950c3f9129629d0c880cbf36b971be77ed"
+          "sha256": "123699bfa30792eb2df3bbda8c7e7433c5ed8870277e59bbf3a871d1525334b6"
         },
         {
           "path": "plugin.json",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/plugin.json",
-          "sha256": "ef93427b63195bd0b5cd97e166050b269202083dce855e158db4f107a47df7cd"
+          "sha256": "f4523d6d38fbedd6b0ed8b8e0c7a28ce3d8cf9988834e064dc0c0657e93067ab"
         },
         {
           "path": "mcp.json",
@@ -72,12 +72,17 @@
         {
           "path": "src/wb_control_center/__init__.py",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/src/wb_control_center/__init__.py",
-          "sha256": "8a2f401af5971bfe2a1cdd05119b38e6eac9e54acf43d23cdd88d752314cbed2"
+          "sha256": "9671c033f6123ade53bed026e1956cdf64f44e9b0243990e3b39e7425babd581"
         },
         {
           "path": "src/wb_control_center/mcp_client.py",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/src/wb_control_center/mcp_client.py",
-          "sha256": "40af6ca9a4a5e8ee10135b7ccc41aba61f82ef2f717e13e1e5ecf91b47b2bfae"
+          "sha256": "45eee3cb799d1a8ea32fb4b158f4d9ed7f4586dc6c77ffa51c8e778721161eb4"
+        },
+        {
+          "path": "src/wb_control_center/config.py",
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/src/wb_control_center/config.py",
+          "sha256": "9cbca2ecc3913ec716034f240ef02941d61f58c2f7b0932fb24c8c8049eb1afd"
         }
       ]
     }
