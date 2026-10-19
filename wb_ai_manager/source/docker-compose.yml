@@ -1,10 +1,26 @@
+# Local Docker Desktop deployment only. Never expose the private WB dashboard publicly.
 services:
   wb-control:
     build: .
     env_file: .env
+    environment:
+      # Inside a container, 127.0.0.1 only listens inside the container.
+      # Listen on the container network; publish exclusively to the Mac's loopback.
+      APP_HOST: "0.0.0.0"
+      APP_PORT: "8787"
+      DASHBOARD_AUTH_REQUIRED: "false"
+      FORCE_READ_ONLY: "true"
+      OPERATION_MODE: "shadow"
+      AUTO_ACTIONS: "false"
     ports:
-      - "8787:8787"
+      - "127.0.0.1:8787:8787"
     volumes:
       - ./data:/app/data
       - ./config:/app/config
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8787/health', timeout=5).close()"]
+      interval: 30s
+      timeout: 10s
+      start_period: 120s
+      retries: 3
     restart: unless-stopped
