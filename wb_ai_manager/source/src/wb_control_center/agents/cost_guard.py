@@ -15,11 +15,29 @@ class CostGuardAgent(BaseAgent):
         start, end = self.dates(7)
         checks = [
             ("wb_paid_storage", {"date_from": start, "date_to": end}, "paid_storage"),
-            ("wb_analytics_measurement_penalties", {"date_from": start, "date_to": end}, "measurement_penalties"),
             ("wb_deductions", {"date_from": start, "date_to": end, "limit": 1000}, "deductions"),
             ("wb_analytics_acceptance", {"date_from": start, "date_to": end}, "paid_acceptance"),
         ]
         collected = {}
+        measurement_status = {
+            "available": False,
+            "status": "removed_by_wb",
+            "reason": "WB удалил отдельный источник штрафов за замеры; текущая версия соединителя больше не предоставляет этот метод.",
+            "replacement": {
+                "source": "finance.report_7d",
+                "field": "penalty",
+                "measurement_specific": False,
+            },
+        }
+        out.snapshots.append(("measurement_penalties", measurement_status))
+        collected["measurement_penalties"] = measurement_status
+        out.events.append(self.event(
+            "warning",
+            "measurement_penalties_removed",
+            "WB не отдаёт отдельный источник штрафов за замеры",
+            "Отдельный метод удалён из API WB. Общие штрафы в отчёте реализации доступны отдельно, но причину «замеры» по ним подтвердить нельзя.",
+            measurement_status,
+        ))
         for tool, args, key in checks:
             try:
                 data = await self.call(tool, **args)
@@ -45,7 +63,7 @@ class CostGuardAgent(BaseAgent):
                 out.events.append(self.event("warning", "worker_penalty_evidence_failed", "Не удалось получить FBS evidence wb-api-worker", str(e)))
         if self.ctx.llm.enabled and collected:
             text = await self.ctx.llm.complete(
-                "Ты контролёр скрытых расходов Wildberries. Найди существенные платное хранение, платную приёмку, штрафы за габариты, подмены/вложения и другие удержания. Не выдумывай суммы. Сначала самые дорогие отклонения.",
+                "Ты контролёр скрытых расходов Wildberries. Найди платное хранение, платную приёмку, подтверждённые штрафы и другие удержания. Отдельный источник штрафов за замеры удалён из API WB; не называй общие штрафы штрафами за замеры. Не выдумывай суммы. Сначала самые дорогие отклонения.",
                 summarize_for_prompt(collected),
                 max_tokens=800,
             )

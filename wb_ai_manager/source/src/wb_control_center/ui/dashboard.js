@@ -41,7 +41,7 @@ const domainRequiredSnapshots = {
   'Остатки':[['inventory','coverage']],
   'Поиск':[['search_positions','positions']],
   'Карточки':[['cards','card_catalog']],
-  'Финансы':[['finance','balance'],['finance','worker_finance']],
+  'Финансы':[['finance','balance'],['finance','report_7d'],['finance','worker_finance']],
   'Клиенты':[['reviews_questions','seller_rating'],['buyer_chats','chat_events']],
   'Новости WB':[['portal_news','news']],
   'Тарифы и Джем':[['seller_services','jam_subscription'],['seller_services','tariff_options']]
@@ -842,27 +842,93 @@ function renderSearch(){
 
 function moneyValue(v){ if(missing(v)) return 0; const n=Number(String(v).replace(/\s/g,'').replace(',','.')); return Number.isFinite(n)?n:0; }
 function renderFinance(){
-  const bal=snap('finance','balance')?.data||{}; $('finance-withdraw').textContent=rub(firstNumeric(bal,['forWithdraw','for_withdraw','balance'])); $('finance-transit').textContent=rub(firstNumeric(bal,['inTransit','in_transit']));
+  const bal=snap('finance','balance')?.data||{};
+  $('finance-withdraw').textContent=rub(firstNumeric(bal,['forWithdraw','for_withdraw','balance']));
+  $('finance-transit').textContent=rub(firstNumeric(bal,['inTransit','in_transit']));
+
+  const reportSnapshot=snap('finance','report_7d'), report=reportSnapshot?.data||{};
+  const reportRows=extractList(report), reportComplete=report?.complete===true;
+  const reportSum=(rows,keys)=>{
+    let found=false,total=0;
+    for(const row of rows){
+      if(!row||typeof row!=='object') continue;
+      for(const key of keys){
+        if(Object.prototype.hasOwnProperty.call(row,key)&&!missing(row[key])){
+          const value=Number(String(row[key]).replace(/\s/g,'').replace(',','.'));
+          if(Number.isFinite(value)){ found=true; total+=value; }
+          break;
+        }
+      }
+    }
+    return found?total:null;
+  };
+  const reportTotals={
+    penalty:reportSum(reportRows,['penalty','penaltyAmount']),
+    deduction:reportSum(reportRows,['deduction','deductionAmount']),
+    acceptance:reportSum(reportRows,['paidAcceptance','paid_acceptance']),
+    storage:reportSum(reportRows,['paidStorage','paid_storage'])
+  };
+  const reportUsable=reportComplete&&(reportRows.length===0||Object.values(reportTotals).some(v=>v!==null));
+
   const wf=snap('finance','worker_finance')?.data||{}, charges=Array.isArray(wf.charges)?wf.charges:[];
   const periodCharges=charges.filter(x=>dateInSelectedRange(x['RR Date']||x['Дата создания']||x['Отчет по']||x['Отчет с']));
-  const penalty=periodCharges.reduce((s,x)=>s+moneyValue(x['Штраф, ₽']),0);
-  const deduction=periodCharges.reduce((s,x)=>s+moneyValue(x['Удержание, ₽']),0);
-  const storage=periodCharges.reduce((s,x)=>s+moneyValue(x['Хранение, ₽']),0);
-  const acceptance=periodCharges.reduce((s,x)=>s+moneyValue(x['Приемка, ₽']),0);
-  if(periodCharges.length){
-    $('finance-deductions').textContent=rub(penalty+deduction+acceptance);
-    $('finance-storage').textContent=rub(storage);
+  const workerTotals={
+    penalty:reportSum(periodCharges,['Штраф, ₽']),
+    deduction:reportSum(periodCharges,['Удержание, ₽']),
+    acceptance:reportSum(periodCharges,['Приемка, ₽']),
+    storage:reportSum(periodCharges,['Хранение, ₽'])
+  };
+
+  let summaries=[],sourceNote='';
+  if(reportUsable){
+    const emptyReport=reportRows.length===0;
+    const penalty=emptyReport?0:reportTotals.penalty;
+    const deduction=emptyReport?0:reportTotals.deduction;
+    const acceptance=emptyReport?0:reportTotals.acceptance;
+    const storage=emptyReport?0:reportTotals.storage;
+    const totalReady=emptyReport||[penalty,deduction,acceptance].every(v=>v!==null);
+    $('finance-deductions').textContent=totalReady?rub((penalty||0)+(deduction||0)+(acceptance||0)):'—';
+    $('finance-storage').textContent=storage!==null?rub(storage):'—';
+    summaries=[
+      ['Штрафы',penalty===null?'—':rub(penalty)],
+      ['Удержания',deduction===null?'—':rub(deduction)],
+      ['Платная приёмка',acceptance===null?'—':rub(acceptance)],
+      ['Хранение',storage===null?'—':rub(storage)]
+    ];
+    sourceNote=`Источник: отчёт реализации WB · ${esc(currentPeriodLabel())} · строк ${num(reportRows.length)} · страниц ${num(report.pages||0)} · полнота подтверждена`;
+  }else if(periodCharges.length){
+    const totalReady=[workerTotals.penalty,workerTotals.deduction,workerTotals.acceptance].every(v=>v!==null);
+    $('finance-deductions').textContent=totalReady?rub(workerTotals.penalty+workerTotals.deduction+workerTotals.acceptance):'—';
+    $('finance-storage').textContent=workerTotals.storage===null?'—':rub(workerTotals.storage);
+    summaries=[
+      ['Штрафы',workerTotals.penalty===null?'—':rub(workerTotals.penalty)],
+      ['Удержания',workerTotals.deduction===null?'—':rub(workerTotals.deduction)],
+      ['Платная приёмка',workerTotals.acceptance===null?'—':rub(workerTotals.acceptance)],
+      ['Хранение',workerTotals.storage===null?'—':rub(workerTotals.storage)]
+    ];
+    sourceNote=`Источник: финансовый worker · ${esc(currentPeriodLabel())} · строк списаний ${num(periodCharges.length)}`;
   }else{
-    const ded=extractList(snap('cost_guard','deductions')?.data); const stor=extractList(snap('cost_guard','paid_storage')?.data);
-    $('finance-deductions').textContent=ded.length?rub(ded.reduce((s,x)=>s+moneyValue(x.amount??x.sum),0)):'—';
-    $('finance-storage').textContent=stor.length?rub(stor.reduce((s,x)=>s+moneyValue(x.warehousePrice??x.amount??x.price),0)):'—';
+    const ded=extractList(snap('cost_guard','deductions')?.data);
+    const stor=extractList(snap('cost_guard','paid_storage')?.data);
+    const deductionTotal=reportSum(ded,['amount','sum','deduction','deductionAmount']);
+    const storageTotal=reportSum(stor,['warehousePrice','amount','price','paidStorage']);
+    $('finance-deductions').textContent=deductionTotal===null?'—':rub(deductionTotal);
+    $('finance-storage').textContent=storageTotal===null?'—':rub(storageTotal);
+    if(deductionTotal!==null) summaries.push(['Доступные удержания',rub(deductionTotal)]);
+    if(storageTotal!==null) summaries.push(['Платное хранение',rub(storageTotal)]);
+    if(summaries.length) sourceNote=`Источник: отдельные отчёты WB · ${esc(currentPeriodLabel())}`;
   }
-  const summaries=periodCharges.length?[
-    ['Штрафы',rub(penalty)],['Удержания',rub(deduction)],['Платная приёмка',rub(acceptance)],['Хранение',rub(storage)]
-  ]:[];
+
+  const statusNote=reportSnapshot&&!reportComplete
+    ?`<div class="source-note">В отчёте WB получено ${num(reportRows.length)} строк; конец списка не подтверждён, суммы по нему скрыты.</div>`
+    :reportSnapshot&&reportComplete&&!reportUsable
+      ?`<div class="source-note">Отчёт WB завершён, но не содержит распознаваемых полей начислений; итог не подставлен.</div>`
+      :'';
+  const summaryHtml=summaries.length
+    ?`<div class="finance-breakdown">${summaries.map(([k,v])=>`<div><span>${esc(k)}</span><strong>${esc(v)}</strong></div>`).join('')}</div>${sourceNote?`<div class="source-note">${sourceNote}</div>`:''}`
+    :'';
   const ev=(state.data.events||[]).filter(e=>['finance','cost_guard','documents'].includes(e.agent)&&['critical','warning'].includes(e.severity)).slice(0,10);
-  const summaryHtml=summaries.length?`<div class="finance-breakdown">${summaries.map(([k,v])=>`<div><span>${k}</span><strong>${v}</strong></div>`).join('')}</div><div class="source-note">Источник: финансовый worker · ${esc(currentPeriodLabel())} · строк списаний ${periodCharges.length}</div>`:'';
-  $('finance-signals').innerHTML=summaryHtml+(ev.length?ev.map(signalHtml).join(''):empty('За выбранный период финансовых предупреждений нет.'));
+  $('finance-signals').innerHTML=summaryHtml+statusNote+(ev.length?ev.map(signalHtml).join(''):empty('За выбранный период финансовых предупреждений нет.'));
 }
 
 function countObjList(s,k){ const x=snap(s,k)?.data; return extractList(x).length; }

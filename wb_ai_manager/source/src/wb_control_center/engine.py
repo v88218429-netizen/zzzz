@@ -310,9 +310,13 @@ class ControlCenter:
         token = set_analysis_period(period)
         started = datetime.now(timezone.utc).isoformat()
         try:
+            agent_timeout = max(1.0, float(self.settings.agent_run_timeout_seconds))
+            if name == "finance":
+                # WB limits detailed realization reports to one request per minute.
+                agent_timeout = max(agent_timeout, 540.0)
             result = await asyncio.wait_for(
                 self.agents[name].run(),
-                timeout=max(1.0, float(self.settings.agent_run_timeout_seconds)),
+                timeout=agent_timeout,
             )
         except Exception as exc:
             return {

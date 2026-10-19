@@ -2,25 +2,40 @@
   "schema": 1,
   "channels": {
     "stable": {
-      "version": "1.1.0",
+      "version": "1.1.6",
       "channel": "stable",
-      "notes": "Управляющее ядро v1.1: точная связь кампания+nmID, когортная аналитика, расследование, независимый критик, контроль риска, история фактических действий, оценка результата, обучение на подтверждённом бездействии и защита от последующих вмешательств.",
+      "notes": "Финансовый отчёт WB загружается постранично с проверкой полноты; панель не подставляет частичные суммы и отмечает удалённый источник штрафов за замеры.",
       "minimum_current_version": "1.0.0",
       "files": [
         {
           "path": "VERSION",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/releases/1.1.0/VERSION",
-          "sha256": "1575e1af4a95f12f70b4ee6a6adce8160953d93ea17dc2611b90883ccc3ad3b8"
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/VERSION",
+          "sha256": "2f66e2158a2645e2455e374272c8deb113173dca586f9159f813519a50436c32"
         },
         {
-          "path": "scripts/update_smoke.py",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/releases/1.1.0/update_smoke.py",
-          "sha256": "e1f3ad434945bd4d4ce9877ba041922cafd3e7b958628826c84a859509688f7d"
+          "path": "pyproject.toml",
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/pyproject.toml",
+          "sha256": "689397d68fe126323056c7ec48f4e862274b92de3515c0b873c5dabd2955f102"
         },
         {
-          "path": "scripts/.v11_bundle.b64",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/releases/1.1.0/bundle.b64",
-          "sha256": "b08d8c64bbb1f2c18cad4981248fe30b59018b2e66e0527d2a7413e0bc3c013b"
+          "path": "src/wb_control_center/agents/finance.py",
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/src/wb_control_center/agents/finance.py",
+          "sha256": "48eb0581c836473d180b53563a1e2416247832590e41d8d7481157f0a7eb9920"
+        },
+        {
+          "path": "src/wb_control_center/agents/cost_guard.py",
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/src/wb_control_center/agents/cost_guard.py",
+          "sha256": "e9193503ca6cc18f5cb64ef63824c9635b2307ddf0e98e936c2a990b60a3a68f"
+        },
+        {
+          "path": "src/wb_control_center/engine.py",
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/src/wb_control_center/engine.py",
+          "sha256": "46b76bfc812e818673a14da709c4dbb9e0a11b0b5d0c223ae6fde6b5426d600a"
+        },
+        {
+          "path": "src/wb_control_center/ui/dashboard.js",
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/src/wb_control_center/ui/dashboard.js",
+          "sha256": "9913cbd725242e93e8d4a86e602fdf82787d12c8643f1662b190fb0f8bf77383"
         }
       ]
     }
