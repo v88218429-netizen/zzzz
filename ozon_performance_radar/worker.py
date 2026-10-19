@@ -154,7 +154,18 @@ def collect_store(store, client_id, secret, last_date):
 
     for path in STAT_ENDPOINTS:
         key = "daily" if path.endswith("/daily/json") else "campaign_product"
-        for start, end in windows(FIRST_DATE, last_date):
+        requested_start = FIRST_DATE
+        if key == "campaign_product":
+            observed_dates = []
+            for daily_window in bundle["daily"]:
+                for row in daily_window["response"].get("rows", []):
+                    try:
+                        observed_dates.append(dt.date.fromisoformat(str(row.get("date"))))
+                    except (TypeError, ValueError):
+                        pass
+            if observed_dates:
+                requested_start = min(observed_dates)
+        for start, end in windows(requested_start, last_date):
             params = {"dateFrom": start.isoformat(), "dateTo": end.isoformat()}
             if key == "daily" and campaign_ids:
                 params = [
