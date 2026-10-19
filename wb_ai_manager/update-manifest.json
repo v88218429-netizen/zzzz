@@ -2,25 +2,25 @@
   "schema": 1,
   "channels": {
     "stable": {
-      "version": "1.1.7",
+      "version": "1.1.8",
       "channel": "stable",
-      "notes": "Пустой ответ WB 204 корректно завершает финансовую выгрузку без ложной ошибки формата.",
+      "notes": "Финансовые страницы запрашиваются по пределу WB; повышенный предел ответа позволяет получать полные срезы без ложного обрезания.",
       "minimum_current_version": "1.0.0",
       "files": [
         {
           "path": "VERSION",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/VERSION",
-          "sha256": "f2fb797db5b32c15ac4c67b2180b593bf46c768ba1d69971fecbef1d9afb1975"
+          "sha256": "333d89aa068c7ab9eb7fe7ba55387e02b26fafdcfa06b62d2e45e3d0a43c3b9a"
         },
         {
           "path": "pyproject.toml",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/pyproject.toml",
-          "sha256": "ebd856b9d4011fc480ac130e5dcb732d007a0508c9fe36d816a26f920d73a50b"
+          "sha256": "33d8effd308ee478ce839b16048f19950c3f9129629d0c880cbf36b971be77ed"
         },
         {
           "path": "plugin.json",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/plugin.json",
-          "sha256": "a9ea23c261ee5f96eb5499fa256e712c02d61b5a843dd36f535b76b0ad2d081f"
+          "sha256": "ef93427b63195bd0b5cd97e166050b269202083dce855e158db4f107a47df7cd"
         },
         {
           "path": "mcp.json",
@@ -52,7 +52,7 @@
         {
           "path": "src/wb_control_center/agents/finance.py",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/src/wb_control_center/agents/finance.py",
-          "sha256": "2d9f880c81e8db26329b5d1885f1f2aa35c1122dbe19c8f0226381da08260bd7"
+          "sha256": "5d141b7afe5e5b3bdcbeaf5626901652f9588e11956539fdc3a58ea3c867f420"
         },
         {
           "path": "src/wb_control_center/agents/cost_guard.py",
@@ -72,7 +72,12 @@
         {
           "path": "src/wb_control_center/__init__.py",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/src/wb_control_center/__init__.py",
-          "sha256": "a76a807dd53bcc73928498b67f5156fbfed36e6d3e2823c4ec223bdbce108878"
+          "sha256": "8a2f401af5971bfe2a1cdd05119b38e6eac9e54acf43d23cdd88d752314cbed2"
+        },
+        {
+          "path": "src/wb_control_center/mcp_client.py",
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/src/wb_control_center/mcp_client.py",
+          "sha256": "40af6ca9a4a5e8ee10135b7ccc41aba61f82ef2f717e13e1e5ecf91b47b2bfae"
         }
       ]
     }
