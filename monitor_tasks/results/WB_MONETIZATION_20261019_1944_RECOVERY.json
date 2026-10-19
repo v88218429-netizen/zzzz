@@ -1,0 +1,46 @@
+{
+  "task_id": "WB_MONETIZATION",
+  "request": "WB_MONETIZATION_20261019_1944_RECOVERY.json",
+  "query": "как монетизировать экспертизу Wildberries кроме ведения кабинетов",
+  "knowledge_tag": "WB_MONETIZATION",
+  "generated_at": "2026-10-19T16:46:57.239822+00:00",
+  "videos": [
+    {
+      "video_id": "52cSEnlBv-4",
+      "url": "https://www.youtube.com/watch?v=52cSEnlBv-4",
+      "title": "How to Make Millions on Wildberries and Ozon Marketplaces? Tips and Life Hacks from Experienced S...",
+      "channel": "ВИТАЛИЙ ТЕИН",
+      "duration": 4037,
+      "timestamp": null,
+      "query": "сервис для селлеров Wildberries бизнес",
+      "kind": "video",
+      "transcript": "transcripts/2026-10-19_WB_MONETIZATION_video_52cSEnlBv-4.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "_ShzuT0KEoI",
+      "url": "https://www.youtube.com/watch?v=_ShzuT0KEoI",
+      "title": "КАК создать ИИ-агентов для Wildberries, которые заменят Менеджера по маркетплейсам",
+      "channel": "Андрей Пекинский • Реклама на Вайлдберриз и Озон",
+      "duration": 462,
+      "timestamp": null,
+      "query": "сервис для селлеров Wildberries бизнес",
+      "kind": "video",
+      "transcript": "transcripts/2026-10-19_WB_MONETIZATION_video__ShzuT0KEoI.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "NixvZ_-X_F8",
+      "url": "https://www.youtube.com/watch?v=NixvZ_-X_F8",
+      "title": "How to Start a Fulfillment Center from Scratch and Make 1,000,000₽ During the Wildberries Crisis ...",
+      "channel": "ВОВА & ВАНЯ | Бизнес с нуля без вложений",
+      "duration": 1016,
+      "timestamp": null,
+      "query": "сервис для селлеров Wildberries бизнес",
+      "kind": "video",
+      "transcript": "transcripts/2026-10-19_WB_MONETIZATION_video_NixvZ_-X_F8.md",
+      "method": "FreeTranscriptAPI"
+    }
+  ],
+  "errors": []
+}
