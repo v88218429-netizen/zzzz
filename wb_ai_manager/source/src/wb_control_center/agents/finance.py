@@ -9,7 +9,7 @@ from ..models import AgentResult
 
 
 REPORT_PAGE_SIZE = 500
-REPORT_MAX_PAGES = 4
+REPORT_MAX_PAGES = 5
 REPORT_PAGE_INTERVAL_SECONDS = 61
 
 
@@ -50,17 +50,26 @@ class FinanceAgent(BaseAgent):
         pages = 0
         complete = False
         report_error: str | None = None
+        report_deadline = asyncio.get_running_loop().time() + 270
         for page_number in range(REPORT_MAX_PAGES):
             if page_number:
+                remaining = report_deadline - asyncio.get_running_loop().time()
+                if remaining <= REPORT_PAGE_INTERVAL_SECONDS:
+                    report_error = "Достигнут безопасный предел времени загрузки отчёта"
+                    break
                 await asyncio.sleep(REPORT_PAGE_INTERVAL_SECONDS)
+            remaining = report_deadline - asyncio.get_running_loop().time()
+            if remaining <= 0:
+                report_error = "Достигнут безопасный предел времени загрузки отчёта"
+                break
             try:
-                page = await self.call(
+                page = await asyncio.wait_for(self.call(
                     "wb_finance_report",
                     date_from=start,
                     date_to=end,
                     limit=REPORT_PAGE_SIZE,
                     rrd_id=cursor,
-                )
+                ), timeout=remaining)
             except Exception as e:
                 report_error = f"{type(e).__name__}: {e}"
                 break
