@@ -133,10 +133,34 @@ def collect_store(store, client_id, secret, last_date):
         "Authorization": "Bearer " + token,
         "Accept": "application/json",
     })
+    campaign_ids = []
+    page = 1
+    while page <= 20:
+        campaign_data, campaign_status = fetch_json(
+            session,
+            "/api/client/campaign",
+            {"page": page, "pageSize": 100, "advObjectType": "SKU"},
+        )
+        if campaign_data is None:
+            bundle["errors"].append({"stage": "campaign_list", "status": campaign_status})
+            break
+        campaign_rows = campaign_data.get("list") or []
+        campaign_ids.extend(
+            str(row.get("id")) for row in campaign_rows if row.get("id") is not None
+        )
+        if len(campaign_rows) < 100:
+            break
+        page += 1
+
     for path in STAT_ENDPOINTS:
         key = "daily" if path.endswith("/daily/json") else "campaign_product"
         for start, end in windows(FIRST_DATE, last_date):
             params = {"dateFrom": start.isoformat(), "dateTo": end.isoformat()}
+            if key == "daily" and campaign_ids:
+                params = [
+                    ("dateFrom", start.isoformat()),
+                    ("dateTo", end.isoformat()),
+                ] + [("campaigns", campaign_id) for campaign_id in campaign_ids]
             payload, status = fetch_json(session, path, params)
             if status == 401:
                 try:
