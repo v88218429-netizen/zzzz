@@ -21,25 +21,17 @@ jobs:
             client_id: "104833980-1790097716038@advertising.performance.ozon.ru"
             secret_name: OZON_PERF_HOZYAIKA_SECRET
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 30
     env:
       OZON_STORE: ${{ matrix.store }}
       OZON_PERF_CLIENT_ID: ${{ matrix.client_id }}
       OZON_PERF_CLIENT_SECRET: ${{ matrix.secret_name == 'OZON_PERF_DOM_SECRET' && secrets.OZON_PERF_DOM_SECRET || secrets.OZON_PERF_HOZYAIKA_SECRET }}
-      TEST_SKU: "5094364543"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Credential capability
-        shell: bash
-        run: |
-          test -n "$OZON_PERF_CLIENT_SECRET" || { echo "STORE=$OZON_STORE PERFORMANCE_CREDENTIALS=missing"; exit 2; }
-          echo "::add-mask::$OZON_PERF_CLIENT_SECRET"
-          echo "STORE=$OZON_STORE PERFORMANCE_CREDENTIALS=present"\n          echo "STORE=$OZON_STORE SECRET_LENGTH=${#OZON_PERF_CLIENT_SECRET}"
-      - run: pip install requests
-      - name: Live Performance probe
+      - name: Install API and encryption libraries
+        run: pip install requests cryptography
+      - name: Pull and encrypt Ozon statistics
         run: python ozon_performance_radar/worker.py
-
-# manual trigger 2026-09-22
