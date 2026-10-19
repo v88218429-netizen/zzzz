@@ -9,7 +9,7 @@ from ..models import AgentResult
 
 
 REPORT_PAGE_SIZE = 500
-REPORT_MAX_PAGES = 5
+REPORT_MAX_PAGES = 8
 REPORT_PAGE_INTERVAL_SECONDS = 61
 
 
@@ -50,7 +50,7 @@ class FinanceAgent(BaseAgent):
         pages = 0
         complete = False
         report_error: str | None = None
-        report_deadline = asyncio.get_running_loop().time() + 270
+        report_deadline = asyncio.get_running_loop().time() + 500
         for page_number in range(REPORT_MAX_PAGES):
             if page_number:
                 remaining = report_deadline - asyncio.get_running_loop().time()
