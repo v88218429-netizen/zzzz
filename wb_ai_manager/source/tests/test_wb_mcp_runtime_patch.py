@@ -25,7 +25,7 @@ async def test_runtime_patch_updates_wb_mcp_request_contracts():
 
     deductions=calls[1]
     assert deductions[2]["dateFrom"] == "2026-09-21T00:00:00Z"
-    assert "limit" not in deductions[2] and "offset" not in deductions[2]
+    assert deductions[2]["limit"] == 1000 and deductions[2]["offset"] == 0
 
     docs=calls[2]
     assert docs[2]["beginTime"] == "2026-09-21"
