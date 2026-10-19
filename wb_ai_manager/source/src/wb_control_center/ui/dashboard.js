@@ -854,7 +854,7 @@ function renderFinance(){
       if(!row||typeof row!=='object') continue;
       for(const key of keys){
         if(Object.prototype.hasOwnProperty.call(row,key)&&!missing(row[key])){
-          const value=Number(String(row[key]).replace(/\\s/g,'').replace(',','.'));
+          const value=Number(String(row[key]).replace(/\s/g,'').replace(',','.'));
           if(Number.isFinite(value)){ found=true; total+=value; }
           break;
         }
