@@ -1,0 +1,15 @@
+{
+  "task_id": "WB_MONETIZATION",
+  "query": "как монетизировать экспертизу Wildberries кроме ведения кабинетов",
+  "extra_queries": [
+    "сервис для селлеров Wildberries бизнес",
+    "агентство Wildberries масштабирование",
+    "продукт для продавцов WB"
+  ],
+  "content": "Видео",
+  "limit_video": 3,
+  "limit_shorts": 0,
+  "depth_days": 30,
+  "knowledge_tag": "WB_MONETIZATION",
+  "language": "ru"
+}
