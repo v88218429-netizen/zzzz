@@ -75,6 +75,11 @@ class FinanceAgent(BaseAgent):
                 break
             pages += 1
             if isinstance(page, dict):
+                # wb-mcp-server converts a bodyless HTTP 204 response to {}.
+                # WB uses 204 to confirm that there are no more report rows.
+                if not page:
+                    complete = True
+                    break
                 status_code = page.get("status_code", page.get("statusCode"))
                 try:
                     status_code = int(status_code or 0)
