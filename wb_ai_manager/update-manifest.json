@@ -4,7 +4,7 @@
     "stable": {
       "version": "1.1.6",
       "channel": "stable",
-      "notes": "Финансовый отчёт WB загружается постранично с проверкой полноты; панель не подставляет частичные суммы и отмечает удалённый источник штрафов за замеры.",
+      "notes": "Финансовый отчёт WB загружается постранично с проверкой полноты; образ содержит файлы штатной самопроверки; удалённый источник штрафов за замеры не подменяется нулём.",
       "minimum_current_version": "1.0.0",
       "files": [
         {
@@ -16,6 +16,38 @@
           "path": "pyproject.toml",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/pyproject.toml",
           "sha256": "689397d68fe126323056c7ec48f4e862274b92de3515c0b873c5dabd2955f102"
+        },
+        {
+          "path": "plugin.json",
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/plugin.json",
+          "sha256": "fe37cc5c965de5c64c7cd8088ce8517281f3f2f1cb11d4b67b06825efe076598"
+        },
+        {
+          "path": "mcp.json",
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/mcp.json",
+          "sha256": "e2a66e8ea5543f5aeb820372fe7f0f0788c8c453621c3945804a5fee2bbd8d13"
+        },
+        {
+          "path": "START_WB_AI_MANAGER.command",
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/START_WB_AI_MANAGER.command",
+          "sha256": "1a1041b6f037d56bce61b6f1af96c46d08526eca23a7d3b811b521704bdb4947",
+          "executable": true
+        },
+        {
+          "path": "Dockerfile",
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/Dockerfile",
+          "sha256": "5bcf57cbde254b8580d5aa79a161986d1cb43082c3e5d9903101e24d8bf6eca2"
+        },
+        {
+          "path": "scripts/plugin_mcp_stdio.sh",
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/scripts/plugin_mcp_stdio.sh",
+          "sha256": "2b365be367d9fa4fc1442cf98d7390d3685d16c73c91ab1be2b46bc4ff447e06",
+          "executable": true
+        },
+        {
+          "path": "scripts/update_smoke.py",
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/scripts/update_smoke.py",
+          "sha256": "02f18f9f2562082cf64fd3f6fbde0f90336afaf4b2b30caa6b2034be3fe47140"
         },
         {
           "path": "src/wb_control_center/agents/finance.py",
