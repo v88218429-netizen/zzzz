@@ -8,7 +8,7 @@ from ..metrics import summarize_for_prompt
 from ..models import AgentResult
 
 
-REPORT_PAGE_SIZE = 500
+REPORT_PAGE_SIZE = 100000
 REPORT_MAX_PAGES = 8
 REPORT_PAGE_INTERVAL_SECONDS = 61
 
