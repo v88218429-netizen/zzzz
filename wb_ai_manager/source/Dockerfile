@@ -1,6 +1,9 @@
 FROM python:3.12-slim
 WORKDIR /app
 COPY pyproject.toml README.md VERSION ./
+COPY plugin.json mcp.json START_WB_AI_MANAGER.command ./
+RUN mkdir -p ./scripts
+COPY scripts/plugin_mcp_stdio.sh scripts/update_smoke.py ./scripts/
 COPY src ./src
 COPY config ./config
 COPY data ./data
