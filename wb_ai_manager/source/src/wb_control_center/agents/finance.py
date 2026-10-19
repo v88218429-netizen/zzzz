@@ -67,11 +67,15 @@ class FinanceAgent(BaseAgent):
             pages += 1
             if isinstance(page, dict):
                 status_code = page.get("status_code", page.get("statusCode"))
+                try:
+                    status_code = int(status_code or 0)
+                except (TypeError, ValueError):
+                    status_code = 0
                 rows = page.get("data")
                 if status_code == 204 and rows is None:
                     complete = True
                     break
-                if not isinstance(rows, list):
+                if not isinstance(rows, list) or not all(isinstance(row, dict) for row in rows):
                     report_error = "WB вернул неожиданный формат отчёта"
                     break
             else:
