@@ -47,7 +47,7 @@ class WBMCPClient:
             "PATH": os.environ.get("PATH", ""),
             "HOME": os.environ.get("HOME", ""),
             # Finance rows exceed the connector default response size.
-            "WB_MAX_RESPONSE_CHARS": "1000000",
+            "WB_MAX_RESPONSE_CHARS": "12000000",
         }
         params = StdioServerParameters(command=sys.executable, args=["-m", "wb_control_center.wb_mcp_runner"], env=env)
 
