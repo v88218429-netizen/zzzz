@@ -69,6 +69,8 @@ async def _analytics_deductions(
             "dateTo": _rfc3339_not_future(date_to),
             "sort": "dtBonus",
             "order": "desc",
+            "limit": limit,
+            "offset": offset,
         },
     )
 
