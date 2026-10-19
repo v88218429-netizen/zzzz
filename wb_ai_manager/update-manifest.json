@@ -2,25 +2,25 @@
   "schema": 1,
   "channels": {
     "stable": {
-      "version": "1.1.6",
+      "version": "1.1.7",
       "channel": "stable",
-      "notes": "Финансовый отчёт WB загружается постранично с проверкой полноты; образ содержит файлы штатной самопроверки; удалённый источник штрафов за замеры не подменяется нулём.",
+      "notes": "Пустой ответ WB 204 корректно завершает финансовую выгрузку без ложной ошибки формата.",
       "minimum_current_version": "1.0.0",
       "files": [
         {
           "path": "VERSION",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/VERSION",
-          "sha256": "2f66e2158a2645e2455e374272c8deb113173dca586f9159f813519a50436c32"
+          "sha256": "f2fb797db5b32c15ac4c67b2180b593bf46c768ba1d69971fecbef1d9afb1975"
         },
         {
           "path": "pyproject.toml",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/pyproject.toml",
-          "sha256": "689397d68fe126323056c7ec48f4e862274b92de3515c0b873c5dabd2955f102"
+          "sha256": "ebd856b9d4011fc480ac130e5dcb732d007a0508c9fe36d816a26f920d73a50b"
         },
         {
           "path": "plugin.json",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/plugin.json",
-          "sha256": "fe37cc5c965de5c64c7cd8088ce8517281f3f2f1cb11d4b67b06825efe076598"
+          "sha256": "a9ea23c261ee5f96eb5499fa256e712c02d61b5a843dd36f535b76b0ad2d081f"
         },
         {
           "path": "mcp.json",
@@ -52,7 +52,7 @@
         {
           "path": "src/wb_control_center/agents/finance.py",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/src/wb_control_center/agents/finance.py",
-          "sha256": "48eb0581c836473d180b53563a1e2416247832590e41d8d7481157f0a7eb9920"
+          "sha256": "2d9f880c81e8db26329b5d1885f1f2aa35c1122dbe19c8f0226381da08260bd7"
         },
         {
           "path": "src/wb_control_center/agents/cost_guard.py",
@@ -72,7 +72,7 @@
         {
           "path": "src/wb_control_center/__init__.py",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/src/wb_control_center/__init__.py",
-          "sha256": "7ded62ef2b50ebb7263a2e1f292a5f07be1edfa76446079cd73760ef5bae4453"
+          "sha256": "a76a807dd53bcc73928498b67f5156fbfed36e6d3e2823c4ec223bdbce108878"
         }
       ]
     }
