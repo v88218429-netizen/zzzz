@@ -98,9 +98,23 @@ def free_api(vid, lang="ru"):
     if not lines: raise RuntimeError(data.get("error") or "empty transcript")
     return "\n".join(lines), "FreeTranscriptAPI"
 
+def youtube_captions(vid, lang="ru"):
+    from youtube_transcript_api import YouTubeTranscriptApi
+    rows=YouTubeTranscriptApi().fetch(vid, languages=[lang, "ru", "en"])
+    lines=[]
+    for row in rows:
+        body=re.sub(r"\s+", " ", row.text).strip()
+        if not body: continue
+        sec=int(row.start)
+        h,rem=divmod(sec,3600); m,ss=divmod(rem,60)
+        stamp=f"{h:02d}:{m:02d}:{ss:02d}" if h else f"{m:02d}:{ss:02d}"
+        lines.append(f"[{stamp}] {body}")
+    if not lines: raise RuntimeError("empty captions")
+    return "\n".join(lines), "youtube-transcript-api"
+
 def get_transcript(vid, lang="ru"):
     errs=[]
-    for fn in (transcript_ai, free_api):
+    for fn in (youtube_captions, transcript_ai, free_api):
         try: return fn(vid, lang)
         except Exception as exc: errs.append(f"{fn.__name__}: {exc}")
     raise RuntimeError(" | ".join(errs))
@@ -208,13 +222,14 @@ def process_request(path):
     }
     out=RES/f"{path.stem}.json"
     out.write_text(json.dumps(payload,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
-    marker.write_text(json.dumps({"result":str(out.relative_to(ROOT)),"processed_at":datetime.now(timezone.utc).isoformat()},ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
+    if results or not errors:
+        marker.write_text(json.dumps({"result":str(out.relative_to(ROOT)),"processed_at":datetime.now(timezone.utc).isoformat()},ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
 
 def main():
     files=sorted(REQ.glob("*.json"))
     for f in files:
         try: process_request(f)
-        except Exception as exc: print(f"REQUEST ERROR {f.name}: {exc}")
+        except Exception as exc: print(f"REQUEST ERROR {f.name}: {exc}"); raise
 
 if __name__=="__main__":
     main()
