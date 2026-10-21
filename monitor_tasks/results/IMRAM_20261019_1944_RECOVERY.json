@@ -1,0 +1,34 @@
+{
+  "task_id": "IMRAM",
+  "request": "IMRAM_20261019_1944_RECOVERY.json",
+  "query": "Имрам как правильно формулировать желание конечный результат",
+  "knowledge_tag": "IMRAM",
+  "generated_at": "2026-10-21T20:52:03.754850+00:00",
+  "videos": [
+    {
+      "video_id": "YLkuuOzXcRE",
+      "url": "https://www.youtube.com/watch?v=YLkuuOzXcRE",
+      "title": "Как МЫСЛИ материализуются | Синхроничность Карла Юнга",
+      "channel": "Раскрой Свой Потенциал",
+      "duration": 3796,
+      "timestamp": null,
+      "query": "Имрам как правильно формулировать желание конечный результат",
+      "kind": "video",
+      "transcript": "transcripts/2026-10-21_IMRAM_video_YLkuuOzXcRE.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "xiKEY74z-RU",
+      "url": "https://www.youtube.com/watch?v=xiKEY74z-RU",
+      "title": "УЧЁНЫЕ В ШОКЕ! МЕТОД БЕХТЕРЕВОЙ РАБОТАЕТ С ПЕРВОГО РАЗА НА 1000%! Как получить то, чего ВЫ ХОТИТЕ",
+      "channel": "Психология Успеха",
+      "duration": 3170,
+      "timestamp": null,
+      "query": "Имрам как правильно формулировать желание конечный результат",
+      "kind": "video",
+      "transcript": "transcripts/2026-10-21_IMRAM_video_xiKEY74z-RU.md",
+      "method": "FreeTranscriptAPI"
+    }
+  ],
+  "errors": []
+}
