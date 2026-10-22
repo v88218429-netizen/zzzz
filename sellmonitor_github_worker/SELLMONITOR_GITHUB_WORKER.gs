@@ -3430,7 +3430,7 @@ function sellmonitorGithubMaybeSyncInnerFinance_(cfg,cc) {
     return {ok:false,attempted:true,date:dateKey,error:message};
   }
 }
-function sellmonitorGithubWriteWbTrafficPartitions_(prepared, runId) {
+function sellmonitorGithubWriteWbTrafficPartitions_(prepared, runId, skipDailyView) {
   var output = {};
   ['ads','funnel','organic','ads_poll','funnel_poll'].forEach(function(dataset) {
     var cfg = SMC_WB_TRAFFIC.DATASETS[dataset], table = prepared[dataset] || {rows:[]};
@@ -3515,8 +3515,11 @@ function sellmonitorGithubWriteWbTrafficPartitions_(prepared, runId) {
     });
     output[dataset] = datasetResult;
   });
-  output.daily_view = sellmonitorGithubWriteWbTrafficDailyView_(prepared, runId);
-  return {ok:output.daily_view.lite_tables && output.daily_view.lite_tables.ok === true, schema_version:SMC_WB_TRAFFIC_PARTITIONS.schemaVersion, run_id:String(runId), datasets:output};
+  output.daily_view = skipDailyView === true
+    ? {ok:true,skipped:true,reason:'daily_view_deferred_until_all_datasets_are_published'}
+    : sellmonitorGithubWriteWbTrafficDailyView_(prepared, runId);
+  return {ok:skipDailyView === true || (output.daily_view.lite_tables && output.daily_view.lite_tables.ok === true),
+    schema_version:SMC_WB_TRAFFIC_PARTITIONS.schemaVersion, run_id:String(runId), datasets:output};
 }
 
 function sellmonitorGithubWriteWbTrafficDailyView_(prepared, runId) {
@@ -4461,9 +4464,15 @@ function sellmonitorGithubPublishWbTraffic_(body) {
     if (sourceRows == null) sourceRows = [];
     prepared[name] = sellmonitorGithubNormalizeWbPollRows_(name, sourceRows, status.finishedAt);
   });
+  if (body.daily_view_only === true) {
+    var dailyView = sellmonitorGithubWriteWbTrafficDailyView_(prepared, status.finishedAt);
+    return {ok:dailyView.lite_tables && dailyView.lite_tables.ok === true,
+      action:'publish_wb_traffic',sync_finished_at:status.finishedAt,
+      partitions:{daily_view:dailyView}};
+  }
   var partitions = body.skip_partitions === true
     ? {ok:true, skipped:true, reason:'already_published_in_bounded_chunks'}
-    : sellmonitorGithubWriteWbTrafficPartitions_(prepared, status.finishedAt);
+    : sellmonitorGithubWriteWbTrafficPartitions_(prepared, status.finishedAt, body.skip_daily_view === true);
   if (body.partition_only === true) {
     return {ok:partitions.ok === true, action:'publish_wb_traffic', sync_finished_at:status.finishedAt, partitions:partitions};
   }
