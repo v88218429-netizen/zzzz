@@ -685,6 +685,9 @@ class PortfolioService:
                     ozon_article=str(rec.get("Артикул продавца Ozon") or "").strip()
                     subject=str(rec.get("Предмет WB") or "").strip()
 
+                    if row_name.upper() in {"ИТОГО", "ВСЕГО", "TOTAL"}:
+                        continue
+
                     if not sku.isdigit() and not ozon_sku.isdigit():
                         # Aggregate/K2 row = the physical inventory object.  Variants
                         # such as "Бидон 15л 1шт" and "Бидон 15л 2шт" consume the same
