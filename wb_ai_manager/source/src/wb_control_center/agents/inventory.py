@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import datetime, timedelta
 from typing import Any
 
 from .base import BaseAgent
@@ -20,6 +19,13 @@ def _row_date(row: dict[str, Any]) -> str | None:
     return None
 
 
+def _float_or_none(value: Any) -> float | None:
+    try:
+        return float(value) if value is not None and str(value).strip() != "" else None
+    except (TypeError, ValueError):
+        return None
+
+
 class InventoryAgent(BaseAgent):
     name = "inventory"
 
@@ -31,42 +37,127 @@ class InventoryAgent(BaseAgent):
         sales = await self.call("wb_stats_sales", date_from=start)
         period = self.analysis_period()
         period_days = period.days if period is not None else 14
+
         stock_by_nm: dict[int, float] = defaultdict(float)
-        for d in find_dicts_with_any_key(stocks, {"nmId", "nmID", "quantity", "quantityFull", "stock"}):
-            nm = extract_nm_id(d)
+        for row in find_dicts_with_any_key(stocks, {"nmId", "nmID", "quantity", "quantityFull", "stock"}):
+            nm = extract_nm_id(row)
             if nm is None:
                 continue
-            qty = first_number(d, {"quantityFull", "quantity_full", "quantity", "stock", "stocks"})
+            qty = first_number(row, {"quantityFull", "quantity_full", "quantity", "stock", "stocks"})
             if qty is not None:
                 stock_by_nm[nm] += max(0.0, qty)
+
         sales_by_nm: dict[int, float] = defaultdict(float)
-        for d in find_dicts_with_any_key(sales, {"nmId", "nmID", "quantity", "saleID", "saleId"}):
+        for row in find_dicts_with_any_key(sales, {"nmId", "nmID", "quantity", "saleID", "saleId"}):
             if period is not None:
-                row_date = _row_date(d)
+                row_date = _row_date(row)
                 if row_date is None or row_date < start or row_date > end:
                     continue
-            nm = extract_nm_id(d)
+            nm = extract_nm_id(row)
             if nm is None:
                 continue
-            qty = first_number(d, {"quantity", "qty"})
+            qty = first_number(row, {"quantity", "qty"})
             sales_by_nm[nm] += abs(qty) if qty not in (None, 0) else 1.0
-        # WB statistics stock is not a reliable FBS availability source for this
-        # operating model. Reconcile it with the live trusted "Сводная" snapshot.
+
+        # The physical product row is the stock-planning unit. Its safe K2/FF
+        # balance and demand already combine the listing variants in the source
+        # table, so a 2/4/6 kg listing does not become three separate supply alarms.
         settings = getattr(self.ctx, "settings", None)
         portfolio = PortfolioService(settings).snapshot() if settings is not None else {}
         trusted_current = bool(portfolio.get("current_data"))
         legacy_test_context = settings is None
+        own = portfolio.get("own_27") or {}
         trusted_rows = {
-            str(x.get("sku")): x
-            for x in ((portfolio.get("own_27") or {}).get("products") or [])
-            if isinstance(x, dict) and x.get("sku")
+            str(item.get("sku")): item
+            for item in (own.get("products") or [])
+            if isinstance(item, dict) and item.get("sku")
         }
 
-        coverage: dict[str, Any] = {}
         critical = float(cfg.get("critical_days_cover", 2))
         warning = float(cfg.get("warning_days_cover", 5))
         over = float(cfg.get("overstock_days_cover", 75))
-        trusted_nm = {int(x) for x in trusted_rows if str(x).isdigit()} if trusted_current else set()
+
+        physical_coverage: dict[str, Any] = {}
+        physical_member_skus: set[str] = set()
+        for index, item in enumerate(own.get("physical_inventory") or []):
+            if not isinstance(item, dict):
+                continue
+            name = str(item.get("physical_position") or "").strip()
+            members = [
+                {"sku": str(member.get("sku") or ""), "name": str(member.get("name") or "")}
+                for member in (item.get("member_skus") or [])
+                if isinstance(member, dict) and member.get("sku")
+            ]
+            if not name or (not members and all(item.get(key) is None for key in ("k2_safe_stock", "ff_stock", "ivanovo_stock", "orders_per_day"))):
+                continue
+
+            stock = None
+            stock_source = ""
+            for key, label in (
+                ("k2_safe_stock", "Сводная · К2 ФФ SAFE"),
+                ("ff_stock", "Сводная · Остатки ФФ"),
+                ("ivanovo_stock", "Сводная · ФФ Иваново"),
+            ):
+                candidate = _float_or_none(item.get(key))
+                if candidate is not None:
+                    stock = max(0.0, candidate)
+                    stock_source = label
+                    break
+            daily = _float_or_none(item.get("orders_per_day"))
+            if daily is not None:
+                daily = max(0.0, daily)
+            days = stock / daily if stock is not None and daily is not None and daily > 0 else None
+            sheet_row = item.get("sheet_row")
+            key = f"physical:{sheet_row if sheet_row is not None else index}"
+            physical_coverage[key] = {
+                "scope": "physical_product",
+                "physical_position": name,
+                "member_skus": members,
+                "stock": stock,
+                "stock_source": stock_source or "Источник физического остатка не указан",
+                "stock_verified": stock is not None,
+                "daily_sales": daily,
+                "velocity_source": "Сводная · темп физического товара" if daily is not None else "Нет подтверждённого темпа физического товара",
+                "days_cover": days,
+                "stock_scope": "current_snapshot",
+                "velocity_scope": "source_physical_product",
+                "sheet_row": sheet_row,
+                "planned_order_qty": item.get("planned_order_qty"),
+                "supplier_debt_qty": item.get("supplier_debt_qty"),
+                "order_status": item.get("order_status"),
+            }
+            if stock is not None:
+                physical_member_skus.update(member["sku"] for member in members)
+            row = physical_coverage[key]
+            if stock is None or days is None:
+                continue
+            if days <= critical:
+                out.events.append(self.event(
+                    "critical",
+                    f"physical_stockout:{key}",
+                    "Критический остаток физического товара",
+                    f"{name}: запас примерно на {days:.1f} дня (остаток {stock:.0f}; темп {daily:.1f} физических единиц/день).",
+                    row,
+                ))
+            elif days <= warning:
+                out.events.append(self.event(
+                    "warning",
+                    f"physical_low_stock:{key}",
+                    "Заканчивается физический товар",
+                    f"{name}: запас примерно на {days:.1f} дня.",
+                    row,
+                ))
+            elif days >= over:
+                out.events.append(self.event(
+                    "warning",
+                    f"physical_overstock:{key}",
+                    "Высокий физический запас / риск неликвида",
+                    f"{name}: примерно {days:.0f} дней физического запаса.",
+                    row,
+                ))
+
+        coverage: dict[str, Any] = {}
+        trusted_nm = {int(x) for x in trusted_rows if x.isdigit()} if trusted_current else set()
         all_nm = set(stock_by_nm) | set(sales_by_nm) | trusted_nm
         for nm in all_nm:
             wb_stats_stock = stock_by_nm.get(nm, 0.0)
@@ -82,13 +173,7 @@ class InventoryAgent(BaseAgent):
                 stock_verified = legacy_test_context
 
             api_daily = sales_by_nm.get(nm, 0.0) / max(1.0, float(period_days))
-            trusted_daily = None
-            if isinstance(trusted, dict):
-                try:
-                    value = trusted.get("orders_per_day")
-                    trusted_daily = float(value) if value is not None else None
-                except (TypeError, ValueError):
-                    trusted_daily = None
+            trusted_daily = _float_or_none(trusted.get("orders_per_day")) if isinstance(trusted, dict) else None
             if trusted_daily is not None and trusted_daily > 0:
                 daily = trusted_daily
                 velocity_source = "Сводная · WB Заказов в день"
@@ -114,25 +199,25 @@ class InventoryAgent(BaseAgent):
                 "stock_scope": "current_snapshot",
                 "velocity_scope": "selected_period" if period is not None else "rolling_14d",
             }
-            # Do not manufacture stockout alarms from a source that is not the
-            # seller's trusted FBS availability. Until Sheets is live, expose a
-            # data-quality warning instead.
-            if not stock_verified:
+            # Keep listing-level stock available for inspection, but don't repeat
+            # family replenishment alarms for listings covered by physical stock.
+            if not stock_verified or str(nm) in physical_member_skus:
                 continue
             if days is not None and days <= critical:
-                out.events.append(self.event("critical", f"stockout:{nm}", "Критический остаток", f"nmID {nm}: запас примерно на {days:.1f} дня (остаток {stock:.0f}, темп {daily:.1f}/день).", coverage[str(nm)]))
+                out.events.append(self.event("critical", f"stockout:{nm}", "Критический остаток карточки WB", f"nmID {nm}: запас примерно на {days:.1f} дня.", coverage[str(nm)]))
             elif days is not None and days <= warning:
-                out.events.append(self.event("warning", f"low_stock:{nm}", "Заканчивается товар", f"nmID {nm}: запас примерно на {days:.1f} дня.", coverage[str(nm)]))
+                out.events.append(self.event("warning", f"low_stock:{nm}", "Низкий остаток карточки WB", f"nmID {nm}: запас примерно на {days:.1f} дня.", coverage[str(nm)]))
             elif days is not None and days >= over:
-                out.events.append(self.event("warning", f"overstock:{nm}", "Высокий запас / риск неликвида", f"nmID {nm}: примерно {days:.0f} дней запаса.", coverage[str(nm)]))
+                out.events.append(self.event("warning", f"overstock:{nm}", "Высокий запас карточки WB", f"nmID {nm}: примерно {days:.0f} дней.", coverage[str(nm)]))
 
         if not trusted_current and not legacy_test_context:
             out.events.append(self.event(
                 "warning",
                 "inventory_source_unverified",
-                "Остатки FBS не сверены с рабочей «Сводной»",
-                "WB statistics сам по себе не считается подтверждением FBS-остатка. Подключи живую «Сводную»/K2 — до этого дефицит по товарам не помечается как критический.",
-                {"source": "WB statistics", "required_source": "Сводная · Остатки WB FBS / K2"},
+                "Остатки физического товара не сверены с рабочей «Сводной»",
+                "До подключения свежей «Сводной» остаток WB statistics не считается подтверждённым остатком физического товара или FBS.",
+                {"source": "WB statistics", "required_source": "Сводная · К2 ФФ SAFE / Остатки WB FBS"},
             ))
         out.snapshots.append(("coverage", coverage))
+        out.snapshots.append(("physical_coverage", physical_coverage))
         return out
