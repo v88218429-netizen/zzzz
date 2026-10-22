@@ -660,46 +660,47 @@ function adSummary(){
 
 function articleAdSummary(){
   const raw=snap('advertising_monitor','stats_by_nm_7d')?.data;
-  const rows=extractList(raw), byNm=new Map();
-  const add=(target,key,value)=>{
-    const n=Number(value);
-    if(Number.isFinite(n)) target[key]+=n;
+  const names=campaignNames();
+  const readMetric=(row,available,key,aliases)=>{
+    if(!available.has(key)) return null;
+    const value=aliases.map(name=>row?.[name]).find(value=>value!==undefined&&value!==null&&value!=='');
+    const number=Number(value);
+    return Number.isFinite(number)?number:null;
   };
-  for(const row of rows){
+  return extractList(raw).map(row=>{
     const nm=Number(row?.nmId??row?.nmID??row?.nm_id);
-    if(!Number.isFinite(nm)||nm<=0) continue;
-    const item=byNm.get(nm)||{nm_id:nm,spend:0,orders:0,revenue:0,clicks:0,views:0,campaigns:new Set()};
-    add(item,'spend',row.sum??row.spend??row.spent);
-    add(item,'orders',row.orders??row.ordersCount??row.orders_count);
-    add(item,'revenue',row.sum_price??row.sumPrice??row.revenue??row.sales);
-    add(item,'clicks',row.clicks);
-    add(item,'views',row.views??row.impressions);
-    const campaign=row.advertId??row.advert_id;
-    if(!missing(campaign)) item.campaigns.add(String(campaign));
-    byNm.set(nm,item);
-  }
-  return [...byNm.values()].map(item=>({
-    ...item,
-    drr:item.revenue>0?item.spend/item.revenue*100:null,
-    ctr:item.views>0?item.clicks/item.views*100:null,
-    cpc:item.clicks>0?item.spend/item.clicks:null
-  })).sort((a,b)=>b.spend-a.spend);
+    const advert=String(row?.advertId??row?.advert_id??'');
+    const available=new Set(Array.isArray(row?.available_metrics)?row.available_metrics:[]);
+    if(!Number.isFinite(nm)||nm<=0||!available.size) return null;
+    const spend=readMetric(row,available,'sum',['sum','spend','spent']);
+    const orders=readMetric(row,available,'orders',['orders','ordersCount','orders_count']);
+    const revenue=readMetric(row,available,'sum_price',['sum_price','sumPrice','revenue','sales']);
+    const clicks=readMetric(row,available,'clicks',['clicks']);
+    const views=readMetric(row,available,'views',['views','impressions']);
+    const directCtr=readMetric(row,available,'ctr',['ctr']);
+    const directCpc=readMetric(row,available,'cpc',['cpc']);
+    const ctr=directCtr??(clicks!==null&&views!==null&&views>0?clicks/views*100:null);
+    const cpc=directCpc??(spend!==null&&clicks!==null&&clicks>0?spend/clicks:null);
+    return {
+      nm_id:nm,
+      campaign:names[advert]||`кампания ${advert||'—'}`,
+      spend,orders,revenue,
+      drr:spend!==null&&revenue!==null&&revenue>0?spend/revenue*100:null,
+      ctr,cpc,
+    };
+  }).filter(Boolean).sort((a,b)=>(b.spend??-1)-(a.spend??-1));
 }
 function renderArticleAdStats(){
   const snapObj=snap('advertising_monitor','stats_by_nm_7d');
   if($('ads-sku-updated')) $('ads-sku-updated').textContent=snapObj?`WB · обновлено ${ago(snapObj.created_at)}`:'нет точных данных по артикулам';
   const rows=articleAdSummary();
-  const names=campaignNames();
   if(!$('ads-sku-table')) return;
   $('ads-sku-table').innerHTML=rows.length?rows.map(row=>{
     const info=entityInfo(row.nm_id)||{};
     const article=entityName(row.nm_id)||info.name||String(row.nm_id);
-    const campaignLabels=[...row.campaigns].map(id=>names[id]||`кампания ${id}`);
-    const campaignTitle=campaignLabels.join(', ');
-    return `<tr><td><strong>${esc(article)}</strong><br><span class="muted">${esc(info.group_name||info.weekly_group||'')}</span></td><td>${esc(row.nm_id)}</td><td title="${esc(campaignTitle)}">${num(row.campaigns.size)} кампания</td><td>${rub(row.spend)}</td><td>${num(row.orders,1)}</td><td>${rub(row.revenue)}</td><td>${pct(row.drr)}</td><td>${pct(row.ctr)}</td><td>${rub(row.cpc)}</td></tr>`;
-  }).join(''):`<tr><td colspan="9">${empty(snapObj?'WB не вернул точных строк nmID за последние 7 дней. Расходы кампании не распределяются по артикулам.':'Ждём срез WB с прямой привязкой рекламы к nmID.')}</td></tr>`;
+    return `<tr><td><strong>${esc(article)}</strong><br><span class="muted">${esc(info.group_name||info.weekly_group||'')}</span></td><td>${esc(row.nm_id)}</td><td>${esc(row.campaign)}</td><td>${rub(row.spend)}</td><td>${num(row.orders,1)}</td><td>${rub(row.revenue)}</td><td>${pct(row.drr)}</td><td>${pct(row.ctr)}</td><td>${rub(row.cpc)}</td></tr>`;
+  }).join(''):`<tr><td colspan="9">${empty(snapObj?'WB не вернул точных строк nmID за последние 7 дней. Расходы кампании не распределяются по артикулам.':'Ждём срез WB с прямой привязкой к nmID.')}</td></tr>`;
 }
-
 function renderConnections(){
   const c=state.data?.connections||{}, wb=c.wb||{}, gs=c.google_sheets||{};
   if($('wb-connection-status')){ $('wb-connection-status').className=`status-tag ${wb.configured?'ok':'warn'}`; $('wb-connection-status').textContent=wb.configured?'ПОДКЛЮЧЕН':'НЕТ ТОКЕНА'; }
