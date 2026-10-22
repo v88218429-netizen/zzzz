@@ -186,16 +186,21 @@ def _publish() -> None:
             if len(encoded) > MAX_REQUEST_BYTES:
                 raise RuntimeError(f"Traffic store-view payload exceeds safe limit for {shop_name}: {len(encoded)} bytes")
             store_result = _post_bridge(client, store_payload)
-            if not isinstance(store_result, dict) or store_result.get("ok") is not True or store_result.get("action") != "publish_wb_traffic":
+            if not isinstance(store_result, dict) or store_result.get("action") != "publish_wb_traffic":
                 detail = str(store_result.get("error", "unknown bridge response"))[:500] if isinstance(store_result, dict) else "invalid bridge response"
                 raise RuntimeError(f"Google Sheets bridge rejected store-view publication for {shop_name}: {detail}")
             store_view = ((store_result.get("partitions") or {}).get("daily_view") or {})
             lite_tables = store_view.get("lite_tables") or {}
             dashboard = store_view.get("dashboard") or {}
-            if (lite_tables.get("ok") is not True or lite_tables.get("written") != 1 or
-                    lite_tables.get("stores") != [shop_name] or lite_tables.get("failed") or
-                    dashboard.get("written") != 1 or dashboard.get("failed_stores")):
-                raise RuntimeError(f"WB_TRAFFIC_STORE_VIEW_PUBLICATION_INCOMPLETE:{shop_name}")
+            if (store_result.get("ok") is not True or lite_tables.get("ok") is not True or
+                    lite_tables.get("written") != 1 or lite_tables.get("stores") != [shop_name] or
+                    lite_tables.get("failed")):
+                raise RuntimeError(f"WB_TRAFFIC_STORE_LIGHT_TABLE_INCOMPLETE:{shop_name}: {json.dumps(lite_tables, ensure_ascii=False)[:800]}")
+            if dashboard.get("written") != 1 or dashboard.get("failed_stores"):
+                raise RuntimeError(
+                    f"WB_TRAFFIC_STORE_DASHBOARD_INCOMPLETE:{shop_name}: "
+                    f"written={dashboard.get('written')} failed={dashboard.get('failed_stores')} partial={dashboard.get('partial_stores')}"
+                )
             store_publications[shop_name] = {
                 "lite_table": lite_tables,
                 "dashboard": dashboard,
