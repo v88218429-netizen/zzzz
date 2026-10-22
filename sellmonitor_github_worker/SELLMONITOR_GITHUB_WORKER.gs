@@ -3522,7 +3522,8 @@ function sellmonitorGithubWriteWbTrafficPartitions_(prepared, runId, skipDailyVi
     schema_version:SMC_WB_TRAFFIC_PARTITIONS.schemaVersion, run_id:String(runId), datasets:output};
 }
 
-function sellmonitorGithubWriteWbTrafficDailyView_(prepared, runId) {
+function sellmonitorGithubWriteWbTrafficDailyView_(prepared, runId, options) {
+  options = options || {};
   var headers = ['Дата','Магазин','Показы рекламы','Клики рекламы','Расход рекламы, ₽','Заказы рекламы',
     'Переходы в карточку','В корзину','Заказы воронки','Сумма заказов воронки, ₽',
     'Платные клики · сверка','Органические клики · расчёт','Статус органики',
@@ -3616,6 +3617,7 @@ function sellmonitorGithubWriteWbTrafficDailyView_(prepared, runId) {
       paidClicks,organicClicks,organicStatus,g.ads.rows,g.funnel.rows,g.organic.rows,String(runId)
     ]);
   });
+  if (options.storeName) freshRows = freshRows.filter(function(row){return String(row[1]||'')===options.storeName;});
   if (!freshRows.length) return {ok:true,skipped:true,reason:'no_daily_facts',rows:last>1?last-1:0};
   var byKey={};
   if (last>1) sheet.getRange(2,1,last-1,headers.length).getValues().forEach(function(row,index){
@@ -3638,21 +3640,24 @@ function sellmonitorGithubWriteWbTrafficDailyView_(prepared, runId) {
     var bd=b[0] instanceof Date?Utilities.formatDate(b[0],'Europe/Moscow','yyyy-MM-dd'):String(b[0]||'');
     return ad.localeCompare(bd)||String(a[1]||'').localeCompare(String(b[1]||''));
   });
+  if (options.writeArchive !== false) {
   var needed=allRows.length+1;
-  if (sheet.getMaxRows()<needed) sheet.insertRowsAfter(sheet.getMaxRows(),needed-sheet.getMaxRows());
-  sheet.getRange(2,1,allRows.length,headers.length).setValues(allRows);
-  if (last>needed) sheet.getRange(needed+1,1,last-needed,headers.length).clearContent();
-  SpreadsheetApp.flush();
-  var check=sheet.getRange(2,1,allRows.length,headers.length).getValues(), seen={};
-  check.forEach(function(row){var key=String(row[1]||'')+'|'+String(row[0]||'');if(seen[key])throw new Error('WB_TRAFFIC_DAILY_VIEW_READBACK_DUPLICATE:' + key);seen[key]=true;});
-  if (check.length!==allRows.length) throw new Error('WB_TRAFFIC_DAILY_VIEW_READBACK_ROW_COUNT');
-  var liteTables = sellmonitorGithubWriteWbTrafficLiteTables_(allRows);
-  var dashboard = sellmonitorGithubWriteWbTrafficDashboards_(freshRows, runId);
+    if (sheet.getMaxRows()<needed) sheet.insertRowsAfter(sheet.getMaxRows(),needed-sheet.getMaxRows());
+    sheet.getRange(2,1,allRows.length,headers.length).setValues(allRows);
+    if (last>needed) sheet.getRange(needed+1,1,last-needed,headers.length).clearContent();
+    SpreadsheetApp.flush();
+    var check=sheet.getRange(2,1,allRows.length,headers.length).getValues(), seen={};
+    check.forEach(function(row){var key=String(row[1]||'')+'|'+String(row[0]||'');if(seen[key])throw new Error('WB_TRAFFIC_DAILY_VIEW_READBACK_DUPLICATE:' + key);seen[key]=true;});
+    if (check.length!==allRows.length) throw new Error('WB_TRAFFIC_DAILY_VIEW_READBACK_ROW_COUNT');
+  }
+  if (options.archiveOnly === true) return {ok:true,archive_only:true,rows:allRows.length,added:added,updated:updated,max_date:allRows.length?String(allRows[allRows.length-1][0]):'',reconciled:freshRows.filter(function(row){return row[12]==='ПОЛНЫЙ РАСЧЁТ';}).length};
+  var liteTables = sellmonitorGithubWriteWbTrafficLiteTables_(allRows, options.storeName);
+  var dashboard = sellmonitorGithubWriteWbTrafficDashboards_(freshRows, runId, options.storeName);
   return {ok:liteTables.ok===true,rows:allRows.length,added:added,updated:updated,max_date:allRows.length?String(allRows[allRows.length-1][0]):'',
     reconciled:freshRows.filter(function(row){return row[12]==='ПОЛНЫЙ РАСЧЁТ';}).length,lite_tables:liteTables,dashboard:dashboard};
 }
 
-function sellmonitorGithubWriteWbTrafficLiteTables_(dailyRows) {
+function sellmonitorGithubWriteWbTrafficLiteTables_(dailyRows, onlyStore) {
   var stores = {
     'Саныч':'1kdeQ-N80Ul0WvekuPxM1QS8FRz0I3g5eOpsgcK0g9Ls',
     'Хозяюшка':'1H_UpoQa0ZsY3hnnS6R4cM2xXiqezFRYa0ZDLhVYfZbQ',
@@ -3669,6 +3674,7 @@ function sellmonitorGithubWriteWbTrafficLiteTables_(dailyRows) {
   }
   var written = [], skipped = [], failed = [];
   Object.keys(stores).forEach(function(name) {
+    if (onlyStore && name !== onlyStore) return;
     try {
       var book = SpreadsheetApp.openById(stores[name]);
       var sheet = book.getSheetByName('04_Трафик');
@@ -3726,7 +3732,7 @@ function sellmonitorGithubWriteWbTrafficLiteTables_(dailyRows) {
   return {ok:failed.length===0,written:written.length,stores:written,skipped:skipped,failed:failed};
 }
 
-function sellmonitorGithubWriteWbTrafficDashboards_(dailyRows, runId) {
+function sellmonitorGithubWriteWbTrafficDashboards_(dailyRows, runId, onlyStore) {
   var stores = {
     'Саныч':'1-aBDZ7c5xfmVwwiNmUi9-DyfIANXmfiM5-Ti2_zg4zI',
     'AIR':'1SmsoG8zKx3hbTtTzS-zLekTFiWEQN8eIwHOxXq-5RHo',
@@ -3743,6 +3749,7 @@ function sellmonitorGithubWriteWbTrafficDashboards_(dailyRows, runId) {
   });
   var written = 0, missing = [], failed = [];
   Object.keys(stores).forEach(function(name) {
+    if (onlyStore && name !== onlyStore) return;
     try {
       var ss = SpreadsheetApp.openById(stores[name]);
       var sheet = ss.getSheetByName('00_Дашборд');
@@ -4465,10 +4472,18 @@ function sellmonitorGithubPublishWbTraffic_(body) {
     prepared[name] = sellmonitorGithubNormalizeWbPollRows_(name, sourceRows, status.finishedAt);
   });
   if (body.daily_view_only === true) {
-    var dailyView = sellmonitorGithubWriteWbTrafficDailyView_(prepared, status.finishedAt);
-    return {ok:dailyView.lite_tables && dailyView.lite_tables.ok === true,
+    var dailyView = sellmonitorGithubWriteWbTrafficDailyView_(prepared, status.finishedAt, {archiveOnly:true});
+    return {ok:dailyView.archive_only === true,
       action:'publish_wb_traffic',sync_finished_at:status.finishedAt,
       partitions:{daily_view:dailyView}};
+  }
+  if (body.daily_view_store === true) {
+    var storeName = String(body.store_name || '').trim();
+    if (['Саныч','AIR','Хозяюшка'].indexOf(storeName) < 0) throw new Error('WB_TRAFFIC_DAILY_VIEW_STORE_INVALID');
+    var storeView = sellmonitorGithubWriteWbTrafficDailyView_(prepared, status.finishedAt, {storeName:storeName,writeArchive:false});
+    return {ok:storeView.lite_tables && storeView.lite_tables.ok === true && storeView.dashboard && storeView.dashboard.written === 1,
+      action:'publish_wb_traffic',sync_finished_at:status.finishedAt,
+      partitions:{daily_view:storeView}};
   }
   var partitions = body.skip_partitions === true
     ? {ok:true, skipped:true, reason:'already_published_in_bounded_chunks'}
