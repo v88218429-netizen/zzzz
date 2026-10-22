@@ -87,7 +87,8 @@ class InventoryAgent(BaseAgent):
         source_updated_at = own_health.get("bridge_modified_at") or own.get("source_updated_at") or own_health.get("freshness")
         source_dt = _source_datetime(source_updated_at)
         max_source_age_hours = max(1.0, float(cfg.get("source_max_age_hours", 72)))
-        source_fresh = bool(source_dt and (datetime.now(timezone.utc) - source_dt).total_seconds() <= max_source_age_hours * 3600)
+        source_age_hours = (datetime.now(timezone.utc) - source_dt).total_seconds() / 3600 if source_dt else None
+        source_fresh = bool(source_age_hours is not None and source_age_hours <= max_source_age_hours)
         trusted_current = bool(portfolio.get("current_data") and source_fresh)
         legacy_test_context = settings is None
         trusted_rows = {
@@ -243,7 +244,7 @@ class InventoryAgent(BaseAgent):
                 f"Источник остатков обновлялся: {source_updated_at or 'дата неизвестна'}. Пороги дефицита не применяются к устаревшему или неподтверждённому срезу.",
                 {"source": "Сводная", "source_updated_at": source_updated_at, "max_age_hours": max_source_age_hours},
             ))
-        if not trusted_current and not legacy_test_context:
+        if not trusted_current and not legacy_test_context and not portfolio.get("current_data"):
             out.events.append(self.event(
                 "warning",
                 "inventory_source_unverified",
@@ -251,6 +252,12 @@ class InventoryAgent(BaseAgent):
                 "До подключения свежей «Сводной» остаток WB statistics не считается подтверждённым остатком физического товара или FBS.",
                 {"source": "WB statistics", "required_source": "Сводная · К2 ФФ SAFE / Остатки WB FBS"},
             ))
+        physical_coverage["_meta"] = {
+            "source_updated_at": source_updated_at,
+            "source_fresh": source_fresh,
+            "source_age_hours": source_age_hours,
+            "source_max_age_hours": max_source_age_hours,
+        }
         out.snapshots.append(("coverage", coverage))
         out.snapshots.append(("physical_coverage", physical_coverage))
         return out
