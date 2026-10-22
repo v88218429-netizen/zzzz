@@ -1,4 +1,4 @@
-const state = { data: null, eventFilter: 'important', inventoryFilter: 'shortage', inventoryView: 'physical', portfolioStoreFilter: 'all', decisionFilter: 'priority', page: location.hash.replace('#','') || 'overview', periodFrom: null, periodTo: null, periodAuditRequestedKey: null, periodPollTimer: null };
+const state = { data: null, eventFilter: 'important', inventoryFilter: 'shortage', inventoryView: 'physical', portfolioStoreFilter: 'all', customerLimit: 20, decisionFilter: 'priority', page: location.hash.replace('#','') || 'overview', periodFrom: null, periodTo: null, periodAuditRequestedKey: null, periodPollTimer: null };
 const $ = (id) => document.getElementById(id);
 const qa = (sel, root=document) => [...root.querySelectorAll(sel)];
 
@@ -362,6 +362,7 @@ function initNav(){
   const filters=$('event-filter'); if(filters) filters.addEventListener('click',e=>{ if(!e.target.dataset.filter) return; state.eventFilter=e.target.dataset.filter; qa('button',filters).forEach(b=>b.classList.toggle('active',b===e.target)); renderEvents(); });
   const storeFilter=$('portfolio-store-filter'); if(storeFilter) storeFilter.addEventListener('click',e=>{ const button=e.target.closest('[data-portfolio-store]'); if(!button) return; state.portfolioStoreFilter=button.dataset.portfolioStore; renderPortfolio(); });
   const inventoryGrid=$('inventory-grid'); if(inventoryGrid) inventoryGrid.addEventListener('click',e=>{ const button=e.target.closest('[data-inventory-view]'); if(!button) return; state.inventoryView=button.dataset.inventoryView; renderInventory(); });
+  const customerList=$('customer-feedback-list'); if(customerList) customerList.addEventListener('click',e=>{ if(!e.target.closest('[data-customer-more]')) return; state.customerLimit=(Number(state.customerLimit)||20)+20; renderCustomers(); });
   setPage(state.page);
 }
 function setPage(page){
@@ -424,7 +425,10 @@ function renderAll(){
   if($('metric-critical-period')) $('metric-critical-period').textContent=auditReady?`сигналы · ${d.period?.label||'текущий контекст'}`:'текущие решения · период пересчитывается';
   if($('metric-warning-period')) $('metric-warning-period').textContent=auditReady?`сигналы · ${d.period?.label||'текущий контекст'}`:'текущие решения · период пересчитывается';
   if($('finance-period-label')) $('finance-period-label').textContent=d.period_audit?.ready?`за ${d.period?.label||'выбранный период'}`:'ожидает пересчёта периода';
-  $('nav-alerts').textContent=critical+warning; if($('nav-decisions')) $('nav-decisions').textContent=(d.decisions||[]).filter(x=>['critical','high'].includes(x.priority)).length;
+  const alertRows=(d.events||[]).filter(e=>['critical','warning'].includes(e.severity));
+  const alertKeys=new Set(alertRows.map(e=>e.fingerprint||`${e.agent||''}:${e.key||e.event_key||e.title||''}:${e.entity_id||''}`));
+  $('nav-alerts').textContent=String(alertKeys.size); $('nav-alerts').title='Разные сигналы за период, не счётчик непрочитанных уведомлений';
+  if($('nav-decisions')) $('nav-decisions').textContent=(d.decisions||[]).filter(x=>['critical','high'].includes(x.priority)).length;
   if($('nav-news')) $('nav-news').textContent=(d.events||[]).filter(x=>x.agent==='portal_news'&&x.key==='news_updates').length;
   const ad=adSummary(); $('metric-ad-spend').textContent=ad.error&&!ad.rows.length?'—':rub(ad.spend); const ratingVal=sellerRating(); $('metric-rating').textContent=ratingVal==null?'Недоступен':num(ratingVal,2);
   renderPeriodAudit();
@@ -1009,23 +1013,32 @@ function renderCustomers(){
   $('customer-rating').textContent=rating==null?'Недоступен':num(rating,2);
   const flagsRaw=snap('reviews_questions','flags')?.data||{}, flags=flagsRaw?.data||flagsRaw;
   const nf=!!flags.hasNewFeedbacks,nq=!!flags.hasNewQuestions;
+  $('customer-returns').textContent=num(countObjList('returns_quality','open_claims')); $('customer-chats').textContent=num(countObjList('buyer_chats','chat_events'));
+  const feedbacks=extractList(snap('reviews_questions','feedbacks')?.data);
+  const questions=extractList(snap('reviews_questions','questions')?.data);
   const feedbackRaw=snap('reviews_questions','feedbacks')?.data||{};
   const unanswered=Number(feedbackRaw?.data?.countUnanswered);
-  $('customer-flags').textContent=nf||nq?[nf?(Number.isFinite(unanswered)?`Неотвеченные отзывы: ${num(unanswered)}`:'Есть отзывы'):null,nq?'Есть вопросы':null].filter(Boolean).join(' · '):'Нет';
-  $('customer-returns').textContent=num(countObjList('returns_quality','open_claims')); $('customer-chats').textContent=num(countObjList('buyer_chats','chat_events'));
-  const feedbacks=extractList(snap('reviews_questions','feedbacks')?.data), questions=extractList(snap('reviews_questions','questions')?.data);
+  $('customer-flags').textContent=nf||nq?[nf?(Number.isFinite(unanswered)?`Неотвеченные отзывы: ${num(unanswered)}`:`Загружено отзывов: ${num(feedbacks.length)}`):null,nq?`Загружено вопросов: ${num(questions.length)}`:null].filter(Boolean).join(' · '):'Нет новых отзывов и вопросов';
   const items=[
-    ...feedbacks.slice(0,8).map(x=>({kind:'Отзыв',x})),
-    ...questions.slice(0,8).map(x=>({kind:'Вопрос',x}))
-  ].slice(0,12);
-  if($('customer-feedback-list')) $('customer-feedback-list').innerHTML=items.length?items.map(({kind,x})=>{
+    ...feedbacks.map(x=>({kind:'Отзыв',x})),
+    ...questions.map(x=>({kind:'Вопрос',x}))
+  ].sort((a,b)=>{
+    const da=new Date(a.x.createdDate||a.x.createdAt||a.x.lastActivityDate||a.x.date||0).getTime()||0;
+    const db=new Date(b.x.createdDate||b.x.createdAt||b.x.lastActivityDate||b.x.date||0).getTime()||0;
+    return db-da;
+  });
+  const limit=Math.max(20,Number(state.customerLimit)||20);
+  const shown=items.slice(0,limit);
+  if($('customer-feedback-list')) $('customer-feedback-list').innerHTML=items.length?`<div class="customer-list-status">Показано ${num(shown.length)} из ${num(items.length)} загруженных записей WB. Источник отдаёт неотвеченные отзывы и вопросы; показаны все полученные строки.</div>`+shown.map(({kind,x})=>{
     const pd=x.productDetails||x.product_details||{}; const nm=pd.nmId??pd.nmID??x.nmId??x.nmID; const art=pd.supplierArticle??pd.vendorCode??x.vendorCode??entityName(nm);
     const txt=x.text??x.questionText??x.question??x.pros??x.cons??'Текст не передан API'; const rating=x.productValuation??x.valuation??x.rating;
-    return `<button type="button" class="signal info interactive-card" ${nm?`data-entity-id="${esc(nm)}"`:''}><strong>${kind} · ${esc(art||'товар')}</strong><p>${esc(String(txt).slice(0,500))}</p><span class="source">${!missing(rating)?`оценка ${esc(rating)} · `:''}открыть товар</span></button>`;
-  }).join(''):empty('Новых неотвеченных отзывов и вопросов нет либо API не вернул детали.');
+    const needsAnswer=true, lowRating=kind==='Отзыв'&&!missing(rating)&&Number(rating)<=3;
+    const action=kind==='Вопрос'?'Нужно ответить на вопрос':lowRating?'Проверить причину низкой оценки и подготовить ответ':'Неотвеченный отзыв · подготовить ответ';
+    const cls=kind==='Вопрос'||lowRating?'warning':'info';
+    return `<button type="button" class="signal ${cls} interactive-card" ${nm? `data-entity-id="${esc(nm)}"`:''}><strong>${kind} · ${esc(art||'товар')}</strong><p>${esc(String(txt).slice(0,500))}</p><span class="source">${!missing(rating)?`оценка ${esc(rating)} · `:''}${esc(action)} · открыть товар</span></button>`;
+  }).join('')+(items.length>shown.length?`<button type="button" class="button secondary" data-customer-more>Показать ещё ${num(Math.min(20,items.length-shown.length))}</button>`:'') :empty('WB не вернул неотвеченные отзывы и вопросы.');
   const ev=(state.data.events||[]).filter(e=>['reviews_questions','buyer_chats','returns_quality','orders_fbs'].includes(e.agent)&&['critical','warning'].includes(e.severity)).slice(0,12); $('customer-signals').innerHTML=ev.length?ev.map(signalHtml).join(''):empty('Критичных сигналов от покупателей и возвратов нет.');
 }
-
 function signalHtml(e){ const scope=eventScopeText(e), ent=eventEntity(e); const title=ent?`${ent.name} · ${e.title}`:e.title; return `<button type="button" class="signal ${esc(e.severity)} interactive-card" data-event-id="${esc(e.id)}"><strong>${esc(humanizeText(title))}</strong><p>${esc(humanizeText(e.message))}</p><span class="source">${esc(agentNames[e.agent]||e.agent)} · ${scope?esc(scope)+' · ':''}${time(e.created_at)} · открыть подробности</span></button>`; }
 
 function renderKnowledge(){
