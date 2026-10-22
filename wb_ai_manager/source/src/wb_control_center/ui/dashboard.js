@@ -921,8 +921,8 @@ function renderSearch(){
   const rows=Object.values(s?.data||{}).sort((a,b)=>Number(a.position)-Number(b.position));
   $('search-table').innerHTML=rows.length?rows.map(r=>{
     const p=missing(r.position)?null:Number(r.position); const st=!Number.isFinite(p)?['neutral','Нет данных']:p<=10?['ok','Топ-10']:p<=30?['warn','11–30']:['bad','30+']; const id=r.nm_id??r.nmId??r.nmID;
-    return `<tr class="interactive-row" data-entity-id="${esc(id)}"><td><strong>${esc(entityName(id))}</strong><br><span class="muted">${entityMeta(id)}</span></td><td>${esc(r.query||'—')}</td><td>${num(p)}</td><td><span class="status-tag ${st[0]}">${st[1]}</span></td></tr>`;
-  }).join(''):`<tr><td colspan="4">${empty('Поисковая аналитика недоступна или ещё не загружена.')}</td></tr>`;
+    return `<tr class="interactive-row" data-entity-id="${esc(id)}"><td><strong>${esc(entityName(id))}</strong><br><span class="muted">${entityMeta(id)}</span></td><td>${esc(r.query||'—')}</td><td>${missing(r.frequency)?'—':num(r.frequency)}</td><td>${num(p)}</td><td><span class="status-tag ${st[0]}">${st[1]}</span></td></tr>`;
+  }).join(''):`<tr><td colspan="5">${empty('Поисковая аналитика недоступна или ещё не загружена.')}</td></tr>`;
   const ev=(state.data.events||[]).filter(e=>['cards','price_margin','search_positions'].includes(e.agent)&&['critical','warning'].includes(e.severity)).slice(0,10); $('cards-signals').innerHTML=ev.length?ev.map(signalHtml).join(''):empty('Карточки и позиции без заметных проблем.');
 }
 
@@ -955,6 +955,7 @@ function renderFinance(){
     storage:reportSum(reportRows,['paidStorage','paid_storage'])
   };
   const reportUsable=reportComplete&&(reportRows.length===0||Object.values(reportTotals).some(v=>v!==null));
+  const reportRange=report.date_from&&report.date_to?`${report.date_from} — ${report.date_to}`:'последние 7 дней';
 
   const wf=snap('finance','worker_finance')?.data||{}, charges=Array.isArray(wf.charges)?wf.charges:[];
   const periodCharges=charges.filter(x=>dateInSelectedRange(x['RR Date']||x['Дата создания']||x['Отчет по']||x['Отчет с']));
@@ -981,7 +982,7 @@ function renderFinance(){
       ['Платная приёмка',acceptance===null?'—':rub(acceptance)],
       ['Хранение',storage===null?'—':rub(storage)]
     ];
-    sourceNote=`Источник: отчёт реализации WB · ${esc(currentPeriodLabel())} · строк ${num(reportRows.length)} · страниц ${num(report.pages||0)} · полнота подтверждена`;
+    sourceNote=`Источник: отчёт реализации WB · ${esc(reportRange)} · строк ${num(reportRows.length)} · страниц ${num(report.pages||0)} · полнота подтверждена`;
   }else if(periodCharges.length){
     const totalReady=[workerTotals.penalty,workerTotals.deduction,workerTotals.acceptance].every(v=>v!==null);
     $('finance-deductions').textContent=totalReady?rub(workerTotals.penalty+workerTotals.deduction+workerTotals.acceptance):'—';
