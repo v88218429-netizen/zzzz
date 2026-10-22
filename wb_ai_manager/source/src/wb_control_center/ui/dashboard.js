@@ -856,6 +856,7 @@ function renderInventory(){
   const verifiedRows=allRows.filter(r=>r.stock_verified!==false);
   const unverifiedCount=allRows.length-verifiedRows.length;
   const classify=(r)=>{
+    if(r.no_demand===true&&Number(r.stock)>0) return 'overstock';
     const days=missing(r.days_cover)?null:Number(r.days_cover);
     if(!Number.isFinite(days)) return 'unknown';
     if(days<=2) return 'critical';
@@ -902,7 +903,8 @@ function renderInventory(){
       const linkedText=usingPhysical?(linked.length?`Карточки: ${linked.slice(0,4).join(', ')}${linked.length>4?` и ещё ${linked.length-4}`:''}`:'карточки не связаны'):'';
       const tag=category==='critical'?['bad','Дефицит']:category==='low'?['warn','Низкий запас']:category==='overstock'?['warn','Избыток']:category==='unknown'?['neutral','Нет темпа']:['ok','Норма'];
       const clickAttr=id?`data-entity-id="${esc(id)}"`:'';
-      return `<button type="button" class="inventory-item ${cls} interactive-card" ${clickAttr}><div class="inventory-top"><div><strong>${esc(title)}</strong><small>${usingPhysical?`физический товар · карточек WB: ${num(members.length)}`:entityMeta(id)}</small></div><span class="status-tag ${tag[0]}">${tag[1]}</span></div><div class="inventory-days">${Number.isFinite(days)?`${num(days,1)} дня`:'Нет подтверждённого темпа'}</div><div class="inventory-meta">Остаток ${r.stock===null?'нет данных':num(r.stock)} · темп ${r.daily_sales===null?'нет данных':num(r.daily_sales,1)}/день · ${esc(r.stock_source||'источник остатка не указан')}${r.velocity_source?` · темп: ${esc(r.velocity_source)}`:''}${linkedText?`<br>${esc(linkedText)}`:''}</div><div class="cover-bar"><i style="width:${width}%"></i></div></button>`;
+      const coverLabel=r.no_demand===true?'Нет заказов в источнике':Number.isFinite(days)?`${num(days,1)} дня`:'Нет подтверждённого темпа';
+      return `<button type="button" class="inventory-item ${cls} interactive-card" ${clickAttr}><div class="inventory-top"><div><strong>${esc(title)}</strong><small>${usingPhysical?`физический товар · карточек WB: ${num(members.length)}`:entityMeta(id)}</small></div><span class="status-tag ${tag[0]}">${tag[1]}</span></div><div class="inventory-days">${coverLabel}</div><div class="inventory-meta">Остаток ${r.stock===null?'нет данных':num(r.stock)} · темп ${r.daily_sales===null?'нет данных':num(r.daily_sales,1)}/день · ${esc(r.stock_source||'источник остатка не указан')}${r.velocity_source?` · темп: ${esc(r.velocity_source)}`:''}${linkedText?`<br>${esc(linkedText)}`:''}</div><div class="cover-bar"><i style="width:${width}%"></i></div></button>`;
     }).join('');
   }else if(usingPhysical&&!physicalSnap){
     inventoryHtml+=empty('Нет подтверждённого физического остатка.');
