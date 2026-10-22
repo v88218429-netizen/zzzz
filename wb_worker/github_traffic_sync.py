@@ -5,6 +5,7 @@ import csv
 import json
 import os
 import sys
+import time
 from pathlib import Path
 
 import httpx
@@ -50,6 +51,24 @@ def _load_status() -> dict:
     if not path.exists():
         raise RuntimeError("Traffic status is missing")
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _post_bridge(client: httpx.Client, payload: dict) -> dict:
+    # Apps Script can briefly return its auth error while a deployed version
+    # propagates. Retry only that explicit pre-write rejection; partition writes
+    # remain idempotent, and permanent credential errors still fail loudly.
+    for attempt in range(3):
+        response = client.post(BRIDGE_URL, json=payload)
+        if response.status_code == 401 and attempt < 2:
+            time.sleep(3 * (attempt + 1))
+            continue
+        response.raise_for_status()
+        result = response.json()
+        if isinstance(result, dict) and result.get("error") == "UNAUTHORIZED" and attempt < 2:
+            time.sleep(3 * (attempt + 1))
+            continue
+        return result
+    raise RuntimeError("Google Sheets bridge authorization retries exhausted")
 
 
 def _publish() -> None:
@@ -99,9 +118,7 @@ def _publish() -> None:
                 if len(encoded) > MAX_REQUEST_BYTES:
                     raise RuntimeError(f"Traffic publication payload exceeds safe limit for {shop}/{dataset_name}: {len(encoded)} bytes")
 
-                response = client.post(BRIDGE_URL, json=payload)
-                response.raise_for_status()
-                result = response.json()
+                result = _post_bridge(client, payload)
                 if not isinstance(result, dict) or result.get("ok") is not True or result.get("action") != "publish_wb_traffic":
                     detail = str(result.get("error", "unknown bridge response"))[:500] if isinstance(result, dict) else "invalid bridge response"
                     raise RuntimeError(f"Google Sheets bridge rejected traffic publication for {shop}/{dataset_name}: {detail}")
@@ -144,9 +161,7 @@ def _publish() -> None:
         encoded = json.dumps(view_payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
         if len(encoded) > MAX_REQUEST_BYTES:
             raise RuntimeError(f"Traffic daily-view payload exceeds safe limit: {len(encoded)} bytes")
-        response = client.post(BRIDGE_URL, json=view_payload)
-        response.raise_for_status()
-        view_result = response.json()
+        view_result = _post_bridge(client, view_payload)
         if not isinstance(view_result, dict) or view_result.get("ok") is not True or view_result.get("action") != "publish_wb_traffic":
             detail = str(view_result.get("error", "unknown bridge response"))[:500] if isinstance(view_result, dict) else "invalid bridge response"
             raise RuntimeError(f"Google Sheets bridge rejected daily-view publication: {detail}")
