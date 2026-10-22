@@ -330,20 +330,20 @@
       </section>
 
       <section class="page" data-page-panel="search">
-        <div class="section-intro"><div><span class="section-label">ПОИСК И КАРТОЧКИ</span><h2>Видимость товара и здоровье контента</h2><p>Позиции по запросам, ошибки карточек, блокировки и ценовой карантин.</p></div></div>
+        <div class="section-intro"><div><span class="section-label">ПОИСК И КАРТОЧКИ</span><h2>Видимость товара и здоровье контента</h2><p>Позиция и частотность показывают видимость по конкретному запросу, а не продажи. При просадке проверь запрос, карточку и рекламу этого артикула.</p></div></div>
         <div class="content-grid half">
-          <article class="card"><div class="card-head"><div><span class="section-label">ПОЗИЦИИ</span><h3>Поисковая видимость</h3></div><span class="muted" id="search-updated">—</span></div><div class="table-wrap"><table class="data-table"><thead><tr><th>Артикул продавца</th><th>Запрос</th><th>Позиция</th><th>Оценка</th></tr></thead><tbody id="search-table"></tbody></table></div></article>
+          <article class="card"><div class="card-head"><div><span class="section-label">ПОЗИЦИИ</span><h3>Поисковая видимость</h3></div><span class="muted" id="search-updated">—</span></div><div class="table-wrap"><table class="data-table"><thead><tr><th>Артикул продавца</th><th>Запрос</th><th>Частотность</th><th>Позиция</th><th>Оценка</th></tr></thead><tbody id="search-table"></tbody></table></div></article>
           <article class="card"><div class="card-head"><div><span class="section-label">КАРТОЧКИ</span><h3>Проблемы контента</h3></div></div><div id="cards-signals" class="signal-stack"></div></article>
         </div>
       </section>
 
       <section class="page" data-page-panel="finance">
-        <div class="section-intro"><div><span class="section-label">ФИНАНСЫ</span><h2>Деньги, удержания и скрытые расходы</h2><p>Баланс, отчёт реализации, платное хранение, штрафы и удержания.</p></div></div>
+        <div class="section-intro"><div><span class="section-label">ФИНАНСЫ</span><h2>Деньги, удержания и скрытые расходы</h2><p>Показывает сумму к выводу, выплаты в пути и списания Wildberries за указанный ниже период. Это не прибыль по товарам: себестоимость, реклама и внекабинетные расходы здесь не учтены.</p><p class="source-note">Баланс относится к токену подключённого кабинета WB. Выбор магазина в «Портфеле» меняет только сравнительные сводки. Данные Ozon в этот раздел не входят.</p></div></div>
         <div class="metric-grid four">
           <article class="metric-card"><span class="metric-icon green">₽</span><div><span>К выводу</span><strong id="finance-withdraw">—</strong><small>по последнему балансу</small></div></article>
           <article class="metric-card"><span class="metric-icon blue">→</span><div><span>В пути</span><strong id="finance-transit">—</strong><small>ожидаемые выплаты</small></div></article>
-          <article class="metric-card"><span class="metric-icon warning">!</span><div><span>Удержания</span><strong id="finance-deductions">—</strong><small>по доступным данным</small></div></article>
-          <article class="metric-card"><span class="metric-icon purple">□</span><div><span>Хранение</span><strong id="finance-storage">—</strong><small>платное хранение</small></div></article>
+          <article class="metric-card"><span class="metric-icon warning">!</span><div><span>Списания WB</span><strong id="finance-deductions">—</strong><small>штрафы, удержания и приёмка</small></div></article>
+          <article class="metric-card"><span class="metric-icon purple">□</span><div><span>Хранение</span><strong id="finance-storage">—</strong><small>отдельная статья расходов</small></div></article>
         </div>
         <article class="card"><div class="card-head"><div><span class="section-label">ФИНАНСОВЫЕ СИГНАЛЫ</span><h3>Что требует внимания</h3></div><span class="muted" id="finance-period-label">выбранный период</span></div><div id="finance-signals" class="signal-stack"></div></article>
       </section>
