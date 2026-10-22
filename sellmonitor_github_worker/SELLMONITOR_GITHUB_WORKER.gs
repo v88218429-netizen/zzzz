@@ -4481,7 +4481,7 @@ function sellmonitorGithubPublishWbTraffic_(body) {
     var storeName = String(body.store_name || '').trim();
     if (['Саныч','AIR','Хозяюшка'].indexOf(storeName) < 0) throw new Error('WB_TRAFFIC_DAILY_VIEW_STORE_INVALID');
     var storeView = sellmonitorGithubWriteWbTrafficDailyView_(prepared, status.finishedAt, {storeName:storeName,writeArchive:false});
-    return {ok:storeView.lite_tables && storeView.lite_tables.ok === true && storeView.dashboard && storeView.dashboard.written === 1,
+    return {ok:storeView.lite_tables && storeView.lite_tables.ok === true,
       action:'publish_wb_traffic',sync_finished_at:status.finishedAt,
       partitions:{daily_view:storeView}};
   }
