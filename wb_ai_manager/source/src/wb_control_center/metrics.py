@@ -252,8 +252,12 @@ def extract_ad_nm_metrics(obj: Any) -> dict[tuple[int, int], dict[str, Any]]:
                             b[mk] = max(float(b.get(mk) or 0.0), float(mv))
                 ctr = direct_number(x, ("ctr",))
                 cpc = direct_number(x, ("cpc",))
-                if ctr is not None: b["ctr"] = float(ctr)
-                if cpc is not None: b["cpc"] = float(cpc)
+                if ctr is not None:
+                    b["ctr"] = float(ctr)
+                    b["available_metrics"].add("ctr")
+                if cpc is not None:
+                    b["cpc"] = float(cpc)
+                    b["available_metrics"].add("cpc")
 
         for v in x.values():
             if isinstance(v, (dict, list)):
