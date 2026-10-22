@@ -716,10 +716,9 @@ class PortfolioService:
                                 "supplier_debt_qty": self._num(rec.get("Долг поставщика")),
                                 "sheet_row": sheet_row,
                             }
-                            if any(item.get(k) not in (None, "", 0, 0.0) for k in (
-                                "fbs_debt_orders", "ff_stock", "k2_safe_stock", "orders_qty",
-                                "orders_per_day", "sheet_need_raw", "planned_order_qty", "supplier_debt_qty"
-                            )) or order_status:
+                            # Keep named physical rows even when all measured values are zero.
+                            # Their child listings still need a visible, verified zero stock.
+                            if row_name:
                                 physical_inventory.append(item)
                         continue
 
