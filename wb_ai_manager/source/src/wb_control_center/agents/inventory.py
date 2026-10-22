@@ -131,6 +131,8 @@ class InventoryAgent(BaseAgent):
             if daily is not None:
                 daily = max(0.0, daily)
             days = stock / daily if stock is not None and daily is not None and daily > 0 else None
+            orders_qty = _float_or_none(item.get("orders_qty"))
+            no_demand = bool(stock is not None and daily == 0 and orders_qty is not None and orders_qty <= 0)
             sheet_row = item.get("sheet_row")
             key = f"physical:{sheet_row if sheet_row is not None else index}"
             physical_coverage[key] = {
@@ -144,6 +146,8 @@ class InventoryAgent(BaseAgent):
                 "daily_sales": daily,
                 "velocity_source": "Сводная · темп физического товара" if daily is not None else "Нет подтверждённого темпа физического товара",
                 "days_cover": days,
+                "orders_qty": orders_qty,
+                "no_demand": no_demand,
                 "stock_scope": "current_snapshot",
                 "velocity_scope": "source_physical_product",
                 "sheet_row": sheet_row,
@@ -154,7 +158,18 @@ class InventoryAgent(BaseAgent):
             if stock is not None:
                 physical_member_skus.update(member["sku"] for member in members)
             row = physical_coverage[key]
-            if stock is None or days is None:
+            if stock is None:
+                continue
+            if row.get("no_demand") and stock > 0:
+                out.events.append(self.event(
+                    "warning",
+                    f"physical_no_demand:{key}",
+                    "Запас без заказов · проверить риск неликвида",
+                    f"{name}: остаток {stock:.0f}, заказов в источнике нет.",
+                    row,
+                ))
+                continue
+            if days is None:
                 continue
             if days <= critical:
                 out.events.append(self.event(
