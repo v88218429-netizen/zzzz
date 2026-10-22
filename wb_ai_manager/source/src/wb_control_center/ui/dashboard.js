@@ -1018,7 +1018,10 @@ function renderCustomers(){
   const questions=extractList(snap('reviews_questions','questions')?.data);
   const feedbackRaw=snap('reviews_questions','feedbacks')?.data||{};
   const unanswered=Number(feedbackRaw?.data?.countUnanswered);
-  $('customer-flags').textContent=nf||nq?[nf?(Number.isFinite(unanswered)?`Неотвеченные отзывы: ${num(unanswered)}`:`Загружено отзывов: ${num(feedbacks.length)}`):null,nq?`Загружено вопросов: ${num(questions.length)}`:null].filter(Boolean).join(' · '):'Нет новых отзывов и вопросов';
+  const customerFlags=[];
+  if(nf||feedbacks.length) customerFlags.push(Number.isFinite(unanswered)?`Неотвеченные отзывы: ${num(unanswered)}`:`Загружено отзывов: ${num(feedbacks.length)}`);
+  if(nq||questions.length) customerFlags.push(`Загружено вопросов: ${num(questions.length)}`);
+  $('customer-flags').textContent=customerFlags.join(' · ')||'Нет новых отзывов и вопросов';
   const items=[
     ...feedbacks.map(x=>({kind:'Отзыв',x})),
     ...questions.map(x=>({kind:'Вопрос',x}))
@@ -1032,7 +1035,7 @@ function renderCustomers(){
   if($('customer-feedback-list')) $('customer-feedback-list').innerHTML=items.length?`<div class="customer-list-status">Показано ${num(shown.length)} из ${num(items.length)} загруженных записей WB. Источник отдаёт неотвеченные отзывы и вопросы; показаны все полученные строки.</div>`+shown.map(({kind,x})=>{
     const pd=x.productDetails||x.product_details||{}; const nm=pd.nmId??pd.nmID??x.nmId??x.nmID; const art=pd.supplierArticle??pd.vendorCode??x.vendorCode??entityName(nm);
     const txt=x.text??x.questionText??x.question??x.pros??x.cons??'Текст не передан API'; const rating=x.productValuation??x.valuation??x.rating;
-    const needsAnswer=true, lowRating=kind==='Отзыв'&&!missing(rating)&&Number(rating)<=3;
+    const lowRating=kind==='Отзыв'&&!missing(rating)&&Number(rating)<=3;
     const action=kind==='Вопрос'?'Нужно ответить на вопрос':lowRating?'Проверить причину низкой оценки и подготовить ответ':'Неотвеченный отзыв · подготовить ответ';
     const cls=kind==='Вопрос'||lowRating?'warning':'info';
     return `<button type="button" class="signal ${cls} interactive-card" ${nm? `data-entity-id="${esc(nm)}"`:''}><strong>${kind} · ${esc(art||'товар')}</strong><p>${esc(String(txt).slice(0,500))}</p><span class="source">${!missing(rating)?`оценка ${esc(rating)} · `:''}${esc(action)} · открыть товар</span></button>`;
