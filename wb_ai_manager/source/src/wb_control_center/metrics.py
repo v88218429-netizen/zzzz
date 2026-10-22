@@ -225,6 +225,7 @@ def extract_ad_nm_metrics(obj: Any) -> dict[tuple[int, int], dict[str, Any]]:
             b = buckets.setdefault(key, {
                 "advertId": int(advert), "nmId": int(nm), "sum": 0.0, "orders": 0.0,
                 "sum_price": 0.0, "clicks": 0.0, "views": 0.0, "days": [], "_rows": 0,
+                "available_metrics": set(),
             })
             vals = {
                 "sum": direct_number(x, ("sum", "spend", "spent", "cost", "expenses")),
@@ -235,6 +236,7 @@ def extract_ad_nm_metrics(obj: Any) -> dict[tuple[int, int], dict[str, Any]]:
             }
             if any(v is not None for v in vals.values()):
                 b["_rows"] += 1
+                b["available_metrics"].update(k for k, v in vals.items() if v is not None)
                 # If this is a dated leaf, retain it as a day row and aggregate later.
                 if day:
                     dr = {"date": day}
@@ -281,5 +283,11 @@ def extract_ad_nm_metrics(obj: Any) -> dict[tuple[int, int], dict[str, Any]]:
         spend = float(b.get("sum") or 0)
         b["ctr"] = float(b.get("ctr")) if b.get("ctr") is not None else ((clicks / views * 100) if views > 0 else None)
         b["cpc"] = float(b.get("cpc")) if b.get("cpc") is not None else ((spend / clicks) if clicks > 0 else None)
+        available = b.get("available_metrics") or set()
+        if b.get("ctr") is not None and ("ctr" in available or {"clicks", "views"}.issubset(available)):
+            available.add("ctr")
+        if b.get("cpc") is not None and ("cpc" in available or {"sum", "clicks"}.issubset(available)):
+            available.add("cpc")
+        b["available_metrics"] = sorted(available)
         b.pop("_rows", None)
     return buckets
