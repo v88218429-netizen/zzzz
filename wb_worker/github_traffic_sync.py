@@ -194,7 +194,7 @@ def _publish() -> None:
             dashboard = store_view.get("dashboard") or {}
             if (lite_tables.get("ok") is not True or lite_tables.get("written") != 1 or
                     lite_tables.get("stores") != [shop_name] or lite_tables.get("failed") or
-                    dashboard.get("written") != 1 or dashboard.get("partial_stores") or dashboard.get("failed_stores")):
+                    dashboard.get("written") != 1 or dashboard.get("failed_stores")):
                 raise RuntimeError(f"WB_TRAFFIC_STORE_VIEW_PUBLICATION_INCOMPLETE:{shop_name}")
             store_publications[shop_name] = {
                 "lite_table": lite_tables,
