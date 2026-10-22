@@ -843,11 +843,16 @@ async function rollbackPolicy(){ const b=$('rollback-policy'); if(!b)return; b.d
 
 function renderInventory(){
   const listingSnap=snap('inventory','coverage'), physicalSnap=snap('inventory','physical_coverage');
-  const physicalRows=Object.values(physicalSnap?.data||{});
+  const physicalMeta=physicalSnap?.data?._meta||{};
+  const physicalRows=Object.values(physicalSnap?.data||{}).filter(r=>r?.scope==='physical_product');
   const usingPhysical=state.inventoryView!=='cards';
   const activeSnap=usingPhysical?physicalSnap:listingSnap;
   const allRows=usingPhysical?physicalRows:Object.values(listingSnap?.data||{});
-  $('inventory-updated').textContent=activeSnap?`${usingPhysical?'физический товар':'карточки WB'} · обновлено ${ago(activeSnap.created_at)}`:'нет свежего среза';
+  const sourceStamp=physicalMeta.source_updated_at;
+  const sourceStampText=sourceStamp?(time(sourceStamp)==='—'?String(sourceStamp):time(sourceStamp)):'дата источника неизвестна';
+  $('inventory-updated').textContent=usingPhysical
+    ? (physicalSnap?`физический товар · источник ${sourceStampText}`:'нет свежего среза')
+    : (listingSnap?`карточки WB · снимок ${ago(listingSnap.created_at)}`:'нет свежего среза');
   const verifiedRows=allRows.filter(r=>r.stock_verified!==false);
   const unverifiedCount=allRows.length-verifiedRows.length;
   const classify=(r)=>{
@@ -880,7 +885,10 @@ function renderInventory(){
   if(usingPhysical&&!physicalSnap){
     inventoryHtml+=`<div class="inventory-source-warning"><strong>Нет свежего среза по физическим товарам</strong><p>Обнови приложение до версии с группировкой по строкам физического остатка. Карточные остатки доступны отдельно и не подменяют остаток сырья или базового товара.</p></div>`;
   }else if(usingPhysical&&physicalSnap&&!physicalRows.length){
-    inventoryHtml+=`<div class="inventory-source-warning"><strong>Физические товары пока не сопоставлены</strong><p>В свежей «Сводной» нет строк физического товара с остатком или связанными карточками.</p></div>`;
+    const staleText=physicalMeta.source_fresh===false
+      ? `Срез старше ${num(physicalMeta.source_max_age_hours)} часов или дата источника неизвестна. Дефицит по нему не рассчитывается.`
+      : 'В подтверждённой «Сводной» нет строк физического товара с остатком или связанными карточками.';
+    inventoryHtml+=`<div class="inventory-source-warning"><strong>${physicalMeta.source_fresh===false?'Свежесть источника не подтверждена':'Физические товары пока не сопоставлены'}</strong><p>${esc(staleText)}</p></div>`;
   }
   if(visible.length){
     inventoryHtml+=visible.map(r=>{
