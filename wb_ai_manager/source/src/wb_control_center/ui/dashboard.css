@@ -943,3 +943,21 @@ body { font-size: 15px; line-height: 1.5; }
   min-width: 78px;
   flex: 0 0 78px;
 }
+
+
+/* Выбор магазина в финансовой сводке и разрез остатков */
+.portfolio-head-controls{display:flex;align-items:center;justify-content:flex-end;gap:12px;flex-wrap:wrap}
+.portfolio-head-controls .segmented{max-width:100%;overflow-x:auto}
+.inventory-controls{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+.inventory-level-switch{display:flex;align-items:center;gap:3px;padding:3px;border:1px solid #e8eaf0;border-radius:9px;background:#fff}
+.inventory-level-switch button{border:0;border-radius:7px;padding:7px 9px;background:transparent;color:#737888;font-size:8.5px;font-weight:700;white-space:nowrap}
+.inventory-level-switch button.active{background:#eef0ff;color:#4546a1}
+.inventory-item small{display:block;color:var(--muted);font-size:8px;margin-top:3px}
+.article-ad-note{margin:0 18px 12px;color:var(--muted);font-size:11px;line-height:1.45}
+@media(max-width:760px){
+  .inventory-toolbar{align-items:stretch;flex-direction:column}
+  .inventory-controls{justify-content:flex-start;flex-direction:column;align-items:stretch}
+  .inventory-controls>.segmented{overflow-x:auto;max-width:100%}
+  .portfolio-head-controls{justify-content:flex-start}
+  .stores-grid{grid-template-columns:1fr}
+}
