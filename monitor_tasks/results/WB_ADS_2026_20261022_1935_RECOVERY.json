@@ -1,0 +1,34 @@
+{
+  "task_id": "WB_ADS_2026",
+  "request": "WB_ADS_2026_20261022_1935_RECOVERY.json",
+  "query": "реклама Wildberries 2026 CPC CPM поиск полки",
+  "knowledge_tag": "WB_ADS",
+  "generated_at": "2026-10-22T16:38:06.390433+00:00",
+  "videos": [
+    {
+      "video_id": "_fMXlSM1Rt8",
+      "url": "https://www.youtube.com/watch?v=_fMXlSM1Rt8",
+      "title": "How to SET UP ADS on Wildberries FALL 2026? Shelves, CPC, and current strategies for SELLERS 2026!",
+      "channel": "Михаил Шебзухов. Продажи на Wildberries",
+      "duration": 1335,
+      "timestamp": null,
+      "query": "реклама Wildberries 2026 CPC CPM поиск полки",
+      "kind": "video",
+      "transcript": "transcripts/2026-10-22_WB_ADS_2026_video__fMXlSM1Rt8.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "mter-Afofdk",
+      "url": "https://www.youtube.com/watch?v=mter-Afofdk",
+      "title": "How to Set Up Wildberries Ads for Fall 2026 RIGHT NOW? Setting Up CPC, Shelves, Unified, and Manu...",
+      "channel": "Пивоваров на Маркетплейсах ",
+      "duration": 1203,
+      "timestamp": null,
+      "query": "реклама Wildberries 2026 CPC CPM поиск полки",
+      "kind": "video",
+      "transcript": "transcripts/2026-10-22_WB_ADS_2026_video_mter-Afofdk.md",
+      "method": "FreeTranscriptAPI"
+    }
+  ],
+  "errors": []
+}
