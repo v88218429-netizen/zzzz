@@ -60,9 +60,6 @@ def _publish() -> None:
         if (status.get("shops") or {}).get(shop, {}).get("ok") is not True:
             raise RuntimeError(f"Traffic source is not verified for {shop}; refusing to publish")
 
-    # The encrypted GitHub history is the long-term archive. Sheets receive only
-    # the live source windows and upsert them into month/store partitions, so the
-    # publication request stays bounded while each monthly part retains history.
     ads = _rows_in_window(_read_rows(DATA_DIR / "campaign_sku_day.csv", COLUMNS), 1, status.get("period"), "ads")
     funnel = _rows_in_window(_read_rows(DATA_DIR / "funnel_sku_day.csv", FUNNEL_COLUMNS), 1, status.get("funnel_period"), "funnel")
     organic = _rows_in_window(_read_rows(DATA_DIR / "organic_sku_day.csv", ORGANIC_COLUMNS), 1, status.get("period"), "organic")
@@ -71,54 +68,80 @@ def _publish() -> None:
     key = os.environ.get("GOOGLE_SHEETS_BRIDGE_KEY", "").strip()
     if not key:
         raise RuntimeError("Google Sheets bridge key is not configured")
-    payload = {
-        "token": key,
-        "action": "publish_wb_traffic",
-        "sync_status": status,
-        # The monthly parts are the durable facts layer. Do not write a duplicate
-        # unbounded copy into the near-full WB AI HUB workbook.
-        "partition_only": True,
-        "datasets": {
-            "ads": ads,
-            "funnel": funnel,
-            "organic": organic,
-            "ads_poll": ads_poll,
-            "funnel_poll": funnel_poll,
-        },
-    }
-    encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-    if len(encoded) > MAX_REQUEST_BYTES:
-        raise RuntimeError(f"Traffic publication payload exceeds safe limit: {len(encoded)} bytes")
 
+    source_datasets = {
+        "ads": ads,
+        "funnel": funnel,
+        "organic": organic,
+        "ads_poll": ads_poll,
+        "funnel_poll": funnel_poll,
+    }
+    totals = {name: 0 for name in source_datasets}
+    publications = {}
+    # Publish one cabinet per request. The bridge rebuilds monthly partitions
+    # and the daily view; sending every cabinet in one request makes Apps Script
+    # exceed the response timeout while it rewrites the long history.
     with httpx.Client(timeout=httpx.Timeout(180.0, connect=15.0), follow_redirects=True) as client:
-        response = client.post(BRIDGE_URL, json=payload)
-        response.raise_for_status()
-        result = response.json()
-    if not isinstance(result, dict) or result.get("ok") is not True or result.get("action") != "publish_wb_traffic":
-        detail = str(result.get("error", "unknown bridge response"))[:500] if isinstance(result, dict) else "invalid bridge response"
-        raise RuntimeError(f"Google Sheets bridge rejected traffic publication: {detail}")
-    partition_counts = (result.get("partitions") or {}).get("datasets") or {}
-    daily_view = partition_counts.get("daily_view") or {}
-    lite_tables = daily_view.get("lite_tables") or {}
-    if lite_tables.get("ok") is not True or lite_tables.get("failed"):
-        raise RuntimeError("WB_TRAFFIC_LITE_PUBLICATION_INCOMPLETE")
-    expectations = (("ads", len(ads)), ("funnel", len(funnel)), ("organic", len(organic)),
-                    ("ads_poll", len(ads_poll)), ("funnel_poll", len(funnel_poll)))
-    for name, expected in expectations:
-        item = partition_counts.get(name) or {}
-        if item.get("written") != expected:
-            raise RuntimeError(f"Monthly-partition row-count mismatch for {name}")
-        if expected and (item.get("distinct_keys") != expected or item.get("skipped")):
-            raise RuntimeError(f"Monthly-partition key-count mismatch for {name}")
-        if not expected and not item.get("skipped"):
-            raise RuntimeError(f"Monthly-partition empty {name} result was not preserved")
+        for shop in ("ap", "aa", "yv"):
+            datasets = {
+                name: [row for row in rows if str(row[0] or "").strip() == shop]
+                for name, rows in source_datasets.items()
+            }
+            payload = {
+                "token": key,
+                "action": "publish_wb_traffic",
+                "sync_status": status,
+                "partition_only": True,
+                "datasets": datasets,
+            }
+            encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+            if len(encoded) > MAX_REQUEST_BYTES:
+                raise RuntimeError(f"Traffic publication payload exceeds safe limit for {shop}: {len(encoded)} bytes")
+
+            response = client.post(BRIDGE_URL, json=payload)
+            response.raise_for_status()
+            result = response.json()
+            if not isinstance(result, dict) or result.get("ok") is not True or result.get("action") != "publish_wb_traffic":
+                detail = str(result.get("error", "unknown bridge response"))[:500] if isinstance(result, dict) else "invalid bridge response"
+                raise RuntimeError(f"Google Sheets bridge rejected traffic publication for {shop}: {detail}")
+
+            partition_counts = (result.get("partitions") or {}).get("datasets") or {}
+            daily_view = partition_counts.get("daily_view") or {}
+            lite_tables = daily_view.get("lite_tables") or {}
+            if lite_tables.get("ok") is not True or lite_tables.get("failed"):
+                raise RuntimeError(f"WB_TRAFFIC_LITE_PUBLICATION_INCOMPLETE:{shop}")
+
+            for name, rows in datasets.items():
+                expected = len(rows)
+                totals[name] += expected
+                item = partition_counts.get(name) or {}
+                if item.get("written") != expected:
+                    raise RuntimeError(f"Monthly-partition row-count mismatch for {shop}/{name}")
+                if expected and (item.get("distinct_keys") != expected or item.get("skipped")):
+                    raise RuntimeError(f"Monthly-partition key-count mismatch for {shop}/{name}")
+                if not expected and not item.get("skipped"):
+                    raise RuntimeError(f"Monthly-partition empty {shop}/{name} result was not preserved")
+            publications[shop] = {
+                "lite_tables": lite_tables,
+                "daily_view": daily_view.get("dashboard", {}),
+                "partitions": {
+                    name: {
+                        "written": (partition_counts.get(name) or {}).get("written"),
+                        "distinct_keys": (partition_counts.get(name) or {}).get("distinct_keys"),
+                        "skipped": (partition_counts.get(name) or {}).get("skipped"),
+                    }
+                    for name in source_datasets
+                },
+            }
+
+    for name, rows in source_datasets.items():
+        if totals[name] != len(rows):
+            raise RuntimeError(f"Traffic publication total-count mismatch for {name}")
     print(json.dumps({
         "published": True,
         "publication_target": "monthly_partitions_plus_light_store_tables",
-        "lite_tables": lite_tables,
-        "dashboards": daily_view.get("dashboard", {}),
+        "shops": publications,
     }, ensure_ascii=False, sort_keys=True))
-
 
 def main() -> int:
     parser = argparse.ArgumentParser()
