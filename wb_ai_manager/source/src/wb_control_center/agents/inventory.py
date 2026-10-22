@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from typing import Any
+from datetime import datetime, timezone
 
 from .base import BaseAgent
 from ..metrics import extract_nm_id, find_dicts_with_any_key, first_number
@@ -24,6 +25,23 @@ def _float_or_none(value: Any) -> float | None:
         return float(value) if value is not None and str(value).strip() != "" else None
     except (TypeError, ValueError):
         return None
+
+
+def _source_datetime(value: Any):
+    if not value:
+        return None
+    text = str(value).strip()
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+    except ValueError:
+        pass
+    for fmt in ("%d.%m.%Y", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(text[:10], fmt).replace(tzinfo=timezone.utc)
+        except ValueError:
+            pass
+    return None
 
 
 class InventoryAgent(BaseAgent):
@@ -64,9 +82,14 @@ class InventoryAgent(BaseAgent):
         # table, so a 2/4/6 kg listing does not become three separate supply alarms.
         settings = getattr(self.ctx, "settings", None)
         portfolio = PortfolioService(settings).snapshot() if settings is not None else {}
-        trusted_current = bool(portfolio.get("current_data"))
-        legacy_test_context = settings is None
         own = portfolio.get("own_27") or {}
+        own_health = next((x for x in (portfolio.get("source_health") or []) if isinstance(x, dict) and x.get("id") == "own_27"), {})
+        source_updated_at = own_health.get("bridge_modified_at") or own.get("source_updated_at") or own_health.get("freshness")
+        source_dt = _source_datetime(source_updated_at)
+        max_source_age_hours = max(1.0, float(cfg.get("source_max_age_hours", 72)))
+        source_fresh = bool(source_dt and (datetime.now(timezone.utc) - source_dt).total_seconds() <= max_source_age_hours * 3600)
+        trusted_current = bool(portfolio.get("current_data") and source_fresh)
+        legacy_test_context = settings is None
         trusted_rows = {
             str(item.get("sku")): item
             for item in (own.get("products") or [])
@@ -79,7 +102,7 @@ class InventoryAgent(BaseAgent):
 
         physical_coverage: dict[str, Any] = {}
         physical_member_skus: set[str] = set()
-        for index, item in enumerate(own.get("physical_inventory") or []):
+        for index, item in enumerate((own.get("physical_inventory") or []) if trusted_current else []):
             if not isinstance(item, dict):
                 continue
             name = str(item.get("physical_position") or "").strip()
@@ -111,6 +134,7 @@ class InventoryAgent(BaseAgent):
             key = f"physical:{sheet_row if sheet_row is not None else index}"
             physical_coverage[key] = {
                 "scope": "physical_product",
+                "source_updated_at": source_updated_at,
                 "physical_position": name,
                 "member_skus": members,
                 "stock": stock,
@@ -183,6 +207,7 @@ class InventoryAgent(BaseAgent):
             days = stock / daily if daily > 0 else None
             coverage[str(nm)] = {
                 "nm_id": nm,
+                "source_updated_at": source_updated_at,
                 "stock": stock,
                 "wb_stats_stock": wb_stats_stock,
                 "stock_source": stock_source,
@@ -210,6 +235,14 @@ class InventoryAgent(BaseAgent):
             elif days is not None and days >= over:
                 out.events.append(self.event("warning", f"overstock:{nm}", "Высокий запас карточки WB", f"nmID {nm}: примерно {days:.0f} дней.", coverage[str(nm)]))
 
+        if portfolio.get("current_data") and not source_fresh and not legacy_test_context:
+            out.events.append(self.event(
+                "warning",
+                "inventory_source_stale",
+                "Свежесть «Сводной» не подтверждена",
+                f"Источник остатков обновлялся: {source_updated_at or 'дата неизвестна'}. Пороги дефицита не применяются к устаревшему или неподтверждённому срезу.",
+                {"source": "Сводная", "source_updated_at": source_updated_at, "max_age_hours": max_source_age_hours},
+            ))
         if not trusted_current and not legacy_test_context:
             out.events.append(self.event(
                 "warning",
