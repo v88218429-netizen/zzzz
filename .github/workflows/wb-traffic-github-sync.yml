@@ -24,7 +24,9 @@ concurrency:
 
 jobs:
   sync:
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    if: >-
+      (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success') &&
+      (github.event_name != 'push' || !contains(toJSON(github.event.commits), 'sellmonitor_github_worker/SELLMONITOR_GITHUB_WORKER.gs'))
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
