@@ -1,4 +1,4 @@
-const state = { data: null, eventFilter: 'important', inventoryFilter: 'shortage', decisionFilter: 'priority', page: location.hash.replace('#','') || 'overview', periodFrom: null, periodTo: null, periodAuditRequestedKey: null, periodPollTimer: null };
+const state = { data: null, eventFilter: 'important', inventoryFilter: 'shortage', inventoryView: 'physical', portfolioStoreFilter: 'all', decisionFilter: 'priority', page: location.hash.replace('#','') || 'overview', periodFrom: null, periodTo: null, periodAuditRequestedKey: null, periodPollTimer: null };
 const $ = (id) => document.getElementById(id);
 const qa = (sel, root=document) => [...root.querySelectorAll(sel)];
 
@@ -360,6 +360,8 @@ function initNav(){
   qa('.nav-item').forEach(btn=>btn.addEventListener('click',()=>setPage(btn.dataset.page)));
   $('mobile-menu').addEventListener('click',()=> $('sidebar').classList.toggle('open'));
   const filters=$('event-filter'); if(filters) filters.addEventListener('click',e=>{ if(!e.target.dataset.filter) return; state.eventFilter=e.target.dataset.filter; qa('button',filters).forEach(b=>b.classList.toggle('active',b===e.target)); renderEvents(); });
+  const storeFilter=$('portfolio-store-filter'); if(storeFilter) storeFilter.addEventListener('click',e=>{ const button=e.target.closest('[data-portfolio-store]'); if(!button) return; state.portfolioStoreFilter=button.dataset.portfolioStore; renderPortfolio(); });
+  const inventoryGrid=$('inventory-grid'); if(inventoryGrid) inventoryGrid.addEventListener('click',e=>{ const button=e.target.closest('[data-inventory-view]'); if(!button) return; state.inventoryView=button.dataset.inventoryView; renderInventory(); });
   setPage(state.page);
 }
 function setPage(page){
@@ -570,6 +572,15 @@ function pf(){ return state.data?.portfolio||{}; }
 
 function renderPortfolio(){
   const p=pf(), all=p.portfolio||{}, current=!!p.current_data;
+  const stores=p.stores||[];
+  const keyOf=x=>String(x?.id??x?.name??'');
+  if(!stores.some(x=>keyOf(x)===String(state.portfolioStoreFilter))) state.portfolioStoreFilter='all';
+  const selectedStore=state.portfolioStoreFilter==='all'?null:stores.find(x=>keyOf(x)===String(state.portfolioStoreFilter));
+  const summary=selectedStore||all;
+  const filter=$('portfolio-store-filter');
+  if(filter) filter.innerHTML=stores.length>1
+    ? `<button type="button" data-portfolio-store="all" class="${state.portfolioStoreFilter==='all'?'active':''}">Все магазины</button>${stores.map(x=>`<button type="button" data-portfolio-store="${esc(keyOf(x))}" class="${state.portfolioStoreFilter===keyOf(x)?'active':''}">${esc(x.name)}</button>`).join('')}`
+    : '';
   if($('portfolio-origin')) $('portfolio-origin').textContent=current?'ПОДКЛЮЧЁННЫЕ ДАННЫЕ':'АРХИВНЫЙ СРЕЗ';
   if($('portfolio-period')) $('portfolio-period').textContent=p.period||'период не указан';
   const truth=$('portfolio-truth-banner');
@@ -577,18 +588,18 @@ function renderPortfolio(){
     truth.classList.toggle('hidden',current);
     truth.innerHTML=current?'':`<strong>Это не текущие показатели.</strong><span>${esc(p.stale_reason||'Показан последний сохранённый срез. Он не участвует в текущих денежных решениях.')}</span><small>Период архива: ${esc(p.period||'—')}</small>`;
   }
-  if($('pf-orders')) $('pf-orders').textContent=current?rub(all.orders_rub):'—';
-  if($('pf-buyouts')) $('pf-buyouts').textContent=current?rub(all.buyouts_rub):'—';
-  if($('pf-profit')) $('pf-profit').textContent=current?rub(all.profit_rub):'—';
-  if($('pf-margin')) $('pf-margin').textContent=current?pct(all.margin_pct):'—';
-  if($('pf-roi')) $('pf-roi').textContent=current?`ROI ${pct(all.roi_pct)}`:'Нет свежих данных';
-  if($('pf-ads')) $('pf-ads').textContent=current?rub(all.ad_spend_rub):'—';
-  if($('pf-drr')) $('pf-drr').textContent=current?`ДРР ${pct(all.drr_pct)}`:'Нет свежих данных';
-  if($('pf-orders-change')) $('pf-orders-change').textContent=current&&Number.isFinite(Number(all.orders_change_pct))?`${Number(all.orders_change_pct)>=0?'+':''}${pct(all.orders_change_pct)} к прошлому периоду`:'—';
-  if($('pf-profit-change')) $('pf-profit-change').textContent=current&&Number.isFinite(Number(all.profit_change_pct))?`${Number(all.profit_change_pct)>=0?'+':''}${pct(all.profit_change_pct)} к прошлому периоду`:'—';
+  if($('pf-orders')) $('pf-orders').textContent=current?rub(summary.orders_rub):'—';
+  if($('pf-buyouts')) $('pf-buyouts').textContent=current?rub(summary.buyouts_rub):'—';
+  if($('pf-profit')) $('pf-profit').textContent=current?rub(summary.profit_rub):'—';
+  if($('pf-margin')) $('pf-margin').textContent=current?pct(summary.margin_pct):'—';
+  if($('pf-roi')) $('pf-roi').textContent=current?`ROI ${pct(summary.roi_pct)}`:'Нет свежих данных';
+  if($('pf-ads')) $('pf-ads').textContent=current?rub(summary.ad_spend_rub):'—';
+  if($('pf-drr')) $('pf-drr').textContent=current?`ДРР ${pct(summary.drr_pct)}`:'Нет свежих данных';
+  if($('pf-orders-change')) $('pf-orders-change').textContent=current&&Number.isFinite(Number(summary.orders_change_pct))?`${Number(summary.orders_change_pct)>=0?'+':''}${pct(summary.orders_change_pct)} к прошлому периоду`:'—';
+  if($('pf-profit-change')) $('pf-profit-change').textContent=current&&Number.isFinite(Number(summary.profit_change_pct))?`${Number(summary.profit_change_pct)>=0?'+':''}${pct(summary.profit_change_pct)} к прошлому периоду`:'—';
 
-  const stores=p.stores||[];
-  if($('stores-grid')) $('stores-grid').innerHTML=stores.length?stores.map(x=>{
+  const visibleStores=selectedStore?[selectedStore]:stores;
+  if($('stores-grid')) $('stores-grid').innerHTML=visibleStores.length?visibleStores.map(x=>{
     const cls=current?(x.status==='critical'?'critical':x.status==='watch'?'watch':''):'';
     const badge=current?(x.status==='critical'?['bad','Требует внимания']:x.status==='watch'?['warn','Наблюдать']:['ok','Штатно']):['neutral','АРХИВ'];
     return `<div class="store-portfolio-card ${cls}"><div class="store-card-head"><div><strong>${esc(x.name)}</strong><div class="store-source">${esc(x.source||'')}</div></div><span class="status-tag ${badge[0]}">${badge[1]}</span></div><div class="store-stat-grid"><div class="store-stat"><span>Заказы</span><b>${rub(x.orders_rub)}</b></div><div class="store-stat"><span>Выкупы</span><b>${rub(x.buyouts_rub)}</b></div><div class="store-stat"><span>Прибыль</span><b>${rub(x.profit_rub)}</b></div><div class="store-stat"><span>Маржа / ROI</span><b>${pct(x.margin_pct)} · ${pct(x.roi_pct)}</b></div><div class="store-stat"><span>Реклама</span><b>${rub(x.ad_spend_rub)}</b></div><div class="store-stat"><span>ДРР</span><b>${pct(x.drr_pct)}</b></div></div><p class="store-note">${current?'Срез':'Архив'}: ${esc(x.freshness||p.period||'—')}. ${esc(x.note||'')}</p></div>`;
@@ -645,6 +656,48 @@ function adSummary(){
   const drr=revenue>0?spend/revenue*100:null;
   const ctr=views>0?clicks/views*100:null;
   return {rows,spend,orders,revenue,drr,ctr,error:errorText};
+}
+
+function articleAdSummary(){
+  const raw=snap('advertising_monitor','stats_by_nm_7d')?.data;
+  const rows=extractList(raw), byNm=new Map();
+  const add=(target,key,value)=>{
+    const n=Number(value);
+    if(Number.isFinite(n)) target[key]+=n;
+  };
+  for(const row of rows){
+    const nm=Number(row?.nmId??row?.nmID??row?.nm_id);
+    if(!Number.isFinite(nm)||nm<=0) continue;
+    const item=byNm.get(nm)||{nm_id:nm,spend:0,orders:0,revenue:0,clicks:0,views:0,campaigns:new Set()};
+    add(item,'spend',row.sum??row.spend??row.spent);
+    add(item,'orders',row.orders??row.ordersCount??row.orders_count);
+    add(item,'revenue',row.sum_price??row.sumPrice??row.revenue??row.sales);
+    add(item,'clicks',row.clicks);
+    add(item,'views',row.views??row.impressions);
+    const campaign=row.advertId??row.advert_id;
+    if(!missing(campaign)) item.campaigns.add(String(campaign));
+    byNm.set(nm,item);
+  }
+  return [...byNm.values()].map(item=>({
+    ...item,
+    drr:item.revenue>0?item.spend/item.revenue*100:null,
+    ctr:item.views>0?item.clicks/item.views*100:null,
+    cpc:item.clicks>0?item.spend/item.clicks:null
+  })).sort((a,b)=>b.spend-a.spend);
+}
+function renderArticleAdStats(){
+  const snapObj=snap('advertising_monitor','stats_by_nm_7d');
+  if($('ads-sku-updated')) $('ads-sku-updated').textContent=snapObj?`WB · обновлено ${ago(snapObj.created_at)}`:'нет точных данных по артикулам';
+  const rows=articleAdSummary();
+  const names=campaignNames();
+  if(!$('ads-sku-table')) return;
+  $('ads-sku-table').innerHTML=rows.length?rows.map(row=>{
+    const info=entityInfo(row.nm_id)||{};
+    const article=entityName(row.nm_id)||info.name||String(row.nm_id);
+    const campaignLabels=[...row.campaigns].map(id=>names[id]||`кампания ${id}`);
+    const campaignTitle=campaignLabels.join(', ');
+    return `<tr><td><strong>${esc(article)}</strong><br><span class="muted">${esc(info.group_name||info.weekly_group||'')}</span></td><td>${esc(row.nm_id)}</td><td title="${esc(campaignTitle)}">${num(row.campaigns.size)} кампания</td><td>${rub(row.spend)}</td><td>${num(row.orders,1)}</td><td>${rub(row.revenue)}</td><td>${pct(row.drr)}</td><td>${pct(row.ctr)}</td><td>${rub(row.cpc)}</td></tr>`;
+  }).join(''):`<tr><td colspan="9">${empty(snapObj?'WB не вернул точных строк nmID за последние 7 дней. Расходы кампании не распределяются по артикулам.':'Ждём срез WB с прямой привязкой рекламы к nmID.')}</td></tr>`;
 }
 
 function renderConnections(){
@@ -711,6 +764,7 @@ function renderAdvertising(){
   const snapObj=snap('advertising_monitor','stats_7d');
   $('ads-updated').textContent=a.error&&!a.rows.length?'WB временно ограничил статистику (повторю автоматически)':snapObj?`${snapshotScopeText(snapObj)||'данные'} · обновлено ${ago(snapObj.created_at)}`:'нет данных';
   $('ads-table').innerHTML=a.rows.length?a.rows.map(r=>{ const id=r.advertId??r.advert_id??r.id; const sp=Number(r.sum??r.spend??0)||0, or=Number(r.orders??r.ordersCount??0)||0, rev=Number(r.sum_price??r.revenue??0)||0, drr=rev>0?sp/rev*100:null, ctr=Number(r.ctr), cpc=Number(r.cpc); const related=plans.filter(p=>String(p.entity_id||'').split(':')[0]===String(id)); const action=related.length===1?related[0].recommended_actions?.[0]?.action:null; const advice=related.length>1?`${related.length} плана по товарам ниже`:action||'Нет проверенного плана по товару'; const nms=extractList(r?.nm_settings||r?.nmSettings||[]).map(x=>x.nm_id??x.nmId??x.nmID).filter(x=>!missing(x)); const arts=[...new Set(nms.map(entityName).filter(Boolean))]; return `<tr><td><strong>${esc(campaignLabel(id))}</strong><br><span class="muted">кампания ID ${esc(id??'—')}</span></td><td>${rub(sp)}</td><td>${num(or)}</td><td>${rub(rev)}</td><td>${pct(drr)}</td><td>${Number.isFinite(ctr)?pct(ctr):'—'}</td><td>${Number.isFinite(cpc)?rub(cpc):'—'}</td><td>${esc(humanizeText(advice))}</td></tr>`; }).join(''):`<tr><td colspan="8">${empty(a.error?'WB временно ограничил статистику рекламы. Нули не считаются фактом; система повторит чтение автоматически.':'Нет рекламных данных. Запусти проверку.')}</td></tr>`;
+  renderArticleAdStats();
   const ev=(state.data.events||[]).filter(e=>['advertising_monitor','advertising_optimizer'].includes(e.agent)&&['critical','warning'].includes(e.severity)).slice(0,8); $('ads-signals').innerHTML=ev.length?ev.map(signalHtml).join(''):empty('Проблемных рекламных сигналов сейчас нет.');
   if($('ad-control-plans')) $('ad-control-plans').innerHTML=plans.length?plans.map(adPlanHtml).join(''):empty('Числовых планов пока нет. Запусти полный аудит.');
 }
@@ -783,9 +837,12 @@ async function savePolicy(){ const b=$('save-policy'); if(!b)return; b.disabled=
 async function rollbackPolicy(){ const b=$('rollback-policy'); if(!b)return; b.disabled=true; try{const r=await fetch('/api/policy-studio/rollback/0',{method:'POST'}); const j=await r.json(); if(!r.ok)throw new Error(j.detail||`HTTP ${r.status}`); showToast('Последнее изменение откатилось.','success'); await fetchData();}catch(e){showToast(`Откат не выполнен: ${e.message}`,'error');}finally{b.disabled=false;}}
 
 function renderInventory(){
-  const s=snap('inventory','coverage'), cov=s?.data||{};
-  $('inventory-updated').textContent=s?`${snapshotScopeText(s)||'данные'} · обновлено ${ago(s.created_at)}`:'нет данных';
-  const allRows=Object.values(cov||{});
+  const listingSnap=snap('inventory','coverage'), physicalSnap=snap('inventory','physical_coverage');
+  const physicalRows=Object.values(physicalSnap?.data||{});
+  const usingPhysical=state.inventoryView!=='cards';
+  const activeSnap=usingPhysical?physicalSnap:listingSnap;
+  const allRows=usingPhysical?physicalRows:Object.values(listingSnap?.data||{});
+  $('inventory-updated').textContent=activeSnap?`${usingPhysical?'физический товар':'карточки WB'} · обновлено ${ago(activeSnap.created_at)}`:'нет свежего среза';
   const verifiedRows=allRows.filter(r=>r.stock_verified!==false);
   const unverifiedCount=allRows.length-verifiedRows.length;
   const classify=(r)=>{
@@ -810,25 +867,39 @@ function renderInventory(){
     return ca==='overstock' ? db-da : da-db;
   });
 
-  let inventoryHtml=`<div class="inventory-toolbar"><div><strong>Требуют внимания: ${num(attention.length)}</strong><span>дефицит ${num(counts.critical)} · низкий запас ${num(counts.low)} · избыток ${num(counts.overstock)} · норма ${num(counts.normal)}</span></div><div class="segmented"><button type="button" data-inventory-filter="shortage" class="${state.inventoryFilter==='shortage'?'active':''}">Дефицит / низкий (${num(shortage.length)})</button><button type="button" data-inventory-filter="overstock" class="${state.inventoryFilter==='overstock'?'active':''}">Избыток (${num(overstockRows.length)})</button><button type="button" data-inventory-filter="all" class="${state.inventoryFilter==='all'?'active':''}">Все (${num(verifiedRows.length)})</button></div></div>`;
+  const levelSwitch=`<div class="inventory-level-switch"><button type="button" data-inventory-view="physical" class="${usingPhysical?'active':''}">Физический товар</button><button type="button" data-inventory-view="cards" class="${!usingPhysical?'active':''}">Карточки WB</button></div>`;
+  let inventoryHtml=`<div class="inventory-toolbar"><div><strong>Требуют внимания: ${num(attention.length)}</strong><span>дефицит ${num(counts.critical)} · низкий запас ${num(counts.low)} · избыток ${num(counts.overstock)} · норма ${num(counts.normal)}</span></div><div class="inventory-controls">${levelSwitch}<div class="segmented"><button type="button" data-inventory-filter="shortage" class="${state.inventoryFilter==='shortage'?'active':''}">Дефицит / низкий (${num(shortage.length)})</button><button type="button" data-inventory-filter="overstock" class="${state.inventoryFilter==='overstock'?'active':''}">Избыток (${num(overstockRows.length)})</button><button type="button" data-inventory-filter="all" class="${state.inventoryFilter==='all'?'active':''}">Все (${num(verifiedRows.length)})</button></div></div></div>`;
   if(unverifiedCount){
-    inventoryHtml+=`<div class="inventory-source-warning"><strong>Не показываю неподтверждённые остатки как реальные</strong><p>${num(unverifiedCount)} SKU не удалось сопоставить с текущей «Сводной» / FBS. Они скрыты из расчёта дефицита, чтобы не создавать ложные тревоги.</p><small>Нужно проверить строку товара/артикул продавца в «Сводной». Остальные карточки считаются по живым данным.</small></div>`;
+    inventoryHtml+=`<div class="inventory-source-warning"><strong>Не показываю неподтверждённые остатки как реальные</strong><p>${num(unverifiedCount)} строк не удалось сопоставить с подтверждённым источником. Они скрыты из расчёта дефицита, чтобы не создавать ложные тревоги.</p></div>`;
+  }
+  if(usingPhysical&&!physicalSnap){
+    inventoryHtml+=`<div class="inventory-source-warning"><strong>Нет свежего среза по физическим товарам</strong><p>Обнови приложение до версии с группировкой по строкам физического остатка. Карточные остатки доступны отдельно и не подменяют остаток сырья или базового товара.</p></div>`;
+  }else if(usingPhysical&&physicalSnap&&!physicalRows.length){
+    inventoryHtml+=`<div class="inventory-source-warning"><strong>Физические товары пока не сопоставлены</strong><p>В свежей «Сводной» нет строк физического товара с остатком или связанными карточками.</p></div>`;
   }
   if(visible.length){
     inventoryHtml+=visible.map(r=>{
       const days=missing(r.days_cover)?null:Number(r.days_cover), category=classify(r);
       const cls=category==='critical'?'critical':(['low','overstock'].includes(category)?'warn':'');
       const width=Number.isFinite(days)?Math.max(4,Math.min(100,days/30*100)):100;
-      const id=r.nm_id??r.nmId??r.nmID;
+      const members=Array.isArray(r.member_skus)?r.member_skus:[];
+      const id=r.nm_id??r.nmId??r.nmID??members[0]?.sku;
+      const title=usingPhysical?(r.physical_position||'Физический товар'):entityName(id);
+      const linked=members.map(x=>x.name||entityName(x.sku)).filter(Boolean);
+      const linkedText=usingPhysical?(linked.length?`Карточки: ${linked.slice(0,4).join(', ')}${linked.length>4?` и ещё ${linked.length-4}`:''}`:'карточки не связаны'):'';
       const tag=category==='critical'?['bad','Дефицит']:category==='low'?['warn','Низкий запас']:category==='overstock'?['warn','Избыток']:category==='unknown'?['neutral','Нет темпа']:['ok','Норма'];
-      return `<button type="button" class="inventory-item ${cls} interactive-card" data-entity-id="${esc(id)}"><div class="inventory-top"><div><strong>${esc(entityName(id))}</strong><small>${entityMeta(id)}</small></div><span class="status-tag ${tag[0]}">${tag[1]}</span></div><div class="inventory-days">${Number.isFinite(days)?`${num(days,1)} дня`:'Нет данных о темпе'}</div><div class="inventory-meta">Остаток ${num(r.stock)} · темп ${num(r.daily_sales,1)}/день · ${esc(r.stock_source||'источник остатка не указан')}${r.velocity_source?` · темп: ${esc(r.velocity_source)}`:''}</div><div class="cover-bar"><i style="width:${width}%"></i></div></button>`;
+      const clickAttr=id?`data-entity-id="${esc(id)}"`:'';
+      return `<button type="button" class="inventory-item ${cls} interactive-card" ${clickAttr}><div class="inventory-top"><div><strong>${esc(title)}</strong><small>${usingPhysical?`физический товар · карточек WB: ${num(members.length)}`:entityMeta(id)}</small></div><span class="status-tag ${tag[0]}">${tag[1]}</span></div><div class="inventory-days">${Number.isFinite(days)?`${num(days,1)} дня`:'Нет подтверждённого темпа'}</div><div class="inventory-meta">Остаток ${r.stock===null?'нет данных':num(r.stock)} · темп ${r.daily_sales===null?'нет данных':num(r.daily_sales,1)}/день · ${esc(r.stock_source||'источник остатка не указан')}${r.velocity_source?` · темп: ${esc(r.velocity_source)}`:''}${linkedText?`<br>${esc(linkedText)}`:''}</div><div class="cover-bar"><i style="width:${width}%"></i></div></button>`;
     }).join('');
+  }else if(usingPhysical&&!physicalSnap){
+    inventoryHtml+=empty('Нет подтверждённого физического остатка.');
   }else{
-    inventoryHtml+=empty(state.inventoryFilter==='shortage'?'Нет подтверждённых дефицитов или низкого запаса.':state.inventoryFilter==='overstock'?'Нет подтверждённого избыточного запаса.':'Нет данных по покрытию остатками.');
+    inventoryHtml+=empty(state.inventoryFilter==='shortage'?'Нет подтверждённых дефицитов или низкого запаса.':state.inventoryFilter==='overstock'?'Нет подтверждённого избыточного запаса.':usingPhysical?'Нет данных по покрытию физических товаров.':'Нет данных по покрытию карточек.');
   }
   $('inventory-grid').innerHTML=inventoryHtml;
   const acc=extractList(snap('supply','acceptance')?.data); $('acceptance-list').innerHTML=acc.length?acc.slice(0,8).map(x=>{const coef=missing(x.coefficient)?null:Number(x.coefficient); return `<div class="signal ${Number.isFinite(coef)&&coef<=1?'info':'warning'}"><strong>${esc(x.warehouseName||x.warehouse_name||'Склад')}</strong><p>Коэффициент приёмки: ${Number.isFinite(coef)?num(coef,0):'—'} · разгрузка ${x.allowUnload===false?'недоступна':'доступна'}</p><span class="source">Источник: коэффициенты приёмки WB</span></div>`;}).join(''):empty('Нет данных по коэффициентам приёмки.');
 }
+
 
 function renderSearch(){
   const s=snap('search_positions','positions'); $('search-updated').textContent=s?`${snapshotScopeText(s)||'данные'} · обновлено ${ago(s.created_at)}`:'нет данных';
