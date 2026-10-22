@@ -148,8 +148,10 @@ def _publish() -> None:
             if totals[name] != len(rows):
                 raise RuntimeError(f"Traffic publication total-count mismatch for {name}")
 
-        # Rebuild the user-facing daily summaries only after every monthly
-        # partition has been verified. This avoids exposing half-published days.
+        # First publish the canonical daily archive, then refresh each cabinet's
+        # light table and dashboard in its own bounded request. The old combined
+        # request exceeded Apps Script's response window after all 15 partitions
+        # had already been published.
         view_payload = {
             "token": key,
             "action": "publish_wb_traffic",
@@ -164,13 +166,41 @@ def _publish() -> None:
         view_result = _post_bridge(client, view_payload)
         if not isinstance(view_result, dict) or view_result.get("ok") is not True or view_result.get("action") != "publish_wb_traffic":
             detail = str(view_result.get("error", "unknown bridge response"))[:500] if isinstance(view_result, dict) else "invalid bridge response"
-            raise RuntimeError(f"Google Sheets bridge rejected daily-view publication: {detail}")
+            raise RuntimeError(f"Google Sheets bridge rejected daily-view archive publication: {detail}")
         daily_view = ((view_result.get("partitions") or {}).get("daily_view") or {})
-        lite_tables = daily_view.get("lite_tables") or {}
-        if lite_tables.get("ok") is not True or lite_tables.get("failed"):
-            raise RuntimeError("WB_TRAFFIC_LITE_PUBLICATION_INCOMPLETE")
-        if daily_view.get("rows", 0) <= 0:
-            raise RuntimeError("WB_TRAFFIC_DAILY_VIEW_EMPTY")
+        if daily_view.get("archive_only") is not True or daily_view.get("rows", 0) <= 0:
+            raise RuntimeError("WB_TRAFFIC_DAILY_VIEW_ARCHIVE_INCOMPLETE")
+
+        store_publications = {}
+        for shop_name in ("Саныч", "AIR", "Хозяюшка"):
+            store_payload = {
+                "token": key,
+                "action": "publish_wb_traffic",
+                "sync_status": status,
+                "skip_partitions": True,
+                "daily_view_store": True,
+                "store_name": shop_name,
+                "datasets": source_datasets,
+            }
+            encoded = json.dumps(store_payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+            if len(encoded) > MAX_REQUEST_BYTES:
+                raise RuntimeError(f"Traffic store-view payload exceeds safe limit for {shop_name}: {len(encoded)} bytes")
+            store_result = _post_bridge(client, store_payload)
+            if not isinstance(store_result, dict) or store_result.get("ok") is not True or store_result.get("action") != "publish_wb_traffic":
+                detail = str(store_result.get("error", "unknown bridge response"))[:500] if isinstance(store_result, dict) else "invalid bridge response"
+                raise RuntimeError(f"Google Sheets bridge rejected store-view publication for {shop_name}: {detail}")
+            store_view = ((store_result.get("partitions") or {}).get("daily_view") or {})
+            lite_tables = store_view.get("lite_tables") or {}
+            dashboard = store_view.get("dashboard") or {}
+            if (lite_tables.get("ok") is not True or lite_tables.get("written") != 1 or
+                    lite_tables.get("stores") != [shop_name] or lite_tables.get("failed") or
+                    dashboard.get("written") != 1 or dashboard.get("partial_stores") or dashboard.get("failed_stores")):
+                raise RuntimeError(f"WB_TRAFFIC_STORE_VIEW_PUBLICATION_INCOMPLETE:{shop_name}")
+            store_publications[shop_name] = {
+                "lite_table": lite_tables,
+                "dashboard": dashboard,
+            }
+        daily_view["store_publications"] = store_publications
 
     print(json.dumps({
         "published": True,
