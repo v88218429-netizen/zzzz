@@ -5026,6 +5026,11 @@ function doPost(e) {
       });
     }
 
+    if (action === 'fbs_ingest_batch') {
+      var fbsResult = sellmonitorGithubFbsIngestBatchV1_(body);
+      return sellmonitorGithubWebJson_({ok:fbsResult.ok===true,action:action,result:fbsResult});
+    }
+
     if (action === 'fbs_targets_health') {
       return sellmonitorGithubWebJson_({ok:true,action:action,result:sellmonitorGithubFbsTargetHealthV1_()});
     }
@@ -5140,4 +5145,120 @@ function sellmonitorGithubFbsTargetHealthV1_() {
     }
   });
   return {ok:results.every(function(x){return x.accessible;}),checkedAt:new Date().toISOString(),results:results};
+}
+
+
+/** Safe bounded FBS upsert; authenticated at the doPost entry point. No external service. */
+function sellmonitorGithubFbsIngestBatchV1_(body) {
+  var stores={
+    AIR:'1qJvhEOIku7sOMydfrUz0PR5dkcU0sLjv433pa1MFBcM',
+    HOZYAYUSHKA:'1f9dxXeZxkDth8h2C9GA7L7WqAr1-Ok-Oi5YtufLYOOk'
+  };
+  var client=String(body.client||'');
+  var spreadsheetId=stores[client];
+  if(!spreadsheetId)throw new Error('FBS_CLIENT_NOT_ALLOWED');
+  var batch=body.orders;
+  if(!Array.isArray(batch)||batch.length<1||batch.length>60)throw new Error('FBS_BATCH_SIZE_INVALID');
+  function str(x,limit) {
+    var s=String(x==null?'':x).slice(0,limit||300);
+    if(/^[=+@]/.test(s))s="'"+s;
+    return s;
+  }
+  function rub(x) {
+    var v=Number(x);
+    return isFinite(v)&&v>=0&&v<1000000000 ? Math.round(v)/100 : 0;
+  }
+  function human(a,b){
+    var sa={new:'Новый',confirm:'На сборке',complete:'Передан в доставку',cancel:'Отменён продавцом'};
+    var wb={waiting:'WB ожидает заказ',sorted:'Отсортирован WB',sold:'Продан',
+      canceled:'Отменён WB',canceled_by_client:'Отказ покупателя',
+      declined_by_client:'Отмена покупателем в первый час',ready_for_pickup:'Готов к получению',
+      defect:'Брак',canceled_by_missed_call:'Отмена из-за недозвона'};
+    return [a?(sa[a]||a):'',b?(wb[b]||b):''].filter(Boolean).join(' / ')||'Статус не получен';
+  }
+  var parsed=[],dedupe={};
+  batch.forEach(function(v){
+    if(!v||typeof v!=='object')throw new Error('FBS_ROW_INVALID');
+    var id=str(v.id,32);
+    if(!/^\d{6,20}$/.test(id))throw new Error('FBS_ID_INVALID');
+    if(dedupe[id])throw new Error('FBS_DUPLICATE_WITHIN_BATCH');
+    dedupe[id]=true;
+    var created=new Date(String(v.createdAt||''));
+    if(isNaN(created.getTime()))throw new Error('FBS_DATE_INVALID');
+    var ageDays=(Date.now()-created.getTime())/86400000;
+    if(ageDays>120||ageDays< -1)throw new Error('FBS_DATE_OUTSIDE_RECOVERY_WINDOW');
+    var seller=str(v.supplierStatus,90),wb=str(v.wbStatus,90);
+    if(!seller||!wb)throw new Error('FBS_MISSING_CONFIRMED_STATUS');
+    parsed.push({id:id,created:created,seller:seller,wb:wb,source:v});
+  });
+  var lock=LockService.getUserLock();
+  if(!lock.tryLock(7500))return {ok:false,retryable:true,error:'GITHUB_FBS_LOCK_BUSY'};
+  try {
+    var book=SpreadsheetApp.openById(spreadsheetId);
+    var sh=book.getSheetByName('📦 FBS Заказы');
+    var history=book.getSheetByName('🕘 История статусов');
+    if(!sh||!history)throw new Error('FBS_BOOK_SCHEMA_MISSING');
+    var head=sh.getRange(1,1,1,7).getDisplayValues()[0];
+    if(head[0]!=='ID заказа'||head[4]!=='Статус продавца'||head[5]!=='Статус WB')
+      throw new Error('FBS_COLUMN_SCHEMA_MISMATCH');
+    var last=sh.getLastRow();
+    if(last<1||last>100000)throw new Error('FBS_ROW_COUNT_UNEXPECTED');
+    var ids=last>1?sh.getRange(2,1,last-1,1).getDisplayValues():[];
+    var states=last>1?sh.getRange(2,5,last-1,2).getDisplayValues():[];
+    var byId={};
+    ids.forEach(function(v,i){if(v[0]&&!Object.prototype.hasOwnProperty.call(byId,v[0]))byId[String(v[0])]=i+2;});
+    var n=new Date(),insert=[],patch=[],events=[],already=0,updated=0,confirmed=0;
+    parsed.forEach(function(r){
+      var o=r.source,id=r.id,rowNumber=byId[id];
+      if(rowNumber) {
+        already++;
+        var old=states[rowNumber-2]||[],os=str(old[0],90),ow=str(old[1],90);
+        if(os!==r.seller||ow!==r.wb){
+          patch.push({row:rowNumber,seller:r.seller,wb:r.wb,desc:human(r.seller,r.wb)});
+          updated++;
+          events.push([n,id,str(o.article,300),r.created,os,r.seller,ow,r.wb,'',
+            'СМЕНА СТАТУСА',human(r.seller,r.wb),'GITHUB_WB_FBS']);
+        } else confirmed++;
+        return;
+      }
+      var row=Array(45).fill('');
+      var age=Math.max(0,Math.floor((n.getTime()-r.created.getTime())/60000));
+      row[0]=id;row[1]=r.created;row[2]=age;row[3]=age+' мин';
+      row[4]=r.seller;row[5]=r.wb;row[6]=human(r.seller,r.wb);
+      row[7]=str(o.article,300);row[8]=str(o.nmId,50);row[9]=rub(o.priceKopecks);
+      row[10]=str(o.supplyId,90);row[11]=str(o.warehouseId,50);row[12]=str(o.officeId,50);
+      row[13]=str(o.deliveryType,40);row[14]=str(o.cargoType,40);
+      row[15]=str(o.orderUid,150);row[16]=str(o.rid,150);row[17]=n;row[21]=n;row[22]=n;
+      row[26]=['confirm','complete'].indexOf(r.seller)!==-1?'ДА':'НЕТ';
+      row[27]='НЕТ';row[31]='НЕТ';row[32]='GITHUB_WB_FBS';
+      row[34]=str(o.comment,500);row[36]=str(o.barcode,100);row[37]=str(o.chrtId,100);
+      row[43]='❔ Не проверено';
+      insert.push(row);byId[id]=last+insert.length;
+      events.push([n,id,str(o.article,300),r.created,'',r.seller,'',r.wb,age+' мин',
+        'СНИМОК СТАТУСА','Статус WB подтверждён при импорте из GitHub','GITHUB_WB_FBS']);
+    });
+    if(insert.length){
+      var required=last+insert.length;
+      if(sh.getMaxRows()<required)sh.insertRowsAfter(sh.getMaxRows(),required-sh.getMaxRows());
+      sh.getRange(last+1,1,insert.length,45).setValues(insert);
+      var check=sh.getRange(last+1,1,insert.length,1).getDisplayValues();
+      for(var i=0;i<insert.length;i++)if(String(check[i][0])!==String(insert[i][0]))
+        throw new Error('FBS_INSERT_READBACK_FAILED');
+    }
+    patch.forEach(function(p){
+      sh.getRange(p.row,5,1,3).setValues([[p.seller,p.wb,p.desc]]);
+      sh.getRange(p.row,22).setValue(n);
+      sh.getRange(p.row,23).setValue(n);
+    });
+    if(events.length){
+      var start=history.getLastRow()+1;
+      var needed=start+events.length-1;
+      if(history.getMaxRows()<needed)
+        history.insertRowsAfter(history.getMaxRows(),needed-history.getMaxRows());
+      history.getRange(start,1,events.length,12).setValues(events);
+    }
+    return {ok:true,client:client,received:parsed.length,inserted:insert.length,
+      existing:already,changed:updated,unchanged:confirmed,events:events.length,
+      latestWorkbookOrderRows:sh.getLastRow()-1,checkedAt:n.toISOString()};
+  }finally{lock.releaseLock();}
 }
