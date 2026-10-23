@@ -54,21 +54,32 @@ def _load_status() -> dict:
 
 
 def _post_bridge(client: httpx.Client, payload: dict) -> dict:
-    # Apps Script can briefly return its auth error while a deployed version
-    # propagates. Retry only that explicit pre-write rejection; partition writes
-    # remain idempotent, and permanent credential errors still fail loudly.
-    for attempt in range(3):
+    # Apps Script may briefly return 404 while its active deployment propagates.
+    # Retry that explicit no-route response, plus narrowly defined transient
+    # gateway/rate-limit statuses. Permanent HTTP and bridge errors still fail.
+    retry_statuses = {404, 408, 429, 500, 502, 503, 504}
+    last_retry_reason = "Google Sheets bridge retry limit reached"
+    for attempt in range(4):
         response = client.post(BRIDGE_URL, json=payload)
-        if response.status_code == 401 and attempt < 2:
-            time.sleep(3 * (attempt + 1))
-            continue
+        if response.status_code == 401:
+            last_retry_reason = "HTTP 401"
+            if attempt < 3:
+                time.sleep(3 * (attempt + 1))
+                continue
+        elif response.status_code in retry_statuses:
+            last_retry_reason = f"HTTP {response.status_code}"
+            if attempt < 3:
+                time.sleep(3 * (attempt + 1))
+                continue
         response.raise_for_status()
         result = response.json()
-        if isinstance(result, dict) and result.get("error") == "UNAUTHORIZED" and attempt < 2:
-            time.sleep(3 * (attempt + 1))
-            continue
+        if isinstance(result, dict) and result.get("error") == "UNAUTHORIZED":
+            last_retry_reason = "bridge UNAUTHORIZED"
+            if attempt < 3:
+                time.sleep(3 * (attempt + 1))
+                continue
         return result
-    raise RuntimeError("Google Sheets bridge authorization retries exhausted")
+    raise RuntimeError(f"Google Sheets bridge retries exhausted: {last_retry_reason}")
 
 
 def _publish() -> None:
