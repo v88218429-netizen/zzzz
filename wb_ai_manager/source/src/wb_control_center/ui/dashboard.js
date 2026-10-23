@@ -896,6 +896,17 @@ function renderInventory(){
     if(Number(physicalMeta.incomplete_mapping_groups)>0) issues.push(`Не все карточки распределены по складским товарам в ${num(physicalMeta.incomplete_mapping_groups)} группах.`);
     if(Number(physicalMeta.incomplete_demand_groups)>0) issues.push(`По ${num(physicalMeta.incomplete_demand_groups)} складским товарам темп неполный.`);
     if(issues.length) inventoryHtml+=`<div class="inventory-source-warning"><strong>Дефицит и риск неликвида пока не подтверждены</strong><p>${esc(issues.join(' '))} Значения ниже показаны справочно на дату источника.</p></div>`;
+    const componentIssues=(physicalMeta.unmapped_examples||[])
+      .filter(x=>Array.isArray(x.unresolved_components)&&x.unresolved_components.length)
+      .slice(0,3)
+      .map(x=>{
+        const details=x.unresolved_components.map(issue=>{
+          const candidates=Array.isArray(issue.candidate_physical_positions)&&issue.candidate_physical_positions.length?issue.candidate_physical_positions.join(', '):'';
+          return `${issue.component||'компонент'}: ${issue.reason||'нет однозначной связи'}${candidates?` (${candidates})`:''}`;
+        }).join('; ');
+        return `<p><strong>${esc(x.name||'Набор')}</strong>: ${esc(details)}</p>`;
+      }).join('');
+    if(componentIssues) inventoryHtml+=`<div class="inventory-source-warning"><strong>Набор не распределён полностью по складским позициям</strong><p>Проверьте перечисленные компоненты и их точные складские связи.</p>${componentIssues}</div>`;
     if(!physicalRows.length) inventoryHtml+=`<div class="inventory-source-warning"><strong>Физические товары не сопоставлены</strong><p>В источнике нет строк с общим остатком ФФ.</p></div>`;
   }
   if(visible.length){
