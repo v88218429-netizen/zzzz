@@ -16,7 +16,7 @@ BASE = "https://marketplace-api.wildberries.ru"
 BRIDGE_URL = os.environ["GOOGLE_BRIDGE_URL"]
 BRIDGE_KEY = os.environ["GOOGLE_BRIDGE_KEY"]
 LOOKBACK_DAYS = max(1, min(7, int(os.environ.get("FBS_LOOKBACK_DAYS", "7"))))
-BATCH_SIZE = 10
+BATCH_SIZE = 1000
 TIMEOUT = 55
 
 
@@ -175,22 +175,29 @@ def ingest(client: str, orders: list[dict]) -> dict:
 def main() -> None:
     if len(BRIDGE_KEY) < 16:
         raise RuntimeError("BRIDGE_AUTH_NOT_CONFIGURED")
+    selected = os.environ.get("FBS_CLIENT", "").strip().upper()
+    clients = {
+        "AIR": "WB_API_TOKEN_AA",
+        "HOZYAYUSHKA": "WB_API_TOKEN_YV",
+    }
+    if selected and selected not in clients:
+        raise RuntimeError("FBS_CLIENT_NOT_ALLOWED")
+    targets = [(selected, clients[selected])] if selected else list(clients.items())
     wait_bridge()
     summary = {}
-    for client, key in [("AIR", "WB_API_TOKEN_AA"), ("HOZYAYUSHKA", "WB_API_TOKEN_YV")]:
+    for client, key in targets:
         token = os.environ.get(key, "")
         if len(token) < 30:
-            raise RuntimeError(client+":WB_TOKEN_MISSING")
+            raise RuntimeError(client + ":WB_TOKEN_MISSING")
         orders = collect(token)
         if not orders:
             summary[client] = {"received": 0, "inserted": 0, "existing": 0}
             continue
         counts = ingest(client, orders)
         if counts["received"] != len(orders):
-            raise RuntimeError(client+":ROWS_UNACCOUNTED")
+            raise RuntimeError(client + ":ROWS_UNACCOUNTED")
         summary[client] = counts
-    print("FBS_GITHUB_SYNC_SUMMARY="+json.dumps(summary,ensure_ascii=False), flush=True)
-
+    print("FBS_GITHUB_SYNC_SUMMARY=" + json.dumps(summary, ensure_ascii=False), flush=True)
 
 if __name__ == "__main__":
     main()
