@@ -897,7 +897,7 @@ function renderInventory(){
     if(Number(physicalMeta.incomplete_demand_groups)>0) issues.push(`По ${num(physicalMeta.incomplete_demand_groups)} складским товарам темп неполный.`);
     if(issues.length) inventoryHtml+=`<div class="inventory-source-warning"><strong>Дефицит и риск неликвида пока не подтверждены</strong><p>${esc(issues.join(' '))} Значения ниже показаны справочно на дату источника.</p></div>`;
     const componentIssues=(physicalMeta.unmapped_examples||[])
-      .filter(x=>Array.isArray(x.unresolved_components)&&x.unresolved_components.length)
+      .filter(x=>String(x.name||'').includes('+')&&Array.isArray(x.unresolved_components)&&x.unresolved_components.length)
       .slice(0,3)
       .map(x=>{
         const details=x.unresolved_components.map(issue=>{
