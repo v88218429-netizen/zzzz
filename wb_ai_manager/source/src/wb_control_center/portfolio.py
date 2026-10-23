@@ -995,6 +995,7 @@ class PortfolioService:
                                 "sku": str(listing_id or ""),
                                 "name": str(name or ""),
                                 "reason": unresolved[0].get("reason") if unresolved else "нет точного складского артикула",
+                                "unresolved_components": unresolved,
                             })
                         for component in recipe:
                             target = physical_by_name.get(str(component.get("physical_position") or ""))
