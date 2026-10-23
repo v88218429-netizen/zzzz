@@ -125,6 +125,61 @@ def collect(token: str) -> list[dict]:
             })
     return out
 
+def wait_bridge() -> None:
+    for attempt in range(1, 9):
+        try:
+            data = request(BRIDGE_URL, body={"token": BRIDGE_KEY, "action": "fbs_targets_health"})
+            if data.get("ok") is True and data.get("action") == "fbs_targets_health":
+                print("FBS_AUTHENTICATED_BRIDGE_READY=yes", flush=True)
+                return
+        except RuntimeError:
+            pass
+        time.sleep(10)
+    raise RuntimeError("FBS_BRIDGE_NOT_DEPLOYED")
+
+
+def ingest(client: str, orders: list[dict]) -> dict:
+    totals = {"received": 0, "inserted": 0, "existing": 0, "changed": 0, "events": 0}
+    for p in range(0, len(orders), BATCH_SIZE):
+        batch = orders[p:p+BATCH_SIZE]
+        payload = {"token": BRIDGE_KEY, "action": "fbs_ingest_batch",
+                   "client": client, "orders": batch}
+        for attempt in range(1, 5):
+            try:
+                obj = request(BRIDGE_URL, body=payload)
+                result = obj.get("result") or {}
+                if obj.get("ok") and obj.get("action") == "fbs_ingest_batch" and result.get("ok"):
+                    break
+                if not result.get("retryable") or attempt == 4:
+                    details = str(obj.get("error") or result.get("error") or "")
+                    candidates = [
+                        "FBS_BATCH_SIZE_INVALID", "FBS_ROW_COUNT_UNEXPECTED",
+                        "FBS_DATE_OUTSIDE_RECOVERY_WINDOW", "FBS_ID_INVALID",
+                        "FBS_MISSING_CONFIRMED_STATUS", "FBS_DATE_INVALID",
+                        "FBS_COLUMN_SCHEMA_MISMATCH", "FBS_INSERT_READBACK_FAILED",
+                        "FBS_BOOK_SCHEMA_MISSING", "FBS_CLIENT_NOT_ALLOWED",
+                        "GITHUB_FBS_LOCK_BUSY", "Service Spreadsheets failed",
+                        "You do not have permission", "Exceeded maximum execution",
+                        "Service invoked too many times", "Exception:", "TypeError:"
+                    ]
+                    reason = next((tag.replace(" ", "_") for tag in candidates if tag in details),
+                                  "UNCLASSIFIED_SCRIPT_REJECTION")
+                    print("FBS_BRIDGE_REJECT_CLASS=" + reason, flush=True)
+                    raise RuntimeError("INGEST_REJECTED:" + reason)
+            except RuntimeError:
+                if attempt == 4:
+                    raise
+            time.sleep(5 * attempt)
+        for field in totals:
+            totals[field] += int(result.get(field, 0))
+        print(json.dumps({"store":client, "batch":p//BATCH_SIZE+1,
+              "received":result.get("received"),"inserted":result.get("inserted"),
+              "changed":result.get("changed")}, ensure_ascii=False), flush=True)
+    return totals
+
+
+
+
 def main() -> None:
     if len(BRIDGE_KEY) < 16:
         raise RuntimeError("BRIDGE_AUTH_NOT_CONFIGURED")
