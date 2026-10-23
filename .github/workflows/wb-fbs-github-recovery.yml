@@ -2,24 +2,31 @@ name: WB FBS GitHub recovery
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: "*/30 * * * *"
   push:
     branches: [mainggg]
     paths:
+      - ".github/workflows/wb-fbs-github-recovery.yml"
       - "wb_worker/github_fbs_recovery.py"
 
 permissions:
   contents: read
 
-concurrency:
-  group: wb-fbs-github-recovery
-  cancel-in-progress: false
-
 jobs:
   recover:
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        client: [AIR, HOZYAYUSHKA]
+    concurrency:
+      group: wb-fbs-github-recovery-${{ matrix.client }}
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
+      FBS_CLIENT: ${{ matrix.client }}
       WB_API_TOKEN_AA: ${{ secrets.WB_API_TOKEN_AA }}
       WB_API_TOKEN_YV: ${{ secrets.WB_API_TOKEN_YV }}
       GOOGLE_BRIDGE_KEY: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
@@ -32,14 +39,19 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Syntax and credentials availability
+      - name: Check source and credentials
         shell: bash
         run: |
           set -euo pipefail
           python -m py_compile wb_worker/github_fbs_recovery.py
-          test -n "$WB_API_TOKEN_AA"
-          test -n "$WB_API_TOKEN_YV"
           test -n "$GOOGLE_BRIDGE_KEY"
-      - name: Reconcile AIR and Hozyayushka from WB to actual FBS Sheets
+          if [[ "$FBS_CLIENT" == "AIR" ]]; then
+            test -n "$WB_API_TOKEN_AA"
+          elif [[ "$FBS_CLIENT" == "HOZYAYUSHKA" ]]; then
+            test -n "$WB_API_TOKEN_YV"
+          else
+            exit 2
+          fi
+      - name: Reconcile ${{ matrix.client }} from WB to its FBS book
         shell: bash
         run: python wb_worker/github_fbs_recovery.py
