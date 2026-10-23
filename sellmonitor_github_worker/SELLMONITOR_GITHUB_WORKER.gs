@@ -5026,6 +5026,10 @@ function doPost(e) {
       });
     }
 
+    if (action === 'fbs_targets_health') {
+      return sellmonitorGithubWebJson_({ok:true,action:action,result:sellmonitorGithubFbsTargetHealthV1_()});
+    }
+
     if (action === 'health') {
       return sellmonitorGithubWebJson_({
         ok: true,
@@ -5107,4 +5111,33 @@ function doPost(e) {
       error: String(err && (err.stack || err.message) ? (err.stack || err.message) : err)
     });
   }
+}
+
+
+/** GitHub FBS migration preflight: read-only and restricted to three known live books. */
+function sellmonitorGithubFbsTargetHealthV1_() {
+  var targets=[
+    {client:'SANYCH',id:'1v0qt-thJDOw3tLFdZVGhdXJdBM8rDPRz9mHlcHmuuyM'},
+    {client:'AIR',id:'1qJvhEOIku7sOMydfrUz0PR5dkcU0sLjv433pa1MFBcM'},
+    {client:'HOZYAYUSHKA',id:'1f9dxXeZxkDth8h2C9GA7L7WqAr1-Ok-Oi5YtufLYOOk'}
+  ];
+  var results=[];
+  targets.forEach(function(t) {
+    try {
+      var ss=SpreadsheetApp.openById(t.id);
+      var orders=ss.getSheetByName('📦 FBS Заказы');
+      if(!orders)throw new Error('ORDERS_TAB_MISSING');
+      var n=orders.getLastRow();
+      var head=orders.getRange('A1:F1').getDisplayValues()[0];
+      if(String(head[0]||'').indexOf('ID')<0)throw new Error('ORDERS_SCHEMA_MISMATCH');
+      var latest=n>1?orders.getRange(n,1,1,6).getDisplayValues()[0]:[];
+      results.push({client:t.client,accessible:true,ordersRows:Math.max(0,n-1),
+        latestOrderDate:String(latest[1]||''),hasLatestOrderId:!!latest[0],
+        columns:Number(orders.getMaxColumns()),analyticsExists:!!ss.getSheetByName('📈 Аналитика')});
+    }catch(e){
+      results.push({client:t.client,accessible:false,reason:'SPREADSHEET_ACCESS_OR_SCHEMA_ERROR',
+        errorType:String(e&&e.name||'Error')});
+    }
+  });
+  return {ok:results.every(function(x){return x.accessible;}),checkedAt:new Date().toISOString(),results:results};
 }
