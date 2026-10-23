@@ -16,7 +16,7 @@ BASE = "https://marketplace-api.wildberries.ru"
 BRIDGE_URL = os.environ["GOOGLE_BRIDGE_URL"]
 BRIDGE_KEY = os.environ["GOOGLE_BRIDGE_KEY"]
 LOOKBACK_DAYS = max(1, min(7, int(os.environ.get("FBS_LOOKBACK_DAYS", "7"))))
-BATCH_SIZE = 50
+BATCH_SIZE = 10
 TIMEOUT = 55
 
 
@@ -145,7 +145,21 @@ def ingest(client: str, orders: list[dict]) -> dict:
                 if obj.get("ok") and obj.get("action") == "fbs_ingest_batch" and result.get("ok"):
                     break
                 if not result.get("retryable") or attempt == 4:
-                    raise RuntimeError("INGEST_REJECTED")
+                    details = str(obj.get("error") or result.get("error") or "")
+                    candidates = [
+                        "FBS_BATCH_SIZE_INVALID", "FBS_ROW_COUNT_UNEXPECTED",
+                        "FBS_DATE_OUTSIDE_RECOVERY_WINDOW", "FBS_ID_INVALID",
+                        "FBS_MISSING_CONFIRMED_STATUS", "FBS_DATE_INVALID",
+                        "FBS_COLUMN_SCHEMA_MISMATCH", "FBS_INSERT_READBACK_FAILED",
+                        "FBS_BOOK_SCHEMA_MISSING", "FBS_CLIENT_NOT_ALLOWED",
+                        "GITHUB_FBS_LOCK_BUSY", "Service Spreadsheets failed",
+                        "You do not have permission", "Exceeded maximum execution",
+                        "Service invoked too many times", "Exception:", "TypeError:"
+                    ]
+                    reason = next((tag.replace(" ", "_") for tag in candidates if tag in details),
+                                  "UNCLASSIFIED_SCRIPT_REJECTION")
+                    print("FBS_BRIDGE_REJECT_CLASS=" + reason, flush=True)
+                    raise RuntimeError("INGEST_REJECTED:" + reason)
             except RuntimeError:
                 if attempt == 4:
                     raise
