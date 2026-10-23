@@ -1033,7 +1033,7 @@ class PortfolioService:
                         "marketplace_listings": len(products) + len(ozon_products),
                         "mapped_listings": len(products) + len(ozon_products) - len(unmapped_listings),
                         "unmapped_listings": len(unmapped_listings),
-                        "unmapped_examples": unmapped_listings[:30],
+                        "unmapped_examples": ([x for x in unmapped_listings if "+" in str(x.get("name") or "")] + [x for x in unmapped_listings if "+" not in str(x.get("name") or "")])[:30],
                     }
                 if groups:
                     own["product_groups"] = list(groups.values())
