@@ -896,6 +896,7 @@ class PortfolioService:
                             "subject":subject,
                             "physical_position": current_physical_position or None,
                             "physical_multiplier":self._num(rec.get("кофф")),
+                            "physical_multiplier_source":"Сводная · кофф",
                             "wb_orders_qty":self._num(rec.get("Заказы, шт")),
                             "ozon_orders_qty":self._num(rec.get("Заказы Ozon")),
                             "wb_fbs_stock":wb_stock,
@@ -938,6 +939,7 @@ class PortfolioService:
                             "cabinet":cabinet,
                             "physical_position":current_physical_position or None,
                             "physical_multiplier":self._num(rec.get("кофф")),
+                            "physical_multiplier_source":"Сводная · кофф",
                             # Кабинет 2 has only a manual product list here; its stock
                             # and order rates are not provided by the current Ozon feeds.
                             "stock":None if cabinet2_unverified else ozon_stock,
@@ -973,6 +975,7 @@ class PortfolioService:
                         recipe, unresolved = self._physical_components(name, preferred, physical_inventory, products + ozon_products, listing.get("physical_multiplier"))
                         listing["physical_components"] = recipe
                         listing["physical_mapping_complete"] = bool(recipe) and not unresolved
+                        listing["physical_mapping_source"] = "Сводная · точные строки + кофф"
                         if len(recipe) == 1:
                             listing["physical_position"] = recipe[0]["physical_position"]
                         for issue in unresolved:
