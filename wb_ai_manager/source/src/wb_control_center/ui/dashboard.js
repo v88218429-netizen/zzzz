@@ -912,7 +912,7 @@ function renderInventory(){
       const linkedText=usingPhysical?(linked.length?`Карточки WB: ${num(counts.WB||0)} · Ozon: ${num(counts.Ozon||0)} · ${linked.slice(0,3).join(', ')}${linked.length>3?` и ещё ${linked.length-3}`:''}`:'карточки не связаны'):'';
       let tag=category==='critical'?['bad','Дефицит']:category==='low'?['warn','Низкий запас']:category==='overstock'?['warn','Избыток']:category==='unknown'?['neutral','Нет темпа']:['ok','Норма'];
       if(usingPhysical&&!eligible){
-        tag=physicalMeta.source_fresh===false?['neutral','Срез устарел']:physicalMeta.all_store_scope_complete!==true?['neutral','Охват неполный']:r.mapping_complete!==true?['neutral','Карточки не связаны']:['neutral','Темп неполный'];
+        tag=physicalMeta.source_fresh===false?['neutral','Срез устарел']:physicalMeta.all_store_scope_complete!==true?['neutral','Охват неполный']:physicalMeta.global_mapping_complete!==true||r.mapping_complete!==true?['neutral','Связка неполная']:['neutral','Темп неполный'];
       }
       const clickAttr=id?`data-entity-id="${esc(id)}"`:'';
       const coverLabel=usingPhysical&&!eligible
