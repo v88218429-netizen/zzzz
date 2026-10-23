@@ -2,16 +2,10 @@ name: WB FBS GitHub recovery
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "*/15 * * * *"
-  workflow_run:
-    workflows: ["Sellmonitor GitHub worker deploy"]
-    types: [completed]
   push:
     branches: [mainggg]
     paths:
       - "wb_worker/github_fbs_recovery.py"
-      - ".github/workflows/wb-fbs-github-recovery.yml"
 
 permissions:
   contents: read
