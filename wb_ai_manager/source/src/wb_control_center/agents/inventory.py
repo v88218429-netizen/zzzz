@@ -77,14 +77,15 @@ class InventoryAgent(BaseAgent):
             qty = first_number(row, {"quantity", "qty"})
             sales_by_nm[nm] += abs(qty) if qty not in (None, 0) else 1.0
 
-        # The physical product row is the stock-planning unit. Its safe K2/FF
-        # balance and demand already combine the listing variants in the source
-        # table, so a 2/4/6 kg listing does not become three separate supply alarms.
+        # Read the physical article from the FF total, but treat old or partial
+        # snapshots as references only. Marketplace card stock stays separate.
         settings = getattr(self.ctx, "settings", None)
         portfolio = PortfolioService(settings).snapshot() if settings is not None else {}
         own = portfolio.get("own_27") or {}
         own_health = next((x for x in (portfolio.get("source_health") or []) if isinstance(x, dict) and x.get("id") == "own_27"), {})
-        source_updated_at = own_health.get("bridge_modified_at") or own.get("source_updated_at") or own_health.get("freshness")
+        # The stock snapshot date is more meaningful than the bridge refresh time:
+        # a newly generated file can still contain month-old balances.
+        source_updated_at = own.get("ff_snapshot_date") or own_health.get("bridge_modified_at") or own.get("source_updated_at") or own_health.get("freshness")
         source_dt = _source_datetime(source_updated_at)
         max_source_age_hours = max(1.0, float(cfg.get("source_max_age_hours", 72)))
         source_age_hours = (datetime.now(timezone.utc) - source_dt).total_seconds() / 3600 if source_dt else None
@@ -97,75 +98,141 @@ class InventoryAgent(BaseAgent):
             if isinstance(item, dict) and item.get("sku")
         }
 
+        # A physical stock signal is valid only after the operator/source has
+        # explicitly confirmed that every shop/cabinet is included. No implicit
+        # assumption that one workbook covers the whole business.
+        all_store_scope_complete = (
+            own.get("all_store_scope_complete") is True
+            or portfolio.get("all_store_scope_complete") is True
+        )
+        scope_note = str(
+            own.get("inventory_scope_note")
+            or portfolio.get("inventory_scope_note")
+            or "Охват всех магазинов и кабинетов не подтверждён."
+        )
+
         critical = float(cfg.get("critical_days_cover", 2))
         warning = float(cfg.get("warning_days_cover", 5))
         over = float(cfg.get("overstock_days_cover", 75))
 
         physical_coverage: dict[str, Any] = {}
         physical_member_skus: set[str] = set()
-        for index, item in enumerate((own.get("physical_inventory") or []) if trusted_current else []):
-            if not isinstance(item, dict):
-                continue
+        physical_rows = [
+            item for item in (own.get("physical_inventory") or [])
+            if isinstance(item, dict)
+        ]
+        for index, item in enumerate(physical_rows):
             name = str(item.get("physical_position") or "").strip()
+            if not name or item.get("is_composite"):
+                # A set is a sales package, not a separate warehouse article.
+                continue
             members = [
-                {"sku": str(member.get("sku") or ""), "name": str(member.get("name") or "")}
-                for member in (item.get("member_skus") or [])
+                member for member in (item.get("member_skus") or [])
                 if isinstance(member, dict) and member.get("sku")
             ]
-            if not name or (not members and all(item.get(key) is None for key in ("k2_safe_stock", "ff_stock", "ivanovo_stock", "orders_per_day"))):
-                continue
+            for member in members:
+                if str(member.get("platform") or "").upper() == "WB":
+                    physical_member_skus.add(str(member.get("sku")))
 
-            stock = None
-            stock_source = ""
-            for key, label in (
-                ("k2_safe_stock", "Сводная · К2 ФФ SAFE"),
-                ("ff_stock", "Сводная · Остатки ФФ"),
-                ("ivanovo_stock", "Сводная · ФФ Иваново"),
-            ):
-                candidate = _float_or_none(item.get(key))
-                if candidate is not None:
-                    stock = max(0.0, candidate)
-                    stock_source = label
-                    break
-            daily = _float_or_none(item.get("orders_per_day"))
-            if daily is not None:
-                daily = max(0.0, daily)
+            # Only the combined physical warehouse balance belongs here.
+            # K2 SAFE is a subset and must never replace Остатки ФФ.
+            stock = _float_or_none(item.get("ff_stock"))
+            stock = max(0.0, stock) if stock is not None else None
+            stock_source = "Сводная · Остатки ФФ (К2 + Иваново)" if stock is not None else "Нет подтверждённого общего остатка ФФ"
+
+            daily_by_platform: dict[str, float] = defaultdict(float)
+            marketplace_stock_units: dict[str, float] = defaultdict(float)
+            marketplace_counts: dict[str, int] = defaultdict(int)
+            stock_pool_seen: set[str] = set()
+            mapping_complete = bool(members) and not bool(item.get("unresolved_components"))
+            demand_coverage_complete = bool(members)
+            known_demand_members = 0
+            for member in members:
+                platform = str(member.get("platform") or "Неизвестный кабинет")
+                units = _float_or_none(member.get("units_per_order"))
+                rate = _float_or_none(member.get("orders_per_day"))
+                if member.get("mapping_complete") is False or units is None or units <= 0:
+                    mapping_complete = False
+                if units is None or units <= 0 or rate is None:
+                    demand_coverage_complete = False
+                else:
+                    daily_by_platform[platform] += max(0.0, rate) * units
+                    known_demand_members += 1
+                if platform.upper() == "WB":
+                    marketplace_counts["WB"] += 1
+                    for source_key, pool_name in (("stock", "WB FBS"), ("fbw_stock", "WB FBW")):
+                        quantity = _float_or_none(member.get(source_key))
+                        if quantity is not None and units is not None and units > 0:
+                            marketplace_stock_units[pool_name] += max(0.0, quantity) * units
+                            stock_pool_seen.add(pool_name)
+                elif platform.lower().startswith("ozon"):
+                    marketplace_counts["Ozon"] += 1
+                    quantity = _float_or_none(member.get("stock"))
+                    if quantity is not None and units is not None and units > 0:
+                        marketplace_stock_units["Ozon FBS"] += max(0.0, quantity) * units
+                        stock_pool_seen.add("Ozon FBS")
+
+            if known_demand_members == 0:
+                demand_coverage_complete = False
+            if len(members) != known_demand_members:
+                demand_coverage_complete = False
+            daily = sum(daily_by_platform.values()) if known_demand_members else None
             days = stock / daily if stock is not None and daily is not None and daily > 0 else None
+            is_composite = bool(item.get("is_composite"))
+            signal_eligible = bool(
+                trusted_current
+                and all_store_scope_complete
+                and mapping_complete
+                and demand_coverage_complete
+                and stock is not None
+                and not is_composite
+            )
+            no_demand = bool(signal_eligible and stock is not None and stock > 0 and daily == 0)
             orders_qty = _float_or_none(item.get("orders_qty"))
-            no_demand = bool(stock is not None and daily == 0 and orders_qty is not None and orders_qty <= 0)
             sheet_row = item.get("sheet_row")
             key = f"physical:{sheet_row if sheet_row is not None else index}"
-            physical_coverage[key] = {
+            row = {
                 "scope": "physical_product",
                 "source_updated_at": source_updated_at,
+                "source_fresh": source_fresh,
                 "physical_position": name,
+                "is_composite": is_composite,
                 "member_skus": members,
+                "marketplace_counts": dict(marketplace_counts),
+                "marketplace_stock_units": dict(marketplace_stock_units) if stock_pool_seen else {},
                 "stock": stock,
-                "stock_source": stock_source or "Источник физического остатка не указан",
-                "stock_verified": stock is not None,
+                "stock_source": stock_source,
+                "stock_available": stock is not None,
+                "stock_verified": bool(stock is not None and source_fresh),
                 "daily_sales": daily,
-                "velocity_source": "Сводная · темп физического товара" if daily is not None else "Нет подтверждённого темпа физического товара",
+                "daily_demand_by_platform": dict(daily_by_platform),
+                "velocity_source": "Заказы по карточкам, пересчитанные в единицы складского артикула" if daily is not None else "Нет полного темпа по связанным карточкам",
                 "days_cover": days,
+                "reference_days_cover": days,
                 "orders_qty": orders_qty,
                 "no_demand": no_demand,
-                "stock_scope": "current_snapshot",
-                "velocity_scope": "source_physical_product",
+                "signal_eligible": signal_eligible,
+                "mapping_complete": mapping_complete,
+                "demand_coverage_complete": demand_coverage_complete,
+                "all_store_scope_complete": all_store_scope_complete,
+                "scope_note": scope_note,
+                "stock_scope": "current_snapshot" if source_fresh else "historical_snapshot",
+                "velocity_scope": "weighted_mapped_listings",
                 "sheet_row": sheet_row,
                 "planned_order_qty": item.get("planned_order_qty"),
                 "supplier_debt_qty": item.get("supplier_debt_qty"),
                 "order_status": item.get("order_status"),
+                "unresolved_components": item.get("unresolved_components") or [],
             }
-            if stock is not None:
-                physical_member_skus.update(member["sku"] for member in members)
-            row = physical_coverage[key]
-            if stock is None:
+            physical_coverage[key] = row
+            if stock is None or not signal_eligible:
                 continue
-            if row.get("no_demand") and stock > 0:
+            if row.get("no_demand"):
                 out.events.append(self.event(
                     "warning",
                     f"physical_no_demand:{key}",
                     "Запас без заказов · проверить риск неликвида",
-                    f"{name}: остаток {stock:.0f}, заказов в источнике нет.",
+                    f"{name}: остаток {stock:.0f}, подтверждённых заказов нет.",
                     row,
                 ))
                 continue
@@ -176,7 +243,7 @@ class InventoryAgent(BaseAgent):
                     "critical",
                     f"physical_stockout:{key}",
                     "Критический остаток физического товара",
-                    f"{name}: запас примерно на {days:.1f} дня (остаток {stock:.0f}; темп {daily:.1f} физических единиц/день).",
+                    f"{name}: запас примерно на {days:.1f} дня (остаток {stock:.0f}; расход {daily:.1f} складских единиц/день).",
                     row,
                 ))
             elif days <= warning:
@@ -267,11 +334,28 @@ class InventoryAgent(BaseAgent):
                 "До подключения свежей «Сводной» остаток WB statistics не считается подтверждённым остатком физического товара или FBS.",
                 {"source": "WB statistics", "required_source": "Сводная · К2 ФФ SAFE / Остатки WB FBS"},
             ))
+        non_composite_rows = [x for x in physical_coverage.values() if x.get("scope") == "physical_product"]
+        inventory_mapping = own.get("inventory_mapping") or {}
         physical_coverage["_meta"] = {
             "source_updated_at": source_updated_at,
             "source_fresh": source_fresh,
             "source_age_hours": source_age_hours,
             "source_max_age_hours": max_source_age_hours,
+            "all_store_scope_complete": all_store_scope_complete,
+            "scope_note": scope_note,
+            "unmapped_listings": inventory_mapping.get("unmapped_listings"),
+            "mapped_listings": inventory_mapping.get("mapped_listings"),
+            "source_listing_total": inventory_mapping.get("marketplace_listings"),
+            "physical_groups": len(non_composite_rows),
+            "incomplete_mapping_groups": sum(not x.get("mapping_complete") for x in non_composite_rows),
+            "incomplete_demand_groups": sum(not x.get("demand_coverage_complete") for x in non_composite_rows),
+            "signal_eligible_groups": sum(bool(x.get("signal_eligible")) for x in non_composite_rows),
+            "coverage_complete": bool(
+                trusted_current
+                and all_store_scope_complete
+                and non_composite_rows
+                and all(x.get("mapping_complete") and x.get("demand_coverage_complete") for x in non_composite_rows)
+            ),
         }
         out.snapshots.append(("coverage", coverage))
         out.snapshots.append(("physical_coverage", physical_coverage))
