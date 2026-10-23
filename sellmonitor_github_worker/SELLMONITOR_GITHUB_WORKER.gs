@@ -5191,9 +5191,9 @@ function sellmonitorGithubFbsIngestBatchV1_(body) {
     if(!seller||!wb)throw new Error('FBS_MISSING_CONFIRMED_STATUS');
     parsed.push({id:id,created:created,seller:seller,wb:wb,source:v});
   });
-  var lock=LockService.getUserLock();
-  if(!lock.tryLock(7500))return {ok:false,retryable:true,error:'GITHUB_FBS_LOCK_BUSY'};
-  try {
+  // GitHub recovery workflow serializes all calls to this endpoint. Do not
+  // share the adapter-wide UserLock with the independent finance sync.
+
     var book=SpreadsheetApp.openById(spreadsheetId);
     var sh=book.getSheetByName('📦 FBS Заказы');
     var history=book.getSheetByName('🕘 История статусов');
@@ -5260,5 +5260,4 @@ function sellmonitorGithubFbsIngestBatchV1_(body) {
     return {ok:true,client:client,received:parsed.length,inserted:insert.length,
       existing:already,changed:updated,unchanged:confirmed,events:events.length,
       latestWorkbookOrderRows:sh.getLastRow()-1,checkedAt:n.toISOString()};
-  }finally{lock.releaseLock();}
 }
