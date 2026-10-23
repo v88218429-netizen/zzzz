@@ -110,6 +110,10 @@ class InventoryAgent(BaseAgent):
             own.get("all_store_scope_complete") is True
             or portfolio.get("all_store_scope_complete") is True
         )
+        inventory_mapping = own.get("inventory_mapping") or {}
+        global_mapping_complete = (
+            _float_or_none(inventory_mapping.get("unmapped_listings")) == 0
+        )
         scope_note = str(
             own.get("inventory_scope_note")
             or portfolio.get("inventory_scope_note")
@@ -209,6 +213,7 @@ class InventoryAgent(BaseAgent):
             signal_eligible = bool(
                 trusted_current
                 and all_store_scope_complete
+                and global_mapping_complete
                 and mapping_complete
                 and demand_coverage_complete
                 and stock is not None
@@ -369,6 +374,7 @@ class InventoryAgent(BaseAgent):
             "source_age_hours": source_age_hours,
             "source_max_age_hours": max_source_age_hours,
             "all_store_scope_complete": all_store_scope_complete,
+            "global_mapping_complete": global_mapping_complete,
             "scope_note": scope_note,
             "unmapped_listings": inventory_mapping.get("unmapped_listings"),
             "mapped_listings": inventory_mapping.get("mapped_listings"),
@@ -380,6 +386,7 @@ class InventoryAgent(BaseAgent):
             "coverage_complete": bool(
                 trusted_current
                 and all_store_scope_complete
+                and global_mapping_complete
                 and non_composite_rows
                 and all(x.get("mapping_complete") and x.get("demand_coverage_complete") for x in non_composite_rows)
             ),
