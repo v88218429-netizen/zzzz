@@ -444,6 +444,7 @@ class InventoryAgent(BaseAgent):
             "global_mapping_complete": global_mapping_complete,
             "scope_note": scope_note,
             "unmapped_listings": inventory_mapping.get("unmapped_listings"),
+            "unmapped_examples": inventory_mapping.get("unmapped_examples") or [],
             "mapped_listings": inventory_mapping.get("mapped_listings"),
             "source_listing_total": inventory_mapping.get("marketplace_listings"),
             "physical_groups": len(non_composite_rows),
