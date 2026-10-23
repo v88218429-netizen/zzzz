@@ -24,7 +24,7 @@ jobs:
       group: wb-fbs-github-recovery-${{ matrix.client }}
       cancel-in-progress: false
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 90
     env:
       FBS_CLIENT: ${{ matrix.client }}
       WB_API_TOKEN_AA: ${{ secrets.WB_API_TOKEN_AA }}
