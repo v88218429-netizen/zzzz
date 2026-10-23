@@ -919,7 +919,7 @@ function renderInventory(){
         : r.no_demand===true?'Нет заказов в источнике':Number.isFinite(days)?`${num(days,1)} дня`:'Нет подтверждённого темпа';
       const demandText=r.daily_sales===null?'нет данных':`${num(r.daily_sales,1)} складских единиц/день`;
       const pools=r.marketplace_stock_units||{};
-      const poolText=Object.keys(pools).length?` · остатки карточек отдельно: ${Object.entries(pools).map(([k,v])=>`${k} ${num(v)} складских единиц`).join(', ')`:'';
+      const poolText=Object.keys(pools).length?` · остатки карточек отдельно: ${Object.entries(pools).map(([k,v])=>`${k} ${num(v)} складских единиц`).join(', ')}`:'';
       return `<button type="button" class="inventory-item ${cls} interactive-card" ${clickAttr}><div class="inventory-top"><div><strong>${esc(title)}</strong><small>${usingPhysical?`складской артикул · WB карточек: ${num(counts.WB||0)} · Ozon карточек: ${num(counts.Ozon||0)}`:entityMeta(id)}</small></div><span class="status-tag ${tag[0]}">${tag[1]}</span></div><div class="inventory-days">${coverLabel}</div><div class="inventory-meta">Остаток ФФ ${r.stock===null?'нет данных':num(r.stock)} · расход ${demandText} · ${esc(r.stock_source||'источник остатка не указан')}${usingPhysical&&!physicalMeta.source_fresh&&r.source_updated_at?` · дата среза: ${esc(String(r.source_updated_at))}`:''}${poolText}${r.velocity_source?` · темп: ${esc(r.velocity_source)}`:''}${linkedText?`<br>${esc(linkedText)}`:''}</div><div class="cover-bar"><i style="width:${width}%"></i></div></button>`;
     }).join('');
   }else if(usingPhysical&&!physicalSnap){
