@@ -358,28 +358,20 @@ class PortfolioService:
         return ("кг", amount)
 
     @classmethod
-    def _physical_units_per_package(cls, physical_article: Any, listing_article: Any) -> int | None:
-        base = str(physical_article or "").strip()
-        listing = str(listing_article or "").strip()
-        base_families = cls._economics_families(base)
-        listing_families = cls._economics_families(listing)
-        if not base_families or not listing_families or base_families.isdisjoint(listing_families):
+    def _physical_component_key(cls, value: Any) -> tuple[str, str, float, int, frozenset[str]] | None:
+        """Return a strict identity for a component named in a stock-table bundle row."""
+        text = str(value or "").strip()
+        families = cls._economics_families(text)
+        measure = cls._physical_measure(text)
+        if len(families) != 1 or not measure:
             return None
-
-        base_measure = cls._physical_measure(base)
-        listing_measure = cls._physical_measure(listing)
-        ratio = 1.0
-        if base_measure and listing_measure:
-            if base_measure[0] != listing_measure[0] or base_measure[1] <= 0:
-                return None
-            ratio = listing_measure[1] / base_measure[1]
-        # The parent row is an explicit mapping in «Сводной». If one name omits
-        # its size, retain the article link but do not infer a size ratio.
-        package_count = cls._economics_pack_count(listing) or 1
-        units = ratio * package_count
-        if units <= 0 or abs(units - round(units)) > 1e-6:
-            return None
-        return int(round(units))
+        return (
+            next(iter(families)),
+            measure[0],
+            round(measure[1], 6),
+            cls._economics_pack_count(text) or 1,
+            frozenset(cls._economics_traits(text)),
+        )
 
     @classmethod
     def _physical_components(
@@ -387,7 +379,10 @@ class PortfolioService:
         listing_article: Any,
         preferred_position: Any,
         physical_rows: list[dict[str, Any]],
+        table_listings: list[dict[str, Any]],
+        listing_multiplier: Any = None,
     ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        """Map listings only through explicit stock-table rows and their «кофф» values."""
         text = str(listing_article or "").strip()
         preferred = str(preferred_position or "").strip()
         by_name = {
@@ -395,87 +390,93 @@ class PortfolioService:
             for row in physical_rows
             if isinstance(row, dict) and row.get("physical_position")
         }
+
+        def positive_multiplier(value: Any) -> int | float | None:
+            try:
+                number = float(value)
+            except (TypeError, ValueError):
+                return None
+            if number <= 0:
+                return None
+            return int(round(number)) if abs(number - round(number)) <= 1e-6 else number
+
         if "+" not in text:
             parent = by_name.get(preferred)
-            if parent and not parent.get("is_composite"):
-                units = cls._physical_units_per_package(preferred, text)
-                if units is not None:
-                    return [{"physical_position": preferred, "units_per_order": units}], []
-        else:
-            recipe: list[dict[str, Any]] = []
-            unresolved: list[dict[str, Any]] = []
-            package_count = cls._economics_pack_count(text) or 1
-            for component in [part.strip() for part in text.split("+") if part.strip()]:
-                families = cls._economics_families(component)
-                candidates: list[tuple[str, int]] = []
-                compatible: list[str] = []
-                for row in physical_rows:
-                    name = str(row.get("physical_position") or "").strip()
-                    if not name or row.get("is_composite") or "+" in name:
-                        continue
-                    parent_families = cls._economics_families(name)
-                    if not families or families.isdisjoint(parent_families):
-                        continue
-                    component_measure = cls._physical_measure(component)
-                    parent_measure = cls._physical_measure(name)
-                    if component_measure and parent_measure and component_measure[0] != parent_measure[0]:
-                        continue
-                    if bool(component_measure) != bool(parent_measure):
-                        continue
-                    compatible.append(name)
-                    units = cls._physical_units_per_package(name, component)
-                    if units is None:
-                        continue
-                    component_traits = cls._economics_traits(component)
-                    parent_traits = cls._economics_traits(name)
-                    if any(
-                        trait in component_traits and trait not in parent_traits
-                        for trait in {"zinc", "construction", "hermetic"}
-                    ):
-                        continue
-                    candidates.append((name, units * package_count))
-                unique = {name: units for name, units in candidates}
-                if len(unique) == 1:
-                    name, units = next(iter(unique.items()))
-                    recipe.append({"physical_position": name, "units_per_order": units})
-                else:
-                    unresolved.append({
-                        "component": component,
-                        "reason": "несколько возможных складских артикулов" if unique else "состав не сопоставлен",
-                        "candidate_physical_positions": sorted(set(compatible)),
-                    })
-            return recipe, unresolved
+            units = positive_multiplier(listing_multiplier)
+            if parent and not parent.get("is_composite") and units is not None:
+                return [{"physical_position": preferred, "units_per_order": units}], []
+            return [], [{
+                "component": text,
+                "reason": "нет точной складской строки или множителя «кофф»",
+                "candidate_physical_positions": [preferred] if preferred else [],
+            }]
 
-        # A row outside its expected block may still map to one unambiguous
-        # warehouse article. Similar names alone are not enough: dimensions and
-        # pack counts must also fit.
-        candidates: list[tuple[str, int]] = []
-        compatible: list[str] = []
-        for row in physical_rows:
-            name = str(row.get("physical_position") or "").strip()
-            if not name or row.get("is_composite") or "+" in name:
+        recipe_units: dict[str, int | float] = {}
+        unresolved: list[dict[str, Any]] = []
+        components = [part.strip() for part in text.split("+") if part.strip()]
+        for component in components:
+            component_key = cls._physical_component_key(component)
+            if component_key is None:
+                unresolved.append({
+                    "component": component,
+                    "reason": "в составе не указаны однозначные вид товара и размер",
+                    "candidate_physical_positions": [],
+                })
                 continue
-            base_families = cls._economics_families(name)
-            item_families = cls._economics_families(text)
-            if not base_families or not item_families or base_families.isdisjoint(item_families):
-                continue
-            base_measure = cls._physical_measure(name)
-            item_measure = cls._physical_measure(text)
-            if base_measure and item_measure and base_measure[0] != item_measure[0]:
-                continue
-            compatible.append(name)
-            units = cls._physical_units_per_package(name, text)
-            if units is not None:
-                candidates.append((name, units))
-        unique = {name: units for name, units in candidates}
-        if len(unique) == 1:
-            name, units = next(iter(unique.items()))
-            return [{"physical_position": name, "units_per_order": units}], []
-        return [], [{
-            "component": text,
-            "reason": "несколько возможных складских артикулов" if unique else "состав не сопоставлен",
-            "candidate_physical_positions": sorted(set(compatible)),
-        }]
+
+            family, unit, amount, pack_count, required_traits = component_key
+            candidates: set[tuple[str, int | float]] = set()
+            compatible_positions: set[str] = set()
+            missing_multiplier = False
+            for candidate in table_listings:
+                if not isinstance(candidate, dict):
+                    continue
+                name = str(candidate.get("name") or candidate.get("seller_article") or "").strip()
+                position = str(candidate.get("physical_position") or "").strip()
+                parent = by_name.get(position)
+                if not name or not parent or parent.get("is_composite"):
+                    continue
+                candidate_key = cls._physical_component_key(name)
+                if candidate_key is None:
+                    continue
+                c_family, c_unit, c_amount, c_count, c_traits = candidate_key
+                parent_traits = frozenset(cls._economics_traits(position))
+                if (
+                    c_family != family
+                    or c_unit != unit
+                    or abs(c_amount - amount) > 1e-6
+                    or c_count != pack_count
+                    or not required_traits.issubset(c_traits | parent_traits)
+                ):
+                    continue
+                compatible_positions.add(position)
+                units = positive_multiplier(candidate.get("physical_multiplier"))
+                if units is None:
+                    missing_multiplier = True
+                    continue
+                candidates.add((position, units))
+
+            if len(candidates) == 1 and not missing_multiplier:
+                position, units = next(iter(candidates))
+                recipe_units[position] = recipe_units.get(position, 0) + units
+            else:
+                if len(candidates) > 1:
+                    reason = "несколько складских позиций подходят составу"
+                elif compatible_positions or missing_multiplier:
+                    reason = "для точной строки таблицы не подтверждён множитель «кофф»"
+                else:
+                    reason = "точная складская позиция по строкам таблицы не найдена"
+                unresolved.append({
+                    "component": component,
+                    "reason": reason,
+                    "candidate_physical_positions": sorted(compatible_positions),
+                })
+
+        recipe = [
+            {"physical_position": position, "units_per_order": units}
+            for position, units in recipe_units.items()
+        ]
+        return recipe, unresolved
 
     @staticmethod
     def _economics_families(value: Any) -> set[str]:
@@ -894,6 +895,7 @@ class PortfolioService:
                             "sheet_row":sheet_row,
                             "subject":subject,
                             "physical_position": current_physical_position or None,
+                            "physical_multiplier":self._num(rec.get("кофф")),
                             "wb_orders_qty":self._num(rec.get("Заказы, шт")),
                             "ozon_orders_qty":self._num(rec.get("Заказы Ozon")),
                             "wb_fbs_stock":wb_stock,
@@ -935,6 +937,7 @@ class PortfolioService:
                             "category_name":category,
                             "cabinet":cabinet,
                             "physical_position":current_physical_position or None,
+                            "physical_multiplier":self._num(rec.get("кофф")),
                             # Кабинет 2 has only a manual product list here; its stock
                             # and order rates are not provided by the current Ozon feeds.
                             "stock":None if cabinet2_unverified else ozon_stock,
@@ -967,7 +970,7 @@ class PortfolioService:
                     unmapped_listings: list[dict[str, Any]] = []
 
                     def attach_listing(listing: dict[str, Any], platform: str, listing_id: Any, name: Any, preferred: Any, orders_per_day: Any, stock: Any, fbw_stock: Any = None) -> None:
-                        recipe, unresolved = self._physical_components(name, preferred, physical_inventory)
+                        recipe, unresolved = self._physical_components(name, preferred, physical_inventory, products + ozon_products, listing.get("physical_multiplier"))
                         listing["physical_components"] = recipe
                         listing["physical_mapping_complete"] = bool(recipe) and not unresolved
                         if len(recipe) == 1:
