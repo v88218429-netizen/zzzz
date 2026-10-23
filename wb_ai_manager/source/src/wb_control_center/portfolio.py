@@ -342,6 +342,142 @@ class PortfolioService:
         return None
 
     @staticmethod
+    def _physical_measure(value: Any) -> tuple[str, float] | None:
+        text = str(value or "").lower().replace(",", ".")
+        match = re.search(r"(\d+(?:\.\d+)?)\s*(кг|kg|г|g|л|l|м|m)\b", text)
+        if not match:
+            return None
+        amount = float(match.group(1))
+        unit = match.group(2)
+        if unit in {"г", "g"}:
+            return ("кг", amount / 1000.0)
+        if unit in {"л", "l"}:
+            return ("л", amount)
+        if unit in {"м", "m"}:
+            return ("м", amount)
+        return ("кг", amount)
+
+    @classmethod
+    def _physical_units_per_package(cls, physical_article: Any, listing_article: Any) -> int | None:
+        base = str(physical_article or "").strip()
+        listing = str(listing_article or "").strip()
+        base_families = cls._economics_families(base)
+        listing_families = cls._economics_families(listing)
+        if not base_families or not listing_families or base_families.isdisjoint(listing_families):
+            return None
+
+        base_measure = cls._physical_measure(base)
+        listing_measure = cls._physical_measure(listing)
+        ratio = 1.0
+        if base_measure and listing_measure:
+            if base_measure[0] != listing_measure[0] or base_measure[1] <= 0:
+                return None
+            ratio = listing_measure[1] / base_measure[1]
+        # The parent row is an explicit mapping in «Сводной». If one name omits
+        # its size, retain the article link but do not infer a size ratio.
+        package_count = cls._economics_pack_count(listing) or 1
+        units = ratio * package_count
+        if units <= 0 or abs(units - round(units)) > 1e-6:
+            return None
+        return int(round(units))
+
+    @classmethod
+    def _physical_components(
+        cls,
+        listing_article: Any,
+        preferred_position: Any,
+        physical_rows: list[dict[str, Any]],
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        text = str(listing_article or "").strip()
+        preferred = str(preferred_position or "").strip()
+        by_name = {
+            str(row.get("physical_position") or "").strip(): row
+            for row in physical_rows
+            if isinstance(row, dict) and row.get("physical_position")
+        }
+        if "+" not in text:
+            parent = by_name.get(preferred)
+            if parent and not parent.get("is_composite"):
+                units = cls._physical_units_per_package(preferred, text)
+                if units is not None:
+                    return [{"physical_position": preferred, "units_per_order": units}], []
+        else:
+            recipe: list[dict[str, Any]] = []
+            unresolved: list[dict[str, Any]] = []
+            package_count = cls._economics_pack_count(text) or 1
+            for component in [part.strip() for part in text.split("+") if part.strip()]:
+                families = cls._economics_families(component)
+                candidates: list[tuple[str, int]] = []
+                compatible: list[str] = []
+                for row in physical_rows:
+                    name = str(row.get("physical_position") or "").strip()
+                    if not name or row.get("is_composite") or "+" in name:
+                        continue
+                    parent_families = cls._economics_families(name)
+                    if not families or families.isdisjoint(parent_families):
+                        continue
+                    component_measure = cls._physical_measure(component)
+                    parent_measure = cls._physical_measure(name)
+                    if component_measure and parent_measure and component_measure[0] != parent_measure[0]:
+                        continue
+                    if bool(component_measure) != bool(parent_measure):
+                        continue
+                    compatible.append(name)
+                    units = cls._physical_units_per_package(name, component)
+                    if units is None:
+                        continue
+                    component_traits = cls._economics_traits(component)
+                    parent_traits = cls._economics_traits(name)
+                    if any(
+                        trait in component_traits and trait not in parent_traits
+                        for trait in {"zinc", "construction", "hermetic"}
+                    ):
+                        continue
+                    candidates.append((name, units * package_count))
+                unique = {name: units for name, units in candidates}
+                if len(unique) == 1:
+                    name, units = next(iter(unique.items()))
+                    recipe.append({"physical_position": name, "units_per_order": units})
+                else:
+                    unresolved.append({
+                        "component": component,
+                        "reason": "несколько возможных складских артикулов" if unique else "состав не сопоставлен",
+                        "candidate_physical_positions": sorted(set(compatible)),
+                    })
+            return recipe, unresolved
+
+        # A row outside its expected block may still map to one unambiguous
+        # warehouse article. Similar names alone are not enough: dimensions and
+        # pack counts must also fit.
+        candidates: list[tuple[str, int]] = []
+        compatible: list[str] = []
+        for row in physical_rows:
+            name = str(row.get("physical_position") or "").strip()
+            if not name or row.get("is_composite") or "+" in name:
+                continue
+            base_families = cls._economics_families(name)
+            item_families = cls._economics_families(text)
+            if not base_families or not item_families or base_families.isdisjoint(item_families):
+                continue
+            base_measure = cls._physical_measure(name)
+            item_measure = cls._physical_measure(text)
+            if base_measure and item_measure and base_measure[0] != item_measure[0]:
+                continue
+            compatible.append(name)
+            units = cls._physical_units_per_package(name, text)
+            if units is not None:
+                candidates.append((name, units))
+        unique = {name: units for name, units in candidates}
+        if len(unique) == 1:
+            name, units = next(iter(unique.items()))
+            return [{"physical_position": name, "units_per_order": units}], []
+        return [], [{
+            "component": text,
+            "reason": "несколько возможных складских артикулов" if unique else "состав не сопоставлен",
+            "candidate_physical_positions": sorted(set(compatible)),
+        }]
+
+    @staticmethod
     def _economics_families(value: Any) -> set[str]:
         text = str(value or "").lower().replace("ё", "е")
         dictionary = {
@@ -689,12 +825,12 @@ class PortfolioService:
                         continue
 
                     if not sku.isdigit() and not ozon_sku.isdigit():
-                        # Aggregate/K2 row = the physical inventory object.  Variants
-                        # such as "Бидон 15л 1шт" and "Бидон 15л 2шт" consume the same
-                        # physical stock and must never create separate replenishment
-                        # tasks for the owner.
                         if row_name:
                             current_physical_position = row_name
+                            wb_orders_qty = self._num(rec.get("Заказы, шт"))
+                            ozon_orders_qty = self._num(rec.get("Заказы Ozon"))
+                            wb_orders_per_day = self._num(row_cell(row, "Заказов в день", 0))
+                            ozon_orders_per_day = self._num(row_cell(row, "Заказов в день", 1))
                             order_status = str(rec.get("Наличие заказа") or "").strip()
                             need_raw = self._num(rec.get("Потребность"))
                             planned_slots = []
@@ -704,13 +840,22 @@ class PortfolioService:
                                     planned_slots.append(v)
                             item = {
                                 "physical_position": row_name,
+                                "is_composite": "+" in row_name,
                                 "fbs_debt_orders": self._num(rec.get("FBS долг по заказам")),
+                                # «Остатки ФФ» is the combined K2 + Иваново warehouse balance.
+                                # K2 SAFE is a replenishment subset, not the whole stock.
                                 "ff_stock": self._num(rec.get("Остатки ФФ")),
                                 "k2_safe_stock": self._num(rec.get("К2 ФФ · SAFE")) if self._num(rec.get("К2 ФФ · SAFE")) is not None else self._num(rec.get("К2 ФФ")),
                                 "ivanovo_stock": self._num(rec.get("ФФ Иваново")),
+                                "fbw_stock": self._num(rec.get("Остатки FBW")),
                                 "wb_fbs_stock": self._num(rec.get("Остатки WB FBS")),
-                                "orders_qty": self._num(rec.get("Заказы, шт")),
-                                "orders_per_day": self._num(row_cell(row, "Заказов в день", 0)),
+                                "ozon_fbs_stock": self._num(rec.get("Остатки Ozon FBS")),
+                                "wb_orders_qty": wb_orders_qty,
+                                "ozon_orders_qty": ozon_orders_qty,
+                                "orders_qty": wb_orders_qty + ozon_orders_qty if wb_orders_qty is not None and ozon_orders_qty is not None else None,
+                                "wb_orders_per_day": wb_orders_per_day,
+                                "ozon_orders_per_day": ozon_orders_per_day,
+                                "orders_per_day": wb_orders_per_day + ozon_orders_per_day if wb_orders_per_day is not None and ozon_orders_per_day is not None else None,
                                 "order_status": order_status,
                                 "sheet_need_raw": need_raw,
                                 "reorder_point_days": self._num(rec.get("Точка заказа")),
@@ -719,10 +864,7 @@ class PortfolioService:
                                 "supplier_debt_qty": self._num(rec.get("Долг поставщика")),
                                 "sheet_row": sheet_row,
                             }
-                            # Keep named physical rows even when all measured values are zero.
-                            # Their child listings still need a visible, verified zero stock.
-                            if row_name:
-                                physical_inventory.append(item)
+                            physical_inventory.append(item)
                         continue
 
                     category = self._category_name(subject)
@@ -752,6 +894,10 @@ class PortfolioService:
                             "sheet_row":sheet_row,
                             "subject":subject,
                             "physical_position": current_physical_position or None,
+                            "wb_orders_qty":self._num(rec.get("Заказы, шт")),
+                            "ozon_orders_qty":self._num(rec.get("Заказы Ozon")),
+                            "wb_fbs_stock":wb_stock,
+                            "physical_components":[],
                             "price_client_rub":self._num(rec.get("Цена для клиента")),
                             "fbs_debt_orders":self._num(rec.get("FBS долг по заказам")),
                             "ff_stock":ff,
@@ -780,6 +926,7 @@ class PortfolioService:
 
                     if ozon_sku.isdigit():
                         cabinet = "Ozon каб.2" if ("Ozon каб.2" in subject or "Ozon каб.2" in row_name) else "Ozon каб.1"
+                        cabinet2_unverified = cabinet == "Ozon каб.2"
                         oz={
                             "sku":ozon_sku,
                             "seller_article":ozon_article,
@@ -787,8 +934,15 @@ class PortfolioService:
                             "group_name":category,
                             "category_name":category,
                             "cabinet":cabinet,
-                            "stock":ozon_stock,
+                            "physical_position":current_physical_position or None,
+                            # Кабинет 2 has only a manual product list here; its stock
+                            # and order rates are not provided by the current Ozon feeds.
+                            "stock":None if cabinet2_unverified else ozon_stock,
+                            "orders_per_day":None if cabinet2_unverified else self._num(row_cell(row, "Заказов в день", 1)),
+                            "orders_qty":None if cabinet2_unverified else self._num(rec.get("Заказы Ozon")),
+                            "inventory_source_verified":not cabinet2_unverified,
                             "sheet_row":sheet_row,
+                            "physical_components":[],
                         }
                         ozon_products.append(oz)
                         g=groups.setdefault(category, {"name":category,"wb_nm_ids":[],"ozon_skus":[],"variants":[]})
@@ -801,18 +955,79 @@ class PortfolioService:
                 if ozon_products:
                     own["ozon_products"] = ozon_products
                 if physical_inventory:
-                    members: dict[str, list[dict[str, Any]]] = {}
-                    for prod in products:
-                        key = str(prod.get("physical_position") or "").strip()
-                        if key:
-                            members.setdefault(key, []).append(prod)
+                    physical_by_name: dict[str, dict[str, Any]] = {}
                     for item in physical_inventory:
-                        key = str(item.get("physical_position") or "").strip()
-                        item["member_skus"] = [
-                            {"sku": x.get("sku"), "name": x.get("name")}
-                            for x in members.get(key, [])
-                        ]
+                        name = str(item.get("physical_position") or "").strip()
+                        item["member_skus"] = []
+                        item["unresolved_components"] = []
+                        item["is_composite"] = bool(item.get("is_composite") or "+" in name)
+                        if name:
+                            physical_by_name.setdefault(name, item)
+
+                    unmapped_listings: list[dict[str, Any]] = []
+
+                    def attach_listing(listing: dict[str, Any], platform: str, listing_id: Any, name: Any, preferred: Any, orders_per_day: Any, stock: Any, fbw_stock: Any = None) -> None:
+                        recipe, unresolved = self._physical_components(name, preferred, physical_inventory)
+                        listing["physical_components"] = recipe
+                        listing["physical_mapping_complete"] = bool(recipe) and not unresolved
+                        if len(recipe) == 1:
+                            listing["physical_position"] = recipe[0]["physical_position"]
+                        for issue in unresolved:
+                            for candidate_name in issue.get("candidate_physical_positions") or []:
+                                target = physical_by_name.get(candidate_name)
+                                if target:
+                                    target["unresolved_components"].append({
+                                        "platform": platform,
+                                        "sku": str(listing_id or ""),
+                                        "name": str(name or ""),
+                                        "component": issue.get("component"),
+                                        "reason": issue.get("reason"),
+                                    })
+                        if not recipe or unresolved:
+                            unmapped_listings.append({
+                                "platform": platform,
+                                "sku": str(listing_id or ""),
+                                "name": str(name or ""),
+                                "reason": unresolved[0].get("reason") if unresolved else "нет точного складского артикула",
+                            })
+                        for component in recipe:
+                            target = physical_by_name.get(str(component.get("physical_position") or ""))
+                            if not target or target.get("is_composite"):
+                                continue
+                            target["member_skus"].append({
+                                "platform": platform,
+                                "sku": str(listing_id or ""),
+                                "name": str(name or ""),
+                                "units_per_order": component.get("units_per_order"),
+                                "orders_per_day": self._num(orders_per_day),
+                                "stock": self._num(stock),
+                                "fbw_stock": self._num(fbw_stock),
+                                "mapping_complete": not unresolved,
+                            })
+
+                    for prod in products:
+                        attach_listing(
+                            prod, "WB", prod.get("sku"), prod.get("name"),
+                            prod.get("physical_position"), prod.get("orders_per_day"),
+                            prod.get("wb_fbs_stock"), prod.get("fbw_stock"),
+                        )
+                    for oz in ozon_products:
+                        attach_listing(
+                            oz, str(oz.get("cabinet") or "Ozon"), oz.get("sku"),
+                            oz.get("name") or oz.get("seller_article"),
+                            oz.get("physical_position"), oz.get("orders_per_day"),
+                            oz.get("stock"), None,
+                        )
                     own["physical_inventory"] = physical_inventory
+                    own["inventory_mapping"] = {
+                        "source": "Сводная · физическая строка + карточки WB/Ozon",
+                        "warehouse_groups": sum(not x.get("is_composite") for x in physical_inventory),
+                        "composite_groups": sum(bool(x.get("is_composite")) for x in physical_inventory),
+                        "marketplace_listings": len(products) + len(ozon_products),
+                        "mapped_listings": len(products) + len(ozon_products) - len(unmapped_listings),
+                        "unmapped_listings": len(unmapped_listings),
+                        "unmapped_examples": unmapped_listings[:30],
+                    }
                 if groups:
                     own["product_groups"] = list(groups.values())
                 own["identity_source"] = "Сводная"
