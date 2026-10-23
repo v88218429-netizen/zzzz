@@ -163,6 +163,21 @@ class InventoryAgent(BaseAgent):
             item for item in (own.get("physical_inventory") or [])
             if isinstance(item, dict)
         ]
+        def exact_units_for_position(product: dict[str, Any], position: str) -> float | None:
+            if product.get("physical_mapping_source") != "Сводная · точные строки + кофф":
+                return None
+            components = product.get("physical_components")
+            if not isinstance(components, list):
+                return None
+            amounts = []
+            for component in components:
+                if not isinstance(component, dict) or str(component.get("physical_position") or "").strip() != position:
+                    continue
+                units = _float_or_none(component.get("units_per_order"))
+                if units is None or units <= 0:
+                    return None
+                amounts.append(units)
+            return sum(amounts) if amounts else None
         for index, item in enumerate(physical_rows):
             name = str(item.get("physical_position") or "").strip()
             if not name or item.get("is_composite"):
@@ -185,7 +200,7 @@ class InventoryAgent(BaseAgent):
                     # reference demand from both channels when the same source row
                     # contains an explicit Ozon counterpart.
                     product = trusted_rows[sku]
-                    units = PortfolioService._physical_units_per_package(name, product.get("name"))
+                    units = exact_units_for_position(product, name)
                     member.update({
                         "platform": "WB",
                         "units_per_order": units,
@@ -193,25 +208,22 @@ class InventoryAgent(BaseAgent):
                         "stock": product.get("wb_fbs_stock"),
                         "fbw_stock": product.get("fbw_stock"),
                         "mapping_complete": units is not None,
+                        "mapping_note": None if units is not None else "В старом снимке нет проверенной связи со строкой «Сводной» и множителем «кофф».",
                     })
                     ozon_sku = str(product.get("ozon_sku") or "")
                     if ozon_sku.isdigit() and ozon_sku not in known_ozon_skus:
                         ozon_article = str(product.get("ozon_seller_article") or product.get("name") or "")
-                        recipe, unresolved = PortfolioService._physical_components(ozon_article, name, physical_rows)
-                        ozon_units = sum(
-                            float(component.get("units_per_order") or 0)
-                            for component in recipe
-                            if component.get("physical_position") == name
-                        ) if not unresolved else None
+                        ozon_units = exact_units_for_position(product, name)
                         members.append({
                             "platform": str(product.get("cabinet") or "Ozon"),
                             "sku": ozon_sku,
                             "name": ozon_article,
-                            "units_per_order": ozon_units if ozon_units and ozon_units > 0 else None,
+                            "units_per_order": ozon_units,
                             "orders_per_day": product.get("ozon_orders_per_day"),
                             "stock": product.get("ozon_fbs_stock"),
                             "fbw_stock": None,
-                            "mapping_complete": bool(ozon_units and ozon_units > 0 and not unresolved),
+                            "mapping_complete": ozon_units is not None,
+                            "mapping_note": None if ozon_units is not None else "В старом снимке нет проверенной связи со строкой «Сводной» и множителем «кофф».",
                         })
                         known_ozon_skus.add(ozon_sku)
                 elif not member.get("platform") and sku in trusted_ozon_rows:
