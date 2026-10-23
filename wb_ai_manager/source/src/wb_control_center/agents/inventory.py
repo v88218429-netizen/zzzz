@@ -140,15 +140,22 @@ class InventoryAgent(BaseAgent):
             if not name or item.get("is_composite"):
                 # A set is a sales package, not a separate warehouse article.
                 continue
+            raw_members = [
+                member for member in (item.get("member_skus") or [])
+                if isinstance(member, dict) and member.get("sku")
+            ]
+            known_ozon_skus = {
+                str(member.get("sku")) for member in raw_members
+                if str(member.get("platform") or "").lower().startswith("ozon")
+            }
             members = []
-            for raw_member in (item.get("member_skus") or []):
-                if not isinstance(raw_member, dict) or not raw_member.get("sku"):
-                    continue
+            for raw_member in raw_members:
                 member = dict(raw_member)
                 sku = str(member.get("sku"))
                 if not member.get("platform") and sku in trusted_rows:
-                    # Older saved snapshots carried only sku/name in this link.
-                    # Enrich WB reference rates and package size when possible.
+                    # Older saved snapshots carried only WB sku/name links. Rebuild
+                    # reference demand from both channels when the same source row
+                    # contains an explicit Ozon counterpart.
                     product = trusted_rows[sku]
                     units = PortfolioService._physical_units_per_package(name, product.get("name"))
                     member.update({
@@ -159,6 +166,26 @@ class InventoryAgent(BaseAgent):
                         "fbw_stock": product.get("fbw_stock"),
                         "mapping_complete": units is not None,
                     })
+                    ozon_sku = str(product.get("ozon_sku") or "")
+                    if ozon_sku.isdigit() and ozon_sku not in known_ozon_skus:
+                        ozon_article = str(product.get("ozon_seller_article") or product.get("name") or "")
+                        recipe, unresolved = PortfolioService._physical_components(ozon_article, name, physical_rows)
+                        ozon_units = sum(
+                            float(component.get("units_per_order") or 0)
+                            for component in recipe
+                            if component.get("physical_position") == name
+                        ) if not unresolved else None
+                        members.append({
+                            "platform": str(product.get("cabinet") or "Ozon"),
+                            "sku": ozon_sku,
+                            "name": ozon_article,
+                            "units_per_order": ozon_units if ozon_units and ozon_units > 0 else None,
+                            "orders_per_day": product.get("ozon_orders_per_day"),
+                            "stock": product.get("ozon_fbs_stock"),
+                            "fbw_stock": None,
+                            "mapping_complete": bool(ozon_units and ozon_units > 0 and not unresolved),
+                        })
+                        known_ozon_skus.add(ozon_sku)
                 elif not member.get("platform") and sku in trusted_ozon_rows:
                     member["platform"] = str(trusted_ozon_rows[sku].get("cabinet") or "Ozon")
                 members.append(member)
