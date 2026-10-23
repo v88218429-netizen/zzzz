@@ -119,6 +119,34 @@ class InventoryAgent(BaseAgent):
             or portfolio.get("inventory_scope_note")
             or "Охват всех магазинов и кабинетов не подтверждён."
         )
+        if not (own.get("inventory_scope_note") or portfolio.get("inventory_scope_note")):
+            health_by_id = {
+                str(source.get("id") or ""): source
+                for source in (portfolio.get("source_health") or [])
+                if isinstance(source, dict)
+            }
+            other_stock_sources = (
+                ("sanych_sellmonitor", "магазин Саныч"),
+                ("air_fbs", "магазин AIR"),
+                ("hozyushka_fbs", "магазин Хозяюшка"),
+                ("dublinsky_legacy", "старый склад Дублинский"),
+            )
+            source_gaps = []
+            for source_id, label in other_stock_sources:
+                health = health_by_id.get(source_id)
+                if not health:
+                    source_gaps.append(f"{label}: источник не подключён")
+                    continue
+                freshness = str(health.get("freshness") or "").strip()
+                status = str(health.get("status") or "").strip().lower()
+                updated = health.get("bridge_modified_at") or health.get("modified_at") or freshness
+                updated_dt = _source_datetime(updated)
+                age_hours = (datetime.now(timezone.utc) - updated_dt).total_seconds() / 3600 if updated_dt else None
+                if status != "fresh" or age_hours is None or age_hours > max_source_age_hours:
+                    detail = freshness or status or "дата неизвестна"
+                    source_gaps.append(f"{label}: {detail}")
+            if source_gaps:
+                scope_note = "Нет свежего подтверждённого складского охвата: " + "; ".join(source_gaps) + "."
 
         critical = float(cfg.get("critical_days_cover", 2))
         warning = float(cfg.get("warning_days_cover", 5))
