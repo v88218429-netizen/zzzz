@@ -1,0 +1,51 @@
+name: WB FBS GitHub recovery
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_run:
+    workflows: ["Sellmonitor GitHub worker deploy"]
+    types: [completed]
+  push:
+    branches: [mainggg]
+    paths:
+      - "wb_worker/github_fbs_recovery.py"
+      - ".github/workflows/wb-fbs-github-recovery.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wb-fbs-github-recovery
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      WB_API_TOKEN_AA: ${{ secrets.WB_API_TOKEN_AA }}
+      WB_API_TOKEN_YV: ${{ secrets.WB_API_TOKEN_YV }}
+      GOOGLE_BRIDGE_KEY: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
+      GOOGLE_BRIDGE_URL: https://script.google.com/macros/s/AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw/exec
+      FBS_LOOKBACK_DAYS: "7"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: mainggg
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Syntax and credentials availability
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile wb_worker/github_fbs_recovery.py
+          test -n "$WB_API_TOKEN_AA"
+          test -n "$WB_API_TOKEN_YV"
+          test -n "$GOOGLE_BRIDGE_KEY"
+      - name: Reconcile AIR and Hozyayushka from WB to actual FBS Sheets
+        shell: bash
+        run: python wb_worker/github_fbs_recovery.py
