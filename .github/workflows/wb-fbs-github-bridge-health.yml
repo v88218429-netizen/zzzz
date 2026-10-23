@@ -1,0 +1,110 @@
+name: WB FBS GitHub bridge health
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_run:
+    workflows: ["Sellmonitor GitHub worker deploy"]
+    types: [completed]
+  push:
+    branches: [mainggg]
+    paths:
+      - ".github/workflows/wb-fbs-github-bridge-health.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wb-fbs-github-bridge-health
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      BRIDGE_URL: https://script.google.com/macros/s/AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw/exec
+      BRIDGE_KEY: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
+      WB_API_TOKEN_AP: ${{ secrets.WB_API_TOKEN_AP }}
+      WB_API_TOKEN_AA: ${{ secrets.WB_API_TOKEN_AA }}
+      WB_API_TOKEN_YV: ${{ secrets.WB_API_TOKEN_YV }}
+    steps:
+      - name: Verify live WB feeds against actual FBS workbook freshness
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import datetime as dt
+          import json, os, time, urllib.request
+          if not os.environ.get('BRIDGE_KEY'):
+              raise SystemExit('Missing authorized GitHub bridge secret')
+          url=os.environ['BRIDGE_URL']
+          payload=json.dumps({'token':os.environ['BRIDGE_KEY'],'action':'fbs_targets_health'}).encode()
+          last_error='NO_RESPONSE'
+          result=None
+          for attempt in range(1,7):
+              try:
+                  req=urllib.request.Request(url,data=payload,headers={'Content-Type':'application/json'},method='POST')
+                  with urllib.request.urlopen(req,timeout=60) as response:
+                      data=json.loads(response.read().decode('utf-8'))
+                  if data.get('ok') is True and data.get('action')=='fbs_targets_health':
+                      result=data.get('result') or {}
+                      break
+                  last_error='NOT_READY_OR_NOT_DEPLOYED'
+              except Exception as exc:
+                  last_error=type(exc).__name__
+              if attempt<6: time.sleep(10)
+          if result is None:
+              raise SystemExit('Google adapter unavailable: '+last_error)
+          found={row['client']:row for row in result.get('results') or []}
+          mapping={'SANYCH':'WB_API_TOKEN_AP','AIR':'WB_API_TOKEN_AA','HOZYAYUSHKA':'WB_API_TOKEN_YV'}
+          errors=[]
+          for client,key in mapping.items():
+              row=found.get(client) or {}
+              sheet_date=row.get('latestOrderDate') or ''
+              if not row.get('accessible'):
+                  errors.append(client+':SHEET_ACCESS_FAILED')
+                  print(json.dumps({'client':client,'sheet_access':False}))
+                  continue
+              token=os.environ.get(key,'')
+              if len(token)<30:
+                  errors.append(client+':MISSING_WB_TOKEN')
+                  continue
+              try:
+                  request=urllib.request.Request('https://marketplace-api.wildberries.ru/api/v3/orders/new',headers={'Authorization':token})
+                  with urllib.request.urlopen(request,timeout=25) as response:
+                      api=json.loads(response.read().decode('utf-8'))
+                  api_items=api.get('orders') or []
+              except Exception as exc:
+                  errors.append(client+':WB_API_'+type(exc).__name__)
+                  continue
+              newest=None
+              for order in api_items:
+                  stamp=order.get('createdAt')
+                  if not stamp: continue
+                  try:
+                      parsed=dt.datetime.fromisoformat(stamp.replace('Z','+00:00'))
+                      newest=max(newest,parsed) if newest else parsed
+                  except ValueError: continue
+              sheet_stamp=None
+              if sheet_date:
+                  try:
+                      sheet_stamp=dt.datetime.strptime(sheet_date[:19],'%d.%m.%Y %H:%M:%S').replace(tzinfo=dt.timezone(dt.timedelta(hours=3)))
+                  except ValueError: pass
+              lag_minutes=None
+              if newest and sheet_stamp:
+                  lag_minutes=round((newest-sheet_stamp).total_seconds()/60)
+                  if lag_minutes>45: errors.append(client+':FBS_BOOK_LAGS_WB')
+              print(json.dumps({'client':client,'sheet_access':True,
+                                'sheet_rows':row.get('ordersRows'),
+                                'latest_sheet_order':sheet_date,
+                                'wb_open_orders':len(api_items),
+                                'latest_wb_order':newest.isoformat() if newest else None,
+                                'lag_minutes':lag_minutes},ensure_ascii=False))
+          if errors:
+              print('FBS_HEALTH_FAILED='+','.join(errors))
+              raise SystemExit(1)
+          print('FBS_GITHUB_HEALTH=PASS')
+          PY
