@@ -853,9 +853,12 @@ function renderInventory(){
   $('inventory-updated').textContent=usingPhysical
     ? (physicalSnap?`физический товар · источник ${sourceStampText}`:'нет свежего среза')
     : (listingSnap?`карточки WB · снимок ${ago(listingSnap.created_at)}`:'нет свежего среза');
-  const verifiedRows=allRows.filter(r=>r.stock_verified!==false);
+  const verifiedRows=allRows.filter(r=>usingPhysical?r.stock_available===true:r.stock_verified!==false);
   const unverifiedCount=allRows.length-verifiedRows.length;
+  const referenceCount=usingPhysical?verifiedRows.filter(r=>r.signal_eligible!==true).length:0;
+  const signalRows=usingPhysical?verifiedRows.filter(r=>r.signal_eligible===true):verifiedRows;
   const classify=(r)=>{
+    if(usingPhysical&&r.signal_eligible!==true) return 'unknown';
     if(r.no_demand===true&&Number(r.stock)>0) return 'overstock';
     const days=missing(r.days_cover)?null:Number(r.days_cover);
     if(!Number.isFinite(days)) return 'unknown';
@@ -865,46 +868,59 @@ function renderInventory(){
     return 'normal';
   };
   const counts={critical:0,low:0,overstock:0,normal:0,unknown:0};
-  verifiedRows.forEach(r=>counts[classify(r)]++);
-  const shortage=verifiedRows.filter(r=>['critical','low'].includes(classify(r)));
-  const overstockRows=verifiedRows.filter(r=>classify(r)==='overstock');
+  signalRows.forEach(r=>counts[classify(r)]++);
+  const shortage=signalRows.filter(r=>['critical','low'].includes(classify(r)));
+  const overstockRows=signalRows.filter(r=>classify(r)==='overstock');
   const attention=[...shortage,...overstockRows];
-  const sourceRows=state.inventoryFilter==='all'?verifiedRows:state.inventoryFilter==='overstock'?overstockRows:shortage;
+  const sourceRows=state.inventoryFilter==='all'?(usingPhysical?allRows:verifiedRows):state.inventoryFilter==='overstock'?overstockRows:shortage;
   const visible=sourceRows.sort((a,b)=>{
     const rank={critical:0,low:1,overstock:2,normal:3,unknown:4};
     const ca=classify(a), cb=classify(b);
     if(rank[ca]!==rank[cb]) return rank[ca]-rank[cb];
-    const da=Number(a.days_cover), db=Number(b.days_cover);
+    const da=Number(a.reference_days_cover??a.days_cover), db=Number(b.reference_days_cover??b.days_cover);
     return ca==='overstock' ? db-da : da-db;
   });
 
   const levelSwitch=`<div class="inventory-level-switch"><button type="button" data-inventory-view="physical" class="${usingPhysical?'active':''}">Физический товар</button><button type="button" data-inventory-view="cards" class="${!usingPhysical?'active':''}">Карточки WB</button></div>`;
-  let inventoryHtml=`<div class="inventory-toolbar"><div><strong>Требуют внимания: ${num(attention.length)}</strong><span>дефицит ${num(counts.critical)} · низкий запас ${num(counts.low)} · избыток ${num(counts.overstock)} · норма ${num(counts.normal)}</span></div><div class="inventory-controls">${levelSwitch}<div class="segmented"><button type="button" data-inventory-filter="shortage" class="${state.inventoryFilter==='shortage'?'active':''}">Дефицит / низкий (${num(shortage.length)})</button><button type="button" data-inventory-filter="overstock" class="${state.inventoryFilter==='overstock'?'active':''}">Избыток (${num(overstockRows.length)})</button><button type="button" data-inventory-filter="all" class="${state.inventoryFilter==='all'?'active':''}">Все (${num(verifiedRows.length)})</button></div></div></div>`;
+  let inventoryHtml=`<div class="inventory-toolbar"><div><strong>Требуют внимания: ${num(attention.length)}</strong><span>дефицит ${num(counts.critical)} · низкий запас ${num(counts.low)} · избыток ${num(counts.overstock)} · норма ${num(counts.normal)}${usingPhysical?` · справочно ${num(referenceCount)}`:''}</span></div><div class="inventory-controls">${levelSwitch}<div class="segmented"><button type="button" data-inventory-filter="shortage" class="${state.inventoryFilter==='shortage'?'active':''}">Дефицит / низкий (${num(shortage.length)})</button><button type="button" data-inventory-filter="overstock" class="${state.inventoryFilter==='overstock'?'active':''}">Избыток (${num(overstockRows.length)})</button><button type="button" data-inventory-filter="all" class="${state.inventoryFilter==='all'?'active':''}">Все (${num(usingPhysical?allRows.length:verifiedRows.length)})</button></div></div></div>`;
   if(unverifiedCount){
-    inventoryHtml+=`<div class="inventory-source-warning"><strong>Не показываю неподтверждённые остатки как реальные</strong><p>${num(unverifiedCount)} строк не удалось сопоставить с подтверждённым источником. Они скрыты из расчёта дефицита, чтобы не создавать ложные тревоги.</p></div>`;
+    inventoryHtml+=`<div class="inventory-source-warning"><strong>Нет остатка по складскому артикулу</strong><p>${num(unverifiedCount)} строк без общего остатка ФФ не участвуют в расчёте запаса.</p></div>`;
   }
   if(usingPhysical&&!physicalSnap){
-    inventoryHtml+=`<div class="inventory-source-warning"><strong>Нет свежего среза по физическим товарам</strong><p>Обнови приложение до версии с группировкой по строкам физического остатка. Карточные остатки доступны отдельно и не подменяют остаток сырья или базового товара.</p></div>`;
-  }else if(usingPhysical&&physicalSnap&&!physicalRows.length){
-    const staleText=physicalMeta.source_fresh===false
-      ? `Срез старше ${num(physicalMeta.source_max_age_hours)} часов или дата источника неизвестна. Дефицит по нему не рассчитывается.`
-      : 'В подтверждённой «Сводной» нет строк физического товара с остатком или связанными карточками.';
-    inventoryHtml+=`<div class="inventory-source-warning"><strong>${physicalMeta.source_fresh===false?'Свежесть источника не подтверждена':'Физические товары пока не сопоставлены'}</strong><p>${esc(staleText)}</p></div>`;
+    inventoryHtml+=`<div class="inventory-source-warning"><strong>Нет среза по физическим товарам</strong><p>Карточные остатки WB и Ozon не подменяют общий остаток складского артикула.</p></div>`;
+  }else if(usingPhysical&&physicalSnap){
+    const issues=[];
+    if(physicalMeta.source_fresh===false) issues.push(`Складской срез устарел или его дата неизвестна (порог ${num(physicalMeta.source_max_age_hours)} ч).`);
+    if(physicalMeta.all_store_scope_complete!==true) issues.push(physicalMeta.scope_note||'Охват всех магазинов и кабинетов не подтверждён.');
+    if(Number(physicalMeta.unmapped_listings)>0) issues.push(`Не сопоставлено карточек: ${num(physicalMeta.unmapped_listings)}.`);
+    if(Number(physicalMeta.incomplete_demand_groups)>0) issues.push(`По ${num(physicalMeta.incomplete_demand_groups)} складским товарам темп неполный.`);
+    if(issues.length) inventoryHtml+=`<div class="inventory-source-warning"><strong>Дефицит и риск неликвида пока не подтверждены</strong><p>${esc(issues.join(' '))} Значения ниже показаны справочно на дату источника.</p></div>`;
+    if(!physicalRows.length) inventoryHtml+=`<div class="inventory-source-warning"><strong>Физические товары не сопоставлены</strong><p>В источнике нет строк с общим остатком ФФ.</p></div>`;
   }
   if(visible.length){
     inventoryHtml+=visible.map(r=>{
-      const days=missing(r.days_cover)?null:Number(r.days_cover), category=classify(r);
+      const days=missing(r.reference_days_cover??r.days_cover)?null:Number(r.reference_days_cover??r.days_cover), category=classify(r);
+      const eligible=!usingPhysical||r.signal_eligible===true;
       const cls=category==='critical'?'critical':(['low','overstock'].includes(category)?'warn':'');
-      const width=Number.isFinite(days)?Math.max(4,Math.min(100,days/30*100)):100;
+      const width=Number.isFinite(days)&&eligible?Math.max(4,Math.min(100,days/30*100)):4;
       const members=Array.isArray(r.member_skus)?r.member_skus:[];
       const id=r.nm_id??r.nmId??r.nmID??members[0]?.sku;
       const title=usingPhysical?(r.physical_position||'Физический товар'):entityName(id);
       const linked=members.map(x=>x.name||entityName(x.sku)).filter(Boolean);
-      const linkedText=usingPhysical?(linked.length?`Карточки: ${linked.slice(0,4).join(', ')}${linked.length>4?` и ещё ${linked.length-4}`:''}`:'карточки не связаны'):'';
-      const tag=category==='critical'?['bad','Дефицит']:category==='low'?['warn','Низкий запас']:category==='overstock'?['warn','Избыток']:category==='unknown'?['neutral','Нет темпа']:['ok','Норма'];
+      const counts=r.marketplace_counts||{};
+      const linkedText=usingPhysical?(linked.length?`Карточки WB: ${num(counts.WB||0)} · Ozon: ${num(counts.Ozon||0)} · ${linked.slice(0,3).join(', ')}${linked.length>3?` и ещё ${linked.length-3}`:''}`:'карточки не связаны'):'';
+      let tag=category==='critical'?['bad','Дефицит']:category==='low'?['warn','Низкий запас']:category==='overstock'?['warn','Избыток']:category==='unknown'?['neutral','Нет темпа']:['ok','Норма'];
+      if(usingPhysical&&!eligible){
+        tag=physicalMeta.source_fresh===false?['neutral','Срез устарел']:physicalMeta.all_store_scope_complete!==true?['neutral','Охват неполный']:r.mapping_complete!==true?['neutral','Карточки не связаны']:['neutral','Темп неполный'];
+      }
       const clickAttr=id?`data-entity-id="${esc(id)}"`:'';
-      const coverLabel=r.no_demand===true?'Нет заказов в источнике':Number.isFinite(days)?`${num(days,1)} дня`:'Нет подтверждённого темпа';
-      return `<button type="button" class="inventory-item ${cls} interactive-card" ${clickAttr}><div class="inventory-top"><div><strong>${esc(title)}</strong><small>${usingPhysical?`физический товар · карточек WB: ${num(members.length)}`:entityMeta(id)}</small></div><span class="status-tag ${tag[0]}">${tag[1]}</span></div><div class="inventory-days">${coverLabel}</div><div class="inventory-meta">Остаток ${r.stock===null?'нет данных':num(r.stock)} · темп ${r.daily_sales===null?'нет данных':num(r.daily_sales,1)}/день · ${esc(r.stock_source||'источник остатка не указан')}${r.velocity_source?` · темп: ${esc(r.velocity_source)}`:''}${linkedText?`<br>${esc(linkedText)}`:''}</div><div class="cover-bar"><i style="width:${width}%"></i></div></button>`;
+      const coverLabel=usingPhysical&&!eligible
+        ? (Number.isFinite(days)?`${num(days,1)} дня · справочно`:'Только справочные данные')
+        : r.no_demand===true?'Нет заказов в источнике':Number.isFinite(days)?`${num(days,1)} дня`:'Нет подтверждённого темпа';
+      const demandText=r.daily_sales===null?'нет данных':`${num(r.daily_sales,1)} складских единиц/день`;
+      const pools=r.marketplace_stock_units||{};
+      const poolText=Object.keys(pools).length?` · остатки карточек отдельно: ${Object.entries(pools).map(([k,v])=>`${k} ${num(v)} складских единиц`).join(', ')`:'';
+      return `<button type="button" class="inventory-item ${cls} interactive-card" ${clickAttr}><div class="inventory-top"><div><strong>${esc(title)}</strong><small>${usingPhysical?`складской артикул · WB карточек: ${num(counts.WB||0)} · Ozon карточек: ${num(counts.Ozon||0)}`:entityMeta(id)}</small></div><span class="status-tag ${tag[0]}">${tag[1]}</span></div><div class="inventory-days">${coverLabel}</div><div class="inventory-meta">Остаток ФФ ${r.stock===null?'нет данных':num(r.stock)} · расход ${demandText} · ${esc(r.stock_source||'источник остатка не указан')}${usingPhysical&&!physicalMeta.source_fresh&&r.source_updated_at?` · дата среза: ${esc(String(r.source_updated_at))}`:''}${poolText}${r.velocity_source?` · темп: ${esc(r.velocity_source)}`:''}${linkedText?`<br>${esc(linkedText)}`:''}</div><div class="cover-bar"><i style="width:${width}%"></i></div></button>`;
     }).join('');
   }else if(usingPhysical&&!physicalSnap){
     inventoryHtml+=empty('Нет подтверждённого физического остатка.');
