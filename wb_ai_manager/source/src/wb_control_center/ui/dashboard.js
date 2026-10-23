@@ -892,7 +892,8 @@ function renderInventory(){
     const issues=[];
     if(physicalMeta.source_fresh===false) issues.push(`Складской срез устарел или его дата неизвестна (порог ${num(physicalMeta.source_max_age_hours)} ч).`);
     if(physicalMeta.all_store_scope_complete!==true) issues.push(physicalMeta.scope_note||'Охват всех магазинов и кабинетов не подтверждён.');
-    if(Number(physicalMeta.unmapped_listings)>0) issues.push(`Не сопоставлено карточек: ${num(physicalMeta.unmapped_listings)}.`);
+    if(physicalMeta.global_mapping_complete!==true) issues.push(`Связка карточек со складскими артикулами не подтверждена полностью (несопоставлено карточек: ${num(physicalMeta.unmapped_listings)}).`);
+    if(Number(physicalMeta.incomplete_mapping_groups)>0) issues.push(`Не все карточки распределены по складским товарам в ${num(physicalMeta.incomplete_mapping_groups)} группах.`);
     if(Number(physicalMeta.incomplete_demand_groups)>0) issues.push(`По ${num(physicalMeta.incomplete_demand_groups)} складским товарам темп неполный.`);
     if(issues.length) inventoryHtml+=`<div class="inventory-source-warning"><strong>Дефицит и риск неликвида пока не подтверждены</strong><p>${esc(issues.join(' '))} Значения ниже показаны справочно на дату источника.</p></div>`;
     if(!physicalRows.length) inventoryHtml+=`<div class="inventory-source-warning"><strong>Физические товары не сопоставлены</strong><p>В источнике нет строк с общим остатком ФФ.</p></div>`;
