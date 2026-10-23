@@ -4,7 +4,7 @@
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.34',
+  VERSION: 'github-worker-1.3.35',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -5158,7 +5158,7 @@ function sellmonitorGithubFbsIngestBatchV1_(body) {
   var spreadsheetId=stores[client];
   if(!spreadsheetId)throw new Error('FBS_CLIENT_NOT_ALLOWED');
   var batch=body.orders;
-  if(!Array.isArray(batch)||batch.length<1||batch.length>60)throw new Error('FBS_BATCH_SIZE_INVALID');
+  if(!Array.isArray(batch)||batch.length<1||batch.length>1000)throw new Error('FBS_BATCH_SIZE_INVALID');
   function str(x,limit) {
     var s=String(x==null?'':x).slice(0,limit||300);
     if(/^[=+@]/.test(s))s="'"+s;
@@ -5204,7 +5204,8 @@ function sellmonitorGithubFbsIngestBatchV1_(body) {
     var last=sh.getLastRow();
     if(last<1||last>100000)throw new Error('FBS_ROW_COUNT_UNEXPECTED');
     var ids=last>1?sh.getRange(2,1,last-1,1).getDisplayValues():[];
-    var states=last>1?sh.getRange(2,5,last-1,2).getDisplayValues():[];
+    var states=last>1?sh.getRange(2,5,last-1,3).getValues():[];
+    var syncTimes=last>1?sh.getRange(2,22,last-1,2).getValues():[];
     var byId={};
     ids.forEach(function(v,i){if(v[0]&&!Object.prototype.hasOwnProperty.call(byId,v[0]))byId[String(v[0])]=i+2;});
     var n=new Date(),insert=[],patch=[],events=[],already=0,updated=0,confirmed=0;
@@ -5214,8 +5215,8 @@ function sellmonitorGithubFbsIngestBatchV1_(body) {
         already++;
         var old=states[rowNumber-2]||[],os=str(old[0],90),ow=str(old[1],90);
         if(os!==r.seller||ow!==r.wb){
-          patch.push({row:rowNumber,seller:r.seller,wb:r.wb,desc:human(r.seller,r.wb)});
-          updated++;
+          old[0]=r.seller;old[1]=r.wb;old[2]=human(r.seller,r.wb);states[rowNumber-2]=old;
+          syncTimes[rowNumber-2]=[n,n];patch.push(rowNumber);updated++;
           events.push([n,id,str(o.article,300),r.created,os,r.seller,ow,r.wb,'',
             'СМЕНА СТАТУСА',human(r.seller,r.wb),'GITHUB_WB_FBS']);
         } else confirmed++;
@@ -5237,6 +5238,10 @@ function sellmonitorGithubFbsIngestBatchV1_(body) {
       events.push([n,id,str(o.article,300),r.created,'',r.seller,'',r.wb,age+' мин',
         'СНИМОК СТАТУСА','Статус WB подтверждён при импорте из GitHub','GITHUB_WB_FBS']);
     });
+    if(patch.length&&last>1){
+      sh.getRange(2,5,last-1,3).setValues(states);
+      sh.getRange(2,22,last-1,2).setValues(syncTimes);
+    }
     if(insert.length){
       var required=last+insert.length;
       if(sh.getMaxRows()<required)sh.insertRowsAfter(sh.getMaxRows(),required-sh.getMaxRows());
@@ -5245,11 +5250,6 @@ function sellmonitorGithubFbsIngestBatchV1_(body) {
       for(var i=0;i<insert.length;i++)if(String(check[i][0])!==String(insert[i][0]))
         throw new Error('FBS_INSERT_READBACK_FAILED');
     }
-    patch.forEach(function(p){
-      sh.getRange(p.row,5,1,3).setValues([[p.seller,p.wb,p.desc]]);
-      sh.getRange(p.row,22).setValue(n);
-      sh.getRange(p.row,23).setValue(n);
-    });
     if(events.length){
       var start=history.getLastRow()+1;
       var needed=start+events.length-1;
