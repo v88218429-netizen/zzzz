@@ -8,6 +8,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import os
+import re
 import time
 import urllib.error
 import urllib.request
@@ -50,10 +51,43 @@ def endpoint(token: str, path: str, body: dict | None = None) -> dict:
     return request(BASE + path, token=token, body=body)
 
 
-def collect(token: str) -> list[dict]:
+def requested_window() -> tuple[int, int] | None:
+    start_raw = os.environ.get("FBS_START_DATE", "").strip()
+    end_raw = os.environ.get("FBS_END_DATE", "").strip()
+    if not start_raw and not end_raw and os.environ.get("GITHUB_EVENT_NAME") == "push":
+        event_path = os.environ.get("GITHUB_EVENT_PATH", "")
+        if event_path:
+            try:
+                with open(event_path, "r", encoding="utf-8") as event_file:
+                    message = str((json.load(event_file).get("head_commit") or {}).get("message") or "")
+                match = re.search(r"\\[FBS-RANGE:(\\d{4}-\\d{2}-\\d{2}):(\\d{4}-\\d{2}-\\d{2})\\]", message)
+                if match:
+                    start_raw, end_raw = match.group(1), match.group(2)
+            except (OSError, ValueError, TypeError):
+                pass
+    if not start_raw and not end_raw:
+        return None
+    if not start_raw or not end_raw:
+        raise RuntimeError("FBS_DATE_RANGE_INCOMPLETE")
+    try:
+        start_dt = dt.datetime.strptime(start_raw, "%Y-%m-%d").replace(tzinfo=dt.timezone.utc)
+        end_dt = dt.datetime.strptime(end_raw, "%Y-%m-%d").replace(tzinfo=dt.timezone.utc) + dt.timedelta(days=1) - dt.timedelta(seconds=1)
+    except ValueError:
+        raise RuntimeError("FBS_DATE_RANGE_INVALID") from None
     now = dt.datetime.now(dt.timezone.utc)
-    end = int(now.timestamp())
-    start = int((now - dt.timedelta(days=LOOKBACK_DAYS)).timestamp())
+    if end_dt < start_dt or (end_dt.date() - start_dt.date()).days + 1 > 90 or end_dt > now + dt.timedelta(minutes=5):
+        raise RuntimeError("FBS_DATE_RANGE_OUT_OF_BOUNDS")
+    return int(start_dt.timestamp()), int(end_dt.timestamp())
+
+
+def collect(token: str) -> list[dict]:
+    window = requested_window()
+    if window is None:
+        now = dt.datetime.now(dt.timezone.utc)
+        end = int(now.timestamp())
+        start = int((now - dt.timedelta(days=LOOKBACK_DAYS)).timestamp())
+    else:
+        start, end = window
     found: dict[str, dict] = {}
     window_end = end
     while window_end > start:
