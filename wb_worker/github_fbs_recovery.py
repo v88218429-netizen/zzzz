@@ -60,7 +60,7 @@ def requested_window() -> tuple[int, int] | None:
             try:
                 with open(event_path, "r", encoding="utf-8") as event_file:
                     message = str((json.load(event_file).get("head_commit") or {}).get("message") or "")
-                match = re.search(r"\\[FBS-RANGE:(\\d{4}-\\d{2}-\\d{2}):(\\d{4}-\\d{2}-\\d{2})\\]", message)
+                match = re.search(r"\[FBS-RANGE:(\d{4}-\d{2}-\d{2}):(\d{4}-\d{2}-\d{2})\]", message)
                 if match:
                     start_raw, end_raw = match.group(1), match.group(2)
             except (OSError, ValueError, TypeError):
