@@ -5430,6 +5430,7 @@ function sellmonitorGithubFbsTargetHealthV1_() {
 /** Safe bounded FBS upsert; authenticated at the doPost entry point. No external service. */
 function sellmonitorGithubFbsIngestBatchV1_(body) {
   var stores={
+    SANYCH:'1v0qt-thJDOw3tLFdZVGhdXJdBM8rDPRz9mHlcHmuuyM',
     AIR:'1qJvhEOIku7sOMydfrUz0PR5dkcU0sLjv433pa1MFBcM',
     HOZYAYUSHKA:'1f9dxXeZxkDth8h2C9GA7L7WqAr1-Ok-Oi5YtufLYOOk'
   };
