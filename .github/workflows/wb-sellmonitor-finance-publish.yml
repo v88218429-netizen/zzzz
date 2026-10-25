@@ -24,6 +24,7 @@ jobs:
     env:
       WEBAPP_DEPLOYMENT_ID: AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw
       WEBHOOK_SECRET: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
+      PUBLISH_ONLY_STORE: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[sanych-only]') && 'sanych_wb' || '' }}
     steps:
       - name: Check configured authorization
         shell: bash
