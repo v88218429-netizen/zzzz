@@ -5195,7 +5195,21 @@ function sellmonitorGithubPublishOzonSummaryOrders_() {
   if(!sourceSheet)throw new Error('OZON_SOURCE_TAB_MISSING');
   var last=sourceSheet.getLastRow();
   if(last<2)throw new Error('OZON_SOURCE_EMPTY_PRESERVE');
-  var sourceUpdated=DriveApp.getFileById(SMC_OZON_SUMMARY.sourceId).getLastUpdated().toISOString();
+  var automation=source.getSheetByName('Автоматизация');
+  if(!automation)throw new Error('OZON_SOURCE_HEALTH_TAB_MISSING');
+  var automationRows=automation.getRange(1,1,Math.max(1,automation.getLastRow()),4).getDisplayValues();
+  var ozonHealth=null;
+  for(var ai=0;ai<automationRows.length;ai++){
+    if(String(automationRows[ai][0]||'').trim().toLowerCase()==='ozon заказы'){ozonHealth=automationRows[ai];break;}
+  }
+  var sourceLastSuccess=ozonHealth?String(ozonHealth[1]||'').trim():'';
+  var sourceStatus=ozonHealth?String(ozonHealth[3]||'').trim():'СТРОКА СТАТУСА НЕ НАЙДЕНА';
+  if(!ozonHealth||!sourceLastSuccess||!/работает/i.test(sourceStatus)){
+    return {ok:false,action:'publish_ozon_summary_orders',source_id:SMC_OZON_SUMMARY.sourceId,
+      source_status:sourceStatus,source_last_success:sourceLastSuccess||null,
+      reason:'OZON_SOURCE_EXPORT_NOT_VERIFIED; summaries preserved without overwrite'};
+  }
+  var sourceUpdated=sourceLastSuccess;
   var raw=sourceSheet.getRange(1,1,last,19).getValues();
   var expected=['Кабинет','Номер отправления','Номер заказа','Принят в обработку','SKU','Артикул','Товар','Кол-во'];
   var indexes=[0,2,4,7,15,16,17,18];
@@ -5230,11 +5244,11 @@ function sellmonitorGithubPublishOzonSummaryOrders_() {
     if(JSON.stringify(skuSheet.getRange(4,1,1,12).getDisplayValues()[0])!==JSON.stringify(skuHeader))throw new Error('OZON_TARGET_SKU_HEADER_MISMATCH:'+cfg.name);
     var dailyRows=agg.summary.slice(1), dailyStart=5;
     var oldDaily=sellmonitorGithubOzonRows_(daily,dailyStart,1,10), oldSku=sellmonitorGithubOzonRows_(skuSheet,5,1,12), oldHelper=sellmonitorGithubOzonRows_(daily,2,12,4);
-    var oldStamp=daily.getRange(2,1).getValue(), newStamp='Источник: Ozon Заказы; выгрузка изменена '+sourceUpdated+'; дата — «Принят в обработку» (UTC+3); заказ = кабинет + номер заказа, отправление = кабинет + posting number.';
+    var oldStamp=daily.getRange(2,1).getValue(), newStamp='Источник: Ozon Заказы; последний успешный экспорт '+sourceUpdated+'; дата — «Принят в обработку» (UTC+3); заказ = кабинет + номер заказа, отправление = кабинет + posting number.';
     var helper=[['Полные дни — данные графика','Заказы','Отправления','Штук']].concat(agg.fullDays);
     var sameDaily=JSON.stringify(oldDaily)===JSON.stringify(dailyRows), sameSku=JSON.stringify(oldSku)===JSON.stringify(agg.products), sameHelper=JSON.stringify(oldHelper)===JSON.stringify(helper.slice(1)), sameStamp=String(oldStamp||'')===newStamp;
     var archive=ss.getSheetByName('13_API_Заказы_Архив');
-    if(!archive){archive=ss.insertSheet('13_API_Заказы_Архив');archive.getRange(1,1,1,7).setValues([['Архив ID','Время','Лист','Диапазон','Строка в диапазоне','Время источника','Старое значение JSON']]);}
+    if(!archive){archive=ss.insertSheet('13_API_Заказы_Архив');archive.getRange(1,1,1,7).setValues([['Архив ID','Время','Лист','Диапазон','Строка в диапазоне','Последний успешный экспорт источника','Старое значение JSON']]);}
     else if(archive.getLastRow()===0)archive.getRange(1,1,1,7).setValues([['Архив ID','Время','Лист','Диапазон','Строка в диапазоне','Время источника','Старое значение JSON']]);
     var archiveId=Utilities.getUuid(), archived=0;
     if(!sameStamp) archived+=sellmonitorGithubOzonArchive_(archive,'11_API_Заказы','A2',[[oldStamp]],sourceUpdated,archiveId);
@@ -5270,14 +5284,14 @@ function sellmonitorGithubPublishOzonSummaryOrders_() {
     var charts=daily.getCharts();
     if(charts.length){var range=daily.getRange(1,12,helper.length,4);charts.forEach(function(ch){daily.updateChart(ch.modify().clearRanges().addRange(range).build());});}
     var log=ss.getSheetByName('14_API_Заказы_Журнал');
-    if(!log){log=ss.insertSheet('14_API_Заказы_Журнал');log.getRange(1,1,1,12).setValues([['Время','Магазин','Источник','Время изменения источника','Строк источника','Период с','Период по','Строк сводки','Строк SKU','Строк в архиве','SHA-256 сводки','Проверка']]);}
+    if(!log){log=ss.insertSheet('14_API_Заказы_Журнал');log.getRange(1,1,1,12).setValues([['Время запуска','Магазин','Источник','Последний успешный экспорт','Строк источника','Период с','Период по','Строк сводки','Строк SKU','Строк в архиве','SHA-256 сводки','Проверка']]);}
     else if(log.getLastRow()===0)log.getRange(1,1,1,12).setValues([['Время','Магазин','Источник','Время изменения источника','Строк источника','Период с','Период по','Строк сводки','Строк SKU','Строк в архиве','SHA-256 сводки','Проверка']]);
     var finalHash=sellmonitorGithubOzonHash_({summary:newDaily,products:newSku,helper:newHelper});
     var logRow=[new Date(),cfg.name,SMC_OZON_SUMMARY.sourceSheet,sourceUpdated,agg.sourceRows,agg.minDay,agg.maxDay,newDaily.length,newSku.length,archived,finalHash,'OK: запись и чтение сводки совпали; пустые дни не заменены нулями'];
     var logAt=log.getLastRow()+1;sellmonitorGithubOzonEnsureRows_(log,logAt);log.getRange(logAt,1,1,12).setValues([logRow]);
     var logRead=log.getRange(logAt,1,1,12).getValues()[0];
     if(String(logRead[10])!==finalHash||String(logRead[11])!==logRow[11])throw new Error('OZON_LOG_READBACK_MISMATCH:'+cfg.name);
-    results.push({store:cfg.name,ok:true,source_rows:agg.sourceRows,source_min:agg.minDay,source_max:agg.maxDay,daily_rows:newDaily.length,sku_rows:newSku.length,archived_rows:archived,source_updated:sourceUpdated,sha256:finalHash,readback:true,charts:charts.length});
+    results.push({store:cfg.name,ok:true,source_rows:agg.sourceRows,source_min:agg.minDay,source_max:agg.maxDay,daily_rows:newDaily.length,sku_rows:newSku.length,archived_rows:archived,source_last_success:sourceUpdated,sha256:finalHash,readback:true,charts:charts.length});
     } catch(err) {
       results.push({store:cfg.name,ok:false,error:String(err && err.message || err),source_updated:sourceUpdated});
     }
