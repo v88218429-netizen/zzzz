@@ -179,7 +179,9 @@ def _publish() -> None:
             detail = str(view_result.get("error", "unknown bridge response"))[:500] if isinstance(view_result, dict) else "invalid bridge response"
             raise RuntimeError(f"Google Sheets bridge rejected daily-view archive publication: {detail}")
         daily_view = ((view_result.get("partitions") or {}).get("daily_view") or {})
-        if daily_view.get("archive_only") is not True or daily_view.get("rows", 0) <= 0:
+        has_daily_source_rows = any(source_datasets[name] for name in ("ads", "funnel", "organic"))
+        if (daily_view.get("archive_only") is not True or
+                (int(daily_view.get("rows") or 0) <= 0 and has_daily_source_rows)):
             raise RuntimeError("WB_TRAFFIC_DAILY_VIEW_ARCHIVE_INCOMPLETE")
 
         store_publications = {}
@@ -214,9 +216,12 @@ def _publish() -> None:
                 store_view = ((store_result.get("partitions") or {}).get("daily_view") or {})
                 lite_tables = store_view.get("lite_tables") or {}
                 dashboard = store_view.get("dashboard") or {}
-                if (store_result.get("ok") is not True or lite_tables.get("ok") is not True or
-                        lite_tables.get("written") != 1 or lite_tables.get("stores") != [shop_name] or
-                        lite_tables.get("failed")):
+                daily_source_rows = sum(len(store_datasets[name]) for name in ("ads", "funnel", "organic"))
+                no_daily_facts = daily_source_rows == 0 and store_view.get("no_daily_facts") is True
+                wrote_store_table = (lite_tables.get("written") == 1 and lite_tables.get("stores") == [shop_name])
+                explicitly_skipped_empty = (lite_tables.get("written") == 0 and shop_name in (lite_tables.get("skipped") or []))
+                if (store_result.get("ok") is not True or lite_tables.get("ok") is not True or lite_tables.get("failed") or
+                        (not wrote_store_table and not (no_daily_facts and explicitly_skipped_empty))):
                     raise RuntimeError(f"WB_TRAFFIC_STORE_LIGHT_TABLE_INCOMPLETE:{shop_name}: {json.dumps(lite_tables, ensure_ascii=False)[:800]}")
                 dashboard_error = None
                 if dashboard.get("skipped") is not True and (
@@ -228,6 +233,9 @@ def _publish() -> None:
                     )
                     store_errors.append(dashboard_error)
                 store_publications[shop_name] = {
+                    "status": "NO_DAILY_SOURCE_FACTS; prior rows preserved" if no_daily_facts else "PUBLISHED",
+                    "source_rows": daily_source_rows,
+                    "fresh_rows": store_view.get("fresh_rows"),
                     "lite_table": lite_tables,
                     "dashboard": dashboard,
                     "dashboard_error": dashboard_error,
