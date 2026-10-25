@@ -5115,8 +5115,16 @@ function sellmonitorGithubOzonArchive_(archive, target, rangeA1, oldRows, source
   return payload.length;
 }
 
+function sellmonitorGithubOzonLastValueRow_(sheet, col) {
+  var last=sheet.getLastRow();
+  if(last<1)return 0;
+  var values=sheet.getRange(1,col,last,1).getDisplayValues();
+  for(var i=values.length-1;i>=0;i--)if(String(values[i][0]||'').trim()!=='')return i+1;
+  return 0;
+}
+
 function sellmonitorGithubOzonRows_(sheet, row, col, width) {
-  var last = sheet.getLastRow();
+  var last = sellmonitorGithubOzonLastValueRow_(sheet,col);
   if (last < row) return [];
   return sheet.getRange(row, col, last-row+1, width).getValues();
 }
@@ -5209,7 +5217,9 @@ function sellmonitorGithubPublishOzonSummaryOrders_() {
   if(!records.length)throw new Error('OZON_SOURCE_NO_VALID_ROWS_PRESERVE');
   var today=Utilities.formatDate(new Date(),SMC_OZON_SUMMARY.timezone,'yyyy-MM-dd'), results=[];
   Object.keys(SMC_OZON_SUMMARY.stores).forEach(function(cabinet){
-    var cfg=SMC_OZON_SUMMARY.stores[cabinet], ss=SpreadsheetApp.openById(cfg.id),daily=ss.getSheetByName('11_API_Заказы'),skuSheet=ss.getSheetByName('12_API_Заказы_SKU');
+    var cfg=SMC_OZON_SUMMARY.stores[cabinet];
+    try {
+    var ss=SpreadsheetApp.openById(cfg.id),daily=ss.getSheetByName('11_API_Заказы'),skuSheet=ss.getSheetByName('12_API_Заказы_SKU');
     if(!daily||!skuSheet)throw new Error('OZON_TARGET_TAB_MISSING:'+cfg.name);
     var storeRecords=records.filter(function(r){return r.cabinet===cabinet;});
     if(!storeRecords.length){results.push({store:cfg.name,ok:true,skipped:true,reason:'empty_source_preserved'});return;}
@@ -5268,6 +5278,9 @@ function sellmonitorGithubPublishOzonSummaryOrders_() {
     var logRead=log.getRange(logAt,1,1,12).getValues()[0];
     if(String(logRead[10])!==finalHash||String(logRead[11])!==logRow[11])throw new Error('OZON_LOG_READBACK_MISMATCH:'+cfg.name);
     results.push({store:cfg.name,ok:true,source_rows:agg.sourceRows,source_min:agg.minDay,source_max:agg.maxDay,daily_rows:newDaily.length,sku_rows:newSku.length,archived_rows:archived,source_updated:sourceUpdated,sha256:finalHash,readback:true,charts:charts.length});
+    } catch(err) {
+      results.push({store:cfg.name,ok:false,error:String(err && err.message || err),source_updated:sourceUpdated});
+    }
   });
   return {ok:results.every(function(x){return x.ok===true;}),action:'publish_ozon_summary_orders',source_id:SMC_OZON_SUMMARY.sourceId,source_rows:records.length,ignored_rows:ignored,source_updated:sourceUpdated,stores:results};
 }
