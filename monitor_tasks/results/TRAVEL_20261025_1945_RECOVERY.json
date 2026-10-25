@@ -1,0 +1,34 @@
+{
+  "task_id": "TRAVEL",
+  "request": "TRAVEL_20261025_1945_RECOVERY.json",
+  "query": "как путешествовать с семьей и управлять бизнесом удаленно",
+  "knowledge_tag": "TRAVEL",
+  "generated_at": "2026-10-25T16:46:49.015848+00:00",
+  "videos": [
+    {
+      "video_id": "cx0o7aOkXE4",
+      "url": "https://www.youtube.com/watch?v=cx0o7aOkXE4",
+      "title": "Я посетил 69 стран. Где бы я хотел жить в 2027",
+      "channel": "Andrey Burenok",
+      "duration": 8588,
+      "timestamp": null,
+      "query": "как путешествовать с семьей и управлять бизнесом удаленно",
+      "kind": "video",
+      "transcript": "transcripts/2026-10-25_TRAVEL_video_cx0o7aOkXE4.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "V34gmAsu_NY",
+      "url": "https://www.youtube.com/watch?v=V34gmAsu_NY",
+      "title": "Как открыть бизнес в 2026 году? Всё, что нужно знать новичку в 1 видео!",
+      "channel": "ЮЛИЯ ТРУС ПРО БИЗНЕС",
+      "duration": 2149,
+      "timestamp": null,
+      "query": "как путешествовать с семьей и управлять бизнесом удаленно",
+      "kind": "video",
+      "transcript": "transcripts/2026-10-25_TRAVEL_video_V34gmAsu_NY.md",
+      "method": "FreeTranscriptAPI"
+    }
+  ],
+  "errors": []
+}
