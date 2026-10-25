@@ -41,7 +41,9 @@ jobs:
           import json, os, time, urllib.error, urllib.request
 
           url = "https://script.google.com/macros/s/" + os.environ["WEBAPP_DEPLOYMENT_ID"] + "/exec"
-          expected = ("air_wb", "hozyayushka_wb", "sanych_wb")
+          selected_store = os.environ.get("PUBLISH_ONLY_STORE", "").strip()
+          expected = (selected_store,) if selected_store == "sanych_wb" else ("air_wb", "hozyayushka_wb", "sanych_wb")
+          print("PUBLISH_SCOPE=" + (selected_store or "all_stores"))
           verified = []
           for store_id in expected:
               body = json.dumps({
@@ -105,6 +107,7 @@ jobs:
               )
               time.sleep(5)
           actual = {item.get("store") for item in verified}
-          if actual != {"AIR", "Хозяюшка", "Саныч"}:
+          expected_names = {"Саныч"} if selected_store == "sanych_wb" else {"AIR", "Хозяюшка", "Саныч"}
+          if actual != expected_names:
               raise SystemExit("WB summary stores readback acceptance failed: " + repr(actual))
           PY
