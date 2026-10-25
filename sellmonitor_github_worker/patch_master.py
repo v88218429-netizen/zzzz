@@ -53,27 +53,31 @@ if worker.exists():
         print("WB_SECRET_SEED_ENDPOINT=patched")
 
     # Dates written as ISO strings are read back by Apps Script as Date values
-    # once the destination columns have a date number format. Compare their
-    # calendar keys, not JavaScript Date.toString() output.
+    # once the destination columns have a date number format. Normalize date
+    # cells both for idempotence checks and for readback verification.
+    date_normalize_anchor = "var newRows=[],changedRows=[],archiveRows=[],archived=0,skippedIncomplete=0,verifiedRows=[];"
+    date_normalize_marker = "WB_INNER_DATE_READBACK_V2"
+    if date_normalize_anchor in worker_text and date_normalize_marker not in worker_text:
+        normalizer = """var newRows=[],changedRows=[],archiveRows=[],archived=0,skippedIncomplete=0,verifiedRows=[];
+  /* WB_INNER_DATE_READBACK_V2 */
+  var targetTimeZone=ss.getSpreadsheetTimeZone();
+  var normalizeInnerRow=function(row){return row.map(function(v,i){
+    if(v instanceof Date)return (i===1||i===2)?Utilities.formatDate(v,targetTimeZone,'yyyy-MM-dd'):v.toISOString();
+    return v==null?'':String(v);
+  });};"""
+        worker_text = worker_text.replace(date_normalize_anchor, normalizer, 1)
+        same_data_anchor = "var sameData=prior.slice(0,keyCol-2).concat(prior.slice(keyCol-1)).join('\\u001f')===r.slice(0,keyCol-2).concat(r.slice(keyCol-1)).join('\\u001f');"
+        same_data_replacement = "var sameData=normalizeInnerRow(prior.slice(0,keyCol-2).concat(prior.slice(keyCol-1))).join('\\u001f')===normalizeInnerRow(r.slice(0,keyCol-2).concat(r.slice(keyCol-1))).join('\\u001f');"
+        if same_data_anchor not in worker_text:
+            raise SystemExit("WB inner idempotence comparison anchor changed")
+        worker_text = worker_text.replace(same_data_anchor, same_data_replacement, 1)
+        print("WB_INNER_DATE_NORMALIZER=patched")
+    elif date_normalize_marker not in worker_text and "function sellmonitorGithubWbInnerUpsert_" in worker_text:
+        raise SystemExit("WB inner date normalization anchor changed")
+
     date_readback_anchor = "if(rb.join('|')!==r.join('|'))throw new Error('WB_INNER_READBACK_MISMATCH:'+sh.getName()+':'+k);"
-    date_readback_marker = "WB_INNER_DATE_READBACK_V2"
     if date_readback_anchor in worker_text:
-        date_readback_block = """/* WB_INNER_DATE_READBACK_V2 */
-      var readbackMatches = rb.length === r.length;
-      var targetTimeZone = sh.getParent().getSpreadsheetTimeZone();
-      for (var ci = 0; readbackMatches && ci < r.length; ci++) {
-        var actualValue = rb[ci], expectedValue = r[ci];
-        if ((ci === 1 || ci === 2) && actualValue instanceof Date) {
-          actualValue = Utilities.formatDate(actualValue, targetTimeZone, 'yyyy-MM-dd');
-        } else if (actualValue instanceof Date) actualValue = actualValue.toISOString();
-        if ((ci === 1 || ci === 2) && expectedValue instanceof Date) {
-          expectedValue = Utilities.formatDate(expectedValue, targetTimeZone, 'yyyy-MM-dd');
-        } else if (expectedValue instanceof Date) expectedValue = expectedValue.toISOString();
-        if ((actualValue == null ? '' : String(actualValue)) !== (expectedValue == null ? '' : String(expectedValue))) {
-          readbackMatches = false;
-        }
-      }
-      if (!readbackMatches) throw new Error('WB_INNER_READBACK_MISMATCH:'+sh.getName()+':'+k);"""
+        date_readback_block = "if(normalizeInnerRow(rb).join('|')!==normalizeInnerRow(r).join('|'))throw new Error('WB_INNER_READBACK_MISMATCH:'+sh.getName()+':'+k);"
         worker_text = worker_text.replace(date_readback_anchor, date_readback_block, 1)
         print("WB_INNER_DATE_READBACK=patched")
     elif date_readback_marker not in worker_text and "WB_INNER_READBACK_MISMATCH" in worker_text:
