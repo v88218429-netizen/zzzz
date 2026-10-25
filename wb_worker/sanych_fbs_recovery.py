@@ -4,7 +4,7 @@
 Reads WB Marketplace API; writes only via the authenticated GitHub Google adapter.
 No credentials or individual order records are printed or committed.
 """
-# [FBS-RANGE:2026-07-28:2026-10-25] SANYCH 90-day reconciliation trigger (UTC).
+# SANYCH FBS reconciliation; 90-day bootstrap runs only on an explicit commit marker.
 
 from __future__ import annotations
 import datetime as dt
@@ -42,7 +42,7 @@ def request(url: str, *, token: str | None = None, body: dict | None = None, tim
             except ValueError:
                 delay = 2 * attempt
         except (urllib.error.URLError, TimeoutError):
-            if attempt == 5:
+            if attempt == retries:
                 raise RuntimeError("NETWORK_RETRY_EXHAUSTED") from None
             delay = 2 * attempt
         time.sleep(delay)
