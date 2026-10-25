@@ -3618,7 +3618,7 @@ function sellmonitorGithubWriteWbTrafficDailyView_(prepared, runId, options) {
     ]);
   });
   if (options.storeName) freshRows = freshRows.filter(function(row){return String(row[1]||'')===options.storeName;});
-  if (!freshRows.length) return {ok:true,skipped:true,reason:'no_daily_facts',rows:last>1?last-1:0};
+  if (!freshRows.length && options.archiveOnly === true && last <= 1) return {ok:true,archive_only:true,fresh_rows:0,rows:0,added:0,updated:0,max_date:''};
   var byKey={};
   if (last>1) sheet.getRange(2,1,last-1,headers.length).getValues().forEach(function(row,index){
     if (String(row[0]||'').trim()==='') return;
@@ -3650,12 +3650,12 @@ function sellmonitorGithubWriteWbTrafficDailyView_(prepared, runId, options) {
     check.forEach(function(row){var key=String(row[1]||'')+'|'+String(row[0]||'');if(seen[key])throw new Error('WB_TRAFFIC_DAILY_VIEW_READBACK_DUPLICATE:' + key);seen[key]=true;});
     if (check.length!==allRows.length) throw new Error('WB_TRAFFIC_DAILY_VIEW_READBACK_ROW_COUNT');
   }
-  if (options.archiveOnly === true) return {ok:true,archive_only:true,rows:allRows.length,added:added,updated:updated,max_date:allRows.length?String(allRows[allRows.length-1][0]):'',reconciled:freshRows.filter(function(row){return row[12]==='ПОЛНЫЙ РАСЧЁТ';}).length};
+  if (options.archiveOnly === true) return {ok:true,archive_only:true,fresh_rows:freshRows.length,rows:allRows.length,added:added,updated:updated,max_date:allRows.length?String(allRows[allRows.length-1][0]):'',reconciled:freshRows.filter(function(row){return row[12]==='ПОЛНЫЙ РАСЧЁТ';}).length};
   var liteTables = sellmonitorGithubWriteWbTrafficLiteTables_(allRows, options.storeName);
   var dashboard = options.storeName
     ? {ok:true,skipped:true,reason:'summary_scope_only',stores:[options.storeName]}
     : sellmonitorGithubWriteWbTrafficDashboards_(freshRows, runId, options.storeName);
-  return {ok:liteTables.ok===true,rows:allRows.length,added:added,updated:updated,max_date:allRows.length?String(allRows[allRows.length-1][0]):'',
+  return {ok:liteTables.ok===true,fresh_rows:freshRows.length,no_daily_facts:freshRows.length===0,rows:allRows.length,added:added,updated:updated,max_date:allRows.length?String(allRows[allRows.length-1][0]):'',
     reconciled:freshRows.filter(function(row){return row[12]==='ПОЛНЫЙ РАСЧЁТ';}).length,lite_tables:liteTables,dashboard:dashboard};
 }
 
