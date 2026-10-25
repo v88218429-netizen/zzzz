@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 from pathlib import Path
+import re
 import sys
 
 if len(sys.argv) != 2:
@@ -80,24 +81,20 @@ export_end = text.find("\nfunction ", export_start + 10)
 if export_end < 0:
     export_end = len(text)
 export_block = text[export_start:export_end]
-guard_anchor = "  var ss =\n    SpreadsheetApp.getActiveSpreadsheet();\n\n  var errors = [];"
-guard_replacement = """  var ss =
-    SpreadsheetApp.getActiveSpreadsheet();
-
-  var continuationPending = ScriptApp.getProjectTriggers().some(function(t) {
+guard_code = """  var continuationPending = ScriptApp.getProjectTriggers().some(function(t) {
     return t.getHandlerFunction() === 'exportDOM_continue';
   });
   if (continuationPending) {
     Logger.log('Master: выгрузка заказов пропущена; сохранён триггер продолжения exportDOM_continue.');
     return;
   }
-
-  var errors = [];"""
-if guard_anchor not in export_block:
-    if "сохранён триггер продолжения exportDOM_continue" not in export_block:
-        raise SystemExit("marketplace continuation guard anchor missing")
-else:
-    export_block = export_block.replace(guard_anchor, guard_replacement, 1)
+"""
+guard_marker = "var continuationPending = ScriptApp.getProjectTriggers()"
+if guard_marker not in export_block:
+    header_end = export_block.find("\n", export_block.find("function runMarketplaceExports_() {"))
+    if header_end < 0:
+        raise SystemExit("marketplace export wrapper header malformed")
+    export_block = export_block[:header_end + 1] + guard_code + export_block[header_end + 1:]
 
 result_anchor = "      DOM[job.method]();"
 result_replacement = """      var exportResult = DOM[job.method]();
@@ -114,7 +111,14 @@ result_replacement = """      var exportResult = DOM[job.method]();
 if result_anchor in export_block:
     export_block = export_block.replace(result_anchor, result_replacement, 1)
 elif "var exportResult = DOM[job.method]();" not in export_block:
-    raise SystemExit("marketplace export result anchor missing")
+    export_block, replaced = re.subn(
+        r"DOM\s*\[\s*job\.method\s*\]\s*\(\s*\)\s*;",
+        lambda _: result_replacement,
+        export_block,
+        count=1,
+    )
+    if replaced != 1:
+        raise SystemExit("marketplace export result anchor missing")
 
 text = text[:export_start] + export_block + text[export_end:]
 
