@@ -127,24 +127,21 @@ if guard_marker not in export_block:
         raise SystemExit("marketplace export wrapper header malformed")
     export_block = export_block[:header_end + 1] + guard_code + export_block[header_end + 1:]
 
-result_anchor = "      DOM[job.method]();"
-result_replacement = """      var exportResult = DOM[job.method]();
-      if (exportResult === false) {
+result_replacement = """__INDENT__var result = DOM[job.method]();
+__INDENT__if (result === false) {
         var continuationCreated = ScriptApp.getProjectTriggers().some(function(t) {
           return t.getHandlerFunction() === 'exportDOM_continue';
         });
         if (!continuationCreated) {
           throw new Error(job.name + ': вернулся признак продолжения без триггера exportDOM_continue');
         }
-        Logger.log(job.name + ': порция завершена; продолжение сохранено, остальные выгрузки отложены.');
-        return;
-      }"""
-if result_anchor in export_block:
-    export_block = export_block.replace(result_anchor, result_replacement, 1)
-elif "var exportResult = DOM[job.method]();" not in export_block:
+__INDENT__  Logger.log(job.name + ': порция завершена; продолжение сохранено, остальные выгрузки отложены.');
+__INDENT__  return;
+__INDENT__}"""
+if "if (result === false)" not in export_block:
     export_block, replaced = re.subn(
-        r"DOM\s*\[\s*job\.method\s*\]\s*\(\s*\)\s*;",
-        lambda _: result_replacement,
+        r"(?m)^(?P<indent>[ \t]*)(?:var\s+result\s*=\s*)?DOM\s*\[\s*job\.method\s*\]\s*\(\s*\)\s*;",
+        lambda m: result_replacement.replace("__INDENT__", m.group("indent")),
         export_block,
         count=1,
     )
