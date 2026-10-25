@@ -3197,7 +3197,7 @@ function sellmonitorGithubInnerFinanceChecksum_(rows) {
 
 function sellmonitorGithubInnerFinanceStoredDateKey_(value) {
   if (value instanceof Date && !isNaN(value.getTime())) {
-    return Utilities.formatDate(value,'GMT','yyyy-MM-dd');
+    return Utilities.formatDate(value,'Europe/Moscow','yyyy-MM-dd');
   }
   var s=String(value==null?'':value).trim();
   var iso=s.match(/^(\d{4}-\d{2}-\d{2})/);
