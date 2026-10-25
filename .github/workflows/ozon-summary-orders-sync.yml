@@ -55,23 +55,24 @@ jobs:
               try:
                   with urllib.request.urlopen(req, timeout=240) as response:
                       result = json.loads(response.read().decode("utf-8"))
-                  if result.get("ok") is True:
-                      break
-                  last = json.dumps({
-              "action": result.get("action"),
-              "reason": result.get("reason"),
-              "source_status": result.get("source_status"),
-              "source_last_success": result.get("source_last_success"),
-              "stores": [
-                  {"store": x.get("store"), "error": x.get("error"), "ok": x.get("ok")}
-                  for x in (result.get("stores") or [])
-              ],
-          }, ensure_ascii=False)[:1200]
-              if result.get("ok") is False:
-                  break
-              # Retry only transport or response-decoding failures.
               except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
                   last = type(exc).__name__ + ": " + str(exc)[:240]
+              else:
+                  if isinstance(result, dict) and result.get("ok") is True:
+                      break
+                  last = json.dumps({
+                      "action": result.get("action") if isinstance(result, dict) else None,
+                      "reason": result.get("reason") if isinstance(result, dict) else None,
+                      "source_status": result.get("source_status") if isinstance(result, dict) else None,
+                      "source_last_success": result.get("source_last_success") if isinstance(result, dict) else None,
+                      "stores": [
+                          {"store": x.get("store"), "error": x.get("error"), "ok": x.get("ok")}
+                          for x in (result.get("stores") or [])
+                      ] if isinstance(result, dict) else [],
+                  }, ensure_ascii=False)[:1200]
+                  # A valid JSON rejection is deterministic; retry only transport or decode failures.
+                  if isinstance(result, dict) and result.get("ok") is False:
+                      break
               if attempt < 4:
                   time.sleep(15 * attempt)
           if not result or result.get("ok") is not True:
