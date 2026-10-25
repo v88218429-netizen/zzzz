@@ -3323,7 +3323,8 @@ function sellmonitorGithubWriteInnerFinancePart_(cfg, rows, from, runId) {
   });
   var merged = Object.keys(byKey).map(function(key) { return byKey[key]; });
   merged.sort(function(a,b) {
-    return String(a[3]).localeCompare(String(b[3])) || String(a[6]).localeCompare(String(b[6]));
+    return sellmonitorGithubInnerFinanceStoredDateKey_(a[3]).localeCompare(sellmonitorGithubInnerFinanceStoredDateKey_(b[3])) ||
+      String(a[6]).localeCompare(String(b[6]));
   });
   var allTrusted = merged.every(function(row) { return String(row[38] || '') === 'FACTUAL_INNER_ANALYTICS'; });
   var datasetClass = allTrusted ? 'trusted_inner_daily_rows' : 'mixed_trust_inner_daily_rows';
@@ -3336,7 +3337,7 @@ function sellmonitorGithubWriteInnerFinancePart_(cfg, rows, from, runId) {
   var readback = merged.length ? sheet.getRange(2,1,merged.length,width).getValues() : [];
   var digest = sellmonitorGithubInnerFinanceChecksum_(merged);
   if (sellmonitorGithubInnerFinanceChecksum_(readback) !== digest) throw new Error('INNER_FINANCE_PART_READBACK_CHECKSUM_MISMATCH');
-  var dates = merged.map(function(row) { return String(row[3] || ''); }).filter(Boolean).sort();
+  var dates = merged.map(function(row) { return sellmonitorGithubInnerFinanceStoredDateKey_(row[3]); }).filter(Boolean).sort();
   var monthParts = month.split('-');
   var monthEnd = Utilities.formatDate(new Date(Date.UTC(Number(monthParts[0]),Number(monthParts[1]),0)),'GMT','yyyy-MM-dd');
   var url = 'https://docs.google.com/spreadsheets/d/' + part.id + '/edit';
