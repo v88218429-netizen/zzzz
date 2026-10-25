@@ -12,7 +12,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: video-research-task-worker
+  group: ai-video-monitor-git-writes
   cancel-in-progress: false
 
 jobs:
@@ -23,6 +23,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Refresh branch head before processing
+        run: |
+          git fetch origin "${GITHUB_REF_NAME}"
+          git reset --hard "origin/${GITHUB_REF_NAME}"
 
       - uses: actions/setup-python@v5
         with:
