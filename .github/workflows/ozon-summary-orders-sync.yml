@@ -2,6 +2,10 @@ name: Ozon summary orders sync
 
 on:
   workflow_dispatch:
+  push:
+    branches: [mainggg]
+    paths:
+      - ".github/workflows/ozon-summary-orders-sync.yml"
   schedule:
     - cron: "17 * * * *"
 
