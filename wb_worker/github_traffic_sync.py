@@ -219,7 +219,8 @@ def _publish() -> None:
                         lite_tables.get("failed")):
                     raise RuntimeError(f"WB_TRAFFIC_STORE_LIGHT_TABLE_INCOMPLETE:{shop_name}: {json.dumps(lite_tables, ensure_ascii=False)[:800]}")
                 dashboard_error = None
-                if dashboard.get("written") != 1 or dashboard.get("failed_stores"):
+                if dashboard.get("skipped") is not True and (
+                        dashboard.get("written") != 1 or dashboard.get("failed_stores")):
                     dashboard_error = (
                         f"WB_TRAFFIC_STORE_DASHBOARD_INCOMPLETE:{shop_name}: "
                         f"written={dashboard.get('written')} failed={dashboard.get('failed_stores')} "
