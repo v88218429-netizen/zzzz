@@ -23,7 +23,7 @@ on:
 permissions:
   contents: write
 concurrency:
-  group: ai-video-monitor-autonomous
+  group: ai-video-monitor-git-writes
   cancel-in-progress: false
 jobs:
   monitor:
