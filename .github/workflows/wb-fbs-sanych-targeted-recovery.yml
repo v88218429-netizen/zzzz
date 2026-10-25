@@ -1,6 +1,8 @@
 name: WB FBS Sanych targeted recovery
 
 on:
+  schedule:
+    - cron: "*/30 * * * *"
   workflow_dispatch:
     inputs:
       start_date:
