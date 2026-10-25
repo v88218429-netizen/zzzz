@@ -5383,6 +5383,226 @@ function sellmonitorGithubPublishOzonSummaryOrders_() {
   return {ok:results.every(function(x){return x.ok===true;}),action:'publish_ozon_summary_orders',source_id:SMC_OZON_SUMMARY.sourceId,source_rows:records.length,ignored_rows:ignored,source_updated:sourceUpdated,stores:results};
 }
 
+
+var SMC_WB_INNER_SUMMARY_V1 = Object.freeze({
+  registryId:'1E7HSGJgamzKZkdNdDNyp0f1iI2mLhhbpfi04-sOytBs',
+  registrySheet:'Части',
+  stores:{
+    air_wb:{name:'AIR',id:'1fc6fYdNojj02T597-T0pyCjpiWmhvAr45r1_jiyabIk'},
+    hozyayushka_wb:{name:'Хозяюшка',id:'1H_UpoQa0ZsY3hnnS6R4cM2xXiqezFRYa0ZDLhVYfZbQ'},
+    sanych_wb:{name:'Саныч',id:'1kdeQ-N80Ul0WvekuPxM1QS8FRz0I3g5eOpsgcK0g9Ls'}
+  },
+  tabs:{day:'90_SM_Факт_Дни',week:'91_SM_Факт_Недели',month:'92_SM_Факт_Месяцы',archive:'93_SM_Факт_Архив',log:'94_SM_Факт_Журнал'},
+  chunk:400
+});
+
+function sellmonitorGithubWbInnerDateKey_(v,tz){
+  if(v instanceof Date&&!isNaN(v.getTime()))return Utilities.formatDate(v,tz,'yyyy-MM-dd');
+  if(typeof v==='number'&&isFinite(v))return Utilities.formatDate(new Date(Date.UTC(1899,11,30)+Math.floor(v)*86400000),tz,'yyyy-MM-dd');
+  var s=String(v==null?'':v).trim();
+  var m=s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if(m)return m[1]+'-'+m[2]+'-'+m[3];
+  var d=new Date(s);
+  return isNaN(d.getTime())?'':Utilities.formatDate(d,tz,'yyyy-MM-dd');
+}
+
+function sellmonitorGithubWbInnerAddDays_(key,n){
+  var p=key.split('-').map(Number);
+  return Utilities.formatDate(new Date(Date.UTC(p[0],p[1]-1,p[2]+n)),'UTC','yyyy-MM-dd');
+}
+
+function sellmonitorGithubWbInnerWeekStart_(key){
+  var p=key.split('-').map(Number),d=new Date(Date.UTC(p[0],p[1]-1,p[2]));
+  return sellmonitorGithubWbInnerAddDays_(key,-((d.getUTCDay()+6)%7));
+}
+
+function sellmonitorGithubWbInnerMonthStart_(key){return key.substring(0,7)+'-01';}
+
+function sellmonitorGithubWbInnerRowKey_(grain,period,storeId,nmId){
+  return grain+'|'+period+'|'+storeId+'|'+String(nmId||'');
+}
+
+function sellmonitorGithubWbInnerBuildRows_(sourceRows,headers,storeId,tz){
+  var metricHeaders=headers.slice(8,38), items={}, datesByProduct={}, dateSeen={};
+  var sourceMin='',sourceMax='',factualDays={},partialDays={},sourceRowsCount=0;
+  var idIx=headers.indexOf('nmId'), articleIx=headers.indexOf('seller_article'), dayIx=headers.indexOf('period_from');
+  var trustIx=headers.indexOf('trust_status'), sourceIx=headers.indexOf('source'), loadedIx=headers.indexOf('loaded_at');
+  if(idIx<0||articleIx<0||dayIx<0||trustIx<0||sourceIx<0||loadedIx<0)throw new Error('WB_INNER_FACTS_SCHEMA_MISMATCH');
+  sourceRows.forEach(function(r){
+    var day=sellmonitorGithubWbInnerDateKey_(r[dayIx],tz),nm=String(r[idIx]||'').trim(),shop=String(r[0]||'').trim();
+    if(!day||!nm||shop!==storeId)return;
+    var trust=String(r[trustIx]||'').trim(), recordKey=String(r[headers.indexOf('record_key')]||'').trim();
+    if(!recordKey)throw new Error('WB_INNER_RECORD_KEY_MISSING');
+    if(!items[recordKey]){
+      var m=r.slice(8,38).map(function(v){return v===''||v==null?'':(typeof v==='number'?v:(isFinite(Number(v))?Number(v):''));});
+      items[recordKey]={day:day,nm:nm,article:String(r[articleIx]||''),productGroup:String(r[headers.indexOf('product_group')]||''),productSubgroup:String(r[headers.indexOf('product_subgroup')]||''),metrics:m,trust:trust,source:String(r[sourceIx]||''),loaded:r[loadedIx]||'',recordKey:recordKey};
+      var dkey=day+'|'+nm;
+      if(!datesByProduct[dkey])datesByProduct[dkey]=[];
+      datesByProduct[dkey].push(items[recordKey]);
+      sourceRowsCount++;
+      if(!sourceMin||day<sourceMin)sourceMin=day;
+      if(!sourceMax||day>sourceMax)sourceMax=day;
+      if(/FACTUAL/.test(trust))factualDays[day]=true;else if(/PARTIAL|PRELIM/.test(trust))partialDays[day]=true;
+    }
+  });
+  var dayRows=[],weekGroups={},monthGroups={};
+  Object.keys(items).forEach(function(k){
+    var x=items[k],periodEnd=sellmonitorGithubWbInnerAddDays_(x.day,0);
+    dayRows.push(['ДЕНЬ',x.day,periodEnd,1,1,storeId,x.nm,x.article,x.productGroup,x.productSubgroup].concat(x.metrics,[x.trust,x.source,x.loaded,sellmonitorGithubWbInnerRowKey_('D',x.day,storeId,x.nm)]));
+    var ws=sellmonitorGithubWbInnerWeekStart_(x.day),ms=sellmonitorGithubWbInnerMonthStart_(x.day),wk=ws+'|'+x.nm,mk=ms+'|'+x.nm;
+    if(!weekGroups[wk])weekGroups[wk]={grain:'НЕДЕЛЯ',start:ws,end:sellmonitorGithubWbInnerAddDays_(ws,6),store:storeId,nm:x.nm,article:x.article,group:x.productGroup,subgroup:x.productSubgroup,items:[],dates:{}};
+    if(!monthGroups[mk])monthGroups[mk]={grain:'МЕСЯЦ',start:ms,end:Utilities.formatDate(new Date(Date.UTC(Number(ms.slice(0,4)),Number(ms.slice(5,7)),0)),'UTC','yyyy-MM-dd'),store:storeId,nm:x.nm,article:x.article,group:x.productGroup,subgroup:x.productSubgroup,items:[],dates:{}};
+    weekGroups[wk].items.push(x);weekGroups[wk].dates[x.day]=1;
+    monthGroups[mk].items.push(x);monthGroups[mk].dates[x.day]=1;
+  });
+  function rollup_(g,grain){
+    var days=Object.keys(g.dates).length, expected=(new Date(Date.UTC(Number(g.start.slice(0,4)),Number(g.start.slice(5,7))-1,Number(g.start.slice(8,10)))).getTime());
+    var expectedDays=grain==='НЕДЕЛЯ'?7:(new Date(Date.UTC(Number(g.start.slice(0,4)),Number(g.start.slice(5,7)),0)).getUTCDate());
+    var sums=new Array(metricHeaders.length).fill(0),seen=new Array(metricHeaders.length).fill(0),last=g.items.slice().sort(function(a,b){return a.day<b.day?-1:1;}).pop(),anyPartial=false,allExact=true,source='',loaded='';
+    g.items.forEach(function(it){
+      if(/PARTIAL|PRELIM/.test(it.trust))anyPartial=true;
+      if(!/FACTUAL/.test(it.trust))allExact=false;
+      if(it.source)source=it.source;
+      if(it.loaded&&(!loaded||String(it.loaded)>String(loaded)))loaded=it.loaded;
+      it.metrics.forEach(function(v,i){if(v!==''&&v!=null&&isFinite(Number(v))){sums[i]+=Number(v);seen[i]++;}});
+    });
+    var vals=metricHeaders.map(function(h,i){return seen[i]===g.items.length?sums[i]:'';});
+    var ix={};metricHeaders.forEach(function(h,i){ix[h]=i;});
+    var profit=ix.profit_rub!=null?vals[ix.profit_rub]:'',revenue=ix.revenue_rub!=null?vals[ix.revenue_rub]:'',expenses=ix.expenses_total_rub!=null?vals[ix.expenses_total_rub]:'',sales=ix.net_sales_qty!=null?vals[ix.net_sales_qty]:'';
+    if(ix.margin!=null)vals[ix.margin]=typeof profit==='number'&&typeof revenue==='number'&&revenue!==0?profit/revenue:'';
+    if(ix.roi!=null)vals[ix.roi]=typeof profit==='number'&&typeof expenses==='number'&&expenses!==0?profit/expenses:'';
+    if(ix.buyout!=null)vals[ix.buyout]='';
+    if(ix.avg_profit_per_unit_rub!=null)vals[ix.avg_profit_per_unit_rub]=typeof profit==='number'&&typeof sales==='number'&&sales!==0?profit/sales:'';
+    if(ix.stock_qty_snapshot!=null)vals[ix.stock_qty_snapshot]=last?last.metrics[ix.stock_qty_snapshot]:'';
+    if(ix.stock_prime_cost_snapshot_rub!=null)vals[ix.stock_prime_cost_snapshot_rub]=last?last.metrics[ix.stock_prime_cost_snapshot_rub]:'';
+    var status=allExact&&days===expectedDays?'FACTUAL_COMPLETE':(anyPartial?'PRELIMINARY':'PARTIAL_COVERAGE');
+    return [grain,g.start,g.end,days,expectedDays,g.store,g.nm,g.article,g.group,g.subgroup].concat(vals,[status,source,loaded,sellmonitorGithubWbInnerRowKey_(grain==='НЕДЕЛЯ'?'W':'M',g.start,g.store,g.nm)]);
+  }
+  var weekRows=Object.keys(weekGroups).map(function(k){return rollup_(weekGroups[k],'НЕДЕЛЯ');});
+  var monthRows=Object.keys(monthGroups).map(function(k){return rollup_(monthGroups[k],'МЕСЯЦ');});
+  dayRows.sort(function(a,b){return String(a[1])===String(b[1])?String(a[6]).localeCompare(String(b[6])):String(a[1]).localeCompare(String(b[1]));});
+  weekRows.sort(function(a,b){return String(a[1])===String(b[1])?String(a[6]).localeCompare(String(b[6])):String(a[1]).localeCompare(String(b[1]));});
+  monthRows.sort(function(a,b){return String(a[1])===String(b[1])?String(a[6]).localeCompare(String(b[6])):String(a[1]).localeCompare(String(b[1]));});
+  return {day:dayRows,week:weekRows,month:monthRows,metricHeaders:metricHeaders,sourceRows:sourceRowsCount,min:sourceMin,max:sourceMax,factualDays:Object.keys(factualDays).length,partialDays:Object.keys(partialDays).length};
+}
+
+function sellmonitorGithubWbInnerEnsureSheet_(ss,name,headers){
+  var sh=ss.getSheetByName(name);
+  if(!sh)sh=ss.insertSheet(name);
+  if(sh.getLastRow()===0)sh.getRange(1,1,1,headers.length).setValues([headers]);
+  else{
+    var existing=sh.getRange(1,1,1,headers.length).getDisplayValues()[0];
+    if(JSON.stringify(existing)!==JSON.stringify(headers))throw new Error('WB_INNER_TARGET_SCHEMA_MISMATCH:'+name);
+  }
+  sh.setFrozenRows(1);
+  sh.getRange(1,1,1,headers.length).setFontWeight('bold').setBackground('#234f6e').setFontColor('#ffffff');
+  return sh;
+}
+
+function sellmonitorGithubWbInnerUpsert_(ss,sh,headers,rows,storeName){
+  var keyCol=headers.length,last=sh.getLastRow(),old=last>1?sh.getRange(2,1,last-1,keyCol).getValues():[],map={},duplicates=0;
+  old.forEach(function(r,i){var k=String(r[keyCol-1]||'');if(!k)return;if(map[k])duplicates++;map[k]=i+2;});
+  if(duplicates)throw new Error('WB_INNER_TARGET_DUPLICATE_KEYS:'+sh.getName()+':'+duplicates);
+  var archive=sellmonitorGithubWbInnerEnsureSheet_(ss,SMC_WB_INNER_SUMMARY_V1.tabs.archive,['Время архива','Лист','record_key','Старая строка JSON']);
+  var newRows=[],changedRows=[],archiveRows=[],archived=0,skippedIncomplete=0,verifiedRows=[];
+  rows.forEach(function(r){
+    var key=String(r[keyCol-1]||''),at=map[key];
+    if(!at){newRows.push(r);verifiedRows.push(r);return;}
+    var prior=old[at-2],priorStatus=String(prior[keyCol-4]||''),nextStatus=String(r[keyCol-4]||'');
+    if(/^FACTUAL/.test(priorStatus)&&!/^FACTUAL/.test(nextStatus)){skippedIncomplete++;verifiedRows.push(prior);return;}
+    var sameData=prior.slice(0,keyCol-2).concat(prior.slice(keyCol-1)).join('\u001f')===r.slice(0,keyCol-2).concat(r.slice(keyCol-1)).join('\u001f');
+    if(!sameData){archiveRows.push([new Date(),sh.getName(),key,JSON.stringify(prior)]);changedRows.push({row:at,values:r});verifiedRows.push(r);}
+    else verifiedRows.push(prior);
+  });
+  if(archiveRows.length){var ar=archive.getLastRow()+1;if(ar+archiveRows.length-1>archive.getMaxRows())archive.insertRowsAfter(archive.getMaxRows(),Math.max(100,ar+archiveRows.length-1-archive.getMaxRows()));archive.getRange(ar,1,archiveRows.length,4).setValues(archiveRows);archived=archiveRows.length;}
+  changedRows.sort(function(a,b){return a.row-b.row;});
+  var i=0;
+  while(i<changedRows.length){var j=i+1;while(j<changedRows.length&&changedRows[j].row===changedRows[j-1].row+1)j++;sh.getRange(changedRows[i].row,1,j-i,keyCol).setValues(changedRows.slice(i,j).map(function(x){return x.values;}));i=j;}
+  if(newRows.length){
+    var atNew=sh.getLastRow()+1;
+    for(var n=0;n<newRows.length;n+=SMC_WB_INNER_SUMMARY_V1.chunk){
+      var part=newRows.slice(n,n+SMC_WB_INNER_SUMMARY_V1.chunk),need=atNew+part.length-1;
+      if(need>sh.getMaxRows())sh.insertRowsAfter(sh.getMaxRows(),Math.max(100,need-sh.getMaxRows()));
+      sh.getRange(atNew,1,part.length,keyCol).setValues(part);atNew+=part.length;
+    }
+  }
+  SpreadsheetApp.flush();
+  var finalLast=sh.getLastRow(),final=finalLast>1?sh.getRange(2,1,finalLast-1,keyCol).getValues():[],seen={},finalMap={},min='',max='';
+  final.forEach(function(r){var k=String(r[keyCol-1]||'');if(!k)throw new Error('WB_INNER_TARGET_EMPTY_KEY:'+sh.getName());if(seen[k])throw new Error('WB_INNER_READBACK_DUPLICATE:'+sh.getName());seen[k]=true;finalMap[k]=r;var d=String(r[1]||'');if(!min||d<min)min=d;if(!max||d>max)max=d;});
+  var verified=0;
+  verifiedRows.forEach(function(r){var k=String(r[keyCol-1]||''),rb=finalMap[k];if(!rb)throw new Error('WB_INNER_READBACK_MISSING:'+sh.getName()+':'+k);if(rb.join('|')!==r.join('|'))throw new Error('WB_INNER_READBACK_MISMATCH:'+sh.getName()+':'+k);verified++;});
+  if(final.length!==Object.keys(finalMap).length)throw new Error('WB_INNER_READBACK_COUNT_MISMATCH:'+sh.getName());
+  if(final.length>1){
+    sh.getRange(2,2,final.length,2).setNumberFormat('dd.mm.yyyy');
+    headers.forEach(function(h,i){if(/_rub$/.test(String(h)))sh.getRange(2,i+1,final.length,1).setNumberFormat('#,##0.00');else if(/^(margin|roi|buyout)$/.test(String(h)))sh.getRange(2,i+1,final.length,1).setNumberFormat('0.0%');else if(/(_qty|_count)$/.test(String(h)))sh.getRange(2,i+1,final.length,1).setNumberFormat('#,##0.##');});
+    if(!sh.getFilter())sh.getRange(1,1,finalLast,keyCol).createFilter();
+  }
+  var digest=Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,JSON.stringify(final),Utilities.Charset.UTF_8).map(function(b){var v=(b<0?b+256:b).toString(16);return v.length===1?'0'+v:v;}).join('');
+  return {sheet:sh.getName(),rows:final.length,new_rows:newRows.length,changed_rows:changedRows.length,archived_rows:archived,skipped_incomplete_rows:skippedIncomplete,min:min,max:max,verified:verified,sha256:digest};
+}
+
+function sellmonitorGithubPublishWbInnerPeriods_(){
+  var reg=SpreadsheetApp.openById(SMC_WB_INNER_SUMMARY_V1.registryId).getSheetByName(SMC_WB_INNER_SUMMARY_V1.registrySheet);
+  if(!reg)throw new Error('WB_INNER_REGISTRY_MISSING');
+  var regLast=reg.getLastRow(),registry=regLast>1?reg.getRange(2,1,regLast-1,27).getValues():[];
+  var parts={},partHeaders=['part_id','platform','shop_id','dataset','layer','period_start','period_end','part_number','schema_version','file_id','file_url','source_endpoint','source_kind','run_id','fetched_at','row_count','distinct_key_count','min_date','max_date','checksum','status','qc_status','error','supersedes_part_id','source_spreadsheet_id','source_sheet','folder_id'];
+  registry.forEach(function(r){
+    if(String(r[1]||'')!=='WB'||String(r[3]||'')!=='inner_finance'||!/inner_daily_rows$/.test(String(r[4]||''))||String(r[20]||'')!=='OK'||!/PASS/.test(String(r[21]||''))||!r[9])return;
+    var shop=String(r[2]||''),period=sellmonitorGithubWbInnerDateKey_(r[5],Session.getScriptTimeZone()),k=shop+'|'+period,stamp=r[14] instanceof Date?r[14].getTime():Date.parse(String(r[14]||'')),old=parts[k];
+    if(!old||stamp>(old.stamp||0))parts[k]={shop:shop,fileId:String(r[9]),period:period,stamp:isFinite(stamp)?stamp:0,partId:String(r[0]),expectedRows:Number(r[15]),expectedDistinct:Number(r[16]),checksum:String(r[19]||'')};
+  });
+  var results=[];
+  Object.keys(SMC_WB_INNER_SUMMARY_V1.stores).forEach(function(shop){
+    var cfg=SMC_WB_INNER_SUMMARY_V1.stores[shop];
+    try{
+      var chosen=Object.keys(parts).map(function(k){return parts[k];}).filter(function(p){return p.shop===shop;}).sort(function(a,b){return a.period<b.period?-1:1;});
+      if(!chosen.length)throw new Error('WB_INNER_NO_TRUSTED_PARTS:'+shop);
+      var headers=null,allRows=[],sourceIds=[],sourceChecks=[];
+      chosen.forEach(function(p){
+        var part=SpreadsheetApp.openById(p.fileId),facts=part.getSheetByName('facts');
+        if(!facts)throw new Error('WB_INNER_FACTS_TAB_MISSING:'+p.fileId);
+        var last=facts.getLastRow();if(last<2)throw new Error('WB_INNER_SOURCE_FACTS_EMPTY_PART:'+p.partId);
+        var h=facts.getRange(1,1,1,46).getValues()[0].map(String);
+        if(headers&&JSON.stringify(headers)!==JSON.stringify(h))throw new Error('WB_INNER_SOURCE_SCHEMA_VARIANCE');
+        headers=h;
+        var partRows=0,partKeys={};
+        for(var start=2;start<=last;start+=SMC_WB_INNER_SUMMARY_V1.chunk){
+          var n=Math.min(SMC_WB_INNER_SUMMARY_V1.chunk,last-start+1);
+          facts.getRange(start,1,n,46).getValues().forEach(function(r){if(r.some(function(v){return v!==''&&v!=null;})){allRows.push(r);partRows++;var rk=String(r[45]||'');if(!rk)throw new Error('WB_INNER_PART_KEY_MISSING:'+p.partId);if(partKeys[rk])throw new Error('WB_INNER_PART_DUPLICATE_KEY:'+p.partId+':'+rk);partKeys[rk]=1;}});
+        }
+        if(partRows!==p.expectedRows||Object.keys(partKeys).length!==p.expectedDistinct)throw new Error('WB_INNER_PART_COUNT_MISMATCH:'+p.partId+':expected='+p.expectedRows+'/'+p.expectedDistinct+':actual='+partRows+'/'+Object.keys(partKeys).length);
+        sourceIds.push(p.fileId);sourceChecks.push({part_id:p.partId,rows:partRows,distinct:Object.keys(partKeys).length,checksum:p.checksum});
+      });
+      if(!headers||!allRows.length)throw new Error('WB_INNER_SOURCE_FACTS_EMPTY:'+shop);
+      var built=sellmonitorGithubWbInnerBuildRows_(allRows,headers,shop,Session.getScriptTimeZone());
+      var metricHeaders=built.metricHeaders,head=['Период','Начало','Конец','Дней с данными','Ожидаемо дней','Магазин ID','nmId','Артикул продавца','Группа','Подгруппа'].concat(metricHeaders,['Статус источника','Источник','Загружено','Ключ']);
+      var ss=SpreadsheetApp.openById(cfg.id);
+      var day=sellmonitorGithubWbInnerEnsureSheet_(ss,SMC_WB_INNER_SUMMARY_V1.tabs.day,head);
+      var week=sellmonitorGithubWbInnerEnsureSheet_(ss,SMC_WB_INNER_SUMMARY_V1.tabs.week,head);
+      var month=sellmonitorGithubWbInnerEnsureSheet_(ss,SMC_WB_INNER_SUMMARY_V1.tabs.month,head);
+      var res={
+        store:cfg.name,ok:true,source_parts:sourceIds.length,source_ids:sourceIds,
+        source_rows:built.sourceRows,source_min:built.min,source_max:built.max,
+        factual_days:built.factualDays,partial_days:built.partialDays,
+        day:sellmonitorGithubWbInnerUpsert_(ss,day,head,built.day,cfg.name),
+        week:sellmonitorGithubWbInnerUpsert_(ss,week,head,built.week,cfg.name),
+        month:sellmonitorGithubWbInnerUpsert_(ss,month,head,built.month,cfg.name)
+      };
+      results.push(res);
+      var log=sellmonitorGithubWbInnerEnsureSheet_(ss,SMC_WB_INNER_SUMMARY_V1.tabs.log,['Время запуска','Магазин','Источник частей','Строк фактов','Период с','Период по','Дней точных','Дней предварительных','Строк день/неделя/месяц','Новых','Изменённых','Архивировано','SHA-256']);
+      var counts=[res.day.rows,res.week.rows,res.month.rows],newCount=res.day.new_rows+res.week.new_rows+res.month.new_rows,changeCount=res.day.changed_rows+res.week.changed_rows+res.month.changed_rows,archCount=res.day.archived_rows+res.week.archived_rows+res.month.archived_rows;
+      var logRow=[new Date(),cfg.name,sourceIds.join(','),built.sourceRows,built.min,built.max,built.factualDays,built.partialDays,counts.join('/'),newCount,changeCount,archCount,[res.day.sha256,res.week.sha256,res.month.sha256].join('/')];
+      var at=log.getLastRow()+1;if(at>log.getMaxRows())log.insertRowsAfter(log.getMaxRows(),100);
+      log.getRange(at,1,1,13).setValues([logRow]);
+      var check=log.getRange(at,1,1,13).getValues()[0];
+      if(String(check[12])!==String(logRow[12]))throw new Error('WB_INNER_STORE_LOG_READBACK_FAILED:'+cfg.name);
+      SpreadsheetApp.flush();
+    }catch(e){results.push({store:cfg.name,ok:false,error:String(e&&e.message||e)});}
+  });
+  var ok=results.length===3&&results.every(function(x){return x.ok===true;});
+  return {ok:ok,action:'publish_wb_inner_periods',stores:results};
+}
+
 function doPost(e) {
   try {
     var body = JSON.parse((e && e.postData && e.postData.contents) || '{}');
@@ -5443,6 +5663,10 @@ function doPost(e) {
 
     if (action === 'publish_ozon_summary_orders') {
       return sellmonitorGithubWebJson_(sellmonitorGithubPublishOzonSummaryOrders_());
+    }
+
+    if (action === 'publish_wb_inner_periods') {
+      return sellmonitorGithubWebJson_(sellmonitorGithubPublishWbInnerPeriods_());
     }
 
     if (action === 'publish_wb_traffic') {
