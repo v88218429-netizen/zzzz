@@ -51,6 +51,33 @@ if worker.exists():
 """
         worker_text = worker_text.replace(post_anchor, seed_block + post_anchor, 1)
         print("WB_SECRET_SEED_ENDPOINT=patched")
+
+    # Dates written as ISO strings are read back by Apps Script as Date values
+    # once the destination columns have a date number format. Compare their
+    # calendar keys, not JavaScript Date.toString() output.
+    date_readback_anchor = "if(rb.join('|')!==r.join('|'))throw new Error('WB_INNER_READBACK_MISMATCH:'+sh.getName()+':'+k);"
+    date_readback_marker = "WB_INNER_DATE_READBACK_V2"
+    if date_readback_anchor in worker_text:
+        date_readback_block = """/* WB_INNER_DATE_READBACK_V2 */
+      var readbackMatches = rb.length === r.length;
+      var targetTimeZone = sh.getParent().getSpreadsheetTimeZone();
+      for (var ci = 0; readbackMatches && ci < r.length; ci++) {
+        var actualValue = rb[ci], expectedValue = r[ci];
+        if ((ci === 1 || ci === 2) && actualValue instanceof Date) {
+          actualValue = Utilities.formatDate(actualValue, targetTimeZone, 'yyyy-MM-dd');
+        } else if (actualValue instanceof Date) actualValue = actualValue.toISOString();
+        if ((ci === 1 || ci === 2) && expectedValue instanceof Date) {
+          expectedValue = Utilities.formatDate(expectedValue, targetTimeZone, 'yyyy-MM-dd');
+        } else if (expectedValue instanceof Date) expectedValue = expectedValue.toISOString();
+        if ((actualValue == null ? '' : String(actualValue)) !== (expectedValue == null ? '' : String(expectedValue))) {
+          readbackMatches = false;
+        }
+      }
+      if (!readbackMatches) throw new Error('WB_INNER_READBACK_MISMATCH:'+sh.getName()+':'+k);"""
+        worker_text = worker_text.replace(date_readback_anchor, date_readback_block, 1)
+        print("WB_INNER_DATE_READBACK=patched")
+    elif date_readback_marker not in worker_text and "WB_INNER_READBACK_MISMATCH" in worker_text:
+        raise SystemExit("WB inner readback comparison anchor changed")
     worker.write_text(worker_text, encoding="utf-8")
     print("WORKER_TRIGGER_REFRESH_V2=patched")
 candidates = []
