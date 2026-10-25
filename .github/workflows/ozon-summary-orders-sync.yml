@@ -67,6 +67,9 @@ jobs:
                   for x in (result.get("stores") or [])
               ],
           }, ensure_ascii=False)[:1200]
+              if result.get("ok") is False:
+                  break
+              # Retry only transport or response-decoding failures.
               except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
                   last = type(exc).__name__ + ": " + str(exc)[:240]
               if attempt < 4:
