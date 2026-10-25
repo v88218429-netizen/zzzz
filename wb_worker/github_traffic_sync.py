@@ -184,8 +184,17 @@ def _publish() -> None:
 
         store_publications = {}
         store_errors = []
+        shop_aliases = {"Саныч": "yv", "AIR": "ap", "Хозяюшка": "aa"}
         for shop_name in ("Саныч", "AIR", "Хозяюшка"):
             try:
+                shop_alias = shop_aliases[shop_name]
+                # The Apps Script builds one store view per request. Sending all
+                # three stores each time made the bridge payload and execution
+                # slow enough to time out for AIR and Sanych.
+                store_datasets = {
+                    name: [row for row in rows if str(row[0] or "").strip() == shop_alias]
+                    for name, rows in source_datasets.items()
+                }
                 store_payload = {
                     "token": key,
                     "action": "publish_wb_traffic",
@@ -193,7 +202,7 @@ def _publish() -> None:
                     "skip_partitions": True,
                     "daily_view_store": True,
                     "store_name": shop_name,
-                    "datasets": source_datasets,
+                    "datasets": store_datasets,
                 }
                 encoded = json.dumps(store_payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
                 if len(encoded) > MAX_REQUEST_BYTES:
