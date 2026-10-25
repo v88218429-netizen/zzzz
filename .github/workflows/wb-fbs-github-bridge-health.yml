@@ -94,6 +94,8 @@ jobs:
                       sheet_stamp=dt.datetime.strptime(sheet_date[:19],'%d.%m.%Y %H:%M:%S').replace(tzinfo=dt.timezone(dt.timedelta(hours=3)))
                   except ValueError: pass
               lag_minutes=None
+              if api_items and not sheet_stamp:
+                  errors.append(client+':FBS_BOOK_LATEST_ORDER_MISSING')
               if newest and sheet_stamp:
                   lag_minutes=round((newest-sheet_stamp).total_seconds()/60)
                   if lag_minutes>45: errors.append(client+':FBS_BOOK_LAGS_WB')
