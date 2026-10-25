@@ -65,7 +65,7 @@ jobs:
           actual = {x.get("store") for x in stores if x.get("ok") is True and x.get("readback") is True}
           if actual != expected:
               raise SystemExit("Ozon summary readback acceptance failed: " + json.dumps(stores, ensure_ascii=False))
-          print("SOURCE_UPDATED=" + str(result.get("source_updated")))
+          print("SOURCE_UPDATED=" + str(result.get("source_last_success")))
           print("SOURCE_ROWS=" + str(result.get("source_rows")))
           for store in stores:
               print(
