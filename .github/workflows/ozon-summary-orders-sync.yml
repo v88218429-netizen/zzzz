@@ -57,7 +57,16 @@ jobs:
                       result = json.loads(response.read().decode("utf-8"))
                   if result.get("ok") is True:
                       break
-                  last = "bridge returned ok=false"
+                  last = json.dumps({
+              "action": result.get("action"),
+              "reason": result.get("reason"),
+              "source_status": result.get("source_status"),
+              "source_last_success": result.get("source_last_success"),
+              "stores": [
+                  {"store": x.get("store"), "error": x.get("error"), "ok": x.get("ok")}
+                  for x in (result.get("stores") or [])
+              ],
+          }, ensure_ascii=False)[:1200]
               except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
                   last = type(exc).__name__ + ": " + str(exc)[:240]
               if attempt < 4:
