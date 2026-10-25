@@ -118,11 +118,13 @@ def collect(token: str) -> list[dict]:
         if len(found) > 30000:
             raise RuntimeError("ORDERS_ROW_LIMIT_EXCEEDED")
         window_end = window_start - 1
-    # /new includes orders not yet present in the paginated history.
-    for order in endpoint(token, "/api/v3/orders/new").get("orders") or []:
-        oid = str(order.get("id") or order.get("orderId") or "")
-        if oid.isdecimal():
-            found[oid] = order
+    # /new is only for the live rolling sync. Never mix current orders into a
+    # bounded historical recovery window; another live worker owns those rows.
+    if window is None:
+        for order in endpoint(token, "/api/v3/orders/new").get("orders") or []:
+            oid = str(order.get("id") or order.get("orderId") or "")
+            if oid.isdecimal():
+                found[oid] = order
     if len(found) > 30000:
         raise RuntimeError("ORDERS_ROW_LIMIT_EXCEEDED")
     out = []
