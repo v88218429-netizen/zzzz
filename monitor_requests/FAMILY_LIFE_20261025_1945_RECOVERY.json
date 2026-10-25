@@ -1,0 +1,13 @@
+{
+  "task_id": "FAMILY_LIFE",
+  "query": "семейная жизнь предпринимателя как совмещать бизнес и семью",
+  "extra_queries": [
+    "family entrepreneur lifestyle"
+  ],
+  "content": "Видео",
+  "limit_video": 2,
+  "limit_shorts": 0,
+  "depth_days": 60,
+  "knowledge_tag": "FAMILY",
+  "language": "ru"
+}
