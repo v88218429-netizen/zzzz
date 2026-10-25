@@ -19,7 +19,7 @@ BASE = "https://marketplace-api.wildberries.ru"
 BRIDGE_URL = os.environ["GOOGLE_BRIDGE_URL"]
 BRIDGE_KEY = os.environ["GOOGLE_BRIDGE_KEY"]
 LOOKBACK_DAYS = max(1, min(90, int(os.environ.get("FBS_LOOKBACK_DAYS", "7"))))
-BATCH_SIZE = 1000
+BATCH_SIZE = 400
 TIMEOUT = 55
 
 
@@ -184,7 +184,7 @@ def ingest(client: str, orders: list[dict]) -> dict:
                    "client": client, "orders": batch}
         for attempt in range(1, 5):
             try:
-                obj = request(BRIDGE_URL, body=payload, timeout=180, retries=1)
+                obj = request(BRIDGE_URL, body=payload, timeout=240, retries=1)
                 result = obj.get("result") or {}
                 if obj.get("ok") and obj.get("action") == "fbs_ingest_batch" and result.get("ok"):
                     break
