@@ -203,8 +203,7 @@ def ingest(client: str, orders: list[dict]) -> dict:
                     print("FBS_BRIDGE_REJECT_CLASS=" + reason, flush=True)
                     raise RuntimeError("INGEST_REJECTED:" + reason)
             except RuntimeError:
-                if attempt == 4:
-                    raise
+                raise
             time.sleep(5 * attempt)
         for field in totals:
             totals[field] += int(result.get(field, 0))
