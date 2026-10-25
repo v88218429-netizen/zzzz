@@ -3652,7 +3652,9 @@ function sellmonitorGithubWriteWbTrafficDailyView_(prepared, runId, options) {
   }
   if (options.archiveOnly === true) return {ok:true,archive_only:true,rows:allRows.length,added:added,updated:updated,max_date:allRows.length?String(allRows[allRows.length-1][0]):'',reconciled:freshRows.filter(function(row){return row[12]==='ПОЛНЫЙ РАСЧЁТ';}).length};
   var liteTables = sellmonitorGithubWriteWbTrafficLiteTables_(allRows, options.storeName);
-  var dashboard = sellmonitorGithubWriteWbTrafficDashboards_(freshRows, runId, options.storeName);
+  var dashboard = options.storeName
+    ? {ok:true,skipped:true,reason:'summary_scope_only',stores:[options.storeName]}
+    : sellmonitorGithubWriteWbTrafficDashboards_(freshRows, runId, options.storeName);
   return {ok:liteTables.ok===true,rows:allRows.length,added:added,updated:updated,max_date:allRows.length?String(allRows[allRows.length-1][0]):'',
     reconciled:freshRows.filter(function(row){return row[12]==='ПОЛНЫЙ РАСЧЁТ';}).length,lite_tables:liteTables,dashboard:dashboard};
 }
@@ -3696,6 +3698,50 @@ function sellmonitorGithubWriteWbTrafficLiteTables_(dailyRows, onlyStore) {
         seen[key]=true;
       });
       var last=sheet.getLastRow();
+      var currentRows=last>1?sheet.getRange(2,1,last-1,headers.length).getValues():[];
+      var currentByDate={};
+      currentRows.forEach(function(row,index){
+        var key=dayValue(row[0]);
+        if(!key)return;
+        if(Object.prototype.hasOwnProperty.call(currentByDate,key))throw new Error('WB_TRAFFIC_LITE_EXISTING_DUPLICATE:'+key);
+        currentByDate[key]=row;
+      });
+      var archiveName='Архив_04Трафик_изменённые_факты';
+      var archiveHeaders=['Архивировано','Причина'].concat(headers,['Контрольная сумма версии']);
+      var materialIndexes=[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,16];
+      function versionSignature(row){
+        return JSON.stringify(materialIndexes.map(function(index){return row[index]==null?'':row[index];}));
+      }
+      var archiveRows=[];
+      rows.forEach(function(row){
+        var prior=currentByDate[row[0]];
+        if(prior&&versionSignature(prior)!==versionSignature(row)){
+          archiveRows.push([new Date(),'Исправление факта после сверки источника'].concat(prior,versionSignature(prior)));
+        }
+      });
+      if(archiveRows.length){
+        var archive=book.getSheetByName(archiveName);
+        if(!archive)archive=book.insertSheet(archiveName);
+        if(!archive.getLastRow()){
+          archive.getRange(1,1,1,archiveHeaders.length).setValues([archiveHeaders]);
+        }else{
+          var liveArchiveHeaders=archive.getRange(1,1,1,archiveHeaders.length).getDisplayValues()[0];
+          if(archiveHeaders.some(function(value,index){return String(liveArchiveHeaders[index]||'').trim()!==value;}))
+            throw new Error('WB_TRAFFIC_LITE_ARCHIVE_HEADER_MISMATCH:'+name);
+        }
+        var archiveLast=archive.getLastRow(), savedVersions={};
+        if(archiveLast>1){
+          archive.getRange(2,archiveHeaders.length,archiveLast-1,1).getDisplayValues().forEach(function(row){savedVersions[String(row[0]||'')]=true;});
+        }
+        var pendingArchive=archiveRows.filter(function(row){if(savedVersions[row[archiveHeaders.length-1]])return false;savedVersions[row[archiveHeaders.length-1]]=true;return true;});
+        if(pendingArchive.length){
+          archive.getRange(archiveLast+1,1,pendingArchive.length,archiveHeaders.length).setValues(pendingArchive);
+          SpreadsheetApp.flush();
+          var archivedCheck=archive.getRange(archiveLast+1,archiveHeaders.length,pendingArchive.length,1).getDisplayValues();
+          if(archivedCheck.some(function(row,index){return String(row[0]||'')!==pendingArchive[index][archiveHeaders.length-1];}))
+            throw new Error('WB_TRAFFIC_LITE_ARCHIVE_READBACK_MISMATCH:'+name);
+        }
+      }
       if (last) {
         var existingHeaders=sheet.getRange(1,1,1,headers.length).getDisplayValues()[0];
         if (headers.some(function(value,index){return String(existingHeaders[index]||'').trim()!==value;})) {
