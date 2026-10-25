@@ -1,3 +1,4 @@
+# Trigger verified date normalization deployment
 name: WB Sellmonitor finance summaries
 
 on:
