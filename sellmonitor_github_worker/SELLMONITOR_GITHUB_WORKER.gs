@@ -5343,7 +5343,11 @@ function doPost(e) {
       return sellmonitorGithubWebJson_(sellmonitorGithubPublishAdClusters_(body));
     }
 
-    if (action === 'publish_ozon_summary_orders') {\n      return sellmonitorGithubWebJson_(sellmonitorGithubPublishOzonSummaryOrders_());\n    }\n\n    if (action === 'publish_wb_traffic') {
+    if (action === 'publish_ozon_summary_orders') {
+      return sellmonitorGithubWebJson_(sellmonitorGithubPublishOzonSummaryOrders_());
+    }
+
+    if (action === 'publish_wb_traffic') {
       return sellmonitorGithubWebJson_(sellmonitorGithubPublishWbTraffic_(body));
     }
 
