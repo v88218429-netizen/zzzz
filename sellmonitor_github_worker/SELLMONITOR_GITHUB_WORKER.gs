@@ -5056,6 +5056,222 @@ function sellmonitorGithubSeedWbTokens_(payload) {
 }
 
 
+
+const SMC_OZON_SUMMARY = Object.freeze({
+  sourceId: '1VQwf-QPeSjexrEculDjWt_hpuCKu7PLzLZhMFjP2VZM',
+  sourceSheet: 'Ozon Заказы',
+  timezone: 'Europe/Moscow',
+  stores: {
+    '1': {key:'dom', name:'ДОМ', id:'1g57et2zqlVfbs0_BoRobb5G-4Z2MTXZd028V7u4Kd-Q'},
+    '2': {key:'hozyayka', name:'Хозяюшка', id:'1Rl-IVihrZ56wKwDsf76wspZ53a8ntN3hCVN1gd4Tguo'}
+  }
+});
+
+function sellmonitorGithubOzonDateKey_(value) {
+  var d = value instanceof Date ? value : new Date(String(value || ''));
+  if (!isFinite(d.getTime())) return '';
+  return Utilities.formatDate(d, SMC_OZON_SUMMARY.timezone, 'yyyy-MM-dd');
+}
+
+function sellmonitorGithubOzonShiftDay_(key, offset) {
+  var p = String(key).split('-').map(Number);
+  var d = new Date(Date.UTC(p[0], p[1]-1, p[2]+offset));
+  return Utilities.formatDate(d, 'UTC', 'yyyy-MM-dd');
+}
+
+function sellmonitorGithubOzonWeekStart_(key) {
+  var p = String(key).split('-').map(Number);
+  var d = new Date(Date.UTC(p[0], p[1]-1, p[2]));
+  return sellmonitorGithubOzonShiftDay_(key, -((d.getUTCDay()+6)%7));
+}
+
+function sellmonitorGithubOzonMonthEnd_(key) {
+  var p = String(key).split('-').map(Number);
+  return Utilities.formatDate(new Date(Date.UTC(p[0], p[1], 0)), 'UTC', 'yyyy-MM-dd');
+}
+
+function sellmonitorGithubOzonHash_(rows) {
+  var bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, JSON.stringify(rows), Utilities.Charset.UTF_8);
+  return bytes.map(function(b) { var n = (b + 256) % 256; return ('0' + n.toString(16)).slice(-2); }).join('');
+}
+
+function sellmonitorGithubOzonEnsureRows_(sheet, lastRow) {
+  if (sheet.getMaxRows() < lastRow) sheet.insertRowsAfter(sheet.getMaxRows(), lastRow - sheet.getMaxRows());
+}
+
+function sellmonitorGithubOzonArchive_(archive, target, rangeA1, oldRows, sourceUpdated, archiveId) {
+  if (!oldRows || !oldRows.length) return 0;
+  var start = Math.max(2, archive.getLastRow()+1);
+  sellmonitorGithubOzonEnsureRows_(archive, start + oldRows.length - 1);
+  var stamp = new Date();
+  var payload = oldRows.map(function(row, i) {
+    return [archiveId, stamp, target, rangeA1, i+1, sourceUpdated, JSON.stringify(row)];
+  });
+  archive.getRange(start, 1, payload.length, 7).setValues(payload);
+  var check = archive.getRange(start, 1, payload.length, 7).getValues();
+  if (check.length !== payload.length || check.some(function(r, i) { return String(r[0]) !== archiveId || String(r[6]) !== JSON.stringify(oldRows[i]); })) {
+    throw new Error('OZON_ARCHIVE_READBACK_MISMATCH:' + target + ':' + rangeA1);
+  }
+  return payload.length;
+}
+
+function sellmonitorGithubOzonRows_(sheet, row, col, width) {
+  var last = sheet.getLastRow();
+  if (last < row) return [];
+  return sheet.getRange(row, col, last-row+1, width).getValues();
+}
+
+function sellmonitorGithubOzonAgg_(records, storeId, today) {
+  var per = {day:{}, week:{}, month:{}}, products = [];
+  function bucket(type, start, end, rec) {
+    var k = type+'|'+start+'|'+end, x=per[type][k];
+    if (!x) x=per[type][k]={type:type,start:start,end:end,orders:{},posts:{},offers:{},units:0,lines:0,days:{}};
+    x.orders[rec.order]=1; x.posts[rec.posting]=1; x.offers[rec.offer+'|'+rec.sku]=1;
+    x.units+=rec.qty; x.lines++; x.days[rec.day]=1;
+  }
+  var productMap={}, daySeen={}, sourceDays=[];
+  records.forEach(function(r) {
+    if (r.cabinet !== storeId) return;
+    var week=sellmonitorGithubOzonWeekStart_(r.day), month=r.day.slice(0,7)+'-01';
+    bucket('day',r.day,r.day,r);
+    bucket('week',week,sellmonitorGithubOzonShiftDay_(week,6),r);
+    bucket('month',month,sellmonitorGithubOzonMonthEnd_(month),r);
+    sourceDays.push(r.day);
+    ['day','week','month'].forEach(function(type) {
+      var start=type==='day'?r.day:(type==='week'?week:month);
+      var end=type==='day'?r.day:(type==='week'?sellmonitorGithubOzonShiftDay_(week,6):sellmonitorGithubOzonMonthEnd_(month));
+      var k=type+'|'+start+'|'+end+'|'+r.offer+'|'+r.sku, p=productMap[k];
+      if(!p)p=productMap[k]={type:type,start:start,end:end,offer:r.offer,sku:r.sku,title:r.title,orders:{},posts:{},units:0,lines:0};
+      if(p.title!==r.title && r.title && p.title.indexOf(r.title)<0)p.title+=' / '+r.title;
+      p.orders[r.order]=1;p.posts[r.posting]=1;p.units+=r.qty;p.lines++;
+    });
+  });
+  sourceDays.sort();
+  var minDay=sourceDays[0]||'', maxDay=sourceDays[sourceDays.length-1]||'';
+  function status(x) {
+    if (x.start < minDay) return 'Частичный период: источник начинается с '+minDay;
+    if (x.end >= today) return 'Предварительно: период включает текущую дату';
+    return 'Закрытая дата/период; строки выгрузки';
+  }
+  function values(x) {
+    return [x.type==='day'?'День':x.type==='week'?'Неделя':'Месяц',x.start,x.end,
+      Object.keys(x.orders).length,Object.keys(x.posts).length,x.units,
+      x.type==='day'?Object.keys(x.offers).length:'',x.lines,Object.keys(x.days).length,status(x)];
+  }
+  var daily=Object.keys(per.day).map(function(k){return per.day[k];}).sort(function(a,b){return a.start.localeCompare(b.start);});
+  var weekly=Object.keys(per.week).map(function(k){return per.week[k];}).sort(function(a,b){return a.start.localeCompare(b.start);});
+  var monthly=Object.keys(per.month).map(function(k){return per.month[k];}).sort(function(a,b){return a.start.localeCompare(b.start);});
+  var summary=[
+    ['Дневные итоги','Начало','Конец','Заказы, уникальные','Отправления, уникальные','Штук','SKU/offer','Строк товаров','Дней с данными','Состояние'],
+    ...daily.map(values),
+    ['','','','','','','','','',''],
+    ['Недельные итоги','Начало','Конец','Заказы, уникальные','Отправления, уникальные','Штук','SKU/offer','Строк товаров','Дней с данными','Состояние'],
+    ...weekly.map(values),
+    ['','','','','','','','','',''],
+    ['Месячные итоги','Начало','Конец','Заказы, уникальные','Отправления, уникальные','Штук','SKU/offer','Строк товаров','Дней с данными','Состояние'],
+    ...monthly.map(values),
+    ['Контроль: заказ и отправление считаются по уникальным ключам; строки и штуки — по позициям. Отсутствие строки не считается нулём.','','','','','','','','','']
+  ];
+  var products=Object.keys(productMap).map(function(k){return productMap[k];})
+    .sort(function(a,b){return a.type.localeCompare(b.type)||a.start.localeCompare(b.start)||a.offer.localeCompare(b.offer)||a.sku.localeCompare(b.sku);})
+    .map(function(p){return [p.type==='day'?'День':p.type==='week'?'Неделя':'Месяц',p.start,p.end,p.offer,p.sku,p.title,
+      Object.keys(p.orders).length,Object.keys(p.posts).length,p.units,p.lines,
+      p.start<minDay?'Частичный период: источник начинается с '+minDay:(p.end>=today?'Предварительно: период включает текущую дату':'Строки выгрузки'), 'Ozon Seller API — Ozon Заказы'];});
+  var fullDays=daily.filter(function(x){return x.end<today;}).map(function(x){return [x.start,Object.keys(x.orders).length,Object.keys(x.posts).length,x.units];});
+  return {summary:summary,products:products,fullDays:fullDays,minDay:minDay,maxDay:maxDay,sourceRows:records.filter(function(r){return r.cabinet===storeId;}).length};
+}
+
+function sellmonitorGithubPublishOzonSummaryOrders_() {
+  var source=SpreadsheetApp.openById(SMC_OZON_SUMMARY.sourceId);
+  var sourceSheet=source.getSheetByName(SMC_OZON_SUMMARY.sourceSheet);
+  if(!sourceSheet)throw new Error('OZON_SOURCE_TAB_MISSING');
+  var last=sourceSheet.getLastRow();
+  if(last<2)throw new Error('OZON_SOURCE_EMPTY_PRESERVE');
+  var sourceUpdated=DriveApp.getFileById(SMC_OZON_SUMMARY.sourceId).getLastUpdated().toISOString();
+  var raw=sourceSheet.getRange(1,1,last,19).getValues();
+  var expected=['Кабинет','Номер отправления','Номер заказа','Принят в обработку','SKU','Артикул','Товар','Кол-во'];
+  var indexes=[0,2,4,7,15,16,17,18];
+  indexes.forEach(function(ix,i){if(String(raw[0][ix]||'').trim()!==expected[i])throw new Error('OZON_SOURCE_HEADER_MISMATCH:'+expected[i]+':'+String(raw[0][ix]||''));});
+  var seen={}, records=[], ignored=0;
+  for(var ri=1;ri<raw.length;ri++){
+    var row=raw[ri];
+    if(row.every(function(v){return v===null||v==='';}))continue;
+    var cabinet=String(row[0]||'').trim();
+    if(!SMC_OZON_SUMMARY.stores[cabinet]){ignored++;continue;}
+    var day=sellmonitorGithubOzonDateKey_(row[7]),posting=String(row[2]||'').trim(),order=String(row[4]||'').trim();
+    var offer=String(row[16]||'').trim(),sku=String(row[15]||'').trim(),title=String(row[17]||'').trim(),qty=Number(row[18]);
+    if(!day||!posting||!order||!offer||!sku||!isFinite(qty)||qty<0)throw new Error('OZON_SOURCE_INVALID_ROW:'+String(ri+1));
+    var lineKey=cabinet+'|'+posting+'|'+sku;
+    if(seen[lineKey])throw new Error('OZON_SOURCE_DUPLICATE_POSTING_SKU:'+String(ri+1));
+    seen[lineKey]=1;
+    records.push({cabinet:cabinet,day:day,posting:posting,order:order,offer:offer,sku:sku,title:title,qty:qty});
+  }
+  if(!records.length)throw new Error('OZON_SOURCE_NO_VALID_ROWS_PRESERVE');
+  var today=Utilities.formatDate(new Date(),SMC_OZON_SUMMARY.timezone,'yyyy-MM-dd'), results=[];
+  Object.keys(SMC_OZON_SUMMARY.stores).forEach(function(cabinet){
+    var cfg=SMC_OZON_SUMMARY.stores[cabinet], ss=SpreadsheetApp.openById(cfg.id),daily=ss.getSheetByName('11_API_Заказы'),skuSheet=ss.getSheetByName('12_API_Заказы_SKU');
+    if(!daily||!skuSheet)throw new Error('OZON_TARGET_TAB_MISSING:'+cfg.name);
+    var storeRecords=records.filter(function(r){return r.cabinet===cabinet;});
+    if(!storeRecords.length){results.push({store:cfg.name,ok:true,skipped:true,reason:'empty_source_preserved'});return;}
+    var agg=sellmonitorGithubOzonAgg_(records,cabinet,today);
+    var dailyHeader=['Дневные итоги','Начало','Конец','Заказы, уникальные','Отправления, уникальные','Штук','SKU/offer','Строк товаров','Дней с данными','Состояние'];
+    var skuHeader=['Тип периода','Начало','Конец','offer_id','SKU','Наименование','Заказы, уникальные','Отправления, уникальные','Штук','Строк товаров','Состояние периода','Источник'];
+    if(JSON.stringify(daily.getRange(4,1,1,10).getDisplayValues()[0])!==JSON.stringify(dailyHeader))throw new Error('OZON_TARGET_DAILY_HEADER_MISMATCH:'+cfg.name);
+    if(JSON.stringify(skuSheet.getRange(4,1,1,12).getDisplayValues()[0])!==JSON.stringify(skuHeader))throw new Error('OZON_TARGET_SKU_HEADER_MISMATCH:'+cfg.name);
+    var dailyRows=agg.summary.slice(1), dailyStart=5;
+    var oldDaily=sellmonitorGithubOzonRows_(daily,dailyStart,1,10), oldSku=sellmonitorGithubOzonRows_(skuSheet,5,1,12), oldHelper=sellmonitorGithubOzonRows_(daily,2,12,4);
+    var oldStamp=daily.getRange(2,1).getValue(), newStamp='Источник: Ozon Заказы; выгрузка изменена '+sourceUpdated+'; дата — «Принят в обработку» (UTC+3); заказ = кабинет + номер заказа, отправление = кабинет + posting number.';
+    var helper=[['Полные дни — данные графика','Заказы','Отправления','Штук']].concat(agg.fullDays);
+    var sameDaily=JSON.stringify(oldDaily)===JSON.stringify(dailyRows), sameSku=JSON.stringify(oldSku)===JSON.stringify(agg.products), sameHelper=JSON.stringify(oldHelper)===JSON.stringify(helper.slice(1)), sameStamp=String(oldStamp||'')===newStamp;
+    var archive=ss.getSheetByName('13_API_Заказы_Архив');
+    if(!archive){archive=ss.insertSheet('13_API_Заказы_Архив');archive.getRange(1,1,1,7).setValues([['Архив ID','Время','Лист','Диапазон','Строка в диапазоне','Время источника','Старое значение JSON']]);}
+    else if(archive.getLastRow()===0)archive.getRange(1,1,1,7).setValues([['Архив ID','Время','Лист','Диапазон','Строка в диапазоне','Время источника','Старое значение JSON']]);
+    var archiveId=Utilities.getUuid(), archived=0;
+    if(!sameStamp) archived+=sellmonitorGithubOzonArchive_(archive,'11_API_Заказы','A2',[[oldStamp]],sourceUpdated,archiveId);
+    if(!sameDaily) archived+=sellmonitorGithubOzonArchive_(archive,'11_API_Заказы','A5:J'+(4+oldDaily.length),oldDaily,sourceUpdated,archiveId);
+    if(!sameSku) archived+=sellmonitorGithubOzonArchive_(archive,'12_API_Заказы_SKU','A5:L'+(4+oldSku.length),oldSku,sourceUpdated,archiveId);
+    if(!sameHelper) archived+=sellmonitorGithubOzonArchive_(archive,'11_API_Заказы','L1:O'+(1+oldHelper.length),oldHelper,sourceUpdated,archiveId);
+    var written=0;
+    if(!sameStamp)daily.getRange(2,1,1,1).setValue(newStamp);
+    if(!sameDaily){
+      var need=dailyStart+dailyRows.length-1;sellmonitorGithubOzonEnsureRows_(daily,need);
+      var clear=Math.max(oldDaily.length,dailyRows.length);
+      if(clear)daily.getRange(dailyStart,1,clear,10).clearContent();
+      if(dailyRows.length)daily.getRange(dailyStart,1,dailyRows.length,10).setValues(dailyRows);
+      written+=dailyRows.length;
+    }
+    if(!sameSku){
+      var skuRows=agg.products,skuStart=5,skuNeed=skuStart+skuRows.length-1;sellmonitorGithubOzonEnsureRows_(skuSheet,skuNeed);
+      var skuClear=Math.max(oldSku.length,skuRows.length);
+      if(skuClear)skuSheet.getRange(skuStart,1,skuClear,12).clearContent();
+      if(skuRows.length)skuSheet.getRange(skuStart,1,skuRows.length,12).setValues(skuRows);
+      written+=skuRows.length;
+    }
+    if(!sameHelper){
+      var helpNeed=1+helper.length;sellmonitorGithubOzonEnsureRows_(daily,helpNeed);
+      var helpClear=Math.max(oldHelper.length,helper.length-1);
+      if(helpClear)daily.getRange(2,12,helpClear,4).clearContent();
+      daily.getRange(1,12,helper.length,4).setValues(helper);
+    }
+    var newDaily=sellmonitorGithubOzonRows_(daily,dailyStart,1,10),newSku=sellmonitorGithubOzonRows_(skuSheet,5,1,12),newHelper=sellmonitorGithubOzonRows_(daily,1,12,4);
+    if(JSON.stringify(newDaily)!==JSON.stringify(dailyRows))throw new Error('OZON_DAILY_READBACK_MISMATCH:'+cfg.name);
+    if(JSON.stringify(newSku)!==JSON.stringify(agg.products))throw new Error('OZON_SKU_READBACK_MISMATCH:'+cfg.name);
+    if(JSON.stringify(newHelper)!==JSON.stringify(helper))throw new Error('OZON_CHART_READBACK_MISMATCH:'+cfg.name);
+    var charts=daily.getCharts();
+    if(charts.length){var range=daily.getRange(1,12,helper.length,4);charts.forEach(function(ch){daily.updateChart(ch.modify().clearRanges().addRange(range).build());});}
+    var log=ss.getSheetByName('14_API_Заказы_Журнал');
+    if(!log){log=ss.insertSheet('14_API_Заказы_Журнал');log.getRange(1,1,1,12).setValues([['Время','Магазин','Источник','Время изменения источника','Строк источника','Период с','Период по','Строк сводки','Строк SKU','Строк в архиве','SHA-256 сводки','Проверка']]);}
+    else if(log.getLastRow()===0)log.getRange(1,1,1,12).setValues([['Время','Магазин','Источник','Время изменения источника','Строк источника','Период с','Период по','Строк сводки','Строк SKU','Строк в архиве','SHA-256 сводки','Проверка']]);
+    var finalHash=sellmonitorGithubOzonHash_({summary:newDaily,products:newSku,helper:newHelper});
+    var logRow=[new Date(),cfg.name,SMC_OZON_SUMMARY.sourceSheet,sourceUpdated,agg.sourceRows,agg.minDay,agg.maxDay,newDaily.length,newSku.length,archived,finalHash,'OK: запись и чтение сводки совпали; пустые дни не заменены нулями'];
+    var logAt=log.getLastRow()+1;sellmonitorGithubOzonEnsureRows_(log,logAt);log.getRange(logAt,1,1,12).setValues([logRow]);
+    var logRead=log.getRange(logAt,1,1,12).getValues()[0];
+    if(String(logRead[10])!==finalHash||String(logRead[11])!==logRow[11])throw new Error('OZON_LOG_READBACK_MISMATCH:'+cfg.name);
+    results.push({store:cfg.name,ok:true,source_rows:agg.sourceRows,source_min:agg.minDay,source_max:agg.maxDay,daily_rows:newDaily.length,sku_rows:newSku.length,archived_rows:archived,source_updated:sourceUpdated,sha256:finalHash,readback:true,charts:charts.length});
+  });
+  return {ok:results.every(function(x){return x.ok===true;}),action:'publish_ozon_summary_orders',source_id:SMC_OZON_SUMMARY.sourceId,source_rows:records.length,ignored_rows:ignored,source_updated:sourceUpdated,stores:results};
+}
+
 function doPost(e) {
   try {
     var body = JSON.parse((e && e.postData && e.postData.contents) || '{}');
@@ -5114,7 +5330,7 @@ function doPost(e) {
       return sellmonitorGithubWebJson_(sellmonitorGithubPublishAdClusters_(body));
     }
 
-    if (action === 'publish_wb_traffic') {
+    if (action === 'publish_ozon_summary_orders') {\n      return sellmonitorGithubWebJson_(sellmonitorGithubPublishOzonSummaryOrders_());\n    }\n\n    if (action === 'publish_wb_traffic') {
       return sellmonitorGithubWebJson_(sellmonitorGithubPublishWbTraffic_(body));
     }
 
