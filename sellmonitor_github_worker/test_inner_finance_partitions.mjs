@@ -21,8 +21,8 @@ vm.runInNewContext(source + `
   globalThis.__periodDateChecksums = function() {
     var rowA = Array(46).fill(''), rowB = Array(46).fill('');
     rowA[3] = '2026-10-13'; rowA[4] = '2026-10-14';
-    rowB[3] = new Date('2026-10-13T00:00:00Z');
-    rowB[4] = new Date('2026-10-14T00:00:00Z');
+    rowB[3] = new Date('2026-10-12T21:00:00Z');
+    rowB[4] = new Date('2026-10-13T21:00:00Z');
     return [sellmonitorGithubInnerFinanceChecksum_([rowA]),sellmonitorGithubInnerFinanceChecksum_([rowB])];
   };
   globalThis.__loadedAtChecksums = function(a, b) {
@@ -77,7 +77,7 @@ assert.throws(() => context.__innerRows('air_wb', [
 context.Utilities = {
   DigestAlgorithm: { SHA_256: 'test' },
   Charset: { UTF_8: 'test' },
-  formatDate: (date, _timezone, pattern) => pattern === 'yyyy-MM-dd' ? date.toISOString().slice(0, 10) : date.toISOString().slice(0, 19) + 'Z',
+  formatDate: (date, timezone, pattern) => pattern === 'yyyy-MM-dd' && timezone === 'Europe/Moscow' ? new Date(date.getTime() + 3 * 60 * 60 * 1000).toISOString().slice(0, 10) : pattern === 'yyyy-MM-dd' ? date.toISOString().slice(0, 10) : date.toISOString().slice(0, 19) + 'Z',
   computeDigest: (_algorithm, value) => Array.from(String(value), x => x.charCodeAt(0) & 255)
 };
 const [olderDateChecksum, roundedDateChecksum] = context.__dateChecksums(
@@ -87,7 +87,7 @@ assert.equal(olderDateChecksum, roundedDateChecksum,
   'Sheets date precision must not make a correct read-back fail');
 const [periodTextChecksum, periodDateChecksum] = context.__periodDateChecksums();
 assert.equal(periodTextChecksum, periodDateChecksum,
-  'ISO period dates and Sheets date cells must hash identically');
+  'ISO period dates and Moscow-local Sheets date cells must hash identically');
 const [dateObjectChecksum, dateTextChecksum] = context.__loadedAtChecksums(
   '2026-10-13T17:18:52.100Z', '2026-10-13T17:18:52.900Z'
 );
