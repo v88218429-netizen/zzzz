@@ -3194,6 +3194,37 @@ function sellmonitorGithubInnerFinanceChecksum_(rows) {
   return sellmonitorGithubTrafficPartChecksum_(canonical);
 }
 
+function sellmonitorGithubInnerFinanceStoredDateKey_(value) {
+  if (value instanceof Date && !isNaN(value.getTime())) {
+    return Utilities.formatDate(value,'GMT','yyyy-MM-dd');
+  }
+  var s=String(value==null?'':value).trim();
+  var iso=s.match(/^(\d{4}-\d{2}-\d{2})/);
+  if(iso)return iso[1];
+  var us=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if(us)return us[3]+'-'+('0'+us[1]).slice(-2)+'-'+('0'+us[2]).slice(-2);
+  var ru=s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+  if(ru)return ru[3]+'-'+('0'+ru[2]).slice(-2)+'-'+('0'+ru[1]).slice(-2);
+  throw new Error('INNER_FINANCE_STORED_DATE_INVALID');
+}
+
+function sellmonitorGithubInnerFinanceStoredKey_(row) {
+  return [
+    String(row[0]==null?'':row[0]).trim(),
+    sellmonitorGithubInnerFinanceStoredDateKey_(row[3]),
+    sellmonitorGithubInnerFinanceStoredDateKey_(row[4]),
+    String(row[6]==null?'':row[6]).trim()
+  ].join('|');
+}
+
+function sellmonitorGithubInnerFinanceStoredPayload_(row) {
+  var payload=row.slice(0,44);
+  payload[3]=sellmonitorGithubInnerFinanceStoredDateKey_(payload[3]);
+  payload[4]=sellmonitorGithubInnerFinanceStoredDateKey_(payload[4]);
+  payload.splice(40,1); // loaded_at changes on an identical source retry
+  return JSON.stringify(payload);
+}
+
 function sellmonitorGithubWriteInnerFinancePart_(cfg, rows, from, runId) {
   if (!rows.length) throw new Error('INNER_FINANCE_EMPTY_WRITE_REFUSED');
   var month = String(from).slice(0,7);
@@ -3206,21 +3237,72 @@ function sellmonitorGithubWriteInnerFinancePart_(cfg, rows, from, runId) {
   };
   var part = sellmonitorGithubTrafficPartFile_(cfg.shopKey,'inner_finance',month,partCfg);
   var sheet = part.sheet, width = part.headers.length, oldLast = sheet.getLastRow(), byKey = {};
+  var storedRows = {}, duplicateRows = [];
   if (oldLast > 1) {
-    sheet.getRange(2,1,oldLast - 1,width).getValues().forEach(function(row) {
+    sheet.getRange(2,1,oldLast - 1,width).getValues().forEach(function(row, offset) {
       if (!row[0]) return;
-      var key = sellmonitorGithubTrafficPartKey_(row,partCfg.key_columns);
-      if (!key || Object.prototype.hasOwnProperty.call(byKey,key)) throw new Error('INNER_FINANCE_DUPLICATE_STORED_KEY:' + key);
+      var key = sellmonitorGithubInnerFinanceStoredKey_(row);
+      if (!key || key.indexOf('||') >= 0) throw new Error('INNER_FINANCE_STORED_KEY_INVALID');
+      if (Object.prototype.hasOwnProperty.call(byKey,key)) {
+        if (sellmonitorGithubInnerFinanceStoredPayload_(storedRows[key]) !== sellmonitorGithubInnerFinanceStoredPayload_(row)) {
+          throw new Error('INNER_FINANCE_DUPLICATE_STORED_CONFLICT:' + key);
+        }
+        duplicateRows.push({row_index:offset+2,key:key,row:row});
+        return;
+      }
       byKey[key] = row;
+      storedRows[key] = row;
     });
   }
-  var added = 0, updated = 0, partialPreserved = 0;
+
+  var archivedDuplicates = 0;
+  if (duplicateRows.length) {
+    var partSpreadsheet = SpreadsheetApp.openById(part.id);
+    var archiveName = 'facts_duplicate_archive';
+    var archiveSheet = partSpreadsheet.getSheetByName(archiveName);
+    if (!archiveSheet) archiveSheet = partSpreadsheet.insertSheet(archiveName);
+    var archiveHeaders = ['archived_at','source_row','duplicate_key','archive_run_id'].concat(part.headers);
+    if (archiveSheet.getLastRow() === 0) {
+      if (archiveSheet.getMaxColumns() < archiveHeaders.length) {
+        archiveSheet.insertColumnsAfter(archiveSheet.getMaxColumns(), archiveHeaders.length - archiveSheet.getMaxColumns());
+      }
+      archiveSheet.getRange(1,1,1,archiveHeaders.length).setValues([archiveHeaders]);
+    } else {
+      var archiveHead = archiveSheet.getRange(1,1,1,archiveHeaders.length).getDisplayValues()[0];
+      if (archiveHeaders.some(function(value,index) { return String(archiveHead[index] || '').trim() !== value; })) {
+        throw new Error('INNER_FINANCE_DUPLICATE_ARCHIVE_HEADER_MISMATCH');
+      }
+    }
+    var archivedAt = new Date();
+    var archiveRows = duplicateRows.map(function(x) {
+      return [archivedAt,x.row_index,x.key,String(runId)].concat(x.row);
+    });
+    var archiveStart = archiveSheet.getLastRow() + 1;
+    var archiveEnd = archiveStart + archiveRows.length - 1;
+    if (archiveSheet.getMaxRows() < archiveEnd) archiveSheet.insertRowsAfter(archiveSheet.getMaxRows(), archiveEnd - archiveSheet.getMaxRows());
+    archiveSheet.getRange(archiveStart,1,archiveRows.length,archiveHeaders.length).setValues(archiveRows);
+    var archiveReadback = archiveSheet.getRange(archiveStart,1,archiveRows.length,archiveHeaders.length).getValues();
+    if (JSON.stringify(archiveReadback) !== JSON.stringify(archiveRows)) {
+      throw new Error('INNER_FINANCE_DUPLICATE_ARCHIVE_READBACK_MISMATCH');
+    }
+    archivedDuplicates = duplicateRows.length;
+  }
+
+  var added = 0, updated = 0, partialPreserved = 0, duplicateInputKeys = 0, inputByKey = {};
   rows.forEach(function(row) {
     if (row.length !== SMC_INNER_FINANCE_HEADERS.length || row[0] !== cfg.storeId || row[3] !== from) {
       throw new Error('INNER_FINANCE_ROW_OUTSIDE_TARGET_PERIOD');
     }
-    var key = sellmonitorGithubTrafficPartKey_(row,partCfg.key_columns);
+    var key = sellmonitorGithubInnerFinanceStoredKey_(row);
     if (!key || key.indexOf('||') >= 0) throw new Error('INNER_FINANCE_ROW_KEY_INVALID');
+    if (Object.prototype.hasOwnProperty.call(inputByKey,key)) {
+      if (sellmonitorGithubInnerFinanceStoredPayload_(inputByKey[key]) !== sellmonitorGithubInnerFinanceStoredPayload_(row)) {
+        throw new Error('INNER_FINANCE_DUPLICATE_INPUT_CONFLICT:' + key);
+      }
+      duplicateInputKeys++;
+      return;
+    }
+    inputByKey[key] = row;
     if (Object.prototype.hasOwnProperty.call(byKey,key)) {
       var existing = byKey[key];
       if (row[38] === 'PARTIAL_INNER_ANALYTICS' && String(existing[38] || '') === 'FACTUAL_INNER_ANALYTICS') {
@@ -3247,10 +3329,10 @@ function sellmonitorGithubWriteInnerFinancePart_(cfg, rows, from, runId) {
   var partialRows = merged.length - merged.filter(function(row) { return String(row[38] || '') === 'FACTUAL_INNER_ANALYTICS'; }).length;
   var needed = merged.length + 1;
   if (sheet.getMaxRows() < needed) sheet.insertRowsAfter(sheet.getMaxRows(),needed - sheet.getMaxRows());
-  sheet.getRange(2,1,merged.length,width).setValues(merged);
+  if (merged.length) sheet.getRange(2,1,merged.length,width).setValues(merged);
   if (oldLast > needed) sheet.getRange(needed + 1,1,oldLast - needed,width).clearContent();
   SpreadsheetApp.flush();
-  var readback = sheet.getRange(2,1,merged.length,width).getValues();
+  var readback = merged.length ? sheet.getRange(2,1,merged.length,width).getValues() : [];
   var digest = sellmonitorGithubInnerFinanceChecksum_(merged);
   if (sellmonitorGithubInnerFinanceChecksum_(readback) !== digest) throw new Error('INNER_FINANCE_PART_READBACK_CHECKSUM_MISMATCH');
   var dates = merged.map(function(row) { return String(row[3] || ''); }).filter(Boolean).sort();
@@ -3267,10 +3349,10 @@ function sellmonitorGithubWriteInnerFinancePart_(cfg, rows, from, runId) {
   return {
     part_id:part.partId,file_id:part.id,url:url,rows:merged.length,distinct_keys:Object.keys(byKey).length,
     added:added,updated:updated,min_date:dates[0] || '',max_date:dates[dates.length - 1] || '',
-    checksum:digest,qc_status:'PASS',trusted_rows:merged.length - partialRows,partial_rows:partialRows,partial_preserved:partialPreserved
+    checksum:digest,qc_status:'PASS',trusted_rows:merged.length - partialRows,partial_rows:partialRows,
+    partial_preserved:partialPreserved,archived_duplicate_rows:archivedDuplicates,deduplicated_input_keys:duplicateInputKeys
   };
 }
-
 function sellmonitorGithubInnerProducts_(data) {
   if (!data) throw new Error('INNER_FINANCE_SOURCE_EMPTY');
   var value = data.data;
