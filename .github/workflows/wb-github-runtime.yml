@@ -44,11 +44,29 @@ jobs:
           mkdir -p wb_ai_manager/source/data/github-runtime
           if git ls-remote --exit-code --heads origin runtime-state >/dev/null 2>&1; then
             git fetch --depth=1 origin runtime-state:refs/remotes/origin/runtime-state
+            STATE_CIPHER="$RUNNER_TEMP/runtime.tar.gz.enc"
             if git cat-file -e "origin/runtime-state:state/runtime.tar.gz.enc" 2>/dev/null; then
-              git show "origin/runtime-state:state/runtime.tar.gz.enc" > "$RUNNER_TEMP/runtime.tar.gz.enc"
+              # Backward-compatible restore for the previous single-file format.
+              git show "origin/runtime-state:state/runtime.tar.gz.enc" > "$STATE_CIPHER"
+            else
+              # Join encrypted parts before decrypting; each stored file stays below GitHub's 100 MB limit.
+              STATE_PARTS=()
+              while IFS= read -r part; do
+                case "$part" in
+                  state/runtime.tar.gz.enc.part-???) STATE_PARTS+=("$part") ;;
+                esac
+              done < <(git ls-tree -r --name-only origin/runtime-state)
+              if (("${#STATE_PARTS[@]}" > 0)); then
+                : > "$STATE_CIPHER"
+                for part in "${STATE_PARTS[@]}"; do
+                  git show "origin/runtime-state:$part" >> "$STATE_CIPHER"
+                done
+              fi
+            fi
+            if [[ -f "$STATE_CIPHER" ]]; then
               openssl enc -d -aes-256-cbc -pbkdf2 \
                 -pass env:STATE_SECRET \
-                -in "$RUNNER_TEMP/runtime.tar.gz.enc" \
+                -in "$STATE_CIPHER" \
                 -out "$RUNNER_TEMP/runtime.tar.gz"
               tar -xzf "$RUNNER_TEMP/runtime.tar.gz" -C wb_ai_manager/source/data/github-runtime
             fi
@@ -89,10 +107,13 @@ jobs:
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/wb-runtime-publish/state"
           tar -czf "$RUNNER_TEMP/runtime.tar.gz" -C wb_ai_manager/source/data/github-runtime .
+          STATE_CIPHER="$RUNNER_TEMP/wb-runtime-publish/state/runtime.tar.gz.enc"
           openssl enc -aes-256-cbc -salt -pbkdf2 \
             -pass env:STATE_SECRET \
             -in "$RUNNER_TEMP/runtime.tar.gz" \
-            -out "$RUNNER_TEMP/wb-runtime-publish/state/runtime.tar.gz.enc"
+            -out "$STATE_CIPHER"
+          split -b 80m -d -a 3 "$STATE_CIPHER" "$STATE_CIPHER.part-"
+          rm "$STATE_CIPHER"
           cp wb_ai_manager/source/github_site/data/health.json "$RUNNER_TEMP/wb-runtime-publish/state/health.json"
 
       - name: Build non-sensitive GitHub status page
