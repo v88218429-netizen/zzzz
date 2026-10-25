@@ -1,0 +1,82 @@
+name: Ozon summary orders sync
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 * * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ozon-summary-orders-sync
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      WEBAPP_DEPLOYMENT_ID: AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw
+      WEBHOOK_SECRET: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
+    steps:
+      - name: Check configured authorization
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$WEBAPP_DEPLOYMENT_ID"
+          test -n "$WEBHOOK_SECRET"
+          echo "::add-mask::$WEBHOOK_SECRET"
+
+      - name: Publish and verify both Ozon summaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, time, urllib.error, urllib.request
+
+          url = "https://script.google.com/macros/s/" + os.environ["WEBAPP_DEPLOYMENT_ID"] + "/exec"
+          body = json.dumps({
+              "token": os.environ["WEBHOOK_SECRET"],
+              "action": "publish_ozon_summary_orders"
+          }).encode("utf-8")
+          last = None
+          result = None
+          for attempt in range(1, 5):
+              req = urllib.request.Request(
+                  url, data=body,
+                  headers={"Content-Type": "application/json"},
+                  method="POST",
+              )
+              try:
+                  with urllib.request.urlopen(req, timeout=240) as response:
+                      result = json.loads(response.read().decode("utf-8"))
+                  if result.get("ok") is True:
+                      break
+                  last = "bridge returned ok=false"
+              except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+                  last = type(exc).__name__ + ": " + str(exc)[:240]
+              if attempt < 4:
+                  time.sleep(15 * attempt)
+          if not result or result.get("ok") is not True:
+              raise SystemExit("Ozon summary publication failed after bounded retries: " + str(last))
+          stores = result.get("stores") or []
+          expected = {"ДОМ", "Хозяюшка"}
+          actual = {x.get("store") for x in stores if x.get("ok") is True and x.get("readback") is True}
+          if actual != expected:
+              raise SystemExit("Ozon summary readback acceptance failed: " + json.dumps(stores, ensure_ascii=False))
+          print("SOURCE_UPDATED=" + str(result.get("source_updated")))
+          print("SOURCE_ROWS=" + str(result.get("source_rows")))
+          for store in stores:
+              print(
+                  "STORE=" + str(store.get("store"))
+                  + " OK=" + str(store.get("ok"))
+                  + " SOURCE_ROWS=" + str(store.get("source_rows"))
+                  + " PERIOD=" + str(store.get("source_min")) + ".." + str(store.get("source_max"))
+                  + " DAILY_ROWS=" + str(store.get("daily_rows"))
+                  + " SKU_ROWS=" + str(store.get("sku_rows"))
+                  + " ARCHIVED_ROWS=" + str(store.get("archived_rows"))
+                  + " READBACK=" + str(store.get("readback"))
+                  + " SHA256=" + str(store.get("sha256"))
+              )
+          PY
