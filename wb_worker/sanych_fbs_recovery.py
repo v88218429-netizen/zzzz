@@ -4,7 +4,7 @@
 Reads WB Marketplace API; writes only via the authenticated GitHub Google adapter.
 No credentials or individual order records are printed or committed.
 """
-# Targeted SANYCH status recovery.
+# Targeted SANYCH status recovery; bounded dates come from the commit marker.
 
 from __future__ import annotations
 import datetime as dt
