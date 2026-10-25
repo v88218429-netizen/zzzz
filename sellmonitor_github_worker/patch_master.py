@@ -67,8 +67,63 @@ if len(candidates) != 1:
     raise SystemExit(f"expected exactly one master source, found={len(candidates)}")
 
 path, text = candidates[0]
+original_text = text
+
+# Keep the parent export scheduler from cancelling the library's one-minute
+# continuation trigger. The library remains unchanged; this wrapper simply
+# yields after a chunk and does not start another export while a continuation
+# is pending.
+export_start = text.find("function runMarketplaceExports_() {")
+if export_start < 0:
+    raise SystemExit("marketplace export wrapper missing")
+export_end = text.find("\nfunction ", export_start + 10)
+if export_end < 0:
+    export_end = len(text)
+export_block = text[export_start:export_end]
+guard_anchor = "  var ss =\n    SpreadsheetApp.getActiveSpreadsheet();\n\n  var errors = [];"
+guard_replacement = """  var ss =
+    SpreadsheetApp.getActiveSpreadsheet();
+
+  var continuationPending = ScriptApp.getProjectTriggers().some(function(t) {
+    return t.getHandlerFunction() === 'exportDOM_continue';
+  });
+  if (continuationPending) {
+    Logger.log('Master: выгрузка заказов пропущена; сохранён триггер продолжения exportDOM_continue.');
+    return;
+  }
+
+  var errors = [];"""
+if guard_anchor not in export_block:
+    if "сохранён триггер продолжения exportDOM_continue" not in export_block:
+        raise SystemExit("marketplace continuation guard anchor missing")
+else:
+    export_block = export_block.replace(guard_anchor, guard_replacement, 1)
+
+result_anchor = "      DOM[job.method]();"
+result_replacement = """      var exportResult = DOM[job.method]();
+      if (exportResult === false) {
+        var continuationCreated = ScriptApp.getProjectTriggers().some(function(t) {
+          return t.getHandlerFunction() === 'exportDOM_continue';
+        });
+        if (!continuationCreated) {
+          throw new Error(job.name + ': вернулся признак продолжения без триггера exportDOM_continue');
+        }
+        Logger.log(job.name + ': порция завершена; продолжение сохранено, остальные выгрузки отложены.');
+        return;
+      }"""
+if result_anchor in export_block:
+    export_block = export_block.replace(result_anchor, result_replacement, 1)
+elif "var exportResult = DOM[job.method]();" not in export_block:
+    raise SystemExit("marketplace export result anchor missing")
+
+text = text[:export_start] + export_block + text[export_end:]
+
 if marker in text:
-    print(f"PATCH_ALREADY_PRESENT: {path.name}")
+    if text != original_text:
+        path.write_text(text, encoding="utf-8")
+        print(f"MARKETPLACE_CONTINUATION_PATCHED: {path.name}")
+    else:
+        print(f"PATCH_ALREADY_PRESENT: {path.name}")
     raise SystemExit(0)
 
 needle = "    saveMasterCycleResult_(cycleErrors);"
