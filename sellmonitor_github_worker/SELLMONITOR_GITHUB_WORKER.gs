@@ -5541,7 +5541,7 @@ function sellmonitorGithubWbInnerUpsert_(ss,sh,headers,rows,storeName){
   return {sheet:sh.getName(),rows:final.length,new_rows:newRows.length,changed_rows:changedRows.length,archived_rows:archived,skipped_incomplete_rows:skippedIncomplete,min:min,max:max,verified:verified,sha256:digest};
 }
 
-function sellmonitorGithubPublishWbInnerPeriods_(){
+function sellmonitorGithubPublishWbInnerPeriods_(onlyStore){
   var reg=SpreadsheetApp.openById(SMC_WB_INNER_SUMMARY_V1.registryId).getSheetByName(SMC_WB_INNER_SUMMARY_V1.registrySheet);
   if(!reg)throw new Error('WB_INNER_REGISTRY_MISSING');
   var regLast=reg.getLastRow(),registry=regLast>1?reg.getRange(2,1,regLast-1,27).getValues():[];
@@ -5552,7 +5552,9 @@ function sellmonitorGithubPublishWbInnerPeriods_(){
     if(!old||stamp>(old.stamp||0))parts[k]={shop:shop,fileId:String(r[9]),period:period,stamp:isFinite(stamp)?stamp:0,partId:String(r[0]),expectedRows:Number(r[15]),expectedDistinct:Number(r[16]),checksum:String(r[19]||'')};
   });
   var results=[];
-  Object.keys(SMC_WB_INNER_SUMMARY_V1.stores).forEach(function(shop){
+  var storeKeys=Object.keys(SMC_WB_INNER_SUMMARY_V1.stores);
+  if(onlyStore&&storeKeys.indexOf(onlyStore)<0)throw new Error('WB_INNER_UNKNOWN_STORE:'+onlyStore);
+  storeKeys.filter(function(shop){return !onlyStore||shop===onlyStore;}).forEach(function(shop){
     var cfg=SMC_WB_INNER_SUMMARY_V1.stores[shop];
     try{
       var chosen=Object.keys(parts).map(function(k){return parts[k];}).filter(function(p){return p.shop===shop;}).sort(function(a,b){return a.period<b.period?-1:1;});
@@ -5599,7 +5601,8 @@ function sellmonitorGithubPublishWbInnerPeriods_(){
       SpreadsheetApp.flush();
     }catch(e){results.push({store:cfg.name,ok:false,error:String(e&&e.message||e)});}
   });
-  var ok=results.length===3&&results.every(function(x){return x.ok===true;});
+  var expectedCount=onlyStore?1:3;
+  var ok=results.length===expectedCount&&results.every(function(x){return x.ok===true;});
   return {ok:ok,action:'publish_wb_inner_periods',stores:results};
 }
 
@@ -5666,7 +5669,8 @@ function doPost(e) {
     }
 
     if (action === 'publish_wb_inner_periods') {
-      return sellmonitorGithubWebJson_(sellmonitorGithubPublishWbInnerPeriods_());
+      var requestedStore = String(body.store || '').trim();
+      return sellmonitorGithubWebJson_(sellmonitorGithubPublishWbInnerPeriods_(requestedStore || null));
     }
 
     if (action === 'publish_wb_traffic') {
