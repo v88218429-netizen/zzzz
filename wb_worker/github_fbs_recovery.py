@@ -4,7 +4,7 @@
 Reads WB Marketplace API; writes only via the authenticated GitHub Google adapter.
 No credentials or individual order records are printed or committed.
 """
-# Historical recovery batch: 2026-08-11 through 2026-08-24.
+# Historical recovery batch: 2026-08-25 through 2026-09-07.
 
 from __future__ import annotations
 import datetime as dt
