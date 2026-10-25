@@ -4,7 +4,7 @@
 Reads WB Marketplace API; writes only via the authenticated GitHub Google adapter.
 No credentials or individual order records are printed or committed.
 """
-# Historical recovery batch: 2026-10-06 through 2026-10-19.
+# [FBS-90D-ONCE] One-time 90-day WB reconciliation trigger: 2026-10-25.
 
 from __future__ import annotations
 import datetime as dt
