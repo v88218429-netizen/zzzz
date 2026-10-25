@@ -1,0 +1,34 @@
+{
+  "task_id": "FAMILY_LIFE",
+  "request": "FAMILY_LIFE_20261025_1945_RECOVERY.json",
+  "query": "семейная жизнь предпринимателя как совмещать бизнес и семью",
+  "knowledge_tag": "FAMILY",
+  "generated_at": "2026-10-25T16:44:46.617237+00:00",
+  "videos": [
+    {
+      "video_id": "DxHmxneCxUg",
+      "url": "https://www.youtube.com/watch?v=DxHmxneCxUg",
+      "title": "Как совмещать семью и бизнес без выгорания | История успеха",
+      "channel": "Интервью ЗАЯВИ О СЕБЕ с Ольгой Прайм",
+      "duration": 2867,
+      "timestamp": null,
+      "query": "семейная жизнь предпринимателя как совмещать бизнес и семью",
+      "kind": "video",
+      "transcript": "transcripts/2026-10-25_FAMILY_LIFE_video_DxHmxneCxUg.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "6QgyaqQ-r34",
+      "url": "https://www.youtube.com/watch?v=6QgyaqQ-r34",
+      "title": "How to Balance Business, Family, and Big Ambitions? Interview with Yulia Savinykh (Skolkovo Women...",
+      "channel": "RublTerminal",
+      "duration": 2261,
+      "timestamp": null,
+      "query": "семейная жизнь предпринимателя как совмещать бизнес и семью",
+      "kind": "video",
+      "transcript": "transcripts/2026-10-25_FAMILY_LIFE_video_6QgyaqQ-r34.md",
+      "method": "FreeTranscriptAPI"
+    }
+  ],
+  "errors": []
+}
