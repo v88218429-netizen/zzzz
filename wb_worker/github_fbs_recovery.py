@@ -19,8 +19,8 @@ BASE = "https://marketplace-api.wildberries.ru"
 BRIDGE_URL = os.environ["GOOGLE_BRIDGE_URL"]
 BRIDGE_KEY = os.environ["GOOGLE_BRIDGE_KEY"]
 LOOKBACK_DAYS = max(1, min(90, int(os.environ.get("FBS_LOOKBACK_DAYS", "7"))))
-BATCH_SIZE = 1000
-TIMEOUT = 55
+BATCH_SIZE = 500
+TIMEOUT = 120
 
 
 def request(url: str, *, token: str | None = None, body: dict | None = None) -> dict:
@@ -28,13 +28,13 @@ def request(url: str, *, token: str | None = None, body: dict | None = None) -> 
     headers = {"Content-Type": "application/json"} if body is not None else {}
     if token:
         headers["Authorization"] = token
-    for attempt in range(1, 6):
+    for attempt in range(1, 9):
         req = urllib.request.Request(url, data=encoded, headers=headers, method="POST" if body is not None else "GET")
         try:
             with urllib.request.urlopen(req, timeout=TIMEOUT) as response:
                 return json.loads(response.read().decode("utf-8"))
         except urllib.error.HTTPError as ex:
-            if ex.code not in (429, 500, 502, 503, 504) or attempt == 5:
+            if ex.code not in (429, 500, 502, 503, 504) or attempt == 8:
                 raise RuntimeError(f"HTTP_{ex.code}") from None
             retry_after = ex.headers.get("Retry-After", "0")
             try:
@@ -42,7 +42,7 @@ def request(url: str, *, token: str | None = None, body: dict | None = None) -> 
             except ValueError:
                 delay = 2 * attempt
         except (urllib.error.URLError, TimeoutError):
-            if attempt == 5:
+            if attempt == 8:
                 raise RuntimeError("NETWORK_RETRY_EXHAUSTED") from None
             delay = 2 * attempt
         time.sleep(delay)
