@@ -1,0 +1,13 @@
+{
+  "task_id": "TRAVEL",
+  "query": "как путешествовать с семьей и управлять бизнесом удаленно",
+  "extra_queries": [
+    "travel with kids entrepreneur"
+  ],
+  "content": "Видео",
+  "limit_video": 2,
+  "limit_shorts": 0,
+  "depth_days": 60,
+  "knowledge_tag": "TRAVEL",
+  "language": "ru"
+}
