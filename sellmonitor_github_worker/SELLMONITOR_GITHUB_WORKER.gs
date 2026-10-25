@@ -5533,8 +5533,18 @@ function sellmonitorGithubFbsIngestBatchV1_(body) {
         'СНИМОК СТАТУСА','Статус WB подтверждён при импорте из GitHub','GITHUB_WB_FBS']);
     });
     if(patch.length&&last>1){
-      sh.getRange(2,5,last-1,3).setValues(states);
-      sh.getRange(2,22,last-1,2).setValues(syncTimes);
+      patch.sort(function(a,b){return a-b;});
+      var patchStart=patch[0],patchPrev=patch[0];
+      function flushPatch_(start,end){
+        var offset=start-2,count=end-start+1;
+        sh.getRange(start,5,count,3).setValues(states.slice(offset,offset+count));
+        sh.getRange(start,22,count,2).setValues(syncTimes.slice(offset,offset+count));
+      }
+      for(var pi=1;pi<patch.length;pi++){
+        if(patch[pi]===patchPrev+1){patchPrev=patch[pi];continue;}
+        flushPatch_(patchStart,patchPrev);patchStart=patch[pi];patchPrev=patch[pi];
+      }
+      flushPatch_(patchStart,patchPrev);
     }
     if(insert.length){
       var required=last+insert.length;
