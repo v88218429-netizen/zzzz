@@ -23,18 +23,18 @@ BATCH_SIZE = 1000
 TIMEOUT = 55
 
 
-def request(url: str, *, token: str | None = None, body: dict | None = None) -> dict:
+def request(url: str, *, token: str | None = None, body: dict | None = None, timeout: int = TIMEOUT, retries: int = 5) -> dict:
     encoded = json.dumps(body, ensure_ascii=False).encode("utf-8") if body is not None else None
     headers = {"Content-Type": "application/json"} if body is not None else {}
     if token:
         headers["Authorization"] = token
-    for attempt in range(1, 6):
+    for attempt in range(1, retries + 1):
         req = urllib.request.Request(url, data=encoded, headers=headers, method="POST" if body is not None else "GET")
         try:
-            with urllib.request.urlopen(req, timeout=TIMEOUT) as response:
+            with urllib.request.urlopen(req, timeout=timeout) as response:
                 return json.loads(response.read().decode("utf-8"))
         except urllib.error.HTTPError as ex:
-            if ex.code not in (429, 500, 502, 503, 504) or attempt == 5:
+            if ex.code not in (429, 500, 502, 503, 504) or attempt == retries:
                 raise RuntimeError(f"HTTP_{ex.code}") from None
             retry_after = ex.headers.get("Retry-After", "0")
             try:
@@ -182,7 +182,7 @@ def ingest(client: str, orders: list[dict]) -> dict:
                    "client": client, "orders": batch}
         for attempt in range(1, 5):
             try:
-                obj = request(BRIDGE_URL, body=payload)
+                obj = request(BRIDGE_URL, body=payload, timeout=180, retries=1)
                 result = obj.get("result") or {}
                 if obj.get("ok") and obj.get("action") == "fbs_ingest_batch" and result.get("ok"):
                     break
