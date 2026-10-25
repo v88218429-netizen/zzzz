@@ -79,24 +79,24 @@ jobs:
           actual = {
               x.get("store") for x in stores
               if x.get("ok") is True
-              and x.get("readback") is True
-              and x.get("daily_verified") is True
-              and x.get("weekly_verified") is True
-              and x.get("monthly_verified") is True
+              and all(
+                  isinstance(x.get(period), dict)
+                  and int(x[period].get("verified", -1)) == int(x[period].get("rows", -2))
+                  for period in ("day", "week", "month")
+              )
           }
           if actual != expected:
               raise SystemExit("WB summary readback acceptance failed: " + json.dumps(stores, ensure_ascii=False))
-          print("SOURCE_UPDATED=" + str(result.get("source_updated")))
-          print("SOURCE_ROWS=" + str(result.get("source_rows")))
           for store in stores:
               print(
                   "STORE=" + str(store.get("store"))
                   + " OK=" + str(store.get("ok"))
-                  + " DAILY=" + str(store.get("daily_rows"))
-                  + " WEEKLY=" + str(store.get("weekly_rows"))
-                  + " MONTHLY=" + str(store.get("monthly_rows"))
-                  + " ARCHIVED=" + str(store.get("archived_rows"))
-                  + " READBACK=" + str(store.get("readback"))
-                  + " SHA256=" + str(store.get("sha256"))
+                  + " SOURCE_ROWS=" + str(store.get("source_rows"))
+                  + " SOURCE_PERIOD=" + str(store.get("source_min")) + ".." + str(store.get("source_max"))
+                  + " DAY=" + str(store.get("day", {}).get("rows")) + "/" + str(store.get("day", {}).get("verified"))
+                  + " WEEK=" + str(store.get("week", {}).get("rows")) + "/" + str(store.get("week", {}).get("verified"))
+                  + " MONTH=" + str(store.get("month", {}).get("rows")) + "/" + str(store.get("month", {}).get("verified"))
+                  + " ARCHIVED=" + str(sum(store.get(k, {}).get("archived_rows", 0) for k in ("day", "week", "month")))
+                  + " SHA256=" + str("/".join(store.get(k, {}).get("sha256", "") for k in ("day", "week", "month")))
               )
           PY
