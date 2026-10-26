@@ -19,9 +19,9 @@ BASE = "https://marketplace-api.wildberries.ru"
 BRIDGE_URL = os.environ["GOOGLE_BRIDGE_URL"]
 BRIDGE_KEY = os.environ["GOOGLE_BRIDGE_KEY"]
 LOOKBACK_DAYS = max(1, min(90, int(os.environ.get("FBS_LOOKBACK_DAYS", "7"))))
-BATCH_SIZE = 400  # Proven bridge-supported batch size, matching successful Sanych recovery
+BATCH_SIZE = 50  # Keep scattered status writes below Apps Script's execution ceiling
 INGEST_ATTEMPTS = 8  # Allow temporary Apps Script lock holders to finish
-BRIDGE_INGEST_TIMEOUT = 330  # Wait beyond the observed 303-second Apps Script request
+BRIDGE_INGEST_TIMEOUT = 390  # Let Apps Script finish or hit its six-minute execution ceiling before retrying
 TIMEOUT = 120
 
 
