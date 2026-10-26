@@ -1,8 +1,6 @@
 name: WB FBS Sanych targeted recovery
 
 on:
-  schedule:
-    - cron: "*/30 * * * *"
   workflow_dispatch:
     inputs:
       start_date:
@@ -13,11 +11,6 @@ on:
         description: "Конец периода UTC, YYYY-MM-DD"
         required: true
         type: string
-  push:
-    branches: [mainggg]
-    paths:
-      - ".github/workflows/wb-fbs-sanych-targeted-recovery.yml"
-      - "wb_worker/sanych_fbs_recovery.py"
 
 permissions:
   contents: read
