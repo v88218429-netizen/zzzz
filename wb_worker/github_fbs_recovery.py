@@ -21,6 +21,7 @@ BRIDGE_KEY = os.environ["GOOGLE_BRIDGE_KEY"]
 LOOKBACK_DAYS = max(1, min(90, int(os.environ.get("FBS_LOOKBACK_DAYS", "7"))))
 BATCH_SIZE = 400  # Proven bridge-supported batch size, matching successful Sanych recovery
 INGEST_ATTEMPTS = 8  # Allow temporary Apps Script lock holders to finish
+BRIDGE_INGEST_TIMEOUT = 330  # Wait beyond the observed 303-second Apps Script request
 TIMEOUT = 120
 
 
@@ -183,16 +184,20 @@ def collect(token: str) -> list[dict]:
     return out
 
 def wait_bridge() -> None:
-    for attempt in range(1, 5):
+    last_error = "BRIDGE_RESPONSE_INVALID"
+    for attempt in range(1, 7):
         try:
-            data = request(BRIDGE_URL, body={"token": BRIDGE_KEY, "action": "fbs_targets_health"}, max_attempts=1, timeout=45)
+            data = request(BRIDGE_URL, body={"token": BRIDGE_KEY, "action": "fbs_targets_health"}, max_attempts=1, timeout=120)
             if data.get("ok") is True and data.get("action") == "fbs_targets_health":
                 print("FBS_AUTHENTICATED_BRIDGE_READY=yes", flush=True)
                 return
-        except RuntimeError:
-            pass
-        time.sleep(10)
-    raise RuntimeError("FBS_BRIDGE_NOT_DEPLOYED")
+            last_error = "BRIDGE_RESPONSE_INVALID"
+        except RuntimeError as ex:
+            last_error = str(ex)
+        if attempt < 6:
+            print("FBS_BRIDGE_PROBE_RETRY=" + str(attempt) + ":" + last_error, flush=True)
+            time.sleep(min(60, 15 * attempt))
+    raise RuntimeError("FBS_BRIDGE_NOT_READY:" + last_error)
 
 
 def ingest(client: str, orders: list[dict]) -> dict:
@@ -203,7 +208,7 @@ def ingest(client: str, orders: list[dict]) -> dict:
                    "client": client, "orders": batch}
         for attempt in range(1, INGEST_ATTEMPTS + 1):
             try:
-                obj = request(BRIDGE_URL, body=payload, max_attempts=1, timeout=120)
+                obj = request(BRIDGE_URL, body=payload, max_attempts=1, timeout=BRIDGE_INGEST_TIMEOUT)
                 result = obj.get("result") or {}
                 if obj.get("ok") and obj.get("action") == "fbs_ingest_batch" and result.get("ok"):
                     break
