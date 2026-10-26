@@ -27,7 +27,7 @@ jobs:
       WB_API_TOKEN_AP: ${{ secrets.WB_API_TOKEN_AP }}
       WB_API_TOKEN_AA: ${{ secrets.WB_API_TOKEN_AA }}
       WB_API_TOKEN_YV: ${{ secrets.WB_API_TOKEN_YV }}
-      WEBAPP_DEPLOYMENT_ID: AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw
+      WEBAPP_DEPLOYMENT_ID: AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw # also used by the WB FBS recovery workflow
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
