@@ -89,6 +89,15 @@ class AdvertisingMonitorAgent(BaseAgent):
         start, end = self.dates(7)
         stats = await self.call("wb_advert_stats", advert_ids=ids, date_from=start, date_to=end)
         out.snapshots.append(("stats_7d", stats if isinstance(stats, dict) else {"data": stats}))
+        # Keep only promotion rows carrying an explicit nmId. Campaign totals are
+        # never divided across a campaign's cards.
+        exact_nm_stats = extract_ad_nm_metrics(stats)
+        out.snapshots.append(("stats_by_nm_7d", {
+            "data": [dict(row) for _, row in sorted(exact_nm_stats.items())],
+            "from": start,
+            "to": end,
+            "attribution": "explicit_nmId",
+        }))
         # Fullstats contains nested day/app/SKU rows with spend but no campaign id.
         # Those are components of a campaign, not independent campaigns.
         rows = [r for r in extract_ad_metrics(stats) if r.get("advert_id") is not None]
