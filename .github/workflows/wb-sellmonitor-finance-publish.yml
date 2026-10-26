@@ -39,7 +39,7 @@ jobs:
         run: |
           set -euo pipefail
           python - <<'PY'
-          import json, os, time, urllib.error, urllib.request
+          import http.client, json, os, time, urllib.error, urllib.request
 
           url = "https://script.google.com/macros/s/" + os.environ["WEBAPP_DEPLOYMENT_ID"] + "/exec"
           selected_store = os.environ.get("PUBLISH_ONLY_STORE", "").strip()
@@ -63,7 +63,7 @@ jobs:
                   try:
                       with urllib.request.urlopen(req, timeout=420) as response:
                           result = json.loads(response.read().decode("utf-8"))
-                  except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+                  except (urllib.error.URLError, http.client.HTTPException, OSError, json.JSONDecodeError) as exc:
                       last = type(exc).__name__ + ": " + str(exc)[:240]
                   else:
                       if isinstance(result, dict) and result.get("ok") is True:
