@@ -8,7 +8,7 @@ on:
     paths:
       - ".github/workflows/wb-sellmonitor-finance-publish.yml"
   schedule:
-    - cron: "49 * * * *"
+    - cron: "56 * * * *"
   workflow_run:
     workflows: ["Sellmonitor GitHub worker deploy"]
     types: [completed]
