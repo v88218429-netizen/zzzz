@@ -23,18 +23,19 @@ BATCH_SIZE = 100  # Smaller idempotent requests avoid Apps Script bridge timeout
 TIMEOUT = 120
 
 
-def request(url: str, *, token: str | None = None, body: dict | None = None) -> dict:
+def request(url: str, *, token: str | None = None, body: dict | None = None,
+            max_attempts: int = 8, timeout: int | None = None) -> dict:
     encoded = json.dumps(body, ensure_ascii=False).encode("utf-8") if body is not None else None
     headers = {"Content-Type": "application/json"} if body is not None else {}
     if token:
         headers["Authorization"] = token
-    for attempt in range(1, 9):
+    for attempt in range(1, max_attempts + 1):
         req = urllib.request.Request(url, data=encoded, headers=headers, method="POST" if body is not None else "GET")
         try:
-            with urllib.request.urlopen(req, timeout=TIMEOUT) as response:
+            with urllib.request.urlopen(req, timeout=timeout or TIMEOUT) as response:
                 return json.loads(response.read().decode("utf-8"))
         except urllib.error.HTTPError as ex:
-            if ex.code not in (429, 500, 502, 503, 504) or attempt == 8:
+            if ex.code not in (429, 500, 502, 503, 504) or attempt == max_attempts:
                 raise RuntimeError(f"HTTP_{ex.code}") from None
             retry_after = ex.headers.get("Retry-After", "0")
             try:
@@ -42,7 +43,7 @@ def request(url: str, *, token: str | None = None, body: dict | None = None) -> 
             except ValueError:
                 delay = 2 * attempt
         except (urllib.error.URLError, TimeoutError):
-            if attempt == 8:
+            if attempt == max_attempts:
                 raise RuntimeError("NETWORK_RETRY_EXHAUSTED") from None
             delay = 2 * attempt
         time.sleep(delay)
@@ -162,9 +163,9 @@ def collect(token: str) -> list[dict]:
     return out
 
 def wait_bridge() -> None:
-    for attempt in range(1, 9):
+    for attempt in range(1, 5):
         try:
-            data = request(BRIDGE_URL, body={"token": BRIDGE_KEY, "action": "fbs_targets_health"})
+            data = request(BRIDGE_URL, body={"token": BRIDGE_KEY, "action": "fbs_targets_health"}, max_attempts=1, timeout=45)
             if data.get("ok") is True and data.get("action") == "fbs_targets_health":
                 print("FBS_AUTHENTICATED_BRIDGE_READY=yes", flush=True)
                 return
@@ -182,7 +183,7 @@ def ingest(client: str, orders: list[dict]) -> dict:
                    "client": client, "orders": batch}
         for attempt in range(1, 5):
             try:
-                obj = request(BRIDGE_URL, body=payload)
+                obj = request(BRIDGE_URL, body=payload, max_attempts=1, timeout=420)
                 result = obj.get("result") or {}
                 if obj.get("ok") and obj.get("action") == "fbs_ingest_batch" and result.get("ok"):
                     break
@@ -202,7 +203,12 @@ def ingest(client: str, orders: list[dict]) -> dict:
                                   "UNCLASSIFIED_SCRIPT_REJECTION")
                     print("FBS_BRIDGE_REJECT_CLASS=" + reason, flush=True)
                     raise RuntimeError("INGEST_REJECTED:" + reason)
-            except RuntimeError:
+            except RuntimeError as ex:
+                reason = str(ex)
+                if reason == "NETWORK_RETRY_EXHAUSTED" or reason.startswith(("HTTP_500", "HTTP_502", "HTTP_503", "HTTP_504")):
+                    # The web app may still be processing after a lost client response.
+                    # Never fan out duplicate writes; a later run re-reads WB and resumes idempotently.
+                    raise RuntimeError("FBS_INGEST_OUTCOME_UNCERTAIN") from None
                 if attempt == 4:
                     raise
             time.sleep(5 * attempt)
