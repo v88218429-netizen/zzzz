@@ -7,7 +7,7 @@ on:
     paths:
       - ".github/workflows/ozon-summary-orders-sync.yml"
   schedule:
-    - cron: "17 * * * *"
+    - cron: "50 * * * *"
   workflow_run:
     workflows:
       - Sellmonitor GitHub worker deploy
