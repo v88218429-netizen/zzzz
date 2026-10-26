@@ -42,7 +42,9 @@ def request(url: str, *, token: str | None = None, body: dict | None = None,
                 delay = min(15, max(2 * attempt, float(retry_after)))
             except ValueError:
                 delay = 2 * attempt
-        except (urllib.error.URLError, TimeoutError):
+        except (urllib.error.URLError, TimeoutError, OSError):
+            # urllib/http.client can raise RemoteDisconnected directly (an OSError),
+            # instead of wrapping it in URLError. Treat it as a lost response.
             if attempt == max_attempts:
                 raise RuntimeError("NETWORK_RETRY_EXHAUSTED") from None
             delay = 2 * attempt
@@ -183,7 +185,7 @@ def ingest(client: str, orders: list[dict]) -> dict:
                    "client": client, "orders": batch}
         for attempt in range(1, 5):
             try:
-                obj = request(BRIDGE_URL, body=payload, max_attempts=1, timeout=420)
+                obj = request(BRIDGE_URL, body=payload, max_attempts=1, timeout=120)
                 result = obj.get("result") or {}
                 if obj.get("ok") and obj.get("action") == "fbs_ingest_batch" and result.get("ok"):
                     break
@@ -206,9 +208,13 @@ def ingest(client: str, orders: list[dict]) -> dict:
             except RuntimeError as ex:
                 reason = str(ex)
                 if reason == "NETWORK_RETRY_EXHAUSTED" or reason.startswith(("HTTP_500", "HTTP_502", "HTTP_503", "HTTP_504")):
-                    # The web app may still be processing after a lost client response.
-                    # Never fan out duplicate writes; a later run re-reads WB and resumes idempotently.
-                    raise RuntimeError("FBS_INGEST_OUTCOME_UNCERTAIN") from None
+                    # Ingest is an upsert keyed by WB order ID. Repeating this exact
+                    # batch after a lost response is idempotent and recovers lost replies.
+                    if attempt == 4:
+                        raise RuntimeError("FBS_INGEST_OUTCOME_UNCERTAIN") from None
+                    print("FBS_INGEST_RETRY=" + str(attempt) + ":SAME_IDEMPOTENT_BATCH", flush=True)
+                    time.sleep(min(60, 15 * attempt))
+                    continue
                 if attempt == 4:
                     raise
             time.sleep(5 * attempt)
