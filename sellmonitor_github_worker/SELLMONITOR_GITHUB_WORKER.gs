@@ -5373,7 +5373,20 @@ function sellmonitorGithubPublishOzonSummaryOrders_() {
     }
     var newDaily=sellmonitorGithubOzonRows_(daily,dailyStart,1,10),newSku=sellmonitorGithubOzonRows_(skuSheet,5,1,12),newHelper=sellmonitorGithubOzonRows_(daily,1,12,4);
     if(JSON.stringify(sellmonitorGithubOzonNormalizeRows_(newDaily))!==JSON.stringify(sellmonitorGithubOzonNormalizeRows_(dailyRows)))throw new Error('OZON_DAILY_READBACK_MISMATCH:'+cfg.name);
-    if(JSON.stringify(sellmonitorGithubOzonNormalizeRows_(newSku,true))!==JSON.stringify(sellmonitorGithubOzonNormalizeRows_(agg.products,true)))throw new Error('OZON_SKU_READBACK_MISMATCH:'+cfg.name);
+    var readSkuNorm=sellmonitorGithubOzonNormalizeRows_(newSku,true), expectedSkuNorm=sellmonitorGithubOzonNormalizeRows_(agg.products,true);
+    if(JSON.stringify(readSkuNorm)!==JSON.stringify(expectedSkuNorm)){
+      var mismatch={row:-1,col:-1,actualType:'missing',expectedType:'missing'};
+      for(var sri=0;sri<Math.max(readSkuNorm.length,expectedSkuNorm.length)&&mismatch.row<0;sri++){
+        var ar=readSkuNorm[sri]||[],er=expectedSkuNorm[sri]||[];
+        for(var sci=0;sci<Math.max(ar.length,er.length);sci++){
+          if(JSON.stringify(ar[sci])!==JSON.stringify(er[sci])){
+            mismatch={row:sri+5,col:sci+1,actualType:typeof ar[sci],expectedType:typeof er[sci]};
+            break;
+          }
+        }
+      }
+      throw new Error('OZON_SKU_READBACK_MISMATCH:'+cfg.name+':row='+mismatch.row+':col='+mismatch.col+':actualType='+mismatch.actualType+':expectedType='+mismatch.expectedType);
+    }
     if(JSON.stringify(sellmonitorGithubOzonNormalizeRows_(newHelper))!==JSON.stringify(sellmonitorGithubOzonNormalizeRows_(helper)))throw new Error('OZON_CHART_READBACK_MISMATCH:'+cfg.name);
     var charts=daily.getCharts();
     if(charts.length){var range=daily.getRange(1,12,helper.length,4);charts.forEach(function(ch){daily.updateChart(ch.modify().clearRanges().addRange(range).build());});}
