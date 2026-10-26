@@ -5445,6 +5445,8 @@ function sellmonitorGithubWbInnerBuildRows_(sourceRows,headers,storeId,tz){
       if(/FACTUAL/.test(trust))factualDays[day]=true;else if(/PARTIAL|PRELIM/.test(trust))partialDays[day]=true;
     }
   });
+  // A day with any partial source row is not counted as exact.
+  Object.keys(partialDays).forEach(function(day){delete factualDays[day];});
   var dayRows=[],weekGroups={},monthGroups={};
   Object.keys(items).forEach(function(k){
     var x=items[k],periodEnd=sellmonitorGithubWbInnerAddDays_(x.day,0);
