@@ -23,7 +23,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: wb-fbs-sanych-targeted-recovery
+  group: wb-fbs-google-adapter
   cancel-in-progress: false
 
 jobs:
