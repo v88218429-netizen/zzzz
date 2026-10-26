@@ -18,6 +18,10 @@ on:
         required: false
         type: string
   # Periodic recovery is re-enabled only after verified end-to-end acceptance.
+  push:
+    branches: [mainggg]
+    paths:
+      - "wb_worker/github_fbs_recovery.py"
 
 permissions:
   contents: read
