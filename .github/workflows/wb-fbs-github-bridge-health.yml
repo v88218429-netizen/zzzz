@@ -16,8 +16,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: wb-fbs-github-bridge-health
-  cancel-in-progress: true
+  group: wb-fbs-google-adapter
+  cancel-in-progress: false
 
 jobs:
   verify:
