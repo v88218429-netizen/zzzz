@@ -20,6 +20,7 @@ BRIDGE_URL = os.environ["GOOGLE_BRIDGE_URL"]
 BRIDGE_KEY = os.environ["GOOGLE_BRIDGE_KEY"]
 LOOKBACK_DAYS = max(1, min(90, int(os.environ.get("FBS_LOOKBACK_DAYS", "7"))))
 BATCH_SIZE = 400  # Proven bridge-supported batch size, matching successful Sanych recovery
+INGEST_ATTEMPTS = 8  # Allow temporary Apps Script lock holders to finish
 TIMEOUT = 120
 
 
@@ -168,7 +169,7 @@ def collect(token: str) -> list[dict]:
                 "nmId": o.get("nmId") or "",
                 "priceKopecks": o.get("convertedPrice", o.get("convertedFinalPrice",
                                      o.get("finalPrice", o.get("price", 0)))),
-                "supplyId": st.get("supplyId") or o.get("supplyId") or "",
+                "supplyId": (status.get(oid) or {}).get("supplyId") or o.get("supplyId") or "",
                 "warehouseId": o.get("warehouseId") or "",
                 "officeId": o.get("officeId") or o.get("destinationOfficeId") or "",
                 "deliveryType": o.get("deliveryType") or "",
@@ -200,14 +201,15 @@ def ingest(client: str, orders: list[dict]) -> dict:
         batch = orders[p:p+BATCH_SIZE]
         payload = {"token": BRIDGE_KEY, "action": "fbs_ingest_batch",
                    "client": client, "orders": batch}
-        for attempt in range(1, 5):
+        for attempt in range(1, INGEST_ATTEMPTS + 1):
             try:
                 obj = request(BRIDGE_URL, body=payload, max_attempts=1, timeout=120)
                 result = obj.get("result") or {}
                 if obj.get("ok") and obj.get("action") == "fbs_ingest_batch" and result.get("ok"):
                     break
-                if not result.get("retryable") or attempt == 4:
-                    details = str(obj.get("error") or result.get("error") or "")
+                details = str(obj.get("error") or result.get("error") or "")
+                retryable = result.get("retryable") or "GITHUB_FBS_LOCK_BUSY" in details
+                if not retryable or attempt == INGEST_ATTEMPTS:
                     candidates = [
                         "FBS_BATCH_SIZE_INVALID", "FBS_ROW_COUNT_UNEXPECTED",
                         "FBS_DATE_OUTSIDE_RECOVERY_WINDOW", "FBS_ID_INVALID",
@@ -227,14 +229,15 @@ def ingest(client: str, orders: list[dict]) -> dict:
                 if reason == "NETWORK_RETRY_EXHAUSTED" or reason.startswith(("HTTP_500", "HTTP_502", "HTTP_503", "HTTP_504")):
                     # Ingest is an upsert keyed by WB order ID. Repeating this exact
                     # batch after a lost response is idempotent and recovers lost replies.
-                    if attempt == 4:
+                    if attempt == INGEST_ATTEMPTS:
                         raise RuntimeError("FBS_INGEST_OUTCOME_UNCERTAIN") from None
                     print("FBS_INGEST_RETRY=" + str(attempt) + ":SAME_IDEMPOTENT_BATCH", flush=True)
                     time.sleep(min(60, 15 * attempt))
                     continue
-                if attempt == 4:
+                if attempt == INGEST_ATTEMPTS:
                     raise
-            time.sleep(5 * attempt)
+                print("FBS_INGEST_RETRY=" + str(attempt) + ":LOCK_OR_RETRYABLE_RESPONSE", flush=True)
+            time.sleep(min(120, 15 * attempt))
         for field in totals:
             totals[field] += int(result.get(field, 0))
         print(json.dumps({"store":client, "batch":p//BATCH_SIZE+1,
