@@ -64,7 +64,7 @@ jobs:
                       "action": result.get("action") if isinstance(result, dict) else None,
                       "reason": result.get("reason") if isinstance(result, dict) else None,
                       "source_status": result.get("source_status") if isinstance(result, dict) else None,
-                      "source_last_success": result.get("source_last_success") if isinstance(result, dict) else None,
+                      "source_last_success": result.get("source_updated") if isinstance(result, dict) else None,
                       "stores": [
                           {"store": x.get("store"), "error": x.get("error"), "ok": x.get("ok")}
                           for x in (result.get("stores") or [])
@@ -82,7 +82,7 @@ jobs:
           actual = {x.get("store") for x in stores if x.get("ok") is True and x.get("readback") is True}
           if actual != expected:
               raise SystemExit("Ozon summary readback acceptance failed: " + json.dumps(stores, ensure_ascii=False))
-          print("SOURCE_UPDATED=" + str(result.get("source_last_success")))
+          print("SOURCE_UPDATED=" + str(result.get("source_updated")))
           print("SOURCE_ROWS=" + str(result.get("source_rows")))
           for store in stores:
               print(
