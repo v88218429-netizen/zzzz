@@ -19,7 +19,7 @@ BASE = "https://marketplace-api.wildberries.ru"
 BRIDGE_URL = os.environ["GOOGLE_BRIDGE_URL"]
 BRIDGE_KEY = os.environ["GOOGLE_BRIDGE_KEY"]
 LOOKBACK_DAYS = max(1, min(90, int(os.environ.get("FBS_LOOKBACK_DAYS", "7"))))
-BATCH_SIZE = 100  # Smaller idempotent requests avoid Apps Script bridge timeouts
+BATCH_SIZE = 20  # Keep bridge writes below Apps Script execution limits
 TIMEOUT = 120
 
 
