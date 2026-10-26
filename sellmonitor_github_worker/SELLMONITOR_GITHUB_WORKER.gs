@@ -5322,7 +5322,7 @@ function sellmonitorGithubPublishOzonSummaryOrders_() {
     var storeRecords=records.filter(function(r){return r.cabinet===cabinet;});
     if(!storeRecords.length){results.push({store:cfg.name,ok:true,skipped:true,reason:'empty_source_preserved'});return;}
     var agg=sellmonitorGithubOzonAgg_(records,cabinet,today);
-    var dailyHeader=['Дневные итоги','Начало','Конец','Заказы, уникальные','Отправления, уникальные','Штук','SKU/offer','Строк товаров','Дней с данными','Состояние'];
+    var dailyHeader=['Дневные итоги','Начало','Конец','Заказы, уникальные','Отправления, уникальные','Штук','SKU/offer','Строки товаров','Дней с данными','Состояние'];
     var skuHeader=['Тип периода','Начало','Конец','offer_id','SKU','Наименование','Заказы, уникальные','Отправления, уникальные','Штук','Строк товаров','Состояние периода','Источник'];
     if(JSON.stringify(daily.getRange(4,1,1,10).getDisplayValues()[0])!==JSON.stringify(dailyHeader))throw new Error('OZON_TARGET_DAILY_HEADER_MISMATCH:'+cfg.name);
     if(JSON.stringify(skuSheet.getRange(4,1,1,12).getDisplayValues()[0])!==JSON.stringify(skuHeader))throw new Error('OZON_TARGET_SKU_HEADER_MISMATCH:'+cfg.name);
