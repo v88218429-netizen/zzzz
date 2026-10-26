@@ -51,6 +51,7 @@ jobs:
           expected = (selected_store,) if selected_store == "sanych_wb" else ("air_wb", "hozyayushka_wb", "sanych_wb")
           print("PUBLISH_SCOPE=" + (selected_store or "all_stores"))
           verified = []
+          errors = []
           for store_id in expected:
               body = json.dumps({
                   "token": os.environ["WEBHOOK_SECRET"],
@@ -85,21 +86,33 @@ jobs:
                           break
                   if attempt < 3:
                       time.sleep(15 * attempt)
-              if not result or result.get("ok") is not True:
-                  raise SystemExit("WB finance publication failed for " + store_id + ": " + str(last))
+              if not isinstance(result, dict) or result.get("ok") is not True:
+                  message = "WB finance publication failed for " + store_id + ": " + str(last)
+                  errors.append(message)
+                  print("STORE=" + store_id + " OK=no ERROR=" + str(last))
+                  continue
               stores = result.get("stores") or []
-              if len(stores) != 1:
-                  raise SystemExit("WB store result count mismatch for " + store_id)
+              if len(stores) != 1 or not isinstance(stores[0], dict):
+                  message = "WB store result count mismatch for " + store_id
+                  errors.append(message)
+                  print("STORE=" + store_id + " OK=no ERROR=" + message)
+                  continue
               item = stores[0]
               if item.get("ok") is not True:
-                  raise SystemExit("WB store failed for " + store_id + ": " + json.dumps(item, ensure_ascii=False))
+                  message = "WB store failed for " + store_id + ": " + json.dumps(item, ensure_ascii=False)
+                  errors.append(message)
+                  print("STORE=" + store_id + " OK=no ERROR=" + message)
+                  continue
               if not all(
                   isinstance(item.get(period), dict)
                   and int(item[period].get("verified", -1)) == int(item[period].get("rows", -2))
                   and bool(item[period].get("sha256"))
                   for period in ("day", "week", "month")
               ):
-                  raise SystemExit("WB summary readback mismatch for " + store_id + ": " + json.dumps(item, ensure_ascii=False))
+                  message = "WB summary readback mismatch for " + store_id + ": " + json.dumps(item, ensure_ascii=False)
+                  errors.append(message)
+                  print("STORE=" + store_id + " OK=no ERROR=" + message)
+                  continue
               verified.append(item)
               print(
                   "STORE=" + str(item.get("store"))
@@ -115,5 +128,7 @@ jobs:
           actual = {item.get("store") for item in verified}
           expected_names = {"Саныч"} if selected_store == "sanych_wb" else {"AIR", "Хозяюшка", "Саныч"}
           if actual != expected_names:
-              raise SystemExit("WB summary stores readback acceptance failed: " + repr(actual))
+              errors.append("WB summary stores readback acceptance failed: " + repr(actual))
+          if errors:
+              raise SystemExit("; ".join(errors))
           PY
