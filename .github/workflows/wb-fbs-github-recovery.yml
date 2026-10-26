@@ -17,13 +17,7 @@ on:
         description: "Конец точечного восстановления (UTC, YYYY-MM-DD)"
         required: false
         type: string
-  schedule:
-    - cron: "*/30 * * * *"
-  push:
-    branches: [mainggg]
-    paths:
-      - ".github/workflows/wb-fbs-github-recovery.yml"
-      - "wb_worker/github_fbs_recovery.py"
+  # Periodic recovery is re-enabled only after verified end-to-end acceptance.
 
 permissions:
   contents: read
