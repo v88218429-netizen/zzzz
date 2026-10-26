@@ -28,7 +28,7 @@ permissions:
 
 concurrency:
   group: wb-fbs-google-adapter
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   recover:
@@ -39,7 +39,7 @@ jobs:
         client: [AIR, HOZYAYUSHKA]
     concurrency:
       group: wb-fbs-github-recovery-${{ matrix.client }}
-      cancel-in-progress: false
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
