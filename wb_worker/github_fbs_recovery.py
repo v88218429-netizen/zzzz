@@ -137,13 +137,30 @@ def collect(token: str) -> list[dict]:
             str(x.get("id") or x.get("orderId") or ""): x
             for x in (reply.get("orders") or [])
         }
+        def status_pair(oid: str) -> tuple[str, str]:
+            row = status.get(oid) or {}
+            return (
+                str(row.get("supplierStatus") or row.get("supplier_status") or "").strip(),
+                str(row.get("wbStatus") or row.get("wb_status") or "").strip(),
+            )
+        missing = [oid for oid in subset if not all(status_pair(oid))]
+        # A status snapshot can briefly omit a just-created order. Re-read only
+        # those IDs; never invent a status or let a partial response halt the batch.
+        for retry in range(1, 4):
+            if not missing:
+                break
+            time.sleep(2 * retry)
+            check = endpoint(token, "/api/v3/orders/status", {"orders": [int(x) for x in missing]})
+            status.update({
+                str(x.get("id") or x.get("orderId") or ""): x
+                for x in (check.get("orders") or [])
+            })
+            missing = [oid for oid in missing if not all(status_pair(oid))]
+        if missing:
+            raise RuntimeError("WB_STATUS_INCOMPLETE: missing_status_count=" + str(len(missing)))
         for oid in subset:
             o = found[oid]
-            st = status.get(oid) or {}
-            seller = str(st.get("supplierStatus") or st.get("supplier_status") or "").strip()
-            wb = str(st.get("wbStatus") or st.get("wb_status") or "").strip()
-            if not seller or not wb:
-                raise RuntimeError("WB_STATUS_INCOMPLETE: missing_status_count_at_least_1")
+            seller, wb = status_pair(oid)
             out.append({
                 "id": oid, "createdAt": o.get("createdAt") or "",
                 "supplierStatus": seller, "wbStatus": wb,
