@@ -8,6 +8,11 @@ on:
       - ".github/workflows/ozon-summary-orders-sync.yml"
   schedule:
     - cron: "17 * * * *"
+  workflow_run:
+    workflows:
+      - Sellmonitor GitHub worker deploy
+    types: [completed]
+    branches: [mainggg]
 
 permissions:
   contents: read
@@ -18,6 +23,7 @@ concurrency:
 
 jobs:
   publish:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
