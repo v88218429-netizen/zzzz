@@ -5871,17 +5871,65 @@ function sellmonitorGithubFbsIngestBatchV1_(body) {
     });
     if(patch.length&&last>1){
       patch.sort(function(a,b){return a-b;});
-      var patchStart=patch[0],patchPrev=patch[0];
-      function flushPatch_(start,end){
-        var offset=start-2,count=end-start+1;
-        sh.getRange(start,5,count,3).setValues(states.slice(offset,offset+count));
-        sh.getRange(start,22,count,2).setValues(syncTimes.slice(offset,offset+count));
-      }
+      var segments=[],segmentStart=patch[0],segmentEnd=patch[0];
       for(var pi=1;pi<patch.length;pi++){
-        if(patch[pi]===patchPrev+1){patchPrev=patch[pi];continue;}
-        flushPatch_(patchStart,patchPrev);patchStart=patch[pi];patchPrev=patch[pi];
+        if(patch[pi]===segmentEnd+1){segmentEnd=patch[pi];continue;}
+        segments.push([segmentStart,segmentEnd]);segmentStart=segmentEnd=patch[pi];
       }
-      flushPatch_(patchStart,patchPrev);
+      segments.push([segmentStart,segmentEnd]);
+      var patchData=[],verifyFilters=[];
+      function asSheetValue(value){
+        if(value instanceof Date)return value.getTime()/86400000+25569;
+        return value==null?'':value;
+      }
+      segments.forEach(function(seg){
+        var startRow=seg[0],endRow=seg[1],offset=startRow-2,count=endRow-startRow+1;
+        patchData.push({range:"'📦 FBS Заказы'!E"+startRow+":G"+endRow,
+          majorDimension:'ROWS',values:states.slice(offset,offset+count).map(function(r){return (r||[]).slice(0,3).map(asSheetValue);})});
+        patchData.push({range:"'📦 FBS Заказы'!V"+startRow+":W"+endRow,
+          majorDimension:'ROWS',values:syncTimes.slice(offset,offset+count).map(function(r){return (r||[]).slice(0,2).map(asSheetValue);})});
+        verifyFilters.push({a1Range:"'📦 FBS Заказы'!A"+startRow+":G"+endRow});
+        verifyFilters.push({a1Range:"'📦 FBS Заказы'!V"+startRow+":W"+endRow});
+      });
+      var authToken=ScriptApp.getOAuthToken();
+      var apiBase='https://sheets.googleapis.com/v4/spreadsheets/'+encodeURIComponent(spreadsheetId);
+      var writeResponse=UrlFetchApp.fetch(apiBase+'/values:batchUpdate',{
+        method:'post',contentType:'application/json',
+        headers:{Authorization:'Bearer '+authToken},muteHttpExceptions:true,
+        payload:JSON.stringify({valueInputOption:'RAW',data:patchData})
+      });
+      var writeCode=writeResponse.getResponseCode();
+      if(writeCode<200||writeCode>=300)throw new Error('FBS_PATCH_BATCH_HTTP_'+writeCode);
+      var verifyResponse=UrlFetchApp.fetch(apiBase+'/values:batchGetByDataFilter',{
+        method:'post',contentType:'application/json',
+        headers:{Authorization:'Bearer '+authToken},muteHttpExceptions:true,
+        payload:JSON.stringify({dataFilters:verifyFilters,valueRenderOption:'UNFORMATTED_VALUE'})
+      });
+      var verifyCode=verifyResponse.getResponseCode();
+      if(verifyCode<200||verifyCode>=300)throw new Error('FBS_PATCH_READBACK_HTTP_'+verifyCode);
+      var verified=JSON.parse(verifyResponse.getContentText()).valueRanges||[];
+      if(verified.length!==verifyFilters.length)throw new Error('FBS_PATCH_READBACK_COUNT_MISMATCH');
+      var rangeIndex=0;
+      segments.forEach(function(seg){
+        var startRow=seg[0],endRow=seg[1];
+        var orderValues=(verified[rangeIndex++].valueRange||{}).values||[];
+        var timeValues=(verified[rangeIndex++].valueRange||{}).values||[];
+        for(var rowNumber=startRow;rowNumber<=endRow;rowNumber++){
+          var offset=rowNumber-2,rowOffset=rowNumber-startRow;
+          var orderRow=orderValues[rowOffset]||[],timeRow=timeValues[rowOffset]||[];
+          var expectedState=states[offset]||[],expectedTimes=syncTimes[offset]||[];
+          if(String(orderRow[0]||'')!==String(ids[offset][0]||'')||
+             String(orderRow[4]||'')!==String(expectedState[0]||'')||
+             String(orderRow[5]||'')!==String(expectedState[1]||'')||
+             String(orderRow[6]||'')!==String(expectedState[2]||''))
+            throw new Error('FBS_PATCH_READBACK_FAILED');
+          for(var t=0;t<2;t++){
+            var expectedSerial=asSheetValue(expectedTimes[t]),actualSerial=Number(timeRow[t]);
+            if(!isFinite(actualSerial)||Math.abs(actualSerial-Number(expectedSerial))>0.00002)
+              throw new Error('FBS_PATCH_TIME_READBACK_FAILED');
+          }
+        }
+      });
     }
     if(insert.length){
       var required=last+insert.length;
