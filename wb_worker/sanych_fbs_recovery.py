@@ -19,8 +19,8 @@ BASE = "https://marketplace-api.wildberries.ru"
 BRIDGE_URL = os.environ["GOOGLE_BRIDGE_URL"]
 BRIDGE_KEY = os.environ["GOOGLE_BRIDGE_KEY"]
 LOOKBACK_DAYS = max(1, min(90, int(os.environ.get("FBS_LOOKBACK_DAYS", "7"))))
-BATCH_SIZE = 400
-TIMEOUT = 55
+BATCH_SIZE = 100  # Match the proven bounded batch size used by the shared recovery adapter
+TIMEOUT = 120
 
 
 def request(url: str, *, token: str | None = None, body: dict | None = None, timeout: int = TIMEOUT, retries: int = 5) -> dict:
@@ -41,7 +41,7 @@ def request(url: str, *, token: str | None = None, body: dict | None = None, tim
                 delay = min(15, max(2 * attempt, float(retry_after)))
             except ValueError:
                 delay = 2 * attempt
-        except (urllib.error.URLError, TimeoutError):
+        except (urllib.error.URLError, TimeoutError, OSError):
             if attempt == retries:
                 raise RuntimeError("NETWORK_RETRY_EXHAUSTED") from None
             delay = 2 * attempt
@@ -180,42 +180,60 @@ def wait_bridge() -> None:
 
 def ingest(client: str, orders: list[dict]) -> dict:
     totals = {"received": 0, "inserted": 0, "existing": 0, "changed": 0, "events": 0}
+    attempts = 8
     for p in range(0, len(orders), BATCH_SIZE):
         batch = orders[p:p+BATCH_SIZE]
         payload = {"token": BRIDGE_KEY, "action": "fbs_ingest_batch",
                    "client": client, "orders": batch}
-        for attempt in range(1, 5):
+        for attempt in range(1, attempts + 1):
             try:
-                obj = request(BRIDGE_URL, body=payload, timeout=240, retries=1)
-                result = obj.get("result") or {}
-                if obj.get("ok") and obj.get("action") == "fbs_ingest_batch" and result.get("ok"):
-                    break
-                if not result.get("retryable") or attempt == 4:
-                    details = str(obj.get("error") or result.get("error") or "")
-                    candidates = [
-                        "FBS_BATCH_SIZE_INVALID", "FBS_ROW_COUNT_UNEXPECTED",
-                        "FBS_DATE_OUTSIDE_RECOVERY_WINDOW", "FBS_ID_INVALID",
-                        "FBS_MISSING_CONFIRMED_STATUS", "FBS_DATE_INVALID",
-                        "FBS_COLUMN_SCHEMA_MISMATCH", "FBS_INSERT_READBACK_FAILED",
-                        "FBS_BOOK_SCHEMA_MISSING", "FBS_CLIENT_NOT_ALLOWED",
-                        "GITHUB_FBS_LOCK_BUSY", "Service Spreadsheets failed",
-                        "You do not have permission", "Exceeded maximum execution",
-                        "Service invoked too many times", "Exception:", "TypeError:"
-                    ]
-                    reason = next((tag.replace(" ", "_") for tag in candidates if tag in details),
-                                  "UNCLASSIFIED_SCRIPT_REJECTION")
-                    print("FBS_BRIDGE_REJECT_CLASS=" + reason, flush=True)
-                    raise RuntimeError("INGEST_REJECTED:" + reason)
-            except RuntimeError:
-                raise
-            time.sleep(5 * attempt)
+                obj = request(BRIDGE_URL, body=payload, timeout=390, retries=1)
+            except RuntimeError as ex:
+                transient = str(ex) in {
+                    "NETWORK_RETRY_EXHAUSTED", "HTTP_429", "HTTP_500",
+                    "HTTP_502", "HTTP_503", "HTTP_504"
+                }
+                if not transient or attempt == attempts:
+                    raise RuntimeError("FBS_INGEST_TRANSPORT_FAILED:" + str(ex)) from None
+                time.sleep(min(60, 10 * attempt))
+                continue
+
+            result = obj.get("result") or {}
+            if obj.get("ok") and obj.get("action") == "fbs_ingest_batch" and result.get("ok"):
+                break
+
+            details = str(obj.get("error") or result.get("error") or "")
+            retryable = result.get("retryable") or any(
+                marker in details for marker in (
+                    "GITHUB_FBS_LOCK_BUSY", "Service invoked too many times",
+                    "Service Spreadsheets failed", "Exceeded maximum execution",
+                    "Internal error", "backendError", "HTTP_429", "HTTP_500",
+                    "HTTP_502", "HTTP_503", "HTTP_504"
+                )
+            )
+            if not retryable or attempt == attempts:
+                candidates = [
+                    "FBS_BATCH_SIZE_INVALID", "FBS_ROW_COUNT_UNEXPECTED",
+                    "FBS_DATE_OUTSIDE_RECOVERY_WINDOW", "FBS_ID_INVALID",
+                    "FBS_MISSING_CONFIRMED_STATUS", "FBS_DATE_INVALID",
+                    "FBS_COLUMN_SCHEMA_MISMATCH", "FBS_INSERT_READBACK_FAILED",
+                    "FBS_BOOK_SCHEMA_MISSING", "FBS_CLIENT_NOT_ALLOWED",
+                    "GITHUB_FBS_LOCK_BUSY", "Service Spreadsheets failed",
+                    "You do not have permission", "Exceeded maximum execution",
+                    "Service invoked too many times", "Exception:", "TypeError:"
+                ]
+                reason = next((tag.replace(" ", "_") for tag in candidates if tag in details),
+                              "UNCLASSIFIED_SCRIPT_REJECTION")
+                print("FBS_BRIDGE_REJECT_CLASS=" + reason, flush=True)
+                raise RuntimeError("INGEST_REJECTED:" + reason)
+            time.sleep(min(60, 10 * attempt))
+
         for field in totals:
             totals[field] += int(result.get(field, 0))
         print(json.dumps({"store":client, "batch":p//BATCH_SIZE+1,
               "received":result.get("received"),"inserted":result.get("inserted"),
               "changed":result.get("changed")}, ensure_ascii=False), flush=True)
     return totals
-
 
 
 
