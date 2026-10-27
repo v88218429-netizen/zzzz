@@ -1,6 +1,10 @@
 name: WB FBS Sanych targeted recovery
 
 on:
+  push:
+    branches: [mainggg]
+    paths:
+      - "wb_worker/sanych_fbs_recovery.py"
   workflow_dispatch:
     inputs:
       start_date:
