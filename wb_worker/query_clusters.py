@@ -218,9 +218,19 @@ def publish(bridge_url: str, bridge_key: str) -> dict:
                                 raise RuntimeError(f"{shop} chunk {start}: {type(exc).__name__}: {exc}") from None
                             time.sleep([2, 5, 10][attempt])
                     if not isinstance(data, dict) or data.get("ok") is not True or data.get("action") != "publish_ad_clusters":
-                        raise RuntimeError(f"{shop}: clusters bridge rejected publication")
+                        if isinstance(data, dict):
+                            detail = {name: data.get(name) for name in ("ok", "action", "error", "code", "reason", "written")
+                                      if data.get(name) is not None}
+                        else:
+                            detail = {"response_type": type(data).__name__}
+                        raise RuntimeError(
+                            f"{shop}: clusters bridge rejected publication: "
+                            f"{json.dumps(detail, ensure_ascii=False)[:600]}"
+                        )
                     if int(data.get("written", -1)) != len(chunk):
-                        raise RuntimeError(f"{shop}: cluster row-count mismatch")
+                        raise RuntimeError(
+                            f"{shop}: cluster row-count mismatch: expected={len(chunk)} actual={data.get('written')}"
+                        )
                     counts[shop]["published_rows"] += len(chunk)
                     counts[shop]["chunks"] += 1
         except Exception as exc:
