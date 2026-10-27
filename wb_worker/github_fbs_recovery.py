@@ -220,6 +220,7 @@ def ingest(client: str, orders: list[dict]) -> dict:
     totals = {"received": 0, "inserted": 0, "existing": 0, "changed": 0, "events": 0}
     for p in range(0, len(orders), BATCH_SIZE):
         batch = orders[p:p+BATCH_SIZE]
+        print("FBS_INGEST_BATCH_START="+json.dumps({"store":client,"batch":p//BATCH_SIZE+1,"orders":len(batch)}), flush=True)
         payload = {"token": BRIDGE_KEY, "action": "fbs_ingest_batch",
                    "client": client, "orders": batch}
         for attempt in range(1, INGEST_ATTEMPTS + 1):
