@@ -80,6 +80,7 @@ jobs:
       GOOGLE_BRIDGE_URL: https://script.google.com/macros/s/AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw/exec
       FBS_START_DATE: ${{ github.event_name == 'workflow_dispatch' && inputs.start_date || matrix.start_date }}
       FBS_END_DATE: ${{ github.event_name == 'workflow_dispatch' && inputs.end_date || matrix.end_date }}
+    steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.ref_name }}
