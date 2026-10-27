@@ -18,7 +18,8 @@ import urllib.request
 BASE = "https://marketplace-api.wildberries.ru"
 BRIDGE_URL = os.environ["GOOGLE_BRIDGE_URL"]
 BRIDGE_KEY = os.environ["GOOGLE_BRIDGE_KEY"]
-LOOKBACK_DAYS = max(1, min(90, int(os.environ.get("FBS_LOOKBACK_DAYS", "7"))))
+MAX_RECOVERY_DAYS = 90
+LOOKBACK_DAYS = max(1, min(MAX_RECOVERY_DAYS, int(os.environ.get("FBS_LOOKBACK_DAYS", "7"))))
 BATCH_SIZE = 100  # Match the proven bounded batch size used by the shared recovery adapter
 TIMEOUT = 120
 
@@ -79,7 +80,7 @@ def requested_window() -> tuple[int, int] | None:
     now = dt.datetime.now(dt.timezone.utc)
     if end_dt.date() == now.date() and end_dt > now + dt.timedelta(minutes=5):
         end_dt = now
-    if end_dt < start_dt or (end_dt.date() - start_dt.date()).days + 1 > 90 or end_dt > now + dt.timedelta(minutes=5):
+    if end_dt < start_dt or (end_dt.date() - start_dt.date()).days + 1 > MAX_RECOVERY_DAYS or end_dt > now + dt.timedelta(minutes=5):
         raise RuntimeError("FBS_DATE_RANGE_OUT_OF_BOUNDS")
     return int(start_dt.timestamp()), int(end_dt.timestamp())
 
