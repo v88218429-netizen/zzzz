@@ -27,10 +27,10 @@ TIMEOUT = 120
 
 def safe_bridge_detail(value: object) -> str:
     detail = str(value or "")
-    detail = re.sub(r"(?i)bearer\\s+[^\\s,;]+", "Bearer [redacted]", detail)
-    detail = re.sub(r"\\b[A-Za-z0-9_-]{32,}\\b", "[opaque-id]", detail)
-    detail = re.sub(r"\\b\\d{6,20}\\b", "[order-id]", detail)
-    return re.sub(r"\\s+", " ", detail).strip()[:240]
+    detail = re.sub(r"(?i)bearer\s+[^\s,;]+", "Bearer [redacted]", detail)
+    detail = re.sub(r"\b[A-Za-z0-9_-]{32,}\b", "[opaque-id]", detail)
+    detail = re.sub(r"\b\d{6,20}\b", "[order-id]", detail)
+    return re.sub(r"\s+", " ", detail).strip()[:240]
 
 
 def request(url: str, *, token: str | None = None, body: dict | None = None,
