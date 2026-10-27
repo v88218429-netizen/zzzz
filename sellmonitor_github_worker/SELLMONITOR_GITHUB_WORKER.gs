@@ -5899,15 +5899,39 @@ function sellmonitorGithubFbsIngestBatchV1_(body) {
         payload:JSON.stringify({valueInputOption:'RAW',data:patchData})
       });
       var writeCode=writeResponse.getResponseCode();
-      if(writeCode<200||writeCode>=300)throw new Error('FBS_PATCH_BATCH_HTTP_'+writeCode);
+      if(writeCode<200||writeCode>=300){
+  var writeDiagnostic='UNKNOWN';
+  try { var writeError=JSON.parse(writeResponse.getContentText()||'{}').error||{}; writeDiagnostic=String(writeError.status||writeError.message||'UNKNOWN').slice(0,180); } catch(writeParseError) {}
+  if(writeCode!==403)throw new Error('FBS_PATCH_BATCH_HTTP_'+writeCode+':'+writeDiagnostic);
+  try{
+    segments.forEach(function(seg){
+      var startRow=seg[0],endRow=seg[1],offset=startRow-2,count=endRow-startRow+1;
+      sh.getRange(startRow,5,count,3).setValues(states.slice(offset,offset+count).map(function(r){return (r||[]).slice(0,3);}));
+      sh.getRange(startRow,22,count,2).setValues(syncTimes.slice(offset,offset+count).map(function(r){return (r||[]).slice(0,2);}));
+    });
+    SpreadsheetApp.flush();
+    console.log('FBS_PATCH_NATIVE_WRITE_FALLBACK=403:'+writeDiagnostic);
+  }catch(nativeWriteError){throw new Error('FBS_PATCH_BATCH_HTTP_403:'+writeDiagnostic+';NATIVE_FALLBACK_FAILED:'+String(nativeWriteError&&nativeWriteError.message||nativeWriteError));}
+}
       var verifyResponse=UrlFetchApp.fetch(apiBase+'/values:batchGetByDataFilter',{
         method:'post',contentType:'application/json',
         headers:{Authorization:'Bearer '+authToken},muteHttpExceptions:true,
         payload:JSON.stringify({dataFilters:verifyFilters,valueRenderOption:'UNFORMATTED_VALUE'})
       });
       var verifyCode=verifyResponse.getResponseCode();
-      if(verifyCode<200||verifyCode>=300)throw new Error('FBS_PATCH_READBACK_HTTP_'+verifyCode);
-      var verified=JSON.parse(verifyResponse.getContentText()).valueRanges||[];
+      if(verifyCode<200||verifyCode>=300){if(verifyCode!==403)throw new Error('FBS_PATCH_READBACK_HTTP_'+verifyCode);}
+      var verified;
+      if(verifyCode>=200&&verifyCode<300){
+        verified=JSON.parse(verifyResponse.getContentText()).valueRanges||[];
+      }else if(verifyCode===403){
+        verified=[];
+        segments.forEach(function(seg){
+          var startRow=seg[0],endRow=seg[1],count=endRow-startRow+1;
+          verified.push({valueRange:{values:sh.getRange(startRow,1,count,7).getValues().map(function(r){return r.map(asSheetValue);})}});
+          verified.push({valueRange:{values:sh.getRange(startRow,22,count,2).getValues().map(function(r){return r.map(asSheetValue);})}});
+        });
+        console.log('FBS_PATCH_NATIVE_READBACK_FALLBACK=403');
+      }else{throw new Error('FBS_PATCH_READBACK_HTTP_'+verifyCode);}
       if(verified.length!==verifyFilters.length)throw new Error('FBS_PATCH_READBACK_COUNT_MISMATCH');
       var rangeIndex=0;
       segments.forEach(function(seg){
