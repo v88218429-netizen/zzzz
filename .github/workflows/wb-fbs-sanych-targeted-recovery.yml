@@ -4,7 +4,7 @@ on:
   push:
     branches: [mainggg]
     paths:
-      - ".github/workflows/disabled-until-recovery-started.txt"
+      - "wb_worker/sanych_fbs_recovery.py"
   workflow_dispatch:
     inputs:
       start_date:
@@ -25,6 +25,52 @@ concurrency:
 
 jobs:
   recover:
+    if: ${{ (github.event_name == 'push' && contains(github.event.head_commit.message, '[FBS-90D-SLICED]')) || (github.event_name == 'workflow_dispatch' && matrix.slice == 1) }}
+    name: "recover SANYCH ${{ matrix.start_date }}–${{ matrix.end_date }}"
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+        - slice: 1
+          start_date: "2026-07-30"
+          end_date: "2026-08-05"
+        - slice: 2
+          start_date: "2026-08-06"
+          end_date: "2026-08-12"
+        - slice: 3
+          start_date: "2026-08-13"
+          end_date: "2026-08-19"
+        - slice: 4
+          start_date: "2026-08-20"
+          end_date: "2026-08-26"
+        - slice: 5
+          start_date: "2026-08-27"
+          end_date: "2026-09-02"
+        - slice: 6
+          start_date: "2026-09-03"
+          end_date: "2026-09-09"
+        - slice: 7
+          start_date: "2026-09-10"
+          end_date: "2026-09-16"
+        - slice: 8
+          start_date: "2026-09-17"
+          end_date: "2026-09-23"
+        - slice: 9
+          start_date: "2026-09-24"
+          end_date: "2026-09-30"
+        - slice: 10
+          start_date: "2026-10-01"
+          end_date: "2026-10-07"
+        - slice: 11
+          start_date: "2026-10-08"
+          end_date: "2026-10-14"
+        - slice: 12
+          start_date: "2026-10-15"
+          end_date: "2026-10-21"
+        - slice: 13
+          start_date: "2026-10-22"
+          end_date: "2026-10-27"
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
@@ -32,9 +78,8 @@ jobs:
       WB_API_TOKEN_AP: ${{ secrets.WB_API_TOKEN_AP }}
       GOOGLE_BRIDGE_KEY: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
       GOOGLE_BRIDGE_URL: https://script.google.com/macros/s/AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw/exec
-      FBS_START_DATE: ${{ github.event_name == 'workflow_dispatch' && inputs.start_date || '' }}
-      FBS_END_DATE: ${{ github.event_name == 'workflow_dispatch' && inputs.end_date || '' }}
-    steps:
+      FBS_START_DATE: ${{ github.event_name == 'workflow_dispatch' && inputs.start_date || matrix.start_date }}
+      FBS_END_DATE: ${{ github.event_name == 'workflow_dispatch' && inputs.end_date || matrix.end_date }}
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.ref_name }}
