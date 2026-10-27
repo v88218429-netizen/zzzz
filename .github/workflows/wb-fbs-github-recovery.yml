@@ -21,7 +21,7 @@ on:
   push:
     branches: [mainggg]
     paths:
-      - "wb_worker/github_fbs_recovery.py"
+      - ".github/workflows/disabled-until-queue-drains.txt"
 
 permissions:
   contents: read
