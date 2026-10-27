@@ -4,7 +4,7 @@ on:
   push:
     branches: [mainggg]
     paths:
-      - "wb_worker/sanych_fbs_recovery.py"
+      - ".github/workflows/disabled-until-recovery-started.txt"
   workflow_dispatch:
     inputs:
       start_date:
