@@ -25,7 +25,7 @@ concurrency:
 
 jobs:
   recover:
-    if: ${{ (github.event_name == 'push' && contains(github.event.head_commit.message, '[FBS-90D-SLICED]')) || (github.event_name == 'workflow_dispatch' && matrix.slice == 1) }}
+    if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[FBS-90D-SLICED]') }}
     name: "recover SANYCH ${{ matrix.start_date }}–${{ matrix.end_date }}"
     strategy:
       fail-fast: false
@@ -98,5 +98,34 @@ jobs:
             exit 2
           fi
       - name: Reconcile SANYCH from WB to its production FBS book
+        shell: bash
+        run: python wb_worker/sanych_fbs_recovery.py
+  recover_manual:
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    name: "recover SANYCH manual range"
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      FBS_CLIENT: SANYCH
+      WB_API_TOKEN_AP: ${{ secrets.WB_API_TOKEN_AP }}
+      GOOGLE_BRIDGE_KEY: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
+      GOOGLE_BRIDGE_URL: https://script.google.com/macros/s/AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw/exec
+      FBS_START_DATE: ${{ inputs.start_date }}
+      FBS_END_DATE: ${{ inputs.end_date }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check source and credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile wb_worker/sanych_fbs_recovery.py
+          test -n "$GOOGLE_BRIDGE_KEY"
+          test -n "$WB_API_TOKEN_AP"
+      - name: Reconcile SANYCH manual range
         shell: bash
         run: python wb_worker/sanych_fbs_recovery.py
