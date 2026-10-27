@@ -20,7 +20,7 @@ BRIDGE_URL = os.environ["GOOGLE_BRIDGE_URL"]
 BRIDGE_KEY = os.environ["GOOGLE_BRIDGE_KEY"]
 MAX_RECOVERY_DAYS = 90
 LOOKBACK_DAYS = max(1, min(MAX_RECOVERY_DAYS, int(os.environ.get("FBS_LOOKBACK_DAYS", "7"))))
-BATCH_SIZE = 100  # Match the proven bounded batch size used by the shared recovery adapter
+BATCH_SIZE = 400  # Reduce full-sheet scans while keeping each request within adapter bounds
 # [SANYCH-90D-SLICED] Seven-day segments are dispatched by the recovery workflow.
 TIMEOUT = 120
 
