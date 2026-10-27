@@ -19,10 +19,18 @@ BASE = "https://marketplace-api.wildberries.ru"
 BRIDGE_URL = os.environ["GOOGLE_BRIDGE_URL"]
 BRIDGE_KEY = os.environ["GOOGLE_BRIDGE_KEY"]
 LOOKBACK_DAYS = max(1, min(90, int(os.environ.get("FBS_LOOKBACK_DAYS", "7"))))
-BATCH_SIZE = 1000  # Adapter validates and writes contiguous ranges with one readback per segment
+BATCH_SIZE = 100  # Keep each idempotent write bounded while the adapter coalesces neighboring rows
 INGEST_ATTEMPTS = 8  # Allow temporary Apps Script lock holders to finish
 BRIDGE_INGEST_TIMEOUT = 390  # Let Apps Script finish or hit its six-minute execution ceiling before retrying
 TIMEOUT = 120
+
+
+def safe_bridge_detail(value: object) -> str:
+    detail = str(value or "")
+    detail = re.sub(r"(?i)bearer\\s+[^\\s,;]+", "Bearer [redacted]", detail)
+    detail = re.sub(r"\\b[A-Za-z0-9_-]{32,}\\b", "[opaque-id]", detail)
+    detail = re.sub(r"\\b\\d{6,20}\\b", "[order-id]", detail)
+    return re.sub(r"\\s+", " ", detail).strip()[:240]
 
 
 def request(url: str, *, token: str | None = None, body: dict | None = None,
@@ -213,8 +221,16 @@ def ingest(client: str, orders: list[dict]) -> dict:
                 if obj.get("ok") and obj.get("action") == "fbs_ingest_batch" and result.get("ok"):
                     break
                 details = str(obj.get("error") or result.get("error") or "")
-                retryable = result.get("retryable") or "GITHUB_FBS_LOCK_BUSY" in details
-                if not retryable or attempt == INGEST_ATTEMPTS:
+                retryable = result.get("retryable") or any(
+                    marker in details for marker in (
+                        "GITHUB_FBS_LOCK_BUSY", "Service invoked too many times",
+                        "Service Spreadsheets failed", "Exceeded maximum execution",
+                        "Internal error", "backendError"
+                    )
+                )
+                if not retryable and details:
+                    print("FBS_BRIDGE_ERROR_DETAIL=" + safe_bridge_detail(details), flush=True)
+                if not retryable:
                     candidates = [
                         "FBS_BATCH_SIZE_INVALID", "FBS_ROW_COUNT_UNEXPECTED",
                         "FBS_DATE_OUTSIDE_RECOVERY_WINDOW", "FBS_ID_INVALID",
@@ -229,6 +245,9 @@ def ingest(client: str, orders: list[dict]) -> dict:
                                   "UNCLASSIFIED_SCRIPT_REJECTION")
                     print("FBS_BRIDGE_REJECT_CLASS=" + reason, flush=True)
                     raise RuntimeError("INGEST_REJECTED:" + reason)
+                if attempt == INGEST_ATTEMPTS:
+                    print("FBS_BRIDGE_ERROR_DETAIL=" + safe_bridge_detail(details), flush=True)
+                    raise RuntimeError("INGEST_REJECTED:" + safe_bridge_detail(details))
             except RuntimeError as ex:
                 reason = str(ex)
                 if reason == "NETWORK_RETRY_EXHAUSTED" or reason.startswith(("HTTP_500", "HTTP_502", "HTTP_503", "HTTP_504")):
