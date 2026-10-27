@@ -21,7 +21,7 @@ on:
   push:
     branches: [mainggg]
     paths:
-      - ".github/workflows/disabled-until-queue-drains.txt"
+      - "wb_worker/github_fbs_recovery.py"
 
 permissions:
   contents: read
@@ -32,14 +32,91 @@ concurrency:
 
 jobs:
   recover:
+    if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[FBS-90D-SLICED]') }}
+    name: "recover ${{ matrix.client }} ${{ matrix.start_date }}–${{ matrix.end_date }}"
     strategy:
       fail-fast: false
       max-parallel: 1
       matrix:
-        client: [AIR, HOZYAYUSHKA]
-    concurrency:
-      group: wb-fbs-github-recovery-${{ matrix.client }}
-      cancel-in-progress: false
+        include:
+        - client: AIR
+          start_date: "2026-07-30"
+          end_date: "2026-08-05"
+        - client: AIR
+          start_date: "2026-08-06"
+          end_date: "2026-08-12"
+        - client: AIR
+          start_date: "2026-08-13"
+          end_date: "2026-08-19"
+        - client: AIR
+          start_date: "2026-08-20"
+          end_date: "2026-08-26"
+        - client: AIR
+          start_date: "2026-08-27"
+          end_date: "2026-09-02"
+        - client: AIR
+          start_date: "2026-09-03"
+          end_date: "2026-09-09"
+        - client: AIR
+          start_date: "2026-09-10"
+          end_date: "2026-09-16"
+        - client: AIR
+          start_date: "2026-09-17"
+          end_date: "2026-09-23"
+        - client: AIR
+          start_date: "2026-09-24"
+          end_date: "2026-09-30"
+        - client: AIR
+          start_date: "2026-10-01"
+          end_date: "2026-10-07"
+        - client: AIR
+          start_date: "2026-10-08"
+          end_date: "2026-10-14"
+        - client: AIR
+          start_date: "2026-10-15"
+          end_date: "2026-10-21"
+        - client: AIR
+          start_date: "2026-10-22"
+          end_date: "2026-10-27"
+        - client: HOZYAYUSHKA
+          start_date: "2026-07-30"
+          end_date: "2026-08-05"
+        - client: HOZYAYUSHKA
+          start_date: "2026-08-06"
+          end_date: "2026-08-12"
+        - client: HOZYAYUSHKA
+          start_date: "2026-08-13"
+          end_date: "2026-08-19"
+        - client: HOZYAYUSHKA
+          start_date: "2026-08-20"
+          end_date: "2026-08-26"
+        - client: HOZYAYUSHKA
+          start_date: "2026-08-27"
+          end_date: "2026-09-02"
+        - client: HOZYAYUSHKA
+          start_date: "2026-09-03"
+          end_date: "2026-09-09"
+        - client: HOZYAYUSHKA
+          start_date: "2026-09-10"
+          end_date: "2026-09-16"
+        - client: HOZYAYUSHKA
+          start_date: "2026-09-17"
+          end_date: "2026-09-23"
+        - client: HOZYAYUSHKA
+          start_date: "2026-09-24"
+          end_date: "2026-09-30"
+        - client: HOZYAYUSHKA
+          start_date: "2026-10-01"
+          end_date: "2026-10-07"
+        - client: HOZYAYUSHKA
+          start_date: "2026-10-08"
+          end_date: "2026-10-14"
+        - client: HOZYAYUSHKA
+          start_date: "2026-10-15"
+          end_date: "2026-10-21"
+        - client: HOZYAYUSHKA
+          start_date: "2026-10-22"
+          end_date: "2026-10-27"
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
@@ -48,9 +125,9 @@ jobs:
       WB_API_TOKEN_YV: ${{ secrets.WB_API_TOKEN_YV }}
       GOOGLE_BRIDGE_KEY: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
       GOOGLE_BRIDGE_URL: https://script.google.com/macros/s/AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw/exec
-      FBS_LOOKBACK_DAYS: ${{ github.event_name == 'workflow_dispatch' && inputs.lookback_days || (github.event_name == 'push' && contains(github.event.head_commit.message, '[FBS-90D-ONCE]') && '90') || '7' }}
-      FBS_START_DATE: ${{ github.event_name == 'workflow_dispatch' && inputs.start_date || '' }}
-      FBS_END_DATE: ${{ github.event_name == 'workflow_dispatch' && inputs.end_date || '' }}
+      FBS_LOOKBACK_DAYS: "7"
+      FBS_START_DATE: ${{ matrix.start_date }}
+      FBS_END_DATE: ${{ matrix.end_date }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -72,5 +149,36 @@ jobs:
             exit 2
           fi
       - name: Reconcile ${{ matrix.client }} from WB to its FBS book
+        shell: bash
+        run: python wb_worker/github_fbs_recovery.py
+  recover_manual:
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    name: "recover AIR and HOZYAYUSHKA manual range"
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      WB_API_TOKEN_AA: ${{ secrets.WB_API_TOKEN_AA }}
+      WB_API_TOKEN_YV: ${{ secrets.WB_API_TOKEN_YV }}
+      GOOGLE_BRIDGE_KEY: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
+      GOOGLE_BRIDGE_URL: https://script.google.com/macros/s/AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw/exec
+      FBS_LOOKBACK_DAYS: ${{ inputs.lookback_days }}
+      FBS_START_DATE: ${{ inputs.start_date }}
+      FBS_END_DATE: ${{ inputs.end_date }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check source and credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile wb_worker/github_fbs_recovery.py
+          test -n "$GOOGLE_BRIDGE_KEY"
+          test -n "$WB_API_TOKEN_AA"
+          test -n "$WB_API_TOKEN_YV"
+      - name: Reconcile AIR and HOZYAYUSHKA manual range
         shell: bash
         run: python wb_worker/github_fbs_recovery.py
