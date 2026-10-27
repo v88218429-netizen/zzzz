@@ -133,7 +133,7 @@ def fmt_dur(v):
 
 def process_request(path):
     marker=DONE/f"{path.stem}.json"
-    if marker.exists(): return
+    if marker.exists(): return True
     cfg=json.loads(path.read_text(encoding="utf-8"))
     task_id=cfg["task_id"]
     lang=cfg.get("language","ru")
@@ -153,12 +153,14 @@ def process_request(path):
             searches.append((q+" shorts",max(limit_shorts*3,25)))
 
     found={}
+    search_errors=[]
     for q,lim in searches:
         try:
             for item in yt_search(q,lim):
                 found.setdefault(item["video_id"],item)
         except Exception as exc:
             print(f"SEARCH ERROR {q}: {exc}")
+            search_errors.append({"video_id":"","url":"","title":q,"error":str(exc)[:800]})
 
     cutoff=datetime.now(timezone.utc)-timedelta(days=depth)
     candidates=[]
@@ -182,7 +184,7 @@ def process_request(path):
         if vc>=limit_video and sc>=limit_shorts: break
 
     day=datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    results=[]; errors=[]
+    results=[]; errors=list(search_errors)
     for item in picked:
         vid=item["video_id"]
         try:
@@ -224,12 +226,21 @@ def process_request(path):
     out.write_text(json.dumps(payload,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
     if results or not errors:
         marker.write_text(json.dumps({"result":str(out.relative_to(ROOT)),"processed_at":datetime.now(timezone.utc).isoformat()},ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
+    return bool(results or not errors)
 
 def main():
     files=sorted(REQ.glob("*.json"))
+    failed=[]
     for f in files:
-        try: process_request(f)
-        except Exception as exc: print(f"REQUEST ERROR {f.name}: {exc}"); raise
+        try:
+            if not process_request(f):
+                failed.append(f.name)
+                print(f"REQUEST FAILED no verified transcripts: {f.name}")
+        except Exception as exc:
+            failed.append(f.name)
+            print(f"REQUEST ERROR {f.name}: {exc}")
+    if failed:
+        raise RuntimeError(f"{len(failed)} unprocessed requests: {failed}")
 
 if __name__=="__main__":
     main()
