@@ -43,7 +43,15 @@ def request(url: str, *, token: str | None = None, body: dict | None = None,
         req = urllib.request.Request(url, data=encoded, headers=headers, method="POST" if body is not None else "GET")
         try:
             with urllib.request.urlopen(req, timeout=timeout or TIMEOUT) as response:
-                return json.loads(response.read().decode("utf-8"))
+                raw = response.read().decode("utf-8")
+            try:
+                return json.loads(raw)
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                # Apps Script can return an empty/HTML response after a timed-out
+                # execution even when the idempotent sheet write may have committed.
+                if attempt == max_attempts:
+                    raise RuntimeError("INVALID_JSON_RESPONSE_RETRY_EXHAUSTED") from None
+                delay = min(60, 10 * attempt)
         except urllib.error.HTTPError as ex:
             if ex.code not in (429, 500, 502, 503, 504) or attempt == max_attempts:
                 raise RuntimeError(f"HTTP_{ex.code}") from None
@@ -250,7 +258,7 @@ def ingest(client: str, orders: list[dict]) -> dict:
                     raise RuntimeError("INGEST_REJECTED:" + safe_bridge_detail(details))
             except RuntimeError as ex:
                 reason = str(ex)
-                if reason == "NETWORK_RETRY_EXHAUSTED" or reason.startswith(("HTTP_500", "HTTP_502", "HTTP_503", "HTTP_504")):
+                if reason in ("NETWORK_RETRY_EXHAUSTED", "INVALID_JSON_RESPONSE_RETRY_EXHAUSTED") or reason.startswith(("HTTP_500", "HTTP_502", "HTTP_503", "HTTP_504")):
                     # Ingest is an upsert keyed by WB order ID. Repeating this exact
                     # batch after a lost response is idempotent and recovers lost replies.
                     if attempt == INGEST_ATTEMPTS:
