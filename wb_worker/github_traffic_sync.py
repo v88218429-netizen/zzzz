@@ -275,7 +275,12 @@ def main() -> int:
             publish_query_clusters(BRIDGE_URL, key)
             print("WB_AD_CLUSTER_PUBLISHED " + json.dumps({"completed": True}, ensure_ascii=False))
         except Exception as exc:
-            errors.append(f"clusters: {type(exc).__name__}")
+            detail = str(exc)
+            for secret_name in ("GOOGLE_SHEETS_BRIDGE_KEY",):
+                secret = os.getenv(secret_name, "").strip()
+                if secret:
+                    detail = detail.replace(secret, "[redacted]")
+            errors.append(f"clusters: {type(exc).__name__}: {detail[:700]}")
         try:
             settings_published = publish_campaign_state(BRIDGE_URL, key)
             print("WB_CAMPAIGN_SETTINGS_PUBLISHED " + json.dumps({"completed": True}, ensure_ascii=False))
