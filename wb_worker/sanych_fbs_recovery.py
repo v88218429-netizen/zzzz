@@ -33,7 +33,14 @@ def request(url: str, *, token: str | None = None, body: dict | None = None, tim
         req = urllib.request.Request(url, data=encoded, headers=headers, method="POST" if body is not None else "GET")
         try:
             with urllib.request.urlopen(req, timeout=timeout) as response:
-                return json.loads(response.read().decode("utf-8"))
+                raw = response.read().decode("utf-8")
+            try:
+                return json.loads(raw)
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                # A completed/idempotent bridge write may lose its JSON reply.
+                if attempt == retries:
+                    raise RuntimeError("INVALID_JSON_RESPONSE_RETRY_EXHAUSTED") from None
+                delay = min(60, 10 * attempt)
         except urllib.error.HTTPError as ex:
             if ex.code not in (429, 500, 502, 503, 504) or attempt == retries:
                 raise RuntimeError(f"HTTP_{ex.code}") from None
@@ -192,7 +199,8 @@ def ingest(client: str, orders: list[dict]) -> dict:
             except RuntimeError as ex:
                 transient = str(ex) in {
                     "NETWORK_RETRY_EXHAUSTED", "HTTP_429", "HTTP_500",
-                    "HTTP_502", "HTTP_503", "HTTP_504"
+                    "HTTP_502", "HTTP_503", "HTTP_504",
+                    "INVALID_JSON_RESPONSE_RETRY_EXHAUSTED"
                 }
                 if not transient or attempt == attempts:
                     raise RuntimeError("FBS_INGEST_TRANSPORT_FAILED:" + str(ex)) from None
