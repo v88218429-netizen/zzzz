@@ -234,7 +234,18 @@ def ingest(client: str, orders: list[dict]) -> dict:
                 ]
                 reason = next((tag.replace(" ", "_") for tag in candidates if tag in details),
                               "UNCLASSIFIED_SCRIPT_REJECTION")
+                safe_details = details
+                for secret in (BRIDGE_KEY, os.environ.get("WB_API_TOKEN_AP", "")):
+                    if secret:
+                        safe_details = safe_details.replace(secret, "[redacted]")
+                safe_details = re.sub(
+                    r"(?i)(authorization|bearer|token|secret|api[_-]?key)(\s*[=:]\s*|\s+)[^\s,;}{]+",
+                    r"\1\2[redacted]", safe_details
+                )
+                safe_details = re.sub(r"(?<!\d)\d{8,}(?!\d)", "[id]", safe_details)
+                safe_details = re.sub(r"\s+", " ", safe_details).strip()[:500]
                 print("FBS_BRIDGE_REJECT_CLASS=" + reason, flush=True)
+                print("FBS_BRIDGE_REJECT_DETAIL=" + (safe_details or "empty"), flush=True)
                 raise RuntimeError("INGEST_REJECTED:" + reason)
             time.sleep(min(60, 10 * attempt))
 
