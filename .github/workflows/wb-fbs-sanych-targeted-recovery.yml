@@ -27,7 +27,7 @@ jobs:
       FBS_CLIENT: SANYCH
       WB_API_TOKEN_AP: ${{ secrets.WB_API_TOKEN_AP }}
       GOOGLE_BRIDGE_KEY: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
-      GOOGLE_BRIDGE_URL: https://script.google.com/macros/s/AKfycby28C0PxiijesmestUl54Nn94HCEYgk7wiGfef0Faufs29mlSwueJJpp84blSiFHFSC/exec
+      GOOGLE_BRIDGE_URL: https://script.google.com/macros/s/AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw/exec
       FBS_START_DATE: ${{ github.event_name == 'workflow_dispatch' && inputs.start_date || '' }}
       FBS_END_DATE: ${{ github.event_name == 'workflow_dispatch' && inputs.end_date || '' }}
     steps:
