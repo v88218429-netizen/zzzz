@@ -19,7 +19,10 @@ BASE = "https://marketplace-api.wildberries.ru"
 BRIDGE_URL = os.environ["GOOGLE_BRIDGE_URL"]
 BRIDGE_KEY = os.environ["GOOGLE_BRIDGE_KEY"]
 LOOKBACK_DAYS = max(1, min(90, int(os.environ.get("FBS_LOOKBACK_DAYS", "7"))))
-BATCH_SIZE = 100  # Keep each idempotent write bounded while the adapter coalesces neighboring rows
+CLIENT_HINT = os.environ.get("FBS_CLIENT", "").strip().upper()
+BATCH_SIZE = int(os.environ.get("FBS_BATCH_SIZE", "25" if CLIENT_HINT == "AIR" else "100"))
+if not 1 <= BATCH_SIZE <= 1000:
+    raise RuntimeError("FBS_BATCH_SIZE_INVALID")
 INGEST_ATTEMPTS = 8  # Allow temporary Apps Script lock holders to finish
 BRIDGE_INGEST_TIMEOUT = 390  # Let Apps Script finish or hit its six-minute execution ceiling before retrying
 TIMEOUT = 120
@@ -264,7 +267,9 @@ def ingest(client: str, orders: list[dict]) -> dict:
                     # batch after a lost response is idempotent and recovers lost replies.
                     if attempt == INGEST_ATTEMPTS:
                         raise RuntimeError("FBS_INGEST_OUTCOME_UNCERTAIN") from None
-                    print("FBS_INGEST_RETRY=" + str(attempt) + ":SAME_IDEMPOTENT_BATCH", flush=True)
+                    failure_match = re.match(r"HTTP_(\d{3})", reason)
+                    failure_class = ("HTTP_" + failure_match.group(1)) if failure_match else reason
+                    print("FBS_INGEST_RETRY=" + str(attempt) + ":" + failure_class + ":SAME_IDEMPOTENT_BATCH", flush=True)
                     time.sleep(min(60, 15 * attempt))
                     continue
                 if attempt == INGEST_ATTEMPTS:
