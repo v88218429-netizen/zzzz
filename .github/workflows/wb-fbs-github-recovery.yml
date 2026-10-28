@@ -46,83 +46,83 @@ jobs:
       matrix:
         include:
         - client: AIR
-          start_date: "2026-07-30"
-          end_date: "2026-08-05"
-        - client: AIR
-          start_date: "2026-08-06"
-          end_date: "2026-08-12"
-        - client: AIR
-          start_date: "2026-08-13"
-          end_date: "2026-08-19"
-        - client: AIR
-          start_date: "2026-08-20"
-          end_date: "2026-08-26"
-        - client: AIR
-          start_date: "2026-08-27"
-          end_date: "2026-09-02"
-        - client: AIR
-          start_date: "2026-09-03"
-          end_date: "2026-09-09"
-        - client: AIR
-          start_date: "2026-09-10"
-          end_date: "2026-09-16"
-        - client: AIR
-          start_date: "2026-09-17"
-          end_date: "2026-09-23"
-        - client: AIR
-          start_date: "2026-09-24"
-          end_date: "2026-09-30"
-        - client: AIR
-          start_date: "2026-10-01"
-          end_date: "2026-10-07"
-        - client: AIR
-          start_date: "2026-10-08"
-          end_date: "2026-10-14"
+          start_date: "2026-10-22"
+          end_date: "2026-10-27"
         - client: AIR
           start_date: "2026-10-15"
           end_date: "2026-10-21"
         - client: AIR
-          start_date: "2026-10-22"
-          end_date: "2026-10-27"
-        - client: HOZYAYUSHKA
+          start_date: "2026-10-08"
+          end_date: "2026-10-14"
+        - client: AIR
+          start_date: "2026-10-01"
+          end_date: "2026-10-07"
+        - client: AIR
+          start_date: "2026-09-24"
+          end_date: "2026-09-30"
+        - client: AIR
+          start_date: "2026-09-17"
+          end_date: "2026-09-23"
+        - client: AIR
+          start_date: "2026-09-10"
+          end_date: "2026-09-16"
+        - client: AIR
+          start_date: "2026-09-03"
+          end_date: "2026-09-09"
+        - client: AIR
+          start_date: "2026-08-27"
+          end_date: "2026-09-02"
+        - client: AIR
+          start_date: "2026-08-20"
+          end_date: "2026-08-26"
+        - client: AIR
+          start_date: "2026-08-13"
+          end_date: "2026-08-19"
+        - client: AIR
+          start_date: "2026-08-06"
+          end_date: "2026-08-12"
+        - client: AIR
           start_date: "2026-07-30"
           end_date: "2026-08-05"
         - client: HOZYAYUSHKA
-          start_date: "2026-08-06"
-          end_date: "2026-08-12"
-        - client: HOZYAYUSHKA
-          start_date: "2026-08-13"
-          end_date: "2026-08-19"
-        - client: HOZYAYUSHKA
-          start_date: "2026-08-20"
-          end_date: "2026-08-26"
-        - client: HOZYAYUSHKA
-          start_date: "2026-08-27"
-          end_date: "2026-09-02"
-        - client: HOZYAYUSHKA
-          start_date: "2026-09-03"
-          end_date: "2026-09-09"
-        - client: HOZYAYUSHKA
-          start_date: "2026-09-10"
-          end_date: "2026-09-16"
-        - client: HOZYAYUSHKA
-          start_date: "2026-09-17"
-          end_date: "2026-09-23"
-        - client: HOZYAYUSHKA
-          start_date: "2026-09-24"
-          end_date: "2026-09-30"
-        - client: HOZYAYUSHKA
-          start_date: "2026-10-01"
-          end_date: "2026-10-07"
-        - client: HOZYAYUSHKA
-          start_date: "2026-10-08"
-          end_date: "2026-10-14"
+          start_date: "2026-10-22"
+          end_date: "2026-10-27"
         - client: HOZYAYUSHKA
           start_date: "2026-10-15"
           end_date: "2026-10-21"
         - client: HOZYAYUSHKA
-          start_date: "2026-10-22"
-          end_date: "2026-10-27"
+          start_date: "2026-10-08"
+          end_date: "2026-10-14"
+        - client: HOZYAYUSHKA
+          start_date: "2026-10-01"
+          end_date: "2026-10-07"
+        - client: HOZYAYUSHKA
+          start_date: "2026-09-24"
+          end_date: "2026-09-30"
+        - client: HOZYAYUSHKA
+          start_date: "2026-09-17"
+          end_date: "2026-09-23"
+        - client: HOZYAYUSHKA
+          start_date: "2026-09-10"
+          end_date: "2026-09-16"
+        - client: HOZYAYUSHKA
+          start_date: "2026-09-03"
+          end_date: "2026-09-09"
+        - client: HOZYAYUSHKA
+          start_date: "2026-08-27"
+          end_date: "2026-09-02"
+        - client: HOZYAYUSHKA
+          start_date: "2026-08-20"
+          end_date: "2026-08-26"
+        - client: HOZYAYUSHKA
+          start_date: "2026-08-13"
+          end_date: "2026-08-19"
+        - client: HOZYAYUSHKA
+          start_date: "2026-08-06"
+          end_date: "2026-08-12"
+        - client: HOZYAYUSHKA
+          start_date: "2026-07-30"
+          end_date: "2026-08-05"
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
