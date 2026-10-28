@@ -1,0 +1,59 @@
+{
+  "task_id": "IMRAM",
+  "request": "IMRAM_20261028_1916_RECOVERY.json",
+  "query": "Имрам как правильно формулировать желание конечный результат",
+  "knowledge_tag": "IMRAM",
+  "generated_at": "2026-10-28T16:18:36.811716+00:00",
+  "videos": [
+    {
+      "video_id": "h2uGGJuAzTI",
+      "url": "https://www.youtube.com/watch?v=h2uGGJuAzTI",
+      "title": "МОЙ ПЕРВЫЙ ДЕНЬ В ДАТЕ | НЕИЗВЕСТНЫЙ РАЙ ТЮРКИЕ!",
+      "channel": "Sezer Yılmaz",
+      "duration": 2632,
+      "timestamp": null,
+      "query": "Имрам как правильно формулировать желание конечный результат",
+      "kind": "video",
+      "transcript": "transcripts/2026-10-28_IMRAM_video_h2uGGJuAzTI.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "DWrs4WkkY0Y",
+      "url": "https://www.youtube.com/watch?v=DWrs4WkkY0Y",
+      "title": "Как правильно отмечать день рождения, чтобы ваши мечты сбывались?",
+      "channel": "Имрам Крийя - Йога",
+      "duration": 1163,
+      "timestamp": null,
+      "query": "Имрам состояние исполненного желания",
+      "kind": "video",
+      "transcript": "transcripts/2026-10-28_IMRAM_video_DWrs4WkkY0Y.md",
+      "method": "FreeTranscriptAPI"
+    }
+  ],
+  "errors": [
+    {
+      "video_id": "",
+      "url": "",
+      "title": "Имрам как правильно формулировать желание конечный результат shorts",
+      "error": "ytsearchdate: ERROR: Unable to handle request: Unsupported url scheme: \"ytsearchdate25\" (requests, urllib)"
+    },
+    {
+      "video_id": "",
+      "url": "",
+      "title": "Имрам визуализация желаемого как будто уже есть",
+      "error": "ytsearchdate: ERROR: Unable to handle request: Unsupported url scheme: \"ytsearchdate20\" (requests, urllib)"
+    },
+    {
+      "video_id": "",
+      "url": "",
+      "title": "Имрам визуализация желаемого как будто уже есть shorts",
+      "error": "ytsearchdate: ERROR: Unable to handle request: Unsupported url scheme: \"ytsearchdate25\" (requests, urllib)"
+    },
+    {
+      "video_id": "tHEcJWaJVZY",
+      "url": "https://www.youtube.com/watch?v=tHEcJWaJVZY",
+      "title": "твои желания исполняются по щелчку пальцев | мощный саблиминал на исполнение желаний",
+      "error": "youtube_captions: \nCould not retrieve a transcript for the video https://www.youtube.com/watch?v=tHEcJWaJVZY! This is most likely caused by:\n\nYouTube is blocking requests from your IP. This usually is due to one of the following reasons:\n- You have done too many requests and your IP has been blocked by YouTube\n- You are doing requests from an IP belonging to a cloud provider (like AWS, Google Cloud Platform, Azure, etc.). Unfortunately, most IPs from cloud providers are blocked by YouTube.\n\nThere are two things you can do to work around this:\n1. Use proxies to hide your IP address, as explained in the \"Working around IP bans\" section of the README (https://github.com/jdepoix/youtube-transcript-api?tab=readme-ov-file#working-around-ip-bans-requestblocked-or-ipblocked-exception).\n2. (NOT REC"
+    }
+  ]
+}

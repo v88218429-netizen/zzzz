@@ -1,0 +1,59 @@
+{
+  "task_id": "WB_MONETIZATION",
+  "request": "WB_MONETIZATION_20261028_1916_RECOVERY.json",
+  "query": "как монетизировать экспертизу Wildberries кроме ведения кабинетов",
+  "knowledge_tag": "WB_MONETIZATION",
+  "generated_at": "2026-10-28T16:18:54.049083+00:00",
+  "videos": [
+    {
+      "video_id": "5ecYYeJdzuw",
+      "url": "https://www.youtube.com/watch?v=5ecYYeJdzuw",
+      "title": "Как продавать МНОГО на Вайлдберриз и Озон | Бизнес на МАРКЕТПЛЕЙСАХ Wildberries и Ozon | XWAY селлер",
+      "channel": "СТАРТАПЫ",
+      "duration": 2441,
+      "timestamp": null,
+      "query": "сервис для селлеров Wildberries бизнес",
+      "kind": "video",
+      "transcript": "transcripts/2026-10-28_WB_MONETIZATION_video_5ecYYeJdzuw.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "KJZU0m10QK8",
+      "url": "https://www.youtube.com/watch?v=KJZU0m10QK8",
+      "title": "Государственное регулирование Wildberries, Ozon и других маркетплейсов / товарный бизнес",
+      "channel": "Wildberries для Самозанятых",
+      "duration": 762,
+      "timestamp": null,
+      "query": "сервис для селлеров Wildberries бизнес shorts",
+      "kind": "video",
+      "transcript": "transcripts/2026-10-28_WB_MONETIZATION_video_KJZU0m10QK8.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "OBFN6UVMZ5E",
+      "url": "https://www.youtube.com/watch?v=OBFN6UVMZ5E",
+      "title": "Бизнес на Wildberries - Подписывайся в телеграм канал",
+      "channel": "Ленивый Селлер Роман Хоснуллин - MPBIZ",
+      "duration": 125,
+      "timestamp": null,
+      "query": "сервис для селлеров Wildberries бизнес shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-10-28_WB_MONETIZATION_short_OBFN6UVMZ5E.md",
+      "method": "FreeTranscriptAPI"
+    }
+  ],
+  "errors": [
+    {
+      "video_id": "",
+      "url": "",
+      "title": "как монетизировать экспертизу Wildberries кроме ведения кабинетов",
+      "error": "ytsearchdate: ERROR: Unable to handle request: Unsupported url scheme: \"ytsearchdate20\" (requests, urllib)"
+    },
+    {
+      "video_id": "",
+      "url": "",
+      "title": "как монетизировать экспертизу Wildberries кроме ведения кабинетов shorts",
+      "error": "ytsearchdate: ERROR: Unable to handle request: Unsupported url scheme: \"ytsearchdate25\" (requests, urllib)"
+    }
+  ]
+}
