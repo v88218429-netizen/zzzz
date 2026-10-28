@@ -478,6 +478,23 @@ def _attach_substitution_photos(
         candidates = list(deduction_groups.get(base_key, {}).values())
         if len(candidates) > 1:
             stats["ambiguous"] += 1
+            print("GITHUB_PHOTO_AMBIGUOUS " + json.dumps({
+                "shop": shop,
+                "sticker": str(finance_rows[index][25] or ""),
+                "nmId": nm_id,
+                "amountCents": amount,
+                "financeDate": finance_day.isoformat(),
+                "candidates": [
+                    {
+                        "date": candidate_day.isoformat(),
+                        "files": [
+                            photo.split("?", 1)[0].rsplit("/", 1)[-1]
+                            for photo in candidate_photos
+                        ],
+                    }
+                    for candidate_day, candidate_photos in candidates
+                ],
+            }, ensure_ascii=False), flush=True)
         elif candidates:
             matched_day, photos = candidates[0]
             output[index][9:14] = photos[:5] + [""] * max(0, 5 - len(photos[:5]))
