@@ -147,13 +147,13 @@ jobs:
           if health is None:
               raise AssertionError(last)
           print("PROTECTED_BRIDGE_AUTH=ok")
-          print(json.dumps({
-              "worker_version": health.get("version"),
-              "trigger_ok": health.get("trigger_ok"),
-              "trigger_count": health.get("trigger_count"),
-              "fbs_ingest_stages": health.get("fbs_ingest_stages") or {},
-              "clients": health.get("clients") or [],
-          }, ensure_ascii=False, indent=2))
+          print("WORKER_VERSION=" + str(health.get("version")))
+          print("TRIGGER_OK=" + str(health.get("trigger_ok")))
+          print("TRIGGER_COUNT=" + str(health.get("trigger_count")))
+          for client, stage in sorted((health.get("fbs_ingest_stages") or {}).items()):
+              print("FBS_STAGE=" + str(client) + "," + str(stage.get("stage")) + ",elapsed_ms=" + str(stage.get("elapsedMs")) + ",at=" + str(stage.get("at")))
+          for client in health.get("clients") or []:
+              print("CLIENT=" + str(client.get("store_id")) + ",status=" + str(client.get("status")) + ",last_seen=" + str(client.get("last_seen")))
           PY
 
       - name: Seed client WB tokens from GitHub Secrets
