@@ -123,6 +123,30 @@ class MonitorTests(unittest.TestCase):
         self.assertEqual(len(ideas), 1)
         self.assertEqual(ideas[0]["goal_code"], "BUSINESS")
 
+    def test_ai_claim_without_ai_evidence_is_rejected(self):
+        transcript = ("[0:02] Автор показывает CPC-рекламу: сравнивает поисковые ставки, "
+                      "количество показов и расходы в кабинете продавца, "
+                      "не демонстрируя машинное обучение или нейросетевую модель.")
+        # The selected citation discusses advertising, not an AI forecasting mechanism.
+        payload = {"ideas": [{
+            "goal_code": "BUSINESS",
+            "idea": "Внедрить AI для точного прогнозирования рекламных ставок WB",
+            "why_for_owner": "Управлять рекламой без ручной работы",
+            "action": "Создать AI-инициативу для автоматизации рекламной кампании",
+            "metric": "Повышение эффективности",
+            "fact": "AI предсказывает рекламные результаты", "evidence_index": 0,
+            "confidence": "TEST"}]}
+        class Resp:
+            ok = True
+            def json(self):
+                return {"message": {"content": json.dumps(payload, ensure_ascii=False)}}
+        goals = [["Код", "Направление", "Цель"], ["BUSINESS", "Бизнес", "Автономность"]]
+        with patch.object(vm.SESSION, "post", return_value=Resp()):
+            ideas = vm.model_json(row(), {"title": "CPC-реклама"}, transcript,
+                                  goals, [["№", "Правило"]])
+        self.assertEqual(ideas, [])
+
+
 
 if __name__ == "__main__":
     unittest.main()
