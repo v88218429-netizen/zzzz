@@ -9,7 +9,7 @@ import tomllib
 from pathlib import Path
 
 import wb_control_center
-from wb_control_center.updater import current_version
+from wb_control_center.updater import UPDATABLE_TOP_LEVEL, current_version
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -39,6 +39,7 @@ def test_stable_update_manifest_covers_runtime_files_and_matches_hashes():
     }
     assert required.issubset(files)
     for rel, item in files.items():
+        assert Path(rel).parts[0] in UPDATABLE_TOP_LEVEL, rel
         content = (ROOT / rel).read_bytes()
         assert hashlib.sha256(content).hexdigest() == item["sha256"], rel
         assert item["url"].endswith(f"/wb_ai_manager/source/{rel}"), rel

@@ -2,9 +2,9 @@
   "schema": 1,
   "channels": {
     "stable": {
-      "version": "1.1.12",
+      "version": "1.1.13",
       "channel": "stable",
-      "notes": "Исправлен полный состав файлов безопасного обновления панели.",
+      "notes": "Исправлен полный состав и допустимые пути безопасного обновления панели.",
       "minimum_current_version": "1.0.0",
       "files": [
         {
@@ -20,7 +20,7 @@
         {
           "path": "RELEASE_NOTES.md",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/RELEASE_NOTES.md",
-          "sha256": "d269a5eeb18dadcc4ba969a2ae5aba73cb141a30aa446c19f6bd7b55819fdd6c"
+          "sha256": "3646ebd696ffce50200c928af39a23f805c3fc228b172172ee28cec7e7654c21"
         },
         {
           "path": "START_WB_AI_MANAGER.command",
@@ -31,7 +31,7 @@
         {
           "path": "VERSION",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/VERSION",
-          "sha256": "d343770461504b96bbf75486480dcc6840092fe6e29d3e56063b486efb42d819"
+          "sha256": "c505f143f8138296208a3fb41024a91fc083bf8c1d2fe43973f907d24ece333f"
         },
         {
           "path": "docs/AUTO_UPDATE.md",
@@ -51,17 +51,12 @@
         {
           "path": "plugin.json",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/plugin.json",
-          "sha256": "64cf9255de8ebc5999dde34e271762d181d18bee167a5feede6f2d091425eb35"
+          "sha256": "e06615b3a80e7c6d363b07133ec132f7a17577b74cd1850cdc44689a2c804cfd"
         },
         {
           "path": "pyproject.toml",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/pyproject.toml",
-          "sha256": "9579c8a46c27fae5ef1fd0071d7f4f2f4e654e36989e4779b0115adfe89a7144"
-        },
-        {
-          "path": "requirements.txt",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/requirements.txt",
-          "sha256": "1f9eccaba121d3027f16163d6e928b3d8008e88c2f1860fff6a418abe15dac04"
+          "sha256": "ab0b86ecc3c7080d4ae709156527af40053eb32d95917ce530f802f132fc1191"
         },
         {
           "path": "scripts/auto_refresh_sheets.py",
@@ -147,7 +142,7 @@
         {
           "path": "src/wb_control_center/__init__.py",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/src/wb_control_center/__init__.py",
-          "sha256": "af669fe3f24e6b04f64f5d5709da5792fa241d3ef17a624b74b91b6b57a1328a"
+          "sha256": "7c70f70832992e907fbde90849d1c1e789905336a27a5a003d911112691b8914"
         },
         {
           "path": "src/wb_control_center/__main__.py",
