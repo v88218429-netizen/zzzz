@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: wb-ai-control-center
-Version: 1.1.11
+Version: 1.1.12
 Summary: Self-updating read-only WB AI operating system with cohort analytics and safe rollback
 Requires-Python: >=3.11
 Description-Content-Type: text/markdown

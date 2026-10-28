@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import re
 import stat
@@ -18,6 +19,29 @@ def test_release_versions_are_aligned():
     assert version == wb_control_center.__version__
     assert tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]["version"] == version
     assert json.loads((ROOT / "plugin.json").read_text(encoding="utf-8"))["version"] == version
+
+
+def test_stable_update_manifest_covers_runtime_files_and_matches_hashes():
+    manifest_path = ROOT.parent / "update-manifest.json"
+    if not manifest_path.exists() and os.environ.get("GITHUB_WORKSPACE"):
+        manifest_path = Path(os.environ["GITHUB_WORKSPACE"]) / "wb_ai_manager" / "update-manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    stable = manifest["channels"]["stable"]
+    assert stable["version"] == current_version(ROOT)
+    files = {item["path"]: item for item in stable["files"]}
+    required = {
+        "src/wb_control_center/dashboard_auth.py",
+        "src/wb_control_center/agents/__init__.py",
+        "src/wb_control_center/agents/portal_news.py",
+        "src/wb_control_center/agents/seller_services.py",
+        "scripts/runtime_supervisor.py",
+        "scripts/launch/auto_readonly.command",
+    }
+    assert required.issubset(files)
+    for rel, item in files.items():
+        content = (ROOT / rel).read_bytes()
+        assert hashlib.sha256(content).hexdigest() == item["sha256"], rel
+        assert item["url"].endswith(f"/wb_ai_manager/source/{rel}"), rel
 
 
 def test_auto_launcher_resets_live_state_and_never_sources_dotenv():
