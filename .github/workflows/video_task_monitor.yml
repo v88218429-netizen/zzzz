@@ -38,6 +38,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install --upgrade yt-dlp youtube-transcript-api
 
+      - name: Validate worker and offline regression tests
+        run: |
+          python -m py_compile video_task_monitor.py
+          python -m unittest -v test_video_task_monitor.py
+
       - name: Process queued research tasks
         run: python video_task_monitor.py
 
