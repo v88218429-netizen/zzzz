@@ -5780,14 +5780,43 @@ function sellmonitorGithubFbsTargetHealthV1_() {
 
 /** Safe bounded FBS upsert; authenticated at the doPost entry point. No external service. */
 function sellmonitorGithubFbsIngestBatchV1_(body) {
-  // FBS ingestion is an independent data path. Keep it isolated from the long-running
-  // command queue and finance worker; GitHub concurrency serializes all FBS callers.
-  var lock = LockService.getUserLock();
-  if (!lock.tryLock(30000)) throw new Error('GITHUB_FBS_LOCK_BUSY');
+  // Different stores may recover concurrently. A short ScriptLock protects only
+  // the per-store lease claim; it is never held while Sheets are read or written.
+  var client = String(body && body.client || '').trim().toUpperCase();
+  if (['SANYCH','AIR','HOZYAYUSHKA'].indexOf(client) < 0) {
+    throw new Error('FBS_CLIENT_NOT_ALLOWED');
+  }
+  var props = PropertiesService.getScriptProperties();
+  var leaseKey = 'GITHUB_FBS_INGEST_LEASE_' + client;
+  var leaseToken = Utilities.getUuid();
+  var leaseMs = 7 * 60 * 1000;
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) throw new Error('GITHUB_FBS_LOCK_BUSY');
+  try {
+    var current = null;
+    try { current = JSON.parse(props.getProperty(leaseKey) || 'null'); } catch (e) {}
+    if (current && Number(current.expiresAt) > Date.now()) {
+      throw new Error('GITHUB_FBS_LOCK_BUSY');
+    }
+    props.setProperty(leaseKey, JSON.stringify({
+      token: leaseToken, expiresAt: Date.now() + leaseMs
+    }));
+  } finally {
+    lock.releaseLock();
+  }
+
   try {
     return sellmonitorGithubFbsIngestBatchV1Core_(body);
   } finally {
-    lock.releaseLock();
+    if (lock.tryLock(10000)) {
+      try {
+        var active = null;
+        try { active = JSON.parse(props.getProperty(leaseKey) || 'null'); } catch (e) {}
+        if (active && active.token === leaseToken) props.deleteProperty(leaseKey);
+      } finally {
+        lock.releaseLock();
+      }
+    }
   }
 }
 
