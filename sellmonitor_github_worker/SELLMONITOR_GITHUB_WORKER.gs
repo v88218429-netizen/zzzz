@@ -6089,5 +6089,5 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
     console.log('FBS_STAGE_DONE ms='+(Date.now()-fbsStarted)+' inserted='+insert.length+' changed='+updated);
     return {ok:true,client:client,received:parsed.length,inserted:insert.length,
       existing:already,changed:updated,unchanged:confirmed,events:events.length,
-      latestWorkbookOrderRows:sh.getLastRow()-1,checkedAt:n.toISOString()};
+      latestWorkbookOrderRows:last-1+insert.length,checkedAt:n.toISOString()};
 }
