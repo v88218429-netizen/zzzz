@@ -169,7 +169,7 @@ jobs:
       GOOGLE_BRIDGE_KEY: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
       GOOGLE_BRIDGE_URL: https://script.google.com/macros/s/AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw/exec
       FBS_LOOKBACK_DAYS: ${{ inputs.lookback_days }}
-      FBS_BATCH_SIZE: "25"
+      FBS_BATCH_SIZE: "5"
       FBS_START_DATE: ${{ inputs.start_date }}
       FBS_END_DATE: ${{ inputs.end_date }}
     steps:
