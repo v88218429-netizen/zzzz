@@ -269,7 +269,7 @@ async def _resolve_deduction_photo_urls(
             except Exception:
                 return url, None, []
 
-    resolved = dict(await asyncio.gather(*(resolve(url) for url in yandex_links)))
+    resolved = {item[0]: item for item in await asyncio.gather(*(resolve(url) for url in yandex_links))}
     for item in rows:
         bonus_type = str(item.get("bonusType") or "").casefold()
         if "подмен" not in bonus_type:
