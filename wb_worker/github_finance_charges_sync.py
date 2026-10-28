@@ -282,7 +282,7 @@ def _attach_substitution_photos(
     finance_rows: list[list[Any]],
     deductions_by_shop: dict[str, list[dict[str, Any]]],
 ) -> tuple[list[list[Any]], dict[str, int]]:
-    """Attach only uniquely matched photos and report aggregate key-coverage diagnostics."""
+    """Attach only unique shop, item, and amount matches; report aggregate key coverage."""
     finance_groups: dict[tuple[str, str, int], list[tuple[int, dt.date]]] = defaultdict(list)
     finance_stickers: dict[tuple[str, str], list[int]] = defaultdict(list)
     for index, row in enumerate(finance_rows):
@@ -373,10 +373,7 @@ def _attach_substitution_photos(
             continue
         index, finance_day = finance_matches[0]
         shop, nm_id, amount = base_key
-        candidates = [
-            record for record in deduction_groups.get(base_key, {}).values()
-            if abs((record[0] - finance_day).days) <= 1
-        ]
+        candidates = list(deduction_groups.get(base_key, {}).values())
         if len(candidates) > 1:
             stats["ambiguous"] += 1
         elif candidates:
