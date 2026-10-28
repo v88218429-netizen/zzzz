@@ -111,7 +111,7 @@ def _publish() -> None:
     # Each cabinet/dataset pair gets its own short bridge request. The bridge
     # reads and rewrites full monthly partitions, so bundling datasets still
     # exceeds Apps Script's response window even after splitting by cabinet.
-    with httpx.Client(timeout=httpx.Timeout(180.0, connect=15.0), follow_redirects=True) as client:
+    with httpx.Client(timeout=httpx.Timeout(connect=20.0, read=360.0, write=120.0, pool=30.0), follow_redirects=True) as client:
         for shop in ("ap", "aa", "yv"):
             for dataset_name, source_rows in source_datasets.items():
                 rows = [row for row in source_rows if str(row[0] or "").strip() == shop]
