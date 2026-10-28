@@ -306,22 +306,48 @@ async def _fetch_deductions(
         if offset:
             # The official deductions endpoint allows one request per minute per seller account.
             await asyncio.sleep(DEDUCTIONS_PAGE_INTERVAL_SEC)
-        response = await client.get(
-            DEDUCTIONS_URL,
-            headers={"Authorization": token},
-            params={
-                "dateFrom": date_from + "T00:00:00Z",
-                "dateTo": date_to + "T23:59:59Z",
-                "sort": "dtBonus",
-                "order": "desc",
-                "limit": DEDUCTIONS_PAGE_SIZE,
-                "offset": offset,
-            },
-        )
-        if response.status_code == 204:
+        response = None
+        payload = None
+        for attempt in range(3):
+            response = await client.get(
+                DEDUCTIONS_URL,
+                headers={"Authorization": token},
+                params={
+                    "dateFrom": date_from + "T00:00:00Z",
+                    "dateTo": date_to + "T23:59:59Z",
+                    "sort": "dtBonus",
+                    "order": "desc",
+                    "limit": DEDUCTIONS_PAGE_SIZE,
+                    "offset": offset,
+                },
+            )
+            if response.status_code == 204:
+                break
+            if response.status_code == 429 or response.status_code >= 500:
+                if attempt < 2:
+                    delay = DEDUCTIONS_PAGE_INTERVAL_SEC if response.status_code == 429 else 5 * (2 ** attempt)
+                    print(f"WB deductions HTTP {response.status_code}; retry {attempt + 1}/2 after {int(delay)}s", flush=True)
+                    await asyncio.sleep(delay)
+                    continue
+            response.raise_for_status()
+            try:
+                payload = response.json()
+                break
+            except ValueError:
+                if attempt >= 2:
+                    content_type = response.headers.get("content-type", "unknown")
+                    raise ValueError(
+                        f"WB deductions returned invalid JSON (HTTP {response.status_code}, "
+                        f"content-type {content_type}, bytes {len(response.content)})"
+                    )
+                delay = 5 * (2 ** attempt)
+                print(f"WB deductions invalid JSON; retry {attempt + 1}/2 after {delay}s", flush=True)
+                await asyncio.sleep(delay)
+        if response is None or response.status_code == 204:
             break
-        response.raise_for_status()
-        data = (response.json() or {}).get("data") or {}
+        data = (payload or {}).get("data") or {}
+        if not isinstance(data, dict):
+            raise ValueError("WB deductions response data is not an object")
         reports = data.get("reports") or []
         try:
             total = int(data.get("total")) if data.get("total") is not None else total
@@ -660,7 +686,7 @@ async def main() -> int:
                 shop_stats[shop_id] = {
                     "detailRows": len(details),
                     "chargeRows": len(charges),
-                    "deductionsError": type(exc).__name__,
+                    "deductionsError": f"{type(exc).__name__}: {str(exc)[:180]}",
                 }
             print(f"GITHUB_FINANCE shop={shop_id} details={len(details)} charges={len(charges)} deductions={len(deductions_by_shop[shop_name])}", flush=True)
 
