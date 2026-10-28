@@ -282,14 +282,20 @@ def _attach_substitution_photos(
     finance_rows: list[list[Any]],
     deductions_by_shop: dict[str, list[dict[str, Any]]],
 ) -> tuple[list[list[Any]], dict[str, int]]:
-    """Attach photos only when shop, bonus date, nmId, amount, and both sides are unique."""
-    finance_groups: dict[tuple[str, str, str, int], list[int]] = defaultdict(list)
+    """Attach photos only when shop, nmId, amount, and a one-day date window are unique."""
+    finance_groups: dict[tuple[str, str, int], list[tuple[int, dt.date]]] = defaultdict(list)
     for index, row in enumerate(finance_rows):
         key = _substitution_key(row)
-        if key is not None:
-            finance_groups[key].append(index)
+        if key is None:
+            continue
+        shop, day, nm_id, amount = key
+        try:
+            day_value = dt.date.fromisoformat(day)
+        except ValueError:
+            continue
+        finance_groups[(shop, nm_id, amount)].append((index, day_value))
 
-    deduction_groups: dict[tuple[str, str, str, int], dict[tuple[str, ...], list[str]]] = defaultdict(dict)
+    deduction_groups: dict[tuple[str, str, int], dict[tuple[str, ...], tuple[dt.date, list[str]]]] = defaultdict(dict)
     for shop, records in deductions_by_shop.items():
         for item in records:
             bonus_type = str(item.get("bonusType") or "").casefold()
@@ -304,30 +310,47 @@ def _attach_substitution_photos(
                 continue
             try:
                 amount = round(float(item.get("bonusSumm") or 0) * 100)
+                day_value = dt.date.fromisoformat(str(item.get("dtBonus") or "")[:10])
             except (TypeError, ValueError):
                 continue
-            key = (
-                shop,
-                str(item.get("dtBonus") or "")[:10],
-                str(item.get("nmId") or "").strip(),
-                amount,
+            base_key = (shop, str(item.get("nmId") or "").strip(), amount)
+            identity = (
+                day_value.isoformat(),
+                str(item.get("oldShkId") or ""),
+                str(item.get("newShkId") or ""),
+                *photos,
             )
-            identity = (str(item.get("oldShkId") or ""), str(item.get("newShkId") or ""), *photos)
-            deduction_groups[key][identity] = photos
+            deduction_groups[base_key][identity] = (day_value, photos)
 
     output = [_to_penalty_sheet_row(row) for row in finance_rows]
-    stats = {"apiRecords": sum(map(len, deductions_by_shop.values())), "matched": 0, "ambiguous": 0, "unmatched": 0}
-    for key, indices in finance_groups.items():
-        candidates = deduction_groups.get(key, {})
-        if len(indices) != 1 or len(candidates) > 1:
-            stats["ambiguous"] += len(indices)
+    stats = {
+        "apiRecords": sum(map(len, deductions_by_shop.values())),
+        "matched": 0,
+        "dateAdjusted": 0,
+        "ambiguous": 0,
+        "unmatched": 0,
+    }
+    for base_key, finance_matches in finance_groups.items():
+        if len(finance_matches) != 1:
+            stats["ambiguous"] += len(finance_matches)
+            continue
+        index, finance_day = finance_matches[0]
+        candidates = [
+            (identity, record)
+            for identity, record in deduction_groups.get(base_key, {}).items()
+            if abs((record[0] - finance_day).days) <= 1
+        ]
+        if len(candidates) > 1:
+            stats["ambiguous"] += 1
             continue
         if not candidates:
             stats["unmatched"] += 1
             continue
-        photos = next(iter(candidates.values()))[:5]
-        output[indices[0]][9:14] = photos + [""] * (5 - len(photos))
+        matched_day, photos = candidates[0][1]
+        output[index][9:14] = photos[:5] + [""] * max(0, 5 - len(photos[:5]))
         stats["matched"] += 1
+        if matched_day != finance_day:
+            stats["dateAdjusted"] += 1
     return output, stats
 
 
