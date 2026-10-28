@@ -470,6 +470,11 @@ def result_rows(task, video, ideas, t_url, day):
     return video_row, base, options
 
 
+def video_is_processed(status):
+    # Manual audits and explicit IGNORE statuses are final; only retry pending failures.
+    return bool(status and status not in ("AI_RETRY_PENDING", "Ошибка", "Ошибка транскрипции"))
+
+
 def run(args):
     sh = Sheets()
     raw = sh.get("Задания", "A1:Y100")
@@ -485,7 +490,7 @@ def run(args):
     existing_rows = {(str(cell(r, 0)), str(cell(r, 1))): (index, str(cell(r, 10)))
                      for index, r in enumerate(videos[1:], start=2) if cell(r, 0)}
     existing = {key for key, (_, status) in existing_rows.items()
-                if status in ("Обработано AI", "Проанализировано")}
+                if video_is_processed(status)}
     idea_urls = {str(cell(r, 7)) for r in ideas[1:] if cell(r, 7)}
     now = now_msk()
     tasks = [(i, r) for i, r in enumerate(raw[1:], start=2)
@@ -598,7 +603,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--force-task", default="")
-    parser.add_argument("--max-tasks", type=int, default=4)
+    parser.add_argument("--max-tasks", type=int, default=8)
     parser.add_argument("--videos-per-task", type=int, default=2)
     parser.add_argument("--search-limit", type=int, default=14)
     parser.add_argument("--fail-fast", action="store_true")
