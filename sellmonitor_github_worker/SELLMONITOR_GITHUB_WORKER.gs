@@ -5933,7 +5933,12 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
       try {
         var body=JSON.parse(response.getContentText()).error||{};
         var reasons=(body.errors||[]).map(function(e){return e.reason;}).filter(Boolean);
-        return [body.status].concat(reasons).filter(Boolean).join(':')||'NO_ERROR_DETAIL';
+        var msg=String(body.message||'').toLowerCase(), category='';
+        if(/insufficient.*scope|authentication scope|scope.*insufficient/.test(msg)) category='OAUTH_SCOPE';
+        else if(/service.*disabled|not enabled|accessnotconfigured/.test(msg)) category='SHEETS_API_DISABLED';
+        else if(/does not have permission|permission denied|not authorized/.test(msg)) category='SHEET_ACCESS_PERMISSION';
+        else if(/not found/.test(msg)) category='SHEET_OR_RANGE_NOT_FOUND';
+        return [body.status,body.code,category].concat(reasons).filter(Boolean).join(':')||'NO_ERROR_DETAIL';
       } catch(e) { return 'NO_ERROR_DETAIL'; }
     }
     function asSheetValue(value){
