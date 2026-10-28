@@ -120,6 +120,10 @@ jobs:
           obj=json.loads(m.read_text(encoding='utf-8'))
           obj['webapp']={'executeAs':'USER_DEPLOYING','access':'ANYONE_ANONYMOUS'}
           obj['executionApi']={'access':'MYSELF'}
+          dependencies=obj.setdefault('dependencies',{})
+          services=dependencies.setdefault('enabledAdvancedServices',[])
+          if not any(x.get('serviceId')=='sheets' for x in services):
+              services.append({'userSymbol':'Sheets','serviceId':'sheets','version':'v4'})
           m.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding='utf-8')
           PY
           python sellmonitor_github_worker/patch_master.py /tmp/sellmonitor-gh-worker
