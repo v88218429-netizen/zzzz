@@ -45,6 +45,42 @@ jobs:
           test -n "$WB_API_TOKEN_YV"
           test -n "$WEBAPP_DEPLOYMENT_ID"
 
+      - name: Probe direct Google Sheets API access
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, os, urllib.error, urllib.parse, urllib.request
+          cfg=json.loads(os.environ['CLASPRC_JSON'])
+          settings=cfg.get('oauth2ClientSettings') or {}
+          token=cfg.get('token') or {}
+          form=urllib.parse.urlencode({
+              'client_id':settings.get('clientId',''),
+              'client_secret':settings.get('clientSecret',''),
+              'refresh_token':token.get('refresh_token',''),
+              'grant_type':'refresh_token'
+          }).encode()
+          try:
+              req=urllib.request.Request('https://oauth2.googleapis.com/token',data=form,method='POST')
+              with urllib.request.urlopen(req,timeout=30) as response:
+                  auth=json.loads(response.read().decode())
+              scopes=auth.get('scope','')
+              print('DIRECT_SHEETS_TOKEN_REFRESH=ok')
+              print('DIRECT_SHEETS_SCOPE_PRESENT=' + str('https://www.googleapis.com/auth/spreadsheets' in scopes))
+              sheet='1qJvhEOIku7sOMydfrUz0PR5dkcU0sLjv433pa1MFBcM'
+              url='https://sheets.googleapis.com/v4/spreadsheets/'+sheet+'?fields=spreadsheetId,properties.title'
+              req=urllib.request.Request(url,headers={'Authorization':'Bearer '+auth['access_token']})
+              with urllib.request.urlopen(req,timeout=30) as response:
+                  obj=json.loads(response.read().decode())
+              print('DIRECT_SHEETS_READ=ok')
+              print('DIRECT_SHEETS_TITLE=' + str((obj.get('properties') or {}).get('title','')))
+          except urllib.error.HTTPError as exc:
+              detail=exc.read().decode('utf-8','replace')[:300].replace('\n',' ')
+              print('DIRECT_SHEETS_READ=no')
+              print('DIRECT_SHEETS_ERROR=' + str(exc.code) + ':' + detail)
+          except Exception as exc:
+              print('DIRECT_SHEETS_PROBE_ERROR=' + type(exc).__name__ + ':' + str(exc)[:180])
+          PY
+
       - name: Install clasp and auth
         shell: bash
         run: |
