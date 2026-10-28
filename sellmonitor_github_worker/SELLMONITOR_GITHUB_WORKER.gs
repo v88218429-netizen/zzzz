@@ -292,8 +292,13 @@ function sellmonitorGithubTick() {
 }
 
 function sellmonitorGithubInnerFinanceTick() {
+  var scriptLock = LockService.getScriptLock();
+  if (!scriptLock.tryLock(5000)) return {ok:true,skipped:true,reason:'shared_gateway_lock_busy'};
   var lock = LockService.getUserLock();
-  if (!lock.tryLock(5000)) return {ok:true,skipped:true,reason:'inner_finance_lock_busy'};
+  if (!lock.tryLock(5000)) {
+    scriptLock.releaseLock();
+    return {ok:true,skipped:true,reason:'inner_finance_lock_busy'};
+  }
   var cc = null;
   var cfg = null;
   try {
@@ -322,6 +327,7 @@ function sellmonitorGithubInnerFinanceTick() {
     return {ok:false,version:SMC_GH.VERSION,store_id:cfg ? cfg.storeId : '',error:message};
   } finally {
     lock.releaseLock();
+    scriptLock.releaseLock();
   }
 }
 
@@ -5780,6 +5786,16 @@ function sellmonitorGithubFbsTargetHealthV1_() {
 
 /** Safe bounded FBS upsert; authenticated at the doPost entry point. No external service. */
 function sellmonitorGithubFbsIngestBatchV1_(body) {
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(30000)) throw new Error('GITHUB_FBS_LOCK_BUSY');
+  try {
+    return sellmonitorGithubFbsIngestBatchV1Core_(body);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function sellmonitorGithubFbsIngestBatchV1Core_(body) {
   var stores={
     SANYCH:'1v0qt-thJDOw3tLFdZVGhdXJdBM8rDPRz9mHlcHmuuyM',
     AIR:'1qJvhEOIku7sOMydfrUz0PR5dkcU0sLjv433pa1MFBcM',
