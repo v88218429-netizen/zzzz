@@ -429,8 +429,11 @@ def _attach_substitution_photos(
             diagnostic_records[shop].append((nm_id, day_value, amount, bonus_type, photos))
             for photo in photos:
                 basename = photo.split("?", 1)[0].rsplit("/", 1)[-1]
+                folder_sticker = str(item.get("photoFolderSticker") or "").strip()
                 for sticker in sticker_ids:
-                    if sticker and basename.startswith(sticker + "-"):
+                    if sticker and (
+                        sticker == folder_sticker or basename.startswith(sticker + "-")
+                    ):
                         deduction_stickers[(shop, sticker)][identity] = photos
 
     output = [_to_penalty_sheet_row(row) for row in finance_rows]
