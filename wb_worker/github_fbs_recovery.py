@@ -21,11 +21,11 @@ BRIDGE_KEY = os.environ["GOOGLE_BRIDGE_KEY"]
 LOOKBACK_DAYS = max(1, min(90, int(os.environ.get("FBS_LOOKBACK_DAYS", "7"))))
 # AIR needs smaller writes: sparse status changes otherwise exceed Apps Script execution time.
 CLIENT_HINT = os.environ.get("FBS_CLIENT", "").strip().upper()
-BATCH_SIZE = int(os.environ.get("FBS_BATCH_SIZE", "25" if CLIENT_HINT == "AIR" else "100"))
+BATCH_SIZE = int(os.environ.get("FBS_BATCH_SIZE", "5" if CLIENT_HINT == "AIR" else "25"))
 if not 1 <= BATCH_SIZE <= 1000:
     raise RuntimeError("FBS_BATCH_SIZE_INVALID")
-INGEST_ATTEMPTS = 8  # Allow temporary Apps Script lock holders to finish
-BRIDGE_INGEST_TIMEOUT = 390  # Let Apps Script finish or hit its six-minute execution ceiling before retrying
+INGEST_ATTEMPTS = 3  # Bound retries so one long Apps Script call cannot keep a client lease busy for an hour
+BRIDGE_INGEST_TIMEOUT = 330  # Return before Apps Script six-minute ceiling; retry only after bounded delay
 TIMEOUT = 120
 
 
