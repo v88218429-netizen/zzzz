@@ -5807,6 +5807,7 @@ function sellmonitorGithubFbsIngestBatchV1_(body) {
       defect:'Брак',canceled_by_missed_call:'Отмена из-за недозвона'};
     return [a?(sa[a]||a):'',b?(wb[b]||b):''].filter(Boolean).join(' / ')||'Статус не получен';
   }
+  var fbsStarted=Date.now(); console.log('FBS_STAGE_BEGIN client='+client+' orders='+batch.length);
   var parsed=[],dedupe={};
   batch.forEach(function(v){
     if(!v||typeof v!=='object')throw new Error('FBS_ROW_INVALID');
@@ -5825,29 +5826,54 @@ function sellmonitorGithubFbsIngestBatchV1_(body) {
   // GitHub recovery workflow serializes all calls to this endpoint. Do not
   // share the adapter-wide UserLock with the independent finance sync.
 
-    var book=SpreadsheetApp.openById(spreadsheetId);
+    console.log('FBS_STAGE_PARSE ms='+(Date.now()-fbsStarted)+' client='+client+' orders='+parsed.length);
+    var book=SpreadsheetApp.openById(spreadsheetId); console.log('FBS_STAGE_OPEN ms='+(Date.now()-fbsStarted));
     var sh=book.getSheetByName('📦 FBS Заказы');
     var history=book.getSheetByName('🕘 История статусов');
     if(!sh||!history)throw new Error('FBS_BOOK_SCHEMA_MISSING');
     var head=sh.getRange(1,1,1,7).getDisplayValues()[0];
     if(head[0]!=='ID заказа'||head[4]!=='Статус продавца'||head[5]!=='Статус WB')
       throw new Error('FBS_COLUMN_SCHEMA_MISMATCH');
-    var last=sh.getLastRow();
+    var last=sh.getLastRow(); console.log('FBS_STAGE_LASTROW ms='+(Date.now()-fbsStarted)+' rows='+last);
     if(last<1||last>100000)throw new Error('FBS_ROW_COUNT_UNEXPECTED');
-    var ids=last>1?sh.getRange(2,1,last-1,1).getDisplayValues():[];
-    var states=last>1?sh.getRange(2,5,last-1,3).getValues():[];
-    var syncTimes=last>1?sh.getRange(2,22,last-1,2).getValues():[];
+    var ids=last>1?sh.getRange(2,1,last-1,1).getDisplayValues():[]; console.log('FBS_STAGE_IDS ms='+(Date.now()-fbsStarted)+' count='+ids.length);
     var byId={};
     ids.forEach(function(v,i){if(v[0]&&!Object.prototype.hasOwnProperty.call(byId,v[0]))byId[String(v[0])]=i+2;});
+    var readRows=[];
+    parsed.forEach(function(r){var row=byId[r.id];if(row)readRows.push(row);});
+    var stateByRow={},syncTimesByRow={};
+    if(readRows.length){
+      var authToken=ScriptApp.getOAuthToken();
+      var apiBase='https://sheets.googleapis.com/v4/spreadsheets/'+encodeURIComponent(spreadsheetId);
+      var readFilters=readRows.map(function(row){return {a1Range:"'📦 FBS Заказы'!E"+row+":G"+row};});
+      var readResponse=UrlFetchApp.fetch(apiBase+'/values:batchGetByDataFilter',{
+        method:'post',contentType:'application/json',
+        headers:{Authorization:'Bearer '+authToken},muteHttpExceptions:true,
+        payload:JSON.stringify({dataFilters:readFilters,valueRenderOption:'UNFORMATTED_VALUE'})
+      });
+      var readCode=readResponse.getResponseCode(); console.log('FBS_STAGE_STATE_READ ms='+(Date.now()-fbsStarted)+' http='+readCode+' rows='+readRows.length);
+      if(readCode>=200&&readCode<300){
+        var readRanges=JSON.parse(readResponse.getContentText()).valueRanges||[];
+        if(readRanges.length!==readRows.length)throw new Error('FBS_STATE_READBACK_COUNT_MISMATCH');
+        readRows.forEach(function(row,index){stateByRow[row]=((readRanges[index].valueRange||{}).values||[[]])[0]||[];});
+      }else if(readCode===403){
+        var readMin=Math.min.apply(null,readRows),readMax=Math.max.apply(null,readRows);
+        var nativeStateRows=sh.getRange(readMin,5,readMax-readMin+1,3).getValues();
+        readRows.forEach(function(row){stateByRow[row]=nativeStateRows[row-readMin]||[];});
+        console.log('FBS_STATE_NATIVE_READ_FALLBACK=403');
+      }else{
+        throw new Error('FBS_STATE_BATCH_READ_HTTP_'+readCode);
+      }
+    }
     var n=new Date(),insert=[],patch=[],events=[],already=0,updated=0,confirmed=0;
     parsed.forEach(function(r){
       var o=r.source,id=r.id,rowNumber=byId[id];
       if(rowNumber) {
         already++;
-        var old=states[rowNumber-2]||[],os=str(old[0],90),ow=str(old[1],90);
+        var old=stateByRow[rowNumber]||[],os=str(old[0],90),ow=str(old[1],90);
         if(os!==r.seller||ow!==r.wb){
-          old[0]=r.seller;old[1]=r.wb;old[2]=human(r.seller,r.wb);states[rowNumber-2]=old;
-          syncTimes[rowNumber-2]=[n,n];patch.push(rowNumber);updated++;
+          old[0]=r.seller;old[1]=r.wb;old[2]=human(r.seller,r.wb);stateByRow[rowNumber]=old;
+          syncTimesByRow[rowNumber]=[n,n];patch.push(rowNumber);updated++;
           events.push([n,id,str(o.article,300),r.created,os,r.seller,ow,r.wb,'',
             'СМЕНА СТАТУСА',human(r.seller,r.wb),'GITHUB_WB_FBS']);
         } else confirmed++;
@@ -5885,9 +5911,9 @@ function sellmonitorGithubFbsIngestBatchV1_(body) {
       segments.forEach(function(seg){
         var startRow=seg[0],endRow=seg[1],offset=startRow-2,count=endRow-startRow+1;
         patchData.push({range:"'📦 FBS Заказы'!E"+startRow+":G"+endRow,
-          majorDimension:'ROWS',values:states.slice(offset,offset+count).map(function(r){return (r||[]).slice(0,3).map(asSheetValue);})});
+          majorDimension:'ROWS',values:Array.from({length:count},function(_,i){return (stateByRow[startRow+i]||[]).slice(0,3).map(asSheetValue);})});
         patchData.push({range:"'📦 FBS Заказы'!V"+startRow+":W"+endRow,
-          majorDimension:'ROWS',values:syncTimes.slice(offset,offset+count).map(function(r){return (r||[]).slice(0,2).map(asSheetValue);})});
+          majorDimension:'ROWS',values:Array.from({length:count},function(_,i){return (syncTimesByRow[startRow+i]||[]).map(asSheetValue);})});
         verifyFilters.push({a1Range:"'📦 FBS Заказы'!A"+startRow+":G"+endRow});
         verifyFilters.push({a1Range:"'📦 FBS Заказы'!V"+startRow+":W"+endRow});
       });
@@ -5898,7 +5924,7 @@ function sellmonitorGithubFbsIngestBatchV1_(body) {
         headers:{Authorization:'Bearer '+authToken},muteHttpExceptions:true,
         payload:JSON.stringify({valueInputOption:'RAW',data:patchData})
       });
-      var writeCode=writeResponse.getResponseCode();
+      var writeCode=writeResponse.getResponseCode(); console.log('FBS_STAGE_STATE_WRITE ms='+(Date.now()-fbsStarted)+' http='+writeCode+' segments='+segments.length);
       if(writeCode<200||writeCode>=300){
   var writeDiagnostic='UNKNOWN';
   try { var writeError=JSON.parse(writeResponse.getContentText()||'{}').error||{}; writeDiagnostic=String(writeError.status||writeError.message||'UNKNOWN').slice(0,180); } catch(writeParseError) {}
@@ -5906,8 +5932,8 @@ function sellmonitorGithubFbsIngestBatchV1_(body) {
   try{
     segments.forEach(function(seg){
       var startRow=seg[0],endRow=seg[1],offset=startRow-2,count=endRow-startRow+1;
-      sh.getRange(startRow,5,count,3).setValues(states.slice(offset,offset+count).map(function(r){return (r||[]).slice(0,3);}));
-      sh.getRange(startRow,22,count,2).setValues(syncTimes.slice(offset,offset+count).map(function(r){return (r||[]).slice(0,2);}));
+      sh.getRange(startRow,5,count,3).setValues(Array.from({length:count},function(_,i){return (stateByRow[startRow+i]||[]).slice(0,3);}));
+      sh.getRange(startRow,22,count,2).setValues(Array.from({length:count},function(_,i){return syncTimesByRow[startRow+i]||[];}));
     });
     SpreadsheetApp.flush();
     console.log('FBS_PATCH_NATIVE_WRITE_FALLBACK=403:'+writeDiagnostic);
@@ -5918,7 +5944,7 @@ function sellmonitorGithubFbsIngestBatchV1_(body) {
         headers:{Authorization:'Bearer '+authToken},muteHttpExceptions:true,
         payload:JSON.stringify({dataFilters:verifyFilters,valueRenderOption:'UNFORMATTED_VALUE'})
       });
-      var verifyCode=verifyResponse.getResponseCode();
+      var verifyCode=verifyResponse.getResponseCode(); console.log('FBS_STAGE_STATE_VERIFY ms='+(Date.now()-fbsStarted)+' http='+verifyCode+' filters='+verifyFilters.length);
       if(verifyCode<200||verifyCode>=300){if(verifyCode!==403)throw new Error('FBS_PATCH_READBACK_HTTP_'+verifyCode);}
       var verified;
       if(verifyCode>=200&&verifyCode<300){
@@ -5941,7 +5967,7 @@ function sellmonitorGithubFbsIngestBatchV1_(body) {
         for(var rowNumber=startRow;rowNumber<=endRow;rowNumber++){
           var offset=rowNumber-2,rowOffset=rowNumber-startRow;
           var orderRow=orderValues[rowOffset]||[],timeRow=timeValues[rowOffset]||[];
-          var expectedState=states[offset]||[],expectedTimes=syncTimes[offset]||[];
+          var expectedState=stateByRow[rowNumber]||[],expectedTimes=syncTimesByRow[rowNumber]||[];
           if(String(orderRow[0]||'')!==String(ids[offset][0]||'')||
              String(orderRow[4]||'')!==String(expectedState[0]||'')||
              String(orderRow[5]||'')!==String(expectedState[1]||'')||
@@ -5955,6 +5981,7 @@ function sellmonitorGithubFbsIngestBatchV1_(body) {
         }
       });
     }
+    console.log('FBS_STAGE_PATCH ms='+(Date.now()-fbsStarted)+' changed='+updated+' events='+events.length);
     if(insert.length){
       var required=last+insert.length;
       if(sh.getMaxRows()<required)sh.insertRowsAfter(sh.getMaxRows(),required-sh.getMaxRows());
@@ -5970,6 +5997,7 @@ function sellmonitorGithubFbsIngestBatchV1_(body) {
         history.insertRowsAfter(history.getMaxRows(),needed-history.getMaxRows());
       history.getRange(start,1,events.length,12).setValues(events);
     }
+    console.log('FBS_STAGE_DONE ms='+(Date.now()-fbsStarted)+' inserted='+insert.length+' changed='+updated);
     return {ok:true,client:client,received:parsed.length,inserted:insert.length,
       existing:already,changed:updated,unchanged:confirmed,events:events.length,
       latestWorkbookOrderRows:sh.getLastRow()-1,checkedAt:n.toISOString()};
