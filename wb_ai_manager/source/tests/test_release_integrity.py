@@ -22,7 +22,10 @@ def test_release_versions_are_aligned():
 
 
 def test_stable_update_manifest_covers_runtime_files_and_matches_hashes():
-    manifest = json.loads((ROOT.parent / "update-manifest.json").read_text(encoding="utf-8"))
+    manifest_path = ROOT.parent / "update-manifest.json"
+    if not manifest_path.exists() and os.environ.get("GITHUB_WORKSPACE"):
+        manifest_path = Path(os.environ["GITHUB_WORKSPACE"]) / "wb_ai_manager" / "update-manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     stable = manifest["channels"]["stable"]
     assert stable["version"] == current_version(ROOT)
     files = {item["path"]: item for item in stable["files"]}
