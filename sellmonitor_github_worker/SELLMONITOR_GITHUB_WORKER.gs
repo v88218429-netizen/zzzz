@@ -187,6 +187,7 @@ function sellmonitorGithubHealth() {
     trigger: triggerState,
     trigger_count: triggerCount,
     inner_finance_trigger_count:innerFinanceTriggerCount,
+    fbs_ingest_stages: sellmonitorGithubFbsStageSnapshot_(),
     trigger_ok: triggerCount === 1 && innerFinanceTriggerCount === 1
   };
 }
@@ -5807,6 +5808,14 @@ function sellmonitorGithubFbsTargetHealthV1_() {
 }
 
 
+function sellmonitorGithubFbsStageSnapshot_() {
+  var props = PropertiesService.getScriptProperties(), out = {};
+  ['SANYCH','AIR','HOZYAYUSHKA'].forEach(function(client) {
+    try { var raw = props.getProperty('GITHUB_FBS_STAGE_' + client); if (raw) out[client] = JSON.parse(raw); } catch (e) {}
+  });
+  return out;
+}
+
 /** Safe bounded FBS upsert; authenticated at the doPost entry point. No external service. */
 function sellmonitorGithubFbsIngestBatchV1_(body) {
   // Different stores may recover concurrently. UserLock protects only the short
@@ -5816,6 +5825,11 @@ function sellmonitorGithubFbsIngestBatchV1_(body) {
     throw new Error('FBS_CLIENT_NOT_ALLOWED');
   }
   var props = PropertiesService.getScriptProperties();
+  var traceId = Utilities.getUuid(), startedAt = Date.now();
+  function mark(stage) {
+    try { props.setProperty('GITHUB_FBS_STAGE_' + client, JSON.stringify({client:client,trace:traceId,stage:stage,elapsedMs:Date.now()-startedAt,at:new Date().toISOString()})); } catch (e) {}
+  }
+  mark('LEASE_CLAIM_START');
   var leaseKey = 'GITHUB_FBS_INGEST_LEASE_' + client;
   var leaseToken = Utilities.getUuid();
   var leaseMs = 7 * 60 * 1000;
@@ -5830,18 +5844,27 @@ function sellmonitorGithubFbsIngestBatchV1_(body) {
     props.setProperty(leaseKey, JSON.stringify({
       token: leaseToken, expiresAt: Date.now() + leaseMs
     }));
+    mark('LEASE_CLAIMED');
   } finally {
     lock.releaseLock();
   }
 
   try {
-    return sellmonitorGithubFbsIngestBatchV1Core_(body);
+    mark('CORE_START');
+    var result = sellmonitorGithubFbsIngestBatchV1Core_(body, mark);
+    mark('CORE_DONE');
+    return result;
+  } catch (e) {
+    mark('CORE_ERROR');
+    throw e;
   } finally {
+    mark('LEASE_RELEASE_START');
     if (lock.tryLock(10000)) {
       try {
         var active = null;
         try { active = JSON.parse(props.getProperty(leaseKey) || 'null'); } catch (e) {}
         if (active && active.token === leaseToken) props.deleteProperty(leaseKey);
+        mark('LEASE_RELEASED');
       } finally {
         lock.releaseLock();
       }
@@ -5849,7 +5872,8 @@ function sellmonitorGithubFbsIngestBatchV1_(body) {
   }
 }
 
-function sellmonitorGithubFbsIngestBatchV1Core_(body) {
+function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
+  mark = typeof mark === 'function' ? mark : function() {};
   var stores={
     SANYCH:'1v0qt-thJDOw3tLFdZVGhdXJdBM8rDPRz9mHlcHmuuyM',
     AIR:'1qJvhEOIku7sOMydfrUz0PR5dkcU0sLjv433pa1MFBcM',
@@ -5897,16 +5921,17 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body) {
   // share the adapter-wide UserLock with the independent finance sync.
 
     console.log('FBS_STAGE_PARSE ms='+(Date.now()-fbsStarted)+' client='+client+' orders='+parsed.length);
-    var book=SpreadsheetApp.openById(spreadsheetId); console.log('FBS_STAGE_OPEN ms='+(Date.now()-fbsStarted));
+    mark('SHEET_OPEN_START');
+    var book=SpreadsheetApp.openById(spreadsheetId); console.log('FBS_STAGE_OPEN ms='+(Date.now()-fbsStarted)); mark('SHEET_OPEN_DONE');
     var sh=book.getSheetByName('📦 FBS Заказы');
     var history=book.getSheetByName('🕘 История статусов');
     if(!sh||!history)throw new Error('FBS_BOOK_SCHEMA_MISSING');
     var head=sh.getRange(1,1,1,7).getDisplayValues()[0];
     if(head[0]!=='ID заказа'||head[4]!=='Статус продавца'||head[5]!=='Статус WB')
       throw new Error('FBS_COLUMN_SCHEMA_MISMATCH');
-    var last=sh.getLastRow(); console.log('FBS_STAGE_LASTROW ms='+(Date.now()-fbsStarted)+' rows='+last);
+    mark('LASTROW_START'); var last=sh.getLastRow(); console.log('FBS_STAGE_LASTROW ms='+(Date.now()-fbsStarted)+' rows='+last); mark('LASTROW_DONE');
     if(last<1||last>100000)throw new Error('FBS_ROW_COUNT_UNEXPECTED');
-    var ids=last>1?sh.getRange(2,1,last-1,1).getDisplayValues():[]; console.log('FBS_STAGE_IDS ms='+(Date.now()-fbsStarted)+' count='+ids.length);
+    mark('IDS_READ_START'); var ids=last>1?sh.getRange(2,1,last-1,1).getDisplayValues():[]; console.log('FBS_STAGE_IDS ms='+(Date.now()-fbsStarted)+' count='+ids.length); mark('IDS_READ_DONE');
     var byId={};
     ids.forEach(function(v,i){if(v[0]&&!Object.prototype.hasOwnProperty.call(byId,v[0]))byId[String(v[0])]=i+2;});
     var readRows=[];
@@ -5916,12 +5941,12 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body) {
       var authToken=ScriptApp.getOAuthToken();
       var apiBase='https://sheets.googleapis.com/v4/spreadsheets/'+encodeURIComponent(spreadsheetId);
       var readFilters=readRows.map(function(row){return {a1Range:"'📦 FBS Заказы'!E"+row+":G"+row};});
-      var readResponse=UrlFetchApp.fetch(apiBase+'/values:batchGetByDataFilter',{
+      mark('STATE_READ_START'); var readResponse=UrlFetchApp.fetch(apiBase+'/values:batchGetByDataFilter',{
         method:'post',contentType:'application/json',
         headers:{Authorization:'Bearer '+authToken},muteHttpExceptions:true,
         payload:JSON.stringify({dataFilters:readFilters,valueRenderOption:'UNFORMATTED_VALUE'})
       });
-      var readCode=readResponse.getResponseCode(); console.log('FBS_STAGE_STATE_READ ms='+(Date.now()-fbsStarted)+' http='+readCode+' rows='+readRows.length);
+      var readCode=readResponse.getResponseCode(); console.log('FBS_STAGE_STATE_READ ms='+(Date.now()-fbsStarted)+' http='+readCode+' rows='+readRows.length); mark('STATE_READ_DONE_'+readCode);
       if(readCode>=200&&readCode<300){
         var readRanges=JSON.parse(readResponse.getContentText()).valueRanges||[];
         if(readRanges.length!==readRows.length)throw new Error('FBS_STATE_READBACK_COUNT_MISMATCH');
@@ -5989,12 +6014,12 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body) {
       });
       var authToken=ScriptApp.getOAuthToken();
       var apiBase='https://sheets.googleapis.com/v4/spreadsheets/'+encodeURIComponent(spreadsheetId);
-      var writeResponse=UrlFetchApp.fetch(apiBase+'/values:batchUpdate',{
+      mark('STATE_WRITE_START'); var writeResponse=UrlFetchApp.fetch(apiBase+'/values:batchUpdate',{
         method:'post',contentType:'application/json',
         headers:{Authorization:'Bearer '+authToken},muteHttpExceptions:true,
         payload:JSON.stringify({valueInputOption:'RAW',data:patchData})
       });
-      var writeCode=writeResponse.getResponseCode(); console.log('FBS_STAGE_STATE_WRITE ms='+(Date.now()-fbsStarted)+' http='+writeCode+' segments='+segments.length);
+      var writeCode=writeResponse.getResponseCode(); console.log('FBS_STAGE_STATE_WRITE ms='+(Date.now()-fbsStarted)+' http='+writeCode+' segments='+segments.length); mark('STATE_WRITE_DONE_'+writeCode);
       if(writeCode<200||writeCode>=300){
   var writeDiagnostic='UNKNOWN';
   try { var writeError=JSON.parse(writeResponse.getContentText()||'{}').error||{}; writeDiagnostic=String(writeError.status||writeError.message||'UNKNOWN').slice(0,180); } catch(writeParseError) {}
@@ -6009,12 +6034,12 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body) {
     console.log('FBS_PATCH_NATIVE_WRITE_FALLBACK=403:'+writeDiagnostic);
   }catch(nativeWriteError){throw new Error('FBS_PATCH_BATCH_HTTP_403:'+writeDiagnostic+';NATIVE_FALLBACK_FAILED:'+String(nativeWriteError&&nativeWriteError.message||nativeWriteError));}
 }
-      var verifyResponse=UrlFetchApp.fetch(apiBase+'/values:batchGetByDataFilter',{
+      mark('STATE_VERIFY_START'); var verifyResponse=UrlFetchApp.fetch(apiBase+'/values:batchGetByDataFilter',{
         method:'post',contentType:'application/json',
         headers:{Authorization:'Bearer '+authToken},muteHttpExceptions:true,
         payload:JSON.stringify({dataFilters:verifyFilters,valueRenderOption:'UNFORMATTED_VALUE'})
       });
-      var verifyCode=verifyResponse.getResponseCode(); console.log('FBS_STAGE_STATE_VERIFY ms='+(Date.now()-fbsStarted)+' http='+verifyCode+' filters='+verifyFilters.length);
+      var verifyCode=verifyResponse.getResponseCode(); console.log('FBS_STAGE_STATE_VERIFY ms='+(Date.now()-fbsStarted)+' http='+verifyCode+' filters='+verifyFilters.length); mark('STATE_VERIFY_DONE_'+verifyCode);
       if(verifyCode<200||verifyCode>=300){if(verifyCode!==403)throw new Error('FBS_PATCH_READBACK_HTTP_'+verifyCode);}
       var verified;
       if(verifyCode>=200&&verifyCode<300){
@@ -6052,7 +6077,7 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body) {
       });
     }
     console.log('FBS_STAGE_PATCH ms='+(Date.now()-fbsStarted)+' changed='+updated+' events='+events.length);
-    if(insert.length){
+    if(insert.length){ mark('INSERT_START');
       var required=last+insert.length;
       if(sh.getMaxRows()<required)sh.insertRowsAfter(sh.getMaxRows(),required-sh.getMaxRows());
       sh.getRange(last+1,1,insert.length,45).setValues(insert);
@@ -6060,12 +6085,12 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body) {
       for(var i=0;i<insert.length;i++)if(String(check[i][0])!==String(insert[i][0]))
         throw new Error('FBS_INSERT_READBACK_FAILED');
     }
-    if(events.length){
+    if(events.length){ mark('HISTORY_WRITE_START');
       var start=history.getLastRow()+1;
       var needed=start+events.length-1;
       if(history.getMaxRows()<needed)
         history.insertRowsAfter(history.getMaxRows(),needed-history.getMaxRows());
-      history.getRange(start,1,events.length,12).setValues(events);
+      history.getRange(start,1,events.length,12).setValues(events); mark('HISTORY_WRITE_DONE');
     }
     console.log('FBS_STAGE_DONE ms='+(Date.now()-fbsStarted)+' inserted='+insert.length+' changed='+updated);
     return {ok:true,client:client,received:parsed.length,inserted:insert.length,
