@@ -20,6 +20,7 @@ BRIDGE_URL = os.environ["GOOGLE_BRIDGE_URL"]
 BRIDGE_KEY = os.environ["GOOGLE_BRIDGE_KEY"]
 LOOKBACK_DAYS = max(1, min(90, int(os.environ.get("FBS_LOOKBACK_DAYS", "7"))))
 # AIR needs smaller writes: sparse status changes otherwise exceed Apps Script execution time.
+# Keep AIR gateway calls small enough to finish within the Apps Script runtime ceiling.
 CLIENT_HINT = os.environ.get("FBS_CLIENT", "").strip().upper()
 BATCH_SIZE = int(os.environ.get("FBS_BATCH_SIZE", "5" if CLIENT_HINT == "AIR" else "25"))
 if not 1 <= BATCH_SIZE <= 1000:
