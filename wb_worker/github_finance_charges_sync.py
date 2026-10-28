@@ -282,7 +282,7 @@ def _attach_substitution_photos(
     finance_rows: list[list[Any]],
     deductions_by_shop: dict[str, list[dict[str, Any]]],
 ) -> tuple[list[list[Any]], dict[str, int]]:
-    """Use exact sticker IDs first; otherwise require unique shop, nmId, amount, and near date."""
+    """Attach only uniquely matched photos and report aggregate key-coverage diagnostics."""
     finance_groups: dict[tuple[str, str, int], list[tuple[int, dt.date]]] = defaultdict(list)
     finance_stickers: dict[tuple[str, str], list[int]] = defaultdict(list)
     for index, row in enumerate(finance_rows):
@@ -301,6 +301,7 @@ def _attach_substitution_photos(
 
     deduction_groups: dict[tuple[str, str, int], dict[tuple[str, ...], tuple[dt.date, list[str]]]] = defaultdict(dict)
     deduction_stickers: dict[tuple[str, str], dict[tuple[str, ...], list[str]]] = defaultdict(dict)
+    diagnostic_records: dict[str, list[tuple[str, dt.date, int, str, list[str]]]] = defaultdict(list)
     for shop, records in deductions_by_shop.items():
         for item in records:
             bonus_type = str(item.get("bonusType") or "").casefold()
@@ -319,29 +320,35 @@ def _attach_substitution_photos(
             except (TypeError, ValueError):
                 continue
             nm_id = str(item.get("nmId") or "").strip()
+            sticker_ids = [str(item.get("oldShkId") or "").strip(), str(item.get("newShkId") or "").strip()]
             base_key = (shop, nm_id, amount)
-            identity = (
-                day_value.isoformat(),
-                str(item.get("oldShkId") or ""),
-                str(item.get("newShkId") or ""),
-                *photos,
-            )
+            identity = (day_value.isoformat(), *sticker_ids, *photos)
             deduction_groups[base_key][identity] = (day_value, photos)
+            diagnostic_records[shop].append((nm_id, day_value, amount, bonus_type, photos))
             for photo in photos:
                 basename = photo.split("?", 1)[0].rsplit("/", 1)[-1]
-                for sticker in (str(item.get("oldShkId") or "").strip(), str(item.get("newShkId") or "").strip()):
+                for sticker in sticker_ids:
                     if sticker and basename.startswith(sticker + "-"):
                         deduction_stickers[(shop, sticker)][identity] = photos
 
     output = [_to_penalty_sheet_row(row) for row in finance_rows]
     stats = {
         "apiRecords": sum(map(len, deductions_by_shop.values())),
+        "photoSubstitutionRecords": sum(map(len, diagnostic_records.values())),
         "matched": 0,
         "stickerMatched": 0,
         "dateAdjusted": 0,
         "ambiguous": 0,
         "unmatched": 0,
+        "diagnosticRows": 0,
+        "sameArticle": 0,
+        "sameAmount": 0,
+        "sameDate": 0,
+        "sameArticleAmount": 0,
+        "sameArticleDate": 0,
+        "sameAmountDate": 0,
     }
+
     assigned: set[int] = set()
     for sticker_key, indices in finance_stickers.items():
         candidates = deduction_stickers.get(sticker_key, {})
@@ -365,21 +372,33 @@ def _attach_substitution_photos(
             stats["ambiguous"] += len(finance_matches)
             continue
         index, finance_day = finance_matches[0]
+        shop, nm_id, amount = base_key
         candidates = [
             record for record in deduction_groups.get(base_key, {}).values()
             if abs((record[0] - finance_day).days) <= 1
         ]
         if len(candidates) > 1:
             stats["ambiguous"] += 1
-            continue
-        if not candidates:
+        elif candidates:
+            matched_day, photos = candidates[0]
+            output[index][9:14] = photos[:5] + [""] * max(0, 5 - len(photos[:5]))
+            stats["matched"] += 1
+            if matched_day != finance_day:
+                stats["dateAdjusted"] += 1
+        else:
             stats["unmatched"] += 1
-            continue
-        matched_day, photos = candidates[0]
-        output[index][9:14] = photos[:5] + [""] * max(0, 5 - len(photos[:5]))
-        stats["matched"] += 1
-        if matched_day != finance_day:
-            stats["dateAdjusted"] += 1
+
+        comparisons = diagnostic_records.get(shop, [])
+        same_article = [r for r in comparisons if r[0] == nm_id]
+        same_amount = [r for r in comparisons if r[2] == amount]
+        same_date = [r for r in comparisons if abs((r[1] - finance_day).days) <= 1]
+        stats["diagnosticRows"] += 1
+        stats["sameArticle"] += bool(same_article)
+        stats["sameAmount"] += bool(same_amount)
+        stats["sameDate"] += bool(same_date)
+        stats["sameArticleAmount"] += bool([r for r in same_article if r[2] == amount])
+        stats["sameArticleDate"] += bool([r for r in same_article if abs((r[1] - finance_day).days) <= 1])
+        stats["sameAmountDate"] += bool([r for r in same_amount if abs((r[1] - finance_day).days) <= 1])
     return output, stats
 
 
