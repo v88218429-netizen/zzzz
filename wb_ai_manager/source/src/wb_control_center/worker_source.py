@@ -151,3 +151,25 @@ class WorkerSource:
             "supplies": supplies,
             "penalty_evidence": evidence,
         }
+
+    async def traffic_bundle(self) -> dict[str, Any]:
+        """Read the worker's real multi-store ad, funnel and organic traffic exports."""
+        status = await self._get_json("/api/traffic/status")
+        ads = await self._get_csv("/api/traffic/campaign_sku_day.csv", limit=100000)
+        funnel = await self._get_csv("/api/traffic/funnel_sku_day.csv", limit=100000)
+        try:
+            organic = await self._get_csv("/api/traffic/organic_sku_day.csv", limit=100000)
+        except httpx.HTTPStatusError as exc:
+            # Older worker versions do not expose the organic export yet.
+            if exc.response.status_code != 404:
+                raise
+            organic = []
+        return {
+            "source": "wb-api-worker",
+            "retrieved_at": datetime.now(timezone.utc).isoformat(),
+            "source_health": self.stream_meta(status, 180),
+            "status": status,
+            "ads": ads,
+            "funnel": funnel,
+            "organic": organic,
+        }

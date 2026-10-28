@@ -87,7 +87,7 @@ def test_services_agent_flags_changed_options_without_enabling_anything(monkeypa
 
 
 def test_services_agent_does_not_flag_identical_wrapped_snapshots(monkeypatch):
-    jam = {"state": "active", "level": "premium", "till": "2026-10-30T00:00:00Z"}
+    jam = {"state": "active", "level": "premium", "till": "2099-10-30T00:00:00Z"}
     tariffs = {"activeOptionCount": 1, "options": [{"id": 7}], "packages": []}
     previous = {
         "jam_subscription": {"data": {"status": "fresh", "data": jam}},

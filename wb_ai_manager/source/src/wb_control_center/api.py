@@ -45,6 +45,9 @@ _background_tasks: set[asyncio.Task] = set()
 _photo_csv_cache: dict[str, dict[str, Any]] = {}
 _photo_csv_inflight: set[str] = set()
 _photo_csv_sem = asyncio.Semaphore(1)
+_traffic_bundle_cache: dict[str, Any] = {}
+_traffic_bundle_cached_at: datetime | None = None
+_traffic_bundle_lock = asyncio.Lock()
 
 
 def _iso_dt(value: Any) -> datetime | None:
@@ -574,8 +577,73 @@ def _query_manager_payload(
     return manager.build(portfolio_snapshot or portfolio.snapshot(), snapshots or _dashboard_snapshots())
 
 
+def _traffic_dashboard_payload(bundle: dict[str, Any], period: dict[str, Any]) -> dict[str, Any]:
+    """Prepare actual worker rows for the portfolio and per-store dashboard views."""
+    start, end = period["from"], period["to"]
+    shops = {"ap": "sanych", "aa": "air", "yv": "hozyushka"}
+    names = {"ap": "Саныч", "aa": "AIR", "yv": "Хозяюшка"}
+
+    def in_period(row: dict[str, Any]) -> bool:
+        day = str(row.get("date") or "")[:10]
+        return bool(day and start <= day <= end)
+
+    def filtered(kind: str) -> list[dict[str, Any]]:
+        rows = bundle.get(kind) or []
+        return [r for r in rows if isinstance(r, dict) and in_period(r)]
+
+    def amount(value: Any) -> float | None:
+        if value is None or str(value).strip() == "":
+            return None
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    def total(rows: list[dict[str, Any]], field: str) -> float | None:
+        values = [amount(r.get(field)) for r in rows]
+        if not values or any(v is None for v in values):
+            return None
+        return round(sum(v for v in values if v is not None), 2)
+
+    ads, funnel, organic = filtered("ads"), filtered("funnel"), filtered("organic")
+    grouped: dict[str, dict[str, Any]] = {}
+    for shop_code in shops:
+        grouped[shops[shop_code]] = {
+            "id": shops[shop_code], "shop_code": shop_code.upper(), "name": names[shop_code],
+            "ads": [], "funnel": [], "organic": [],
+        }
+    for kind, rows in (("ads", ads), ("funnel", funnel), ("organic", organic)):
+        for row in rows:
+            code = str(row.get("shop") or "").lower()
+            if code in shops:
+                grouped[shops[code]][kind].append(row)
+    shop_status = bundle.get("status", {}).get("shops", {}) if isinstance(bundle.get("status"), dict) else {}
+    for cabinet in grouped.values():
+        cabinet["coverage"] = shop_status.get(cabinet["shop_code"].lower()) or shop_status.get(cabinet["shop_code"]) or {}
+        rows = cabinet["ads"]
+        totals = {key: total(rows, field) for key, field in (
+            ("views", "views"), ("clicks", "clicks"), ("cart_adds", "atbs"),
+            ("orders", "orders"), ("spend_rub", "spend_rub"), ("order_sum_rub", "order_sum_rub"),
+        )}
+        totals["ctr_pct"] = round(totals["clicks"] / totals["views"] * 100, 2) if totals["views"] and totals["clicks"] is not None else None
+        totals["cpc_rub"] = round(totals["spend_rub"] / totals["clicks"], 2) if totals["clicks"] and totals["spend_rub"] is not None else None
+        totals["drr_pct"] = round(totals["spend_rub"] / totals["order_sum_rub"] * 100, 2) if totals["order_sum_rub"] and totals["spend_rub"] is not None else None
+        totals["cpa_rub"] = round(totals["spend_rub"] / totals["orders"], 2) if totals["orders"] and totals["spend_rub"] is not None else None
+        cabinet["summary"] = totals
+    total_ads = [r for c in grouped.values() for r in c["ads"]]
+    total_funnel = [r for c in grouped.values() for r in c["funnel"]]
+    total_organic = [r for c in grouped.values() for r in c["organic"]]
+    return {
+        "source": bundle.get("source"), "retrieved_at": bundle.get("retrieved_at"),
+        "health": bundle.get("source_health") or {}, "status": bundle.get("status") or {},
+        "period": {"from": start, "to": end}, "shops": list(grouped.values()),
+        "ads": total_ads, "funnel": total_funnel, "organic": total_organic,
+    }
+
+
 @app.get("/api/dashboard-data")
 async def dashboard_data(days: int = 7, from_date: str | None = None, to_date: str | None = None) -> dict[str, Any]:
+    global _traffic_bundle_cached_at
     period = _dashboard_period(days, from_date, to_date)
     period_ctx = PeriodContext.from_strings(period["from"], period["to"])
     audit = center.period_audit_status(period_ctx)
@@ -625,6 +693,24 @@ async def dashboard_data(days: int = 7, from_date: str | None = None, to_date: s
     research_agenda["discoveries"] = discover_cross_sku_patterns(portfolio_snapshot)
     research_agenda["discovery_count"] = len(research_agenda["discoveries"])
     query_layer = _query_manager_payload(portfolio_snapshot, snapshots)
+    traffic = {"source": "wb-api-worker", "health": {"status": "UNAVAILABLE"}, "shops": [], "ads": [], "funnel": [], "organic": [], "error": "Источник трафика не подключён."}
+    if center.worker.configured:
+        try:
+            async with _traffic_bundle_lock:
+                now_utc = datetime.now(timezone.utc)
+                if not _traffic_bundle_cache or not _traffic_bundle_cached_at or (now_utc - _traffic_bundle_cached_at).total_seconds() >= 120:
+                    _traffic_bundle_cache.clear()
+                    _traffic_bundle_cache.update(await center.worker.traffic_bundle())
+                    _traffic_bundle_cached_at = now_utc
+                traffic = _traffic_dashboard_payload(_traffic_bundle_cache, period)
+        except Exception as exc:
+            traffic["error"] = f"{type(exc).__name__}: {exc}"
+    if (not center.worker.configured or traffic.get("error")) and portfolio_snapshot.get("traffic_bundle"):
+        bundle = portfolio_snapshot["traffic_bundle"]
+        if bundle.get("ads") or bundle.get("funnel"):
+            traffic = _traffic_dashboard_payload(bundle, period)
+        else:
+            traffic["error"] = "В таблице рекламного центра пока нет строк кампаний и воронки."
     audit_agents = audit.get("agents") or {}
     audit_failed = sum(1 for x in audit_agents.values() if isinstance(x, dict) and x.get("status") == "error")
     return {
@@ -682,6 +768,7 @@ async def dashboard_data(days: int = 7, from_date: str | None = None, to_date: s
         "decision_group_summary": grouped_summary,
         "research_agenda": research_agenda,
         "query_manager": query_layer,
+        "traffic": traffic,
         "snapshots": snapshots,
         "decision_control": {
             "history": center.db.decision_history(limit=80),

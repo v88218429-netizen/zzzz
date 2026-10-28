@@ -267,7 +267,7 @@ async def traffic_status(request: Request):
 @app.get("/api/traffic/{dataset}.csv")
 async def traffic_export(dataset: str, request: Request):
     authorize(request)
-    if dataset not in {"campaign_sku_day", "funnel_sku_day"}:
+    if dataset not in {"campaign_sku_day", "funnel_sku_day", "organic_sku_day"}:
         raise HTTPException(status_code=404, detail="Unknown dataset")
     path = TRAFFIC_DIR / f"{dataset}.csv"
     if not path.exists():

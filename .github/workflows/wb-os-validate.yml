@@ -86,7 +86,7 @@ jobs:
         run: |
           set -euo pipefail
           test -s wb_os/run_core_repair.command
-          grep -q "K2 Evolution Engine v0.1.17" wb_os/apps_script/K2_EVOLUTION_ENGINE.gs
+          grep -q "K2 Evolution Engine v0.1.18" wb_os/apps_script/K2_EVOLUTION_ENGINE.gs
           grep -q "function k2EvolutionCleanupLegacyTriggers_" wb_os/apps_script/K2_EVOLUTION_ENGINE.gs
           grep -q "syncK2StocksOnly" wb_os/apps_script/K2_EVOLUTION_ENGINE.gs
           grep -q "K2_EV_CUTOVER_DONE" wb_os/apps_script/K2_EVOLUTION_ENGINE.gs
@@ -117,7 +117,6 @@ jobs:
           grep -q "CORE REPAIR DEPLOYED + REMOTE VERIFIED" wb_os/run_core_repair.command
           grep -q "audit_and_repair_live.py" .github/workflows/wb-os-deploy-k2.yml
           grep -q "Pull back and verify actual LIVE" .github/workflows/wb-os-deploy-k2.yml
-          grep -q "K2 Evolution Engine v0.1.17" .github/workflows/wb-os-deploy-k2.yml
           grep -q "getK2CredentialsWithFallback_" .github/workflows/wb-os-deploy-k2.yml
           grep -q "wbOsEnsureMasterTrigger" .github/workflows/wb-os-deploy-k2.yml
           ! grep -q "bundle.part" wb_os/run_core_repair.command

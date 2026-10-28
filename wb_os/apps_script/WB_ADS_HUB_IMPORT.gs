@@ -6,7 +6,8 @@
 const ADS_HUB_ID = '11ULokTx74QjziZjThJ0lfxFiMQW42-WV4315cG7eIuU';
 const ADS_TARGETS = [
   {path: '/api/traffic/campaign_sku_day.csv', sheet: '12_ADS_CAMPAIGN_DAY', columns: 15},
-  {path: '/api/traffic/funnel_sku_day.csv', sheet: '13_FUNNEL_DAY', columns: 11}
+  {path: '/api/traffic/funnel_sku_day.csv', sheet: '13_FUNNEL_DAY', columns: 11},
+  {path: '/api/traffic/organic_sku_day.csv', sheet: '19_ORGANIC_DERIVED', columns: 16}
 ];
 
 function adsHubFetch_(path) {
@@ -48,15 +49,19 @@ function syncAdsHub() {
           // Store dates and numeric counters as native Sheets values for control formulas.
           if (row[1]) output[1] = new Date(row[1] + 'T12:00:00+03:00');
           const numericColumns = item.target.sheet === '12_ADS_CAMPAIGN_DAY'
-            ? [2, 3, 4, 5, 6, 7, 8, 9] : [2, 4, 5, 6, 7];
+            ? [2, 3, 4, 5, 6, 7, 8, 9]
+            : item.target.sheet === '13_FUNNEL_DAY' ? [2, 4, 5, 6, 7] : [4, 5, 6, 11, 12, 13];
           numericColumns.forEach(i => { if (row[i] !== '') output[i] = Number(row[i]); });
           if (item.target.sheet === '12_ADS_CAMPAIGN_DAY') {
             output[12] = row[12] || '';
             output[13] = state.finishedAt;
             output[14] = 'SOURCE_OK';
-          } else {
+          } else if (item.target.sheet === '13_FUNNEL_DAY') {
             output[9] = state.finishedAt;
             output[10] = 'SOURCE_OK';
+          } else {
+            output[14] = state.finishedAt;
+            output[15] = row[10] || 'UNKNOWN';
           }
           return output;
         });

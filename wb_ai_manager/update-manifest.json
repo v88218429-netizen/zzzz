@@ -2,25 +2,25 @@
   "schema": 1,
   "channels": {
     "stable": {
-      "version": "1.1.10",
+      "version": "1.1.11",
       "channel": "stable",
-      "notes": "Полный недельный финансовый отчёт, живая таблица и корректный запрос отчёта удержаний WB.",
+      "notes": "Сводка по магазинам, реклама и воронка по товару и дню, органический трафик и локальный калькулятор прибыли.",
       "minimum_current_version": "1.0.0",
       "files": [
         {
           "path": "VERSION",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/VERSION",
-          "sha256": "aeccfaffeec636e89d972edfb0faf337cd0ac748c67ef0ad538d10eb97896120"
+          "sha256": "75fe54d226c17e2ffce72aca63fa1e5066db0d41560e8b6dd746b2361b82574e"
         },
         {
           "path": "pyproject.toml",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/pyproject.toml",
-          "sha256": "d0685b5734c53a5be9a215e59afbe04846ca489da33b37ccb2591937b3780a3c"
+          "sha256": "8df901c3ce1c0ba09cbd9d88a532b44fea8714a7ebc1577c437262bebcf264b9"
         },
         {
           "path": "plugin.json",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/plugin.json",
-          "sha256": "aded6dcdafb02cf34431c323beffda24aa273390503ce00c5c3b8b7e1149caf2"
+          "sha256": "61bd9cdda187ee56e0611174964dd8c3e39c259b4adac4b601f1de31d4e40aab"
         },
         {
           "path": "mcp.json",
@@ -67,12 +67,42 @@
         {
           "path": "src/wb_control_center/ui/dashboard.js",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/src/wb_control_center/ui/dashboard.js",
-          "sha256": "9913cbd725242e93e8d4a86e602fdf82787d12c8643f1662b190fb0f8bf77383"
+          "sha256": "fe9913aa3fed78ad8693b27c1e4ae765138eb6788a634f21a001fdb78ee77f9d"
+        },
+        {
+          "path": "src/wb_control_center/ui/dashboard.html",
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/src/wb_control_center/ui/dashboard.html",
+          "sha256": "04e6e6aec8c4e5f68503af6e93e4ddb8a47d46be106cc85845ffdb90ef26f41b"
+        },
+        {
+          "path": "src/wb_control_center/ui/dashboard.css",
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/src/wb_control_center/ui/dashboard.css",
+          "sha256": "ec1a790c7065d7c267f160cb494d41789094ed90b1453752dd39505bfd15a50b"
+        },
+        {
+          "path": "src/wb_control_center/api.py",
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/src/wb_control_center/api.py",
+          "sha256": "1c94b213c01156cedf9b2da434adfb47514de9778429b158e3a22adfc2e96c6e"
+        },
+        {
+          "path": "src/wb_control_center/portfolio.py",
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/src/wb_control_center/portfolio.py",
+          "sha256": "bd04a3d6362ec713eca58de0c162b1f7528deeefc637d14fb8e3869aa055815c"
+        },
+        {
+          "path": "src/wb_control_center/worker_source.py",
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/src/wb_control_center/worker_source.py",
+          "sha256": "2acd11beeb16b4b06a53f41b48c40c02123e2f557cf024f8f29a0404a87a65ae"
+        },
+        {
+          "path": "RELEASE_NOTES.md",
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/RELEASE_NOTES.md",
+          "sha256": "8a6fba6e24fb0cb1f241ba8a9bf4d9188dfd34774d0d5c5f01c5fd9e8b65c62d"
         },
         {
           "path": "src/wb_control_center/__init__.py",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/src/wb_control_center/__init__.py",
-          "sha256": "fa36277c2b71df16c44b60e8bd4568bc16d0aa33258d73106b7c40567a141508"
+          "sha256": "a27bccc483ca542038ca5e54ab26797ab7d509f5f65764e5f38bc1e259188343"
         },
         {
           "path": "src/wb_control_center/mcp_client.py",

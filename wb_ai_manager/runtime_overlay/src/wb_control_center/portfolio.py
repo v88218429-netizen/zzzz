@@ -14,6 +14,99 @@ from .policy import READ_ONLY_BUILD
 from .cohort import analyze_order_lifecycle
 
 
+def _traffic_bundle_from_bridge(payload: dict[str, Any]) -> dict[str, Any]:
+    """Normalize verified Ads Hub sheet ranges into the worker dashboard shape."""
+    source = ((payload.get("sources") or {}).get("ads_hub") or {})
+    ranges = source.get("ranges") or {}
+
+    def read_rows(name: str) -> list[dict[str, Any]]:
+        values = ((ranges.get(name) or {}).get("values") or [])
+        if not values:
+            return []
+        headers = [str(value or "").strip() for value in values[0]]
+        result = []
+        for values_row in values[1:]:
+            if not isinstance(values_row, list) or not any(str(value or "").strip() for value in values_row):
+                continue
+            row = {key: values_row[index] if index < len(values_row) else "" for index, key in enumerate(headers) if key}
+            # Keep one canonical spelling for fields returned by the WB worker.
+            for alias, canonical in (("store_id", "shop"), ("nmId", "nm_id"), ("vendorCode", "vendor_code")):
+                if alias in row and canonical not in row:
+                    row[canonical] = row[alias]
+            code = str(row.get("shop") or "").strip().lower()
+            row["shop"] = {
+                "ap": "ap", "sanych": "ap", "sanych_wb": "ap", "ип ап": "ap",
+                "aa": "aa", "air": "aa", "air_wb": "aa", "ип аа": "aa",
+                "yv": "yv", "hozyushka": "yv", "hozyayushka_wb": "yv", "ип юв": "yv",
+            }.get(code, code)
+            for field in ("date", "load_timestamp"):
+                value = str(row.get(field) or "").strip()
+                try:
+                    if len(value) == 10 and value[2] == "." and value[5] == ".":
+                        row[field] = datetime.strptime(value, "%d.%m.%Y").date().isoformat()
+                except ValueError:
+                    pass
+            result.append(row)
+        return result
+
+    ads = read_rows("campaign_day")
+    funnel = read_rows("funnel_day")
+    organic = read_rows("organic_day")
+    health_values = ((ranges.get("health") or {}).get("values") or [])
+    source_health: dict[str, dict[str, Any]] = {}
+    if len(health_values) > 1:
+        for values_row in health_values[1:]:
+            if not isinstance(values_row, list) or not values_row:
+                continue
+            raw_code = str(values_row[0] or "").strip().lower()
+            code = {"ap": "ap", "sanych": "ap", "sanych_wb": "ap", "aa": "aa", "air": "aa", "air_wb": "aa", "yv": "yv", "hozyushka": "yv", "hozyayushka_wb": "yv"}.get(raw_code)
+            if not code:
+                continue
+            label = str(values_row[5] or "").strip().upper() if len(values_row) > 5 else ""
+            status = "STALE" if label in {"УСТАРЕЛО", "STALE"} else "PARTIAL" if label in {"ЧАСТИЧНО", "PARTIAL"} else "FRESH" if label in {"АКТУАЛЬНО", "FRESH", "OK"} else "UNKNOWN"
+            source_health[code] = {
+                "status": status,
+                "last_ads_date": normalize_traffic_day(values_row[2]) if len(values_row) > 2 else None,
+                "last_funnel_date": normalize_traffic_day(values_row[4]) if len(values_row) > 4 else None,
+                "comment": str(values_row[6] or "") if len(values_row) > 6 else "",
+            }
+    by_shop: dict[str, dict[str, Any]] = {}
+    for code in ("ap", "aa", "yv"):
+        ads_rows = [row for row in ads if row.get("shop") == code]
+        funnel_rows = [row for row in funnel if row.get("shop") == code]
+        row_statuses = [str(row.get("coverage_status") or "").strip().upper() for row in (*ads_rows, *funnel_rows)]
+        control = source_health.get(code) or {}
+        healthy = bool(ads_rows and funnel_rows and row_statuses and all(value == "SOURCE_OK" for value in row_statuses) and control.get("status") == "FRESH")
+        by_shop[code] = {
+            "ok": healthy,
+            "status": control.get("status") or ("PARTIAL" if ads_rows or funnel_rows else "NO_DATA"),
+            "ads_rows": len(ads_rows), "funnel_rows": len(funnel_rows),
+            "last_loaded_at": max((str(row.get("load_timestamp") or "") for row in (*ads_rows, *funnel_rows)), default="") or None,
+            "last_ads_date": control.get("last_ads_date"), "last_funnel_date": control.get("last_funnel_date"),
+            "comment": control.get("comment"),
+            "source": "google_sheets_ads_hub",
+        }
+    retrieved_at = source.get("read_at") or payload.get("generated_at")
+    return {
+        "source": "google_sheets_ads_hub", "retrieved_at": retrieved_at,
+        "source_health": {"status": "FRESH" if all(item["ok"] for item in by_shop.values()) else "PARTIAL"},
+        "status": {"shops": by_shop, "finishedAt": retrieved_at},
+        "ads": ads, "funnel": funnel, "organic": organic,
+    }
+
+
+def normalize_traffic_day(value: Any) -> str | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        if len(text) == 10 and text[2] == "." and text[5] == ".":
+            return datetime.strptime(text, "%d.%m.%Y").date().isoformat()
+        return date.fromisoformat(text[:10]).isoformat()
+    except ValueError:
+        return None
+
+
 class PortfolioService:
     """Read-only portfolio facts from trusted Sheets snapshots.
 
@@ -663,6 +756,7 @@ class PortfolioService:
         self._parse_own_27(payload, out)
         self._link_products_to_weekly_groups(out)
         self._parse_search_signals(payload, out)
+        out["traffic_bundle"] = _traffic_bundle_from_bridge(payload)
         # Refresh source-health timestamps from the bridge without allowing a stale source
         # to silently become authoritative. Trust/usage policy remains local.
         bridge_sources = payload.get("sources") or {}
