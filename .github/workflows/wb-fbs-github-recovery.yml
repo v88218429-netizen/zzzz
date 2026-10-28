@@ -34,7 +34,7 @@ permissions:
 
 concurrency:
   group: wb-fbs-google-adapter
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   recover:
