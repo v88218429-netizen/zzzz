@@ -4,12 +4,16 @@ import csv
 import datetime as dt
 import json
 import os
+from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
 import httpx
 
 BASE_URL = "https://finance-api.wildberries.ru"
+DEDUCTIONS_URL = "https://seller-analytics-api.wildberries.ru/api/analytics/v1/deductions"
+DEDUCTIONS_PAGE_SIZE = 1000
+DEDUCTIONS_PAGE_INTERVAL_SEC = 61.0
 OUT_DIR = Path(os.environ.get(
     "FINANCE_GITHUB_OUT",
     str(Path(os.environ.get("RUNNER_TEMP", "/tmp")) / "wb-finance"),
@@ -220,6 +224,113 @@ def _to_penalty_sheet_row(row: list[Any]) -> list[Any]:
     ]
 
 
+async def _fetch_deductions(
+    client: httpx.AsyncClient, token: str, date_from: str, date_to: str
+) -> list[dict[str, Any]]:
+    """Load official substitution records and their photo URLs for a bounded reporting window."""
+    rows: list[dict[str, Any]] = []
+    offset = 0
+    total: int | None = None
+    while True:
+        if offset:
+            # The official deductions endpoint allows one request per minute per seller account.
+            await asyncio.sleep(DEDUCTIONS_PAGE_INTERVAL_SEC)
+        response = await client.get(
+            DEDUCTIONS_URL,
+            headers={"Authorization": token},
+            params={
+                "dateFrom": date_from + "T00:00:00Z",
+                "dateTo": date_to + "T23:59:59Z",
+                "sort": "dtBonus",
+                "order": "desc",
+                "limit": DEDUCTIONS_PAGE_SIZE,
+                "offset": offset,
+            },
+        )
+        if response.status_code == 204:
+            break
+        response.raise_for_status()
+        data = (response.json() or {}).get("data") or {}
+        reports = data.get("reports") or []
+        try:
+            total = int(data.get("total")) if data.get("total") is not None else total
+        except (TypeError, ValueError):
+            pass
+        rows.extend(item for item in reports if isinstance(item, dict))
+        offset += len(reports)
+        if not reports or len(reports) < DEDUCTIONS_PAGE_SIZE or (total is not None and offset >= total):
+            break
+    return rows
+
+
+def _substitution_key(row: list[Any]) -> tuple[str, str, str, int] | None:
+    reason = str(row[16] or row[8] or "").casefold()
+    if "подмен" not in reason:
+        return None
+    try:
+        amount = round(sum(float(row[index] or 0) for index in (10, 11, 12, 13)) * 100)
+    except (TypeError, ValueError):
+        return None
+    day = str(row[5] or "")[:10]
+    nm_id = str(row[17] or "").strip()
+    if not day or not nm_id or amount <= 0:
+        return None
+    return str(row[0] or "").strip(), day, nm_id, amount
+
+
+def _attach_substitution_photos(
+    finance_rows: list[list[Any]],
+    deductions_by_shop: dict[str, list[dict[str, Any]]],
+) -> tuple[list[list[Any]], dict[str, int]]:
+    """Attach photos only when shop, bonus date, nmId, amount, and both sides are unique."""
+    finance_groups: dict[tuple[str, str, str, int], list[int]] = defaultdict(list)
+    for index, row in enumerate(finance_rows):
+        key = _substitution_key(row)
+        if key is not None:
+            finance_groups[key].append(index)
+
+    deduction_groups: dict[tuple[str, str, str, int], dict[tuple[str, ...], list[str]]] = defaultdict(dict)
+    for shop, records in deductions_by_shop.items():
+        for item in records:
+            bonus_type = str(item.get("bonusType") or "").casefold()
+            if "подмен" not in bonus_type:
+                continue
+            raw_photos = item.get("photoUrls") or []
+            photos = [
+                str(url).strip() for url in raw_photos
+                if isinstance(url, str) and url.strip().startswith(("https://", "http://"))
+            ] if isinstance(raw_photos, list) else []
+            if not photos:
+                continue
+            try:
+                amount = round(float(item.get("bonusSumm") or 0) * 100)
+            except (TypeError, ValueError):
+                continue
+            key = (
+                shop,
+                str(item.get("dtBonus") or "")[:10],
+                str(item.get("nmId") or "").strip(),
+                amount,
+            )
+            identity = (str(item.get("oldShkId") or ""), str(item.get("newShkId") or ""), *photos)
+            deduction_groups[key][identity] = photos
+
+    output = [_to_penalty_sheet_row(row) for row in finance_rows]
+    stats = {"apiRecords": sum(map(len, deductions_by_shop.values())), "matched": 0, "ambiguous": 0, "unmatched": 0}
+    for key, indices in finance_groups.items():
+        candidates = deduction_groups.get(key, {})
+        if len(indices) != 1 or len(candidates) > 1:
+            stats["ambiguous"] += len(indices)
+            continue
+        if not candidates:
+            stats["unmatched"] += 1
+            continue
+        photos = next(iter(candidates.values()))[:5]
+        output[indices[0]][9:14] = photos + [""] * (5 - len(photos))
+        stats["matched"] += 1
+    return output, stats
+
+
 def _write_csv(path: Path, columns: list[str], rows: list[list[Any]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp")
@@ -382,6 +493,7 @@ async def main() -> int:
 
     all_rows: list[list[Any]] = []
     shop_stats: dict[str, Any] = {}
+    deductions_by_shop: dict[str, list[dict[str, Any]]] = {}
 
     async with httpx.AsyncClient(timeout=180.0) as client:
         for shop_id, (shop_name, env_name) in SHOPS.items():
@@ -390,13 +502,29 @@ async def main() -> int:
             normalized = [_normalize(shop_name, row) for row in details]
             charges = [row for row in normalized if _is_charge(row)]
             all_rows.extend(charges)
-            shop_stats[shop_id] = {"detailRows": len(details), "chargeRows": len(charges)}
-            print(f"GITHUB_FINANCE shop={shop_id} details={len(details)} charges={len(charges)}", flush=True)
+            try:
+                deductions_by_shop[shop_name] = await _fetch_deductions(client, token, date_from, date_to)
+                shop_stats[shop_id] = {
+                    "detailRows": len(details),
+                    "chargeRows": len(charges),
+                    "deductionRows": len(deductions_by_shop[shop_name]),
+                }
+            except Exception as exc:
+                # Photo enrichment is supplementary; keep the finance snapshot flowing if WB's
+                # separate deductions endpoint is unavailable or lacks the required token scope.
+                deductions_by_shop[shop_name] = []
+                shop_stats[shop_id] = {
+                    "detailRows": len(details),
+                    "chargeRows": len(charges),
+                    "deductionsError": type(exc).__name__,
+                }
+            print(f"GITHUB_FINANCE shop={shop_id} details={len(details)} charges={len(charges)} deductions={len(deductions_by_shop[shop_name])}", flush=True)
 
     all_rows.sort(key=lambda r: (str(r[5]), str(r[0]), str(r[6])), reverse=True)
     _write_sheet_csv(OUT_DIR / "charges_all.csv", all_rows)
-    penalty_rows = [_to_penalty_sheet_row(row) for row in all_rows]
+    penalty_rows, photo_stats = _attach_substitution_photos(all_rows, deductions_by_shop)
     _write_csv(OUT_DIR / "penalties_sheet.csv", PENALTY_SHEET_COLUMNS, penalty_rows)
+    print("GITHUB_PHOTO_ENRICHMENT " + json.dumps(photo_stats, ensure_ascii=False), flush=True)
 
     latest_rr = max((str(row[5]) for row in all_rows if row[5]), default="")
     print("GITHUB_FINANCE_DONE " + json.dumps({
@@ -411,3 +539,4 @@ async def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(asyncio.run(main()))
+
