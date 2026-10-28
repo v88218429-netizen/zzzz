@@ -5809,8 +5809,8 @@ function sellmonitorGithubFbsTargetHealthV1_() {
 
 /** Safe bounded FBS upsert; authenticated at the doPost entry point. No external service. */
 function sellmonitorGithubFbsIngestBatchV1_(body) {
-  // Different stores may recover concurrently. A short ScriptLock protects only
-  // the per-store lease claim; it is never held while Sheets are read or written.
+  // Different stores may recover concurrently. UserLock protects only the short
+  // lease claim; long-running Sellmonitor and finance ticks use ScriptLock.
   var client = String(body && body.client || '').trim().toUpperCase();
   if (['SANYCH','AIR','HOZYAYUSHKA'].indexOf(client) < 0) {
     throw new Error('FBS_CLIENT_NOT_ALLOWED');
@@ -5819,7 +5819,7 @@ function sellmonitorGithubFbsIngestBatchV1_(body) {
   var leaseKey = 'GITHUB_FBS_INGEST_LEASE_' + client;
   var leaseToken = Utilities.getUuid();
   var leaseMs = 7 * 60 * 1000;
-  var lock = LockService.getScriptLock();
+  var lock = LockService.getUserLock();
   if (!lock.tryLock(10000)) throw new Error('GITHUB_FBS_LOCK_BUSY');
   try {
     var current = null;
