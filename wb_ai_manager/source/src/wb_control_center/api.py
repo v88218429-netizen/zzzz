@@ -606,17 +606,23 @@ def _traffic_dashboard_payload(bundle: dict[str, Any], period: dict[str, Any]) -
         return round(sum(v for v in values if v is not None), 2)
 
     ads, funnel, organic = filtered("ads"), filtered("funnel"), filtered("organic")
+    clusters = filtered("clusters")
+    campaign_settings = [r for r in bundle.get("campaign_settings") or [] if isinstance(r, dict)]
     grouped: dict[str, dict[str, Any]] = {}
     for shop_code in shops:
         grouped[shops[shop_code]] = {
             "id": shops[shop_code], "shop_code": shop_code.upper(), "name": names[shop_code],
-            "ads": [], "funnel": [], "organic": [],
+            "ads": [], "funnel": [], "organic": [], "clusters": [], "campaign_settings": [],
         }
-    for kind, rows in (("ads", ads), ("funnel", funnel), ("organic", organic)):
+    for kind, rows in (("ads", ads), ("funnel", funnel), ("organic", organic), ("clusters", clusters)):
         for row in rows:
             code = str(row.get("shop") or "").lower()
             if code in shops:
                 grouped[shops[code]][kind].append(row)
+    for row in campaign_settings:
+        code = str(row.get("shop") or "").lower()
+        if code in shops:
+            grouped[shops[code]]["campaign_settings"].append(row)
     shop_status = bundle.get("status", {}).get("shops", {}) if isinstance(bundle.get("status"), dict) else {}
     for cabinet in grouped.values():
         cabinet["coverage"] = shop_status.get(cabinet["shop_code"].lower()) or shop_status.get(cabinet["shop_code"]) or {}
@@ -638,6 +644,8 @@ def _traffic_dashboard_payload(bundle: dict[str, Any], period: dict[str, Any]) -
         "health": bundle.get("source_health") or {}, "status": bundle.get("status") or {},
         "period": {"from": start, "to": end}, "shops": list(grouped.values()),
         "ads": total_ads, "funnel": total_funnel, "organic": total_organic,
+        "clusters": [r for c in grouped.values() for r in c["clusters"]],
+        "campaign_settings": [r for c in grouped.values() for r in c["campaign_settings"]],
     }
 
 
@@ -693,8 +701,8 @@ async def dashboard_data(days: int = 7, from_date: str | None = None, to_date: s
     research_agenda["discoveries"] = discover_cross_sku_patterns(portfolio_snapshot)
     research_agenda["discovery_count"] = len(research_agenda["discoveries"])
     query_layer = _query_manager_payload(portfolio_snapshot, snapshots)
-    traffic = {"source": "wb-api-worker", "health": {"status": "UNAVAILABLE"}, "shops": [], "ads": [], "funnel": [], "organic": [], "error": "Источник трафика не подключён."}
-    if center.worker.configured:
+    traffic = {"source": "github-traffic-state", "health": {"status": "UNAVAILABLE"}, "shops": [], "ads": [], "funnel": [], "organic": [], "error": "Зашифрованный архив GitHub или локальный ключ не настроен."}
+    if center.worker.traffic_configured:
         try:
             async with _traffic_bundle_lock:
                 now_utc = datetime.now(timezone.utc)
@@ -705,12 +713,6 @@ async def dashboard_data(days: int = 7, from_date: str | None = None, to_date: s
                 traffic = _traffic_dashboard_payload(_traffic_bundle_cache, period)
         except Exception as exc:
             traffic["error"] = f"{type(exc).__name__}: {exc}"
-    if (not center.worker.configured or traffic.get("error")) and portfolio_snapshot.get("traffic_bundle"):
-        bundle = portfolio_snapshot["traffic_bundle"]
-        if bundle.get("ads") or bundle.get("funnel"):
-            traffic = _traffic_dashboard_payload(bundle, period)
-        else:
-            traffic["error"] = "В таблице рекламного центра пока нет строк кампаний и воронки."
     audit_agents = audit.get("agents") or {}
     audit_failed = sum(1 for x in audit_agents.values() if isinstance(x, dict) and x.get("status") == "error")
     return {

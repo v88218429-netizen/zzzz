@@ -1,8 +1,15 @@
 from __future__ import annotations
 
+import asyncio
 import csv
 import io
+import json
+import os
+import subprocess
+import tarfile
+import tempfile
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -19,10 +26,15 @@ class WorkerSource:
     consumes its normalized exports instead of duplicating those expensive collectors.
     """
 
-    def __init__(self, base_url: str = "", export_token: str = "", timeout_seconds: float = 30.0):
+    def __init__(self, base_url: str = "", export_token: str = "", timeout_seconds: float = 30.0,
+                 traffic_github_repo: str = "", traffic_github_ref: str = "traffic-state",
+                 traffic_private_key_path: str = ""):
         self.base_url = (base_url or "").rstrip("/")
         self.export_token = (export_token or "").strip()
         self.timeout_seconds = max(3.0, float(timeout_seconds))
+        self.traffic_github_repo = (traffic_github_repo or "").strip()
+        self.traffic_github_ref = (traffic_github_ref or "traffic-state").strip()
+        self.traffic_private_key_path = Path(traffic_private_key_path).expanduser() if traffic_private_key_path else None
 
     @property
     def configured(self) -> bool:
@@ -152,24 +164,78 @@ class WorkerSource:
             "penalty_evidence": evidence,
         }
 
+    @property
+    def traffic_configured(self) -> bool:
+        return bool(self.traffic_github_repo and self.traffic_private_key_path
+                    and self.traffic_private_key_path.is_file())
+
+    @staticmethod
+    def _csv_from_archive(archive: tarfile.TarFile, suffix: str) -> list[dict[str, str]]:
+        member = next((item for item in archive.getmembers()
+                      if item.isfile() and item.name.endswith(suffix)), None)
+        if member is None:
+            return []
+        stream = archive.extractfile(member)
+        if stream is None:
+            return []
+        text = stream.read().decode("utf-8-sig")
+        return list(csv.DictReader(io.StringIO(text)))
+
     async def traffic_bundle(self) -> dict[str, Any]:
-        """Read the worker's real multi-store ad, funnel and organic traffic exports."""
-        status = await self._get_json("/api/traffic/status")
-        ads = await self._get_csv("/api/traffic/campaign_sku_day.csv", limit=100000)
-        funnel = await self._get_csv("/api/traffic/funnel_sku_day.csv", limit=100000)
-        try:
-            organic = await self._get_csv("/api/traffic/organic_sku_day.csv", limit=100000)
-        except httpx.HTTPStatusError as exc:
-            # Older worker versions do not expose the organic export yet.
-            if exc.response.status_code != 404:
-                raise
-            organic = []
-        return {
-            "source": "wb-api-worker",
-            "retrieved_at": datetime.now(timezone.utc).isoformat(),
-            "source_health": self.stream_meta(status, 180),
-            "status": status,
-            "ads": ads,
-            "funnel": funnel,
-            "organic": organic,
-        }
+        """Read private, encrypted WB traffic facts stored only in GitHub."""
+        if not self.traffic_configured:
+            raise WorkerSourceError("GitHub traffic archive or local private key is not configured")
+        root = f"https://raw.githubusercontent.com/{self.traffic_github_repo}/{self.traffic_github_ref}/state"
+        async with httpx.AsyncClient(timeout=self.timeout_seconds, follow_redirects=True) as client:
+            archive_response, key_response = await asyncio.gather(
+                client.get(root + "/traffic-dashboard.tar.gz.enc"),
+                client.get(root + "/traffic-dashboard.key.enc"),
+            )
+            archive_response.raise_for_status()
+            key_response.raise_for_status()
+        with tempfile.TemporaryDirectory(prefix="wb-traffic-github-") as folder:
+            folder_path = Path(folder)
+            encrypted_archive = folder_path / "traffic.tar.gz.enc"
+            encrypted_key = folder_path / "traffic.key.enc"
+            key_file = folder_path / "traffic.key"
+            plain_archive = folder_path / "traffic.tar.gz"
+            encrypted_archive.write_bytes(archive_response.content)
+            encrypted_key.write_bytes(key_response.content)
+            unwrap = subprocess.run(
+                ["openssl", "pkeyutl", "-decrypt", "-inkey", str(self.traffic_private_key_path),
+                 "-in", str(encrypted_key), "-out", str(key_file),
+                 "-pkeyopt", "rsa_padding_mode:oaep", "-pkeyopt", "rsa_oaep_md:sha256"],
+                capture_output=True, text=True, timeout=20,
+            )
+            if unwrap.returncode:
+                raise WorkerSourceError("GitHub traffic key could not be decrypted locally")
+            os.chmod(key_file, 0o600)
+            decrypt = subprocess.run(
+                ["openssl", "enc", "-d", "-aes-256-cbc", "-pbkdf2", "-pass", f"file:{key_file}",
+                 "-in", str(encrypted_archive), "-out", str(plain_archive)],
+                capture_output=True, text=True, timeout=60,
+            )
+            if decrypt.returncode:
+                raise WorkerSourceError("GitHub traffic archive decryption failed")
+            with tarfile.open(plain_archive, "r:gz") as archive:
+                members = archive.getmembers()
+                for item in members:
+                    path = Path(item.name)
+                    if path.is_absolute() or ".." in path.parts:
+                        raise WorkerSourceError("Unsafe path in GitHub traffic archive")
+                status_member = next((item for item in members if item.isfile() and item.name.endswith("traffic/status.json")), None)
+                if status_member is None:
+                    raise WorkerSourceError("GitHub traffic archive has no verified status")
+                status_stream = archive.extractfile(status_member)
+                status = json.loads(status_stream.read().decode("utf-8")) if status_stream else {}
+                return {
+                    "source": "github-traffic-state",
+                    "retrieved_at": datetime.now(timezone.utc).isoformat(),
+                    "source_health": self.stream_meta(status, 180),
+                    "status": status,
+                    "ads": self._csv_from_archive(archive, "traffic/campaign_sku_day.csv"),
+                    "funnel": self._csv_from_archive(archive, "traffic/funnel_sku_day.csv"),
+                    "organic": self._csv_from_archive(archive, "traffic/organic_sku_day.csv"),
+                    "clusters": self._csv_from_archive(archive, "traffic/ad_clusters_day.csv"),
+                    "campaign_settings": self._csv_from_archive(archive, "traffic/campaign_settings_current.csv"),
+                }

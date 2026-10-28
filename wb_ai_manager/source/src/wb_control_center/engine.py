@@ -39,7 +39,8 @@ class ControlCenter:
         self.remote_policy = RemotePolicyClient(settings.remote_policy_url, settings.data_path / "remote_policy_cache.json", settings.remote_policy_refresh_seconds)
         self.runtime_policy = RuntimePolicyStore(self.db, self.policy, self.remote_policy)
         self.wb = DemoWBClient() if settings.wb_mode.lower() == "demo" else WBMCPClient(settings.wb_api_token, str(settings.data_path / "wb_mcp"), settings.wb_shop_id, start_timeout=settings.mcp_start_timeout_seconds, call_timeout=settings.mcp_call_timeout_seconds)
-        self.worker = WorkerSource(settings.wb_worker_base_url, settings.wb_worker_export_token, settings.wb_worker_timeout_seconds)
+        self.worker = WorkerSource(settings.wb_worker_base_url, settings.wb_worker_export_token, settings.wb_worker_timeout_seconds,
+                                    settings.traffic_github_repo, settings.traffic_github_ref, settings.traffic_private_key_path)
         self.llm = LLMClient(settings)
         self.notifier = TelegramNotifier(settings)
         self.policy_engine = PolicyEngine(settings, self.policy)
