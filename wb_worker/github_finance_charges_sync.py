@@ -14,6 +14,7 @@ BASE_URL = "https://finance-api.wildberries.ru"
 DEDUCTIONS_URL = "https://seller-analytics-api.wildberries.ru/api/analytics/v1/deductions"
 DEDUCTIONS_PAGE_SIZE = 1000
 DEDUCTIONS_PAGE_INTERVAL_SEC = 61.0
+YANDEX_PUBLIC_RESOURCES_URL = "https://cloud-api.yandex.net/v1/disk/public/resources"
 OUT_DIR = Path(os.environ.get(
     "FINANCE_GITHUB_OUT",
     str(Path(os.environ.get("RUNNER_TEMP", "/tmp")) / "wb-finance"),
@@ -224,6 +225,76 @@ def _to_penalty_sheet_row(row: list[Any]) -> list[Any]:
     ]
 
 
+async def _resolve_deduction_photo_urls(
+    client: httpx.AsyncClient, rows: list[dict[str, Any]]
+) -> None:
+    """Replace public Yandex folder links with direct image preview URLs."""
+    links = {
+        str(url).strip()
+        for item in rows
+        if "подмен" in str(item.get("bonusType") or "").casefold()
+        for url in (item.get("photoUrls") or [])
+        if isinstance(url, str) and url.strip()
+    }
+    yandex_links = {
+        url for url in links
+        if "disk.yandex." in url.casefold() or "yadi.sk/" in url.casefold()
+    }
+    semaphore = asyncio.Semaphore(5)
+
+    async def resolve(url: str) -> tuple[str, str | None, list[str]]:
+        async with semaphore:
+            try:
+                response = await client.get(
+                    YANDEX_PUBLIC_RESOURCES_URL,
+                    params={"public_key": url, "limit": 100},
+                )
+                response.raise_for_status()
+                resource = response.json() or {}
+                image_files: list[dict[str, Any]] = []
+                if resource.get("type") == "file":
+                    image_files = [resource] if str(resource.get("mime_type") or "").startswith("image/") else []
+                elif resource.get("type") == "dir":
+                    image_files = [
+                        entry for entry in ((resource.get("_embedded") or {}).get("items") or [])
+                        if entry.get("type") == "file"
+                        and str(entry.get("mime_type") or "").startswith("image/")
+                    ]
+                previews = [
+                    str(entry.get("preview") or "").strip()
+                    for entry in image_files
+                    if str(entry.get("preview") or "").strip().startswith("https://")
+                ][:5]
+                return url, str(resource.get("name") or "").strip() or None, previews
+            except Exception:
+                return url, None, []
+
+    resolved = dict(await asyncio.gather(*(resolve(url) for url in yandex_links)))
+    for item in rows:
+        bonus_type = str(item.get("bonusType") or "").casefold()
+        if "подмен" not in bonus_type:
+            continue
+        photos = item.get("photoUrls") or []
+        if not isinstance(photos, list):
+            continue
+        output: list[str] = []
+        folder_sticker = ""
+        for raw_url in photos:
+            url = str(raw_url or "").strip()
+            if not url:
+                continue
+            if url in resolved:
+                name, previews = resolved[url][1], resolved[url][2]
+                if name and name.isdigit():
+                    folder_sticker = name
+                output.extend(previews)
+            elif "disk.yandex." not in url.casefold() and "yadi.sk/" not in url.casefold():
+                output.append(url)
+        if folder_sticker:
+            item["photoFolderSticker"] = folder_sticker
+        item["photoUrls"] = list(dict.fromkeys(output))[:5]
+
+
 async def _fetch_deductions(
     client: httpx.AsyncClient, token: str, date_from: str, date_to: str
 ) -> list[dict[str, Any]]:
@@ -260,6 +331,7 @@ async def _fetch_deductions(
         offset += len(reports)
         if not reports or len(reports) < DEDUCTIONS_PAGE_SIZE or (total is not None and offset >= total):
             break
+    await _resolve_deduction_photo_urls(client, rows)
     return rows
 
 
@@ -320,7 +392,11 @@ def _attach_substitution_photos(
             except (TypeError, ValueError):
                 continue
             nm_id = str(item.get("nmId") or "").strip()
-            sticker_ids = [str(item.get("oldShkId") or "").strip(), str(item.get("newShkId") or "").strip()]
+            sticker_ids = [
+                str(item.get("oldShkId") or "").strip(),
+                str(item.get("newShkId") or "").strip(),
+                str(item.get("photoFolderSticker") or "").strip(),
+            ]
             base_key = (shop, nm_id, amount)
             identity = (day_value.isoformat(), *sticker_ids, *photos)
             deduction_groups[base_key][identity] = (day_value, photos)
