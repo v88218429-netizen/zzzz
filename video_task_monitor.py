@@ -27,7 +27,8 @@ def safe(s):
 
 def yt_search(query, limit):
     errs=[]
-    for prefix in ("ytsearchdate","ytsearch"):
+    # ytsearchdate is unsupported by the current yt-dlp extractor; use supported search.
+    for prefix in ("ytsearch",):
         try:
             raw=run(["yt-dlp","--flat-playlist","--dump-single-json","--no-warnings",f"{prefix}{min(max(int(limit),1),50)}:{query}"])
             data=json.loads(raw)
@@ -48,6 +49,14 @@ def yt_search(query, limit):
         except Exception as exc:
             errs.append(f"{prefix}: {exc}")
     raise RuntimeError(" | ".join(errs) or "no results")
+
+def relevant_to_task(task_id, item):
+    # IMRAM explicitly tracks a named author, not generic "wish" content.
+    if task_id == "IMRAM":
+        text = (str(item.get("title") or "") + " " + str(item.get("channel") or "")).lower()
+        return any(name in text for name in ("имрам", "imram", "крийя", "kriya"))
+    return True
+
 
 def kind(item):
     try:
@@ -165,6 +174,7 @@ def process_request(path):
     cutoff=datetime.now(timezone.utc)-timedelta(days=depth)
     candidates=[]
     for item in found.values():
+        if not relevant_to_task(task_id, item): continue
         if item["video_id"] in seen: continue
         ts=item.get("timestamp")
         if ts:
