@@ -126,7 +126,7 @@ class MonitorTests(unittest.TestCase):
     def test_ai_claim_without_ai_evidence_is_rejected(self):
         transcript = ("[0:02] Автор показывает CPC-рекламу: сравнивает поисковые ставки, "
                       "количество показов и расходы в кабинете продавца, "
-                      "не демонстрируя машинное обучение или нейросетевую модель.")
+                      "не показывая алгоритм прогнозирования или его проверку.")
         # The selected citation discusses advertising, not an AI forecasting mechanism.
         payload = {"ideas": [{
             "goal_code": "BUSINESS",
