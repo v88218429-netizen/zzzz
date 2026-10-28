@@ -21,6 +21,10 @@ class Settings(BaseSettings):
     wb_worker_base_url: str = ""
     wb_worker_export_token: str = ""
     wb_worker_timeout_seconds: float = 30.0
+    # Encrypted portfolio traffic archive on GitHub; the private key stays in local Docker config.
+    traffic_github_repo: str = "v88218429-netizen/zzzz"
+    traffic_github_ref: str = "traffic-state"
+    traffic_private_key_path: str = "/app/config/traffic_state_private.pem"
 
     # Reasoning layer. rules requires no LLM/API key. ollama is fully local.
     llm_provider: str = "rules"
