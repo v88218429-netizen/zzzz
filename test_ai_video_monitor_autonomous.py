@@ -123,6 +123,13 @@ class MonitorTests(unittest.TestCase):
         self.assertEqual(len(ideas), 1)
         self.assertEqual(ideas[0]["goal_code"], "BUSINESS")
 
+    def test_manually_audited_video_is_not_reprocessed(self):
+        self.assertTrue(vm.video_is_processed("Проверено по транскрипту"))
+        self.assertTrue(vm.video_is_processed("Транскрипт подтверждён"))
+        self.assertTrue(vm.video_is_processed("Обработано AI"))
+        self.assertFalse(vm.video_is_processed("AI_RETRY_PENDING"))
+        self.assertFalse(vm.video_is_processed("Ошибка транскрипции"))
+
     def test_ai_claim_without_ai_evidence_is_rejected(self):
         transcript = ("[0:02] Автор показывает CPC-рекламу: сравнивает поисковые ставки, "
                       "количество показов и расходы в кабинете продавца, "
