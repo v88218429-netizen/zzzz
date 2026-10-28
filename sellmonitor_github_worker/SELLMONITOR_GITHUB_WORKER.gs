@@ -4275,6 +4275,24 @@ function sellmonitorGithubBatchUpdateRows_(sh, updates, width) {
   flush_();
 }
 
+function sellmonitorGithubClearDuplicateRows_(sh, rowIndexes, width) {
+  var rows = Array.from(new Set(rowIndexes)).sort(function(a,b){return a-b;});
+  if (!rows.length) return 0;
+  var first = rows[0], previous = rows[0];
+  function clear_(start, end) {
+    sh.getRange(start, 1, end - start + 1, width).clearContent();
+  }
+  for (var i = 1; i < rows.length; i++) {
+    if (rows[i] !== previous + 1) {
+      clear_(first, previous);
+      first = rows[i];
+    }
+    previous = rows[i];
+  }
+  clear_(first, previous);
+  return rows.length;
+}
+
 function sellmonitorGithubPublishCabinetAdClusters_(shop, records, observedAt) {
   var bookId = ({
     aa:'1SmsoG8zKx3hbTtTzS-zLekTFiWEQN8eIwHOxXq-5RHo',
@@ -4296,15 +4314,19 @@ function sellmonitorGithubPublishCabinetAdClusters_(shop, records, observedAt) {
   if (headers.some(function(h,i){return h!==String(current[i]||'');}))
     throw new Error('WB_CABINET_CLUSTER_HEADER_MISMATCH');
   function key(row){return [row[0],row[1],row[2],String(row[3]||'').toLowerCase()].join('|');}
-  var seen={};
+  var seen={}, duplicateRowsByKey={};
   if (sh.getLastRow()>1) sh.getRange(2,1,sh.getLastRow()-1,4).getValues().forEach(function(row,i){
     if (!row[0]) return;
     var rawDate=row[0] instanceof Date ? Utilities.formatDate(row[0],ss.getSpreadsheetTimeZone(),'yyyy-MM-dd') : String(row[0]||'');
     var k=[rawDate,row[1],row[2],String(row[3]||'').toLowerCase()].join('|');
-    if (Object.prototype.hasOwnProperty.call(seen,k)) throw new Error('WB_CABINET_CLUSTER_EXISTING_DUPLICATE');
+    if (Object.prototype.hasOwnProperty.call(seen,k)) {
+      if (!duplicateRowsByKey[k]) duplicateRowsByKey[k]=[];
+      duplicateRowsByKey[k].push(i+2);
+      return;
+    }
     seen[k]=i+2;
   });
-  var updates=[],adds=[];
+  var updates=[],adds=[],incomingKeys={};
   records.forEach(function(r){
     // Source CSV order: shop, date, advert, nm, query, 10 stats, source, quality.
     var day=String(r[1]||'');
@@ -4312,11 +4334,17 @@ function sellmonitorGithubPublishCabinetAdClusters_(shop, records, observedAt) {
     var values=[day,Number(r[3]),Number(r[2]),cluster].concat(r.slice(5,17)).concat([observedAt]);
     if (/^[=+\-@]/.test(cluster)) values[3]="'"+cluster;
     var k=key([day,Number(r[3]),Number(r[2]),cluster]);
+    incomingKeys[k]=true;
     var found=seen[k];
     if(found) updates.push({index:found,row:values});
     else adds.push(values);
   });
   sellmonitorGithubBatchUpdateRows_(sh,updates,headers.length);
+  var duplicateRowsToClear=[];
+  Object.keys(incomingKeys).forEach(function(k){
+    (duplicateRowsByKey[k]||[]).forEach(function(index){duplicateRowsToClear.push(index);});
+  });
+  var duplicatesRemoved=sellmonitorGithubClearDuplicateRows_(sh,duplicateRowsToClear,headers.length);
   if (adds.length){
     var first=sh.getLastRow()+1;
     if (sh.getMaxRows()<first+adds.length-1)
@@ -4325,7 +4353,8 @@ function sellmonitorGithubPublishCabinetAdClusters_(shop, records, observedAt) {
   }
   sh.setFrozenRows(1);
   SpreadsheetApp.flush();
-  return {ok:true,shop:shop,written:records.length,added:adds.length,updated:updates.length};
+  return {ok:true,shop:shop,written:records.length,added:adds.length,updated:updates.length,
+          duplicate_rows_removed:duplicatesRemoved};
 }
 
 // Feed existing AIR/Hozyushka campaign diagnostics using official facts,

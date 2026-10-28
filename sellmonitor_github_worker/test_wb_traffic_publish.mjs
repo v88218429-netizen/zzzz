@@ -114,6 +114,7 @@ dashboardIds.forEach(id => {
   dashboardBooks.set(id,{
     getSheetByName:name=>localSheets[name]||null,
     insertSheet(name){const sheet=makeSheet([]);localSheets[name]=sheet;sheets[name]=sheet;return sheet;},
+    setSheet(name,sheet){localSheets[name]=sheet;},
     getSheets:()=>Object.values(localSheets),
     getId:()=>id,
     getSpreadsheetTimeZone:()=> 'Europe/Moscow',
@@ -361,6 +362,25 @@ const cpcResult=sandbox.sellmonitorGithubPublishAdClusters_({...clusterPayload,r
 assert.equal(cpcResult.added,1);
 assert.equal(sheets['18_AD_CLUSTERS_DAY'].values[2][5],'','unavailable impressions must stay blank');
 assert.equal(sheets['18_AD_CLUSTERS_DAY'].values[2][12],'','unavailable CTR must stay blank');
+
+const aaClusterHeaders = ['Дата','Артикул WB','Кампания','Рекламный поисковый кластер',
+  'Показы','Клики','Корзины','Заказы','Единиц','Расход ₽',
+  'Средняя позиция рекламы','CTR %','CPC ₽','CPM ₽',
+  'Источник','Достоверность','Время наблюдения'];
+const aaClusterSheet = makeSheet(aaClusterHeaders);
+const aaDuplicateRow = ['2026-10-23',327126800,35493186,'ваза глубокая',3,0,0,0,0,0.48,2.33,0,0,160,
+  'WB /adv/v1/normquery/stats','FACT_AD_CLUSTER_DAY_NOT_SEARCH_PHRASE','2026-10-26T17:22:42.946183+03:00'];
+aaClusterSheet.values.push(aaDuplicateRow.slice(),aaDuplicateRow.slice());
+dashboardBooks.get(dashboardIds[1]).setSheet('18_WB_Рекламные_кластеры',aaClusterSheet);
+const aaClusterRow = ['aa','2026-10-23',35493186,327126800,'ваза глубокая',
+                      4,0,0,0,0,0.64,0,0,160,400,
+                      'WB /adv/v1/normquery/stats','FACT_AD_CLUSTER_DAY_NOT_SEARCH_PHRASE'];
+const aaClusterReplay = sandbox.sellmonitorGithubPublishAdClusters_({...clusterPayload,cabinet:'aa',rows:[aaClusterRow]});
+assert.equal(aaClusterReplay.cabinet_publish.duplicate_rows_removed,1,
+  'authoritative replay must clear only duplicate cabinet rows covered by the current facts');
+assert.equal(aaClusterSheet.values[1][9],0.64,'the canonical duplicate row receives the current WB fact');
+assert.ok(aaClusterSheet.values[2].every(value=>value===''),
+  'the superseded duplicate row is cleared without shifting unrelated sheet rows');
 
 
 const campaignRow=['yv',123,456,'=Campaign 1',9,'manual','cpc','RUB',
