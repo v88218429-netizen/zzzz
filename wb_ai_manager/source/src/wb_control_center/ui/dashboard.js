@@ -1,4 +1,4 @@
-const state = { data: null, eventFilter: 'important', inventoryFilter: 'shortage', decisionFilter: 'priority', page: location.hash.replace('#','') || 'overview', periodFrom: null, periodTo: null, periodAuditRequestedKey: null, periodPollTimer: null };
+const state = { data: null, eventFilter: 'important', inventoryFilter: 'shortage', decisionFilter: 'priority', selectedStore: 'all', priceProductKey: '', page: location.hash.replace('#','') || 'overview', periodFrom: null, periodTo: null, periodAuditRequestedKey: null, periodPollTimer: null };
 const $ = (id) => document.getElementById(id);
 const qa = (sel, root=document) => [...root.querySelectorAll(sel)];
 
@@ -365,8 +365,8 @@ function initNav(){
 function setPage(page){
   if(!document.querySelector(`[data-page-panel="${page}"]`)) page='overview'; state.page=page; location.hash=page==='overview'?'':page;
   qa('.nav-item').forEach(b=>b.classList.toggle('active',b.dataset.page===page)); qa('.page').forEach(p=>p.classList.toggle('active',p.dataset.pagePanel===page));
-  const titles={overview:['Операционный центр','Обзор магазина'],stores:['Портфель','Магазины и реальные факты'],decisions:['Решения','Что конкретно делать'],control:['Контроль решений','История, проверка и обучение'],advertising:['Реклама','Рекламная аналитика'],policy:['Редактор правил','Управление логикой агента'],inventory:['Логистика','Остатки и поставки'],search:['Видимость','Поиск и карточки'],finance:['Экономика','Финансы и расходы'],customers:['Качество','Клиенты и возвраты'],news:['Информация WB','Новости портала продавца'],services:['Подписки WB','Джем и платные опции'],connections:['Интеграции','Подключения и источники'],knowledge:['Методология','База знаний и правила'],agents:['Система','Агенты и расписание']};
-  const t=titles[page]||titles.overview; $('page-kicker').textContent=t[0]; $('page-title').textContent=t[1]; $('sidebar').classList.remove('open');
+  const titles={overview:['Операционный центр','Обзор магазина'],stores:['Портфель','Магазины и реальные факты'],decisions:['Решения','Что конкретно делать'],control:['Контроль решений','История, проверка и обучение'],advertising:['Реклама','Рекламная аналитика'],funnel:['Продажи','Воронка по дням и товарам'],price:['Экономика','Сценарий цены и прибыли'],policy:['Редактор правил','Управление логикой агента'],inventory:['Логистика','Остатки и поставки'],search:['Видимость','Поиск и карточки'],finance:['Экономика','Финансы и расходы'],customers:['Качество','Клиенты и возвраты'],news:['Информация WB','Новости портала продавца'],services:['Подписки WB','Джем и платные опции'],connections:['Интеграции','Подключения и источники'],knowledge:['Методология','База знаний и правила'],agents:['Система','Агенты и расписание']};
+  const t=titles[page]||titles.overview; $('page-kicker').textContent=t[0]; $('page-title').textContent=t[1]; $('sidebar').classList.remove('open'); if(page==='price'&&state.data)renderPriceCalculator();
 }
 
 async function fetchData(showLoader=false){
@@ -427,7 +427,7 @@ function renderAll(){
   const ad=adSummary(); $('metric-ad-spend').textContent=ad.error&&!ad.rows.length?'—':rub(ad.spend); const ratingVal=sellerRating(); $('metric-rating').textContent=ratingVal==null?'Недоступен':num(ratingVal,2);
   renderPeriodAudit();
   if($('metric-ad-period')) $('metric-ad-period').textContent=d.period_audit?.ready?(d.period?.label||'за выбранный период'):'ожидает расчёта периода';
-  renderExecutive(); renderEvents(); renderRecommendations(); renderDecisions(); renderDecisionControl(); renderDomains(); renderPortfolio(); renderConnections(); renderAdvertising(); renderPolicyStudio(); renderInventory(); renderSearch(); renderFinance(); renderCustomers(); renderPortalNews(); renderSellerServices(); renderKnowledge(); renderAgents();
+  renderExecutive(); renderEvents(); renderRecommendations(); renderDecisions(); renderDecisionControl(); renderDomains(); renderPortfolio(); renderConnections(); renderAdvertising(); renderTraffic(); renderFunnel(); if(state.page==='price'&&!document.activeElement.closest('#price-inputs'))renderPriceCalculator(); renderPolicyStudio(); renderInventory(); renderSearch(); renderFinance(); renderCustomers(); renderPortalNews(); renderSellerServices(); renderKnowledge(); renderAgents();
 }
 function snap(source,key){ return state.data?.snapshots?.[source]?.[key] || null; }
 function sellerRating(){
@@ -570,6 +570,12 @@ function pf(){ return state.data?.portfolio||{}; }
 
 function renderPortfolio(){
   const p=pf(), all=p.portfolio||{}, current=!!p.current_data;
+  const traffic=state.data?.traffic||{};
+  const trafficStores=traffic.shops||[];
+  const selected=state.selectedStore==='all'?null:trafficStores.find(x=>x.id===state.selectedStore);
+  const selectedFinance=(p.stores||[]).find(x=>String(x.id)===state.selectedStore);
+  const displayed=selectedFinance||all;
+  const visibleStores=state.selectedStore==='all'?(p.stores||[]):(p.stores||[]).filter(x=>String(x.id)===state.selectedStore);
   if($('portfolio-origin')) $('portfolio-origin').textContent=current?'ПОДКЛЮЧЁННЫЕ ДАННЫЕ':'АРХИВНЫЙ СРЕЗ';
   if($('portfolio-period')) $('portfolio-period').textContent=p.period||'период не указан';
   const truth=$('portfolio-truth-banner');
@@ -577,28 +583,42 @@ function renderPortfolio(){
     truth.classList.toggle('hidden',current);
     truth.innerHTML=current?'':`<strong>Это не текущие показатели.</strong><span>${esc(p.stale_reason||'Показан последний сохранённый срез. Он не участвует в текущих денежных решениях.')}</span><small>Период архива: ${esc(p.period||'—')}</small>`;
   }
-  if($('pf-orders')) $('pf-orders').textContent=current?rub(all.orders_rub):'—';
-  if($('pf-buyouts')) $('pf-buyouts').textContent=current?rub(all.buyouts_rub):'—';
-  if($('pf-profit')) $('pf-profit').textContent=current?rub(all.profit_rub):'—';
-  if($('pf-margin')) $('pf-margin').textContent=current?pct(all.margin_pct):'—';
-  if($('pf-roi')) $('pf-roi').textContent=current?`ROI ${pct(all.roi_pct)}`:'Нет свежих данных';
-  if($('pf-ads')) $('pf-ads').textContent=current?rub(all.ad_spend_rub):'—';
-  if($('pf-drr')) $('pf-drr').textContent=current?`ДРР ${pct(all.drr_pct)}`:'Нет свежих данных';
-  if($('pf-orders-change')) $('pf-orders-change').textContent=current&&Number.isFinite(Number(all.orders_change_pct))?`${Number(all.orders_change_pct)>=0?'+':''}${pct(all.orders_change_pct)} к прошлому периоду`:'—';
-  if($('pf-profit-change')) $('pf-profit-change').textContent=current&&Number.isFinite(Number(all.profit_change_pct))?`${Number(all.profit_change_pct)>=0?'+':''}${pct(all.profit_change_pct)} к прошлому периоду`:'—';
+  if($('portfolio-store-select')) $('portfolio-store-select').value=state.selectedStore;
+  if($('pf-orders')) $('pf-orders').textContent=current?rub(displayed.orders_rub):'—';
+  if($('pf-buyouts')) $('pf-buyouts').textContent=current?rub(displayed.buyouts_rub):'—';
+  if($('pf-profit')) $('pf-profit').textContent=current?rub(displayed.profit_rub):'—';
+  if($('pf-margin')) $('pf-margin').textContent=current?pct(displayed.margin_pct):'—';
+  if($('pf-roi')) $('pf-roi').textContent=current?`ROI ${pct(displayed.roi_pct)}`:'Нет свежих данных';
+  if($('pf-ads')) $('pf-ads').textContent=selected?rub(selected.summary?.spend_rub):current?rub(displayed.ad_spend_rub):'—';
+  if($('pf-drr')) $('pf-drr').textContent=selected?`WB ДРР ${pct(selected.summary?.drr_pct)}`:current?`ДРР ${pct(displayed.drr_pct)}`:'Нет свежих данных';
+  if($('pf-orders-change')) $('pf-orders-change').textContent=current&&Number.isFinite(Number(displayed.orders_change_pct))?`${Number(displayed.orders_change_pct)>=0?'+':''}${pct(displayed.orders_change_pct)} к прошлому периоду`:'—';
+  if($('pf-profit-change')) $('pf-profit-change').textContent=current&&Number.isFinite(Number(displayed.profit_change_pct))?`${Number(displayed.profit_change_pct)>=0?'+':''}${pct(displayed.profit_change_pct)} к прошлому периоду`:'—';
 
-  const stores=p.stores||[];
+  const stores=visibleStores;
   if($('stores-grid')) $('stores-grid').innerHTML=stores.length?stores.map(x=>{
     const cls=current?(x.status==='critical'?'critical':x.status==='watch'?'watch':''):'';
     const badge=current?(x.status==='critical'?['bad','Требует внимания']:x.status==='watch'?['warn','Наблюдать']:['ok','Штатно']):['neutral','АРХИВ'];
-    return `<div class="store-portfolio-card ${cls}"><div class="store-card-head"><div><strong>${esc(x.name)}</strong><div class="store-source">${esc(x.source||'')}</div></div><span class="status-tag ${badge[0]}">${badge[1]}</span></div><div class="store-stat-grid"><div class="store-stat"><span>Заказы</span><b>${rub(x.orders_rub)}</b></div><div class="store-stat"><span>Выкупы</span><b>${rub(x.buyouts_rub)}</b></div><div class="store-stat"><span>Прибыль</span><b>${rub(x.profit_rub)}</b></div><div class="store-stat"><span>Маржа / ROI</span><b>${pct(x.margin_pct)} · ${pct(x.roi_pct)}</b></div><div class="store-stat"><span>Реклама</span><b>${rub(x.ad_spend_rub)}</b></div><div class="store-stat"><span>ДРР</span><b>${pct(x.drr_pct)}</b></div></div><p class="store-note">${current?'Срез':'Архив'}: ${esc(x.freshness||p.period||'—')}. ${esc(x.note||'')}</p></div>`;
+    const tr=trafficStores.find(t=>t.id===x.id); const ad=tr?.summary||{};
+    return `<div class="store-portfolio-card ${cls}" data-store-id="${esc(x.id)}" role="button" tabindex="0"><div class="store-card-head"><div><strong>${esc(x.name)}</strong><div class="store-source">${esc(x.source||'')}</div></div><span class="status-tag ${badge[0]}">${badge[1]}</span></div><div class="store-stat-grid"><div class="store-stat"><span>Заказы</span><b>${rub(x.orders_rub)}</b></div><div class="store-stat"><span>Выкупы</span><b>${rub(x.buyouts_rub)}</b></div><div class="store-stat"><span>Прибыль</span><b>${rub(x.profit_rub)}</b></div><div class="store-stat"><span>Маржа / ROI</span><b>${pct(x.margin_pct)} · ${pct(x.roi_pct)}</b></div><div class="store-stat"><span>Реклама WB</span><b>${ad.spend_rub!=null?rub(ad.spend_rub):rub(x.ad_spend_rub)}</b></div><div class="store-stat"><span>WB ДРР</span><b>${ad.drr_pct!=null?pct(ad.drr_pct):pct(x.drr_pct)}</b></div></div><p class="store-note">${current?'Срез':'Архив'}: ${esc(x.freshness||p.period||'—')}. Нажми, чтобы открыть кабинет и его трафик. ${esc(x.note||'')}</p></div>`;
   }).join(''):empty('Нет портфельных фактов.');
+
+  if($('portfolio-traffic-grid')) $('portfolio-traffic-grid').innerHTML=trafficStores.length?trafficStores.map(x=>{const c=x.coverage||{},bad=c.ok===false;return `<div class="store-portfolio-card"><div class="store-card-head"><strong>${esc(x.name)}</strong><span class="status-tag ${bad?'bad':x.ads?.length||x.funnel?.length?'ok':'neutral'}">${bad?'ОШИБКА ИСТОЧНИКА':x.ads?.length||x.funnel?.length?'ЕСТЬ ДАННЫЕ':'ПУСТОЙ ОТЧЁТ'}</span></div><div class="store-stat-grid"><div class="store-stat"><span>Расход / заказы рекламы</span><b>${rub(x.summary?.spend_rub)} / ${num(x.summary?.orders)}</b></div><div class="store-stat"><span>Выручка WB / ДРР</span><b>${rub(x.summary?.order_sum_rub)} / ${pct(x.summary?.drr_pct)}</b></div><div class="store-stat"><span>CTR / CPC / CPA</span><b>${pct(x.summary?.ctr_pct)} / ${rub(x.summary?.cpc_rub)} / ${rub(x.summary?.cpa_rub)}</b></div><div class="store-stat"><span>Строки реклама / воронка</span><b>${num(x.ads?.length)} / ${num(x.funnel?.length)}</b></div><div class="store-stat"><span>Кампании / товары в воронке</span><b>${num(c.campaigns)} / ${num(c.funnel_nm_ids)}</b></div></div><p class="store-note">${esc(x.shop_code)} · реклама ${esc((traffic.status?.period||[]).join(' — ')||'—')} · воронка ${esc((traffic.status?.funnel_period||[]).join(' — ')||'—')}${bad?` · ${esc(JSON.stringify(c.errors||{}))}`:''}</p></div>`;}).join(''):empty(traffic.error||'Многомагазинный сборщик рекламы и воронки не подключён.');
+  if($('traffic-updated')) $('traffic-updated').textContent=traffic.retrieved_at?`сборщик обновлён ${time(traffic.retrieved_at)} · статус ${traffic.health?.status||'—'}`:'нет актуального чтения сборщика';
+  if($('portfolio-traffic-note')) $('portfolio-traffic-note').textContent=traffic.error||`Источник: ${traffic.source||'—'} · период ${traffic.period?.from||'—'} — ${traffic.period?.to||'—'} · состояние: ${traffic.health?.status||'нет данных'}.`;
 
   if(!current){
     if($('own27-grid')) $('own27-grid').innerHTML=empty('Живой операционный срез не подключён. Архивные остатки и экономика не показываются как текущие.');
     if($('unit-alerts')) $('unit-alerts').innerHTML=empty('Архивная юнит-экономика исключена из текущих решений.');
     if($('ff-grid')) $('ff-grid').innerHTML=empty('Архивный снимок фулфилмента скрыт из текущего режима.');
     if($('ff-snapshot-date')) $('ff-snapshot-date').textContent='нет свежего снимка';
+    return;
+  }
+
+  if(state.selectedStore!=='all'){
+    if($('own27-grid')) $('own27-grid').innerHTML=empty('В текущем ответе нет проверенного среза остатков и заказов именно для выбранного магазина. Общие данные не приписываются отдельному кабинету.');
+    if($('unit-alerts')) $('unit-alerts').innerHTML=empty('Юнит-экономика не показана без подтверждённой привязки товара к этому кабинету.');
+    if($('ff-grid')) $('ff-grid').innerHTML=empty('Отдельный складской срез по выбранному магазину не получен.');
+    if($('ff-snapshot-date')) $('ff-snapshot-date').textContent='нет подтверждённого среза';
     return;
   }
 
@@ -713,6 +733,90 @@ function renderAdvertising(){
   $('ads-table').innerHTML=a.rows.length?a.rows.map(r=>{ const id=r.advertId??r.advert_id??r.id; const sp=Number(r.sum??r.spend??0)||0, or=Number(r.orders??r.ordersCount??0)||0, rev=Number(r.sum_price??r.revenue??0)||0, drr=rev>0?sp/rev*100:null, ctr=Number(r.ctr), cpc=Number(r.cpc); const related=plans.filter(p=>String(p.entity_id||'').split(':')[0]===String(id)); const action=related.length===1?related[0].recommended_actions?.[0]?.action:null; const advice=related.length>1?`${related.length} плана по товарам ниже`:action||'Нет проверенного плана по товару'; const nms=extractList(r?.nm_settings||r?.nmSettings||[]).map(x=>x.nm_id??x.nmId??x.nmID).filter(x=>!missing(x)); const arts=[...new Set(nms.map(entityName).filter(Boolean))]; return `<tr><td><strong>${esc(campaignLabel(id))}</strong><br><span class="muted">кампания ID ${esc(id??'—')}</span></td><td>${rub(sp)}</td><td>${num(or)}</td><td>${rub(rev)}</td><td>${pct(drr)}</td><td>${Number.isFinite(ctr)?pct(ctr):'—'}</td><td>${Number.isFinite(cpc)?rub(cpc):'—'}</td><td>${esc(humanizeText(advice))}</td></tr>`; }).join(''):`<tr><td colspan="8">${empty(a.error?'WB временно ограничил статистику рекламы. Нули не считаются фактом; система повторит чтение автоматически.':'Нет рекламных данных. Запусти проверку.')}</td></tr>`;
   const ev=(state.data.events||[]).filter(e=>['advertising_monitor','advertising_optimizer'].includes(e.agent)&&['critical','warning'].includes(e.severity)).slice(0,8); $('ads-signals').innerHTML=ev.length?ev.map(signalHtml).join(''):empty('Проблемных рекламных сигналов сейчас нет.');
   if($('ad-control-plans')) $('ad-control-plans').innerHTML=plans.length?plans.map(adPlanHtml).join(''):empty('Числовых планов пока нет. Запусти полный аудит.');
+}
+
+function renderTraffic(){
+  const t=state.data?.traffic||{}, idMap={AP:'sanych',AA:'air',YV:'hozyushka'}, labels={ap:'Саныч',aa:'AIR',yv:'Хозяюшка'};
+  const select=$('traffic-store-select'); if(select) select.value=state.selectedStore;
+  const selected=state.selectedStore;
+  const keep=row=>selected==='all'||idMap[String(row.shop||'').toUpperCase()]===selected;
+  const ads=(t.ads||[]).filter(keep), funnel=(t.funnel||[]).filter(keep), organic=(t.organic||[]).filter(keep);
+  const sum=(rows,key)=>{if(!rows.length)return null;const values=rows.map(r=>missing(r[key])?null:Number(r[key]));return values.some(v=>v===null||!Number.isFinite(v))?null:values.reduce((a,b)=>a+b,0);};
+  const relevantShops=(t.shops||[]).filter(s=>selected==='all'||s.id===selected);
+  const coverageComplete=relevantShops.length>0&&relevantShops.every(s=>s.coverage?.ok===true);
+  const views=coverageComplete?sum(ads,'views'):null, clicks=coverageComplete?sum(ads,'clicks'):null, spend=coverageComplete?sum(ads,'spend_rub'):null, orders=coverageComplete?sum(ads,'orders'):null, revenue=coverageComplete?sum(ads,'order_sum_rub'):null;
+  const kpis=[['Показы',num(views)],['Переходы / CTR',`${num(clicks)} / ${pct(views?clicks/views*100:null)}`],['Расход / CPC',`${rub(spend)} / ${rub(clicks?spend/clicks:null)}`],['Заказы / ДРР',`${num(orders)} / ${pct(revenue?spend/revenue*100:null)}`]];
+  if($('traffic-kpis')) $('traffic-kpis').innerHTML=kpis.map(([a,b])=>`<article class="metric-card"><span>${esc(a)}</span><strong>${esc(b)}</strong><small>${selected==='all'?'все кабинеты':esc(labels[Object.keys(idMap).find(k=>idMap[k]===selected)?.toLowerCase()]||selected)}</small></article>`).join('');
+  const health=t.health||{};
+  if($('traffic-source-note')) $('traffic-source-note').textContent=t.error?`Источник недоступен: ${t.error}. Показатели не подменены нулями.`:`Источник: ${t.source||'—'} · ${t.period?.from||'—'} — ${t.period?.to||'—'} · состояние ${health.status||'неизвестно'} · ${relevantShops.map(s=>`${s.name}: ${s.coverage?.status||'не проверено'}`).join(' · ')} · обновлён ${t.retrieved_at?time(t.retrieved_at):'неизвестно'}. Сводные суммы скрыты, пока каждый выбранный кабинет не подтвердил покрытие. Значения рекламы относятся к атрибуции WB; это не прибыль магазина.`;
+  if($('traffic-ads-table')) $('traffic-ads-table').innerHTML=ads.length?ads.slice(0,500).map(r=>{const drr=Number(r.order_sum_rub)>0?Number(r.spend_rub)/Number(r.order_sum_rub)*100:null,ctr=Number(r.views)>0?Number(r.clicks)/Number(r.views)*100:null,cpc=Number(r.clicks)>0?Number(r.spend_rub)/Number(r.clicks):null;return `<tr><td>${esc(labels[String(r.shop||'').toLowerCase()]||r.shop||'—')}</td><td>${esc(r.date||'—')}</td><td>${esc(r.seller_article||r.nm_id||'—')}</td><td>${num(r.views)}</td><td>${num(r.clicks)}</td><td>${num(r.atbs)}</td><td>${num(r.orders)}</td><td>${rub(r.spend_rub)}</td><td>${rub(r.order_sum_rub)}</td><td>${pct(drr)}</td><td>${pct(ctr)}</td><td>${rub(cpc)}</td><td>${esc([r.source,r.quality].filter(Boolean).join(' · ')||'—')}</td></tr>`;}).join(''):`<tr><td colspan="13">${esc(t.error||'За выбранный период строки рекламы не получены; это не нулевой расход.')}</td></tr>`;
+  if($('traffic-funnel-table')) $('traffic-funnel-table').innerHTML=funnel.length?funnel.slice(0,500).map(r=>{const opens=Number(r.open_count), carts=Number(r.cart_count), ord=Number(r.order_count);return `<tr><td>${esc(labels[String(r.shop||'').toLowerCase()]||r.shop||'—')}</td><td>${esc(r.date||'—')}</td><td>${esc(r.vendor_code||r.nm_id||'—')}</td><td>${num(r.open_count)}</td><td>${num(r.cart_count)}</td><td>${num(r.order_count)}</td><td>${rub(r.order_sum_rub)}</td><td>${pct(opens>0?carts/opens*100:null)}</td><td>${pct(carts>0?ord/carts*100:null)}</td></tr>`;}).join(''):`<tr><td colspan="9">${esc(t.error||'Строки воронки за выбранный период не получены; это не нулевые открытия и заказы.')}</td></tr>`;
+  const orgRows=organic.filter(r=>r.coverage_status&&r.coverage_status!=='complete');
+  if($('traffic-organic-table')) $('traffic-organic-table').innerHTML=organic.length?organic.slice(0,300).map(r=>`<tr><td>${esc(labels[String(r.shop||'').toLowerCase()]||r.shop||'—')}</td><td>${esc(r.date||'—')}</td><td>${esc(r.vendor_code||r.nm_id||'—')}</td><td>${num(r.total_open_count)}</td><td>${num(r.paid_clicks)}</td><td>${num(r.organic_clicks)}</td><td>${esc(r.coverage_status||'неизвестно')}</td><td>${num(r.campaigns_without_period_statistics)}</td></tr>`).join(''):`<tr><td colspan="8">Органический отчёт не передан источником.</td></tr>`;
+  if($('traffic-organic-note')) $('traffic-organic-note').textContent=organic.length?`Органический трафик: ${num(organic.length)} строк · неполное покрытие: ${num(orgRows.length)}. Доли органики показываются только вместе с состоянием покрытия; кампании без статистики не считаются нулём.`:'Органический/рекламный трафик по источнику пока не опубликован сборщиком. Нет данных — не ноль.';
+}
+
+function renderFunnel(){
+  const t=state.data?.traffic||{}, labels={ap:'Саныч',aa:'AIR',yv:'Хозяюшка'}, idMap={AP:'sanych',AA:'air',YV:'hozyushka'};
+  const select=$('funnel-product-select'); if(!select) return;
+  if($('funnel-store-select')) $('funnel-store-select').value=state.selectedStore;
+  const rows=(t.funnel||[]).filter(r=>state.selectedStore==='all'||idMap[String(r.shop||'').toUpperCase()]===state.selectedStore);
+  const products=[...new Map(rows.map(r=>[String(r.nm_id||r.vendor_code||''),{id:String(r.nm_id||r.vendor_code||''),label:String(r.vendor_code||r.nm_id||'Товар без артикула')}])).values()].filter(x=>x.id).sort((a,b)=>a.label.localeCompare(b.label,'ru'));
+  const prior=select.value; select.innerHTML='<option value="">Все товары</option>'+products.map(x=>`<option value="${esc(x.id)}">${esc(x.label)}</option>`).join(''); if(products.some(x=>x.id===prior)) select.value=prior;
+  const chosen=select.value; const visible=rows.filter(r=>!chosen||String(r.nm_id||r.vendor_code||'')===chosen);
+  const total=k=>{if(!visible.length)return null;const v=visible.map(r=>missing(r[k])?null:Number(r[k]));return v.some(x=>x===null||!Number.isFinite(x))?null:v.reduce((a,b)=>a+b,0);};
+  const opens=total('open_count'), carts=total('cart_count'), orders=total('order_count'), revenue=total('order_sum_rub');
+  $('funnel-kpis').innerHTML=[['Открытия карточки',num(opens)],['Добавили в корзину',num(carts)],['Заказы WB',num(orders)],['Выручка WB',rub(revenue)]].map(([a,b])=>`<article class="metric-card"><span>${esc(a)}</span><strong>${esc(b)}</strong><small>${state.selectedStore==='all'?'все кабинеты':esc(state.selectedStore)}</small></article>`).join('');
+  const st=t.status||{}, coverage=Object.entries(st.shops||{}).filter(([k])=>state.selectedStore==='all'||idMap[k.toUpperCase()]===state.selectedStore);
+  const errors=coverage.filter(([,v])=>!v.ok).map(([k,v])=>`${k}: ${JSON.stringify(v.errors||v.error||'ошибка')}`);
+  $('funnel-source-status').innerHTML=`<strong>Источник: ${esc(t.source||'нет данных')}</strong><span>Период отчёта ${esc((st.funnel_period||[]).join(' — ')||'не указан')} · прочитан ${esc(t.retrieved_at?time(t.retrieved_at):'неизвестно')} · кабинеты с ошибками: ${errors.length?esc(errors.join(' | ')):'не обнаружены'}.</span>`;
+  const byDay={}; for(const r of visible){const day=String(r.date||'').slice(0,10); if(!day)continue; const x=byDay[day]||(byDay[day]={open:0,cart:0,orders:0,revenue:0,complete:true,source:new Set()}); for(const [target,key] of [['open','open_count'],['cart','cart_count'],['orders','order_count'],['revenue','order_sum_rub']]){if(missing(r[key])||!Number.isFinite(Number(r[key])))x.complete=false;else x[target]+=Number(r[key]);} if(r.source)x.source.add(r.source);}
+  const days=Object.entries(byDay).sort(([a],[b])=>b.localeCompare(a));
+  $('funnel-daily-table').innerHTML=days.length?days.map(([day,x])=>`<tr><td>${esc(day)}</td><td>${x.complete?num(x.open):'неполные данные'}</td><td>${x.complete?num(x.cart):'неполные данные'}</td><td>${x.complete?num(x.orders):'неполные данные'}</td><td>${x.complete&&x.open>0?pct(x.cart/x.open*100):'—'}</td><td>${x.complete&&x.cart>0?pct(x.orders/x.cart*100):'—'}</td><td>${esc([...x.source].join(', ')||'WB Analytics')}</td></tr>`).join(''):`<tr><td colspan="7">${esc(t.error||'Строк воронки не получено. Это не нулевые продажи.')}</td></tr>`;
+  $('funnel-product-table').innerHTML=visible.length?visible.slice(0,1000).map(r=>{const o=Number(r.open_count),c=Number(r.cart_count),n=Number(r.order_count);return `<tr><td>${esc(labels[String(r.shop||'').toLowerCase()]||r.shop||'—')}</td><td>${esc(r.date||'—')}</td><td>${esc(r.vendor_code||r.nm_id||'—')}</td><td>${num(r.open_count)}</td><td>${num(r.cart_count)}</td><td>${num(r.order_count)}</td><td>${rub(r.order_sum_rub)}</td><td>${o>0?pct(c/o*100):'—'}</td><td>${c>0?pct(n/c*100):'—'}</td></tr>`;}).join(''):`<tr><td colspan="9">${esc(t.error||'Строк воронки не получено. Отчёт мог не завершиться или не содержать товаров.')}</td></tr>`;
+}
+
+function renderPriceCalculator(){
+  const selector=$('price-product-select'); if(!selector)return;
+  const products=state.data?.portfolio?.own_27?.products||[], storeId=v=>{const s=String(v||'').toLowerCase();return s.includes('саныч')?'sanych':s.includes('air')||s.includes('аир')?'air':s.includes('хозяюш')?'hozyushka':'';};
+  const visible=products.filter(p=>state.selectedStore==='all'||storeId(p.cabinet)===state.selectedStore);
+  const entries=visible.map(p=>({p,key:`${p.cabinet||''}|${p.sku}`})).sort((a,b)=>String(a.p.name||a.p.sku).localeCompare(String(b.p.name||b.p.sku),'ru'));
+  const previous=state.priceProductKey; selector.innerHTML='<option value="">Выбери товар</option>'+entries.map(x=>`<option value="${esc(x.key)}">${esc(x.p.name||x.p.sku)} · ${esc(x.p.cabinet||'кабинет не указан')}</option>`).join('');
+  if(entries.some(x=>x.key===previous))state.priceProductKey=previous;else state.priceProductKey=entries[0]?.key||''; selector.value=state.priceProductKey;
+  if($('price-store-select')) $('price-store-select').value=state.selectedStore;
+  const entry=entries.find(x=>x.key===state.priceProductKey), product=entry?.p;
+  if(!product){$('price-inputs').innerHTML=empty('Нет товаров с доступной привязкой к источнику себестоимости.');$('price-results').innerHTML=empty('Сценарий не рассчитан.');$('price-source-note').textContent='Товар и расходы не получены из текущего среза.';return;}
+  const storageKey=`wb-price-scenario-v1:${encodeURIComponent(state.priceProductKey)}`;
+  let saved={};try{saved=JSON.parse(localStorage.getItem(storageKey)||'{}')||{};}catch{}
+  const fees=[
+    {key:'commission_pct',label:'Комиссия WB',unit:'%',type:'rate'},
+    {key:'logistics_total_rub',label:'Логистика',unit:'₽/шт',type:'fixed'},
+    {key:'storage_rub',label:'Хранение',unit:'₽/шт',type:'fixed'},
+    {key:'acceptance_rub',label:'Приёмка',unit:'₽/шт',type:'fixed'},
+    {key:'constructor_pct',label:'Платные опции WB',unit:'%',type:'rate'},
+    {key:'acquiring_pct',label:'Эквайринг',unit:'%',type:'rate'},
+    {key:'tax_total_rub',label:'Налог',unit:'₽/шт',type:'fixed'},
+    {key:'ad_cost_rub',label:'Реклама',unit:'₽/шт',type:'fixed'},
+    {key:'returns_cost_rub',label:'Возвраты',unit:'₽/шт',type:'fixed'},
+    {key:'penalties_rub',label:'Штрафы и удержания',unit:'₽/шт',type:'fixed'},
+  ];
+  const base={price_rub:product.price_rub??product.price_client_rub,cost_rub:product.cost_rub};
+  for(const f of fees)base[f.key]=product[f.key];
+  const rowHtml=(key,label,unit,required=false)=>{const existing=saved.fields?.[key], initial=existing?existing.value:base[key], active=required||(existing?!!existing.enabled:!missing(base[key]));return `<label class="price-field ${required?'required':''}"><span>${esc(label)} ${required?'<b>обязательно</b>':''}</span><div>${!required?`<input type="checkbox" data-price-enabled="${esc(key)}" ${active?'checked':''} aria-label="Включить ${esc(label)}">`:''}<input type="number" step="0.01" data-price-field="${esc(key)}" value="${missing(initial)?'':esc(initial)}" placeholder="${missing(base[key])?'нет данных':String(base[key])}"><small>${unit}</small></div></label>`;};
+  $('price-inputs').innerHTML=rowHtml('price_rub','Цена продажи','₽/шт',true)+rowHtml('cost_rub','Себестоимость','₽/шт',true)+fees.map(f=>rowHtml(f.key,f.label,f.unit)).join('');
+  $('price-source-note').textContent=`Товар: ${product.name||product.sku} · магазин: ${product.cabinet||'не указан'} · цена и расходы из ${product.unit_economics_source||'рабочего источника'} · режим юнит-экономики: ${product.unit_economics_role||'не определён'}. Поля сценария сохранены локально в этом браузере.`;
+  const fields={};qa('#price-inputs [data-price-field]').forEach(input=>{const key=input.dataset.priceField, toggle=$(`#price-inputs [data-price-enabled="${CSS.escape(key)}"]`);fields[key]={value:input.value===''?null:Number(input.value),enabled:!toggle||toggle.checked};});
+  const price=fields.price_rub.value,cost=fields.cost_rub.value,missingFees=fees.filter(f=>fields[f.key].enabled&&fields[f.key].value===null),included=[],excluded=[];let fixed=0,rates=0;
+  if(price!==null&&cost!==null)for(const f of fees){const x=fields[f.key];if(!x.enabled){excluded.push(f.label);continue;}if(x.value===null)continue;if(f.type==='rate'){rates+=x.value;included.push(`${f.label} ${num(x.value,2)}%`);}else{fixed+=x.value;included.push(`${f.label} ${rub(x.value)}`);}}
+  const ready=price!==null&&cost!==null&&!missingFees.length&&rates<100, profit=ready?price-cost-fixed-price*rates/100:null, margin=ready&&price>0?profit/price*100:null, breakeven=ready?(cost+fixed)/(1-rates/100):null;
+  $('price-results').innerHTML=`<div class="price-result-main"><span>Прибыль в сценарии</span><strong>${rub(profit)}</strong><small>${pct(margin)} маржи · цена безубыточности ${rub(breakeven)}</small></div><div class="price-result-lines"><div><span>Цена сценария</span><b>${rub(price)}</b></div><div><span>Себестоимость</span><b>${rub(cost)}</b></div><div><span>Расходы включены</span><b>${esc(included.join(' · ')||'нет')}</b></div><div><span>Не хватает значений</span><b>${esc(missingFees.map(x=>x.label).join(', ')||'нет')}</b></div><div><span>Исключено из сценария</span><b>${esc(excluded.join(', ')||'нет')}</b></div></div>${!ready?`<div class="source-note">Расчёт не готов: ${price===null?'задай цену; ':''}${cost===null?'задай себестоимость; ':''}${missingFees.length?`введи включённые расходы: ${missingFees.map(x=>x.label).join(', ')}; `:''}${rates>=100?'сумма процентных расходов не может быть 100% или выше.':''}</div>`:'<div class="source-note">Это локальный сценарий, не факт WB. Источник исходных данных не изменён.</div>'}`;
+  $('price-saved-note').textContent=saved.updated_at?`Последнее сохранение этого сценария: ${time(saved.updated_at)}.`:'Сценарий ещё не сохранён.';
+}
+
+function persistPriceScenario(){
+  if(!state.priceProductKey)return;
+  const fields={};qa('#price-inputs [data-price-field]').forEach(input=>{const key=input.dataset.priceField,toggle=$(`#price-inputs [data-price-enabled="${CSS.escape(key)}"]`);fields[key]={value:input.value===''?null:Number(input.value),enabled:!toggle||toggle.checked};});
+  try{localStorage.setItem(`wb-price-scenario-v1:${encodeURIComponent(state.priceProductKey)}`,JSON.stringify({fields,updated_at:new Date().toISOString()}));}catch{}
 }
 
 function adPlanHtml(d){
@@ -987,6 +1091,11 @@ if($('refresh-decisions')) $('refresh-decisions').addEventListener('click',refre
 if($('refresh-sheets')) $('refresh-sheets').addEventListener('click',refreshSheets);
 if($('refresh-remote-policy')) $('refresh-remote-policy').addEventListener('click',refreshRemotePolicy);
 $('run-audit').addEventListener('click',runAudit);
+for(const id of ['traffic-store-select','portfolio-store-select','funnel-store-select','price-store-select']) if($(id)) $(id).addEventListener('change',e=>{state.selectedStore=e.target.value||'all'; for(const other of ['traffic-store-select','portfolio-store-select','funnel-store-select','price-store-select'])if($(other))$(other).value=state.selectedStore; renderPortfolio(); renderTraffic(); renderFunnel(); renderPriceCalculator();});
+if($('funnel-product-select')) $('funnel-product-select').addEventListener('change',renderFunnel);
+if($('price-product-select')) $('price-product-select').addEventListener('change',e=>{state.priceProductKey=e.target.value||'';renderPriceCalculator();});
+document.addEventListener('input',e=>{if(e.target.matches('#price-inputs [data-price-field], #price-inputs [data-price-enabled]'))persistPriceScenario();});
+document.addEventListener('change',e=>{if(e.target.matches('#price-inputs [data-price-field], #price-inputs [data-price-enabled]')){persistPriceScenario();renderPriceCalculator();}});
 if($('apply-period')) $('apply-period').addEventListener('click',async()=>{
   const from=$('period-from')?.value||'', to=$('period-to')?.value||'';
   if(!from || !to){ showToast('Выбери обе даты периода.','error'); return; }
@@ -1006,6 +1115,7 @@ document.addEventListener('click',e=>{
   const decisionFilter=e.target.closest('[data-decision-filter]');
   if(decisionFilter){ state.decisionFilter=decisionFilter.dataset.decisionFilter||'priority'; renderDecisions(); return; }
   const go=e.target.closest('[data-go-page]'); if(go){ setPage(go.dataset.goPage); return; }
+  const storeCard=e.target.closest('[data-store-id]'); if(storeCard){ state.selectedStore=storeCard.dataset.storeId||'all'; for(const other of ['traffic-store-select','portfolio-store-select','funnel-store-select','price-store-select'])if($(other))$(other).value=state.selectedStore; renderPortfolio(); renderTraffic(); renderFunnel(); renderPriceCalculator(); setPage('advertising'); return; }
   const decisionEl=e.target.closest('[data-decision-key]');
   if(decisionEl){
     const key=decisionEl.dataset.decisionKey;

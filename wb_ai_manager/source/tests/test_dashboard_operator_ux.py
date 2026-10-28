@@ -69,6 +69,19 @@ def test_dashboard_russian_operator_labels():
     assert "19 MODULES" not in html
 
 
+def test_dashboard_has_multistore_advertising_funnel_and_price_scenario_tools():
+    root = Path(__file__).parents[1]
+    html = (root / "src" / "wb_control_center" / "ui" / "dashboard.html").read_text(encoding="utf-8")
+    js = (root / "src" / "wb_control_center" / "ui" / "dashboard.js").read_text(encoding="utf-8")
+    worker = (root / "src" / "wb_control_center" / "worker_source.py").read_text(encoding="utf-8")
+    assert 'data-page-panel="funnel"' in html and 'data-page-panel="price"' in html
+    assert 'id="traffic-store-select"' in html and 'id="funnel-store-select"' in html
+    assert 'id="traffic-ads-table"' in html and 'id="funnel-product-table"' in html
+    assert "function renderFunnel()" in js and "function renderPriceCalculator()" in js
+    assert "wb-price-scenario-v1:" in js
+    assert "async def traffic_bundle" in worker and "organic_sku_day.csv" in worker
+
+
 def test_live_card_identity_overrides_historical_fallback():
     from wb_control_center.api import _entity_map
     portfolio = {"own_27": {"products": [{"sku": "111", "name": "СТАРЫЙ-АРТИКУЛ"}]}}
@@ -84,6 +97,55 @@ def test_live_card_identity_overrides_historical_fallback():
     assert mapped["111"]["seller_article"] == "TD-LIVE"
     assert mapped["111"]["display"] == "TD-LIVE"
     assert mapped["111"]["source"] == "live_wb_cards"
+
+
+def test_worker_traffic_dashboard_keeps_shop_breakdown_and_uses_wb_attribution():
+    from wb_control_center.api import _traffic_dashboard_payload
+
+    result = _traffic_dashboard_payload({
+        "source": "wb-api-worker",
+        "retrieved_at": "2026-10-28T10:00:00+00:00",
+        "source_health": {"status": "FRESH"},
+        "status": {"shops": {"AP": {"ok": True}, "AA": {"ok": False}}},
+        "ads": [
+            {"shop": "ap", "date": "2026-10-27", "views": "100", "clicks": "10", "atbs": "3", "orders": "2", "spend_rub": "50", "order_sum_rub": "500"},
+            {"shop": "aa", "date": "2026-10-27", "views": "bad", "clicks": "0", "orders": "0", "spend_rub": "0", "order_sum_rub": "0"},
+            {"shop": "yv", "date": "2026-10-20", "views": "999", "clicks": "9"},
+        ],
+        "funnel": [{"shop": "ap", "date": "2026-10-27", "open_count": "20", "cart_count": "5", "order_count": "2"}],
+        "organic": [],
+    }, {"from": "2026-10-27", "to": "2026-10-28"})
+    stores = {x["id"]: x for x in result["shops"]}
+    assert set(stores) == {"sanych", "air", "hozyushka"}
+    assert stores["sanych"]["summary"]["spend_rub"] == 50
+    assert stores["sanych"]["summary"]["ctr_pct"] == 10
+    assert stores["sanych"]["summary"]["drr_pct"] == 10
+    assert stores["air"]["summary"]["views"] is None
+    assert len(result["ads"]) == 2
+    assert result["funnel"][0]["cart_count"] == "5"
+
+
+def test_sheets_ads_hub_traffic_fallback_keeps_store_and_source_status():
+    from wb_control_center.portfolio import _traffic_bundle_from_bridge
+
+    bundle = _traffic_bundle_from_bridge({
+        "generated_at": "2026-10-28T10:00:00+03:00",
+        "sources": {"ads_hub": {"read_at": "2026-10-28T10:00:00+03:00", "ranges": {
+            "campaign_day": {"values": [
+                ["store_id", "date", "advert_id", "nmId", "views", "clicks", "atbs", "orders", "spend_rub", "order_sum_rub", "source", "quality", "seller_article", "load_timestamp", "coverage_status"],
+                ["SANYCH", "2026-10-27", "9", "123", "100", "10", "3", "2", "50", "500", "WB", "FACT", "SKU-A", "2026-10-28T09:00:00+03:00", "SOURCE_OK"],
+            ]},
+            "funnel_day": {"values": [
+                ["store_id", "date", "nmId", "vendorCode", "open_count", "cart_count", "order_count", "order_sum_rub", "source", "load_timestamp", "coverage_status"],
+                ["SANYCH", "2026-10-27", "123", "SKU-A", "20", "5", "2", "500", "WB", "2026-10-28T09:00:00+03:00", "SOURCE_OK"],
+            ]},
+        }}}
+    })
+    assert bundle["source"] == "google_sheets_ads_hub"
+    assert bundle["ads"][0]["shop"] == "ap"
+    assert bundle["ads"][0]["nm_id"] == "123"
+    assert bundle["status"]["shops"]["ap"]["ok"] is True
+    assert bundle["status"]["shops"]["aa"]["status"] == "NO_DATA"
 
 
 @pytest.mark.asyncio

@@ -9,6 +9,7 @@ mcp<2,>=1.12
 wb-mcp-server<3,>=2.6.1
 tenacity>=9.0
 openpyxl>=3.1
+num2words>=0.5.14
 
 [cloud-llm]
 anthropic>=0.64
@@ -17,3 +18,11 @@ openai>=1.50
 [dev]
 pytest>=8.0
 pytest-asyncio>=0.23
+
+[local-vision]
+safetensors>=0.4
+accelerate>=1.0
+transformers>=4.55
+torch==2.5.1
+torchvision==0.20.1
+pillow>=10.4

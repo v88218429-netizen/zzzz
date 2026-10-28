@@ -31,6 +31,7 @@ const SOURCES = {
     ranges: {
       campaign_day: '12_ADS_CAMPAIGN_DAY!A1:O5000',
       funnel_day: '13_FUNNEL_DAY!A1:K5000',
+      organic_day: '19_ORGANIC_DERIVED!A1:P5000',
       health: '14_ADS_CONTROL!A1:G10',
       sku_master: '10_SKU_MASTER!A1:P1200'
     }

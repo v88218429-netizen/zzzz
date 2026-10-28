@@ -14,6 +14,58 @@ from .policy import READ_ONLY_BUILD
 from .cohort import analyze_order_lifecycle
 
 
+def _traffic_bundle_from_bridge(payload: dict[str, Any]) -> dict[str, Any]:
+    """Normalize verified Ads Hub sheet ranges into the worker dashboard shape."""
+    source = ((payload.get("sources") or {}).get("ads_hub") or {})
+    ranges = source.get("ranges") or {}
+
+    def read_rows(name: str) -> list[dict[str, Any]]:
+        values = ((ranges.get(name) or {}).get("values") or [])
+        if not values:
+            return []
+        headers = [str(value or "").strip() for value in values[0]]
+        result = []
+        for values_row in values[1:]:
+            if not isinstance(values_row, list) or not any(str(value or "").strip() for value in values_row):
+                continue
+            row = {key: values_row[index] if index < len(values_row) else "" for index, key in enumerate(headers) if key}
+            for alias, canonical in (("store_id", "shop"), ("nmId", "nm_id"), ("vendorCode", "vendor_code")):
+                if alias in row and canonical not in row:
+                    row[canonical] = row[alias]
+            code = str(row.get("shop") or "").strip().lower()
+            row["shop"] = {
+                "ap": "ap", "sanych": "ap", "sanych_wb": "ap", "ип ап": "ap",
+                "aa": "aa", "air": "aa", "air_wb": "aa", "ип аа": "aa",
+                "yv": "yv", "hozyushka": "yv", "hozyayushka_wb": "yv", "ип юв": "yv",
+            }.get(code, code)
+            result.append(row)
+        return result
+
+    ads = read_rows("campaign_day")
+    funnel = read_rows("funnel_day")
+    organic = read_rows("organic_day")
+    by_shop: dict[str, dict[str, Any]] = {}
+    for code in ("ap", "aa", "yv"):
+        ads_rows = [row for row in ads if row.get("shop") == code]
+        funnel_rows = [row for row in funnel if row.get("shop") == code]
+        statuses = [str(row.get("coverage_status") or "").strip().upper() for row in (*ads_rows, *funnel_rows)]
+        healthy = bool(ads_rows and funnel_rows and statuses and all(value == "SOURCE_OK" for value in statuses))
+        by_shop[code] = {
+            "ok": healthy,
+            "status": "FRESH" if healthy else ("PARTIAL" if ads_rows or funnel_rows else "NO_DATA"),
+            "ads_rows": len(ads_rows), "funnel_rows": len(funnel_rows),
+            "last_loaded_at": max((str(row.get("load_timestamp") or "") for row in (*ads_rows, *funnel_rows)), default="") or None,
+            "source": "google_sheets_ads_hub",
+        }
+    retrieved_at = source.get("read_at") or payload.get("generated_at")
+    return {
+        "source": "google_sheets_ads_hub", "retrieved_at": retrieved_at,
+        "source_health": {"status": "FRESH" if all(item["ok"] for item in by_shop.values()) else "PARTIAL"},
+        "status": {"shops": by_shop, "finishedAt": retrieved_at},
+        "ads": ads, "funnel": funnel, "organic": organic,
+    }
+
+
 class PortfolioService:
     """Read-only portfolio facts from trusted Sheets snapshots.
 
@@ -663,6 +715,7 @@ class PortfolioService:
         self._parse_own_27(payload, out)
         self._link_products_to_weekly_groups(out)
         self._parse_search_signals(payload, out)
+        out["traffic_bundle"] = _traffic_bundle_from_bridge(payload)
         # Refresh source-health timestamps from the bridge without allowing a stale source
         # to silently become authoritative. Trust/usage policy remains local.
         bridge_sources = payload.get("sources") or {}

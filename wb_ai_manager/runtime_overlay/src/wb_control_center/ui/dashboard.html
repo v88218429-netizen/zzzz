@@ -51,6 +51,14 @@
           <svg viewBox="0 0 24 24"><path d="M4 18V9h3v9H4Zm6 0V5h3v13h-3Zm6 0v-7h3v7h-3Z"/></svg>
           <span>Реклама</span>
         </button>
+<button class="nav-item" data-page="funnel">
+          <svg viewBox="0 0 24 24"><path d="M3 4h18l-7 8v6l-4 2v-8L3 4Zm4.1 2 4.9 5.6L16.9 6H7.1Z"/></svg>
+          <span>Воронка продаж</span>
+        </button>
+<button class="nav-item" data-page="price">
+          <svg viewBox="0 0 24 24"><path d="M12 2v20m5-16H9a3 3 0 0 0 0 6h6a3 3 0 0 1 0 6H6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          <span>Цена и прибыль</span>
+        </button>
         <button class="nav-item" data-page="policy">
           <svg viewBox="0 0 24 24"><path d="M4 5h10v2H4V5Zm0 6h16v2H4v-2Zm0 6h7v2H4v-2Zm13-13h3v5h-3V4Zm-3 12h3v5h-3v-5Z"/></svg>
           <span>Редактор правил</span>
@@ -232,7 +240,8 @@
           <article class="metric-card"><span>Маржа</span><strong id="pf-margin">—</strong><small id="pf-roi">ROI —</small></article>
           <article class="metric-card"><span>Реклама</span><strong id="pf-ads">—</strong><small id="pf-drr">ДРР —</small></article>
         </div>
-        <article class="card"><div class="card-head"><div><span class="section-label">МАГАЗИНЫ</span><h3>Сравнение текущего периода</h3></div><span class="muted" id="portfolio-period">—</span></div><div id="stores-grid" class="stores-grid"></div></article>
+        <article class="card"><div class="card-head"><div><span class="section-label">МАГАЗИНЫ</span><h3>Сравнение текущего периода</h3></div><label class="traffic-store-picker">Показать<select id="portfolio-store-select"><option value="all">Все магазины</option><option value="sanych">Саныч</option><option value="air">AIR</option><option value="hozyushka">Хозяюшка</option></select></label><span class="muted" id="portfolio-period">—</span></div><div id="stores-grid" class="stores-grid"></div></article>
+        <article class="card"><div class="card-head"><div><span class="section-label">РЕКЛАМА И ВОРОНКА · ВСЕ МАГАЗИНЫ</span><h3>Сводка по кабинетам</h3></div><span class="muted" id="traffic-updated">—</span></div><div id="portfolio-traffic-grid" class="stores-grid"></div><div id="portfolio-traffic-note" class="source-note"></div></article>
         <div class="two-col-grid">
           <article class="card"><div class="card-head"><div><span class="section-label">ОПЕРАЦИОННЫЕ ДАННЫЕ</span><h3>Заказы, остатки и экономика</h3></div><span class="pill neutral">ТОЛЬКО ЧТЕНИЕ</span></div><div id="own27-grid" class="fact-grid"></div><div id="unit-alerts" class="signal-stack compact-stack"></div></article>
           <article class="card"><div class="card-head"><div><span class="section-label">ФУЛФИЛМЕНТ</span><h3>Остатки на фулфилменте</h3></div><span class="muted" id="ff-snapshot-date">—</span></div><div id="ff-grid" class="mini-table-list"></div></article>
@@ -262,6 +271,7 @@
 
       <section class="page" data-page-panel="advertising">
         <div class="section-intro"><div><span class="section-label">РЕКЛАМА</span><h2>Контроль эффективности без автодействий</h2><p>Расход, заказы, ДРР, CTR и CPC. Агент только диагностирует и предлагает — ставки и бюджеты не меняются.</p></div><span class="pill safe">ТОЛЬКО ЧТЕНИЕ</span></div>
+        <article class="card multi-store-traffic"><div class="card-head"><div><span class="section-label">ОБЩИЙ СБОРЩИК · РЕКЛАМА И ВОРОНКА</span><h3>Все магазины или один кабинет</h3></div><label class="traffic-store-picker">Кабинет<select id="traffic-store-select"><option value="all">Все магазины</option><option value="sanych">Саныч</option><option value="air">AIR</option><option value="hozyushka">Хозяюшка</option></select></label></div><p class="muted" id="traffic-source-note">Данные загружаются из отдельного сборщика. Нет данных означает «не получено», а не ноль.</p><div class="metric-grid four" id="traffic-kpis"></div><div class="two-col-grid"><div><h4>Товары в рекламе · день × товар</h4><div class="table-wrap"><table class="data-table"><thead><tr><th>Магазин</th><th>Дата</th><th>Артикул</th><th>Показы</th><th>Переходы</th><th>Корзины</th><th>Заказы</th><th>Расход</th><th>Выручка WB</th><th>ДРР</th><th>CTR</th><th>CPC</th><th>Источник / качество</th></tr></thead><tbody id="traffic-ads-table"></tbody></table></div></div><div><h4>Воронка · день × товар</h4><div class="table-wrap"><table class="data-table"><thead><tr><th>Магазин</th><th>Дата</th><th>Артикул</th><th>Открытия</th><th>Корзина</th><th>Заказы</th><th>Выручка</th><th>Открытие → корзина</th><th>Корзина → заказ</th></tr></thead><tbody id="traffic-funnel-table"></tbody></table></div></div></div><h4>Органические и платные переходы</h4><div class="table-wrap"><table class="data-table"><thead><tr><th>Магазин</th><th>Дата</th><th>Артикул</th><th>Открытия всего</th><th>Платные переходы</th><th>Органические переходы</th><th>Покрытие</th><th>Кампании без статистики</th></tr></thead><tbody id="traffic-organic-table"></tbody></table></div><div class="source-note" id="traffic-organic-note"></div></article>
         <div class="metric-grid four">
           <article class="metric-card"><span class="metric-icon blue">₽</span><div><span>Расход 7д</span><strong id="ads-spend">—</strong><small>по активным кампаниям</small></div></article>
           <article class="metric-card"><span class="metric-icon green">#</span><div><span>Заказы</span><strong id="ads-orders">—</strong><small>атрибутировано рекламой</small></div></article>
@@ -279,6 +289,16 @@
           <div class="rule"><b>03</b><strong>Ставки не меняются</strong><span>В текущем режиме агент только формирует диагностическую рекомендацию.</span></div>
           <div class="rule"><b>04</b><strong>Каждый сигнал имеет источник</strong><span>В карточке видны фактические метрики и время чтения данных.</span></div>
         </div></article>
+      </section>
+
+      <section class="page" data-page-panel="funnel">
+        <div class="section-intro"><div><span class="section-label">АНАЛИТИКА ПРОДАЖ</span><h2>Где теряются покупатели</h2><p>Дневная и товарная воронка из отчёта WB. Показываем этапы, переходы между ними и охват источника; рекламная атрибуция остаётся отдельным срезом.</p></div><span class="pill safe">БЕЗ АВТОИЗМЕНЕНИЙ</span></div>
+        <article class="card"><div class="card-head"><div><span class="section-label">КАБИНЕТ И ТОВАР</span><h3>Сводка и строки по дням</h3></div><label class="traffic-store-picker">Кабинет<select id="funnel-store-select"><option value="all">Все магазины</option><option value="sanych">Саныч</option><option value="air">AIR</option><option value="hozyushka">Хозяюшка</option></select></label><label class="traffic-store-picker">Товар<select id="funnel-product-select"><option value="">Все товары</option></select></label></div><div class="metric-grid four" id="funnel-kpis"></div><div class="data-truth-banner" id="funnel-source-status"></div><h4>Этапы по дням</h4><div class="table-wrap"><table class="data-table"><thead><tr><th>Дата</th><th>Открытия карточки</th><th>Корзины</th><th>Заказы</th><th>Открытие → корзина</th><th>Корзина → заказ</th><th>Источник</th></tr></thead><tbody id="funnel-daily-table"></tbody></table></div><h4>Товар × день</h4><div class="table-wrap"><table class="data-table"><thead><tr><th>Магазин</th><th>Дата</th><th>Артикул продавца</th><th>Открытия</th><th>Корзины</th><th>Заказы</th><th>Выручка WB</th><th>Открытие → корзина</th><th>Корзина → заказ</th></tr></thead><tbody id="funnel-product-table"></tbody></table></div></article>
+      </section>
+
+      <section class="page" data-page-panel="price">
+        <div class="section-intro"><div><span class="section-label">РАСЧЁТ СЦЕНАРИЯ</span><h2>Цена и прибыль на единицу</h2><p>Сверь цену, себестоимость и расходы. Переключатели меняют только черновой расчёт в этой панели; цены, скидки и правила WB не меняются.</p></div><span class="pill safe">РАСЧЁТ · НЕ ФАКТ WB</span></div>
+        <article class="card"><div class="card-head"><div><span class="section-label">ТОВАР</span><h3>Исходные данные и допущения</h3></div><label class="traffic-store-picker">Магазин<select id="price-store-select"><option value="all">Все</option><option value="sanych">Саныч</option><option value="air">AIR</option><option value="hozyushka">Хозяюшка</option></select></label><label class="traffic-store-picker">Товар<select id="price-product-select"><option value="">Выбери товар</option></select></label></div><div class="source-note" id="price-source-note"></div><div class="price-calculator-grid"><div class="price-inputs" id="price-inputs"></div><div class="price-results" id="price-results"></div></div><div class="source-note" id="price-saved-note"></div></article>
       </section>
 
       <section class="page" data-page-panel="policy">
