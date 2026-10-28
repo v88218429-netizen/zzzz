@@ -174,7 +174,7 @@ grep -q "CORE REPAIR DEPLOYED + REMOTE VERIFIED" "$OUTPUT"
 grep -q "full project pull-back: exact semantic match" "$OUTPUT"
 grep -q "repair second pass: no-op" "$OUTPUT"
 
-grep -Rqs "K2 Evolution Engine v0.1.17" "$REMOTE"
+grep -Rqs "K2 Evolution Engine v0.1.18" "$REMOTE"
 grep -Rqs "WB Public Customer Price Engine v0.1.19" "$REMOTE"
 grep -Rqs "WB Seller Price Safe Refresh v0.1.0" "$REMOTE"
 grep -Rqs "function wbOsEnsureMasterTrigger()" "$REMOTE"
