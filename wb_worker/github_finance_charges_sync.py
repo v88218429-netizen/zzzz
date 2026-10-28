@@ -282,8 +282,9 @@ def _attach_substitution_photos(
     finance_rows: list[list[Any]],
     deductions_by_shop: dict[str, list[dict[str, Any]]],
 ) -> tuple[list[list[Any]], dict[str, int]]:
-    """Attach photos only when shop, nmId, amount, and a one-day date window are unique."""
+    """Use exact sticker IDs first; otherwise require unique shop, nmId, amount, and near date."""
     finance_groups: dict[tuple[str, str, int], list[tuple[int, dt.date]]] = defaultdict(list)
+    finance_stickers: dict[tuple[str, str], list[int]] = defaultdict(list)
     for index, row in enumerate(finance_rows):
         key = _substitution_key(row)
         if key is None:
@@ -294,8 +295,12 @@ def _attach_substitution_photos(
         except ValueError:
             continue
         finance_groups[(shop, nm_id, amount)].append((index, day_value))
+        sticker = str(row[25] or "").strip()
+        if sticker:
+            finance_stickers[(shop, sticker)].append(index)
 
     deduction_groups: dict[tuple[str, str, int], dict[tuple[str, ...], tuple[dt.date, list[str]]]] = defaultdict(dict)
+    deduction_stickers: dict[tuple[str, str], dict[tuple[str, ...], list[str]]] = defaultdict(dict)
     for shop, records in deductions_by_shop.items():
         for item in records:
             bonus_type = str(item.get("bonusType") or "").casefold()
@@ -313,7 +318,8 @@ def _attach_substitution_photos(
                 day_value = dt.date.fromisoformat(str(item.get("dtBonus") or "")[:10])
             except (TypeError, ValueError):
                 continue
-            base_key = (shop, str(item.get("nmId") or "").strip(), amount)
+            nm_id = str(item.get("nmId") or "").strip()
+            base_key = (shop, nm_id, amount)
             identity = (
                 day_value.isoformat(),
                 str(item.get("oldShkId") or ""),
@@ -321,23 +327,46 @@ def _attach_substitution_photos(
                 *photos,
             )
             deduction_groups[base_key][identity] = (day_value, photos)
+            for photo in photos:
+                basename = photo.split("?", 1)[0].rsplit("/", 1)[-1]
+                for sticker in (str(item.get("oldShkId") or "").strip(), str(item.get("newShkId") or "").strip()):
+                    if sticker and basename.startswith(sticker + "-"):
+                        deduction_stickers[(shop, sticker)][identity] = photos
 
     output = [_to_penalty_sheet_row(row) for row in finance_rows]
     stats = {
         "apiRecords": sum(map(len, deductions_by_shop.values())),
         "matched": 0,
+        "stickerMatched": 0,
         "dateAdjusted": 0,
         "ambiguous": 0,
         "unmatched": 0,
     }
+    assigned: set[int] = set()
+    for sticker_key, indices in finance_stickers.items():
+        candidates = deduction_stickers.get(sticker_key, {})
+        if len(indices) != 1 or len(candidates) > 1:
+            stats["ambiguous"] += len(indices)
+            continue
+        if not candidates:
+            continue
+        index = indices[0]
+        photos = next(iter(candidates.values()))[:5]
+        output[index][9:14] = photos + [""] * (5 - len(photos))
+        assigned.add(index)
+        stats["matched"] += 1
+        stats["stickerMatched"] += 1
+
     for base_key, finance_matches in finance_groups.items():
+        finance_matches = [(index, day) for index, day in finance_matches if index not in assigned]
+        if not finance_matches:
+            continue
         if len(finance_matches) != 1:
             stats["ambiguous"] += len(finance_matches)
             continue
         index, finance_day = finance_matches[0]
         candidates = [
-            (identity, record)
-            for identity, record in deduction_groups.get(base_key, {}).items()
+            record for record in deduction_groups.get(base_key, {}).values()
             if abs((record[0] - finance_day).days) <= 1
         ]
         if len(candidates) > 1:
@@ -346,7 +375,7 @@ def _attach_substitution_photos(
         if not candidates:
             stats["unmatched"] += 1
             continue
-        matched_day, photos = candidates[0][1]
+        matched_day, photos = candidates[0]
         output[index][9:14] = photos[:5] + [""] * max(0, 5 - len(photos[:5]))
         stats["matched"] += 1
         if matched_day != finance_day:
