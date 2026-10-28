@@ -26,7 +26,7 @@ CLIENT_HINT = os.environ.get("FBS_CLIENT", "").strip().upper()
 BATCH_SIZE = int(os.environ.get("FBS_BATCH_SIZE", "5" if CLIENT_HINT == "AIR" else "25"))
 if not 1 <= BATCH_SIZE <= 1000:
     raise RuntimeError("FBS_BATCH_SIZE_INVALID")
-INGEST_ATTEMPTS = 3  # Bound retries so one long Apps Script call cannot keep a client lease busy for an hour
+INGEST_ATTEMPTS = 8  # Allow the seven-minute per-client lease to expire before abandoning an idempotent batch
 BRIDGE_INGEST_TIMEOUT = 330  # Return before Apps Script six-minute ceiling; retry only after bounded delay
 TIMEOUT = 120
 
@@ -278,6 +278,8 @@ def ingest(client: str, orders: list[dict]) -> dict:
                 if attempt == INGEST_ATTEMPTS:
                     raise
                 print("FBS_INGEST_RETRY=" + str(attempt) + ":LOCK_OR_RETRYABLE_RESPONSE", flush=True)
+            # A busy client lease expires after seven minutes; bounded backoff lets
+            # an earlier or timed-out Apps Script call release it before giving up.
             time.sleep(min(120, 15 * attempt))
         for field in totals:
             totals[field] += int(result.get(field, 0))
