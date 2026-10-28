@@ -5929,6 +5929,13 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
       opt.headers.Authorization='Bearer '+authToken; opt.muteHttpExceptions=true; opt.timeoutSeconds=30;
       return UrlFetchApp.fetch(url,opt);
     }
+    function sheetApiFailure(response){
+      try {
+        var body=JSON.parse(response.getContentText()).error||{};
+        var reasons=(body.errors||[]).map(function(e){return e.reason;}).filter(Boolean);
+        return [body.status].concat(reasons).filter(Boolean).join(':')||'NO_ERROR_DETAIL';
+      } catch(e) { return 'NO_ERROR_DETAIL'; }
+    }
     function asSheetValue(value){
       if(value instanceof Date)return value.getTime()/86400000+25569;
       return value==null?'':value;
@@ -5939,7 +5946,7 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
       '&ranges='+encodeURIComponent(orderSheet+'!A2:A')+'&valueRenderOption=UNFORMATTED_VALUE';
     var initialResponse=fetchSheetApi(initialUrl),initialCode=initialResponse.getResponseCode();
     mark('SHEET_READ_DONE_'+initialCode);
-    if(initialCode<200||initialCode>=300)throw new Error('FBS_SHEET_READ_HTTP_'+initialCode);
+    if(initialCode<200||initialCode>=300)throw new Error('FBS_SHEET_READ_HTTP_'+initialCode+':'+sheetApiFailure(initialResponse));
     var initialRanges=JSON.parse(initialResponse.getContentText()).valueRanges||[];
     if(initialRanges.length!==2)throw new Error('FBS_SHEET_READBACK_COUNT_MISMATCH');
     var head=((initialRanges[0]||{}).values||[[]])[0]||[];
@@ -5960,7 +5967,7 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
         payload:JSON.stringify({dataFilters:readFilters,valueRenderOption:'UNFORMATTED_VALUE'})
       });
       var readCode=readResponse.getResponseCode(); mark('STATE_READ_DONE_'+readCode);
-      if(readCode<200||readCode>=300)throw new Error('FBS_STATE_BATCH_READ_HTTP_'+readCode);
+      if(readCode<200||readCode>=300)throw new Error('FBS_STATE_BATCH_READ_HTTP_'+readCode+':'+sheetApiFailure(readResponse));
       var readRanges=JSON.parse(readResponse.getContentText()).valueRanges||[];
       if(readRanges.length!==readRows.length)throw new Error('FBS_STATE_READBACK_COUNT_MISMATCH');
       readRows.forEach(function(row,index){stateByRow[row]=((readRanges[index].valueRange||{}).values||[[]])[0]||[];});
