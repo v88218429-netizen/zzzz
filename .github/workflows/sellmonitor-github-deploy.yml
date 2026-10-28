@@ -151,6 +151,7 @@ jobs:
               "worker_version": health.get("version"),
               "trigger_ok": health.get("trigger_ok"),
               "trigger_count": health.get("trigger_count"),
+              "fbs_ingest_stages": health.get("fbs_ingest_stages") or {},
               "clients": health.get("clients") or [],
           }, ensure_ascii=False, indent=2))
           PY
