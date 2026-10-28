@@ -67,7 +67,7 @@
         {
           "path": "src/wb_control_center/ui/dashboard.js",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/src/wb_control_center/ui/dashboard.js",
-          "sha256": "51f2184f5092a8050e93a190c4c93cd63da37d1a7a93bf3750ef98368bc6f9ca"
+          "sha256": "fe9913aa3fed78ad8693b27c1e4ae765138eb6788a634f21a001fdb78ee77f9d"
         },
         {
           "path": "src/wb_control_center/ui/dashboard.html",
@@ -87,7 +87,7 @@
         {
           "path": "src/wb_control_center/portfolio.py",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/src/wb_control_center/portfolio.py",
-          "sha256": "34c57b51b6bd78b278276c1d97f2fb37486c47bb10675caa7a2120afccd3805c"
+          "sha256": "bd04a3d6362ec713eca58de0c162b1f7528deeefc637d14fb8e3869aa055815c"
         },
         {
           "path": "src/wb_control_center/worker_source.py",

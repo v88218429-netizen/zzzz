@@ -137,15 +137,21 @@ def test_sheets_ads_hub_traffic_fallback_keeps_store_and_source_status():
             ]},
             "funnel_day": {"values": [
                 ["store_id", "date", "nmId", "vendorCode", "open_count", "cart_count", "order_count", "order_sum_rub", "source", "load_timestamp", "coverage_status"],
-                ["SANYCH", "2026-10-27", "123", "SKU-A", "20", "5", "2", "500", "WB", "2026-10-28T09:00:00+03:00", "SOURCE_OK"],
+                ["SANYCH", "27.10.2026", "123", "SKU-A", "20", "5", "2", "500", "WB", "28.10.2026", "SOURCE_OK"],
+            ]},
+            "health": {"values": [
+                ["Магазин", "Кампаний / SKU строк", "Последняя дата рекламы", "Строк воронки", "Последняя дата воронки", "Статус", "Комментарий"],
+                ["ap", "1436", "27.10.2026", "1098", "27.10.2026", "АКТУАЛЬНО", "проверено"],
+                ["aa", "750", "12.10.2026", "819", "12.10.2026", "УСТАРЕЛО", "проверено"],
             ]},
         }}}
     })
     assert bundle["source"] == "google_sheets_ads_hub"
     assert bundle["ads"][0]["shop"] == "ap"
     assert bundle["ads"][0]["nm_id"] == "123"
+    assert bundle["ads"][0]["date"] == "2026-10-27"
     assert bundle["status"]["shops"]["ap"]["ok"] is True
-    assert bundle["status"]["shops"]["aa"]["status"] == "NO_DATA"
+    assert bundle["status"]["shops"]["aa"]["status"] == "STALE"
 
 
 @pytest.mark.asyncio
