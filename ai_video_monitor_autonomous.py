@@ -394,7 +394,9 @@ def model_json(task, video, transcript, goals, rules):
     data = json.loads(match.group())
     allowed = {cell(g, 0) for g in goals[1:] if cell(g, 0)}
     clean = []
-    rejected = {"goal": 0, "evidence": 0, "substance": 0}
+    rejected = {"goal": 0, "evidence": 0, "substance": 0, "semantic": 0}
+    # Fail closed: AI claims require explicit AI evidence in the cited transcript segment.
+    ai_terms = re.compile(r"\bAI\b|\bИИ\b|нейросет|искусственн\w*\s+интеллект|\bLLM\b|\bGPT\b|\bagent\b|агент", re.I)
     t_norm = re.sub(r"\s+", " ", transcript).lower()
     for idea in data.get("ideas", [])[:2]:
         evidence = re.sub(r"\s+", " ", str(idea.get("evidence", ""))).strip()
@@ -414,6 +416,9 @@ def model_json(task, video, transcript, goals, rules):
             continue
         if len(str(idea.get("idea", ""))) < 25 or len(str(idea.get("action", ""))) < 20:
             rejected["substance"] += 1
+            continue
+        if ai_terms.search(str(idea.get("idea", "")) + " " + str(idea.get("fact", ""))) and not ai_terms.search(evidence):
+            rejected["semantic"] += 1
             continue
         item = {k: str(idea.get(k, "")).strip() for k in (
             "goal_code", "idea", "why_for_owner", "action", "metric",
