@@ -247,6 +247,7 @@ def ingest(client: str, orders: list[dict]) -> dict:
                     print("FBS_BRIDGE_ERROR_DETAIL=" + safe_bridge_detail(details), flush=True)
                 if not retryable:
                     candidates = [
+                        "FBS_SHEET_READ_HTTP_403", "FBS_STATE_BATCH_READ_HTTP_403", "PERMISSION_DENIED",
                         "FBS_BATCH_SIZE_INVALID", "FBS_ROW_COUNT_UNEXPECTED",
                         "FBS_DATE_OUTSIDE_RECOVERY_WINDOW", "FBS_ID_INVALID",
                         "FBS_MISSING_CONFIRMED_STATUS", "FBS_DATE_INVALID",
@@ -265,6 +266,10 @@ def ingest(client: str, orders: list[dict]) -> dict:
                     raise RuntimeError("INGEST_REJECTED:" + safe_bridge_detail(details))
             except RuntimeError as ex:
                 reason = str(ex)
+                if reason.startswith("INGEST_REJECTED:"):
+                    # Deterministic Apps Script rejections are not safe to retry
+                    # repeatedly; surface the exact classified cause immediately.
+                    raise
                 if reason in ("NETWORK_RETRY_EXHAUSTED", "INVALID_JSON_RESPONSE_RETRY_EXHAUSTED") or reason.startswith(("HTTP_500", "HTTP_502", "HTTP_503", "HTTP_504")):
                     # Ingest is an upsert keyed by WB order ID. Repeating this exact
                     # batch after a lost response is idempotent and recovers lost replies.
