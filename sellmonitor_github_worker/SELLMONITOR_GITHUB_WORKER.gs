@@ -293,10 +293,26 @@ function sellmonitorGithubTick() {
 }
 
 function sellmonitorGithubInnerFinanceTick() {
-  // Finance is serialized with the worker tick, but never holds the user lock used
-  // by FBS lease claims. Slow finance requests must not block authenticated FBS ingest.
+  // Serialize finance ticks with an expiring lease, but release the shared script lock
+  // before network calls so one slow queue command cannot starve finance collection.
   var financeLock = LockService.getScriptLock();
-  if (!financeLock.tryLock(5000)) return {ok:true,skipped:true,reason:'shared_gateway_lock_busy'};
+  if (!financeLock.tryLock(30000)) return {ok:true,skipped:true,reason:'shared_gateway_lock_busy'};
+  var financeLeaseToken = '';
+  var financeLockHeld = true;
+  var leaseProps = PropertiesService.getScriptProperties();
+  var leaseUntil = Number(leaseProps.getProperty('SMC_INNER_FINANCE_ACTIVE_UNTIL_MS') || 0);
+  if (leaseUntil > Date.now()) {
+    financeLock.releaseLock();
+    financeLockHeld = false;
+    return {ok:true,skipped:true,reason:'inner_finance_lease_busy'};
+  }
+  financeLeaseToken = Utilities.getUuid();
+  leaseProps.setProperties({
+    SMC_INNER_FINANCE_ACTIVE_UNTIL_MS:String(Date.now() + 8 * 60 * 1000),
+    SMC_INNER_FINANCE_ACTIVE_TOKEN:financeLeaseToken
+  },false);
+  financeLock.releaseLock();
+  financeLockHeld = false;
   var cc = null;
   var cfg = null;
   try {
@@ -325,7 +341,14 @@ function sellmonitorGithubInnerFinanceTick() {
     var schemaDiagnostic = String(PropertiesService.getScriptProperties().getProperty('SMC_INNER_MCP_TOOL_SCHEMA_V5') || '');
     return {ok:false,version:SMC_GH.VERSION,store_id:cfg ? cfg.storeId : '',error:message,schema_diagnostic:schemaDiagnostic.slice(0,1100)};
   } finally {
-    financeLock.releaseLock();
+    if (financeLockHeld) financeLock.releaseLock();
+    if (financeLeaseToken) {
+      var releaseProps = PropertiesService.getScriptProperties();
+      if (String(releaseProps.getProperty('SMC_INNER_FINANCE_ACTIVE_TOKEN') || '') === financeLeaseToken) {
+        releaseProps.deleteProperty('SMC_INNER_FINANCE_ACTIVE_UNTIL_MS');
+        releaseProps.deleteProperty('SMC_INNER_FINANCE_ACTIVE_TOKEN');
+      }
+    }
   }
 }
 
