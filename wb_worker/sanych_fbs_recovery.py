@@ -22,6 +22,7 @@ MAX_RECOVERY_DAYS = 90
 LOOKBACK_DAYS = max(1, min(MAX_RECOVERY_DAYS, int(os.environ.get("FBS_LOOKBACK_DAYS", "7"))))
 BATCH_SIZE = max(1, min(100, int(os.environ.get("FBS_BATCH_SIZE", "5"))))  # Keep Apps Script work bounded per gateway call
 # [SANYCH-90D-SLICED] Seven-day segments are dispatched by the recovery workflow.
+# The Sanych recovery runs independently; per-client Apps Script leases serialize its writes.
 TIMEOUT = 120
 
 
