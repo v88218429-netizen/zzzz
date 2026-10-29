@@ -5334,11 +5334,24 @@ function sellmonitorGithubOzonAgg_(records, storeId, today) {
     ...monthly.map(values),
     ['Контроль: заказ и отправление считаются по уникальным ключам; строки и штуки — по позициям. Отсутствие строки не считается нулём.','','','','','','','','','']
   ];
-  var products=Object.keys(productMap).map(function(k){return productMap[k];})
-    .sort(function(a,b){return a.type.localeCompare(b.type)||a.start.localeCompare(b.start)||a.offer.localeCompare(b.offer)||a.sku.localeCompare(b.sku);})
-    .map(function(p){return [p.type==='day'?'День':p.type==='week'?'Неделя':'Месяц',p.start,p.end,p.offer,p.sku,p.title,
+  var productItems=Object.keys(productMap).map(function(k){return productMap[k];})
+    .sort(function(a,b){
+      var rank={day:0,week:1,month:2};
+      return rank[a.type]-rank[b.type]||a.start.localeCompare(b.start)||a.offer.localeCompare(b.offer)||a.sku.localeCompare(b.sku);
+    });
+  var periodBuckets={day:per.day,week:per.week,month:per.month}, products=[], currentGroup='';
+  productItems.forEach(function(p){
+    var groupKey=p.type+'|'+p.start+'|'+p.end, bucket=periodBuckets[p.type][p.type+'|'+p.start+'|'+p.end];
+    if(groupKey!==currentGroup){
+      currentGroup=groupKey;
+      products.push(['ИТОГО МАГАЗИНА · '+(p.type==='day'?'ДЕНЬ':p.type==='week'?'НЕДЕЛЯ':'МЕСЯЦ'),p.start,p.end,'','','ИТОГО МАГАЗИНА',
+        Object.keys(bucket.orders).length,Object.keys(bucket.posts).length,bucket.units,bucket.lines,
+        p.start<minDay?'Частичный период: источник начинается с '+minDay:(p.end>=today?'Предварительно: период включает текущую дату':'Строки выгрузки'), 'Ozon Seller API — Ozon Заказы']);
+    }
+    products.push([p.type==='day'?'День':p.type==='week'?'Неделя':'Месяц',p.start,p.end,p.offer,p.sku,p.title,
       Object.keys(p.orders).length,Object.keys(p.posts).length,p.units,p.lines,
-      p.start<minDay?'Частичный период: источник начинается с '+minDay:(p.end>=today?'Предварительно: период включает текущую дату':'Строки выгрузки'), 'Ozon Seller API — Ozon Заказы'];});
+      p.start<minDay?'Частичный период: источник начинается с '+minDay:(p.end>=today?'Предварительно: период включает текущую дату':'Строки выгрузки'), 'Ozon Seller API — Ozon Заказы']);
+  });
   var fullDays=daily.filter(function(x){return x.end<today;}).map(function(x){return [x.start,Object.keys(x.orders).length,Object.keys(x.posts).length,x.units];});
   return {summary:summary,products:products,fullDays:fullDays,minDay:minDay,maxDay:maxDay,sourceRows:records.filter(function(r){return r.cabinet===storeId;}).length};
 }
@@ -5448,6 +5461,16 @@ function sellmonitorGithubPublishOzonSummaryOrders_() {
       throw new Error('OZON_SKU_READBACK_MISMATCH:'+cfg.name+':row='+mismatch.row+':col='+mismatch.col+':actualType='+mismatch.actualType+':expectedType='+mismatch.expectedType);
     }
     if(JSON.stringify(sellmonitorGithubOzonNormalizeRows_(newHelper))!==JSON.stringify(sellmonitorGithubOzonNormalizeRows_(helper)))throw new Error('OZON_CHART_READBACK_MISMATCH:'+cfg.name);
+    skuSheet.setFrozenRows(4);
+    skuSheet.setHiddenGridlines(true);
+    skuSheet.getRange(4,1,1,12).setBackground('#17365D').setFontColor('#FFFFFF').setFontWeight('bold').setWrap(true);
+    skuSheet.getRange(5,2,Math.max(1,newSku.length),2).setNumberFormat('dd.mm.yyyy');
+    skuSheet.getRange(5,7,Math.max(1,newSku.length),2).setNumberFormat('#,##0');
+    skuSheet.getRange(5,9,Math.max(1,newSku.length),2).setNumberFormat('#,##0.###');
+    var groupRanges=[];
+    newSku.forEach(function(row,index){if(String(row[0]||'').indexOf('ИТОГО МАГАЗИНА ·')===0)groupRanges.push('A'+(index+5)+':L'+(index+5));});
+    if(groupRanges.length)skuSheet.getRangeList(groupRanges).setBackground('#D9EAF7').setFontColor('#17365D').setFontWeight('bold');
+    if(!skuSheet.getFilter())skuSheet.getRange(4,1,Math.max(1,newSku.length+1),12).createFilter();
     var charts=daily.getCharts();
     if(charts.length){var range=daily.getRange(1,12,helper.length,4);charts.forEach(function(ch){daily.updateChart(ch.modify().clearRanges().addRange(range).build());});}
     var log=ss.getSheetByName('14_API_Заказы_Журнал');
