@@ -236,6 +236,7 @@ if worker.exists():
         worker_text = worker_text.replace(resume_anchor, resume_route + resume_anchor, 1)
         print("OZON_CONTINUATION_GITHUB_ACTION=patched")
 
+    # Single authorized continuation invocation requested after bounded source diagnostics.
     result_marker = "SELLMONITOR_OZON_CONTINUATION_RESULT_V1"
     result_anchor = "result:{called:true,return_type:typeof continuationResult,diagnostic_before:before,diagnostic_after:after}"
     if result_marker not in worker_text and result_anchor in worker_text:
