@@ -79,10 +79,11 @@ def test_read_only_fuse_blocks_even_if_mode_is_accidentally_approval():
     assert "read-only" in why
 
 
-def test_this_release_stays_read_only_even_if_env_fuse_is_manually_disabled():
-    ok, why = engine("approval", force_read_only=False).execution_allowed()
+def test_approval_still_requires_authenticated_dashboard():
+    p = PolicyEngine(Settings(operation_mode="approval", force_read_only=False), load_policy())
+    ok, why = p.execution_allowed()
     assert not ok
-    assert "read-only build fuse" in why
+    assert "authenticated dashboard" in why or "credentials" in why
 
 
 import math

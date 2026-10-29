@@ -223,6 +223,57 @@ def test_production_image_contains_version_file():
     assert "VERSION" in dockerfile
 
 
+@pytest.mark.asyncio
+async def test_cards_content_api_reads_trash_and_recovers_single_article(monkeypatch, tmp_path):
+    import json
+    import sys
+    from types import SimpleNamespace
+    from wb_control_center.mcp_client import WBMCPClient
+
+    calls = []
+
+    class Response:
+        def __init__(self, payload): self.payload = payload
+        def raise_for_status(self): pass
+        def json(self): return self.payload
+
+    class AsyncClient:
+        def __init__(self, timeout): self.timeout = timeout
+        async def __aenter__(self): return self
+        async def __aexit__(self, *args): pass
+        async def post(self, url, headers, json):
+            calls.append((url, headers, json))
+            if url.endswith("/get/cards/trash"):
+                return Response({"cards": [{"nmID": 123, "trashedAt": "2026-10-28T10:00:00Z"}], "cursor": {"total": 1}})
+            return Response({"error": False, "errorText": "", "data": {}})
+
+    monkeypatch.setitem(sys.modules, "httpx", SimpleNamespace(AsyncClient=AsyncClient))
+    client = WBMCPClient("seller-token", str(tmp_path))
+    trash = await client.call("wb_cards_trash", {"limit": 100})
+    assert trash["complete"] is True
+    assert trash["cards"][0]["nmID"] == 123
+    recovered = await client.call("wb_cards_recover", {"nm_ids": [123]})
+    assert recovered["error"] is False
+    assert calls[0][0].endswith("/content/v2/get/cards/trash")
+    assert calls[1][0].endswith("/content/v2/cards/recover")
+    assert calls[1][2] == {"nmIDs": [123]}
+    assert calls[1][1]["Authorization"] == "seller-token"
+
+
+@pytest.mark.asyncio
+async def test_cards_content_api_refuses_bulk_recovery(monkeypatch, tmp_path):
+    import sys
+    from types import SimpleNamespace
+    from wb_control_center.mcp_client import WBMCPClient, WBMCPError
+
+    class AsyncClient:
+        def __init__(self, timeout): raise AssertionError("must reject before network call")
+
+    monkeypatch.setitem(sys.modules, "httpx", SimpleNamespace(AsyncClient=AsyncClient))
+    with pytest.raises(WBMCPError, match="exactly one"):
+        await WBMCPClient("seller-token", str(tmp_path)).call("wb_cards_recover", {"nm_ids": [123, 456]})
+
+
 def test_dashboard_period_defaults_to_last_completed_week_and_exposes_date_limit(monkeypatch):
     from wb_control_center import api as api_module
 

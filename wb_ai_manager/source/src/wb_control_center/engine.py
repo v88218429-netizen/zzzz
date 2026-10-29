@@ -27,6 +27,7 @@ from .change_tracker import ChangeTracker
 from .outcome_evaluator import OutcomeEvaluator
 from .investigation import InvestigationEngine
 from .model_validation import DemandModelValidator
+from .metrics import extract_campaign_ids
 
 log = logging.getLogger(__name__)
 
@@ -589,6 +590,39 @@ class ControlCenter:
             )
             self.db.save_event(ev)
             return {"id": action_id, "status": "simulated", "reason": why_exec}
+        if proposal.tool == "wb_advert_pause":
+            # The queue may outlive the state it was based on. Re-read this exact
+            # tenant's active campaigns immediately before pausing anything.
+            campaign_id = int(proposal.arguments.get("advert_id") or 0)
+            try:
+                active = await self.wb.call("wb_advert_list", {"statuses": [9]})
+                if campaign_id <= 0 or campaign_id not in extract_campaign_ids(active):
+                    reason = "campaign is no longer present in the fresh active-campaign read; no change sent"
+                    self.db.update_action(action_id, "blocked", error=reason)
+                    return {"id": action_id, "status": "blocked", "reason": reason}
+            except Exception as exc:
+                reason = f"fresh active-campaign check failed; no change sent: {type(exc).__name__}: {exc}"
+                self.db.update_action(action_id, "blocked", error=reason)
+                return {"id": action_id, "status": "blocked", "reason": reason}
+        if proposal.tool == "wb_cards_recover":
+            nm_ids = proposal.arguments.get("nm_ids")
+            article = nm_ids[0] if isinstance(nm_ids, list) and len(nm_ids) == 1 else 0
+            try:
+                trash = await self.wb.call("wb_cards_trash", {"limit": 100})
+                rows = trash.get("cards", []) if isinstance(trash, dict) else []
+                in_trash = any(
+                    isinstance(row, dict)
+                    and str(row.get("nmID", row.get("nmId", row.get("nm_id", "")))) == str(article)
+                    for row in rows
+                )
+                if not article or not in_trash or trash.get("complete") is False:
+                    reason = "fresh complete trash check did not confirm this WB article; no recovery request sent"
+                    self.db.update_action(action_id, "blocked", error=reason)
+                    return {"id": action_id, "status": "blocked", "reason": reason}
+            except Exception as exc:
+                reason = f"fresh trash check failed; no recovery request sent: {type(exc).__name__}: {exc}"
+                self.db.update_action(action_id, "blocked", error=reason)
+                return {"id": action_id, "status": "blocked", "reason": reason}
         self.db.update_action(action_id, "approved")
         try:
             args = {k: v for k, v in proposal.arguments.items() if not k.startswith("_")}

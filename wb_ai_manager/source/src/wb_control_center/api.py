@@ -20,7 +20,7 @@ from fastapi.staticfiles import StaticFiles
 from .config import Settings
 from .dashboard_auth import DashboardBasicAuthMiddleware
 from .engine import ControlCenter
-from .models import PeriodContext
+from .models import ActionProposal, PeriodContext
 from .portfolio import PortfolioService
 from .photo_analyzer import PhotoAnalyzer
 from .source_discovery import SourceDiscovery
@@ -31,6 +31,7 @@ from .discovery_engine import discover_cross_sku_patterns
 from .research_engine import build_research_agenda
 from .query_manager import QueryManager, QueryManagerConfig
 from .updater import UpdateManager, current_version
+from .policy import MANUAL_APPROVAL_TOOLS
 
 settings = Settings()
 center = ControlCenter(settings)
@@ -355,7 +356,7 @@ async def _run_all_background() -> None:
 
 @app.post("/run-all")
 async def run_all(background: bool = False):
-    # Read-only release: the build fuse blocks WB writes regardless of runtime settings.
+    # Audits only collect and analyze data; the write boundary is separate.
     if background:
         task=asyncio.create_task(_run_all_background())
         _background_tasks.add(task)
@@ -377,9 +378,16 @@ async def actions():
 
 @app.post("/actions/{action_id}/approve")
 async def approve(action_id: int):
-    # Hard-disabled in the read-only test build. Recommendations can be reviewed, but
-    # no endpoint exposed by this app is allowed to apply them to Wildberries.
-    raise HTTPException(409, "read-only build: WB writes are disabled")
+    allowed, why = center.policy_engine.execution_allowed()
+    if not allowed:
+        raise HTTPException(409, why)
+    try:
+        result = await center.execute_action(action_id, approved_by="dashboard")
+    except KeyError:
+        raise HTTPException(404, "action not found")
+    if result.get("status") != "executed":
+        raise HTTPException(409, result.get("reason") or result.get("error") or f"action status: {result.get('status')}")
+    return result
 
 
 @app.post("/actions/{action_id}/reject")
@@ -388,6 +396,98 @@ async def reject(action_id: int):
         return await center.reject_action(action_id)
     except KeyError:
         raise HTTPException(404, "action not found")
+
+
+def _trash_card_rows(payload: Any) -> list[dict[str, Any]]:
+    if not isinstance(payload, dict):
+        return []
+    rows = payload.get("cards")
+    if not isinstance(rows, list):
+        data = payload.get("data")
+        rows = data.get("cards") if isinstance(data, dict) else None
+    return [row for row in rows if isinstance(row, dict)] if isinstance(rows, list) else []
+
+
+@app.get("/api/cards/trash")
+async def cards_trash():
+    if settings.wb_mode.lower() != "live":
+        raise HTTPException(409, "Корзина карточек доступна только из действующего кабинета Wildberries")
+    try:
+        result = await center.wb.call("wb_cards_trash", {"limit": 100})
+    except Exception as exc:
+        raise HTTPException(502, f"Не удалось получить корзину карточек WB: {type(exc).__name__}: {exc}")
+    if not isinstance(result, dict) or result.get("complete") is False:
+        raise HTTPException(502, "Список корзины неполный; восстановление заблокировано")
+    rows = []
+    for card in _trash_card_rows(result):
+        raw_nm = card.get("nmID", card.get("nmId", card.get("nm_id")))
+        try:
+            nm_id = int(raw_nm)
+        except (TypeError, ValueError):
+            continue
+        trashed_at = card.get("trashedAt") or card.get("trashed_at")
+        deadline = None
+        days_left = None
+        if trashed_at:
+            try:
+                moved = datetime.fromisoformat(str(trashed_at).replace("Z", "+00:00"))
+                if moved.tzinfo is None:
+                    moved = moved.replace(tzinfo=timezone.utc)
+                expiry = moved + timedelta(days=30)
+                deadline = expiry.isoformat()
+                local_zone = ZoneInfo(settings.app_timezone or "Europe/Moscow")
+                days_left = max(0, (expiry.astimezone(local_zone).date() - datetime.now(local_zone).date()).days)
+            except ValueError:
+                pass
+        rows.append({
+            "nm_id": nm_id,
+            "seller_article": card.get("vendorCode") or card.get("supplierArticle") or card.get("vendor_code"),
+            "title": card.get("title") or card.get("name"),
+            "trashed_at": trashed_at,
+            "days_left": days_left,
+            "deadline": deadline,
+        })
+    return {"source": result.get("source"), "complete": True, "count": len(rows), "cards": rows}
+
+
+@app.post("/api/cards/{nm_id}/recover")
+async def stage_card_recovery(nm_id: int):
+    if settings.wb_mode.lower() != "live":
+        raise HTTPException(409, "Восстановление карточки доступно только в действующем кабинете Wildberries")
+    if nm_id <= 0:
+        raise HTTPException(422, "Артикул WB должен быть положительным числом")
+    try:
+        current = await center.wb.call("wb_cards_trash", {"limit": 100})
+    except Exception as exc:
+        raise HTTPException(502, f"Не удалось проверить корзину WB: {type(exc).__name__}: {exc}")
+    if not isinstance(current, dict) or current.get("complete") is False:
+        raise HTTPException(409, "Список корзины неполный; действие не поставлено в очередь")
+    matching = [row for row in _trash_card_rows(current) if str(row.get("nmID", row.get("nmId", row.get("nm_id", "")))) == str(nm_id)]
+    if not matching:
+        raise HTTPException(409, "Карточка не найдена в свежем списке корзины")
+    card = matching[0]
+    proposal = ActionProposal(
+        agent="dashboard",
+        tool="wb_cards_recover",
+        arguments={
+            "nm_ids": [nm_id],
+            "_decision_card": {
+                "kind": "card_recovery",
+                "before": "в корзине",
+                "after": "восстановить карточку",
+                "sources": [{"name": "Wildberries Content API · корзина", "read_at": datetime.now(timezone.utc).isoformat()}],
+                "seller_article": card.get("vendorCode") or card.get("supplierArticle"),
+                "title": card.get("title") or card.get("name"),
+            },
+        },
+        reason="Восстановление карточки из корзины после проверки актуального списка WB",
+        risk="medium",
+    )
+    ok, why = center.policy_engine.validate_action(proposal)
+    if not ok:
+        raise HTTPException(409, why)
+    action_id = center.db.create_action(proposal)
+    return {"status": "staged", "change_id": action_id, "nm_id": nm_id, "note": "Карточка не восстановлена. Подтверди отдельное действие в разделе «Решения»."}
 
 
 SNAPSHOT_SPEC: dict[str, list[str]] = {
@@ -732,6 +832,47 @@ def _traffic_dashboard_payload(bundle: dict[str, Any], period: dict[str, Any]) -
     }
 
 
+def _action_preview(action: dict[str, Any]) -> dict[str, Any]:
+    """Expose only the exact proposed change needed for a human review.
+
+    Internal evidence packets may contain large source payloads, so the dashboard
+    receives a compact, tool-specific preview rather than arbitrary arguments.
+    """
+    args = action.get("arguments") if isinstance(action.get("arguments"), dict) else {}
+    tool = str(action.get("tool") or "")
+    preview: dict[str, Any] = {}
+    if tool == "wb_advert_pause":
+        card = args.get("_decision_card") if isinstance(args.get("_decision_card"), dict) else {}
+        preview = {"campaign_id": args.get("advert_id"), "before": card.get("before"), "after": card.get("after")}
+    elif tool == "wb_advert_bids_set":
+        preview["bids"] = [
+            {"campaign_id": c.get("advert_id"), "items": [
+                {"nm_id": row.get("nm_id"), "bid_rub": round(float(row.get("bid_kopecks")) / 100, 2)}
+                for row in c.get("nm_bids", []) if isinstance(row, dict) and isinstance(row.get("bid_kopecks"), (int, float))
+            ]}
+            for c in args.get("bids", []) if isinstance(c, dict)
+        ]
+    elif tool == "wb_advert_cluster_bids":
+        preview["clusters"] = [
+            {k: row.get(k) for k in ("advert_id", "nm_id", "norm_query", "bid") if k in row}
+            for row in args.get("bids", []) if isinstance(row, dict)
+        ]
+    elif tool == "wb_prices_set":
+        preview = {k: args.get(k) for k in ("nm_id", "price", "discount") if k in args}
+    elif tool == "wb_cards_recover":
+        card = args.get("_decision_card") if isinstance(args.get("_decision_card"), dict) else {}
+        preview = {"nm_id": (args.get("nm_ids") or [None])[0], "seller_article": card.get("seller_article"), "title": card.get("title"), "before": card.get("before"), "after": card.get("after")}
+    return {
+        "id": action.get("id"),
+        "tool": tool,
+        "reason": str(action.get("reason") or ""),
+        "risk": str(action.get("risk") or "unknown"),
+        "executable": tool in MANUAL_APPROVAL_TOOLS,
+        "created_at": action.get("created_at"),
+        "preview": preview,
+    }
+
+
 @app.get("/api/dashboard-data")
 async def dashboard_data(days: int = 7, from_date: str | None = None, to_date: str | None = None) -> dict[str, Any]:
     global _traffic_bundle_cached_at
@@ -849,6 +990,13 @@ async def dashboard_data(days: int = 7, from_date: str | None = None, to_date: s
         },
         "recommendations": recommendations,
         "decisions": decisions,
+        "pending_actions": [_action_preview(x) for x in center.db.pending_actions(limit=100)],
+        "action_permissions": {
+            "manual_approval": center.policy_engine.execution_allowed()[0],
+            "read_only": not center.policy_engine.execution_allowed()[0],
+            "mode": center.policy_engine.operation_mode,
+            "manual_tools": sorted(MANUAL_APPROVAL_TOOLS),
+        },
         "decision_groups": decision_groups,
         "decision_group_summary": grouped_summary,
         "research_agenda": research_agenda,

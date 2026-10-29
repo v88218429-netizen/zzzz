@@ -311,6 +311,16 @@ function decisionDetail(d){
     <div class="detail-section"><h3>На каких фактах основано</h3><div class="detail-facts">${ev||'<div><span>Факты</span><strong>Недостаточно данных</strong></div>'}</div></div>
     <div class="detail-section"><h3>Когда проверить результат</h3><p>${esc(d.follow_up||'—')}</p></div>`;
 }
+function scenarioPrompt(d){
+  const evidence=(d.evidence||[]).map(x=>`- ${x.metric}: ${JSON.stringify(x.value)}; источник: ${x.source||'не указан'}${x.note?`; примечание: ${x.note}`:''}`).join('\n')||'- Подтверждённые факты не приложены';
+  const actions=(d.recommended_actions||[]).map((x,i)=>`${i+1}. ${x.action||'действие не описано'}${x.value?` — параметры: ${JSON.stringify(x.value)}`:''}`).join('\n')||'Нет конкретного действия';
+  const blockers=(d.blockers||[]).map(x=>`- ${x}`).join('\n')||'- Нет';
+  return `Сценарий по задаче панели ИИ-Менеджера\n\nМагазин: определи по подтверждённому источнику. Если привязка к кабинету не указана — остановись и запроси её; не переноси числа между магазинами.\nОбъект: ${d.scope||'не указан'} ${d.entity_id||'не указан'}\nПриоритет: ${d.priority||'не указан'}; уверенность: ${d.confidence||'не указана'}\n\nПроблема: ${d.title||'—'}\nДиагноз: ${d.diagnosis||'—'}\n\nФакты:\n${evidence}\n\nПредлагаемые шаги:\n${actions}\n\nОграничения и недостающие данные:\n${blockers}\n\nСначала проверь свежесть и полноту источников, затем пересчитай каждое условие на данных именно этого кабинета. Подготовь понятный сценарий с порогами, исключениями, частотой проверки, ожидаемым результатом и способом отката. Не выдавай оценку за факт и не приписывай рекламе причинный эффект без контрольного сравнения. Любое изменение цены, скидки, бюджета, ставки, карточки или ответа покупателю оставь черновиком до отдельного подтверждения владельца. После подтверждения перечитай значение из кабинета и запиши фактический результат.\n\nКонтроль результата панели: ${d.follow_up||'не задан'}`;
+}
+function openScenario(d){
+  const prompt=scenarioPrompt(d);
+  openDetail('Черновик сценария · проверь перед использованием',humanizeText(d.title||'Новая задача'),`<div class="detail-section"><p>Черновик собран из фактов и ограничений этого решения. Его можно исправить; он сам ничего не запускает.</p><textarea id="scenario-prompt" class="scenario-prompt" rows="18">${esc(prompt)}</textarea><div class="action-approval-buttons"><button type="button" class="button primary" data-copy-scenario>Скопировать черновик</button></div></div>`);
+}
 function productDetail(id){
   const own=state.data?.portfolio?.own_27||{};
   const prod=(own.products||[]).find(x=>String(x.sku)===String(id))||{};
@@ -540,7 +550,7 @@ function renderSellerServices(){
     $('tariff-options-details').innerHTML=`<p class="source">Подключено: опций ${num(tariffs.activeOptionCount??(tariffs.options||[]).length)} · пакетов ${num(tariffs.activePackageCount??(tariffs.packages||[]).length)} · общая ставка из ответа WB: ${missing(rate)?'не передана':esc(rate)} · ${time(options.checked_at)}</p>${html}<details><summary>Полный исходный ответ WB</summary><pre>${esc(JSON.stringify(tariffs,null,2))}</pre></details>`;
   }else $('tariff-options-details').innerHTML=empty(health.tariff_options?.error||'Нет подтверждённых данных об опциях. Для этого метода WB требует сервисный токен.');
 }
-function toolLabel(t){ const m={wb_advert_pause:'Разобрать и при необходимости поставить кампанию на паузу',wb_prices_set:'Проверить изменение цены',wb_advert_bids_set:'Проверить изменение ставки',wb_advert_cluster_bids:'Проверить ставку кластера'}; return m[t]||`Рекомендация: ${t}`; }
+function toolLabel(t){ const m={wb_advert_pause:'Разобрать и при необходимости поставить кампанию на паузу',wb_prices_set:'Проверить изменение цены',wb_advert_bids_set:'Проверить изменение ставки',wb_advert_cluster_bids:'Проверить ставку кластера',wb_cards_recover:'Восстановить карточку из корзины'}; return m[t]||`Рекомендация: ${t}`; }
 function renderRecommendations(){
   const a=state.data?.recommendations||[];
   if(a.length){
@@ -697,7 +707,7 @@ function decisionCardHtml(d){
   const blockers=(d.blockers||[]).map(x=>`<li>${esc(humanizeText(x))}</li>`).join('');
   const pri=d.priority==='critical'?'КРИТИЧНО':d.priority==='high'?'ВЫСОКИЙ':d.priority==='medium'?'СРЕДНИЙ':'НИЗКИЙ';
   const entity=entityLabel(d.entity_id,d.scope), meta=entityMetaScoped(d.entity_id,d.scope);
-  return `<article class="decision-card ${esc(d.priority)} interactive-card" tabindex="0" data-decision-key="${esc(d.decision_key)}"><div class="decision-head"><div><small>${esc(scopeName(d.scope))} · ${esc(entity)}${meta?` · ${meta}`:''}</small><h3>${esc(humanizeText(d.title))}</h3></div><span class="confidence">${pri} · ${esc(d.confidence==='high'?'высокая уверенность':d.confidence==='medium'?'средняя уверенность':'низкая уверенность')}</span></div><p class="decision-diagnosis">${esc(humanizeText(d.diagnosis))}</p>${blockers?`<div class="decision-blockers"><strong>Почему решение ограничено</strong><ul>${blockers}</ul></div>`:''}<div class="decision-actions">${acts}</div><details class="decision-evidence" onclick="event.stopPropagation()"><summary>Факты · ${d.evidence?.length||0}</summary><ul>${ev||'<li>Нет подтверждающих фактов</li>'}</ul></details><div class="decision-foot">Контроль результата: ${esc(humanizeText(d.follow_up||'—'))} · нажми карточку для подробностей</div></article>`;
+  return `<article class="decision-card ${esc(d.priority)} interactive-card" tabindex="0" data-decision-key="${esc(d.decision_key)}"><div class="decision-head"><div><small>${esc(scopeName(d.scope))} · ${esc(entity)}${meta?` · ${meta}`:''}</small><h3>${esc(humanizeText(d.title))}</h3></div><span class="confidence">${pri} · ${esc(d.confidence==='high'?'высокая уверенность':d.confidence==='medium'?'средняя уверенность':'низкая уверенность')}</span></div><p class="decision-diagnosis">${esc(humanizeText(d.diagnosis))}</p>${blockers?`<div class="decision-blockers"><strong>Почему решение ограничено</strong><ul>${blockers}</ul></div>`:''}<div class="decision-actions">${acts}</div><details class="decision-evidence" onclick="event.stopPropagation()"><summary>Факты · ${d.evidence?.length||0}</summary><ul>${ev||'<li>Нет подтверждающих фактов</li>'}</ul></details><div class="decision-foot">Контроль результата: ${esc(humanizeText(d.follow_up||'—'))}</div><button type="button" class="button secondary scenario-button" data-build-scenario="${esc(d.decision_key)}">Собрать черновик сценария</button></article>`;
 }
 
 function renderDecisions(){
@@ -719,6 +729,34 @@ function renderDecisions(){
     return `<section class="event-domain-group"><div class="decision-toolbar"><div><strong>${esc(g.title)}</strong><span>${esc(g.question)}</span></div><span class="confidence">${pri}</span></div><p class="decision-diagnosis">${esc(g.meaning)}</p><div class="priority-strip">${cats}</div><div class="decision-foot">Затронуто: ${num(g.affected_count)} · решений внутри: ${num(g.decision_count)}${verified}${review}${impact}</div><details class="decision-evidence"><summary>Открыть конкретные товары и действия · ${num(items.length)}</summary><div class="decision-group-items">${items.map(decisionCardHtml).join('')}</div></details></section>`;
   }).join('');
   $('decision-grid').innerHTML=toolbar+(html||empty('Нет смысловых задач выбранного приоритета.'));
+  renderActionApprovalQueue();
+}
+
+function renderActionApprovalQueue(){
+  const root=$('action-approval-list'); if(!root)return;
+  const rows=state.data?.pending_actions||[], allowed=!!state.data?.action_permissions?.manual_approval;
+  const badge=$('action-approval-mode');
+  if(badge){badge.textContent=allowed?'РУЧНОЕ ПОДТВЕРЖДЕНИЕ':'ТОЛЬКО ЧТЕНИЕ';badge.className=`pill ${allowed?'warning':'neutral'}`;}
+  if(!rows.length){root.innerHTML=empty(allowed?'Нет изменений, ожидающих подтверждения.':'Изменения WB заблокированы. Для ручного режима нужны вход с паролем, явный режим подтверждения и снятый предохранитель.');return;}
+  root.innerHTML=rows.map(a=>{
+    const preview=Object.entries(a.preview||{}).flatMap(([k,v])=>Array.isArray(v)?v.map(x=>`${k}: ${JSON.stringify(x)}`):v&&typeof v==='object'?[`${k}: ${JSON.stringify(v)}`]:v!==null&&v!==undefined?[`${k}: ${v}`]:[]).map(x=>`<li>${esc(x)}</li>`).join('');
+    const label=toolLabel(a.tool), risk=a.risk==='irreversible'?'необратимое':a.risk==='high'?'высокое':a.risk==='medium'?'среднее':'низкое';
+    const canExecute=allowed&&a.executable;
+    return `<article class="signal warning action-approval-item"><strong>№${num(a.id)} · ${esc(label)} · риск ${esc(risk)}</strong><p>${esc(humanizeText(a.reason||''))}</p>${preview?`<ul class="action-preview">${preview}</ul>`:''}<span class="source">${a.executable?'Создано '+time(a.created_at)+' · перед выполнением система перечитает текущий статус объекта':'Тип изменения пока не допущен к выполнению. Создано '+time(a.created_at)}</span><div class="action-approval-buttons"><button type="button" class="button secondary" data-queue-action="reject" data-action-id="${num(a.id)}">Отклонить</button><button type="button" class="button primary" data-queue-action="approve" data-action-id="${num(a.id)}" ${canExecute?'':'disabled'}>${a.executable?'Подтвердить и выполнить':'Выполнение заблокировано'}</button></div></article>`;
+  }).join('');
+}
+
+async function reviewQueuedAction(button){
+  const id=button.dataset.actionId, action=button.dataset.queueAction;
+  if(!id||!['approve','reject'].includes(action))return;
+  if(action==='approve'&&!state.data?.action_permissions?.manual_approval){showToast('Выполнение заблокировано настройками безопасности.','error');return;}
+  button.disabled=true;
+  try{
+    const r=await fetch(`/actions/${encodeURIComponent(id)}/${action}`,{method:'POST'}), j=await r.json();
+    if(!r.ok)throw new Error(j.detail||`HTTP ${r.status}`);
+    showToast(action==='approve'?'Изменение подтверждено и выполнено.':'Изменение отклонено.','success');
+    await fetchData();
+  }catch(e){showToast(`Не удалось обработать изменение: ${e.message}`,'error');button.disabled=false;}
 }
 
 function renderAdvertising(){
@@ -961,6 +999,34 @@ function renderSearch(){
   const ev=(state.data.events||[]).filter(e=>['cards','price_margin','search_positions'].includes(e.agent)&&['critical','warning'].includes(e.severity)).slice(0,10); $('cards-signals').innerHTML=ev.length?ev.map(signalHtml).join(''):empty('Карточки и позиции без заметных проблем.');
 }
 
+async function refreshCardsTrash(){
+  const status=$('cards-trash-status'), body=$('cards-trash-table'), button=$('refresh-cards-trash');
+  if(button)button.disabled=true;
+  if(status)status.textContent='Читаю список корзины из Wildberries…';
+  try{
+    const response=await fetch('/api/cards/trash'), payload=await response.json();
+    if(!response.ok)throw new Error(payload.detail||`HTTP ${response.status}`);
+    const cards=payload.cards||[];
+    if(status)status.textContent=`Источник: Wildberries Content API · карточек в корзине: ${num(payload.count)} · список полный.`;
+    if(body)body.innerHTML=cards.length?cards.map(c=>`<tr><td>${num(c.nm_id)}</td><td>${esc(c.seller_article||'—')}</td><td>${esc(c.title||'—')}</td><td>${c.trashed_at?time(c.trashed_at):'дата не передана'}</td><td>${c.days_left===null?'—':`${num(c.days_left)} дн.`}</td><td><button type="button" class="button secondary" data-recover-card="${num(c.nm_id)}">Поставить восстановление в очередь</button></td></tr>`).join(''):`<tr><td colspan="6">В корзине WB нет карточек.</td></tr>`;
+  }catch(error){
+    if(status)status.textContent=`Корзина недоступна: ${error.message}`;
+    if(body)body.innerHTML='<tr><td colspan="6">Новых действий не выполнено.</td></tr>';
+  }finally{if(button)button.disabled=false;}
+}
+
+async function stageCardRecovery(button){
+  const nmId=button.dataset.recoverCard;
+  button.disabled=true;
+  try{
+    const response=await fetch(`/api/cards/${encodeURIComponent(nmId)}/recover`,{method:'POST'}), payload=await response.json();
+    if(!response.ok)throw new Error(payload.detail||`HTTP ${response.status}`);
+    showToast(`Восстановление карточки ${nmId} добавлено в очередь подтверждения.`,'success');
+    await fetchData();
+  }catch(error){showToast(`Не удалось поставить восстановление в очередь: ${error.message}`,'error');}
+  finally{button.disabled=false;}
+}
+
 function moneyValue(v){ if(missing(v)) return 0; const n=Number(String(v).replace(/\s/g,'').replace(',','.')); return Number.isFinite(n)?n:0; }
 function renderFinance(){
   const bal=snap('finance','balance')?.data||{};
@@ -1102,6 +1168,7 @@ function renderAgents(){
 }
 
 $('refresh-data').addEventListener('click',()=>fetchData(true));
+if($('refresh-cards-trash')) $('refresh-cards-trash').addEventListener('click',refreshCardsTrash);
 if($('save-policy')) $('save-policy').addEventListener('click',savePolicy);
 if($('rollback-policy')) $('rollback-policy').addEventListener('click',rollbackPolicy);
 if($('refresh-decisions')) $('refresh-decisions').addEventListener('click',refreshDecisions);
@@ -1126,6 +1193,12 @@ if($('apply-period')) $('apply-period').addEventListener('click',async()=>{
   await triggerPeriodAudit({force:true});
 });
 document.addEventListener('click',e=>{
+  const recoverCard=e.target.closest('[data-recover-card]'); if(recoverCard){e.preventDefault();e.stopPropagation();stageCardRecovery(recoverCard);return;}
+  const scenario=e.target.closest('[data-build-scenario]');
+  if(scenario){e.preventDefault();e.stopPropagation();const key=scenario.dataset.buildScenario;const d=(state.data?.decisions||[]).find(x=>String(x.decision_key)===String(key));if(d)openScenario(d);return;}
+  const copyScenario=e.target.closest('[data-copy-scenario]');
+  if(copyScenario){e.preventDefault();const box=$('scenario-prompt');if(!box)return;box.focus();box.select();const fallback=()=>{try{document.execCommand('copy');showToast('Черновик скопирован.','success');}catch(_){showToast('Выдели текст и скопируй его вручную.','error');}};if(navigator.clipboard?.writeText)navigator.clipboard.writeText(box.value).then(()=>showToast('Черновик сценария скопирован.','success')).catch(fallback);else fallback();return;}
+  const queued=e.target.closest('[data-queue-action]'); if(queued){e.preventDefault();e.stopPropagation();reviewQueuedAction(queued);return;}
   if(e.target.closest('[data-close-detail]')){ closeDetail(); return; }
   const invFilter=e.target.closest('[data-inventory-filter]');
   if(invFilter){ state.inventoryFilter=invFilter.dataset.inventoryFilter||'shortage'; renderInventory(); return; }

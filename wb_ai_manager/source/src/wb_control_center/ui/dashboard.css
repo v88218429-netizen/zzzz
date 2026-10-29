@@ -963,3 +963,9 @@ body { font-size: 15px; line-height: 1.5; }
 .price-field input[type=checkbox]{width:16px;height:16px;flex:0 0 16px;accent-color:var(--purple)}.price-field small{flex:0 0 auto;color:var(--muted-2);font-size:9px}
 .price-result-main{padding:20px;border:1px solid #dcebe4;border-radius:16px;background:linear-gradient(140deg,#f3fbf7,#fff)}.price-result-main span,.price-result-main small{display:block;color:var(--muted)}.price-result-main strong{display:block;margin:8px 0;font-size:32px}.price-result-lines{display:grid;gap:8px;margin:12px 0}.price-result-lines>div{display:grid;grid-template-columns:1fr 1.4fr;gap:12px;padding:10px;border-radius:10px;background:var(--surface-2);font-size:11px}.price-result-lines span{color:var(--muted)}.price-result-lines b{overflow-wrap:anywhere;font-weight:650}
 @media(max-width:760px){.price-calculator-grid{grid-template-columns:1fr}.price-inputs{grid-template-columns:1fr}}
+.action-approval-item{border:1px solid rgba(183,144,60,.35);background:rgba(206,168,79,.06);border-radius:14px;padding:16px;margin:10px 0}
+.action-approval-item p{margin:8px 0}.action-preview{margin:8px 0 12px;padding-left:22px;color:var(--muted);font-size:.9rem}
+.action-approval-buttons{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
+.action-approval-buttons .button:disabled{opacity:.45;cursor:not-allowed}
+@media(max-width:640px){.action-approval-buttons{flex-direction:column}.action-approval-buttons .button{width:100%}}
+.scenario-button{margin-top:10px}.scenario-prompt{width:100%;min-height:320px;resize:vertical;padding:12px;border:1px solid var(--border-strong);border-radius:10px;background:var(--surface-2);color:var(--text);font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace}
