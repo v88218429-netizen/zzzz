@@ -307,6 +307,44 @@ if "if (result === false)" not in export_block:
 text = text[:export_start] + export_block + text[export_end:]
 
 
+# Report lock contention instead of silently treating an unacquired
+# continuation call as success. Leave the DOM library and source book intact.
+continuation_result_marker = "EXPORTDOM_CONTINUATION_RESULT_V2"
+continuation_start = text.find("function exportDOM_continue() {")
+if continuation_start < 0:
+    raise SystemExit("DOM continuation wrapper missing")
+continuation_end = text.find("\\nfunction ", continuation_start + 10)
+if continuation_end < 0:
+    continuation_end = len(text)
+continuation_block = text[continuation_start:continuation_end]
+if continuation_result_marker not in continuation_block:
+    lock_anchor = "var lockAcquired = lock.tryLock(1000);"
+    busy_anchor = "Logger.log('DOM continuation skipped: script lock is busy.');\\n      return;"
+    if lock_anchor not in continuation_block or busy_anchor not in continuation_block:
+        raise SystemExit("DOM continuation lock outcome anchors changed")
+    continuation_block = continuation_block.replace(lock_anchor, "var lockAcquired = lock.tryLock(30000);", 1)
+    continuation_block = continuation_block.replace(
+        busy_anchor,
+        "Logger.log('DOM continuation skipped: script lock is busy.');\\n      return {ok:false,skipped:'script_lock_busy'};",
+        1,
+    )
+    active_anchor = re.compile(r"DOM\\.init\\(\\s*SpreadsheetApp\\.getActiveSpreadsheet\\(\\)\\s*\\);\\s*DOM\\.exportDOM_continue\\(\\);")
+    active_replacement = """var continuationBook = SpreadsheetApp.getActiveSpreadsheet();
+    if (!continuationBook) throw new Error('DOM_CONTINUATION_ACTIVE_BOOK_UNAVAILABLE');
+    DOM.init(continuationBook);
+    var continuationResult = DOM.exportDOM_continue();
+    return {ok:true,active_book_present:true,continuation_result_type:typeof continuationResult};"""
+    continuation_block, active_count = active_anchor.subn(active_replacement, continuation_block, count=1)
+    if active_count != 1:
+        raise SystemExit("DOM continuation invocation anchor changed")
+    continuation_block = continuation_block.replace(
+        "function exportDOM_continue() {",
+        "function exportDOM_continue() {\\n  /* " + continuation_result_marker + " */",
+        1,
+    )
+    text = text[:continuation_start] + continuation_block + text[continuation_end:]
+    print("OZON_CONTINUATION_LOCK_OUTCOME=patched")
+
 diagnostic_marker = "SELLMONITOR_OZON_EXPORT_DIAGNOSTIC_V1"
 if diagnostic_marker not in text:
     text += """
