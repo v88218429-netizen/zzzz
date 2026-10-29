@@ -4,7 +4,7 @@
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.41',
+  VERSION: 'github-worker-1.3.42',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -5908,7 +5908,7 @@ function sellmonitorGithubFbsSaveIdIndex_(cache, prefix, client, lastRow, index)
 }
 
 function sellmonitorGithubFbsLoadIdIndex_(sheet, client, lastRow, mark, forceRebuild) {
-  var cache=CacheService.getScriptCache(),prefix='SMC_FBS_ID_INDEX_V1_',index=null,indexLast=0;
+  var cache=CacheService.getScriptCache(),prefix='SMC_FBS_ID_INDEX_V2_',index=null,indexLast=0;
   if(!forceRebuild){
     try{
       var meta=JSON.parse(cache.get(prefix+'meta')||'null');
