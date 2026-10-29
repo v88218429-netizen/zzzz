@@ -288,7 +288,7 @@ jobs:
                   "store_id":tick.get("store_id"),
                   "skipped":tick.get("skipped"),
                   "reason":tick.get("reason"),
-                  "error":str(tick.get("error") or "").replace("Bearer ","Bearer [redacted] ")[:700],
+                  "error":str(tick.get("error") or "").replace("Bearer ","Bearer [redacted] ")[:1600],
                   "schema_diagnostic":str(tick.get("schema_diagnostic") or "")[:1100],
               }
               print("INNER_FINANCE_TICK_RESULT="+json.dumps(detail,ensure_ascii=False,sort_keys=True))

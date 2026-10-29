@@ -45,7 +45,7 @@ if worker.exists():
         cachedTools = 'TOOLS_LIST_ERROR_' + String(catalogError && catalogError.message ? catalogError.message : catalogError).slice(0,180);
       }
     }
-    throw new Error((innerMessage + '|AVAILABLE_TOOL_SCHEMAS=' + (cachedTools || 'unavailable')).slice(0,1100));
+    throw new Error((innerMessage + '|AVAILABLE_TOOL_SCHEMAS=' + (cachedTools || 'unavailable')).slice(0,1600));
   }"""
         worker_text = worker_text.replace(mcp_catalog_anchor, mcp_catalog_replacement, 1)
         print("INNER_MCP_TOOL_SCHEMA=patched")
@@ -70,8 +70,8 @@ if worker.exists():
             return JSON.stringify(compact);
           };
           cachedTools = 'TOTAL=' + allTools.length + ';NAMES=' + names.filter(function(n){return /analytics.*(product|finance|order|sales|expense|wb)/i.test(n);}).join(',').slice(0,210) +
-            ';PRODUCT_LIST_SCHEMA=' + compactSchema('analytics_get_product_list').slice(0,350) +
-            ';WB_EXPENSES_SCHEMA=' + compactSchema('analytics_get_marketplace_expenses').slice(0,350);"""
+            ';PRODUCT_LIST_SCHEMA=' + compactSchema('analytics_get_product_list').slice(0,850) +
+            ';WB_EXPENSES_SCHEMA=' + compactSchema('analytics_get_marketplace_expenses').slice(0,500);"""
         if schema_patch_anchor not in worker_text:
             raise SystemExit("Sellmonitor catalog cache anchor changed")
         worker_text = worker_text.replace("SMC_INNER_MCP_TOOL_SCHEMA_V3", "SMC_INNER_MCP_TOOL_SCHEMA_V4")
