@@ -5947,19 +5947,24 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
     }
     function sheetRows(rows){return rows.map(function(row){return row.map(asSheetValue);});}
     mark('SHEET_READ_START');
+    // Read the used-row boundary and ID column with SpreadsheetApp. The previous
+    // REST request used A2:A (the entire grid); on large books Sheets batchGet
+    // timed out before the recovery could reach its bounded status reads.
+    var orderSheetNative=SpreadsheetApp.openById(spreadsheetId).getSheetByName('📦 FBS Заказы');
+    if(!orderSheetNative)throw new Error('FBS_ORDER_SHEET_NOT_FOUND');
+    var last=orderSheetNative.getLastRow();
+    if(last<1||last>100000)throw new Error('FBS_ROW_COUNT_UNEXPECTED');
     var initialUrl=apiBase+'/values:batchGet?ranges='+encodeURIComponent(orderSheet+'!A1:G1')+
-      '&ranges='+encodeURIComponent(orderSheet+'!A2:A')+'&valueRenderOption=UNFORMATTED_VALUE';
+      '&valueRenderOption=UNFORMATTED_VALUE';
     var initialResponse=fetchSheetApi(initialUrl),initialCode=initialResponse.getResponseCode();
     mark('SHEET_READ_DONE_'+initialCode);
     if(initialCode<200||initialCode>=300)throw new Error('FBS_SHEET_READ_HTTP_'+initialCode+':'+sheetApiFailure(initialResponse));
     var initialRanges=JSON.parse(initialResponse.getContentText()).valueRanges||[];
-    if(initialRanges.length!==2)throw new Error('FBS_SHEET_READBACK_COUNT_MISMATCH');
+    if(initialRanges.length!==1)throw new Error('FBS_SHEET_READBACK_COUNT_MISMATCH');
     var head=((initialRanges[0]||{}).values||[[]])[0]||[];
     if(String(head[0]||'')!=='ID заказа'||String(head[4]||'')!=='Статус продавца'||String(head[5]||'')!=='Статус WB')
       throw new Error('FBS_COLUMN_SCHEMA_MISMATCH');
-    var ids=((initialRanges[1]||{}).values||[]).map(function(v){return [String((v||[])[0]||'')];});
-    var last=ids.length+1;
-    if(last<1||last>100000)throw new Error('FBS_ROW_COUNT_UNEXPECTED');
+    var ids=last>1?orderSheetNative.getRange(2,1,last-1,1).getDisplayValues().map(function(v){return [String((v||[])[0]||'')];}):[];
     var byId={};
     ids.forEach(function(v,i){if(v[0]&&!Object.prototype.hasOwnProperty.call(byId,v[0]))byId[v[0]]=i+2;});
     var readRows=[];
