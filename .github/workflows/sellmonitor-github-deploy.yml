@@ -125,11 +125,11 @@ jobs:
           if not any(x.get('serviceId')=='sheets' for x in services):
               services.append({'userSymbol':'Sheets','serviceId':'sheets','version':'v4'})
           m.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding='utf-8')
-          match=__import__('re').search(r"VERSION:\\s*'([^']+)'", s)
+          match=__import__('re').search(r"VERSION:\s*'([^']+)'", s)
           if not match:
               raise SystemExit('worker version missing')
           with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as env:
-              env.write('EXPECTED_WORKER_VERSION=' + match.group(1) + '\\n')
+              env.write('EXPECTED_WORKER_VERSION=' + match.group(1) + '\n')
           PY
           python sellmonitor_github_worker/patch_master.py /tmp/sellmonitor-gh-worker
 
