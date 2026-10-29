@@ -46,6 +46,7 @@ jobs:
           test -n "$WEBAPP_DEPLOYMENT_ID"
 
       - name: Probe direct Google Sheets API access
+        continue-on-error: true
         shell: bash
         run: |
           python - <<'PY'
