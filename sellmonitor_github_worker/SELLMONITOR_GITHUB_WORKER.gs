@@ -5809,7 +5809,7 @@ function doPost(e) {
 }
 
 
-/** GitHub FBS migration preflight: read-only and restricted to three known live books. */
+/** Read-only health check over real order IDs and the maximum order timestamp. */
 function sellmonitorGithubFbsTargetHealthV1_() {
   var targets=[
     {client:'SANYCH',id:'1v0qt-thJDOw3tLFdZVGhdXJdBM8rDPRz9mHlcHmuuyM'},
@@ -5822,11 +5822,25 @@ function sellmonitorGithubFbsTargetHealthV1_() {
       var ss=SpreadsheetApp.openById(t.id);
       var orders=ss.getSheetByName('📦 FBS Заказы');
       if(!orders)throw new Error('ORDERS_TAB_MISSING');
-      var n=orders.getLastRow();
+      var last=orders.getLastRow();
       var head=orders.getRange('A1:F1').getDisplayValues()[0];
       if(String(head[0]||'').indexOf('ID')<0)throw new Error('ORDERS_SCHEMA_MISMATCH');
-      var latest=n>1?orders.getRange(n,1,1,6).getDisplayValues()[0]:[];
-      results.push({client:t.client,accessible:true,ordersRows:Math.max(0,n-1),
+      var idCount=0,latestRow=0,latestMs=-Infinity;
+      if(last>1){
+        var rows=orders.getRange(2,1,last-1,2).getValues();
+        for(var r=0;r<rows.length;r++){
+          var id=String((rows[r]||[])[0]||'').trim();
+          if(!/^\d{6,20}$/.test(id))continue;
+          idCount++;
+          var rawDate=rows[r][1],stamp=NaN;
+          if(rawDate instanceof Date)stamp=rawDate.getTime();
+          else if(typeof rawDate==='number')stamp=(rawDate-25569)*86400000;
+          else if(rawDate)stamp=new Date(rawDate).getTime();
+          if(isFinite(stamp)&&stamp>latestMs){latestMs=stamp;latestRow=r+2;}
+        }
+      }
+      var latest=latestRow?orders.getRange(latestRow,1,1,6).getDisplayValues()[0]:[];
+      results.push({client:t.client,accessible:true,ordersRows:idCount,
         latestOrderDate:String(latest[1]||''),hasLatestOrderId:!!latest[0],
         columns:Number(orders.getMaxColumns()),analyticsExists:!!ss.getSheetByName('📈 Аналитика')});
     }catch(e){
@@ -5836,7 +5850,6 @@ function sellmonitorGithubFbsTargetHealthV1_() {
   });
   return {ok:results.every(function(x){return x.accessible;}),checkedAt:new Date().toISOString(),results:results};
 }
-
 
 function sellmonitorGithubFbsStageSnapshot_() {
   var props = PropertiesService.getScriptProperties(), out = {};
