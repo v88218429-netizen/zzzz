@@ -4,7 +4,7 @@
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.38',
+  VERSION: 'github-worker-1.3.39',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -6139,11 +6139,22 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
       if(insertCode<200||insertCode>=300)throw new Error('FBS_INSERT_HTTP_'+insertCode);
       var insertResult=JSON.parse(insertResponse.getContentText()),updatedRange=insertResult.updates&&insertResult.updates.updatedRange;
       if(!updatedRange)throw new Error('FBS_INSERT_RANGE_MISSING');
-      var insertedIds=orderSheetNative.getRange(last+1,1,insert.length,1).getDisplayValues()
+      // The Sheets append endpoint returns its actual destination. Do not assume
+      // SpreadsheetApp.getLastRow()+1: another writer or a non-table value can move it.
+      var appendMatch=String(updatedRange).match(/!A(\\d+):AS(\\d+)$/);
+      if(!appendMatch)throw new Error('FBS_INSERT_RANGE_UNPARSEABLE');
+      var appendStart=Number(appendMatch[1]),appendEnd=Number(appendMatch[2]);
+      if(!isFinite(appendStart)||!isFinite(appendEnd)||appendEnd-appendStart+1!==insert.length)
+        throw new Error('FBS_INSERT_RANGE_COUNT_MISMATCH');
+      var insertedIds=orderSheetNative.getRange(appendStart,1,insert.length,1).getDisplayValues()
         .map(function(v){return String((v||[])[0]||'');});
       if(insertedIds.length!==insert.length)throw new Error('FBS_INSERT_READBACK_COUNT_MISMATCH');
-      for(var ii=0;ii<insert.length;ii++)if(insertedIds[ii]!==String(insert[ii][0]))throw new Error('FBS_INSERT_READBACK_FAILED');
-      indexState.lastRow=last+insert.length;
+      for(var ii=0;ii<insert.length;ii++){
+        if(insertedIds[ii]!==String(insert[ii][0]))throw new Error('FBS_INSERT_READBACK_FAILED');
+        byId[insertedIds[ii]]=appendStart+ii;
+        idByRow[appendStart+ii]=insertedIds[ii];
+      }
+      indexState.lastRow=Math.max(last,appendEnd);
       sellmonitorGithubFbsSaveIdIndex_(indexState.cache,indexState.prefix,indexState.client,indexState.lastRow,byId);
     }
     if(events.length){
