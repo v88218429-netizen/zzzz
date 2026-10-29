@@ -97,3 +97,87 @@ async def test_concurrent_action_apply_is_idempotent(tmp_path: Path):
     assert calls == 1
     assert a["status"] == "executed"
     assert b["status"] == "executed"
+
+
+@pytest.mark.asyncio
+async def test_campaign_pause_rechecks_live_active_state_before_write(tmp_path: Path):
+    from wb_control_center.models import ActionProposal
+    s=Settings(wb_mode="live",data_dir=str(tmp_path),remote_policy_url="",auto_update_enabled=False)
+    c=ControlCenter(s)
+    proposal=ActionProposal(agent="test",tool="wb_advert_pause",arguments={"advert_id":77},reason="test",risk="medium")
+    action_id=c.db.create_action(proposal)
+    calls=[]
+    async def fake_call(tool,args):
+        calls.append((tool,args))
+        if tool == "wb_advert_list":
+            return [{"advertId":77,"status":9}]
+        return {"ok":True}
+    c.wb.call=fake_call
+    c.policy_engine.validate_action=lambda proposal:(True,"ok")
+    c.policy_engine.execution_allowed=lambda:(True,"ok")
+    result=await c.execute_action(action_id)
+    assert result["status"] == "executed"
+    assert calls[0] == ("wb_advert_list", {"statuses":[9]})
+    assert calls[1][0] == "wb_advert_pause"
+
+
+@pytest.mark.asyncio
+async def test_campaign_pause_blocks_when_fresh_read_no_longer_shows_campaign(tmp_path: Path):
+    from wb_control_center.models import ActionProposal
+    s=Settings(wb_mode="live",data_dir=str(tmp_path),remote_policy_url="",auto_update_enabled=False)
+    c=ControlCenter(s)
+    proposal=ActionProposal(agent="test",tool="wb_advert_pause",arguments={"advert_id":77},reason="test",risk="medium")
+    action_id=c.db.create_action(proposal)
+    calls=[]
+    async def fake_call(tool,args):
+        calls.append((tool,args))
+        return []
+    c.wb.call=fake_call
+    c.policy_engine.validate_action=lambda proposal:(True,"ok")
+    c.policy_engine.execution_allowed=lambda:(True,"ok")
+    result=await c.execute_action(action_id)
+    assert result["status"] == "blocked"
+    assert "fresh active-campaign read" in result["reason"]
+    assert [x[0] for x in calls] == ["wb_advert_list"]
+
+
+@pytest.mark.asyncio
+async def test_card_recovery_requires_fresh_trash_presence_before_write(tmp_path: Path):
+    from wb_control_center.models import ActionProposal
+    s=Settings(wb_mode="live",data_dir=str(tmp_path),remote_policy_url="",auto_update_enabled=False)
+    c=ControlCenter(s)
+    proposal=ActionProposal(agent="dashboard",tool="wb_cards_recover",arguments={"nm_ids":[123]},reason="recover",risk="medium")
+    action_id=c.db.create_action(proposal)
+    calls=[]
+    async def fake_call(tool,args):
+        calls.append((tool,args))
+        if tool == "wb_cards_trash":
+            return {"cards":[{"nmID":123}],"complete":True}
+        return {"ok":True}
+    c.wb.call=fake_call
+    c.policy_engine.validate_action=lambda proposal:(True,"ok")
+    c.policy_engine.execution_allowed=lambda:(True,"ok")
+    result=await c.execute_action(action_id)
+    assert result["status"] == "executed"
+    assert [x[0] for x in calls] == ["wb_cards_trash", "wb_cards_recover"]
+    assert calls[1][1] == {"nm_ids":[123]}
+
+
+@pytest.mark.asyncio
+async def test_card_recovery_blocks_if_fresh_trash_read_is_incomplete(tmp_path: Path):
+    from wb_control_center.models import ActionProposal
+    s=Settings(wb_mode="live",data_dir=str(tmp_path),remote_policy_url="",auto_update_enabled=False)
+    c=ControlCenter(s)
+    proposal=ActionProposal(agent="dashboard",tool="wb_cards_recover",arguments={"nm_ids":[123]},reason="recover",risk="medium")
+    action_id=c.db.create_action(proposal)
+    calls=[]
+    async def fake_call(tool,args):
+        calls.append(tool)
+        return {"cards":[{"nmID":123}],"complete":False}
+    c.wb.call=fake_call
+    c.policy_engine.validate_action=lambda proposal:(True,"ok")
+    c.policy_engine.execution_allowed=lambda:(True,"ok")
+    result=await c.execute_action(action_id)
+    assert result["status"] == "blocked"
+    assert "fresh complete trash check" in result["reason"]
+    assert calls == ["wb_cards_trash"]

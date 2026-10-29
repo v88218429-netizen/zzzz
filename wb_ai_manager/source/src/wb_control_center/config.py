@@ -53,16 +53,30 @@ class Settings(BaseSettings):
     data_dir: str = "./data"
     log_level: str = "INFO"
 
-    # shadow = never write; approval = human-confirmed writes; guarded_auto = only allowlisted safe writes.
+    # shadow = never write; approval = human-confirmed writes; guarded_auto is retained for compatibility only.
     operation_mode: str = "shadow"
     auto_actions: bool = False  # deprecated compatibility flag; operation_mode is authoritative
-    # Safety fuse for the test/read-only product build. When True, no WB write may execute
-    # even if operation_mode is accidentally changed to approval/guarded_auto.
+    # Safety fuse. When True, no WB write may execute even if the mode is changed.
     force_read_only: bool = True
     enable_public_wb_search: bool = True
     # Public storefront search is geo-sensitive. Keep the destination explicit and
     # configurable so competitor evidence never silently pretends to be universal.
     public_wb_dest: str = "-1257786"
+
+    @property
+    def manual_writes_allowed(self) -> bool:
+        """Only permit a human-confirmed write with a live WB connection,
+        the read-only fuse lowered, and dashboard authentication configured.
+        There is no auto-write mode.
+        """
+        return bool(
+            self.wb_mode.lower() == "live"
+            and not self.force_read_only
+            and self.operation_mode == "approval"
+            and self.dashboard_auth_required
+            and self.dashboard_auth_user
+            and self.dashboard_auth_password
+        )
 
     # Hot business-policy sync. This lets strategy change without reinstalling the app.
     remote_policy_url: str = "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/policy.json"

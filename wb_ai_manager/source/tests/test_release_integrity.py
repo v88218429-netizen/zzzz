@@ -87,9 +87,13 @@ def test_raw_mcp_example_does_not_bypass_safe_gateway():
     assert "wb-mcp" not in json.dumps(cfg)
 
 
-def test_read_only_build_fuse_is_code_level_not_only_env_level():
-    from wb_control_center.policy import READ_ONLY_BUILD
-    assert READ_ONLY_BUILD is True
+def test_write_mode_defaults_to_read_only_and_only_supports_manual_approval():
+    from wb_control_center.config import Settings
+    from wb_control_center.policy import PolicyEngine
+    from wb_control_center.config import load_policy
+    p = PolicyEngine(Settings(), load_policy())
+    assert p.execution_allowed()[0] is False
+    assert p.can_auto_execute(None) is False
 
 
 def test_launchers_write_secret_values_without_regex_replacement_interpretation():
@@ -231,7 +235,18 @@ def test_all_read_only_status_surfaces_include_the_code_level_build_fuse():
     api=(ROOT / "src/wb_control_center/api.py").read_text(encoding="utf-8")
     portfolio=(ROOT / "src/wb_control_center/portfolio.py").read_text(encoding="utf-8")
     assert api.count('"read_only": not center.policy_engine.execution_allowed()[0]') >= 2
-    assert '"read_only": bool(READ_ONLY_BUILD or self.settings.force_read_only)' in portfolio
+    assert '"read_only": not bool(getattr(self.settings, "manual_writes_allowed", False))' in portfolio
+
+
+def test_video_style_scenario_draft_is_editable_and_never_runs_actions():
+    html=(ROOT / "src/wb_control_center/ui/dashboard.html").read_text(encoding="utf-8")
+    js=(ROOT / "src/wb_control_center/ui/dashboard.js").read_text(encoding="utf-8")
+    assert 'data-build-scenario="${esc(d.decision_key)}"' in js
+    assert "function scenarioPrompt(d)" in js
+    assert 'id="scenario-prompt"' in js
+    assert "data-copy-scenario" in js
+    assert "не запускает" in js
+    assert "data-build-scenario" not in html  # buttons are generated only from current, evidence-backed decisions
 
 
 def test_auto_sheets_browser_launcher_is_bounded():

@@ -14,9 +14,6 @@ MONEY_WRITE_TOOLS = {
     "wb_prices_set",
 }
 
-READ_ONLY_BUILD = True
-
-
 IRREVERSIBLE_TOOLS = {
     "wb_advert_stop",
     "wb_advert_delete",
@@ -25,6 +22,14 @@ IRREVERSIBLE_TOOLS = {
     "wb_order_cancel",
     "wb_stocks_delete",
     "wb_warehouse_delete",
+}
+
+# Only writes that have a complete proposal validator and a human review screen
+# may pass the final execution boundary. Adding a connector tool here requires
+# the matching freshness, target-scope, and before/after checks first.
+MANUAL_APPROVAL_TOOLS = {
+    "wb_advert_pause",
+    "wb_cards_recover",
 }
 
 
@@ -53,28 +58,21 @@ class PolicyEngine:
         return mode if mode in {"shadow", "approval", "guarded_auto"} else "shadow"
 
     def can_auto_execute(self, action: ActionProposal) -> bool:
-        if READ_ONLY_BUILD:
-            return False
-        if getattr(self.settings, "force_read_only", True):
-            return False
-        if self.operation_mode != "guarded_auto":
-            return False
-        safety = self.policy.safety
-        if action.tool in set(safety.get("always_require_approval", [])):
-            return False
-        if action.tool in IRREVERSIBLE_TOOLS:
-            return False
-        if action.risk in {"high", "irreversible"}:
-            return False
-        return action.tool in set(safety.get("auto_execute_tools", []))
+        # The video-inspired workflow is deliberately human-confirmed. No policy,
+        # prompt, or allow-list may turn a recommendation into an automatic WB write.
+        return False
 
     def execution_allowed(self) -> tuple[bool, str]:
-        if READ_ONLY_BUILD:
-            return False, "read-only build fuse: WB writes are disabled in this release"
+        if str(getattr(self.settings, "wb_mode", "live")).lower() != "live":
+            return False, "live Wildberries connection is required; demo data cannot be changed"
         if getattr(self.settings, "force_read_only", True):
             return False, "read-only safety fuse: WB writes are disabled in this build"
-        if self.operation_mode == "shadow":
-            return False, "shadow mode: writes are simulated only"
+        if self.operation_mode != "approval":
+            return False, "manual approval mode is required; automatic writes are disabled"
+        if not getattr(self.settings, "dashboard_auth_required", False):
+            return False, "authenticated dashboard access is required for live approval"
+        if not getattr(self.settings, "dashboard_auth_user", "") or not getattr(self.settings, "dashboard_auth_password", ""):
+            return False, "dashboard credentials are not configured"
         return True, "ok"
 
     def _evidence_ok(self, action: ActionProposal) -> tuple[bool, str]:
@@ -92,6 +90,19 @@ class PolicyEngine:
         return True, "ok"
 
     def validate_action(self, action: ActionProposal) -> tuple[bool, str]:
+        # Money-changing proposals may be validated and staged for review, but
+        # only MANUAL_APPROVAL_TOOLS are eligible for the execution button.
+        # Keeping those sets distinct prevents a good bid recommendation from
+        # becoming a write permission by passing numerical validation.
+        if action.tool not in MONEY_WRITE_TOOLS and action.tool not in MANUAL_APPROVAL_TOOLS:
+            return False, f"tool {action.tool!r} is not enabled for human-approved writes"
+        if action.tool == "wb_cards_recover":
+            nm_ids = action.arguments.get("nm_ids")
+            if not isinstance(nm_ids, list) or len(nm_ids) != 1:
+                return False, "card recovery requires exactly one WB article per approval"
+            article = nm_ids[0]
+            if isinstance(article, bool) or not isinstance(article, int) or article <= 0:
+                return False, "nm_ids must contain a positive integer WB article number"
         limits: dict[str, Any] = self.policy.safety.get("limits", {})
 
         ok, why = self._evidence_ok(action)

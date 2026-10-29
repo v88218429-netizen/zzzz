@@ -155,7 +155,7 @@
           <svg viewBox="0 0 24 24"><path d="M12 2 20 5v6c0 5.4-3.4 9.5-8 11-4.6-1.5-8-5.6-8-11V5l8-3Zm0 3.1L6 7.3V11c0 4.1 2.4 7.2 6 8.6 3.6-1.4 6-4.5 6-8.6V7.3l-6-2.2Z"/></svg>
         </div>
         <div class="banner-copy">
-          <strong>Защищённый режим: только чтение и анализ</strong>
+          <strong>По умолчанию: анализ и рекомендации, изменения отключены</strong>
           <span>Агенты могут читать кабинет, находить проблемы и формировать рекомендации. Ставки, цены, бюджеты, остатки и карточки не изменяются.</span>
         </div>
         <span class="pill safe">НАБЛЮДЕНИЕ</span>
@@ -261,6 +261,7 @@
       <section class="page" data-page-panel="decisions">
         <div class="section-intro"><div><span class="section-label">УПРАВЛЯЮЩЕЕ ЯДРО</span><h2>Что конкретно делать</h2><p>Не алерты, а цепочки: причина → действие → контроль. Экономика, реклама, остатки, выкуп, поиск и рынок рассматриваются вместе.</p></div><button class="button primary" id="refresh-decisions">Пересчитать решения</button></div>
         <div class="decision-summary" id="decision-summary"></div><div class="decision-grid" id="decision-grid"></div>
+        <article class="card action-approval-card"><div class="card-head"><div><span class="section-label">СЦЕНАРИЙ И ПОДТВЕРЖДЕНИЕ</span><h3>Изменения, ожидающие решения</h3><p>Каждое изменение показывается отдельно и выполняется только после явного подтверждения. Автоматическое применение отключено.</p></div><span class="pill neutral" id="action-approval-mode">ТОЛЬКО ЧТЕНИЕ</span></div><div id="action-approval-list" class="signal-stack"></div></article>
       </section>
 
       <section class="page" data-page-panel="control">
@@ -335,7 +336,7 @@
               <label><span>Внутренний потолок рекламы, ₽/24ч</span><input id="policy-max-spend24" type="number" min="0" step="100"><small>Даже рекомендация не превысит этот коридор.</small></label>
             </div>
           </article>
-          <article class="card"><div class="card-head"><div><span class="section-label">КОНТУР</span><h3>Что нельзя изменить из интерфейса</h3></div></div><div class="posture-list"><div><span>Изменения в WB</span><strong>Заблокированы</strong></div><div><span>Макс. шаг ставки</span><strong id="hard-bid-step">10%</strong></div><div><span>Абсолютный предел ставки</span><strong id="hard-bid-cap">—</strong></div><div><span>Режим</span><strong>Наблюдение / только чтение</strong></div><div><span>Удалённые правила</span><strong id="remote-policy-version">—</strong></div></div><button class="button secondary" id="refresh-remote-policy">Обновить правила</button><div class="policy-note" id="remote-policy-note">Правила автоматически проверяются раз в минуту. Редактор правил меняет расчёты без перезапуска, но не может отключить защиту или расширить технические лимиты.</div></article>
+          <article class="card"><div class="card-head"><div><span class="section-label">КОНТУР</span><h3>Когда можно применить изменение</h3></div></div><div class="posture-list"><div><span>Автоматические изменения WB</span><strong>Запрещены</strong></div><div><span>Макс. шаг ставки</span><strong id="hard-bid-step">10%</strong></div><div><span>Абсолютный предел ставки</span><strong id="hard-bid-cap">—</strong></div><div><span>Режим</span><strong>По умолчанию — только чтение</strong></div><div><span>Удалённые правила</span><strong id="remote-policy-version">—</strong></div></div><button class="button secondary" id="refresh-remote-policy">Обновить правила</button><div class="policy-note" id="remote-policy-note">Для ручного изменения одновременно требуются действующий кабинет WB, отдельный режим подтверждения, вход с паролем и снятый защитный предохранитель. Автоматическое выполнение не включается.</div></article>
         </div>
         <article class="card"><div class="card-head"><div><span class="section-label">ИСТОРИЯ</span><h3>Последние изменения правил</h3></div><button class="button secondary" id="rollback-policy">Откатить последнее</button></div><div id="policy-history" class="policy-history"></div></article>
       </section>
@@ -354,6 +355,7 @@
           <article class="card"><div class="card-head"><div><span class="section-label">ПОЗИЦИИ</span><h3>Поисковая видимость</h3></div><span class="muted" id="search-updated">—</span></div><div class="table-wrap"><table class="data-table"><thead><tr><th>Артикул продавца</th><th>Запрос</th><th>Позиция</th><th>Оценка</th></tr></thead><tbody id="search-table"></tbody></table></div></article>
           <article class="card"><div class="card-head"><div><span class="section-label">КАРТОЧКИ</span><h3>Проблемы контента</h3></div></div><div id="cards-signals" class="signal-stack"></div></article>
         </div>
+        <article class="card wide-card"><div class="card-head"><div><span class="section-label">ВОССТАНОВЛЕНИЕ КАРТОЧКИ</span><h3>Корзина WB</h3><p>Список берётся из подключённого кабинета WB. Восстановление сначала попадёт в очередь решений; товар вернётся только после отдельного подтверждения.</p></div><button class="button secondary" id="refresh-cards-trash">Обновить корзину</button></div><div class="data-truth-banner" id="cards-trash-status">Нажми «Обновить корзину», чтобы прочитать её из WB.</div><div class="table-wrap"><table class="data-table"><thead><tr><th>Артикул WB</th><th>Артикул продавца</th><th>Товар</th><th>В корзине с</th><th>До удаления</th><th>Действие</th></tr></thead><tbody id="cards-trash-table"></tbody></table></div></article>
       </section>
 
       <section class="page" data-page-panel="finance">
@@ -425,7 +427,7 @@
             <div><span class="status-icon success">✓</span><p><strong>Не выдумывать метрики</strong><small>Нет данных — показывает «нет данных», а не оценивает из головы.</small></p></div>
             <div><span class="status-icon success">✓</span><p><strong>Не менять ставку по одному ДРР</strong><small>Проверяет остальные факторы до рекламного вывода.</small></p></div>
             <div><span class="status-icon success">✓</span><p><strong>Не путать единицы API</strong><small>Рубли и копейки преобразуются только в модуле связи с WB.</small></p></div>
-            <div><span class="status-icon success">✓</span><p><strong>Не выполнять изменяющие запросы</strong><small>Жёсткий режим только чтения включён независимо от остальных настроек.</small></p></div>
+            <div><span class="status-icon success">✓</span><p><strong>Не исполнять изменения автоматически</strong><small>Ставки, цены и другие изменения требуют отдельного ручного подтверждения; по умолчанию запись выключена.</small></p></div>
           </div></article>
         </div>
       </section>
@@ -453,6 +455,6 @@
     </div>
   </div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="/assets/dashboard.js?v=20261029-traffic-compare"></script>
+  <script src="/assets/dashboard.js?v=20261029-video-scenarios"></script>
 </body>
 </html>
