@@ -70,7 +70,7 @@ jobs:
                       "action": result.get("action") if isinstance(result, dict) else None,
                       "reason": result.get("reason") if isinstance(result, dict) else None,
                       "source_status": result.get("source_status") if isinstance(result, dict) else None,
-                      "source_last_success": result.get("source_updated") if isinstance(result, dict) else None,
+                      "source_last_success": (result.get("source_last_success") or result.get("source_updated")) if isinstance(result, dict) else None,
               "export_diagnostic": result.get("export_diagnostic") if isinstance(result, dict) else None,
                       "stores": [
                           {"store": x.get("store"), "error": x.get("error"), "ok": x.get("ok")}
@@ -88,6 +88,15 @@ jobs:
                       break
                   if transient_export:
                       last = "OZON_SOURCE_EXPORT_NOT_VERIFIED"
+                      print("OZON_SOURCE_STATUS=" + str(result.get("source_status") or ""))
+                      print("OZON_SOURCE_LAST_SUCCESS=" + str(result.get("source_last_success") or result.get("source_updated") or ""))
+                      diagnostic = result.get("export_diagnostic") or {}
+                      if isinstance(diagnostic, dict):
+                          print("OZON_EXPORT_JOB=" + str(diagnostic.get("job") or ""))
+                          print("OZON_EXPORT_IN_PROGRESS=" + str(diagnostic.get("in_progress") or ""))
+                          print("OZON_EXPORT_LAST_ATTEMPT_AT=" + str(diagnostic.get("last_attempt_at") or ""))
+                          print("OZON_CONTINUATION_PENDING=" + str(diagnostic.get("continuation_pending")))
+                          print("OZON_EXPORT_LAST_ERROR=" + str(diagnostic.get("last_error") or "").replace("\\n", " ")[:400])
                       print(f"OZON_SOURCE_EXPORT_NOT_VERIFIED attempt={attempt}/6")
               if attempt < 6:
                   time.sleep(15 * attempt)
