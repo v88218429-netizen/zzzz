@@ -20,8 +20,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: wb-fbs-google-adapter-sanych
-  cancel-in-progress: true
+  group: wb-fbs-recovery-global
+  cancel-in-progress: false
 
 jobs:
   recover:
