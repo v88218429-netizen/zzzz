@@ -320,7 +320,8 @@ function sellmonitorGithubInnerFinanceTick() {
   } catch (e) {
     var message = String(e && e.message ? e.message : e).slice(0,1500);
     if (cc && cfg) sellmonitorGithubLog_(cc,cfg.spreadsheetId,'INNER_FINANCE_MONTHLY_PARTITION','ERROR',message,{});
-    return {ok:false,version:SMC_GH.VERSION,store_id:cfg ? cfg.storeId : '',error:message};
+    var schemaDiagnostic = String(PropertiesService.getScriptProperties().getProperty('SMC_INNER_MCP_TOOL_SCHEMA_V5') || '');
+    return {ok:false,version:SMC_GH.VERSION,store_id:cfg ? cfg.storeId : '',error:message,schema_diagnostic:schemaDiagnostic.slice(0,1100)};
   } finally {
     scriptLock.releaseLock();
   }
