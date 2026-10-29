@@ -383,7 +383,7 @@ jobs:
           PY
 
       - name: Inspect the existing Ozon continuation wrapper
-        if: github.event_name == 'push' && github.event.head_commit.message == 'Run Ozon export continuation via GitHub'
+        if: github.event_name == 'push' && github.event.head_commit.message in fromJSON('["Run Ozon export continuation via GitHub","Repair and resume Ozon export via GitHub"]')
         shell: bash
         run: |
           set -euo pipefail
@@ -446,7 +446,10 @@ jobs:
               print("OZON_"+label+"_LAST_ATTEMPT="+str(diagnostic.get("last_attempt_at") or ""))
               print("OZON_"+label+"_CONTINUATION_PENDING="+str(diagnostic.get("continuation_pending")))
               print("OZON_"+label+"_LAST_ERROR="+str(diagnostic.get("last_error") or "").replace("\\n"," ")[:400])
-          if result.get("ok") is not True or body.get("called") is not True:
+          outcome=body.get("continuation_result") or {}
+          resumed=(outcome.get("started_fresh_export") is True or outcome.get("continued_existing_export") is True)
+          print("OZON_CONTINUATION_ACCEPTED="+str(outcome.get("ok") is True and resumed))
+          if result.get("ok") is not True or body.get("called") is not True or outcome.get("ok") is not True or not resumed:
               print("OZON_CONTINUATION_ERROR="+str(result.get("error") or result.get("message") or "action_failed")[:300])
               raise SystemExit("OZON_CONTINUATION_ACTION_FAILED")
           PY
