@@ -314,36 +314,59 @@ jobs:
               stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=False
           )
           raw = proc.stdout.lstrip(chr(0xfeff)).strip()
-          execution = None
-          try:
-              execution = json.loads(raw)
-          except Exception:
-              if raw.startswith("Exception:"):
-                  print("OZON_CONTINUATION_SCRIPT_ERROR=" + raw.split("Exception:",1)[1][:240])
-                  raise SystemExit("OZON_CONTINUATION_FUNCTION_FAILED")
-              if raw.lower() in ("no response.", "undefined", "null", "false", "true", ""):
-                  print("OZON_CONTINUATION_PLAIN_RESULT=" + (raw.lower() or "empty"))
-              else:
-                  print("OZON_CONTINUATION_RESPONSE_FORMAT=plain")
-                  print("OZON_CONTINUATION_RESPONSE_LENGTH=" + str(len(raw)))
-          if execution is not None:
-              error = execution.get("error") or {}
-              if error:
-                  print("OZON_CONTINUATION_ERROR_CODE=" + str(error.get("code") or "unknown"))
-                  details = error.get("details") or []
-                  if details and isinstance(details[0], dict):
-                      message = str(details[0].get("errorMessage") or "")
-                      for marker in ("Bearer ", "token=", "secret=", "authorization="):
-                          index = message.lower().find(marker.lower())
-                          if index >= 0:
-                              message = message[:index] + "[REDACTED]"
-                      print("OZON_CONTINUATION_SCRIPT_ERROR=" + message.replace(chr(10)," ")[:240])
-                  raise SystemExit("OZON_CONTINUATION_FUNCTION_FAILED")
-              result = (execution.get("response") or {}).get("result")
-              print("OZON_CONTINUATION_RESULT_TYPE=" + ("null" if result is None else type(result).__name__))
+          parsed = None
+          decoder = json.JSONDecoder()
+          for offset, char in enumerate(raw):
+              if char != "{":
+                  continue
+              try:
+                  parsed, _ = decoder.raw_decode(raw, offset)
+                  break
+              except Exception:
+                  continue
+          if parsed is None:
+              safe = raw.replace(os.environ.get("WEBHOOK_SECRET",""), "[REDACTED]")
+              safe = __import__("re").sub(r"(?i)(token|secret|authorization)\\s*[:=]\\s*\\S+", r"\\1=[REDACTED]", safe)
+              safe = __import__("re").sub(r"[A-Za-z0-9_-]{32,}", "[ID_REDACTED]", safe)
+              print("OZON_DIAGNOSTIC_STDOUT_LENGTH=" + str(len(raw)))
+              print("OZON_DIAGNOSTIC_STDOUT_PREFIX=" + safe[:220].replace(chr(10)," "))
+              stderr = proc.stderr.strip()
+              if stderr:
+                  stderr = __import__("re").sub(r"[A-Za-z0-9_-]{32,}", "[ID_REDACTED]", stderr)
+                  print("OZON_DIAGNOSTIC_STDERR_PREFIX=" + stderr[:220].replace(chr(10)," "))
+              raise SystemExit("OZON_DIAGNOSTIC_RESPONSE_INVALID")
+          if not isinstance(parsed, dict):
+              raise SystemExit("OZON_DIAGNOSTIC_RESPONSE_NOT_OBJECT")
+          error = parsed.get("error") or {}
+          if error:
+              print("OZON_DIAGNOSTIC_ERROR_CODE=" + str(error.get("code") or "unknown"))
+              details = error.get("details") or []
+              if details and isinstance(details[0], dict):
+                  message = str(details[0].get("errorMessage") or "")
+                  message = message.replace(os.environ.get("WEBHOOK_SECRET",""), "[REDACTED]")
+                  message = __import__("re").sub(r"[A-Za-z0-9_-]{32,}", "[ID_REDACTED]", message)
+                  print("OZON_DIAGNOSTIC_SCRIPT_ERROR=" + message.replace(chr(10)," ")[:240])
+              raise SystemExit("OZON_DIAGNOSTIC_FUNCTION_FAILED")
+          result = parsed.get("response", {}).get("result") if isinstance(parsed.get("response"), dict) else parsed
+          if isinstance(result, str):
+              try:
+                  result = json.loads(result)
+              except Exception:
+                  pass
+          if not isinstance(result, dict) or result.get("ok") is not True:
+              print("OZON_DIAGNOSTIC_RESULT_TYPE=" + type(result).__name__)
+              print("OZON_DIAGNOSTIC_RESULT_KEYS=" + ",".join(sorted(result.keys())[:15]) if isinstance(result,dict) else "OZON_DIAGNOSTIC_RESULT_KEYS=none")
+              raise SystemExit("OZON_DIAGNOSTIC_RESULT_INVALID")
+          print("OZON_EXPORT_JOB=" + str(result.get("job") or ""))
+          print("OZON_EXPORT_IN_PROGRESS=" + str(result.get("in_progress") or ""))
+          print("OZON_EXPORT_LAST_ATTEMPT_AT=" + str(result.get("last_attempt_at") or ""))
+          print("OZON_CONTINUATION_PENDING=" + str(result.get("continuation_pending")))
+          message = str(result.get("last_error") or "").replace(os.environ.get("WEBHOOK_SECRET",""), "[REDACTED]")
+          message = __import__("re").sub(r"[A-Za-z0-9_-]{32,}", "[ID_REDACTED]", message)
+          print("OZON_EXPORT_LAST_ERROR=" + message.replace(chr(10)," ")[:400])
           if proc.returncode:
-              print("OZON_CONTINUATION_EXIT=" + str(proc.returncode))
-              raise SystemExit("OZON_CONTINUATION_COMMAND_FAILED")
+              print("OZON_DIAGNOSTIC_EXIT=" + str(proc.returncode))
+              raise SystemExit("OZON_DIAGNOSTIC_COMMAND_FAILED")
 
           url = "https://script.google.com/macros/s/" + os.environ["WEBAPP_DEPLOYMENT_ID"] + "/exec"
           payload = json.dumps({"token":os.environ["WEBHOOK_SECRET"],"action":"publish_ozon_summary_orders"}).encode()
