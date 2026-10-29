@@ -124,3 +124,77 @@ jobs:
           git -C "$RUNNER_TEMP/wb-traffic-state-branch" commit -m "traffic: encrypted collected history"
           git -C "$RUNNER_TEMP/wb-traffic-state-branch" push origin HEAD:traffic-state --force
 
+      - name: Publish verified traffic to the three store summaries
+        if: steps.archive.outcome == 'success'
+        shell: bash
+        env:
+          DATA_DIR: ${{ runner.temp }}/wb-traffic/data
+          WEBAPP_DEPLOYMENT_ID: AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw
+          WEBHOOK_SECRET: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
+        run: |
+          set -euo pipefail
+          test -n "$WEBHOOK_SECRET"
+          echo "::add-mask::$WEBHOOK_SECRET"
+          python - <<'PY'
+          import csv, json, os, pathlib, time, urllib.error, urllib.request
+
+          root=pathlib.Path(os.environ["DATA_DIR"])/"traffic"
+          status=json.loads((root/"status.json").read_text(encoding="utf-8"))
+          expected=("ap","aa","yv")
+          shops=status.get("shops") or {}
+          if status.get("ok") is not True or not status.get("finishedAt") or any((shops.get(x) or {}).get("ok") is not True for x in expected):
+              raise SystemExit("WB_TRAFFIC_SOURCE_GATE_FAILED")
+          datasets={
+              "ads":("campaign_sku_day.csv",["shop","date","advert_id","nm_id","views","clicks","atbs","orders","spend_rub","order_sum_rub","source","quality","seller_article"]),
+              "funnel":("funnel_sku_day.csv",["shop","date","nm_id","vendor_code","open_count","cart_count","order_count","order_sum_rub","source"]),
+              "organic":("organic_sku_day.csv",["shop","date","nm_id","vendor_code","total_open_count","paid_clicks","organic_clicks","source_total","source_paid","formula","coverage_status","campaigns_checked","campaigns_complete","formula_version"]),
+              "ads_poll":("ads_poll_snapshot.csv",["shop","observed_at","date","advert_id","nm_id","views","clicks","atbs","orders","spend_rub","order_sum_rub","source","measurement_grain","load_timestamp","coverage_status"]),
+              "funnel_poll":("funnel_poll_snapshot.csv",["shop","observed_at","date","sku_rows","open_count","cart_count","order_count","order_sum_rub","open_to_cart","cart_to_order","open_to_order","source","measurement_grain","load_timestamp","coverage_status"]),
+          }
+          all_rows={}
+          for name,(filename,headers) in datasets.items():
+              with (root/filename).open("r",encoding="utf-8-sig",newline="") as fh:
+                  reader=csv.DictReader(fh)
+                  if reader.fieldnames!=headers: raise SystemExit("WB_TRAFFIC_HEADER_MISMATCH:"+name)
+                  all_rows[name]=[[row[h] for h in headers] for row in reader]
+          names={"ap":"Саныч","aa":"AIR","yv":"Хозяюшка"}
+          url="https://script.google.com/macros/s/"+os.environ["WEBAPP_DEPLOYMENT_ID"]+"/exec"
+          token=os.environ["WEBHOOK_SECRET"]
+          def post(payload):
+              body=json.dumps(dict(payload,token=token),ensure_ascii=False,separators=(",",":")).encode("utf-8")
+              req=urllib.request.Request(url,data=body,headers={"Content-Type":"application/json"},method="POST")
+              last=None
+              for attempt in range(1,4):
+                  try:
+                      with urllib.request.urlopen(req,timeout=540) as response:
+                          return json.loads(response.read().decode("utf-8"))
+                  except urllib.error.HTTPError as exc:
+                      last="HTTP_"+str(exc.code)
+                      if exc.code<500 and exc.code!=429: break
+                  except (urllib.error.URLError,TimeoutError,OSError,json.JSONDecodeError) as exc:
+                      last=type(exc).__name__+":"+str(exc)[:180]
+                  if attempt<3: time.sleep(10*attempt)
+              raise RuntimeError("WB_TRAFFIC_PUBLISH_REQUEST_FAILED:"+str(last))
+          errors=[]
+          for alias in expected:
+              data={name:[row for row in rows if str(row[0]).strip()==alias] for name,rows in all_rows.items()}
+              print("WB_TRAFFIC_STORE_INPUT="+alias+" "+json.dumps({k:len(v) for k,v in data.items()},sort_keys=True))
+              common={"action":"publish_wb_traffic","sync_status":status,"datasets":data}
+              try:
+                  partition=post(dict(common,partition_only=True))
+                  if partition.get("ok") is not True or (partition.get("partitions") or {}).get("ok") is not True:
+                      raise RuntimeError("partition_readback_failed:"+json.dumps(partition,ensure_ascii=False)[:700])
+                  parts=partition["partitions"]
+                  print("WB_TRAFFIC_PARTITIONS_OK="+alias+" "+json.dumps({k:{"written":v.get("written"),"added":v.get("added"),"updated":v.get("updated"),"parts":len(v.get("parts") or [])} for k,v in parts.items() if isinstance(v,dict)},ensure_ascii=False,sort_keys=True))
+                  view=post(dict(common,daily_view_store=True,store_name=names[alias]))
+                  daily=((view.get("partitions") or {}).get("daily_view") or {})
+                  lite=daily.get("lite_tables") or {}
+                  if view.get("ok") is not True or daily.get("ok") is not True or lite.get("ok") is not True or names[alias] not in (lite.get("stores") or []):
+                      raise RuntimeError("summary_readback_failed:"+json.dumps(view,ensure_ascii=False)[:900])
+                  print("WB_TRAFFIC_SUMMARY_READBACK_OK="+alias+" "+json.dumps({"store":names[alias],"fresh_rows":daily.get("fresh_rows"),"rows":daily.get("rows"),"added":daily.get("added"),"updated":daily.get("updated"),"max_date":daily.get("max_date"),"written":lite.get("stores")},ensure_ascii=False))
+              except Exception as exc:
+                  errors.append(alias+":"+str(exc)[:1000])
+                  print("WB_TRAFFIC_STORE_FAILED="+alias+" "+str(exc)[:1000])
+          if errors: raise SystemExit("WB_TRAFFIC_SUMMARY_PUBLICATION_FAILED:"+json.dumps(errors,ensure_ascii=False))
+          PY
+
