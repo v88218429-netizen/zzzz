@@ -49,28 +49,56 @@ jobs:
         shell: bash
         run: |
           python - <<'PY'
-          import json, os, urllib.error, urllib.request
+          import json, os, urllib.error, urllib.parse, urllib.request
           cfg=json.loads(os.environ['CLASPRC_JSON'])
-          token=cfg.get('token') or {}
-          access=str(token.get('access_token') or '')
+          def find(obj,names):
+              wanted={x.lower().replace('_','') for x in names}
+              if isinstance(obj,dict):
+                  for key,value in obj.items():
+                      if str(key).lower().replace('_','') in wanted and isinstance(value,str) and value:
+                          return value
+                  for value in obj.values():
+                      found=find(value,names)
+                      if found:return found
+              elif isinstance(obj,list):
+                  for value in obj:
+                      found=find(value,names)
+                      if found:return found
+              return ''
+          token_fields=cfg.get('tokens') or []
           print('CLASPRC_TOP_LEVEL_FIELDS='+','.join(sorted(cfg.keys())))
-          print('CLASPRC_TOKEN_FIELDS='+','.join(sorted(token.keys())))
-          if not access:
-              raise SystemExit('CLASPRC_ACCESS_TOKEN_UNAVAILABLE')
+          print('CLASPRC_TOKEN_ENTRY_COUNT='+str(len(token_fields) if isinstance(token_fields,list) else 0))
+          if isinstance(token_fields,list) and token_fields and isinstance(token_fields[0],dict):
+              print('CLASPRC_TOKEN_ENTRY_FIELDS='+','.join(sorted(token_fields[0].keys())))
+          access=find(cfg,['access_token','accessToken'])
+          refresh=find(cfg,['refresh_token','refreshToken'])
+          client_id=find(cfg,['client_id','clientId'])
+          client_secret=find(cfg,['client_secret','clientSecret'])
+          def probe(access):
+              sheet='1qJvhEOIku7sOMydfrUz0PR5dkcU0sLjv433pa1MFBcM'
+              url='https://sheets.googleapis.com/v4/spreadsheets/'+sheet+'?fields=spreadsheetId,properties.title'
+              req=urllib.request.Request(url,headers={'Authorization':'Bearer '+access})
+              with urllib.request.urlopen(req,timeout=20) as response:return json.loads(response.read().decode())
+          try:
+              result=probe(access) if access else None
+          except urllib.error.HTTPError as exc:
+              result=None
+              if exc.code!=401: raise
+          if result is None and refresh and client_id and client_secret:
+              form=urllib.parse.urlencode({'client_id':client_id,'client_secret':client_secret,'refresh_token':refresh,'grant_type':'refresh_token'}).encode()
+              req=urllib.request.Request('https://oauth2.googleapis.com/token',data=form,method='POST')
+              with urllib.request.urlopen(req,timeout=30) as response:
+                  auth=json.loads(response.read().decode())
+              access=auth['access_token']
+              result=probe(access)
+              print('DIRECT_SHEETS_TOKEN_REFRESH=ok')
+          if result is None:
+              raise SystemExit('CLASPRC_USABLE_SHEETS_TOKEN_UNAVAILABLE')
           print('::add-mask::'+access)
           with open(os.environ['GITHUB_ENV'],'a',encoding='utf-8') as env:
               env.write('SHEETS_ACCESS_TOKEN='+access+chr(10))
-          sheet='1qJvhEOIku7sOMydfrUz0PR5dkcU0sLjv433pa1MFBcM'
-          url='https://sheets.googleapis.com/v4/spreadsheets/'+sheet+'?fields=spreadsheetId,properties.title'
-          req=urllib.request.Request(url,headers={'Authorization':'Bearer '+access})
-          try:
-              with urllib.request.urlopen(req,timeout=20) as response:
-                  obj=json.loads(response.read().decode())
-              print('DIRECT_SHEETS_READ=ok')
-              print('DIRECT_SHEETS_TITLE='+str((obj.get('properties') or {}).get('title','')))
-          except urllib.error.HTTPError as exc:
-              detail=exc.read().decode('utf-8','replace')[:240].replace(chr(10),' ')
-              raise SystemExit('DIRECT_SHEETS_READ_FAILED:'+str(exc.code)+':'+detail)
+          print('DIRECT_SHEETS_READ=ok')
+          print('DIRECT_SHEETS_TITLE='+str((result.get('properties') or {}).get('title','')))
           PY
 
       - name: Install clasp and auth
