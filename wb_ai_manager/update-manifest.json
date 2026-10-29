@@ -2,9 +2,9 @@
   "schema": 1,
   "channels": {
     "stable": {
-      "version": "1.1.17",
+      "version": "1.1.18",
       "channel": "stable",
-      "notes": "Восстановление карточек из корзины с проверкой срока, свежим перечитыванием и ручным подтверждением; сохранены аудит магазина и сценарии решений.",
+      "notes": "Разбор фактических кластеров WB по магазинам, текущим ставкам, состоянию, заказам и точной экономике; советы только для проверки, без автоматических изменений.",
       "minimum_current_version": "1.0.0",
       "files": [
         {
@@ -20,7 +20,7 @@
         {
           "path": "RELEASE_NOTES.md",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/RELEASE_NOTES.md",
-          "sha256": "bad82ec36afe60d7d015dc65a7a19dd957d02a3200e8cfc5779aae62a5fad60c"
+          "sha256": "7790b61cf5aa510ceea79c118e9d0cf6638e4846cb71d936924d8dbbd0840ce3"
         },
         {
           "path": "START_WB_AI_MANAGER.command",
@@ -31,7 +31,7 @@
         {
           "path": "VERSION",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/VERSION",
-          "sha256": "fff006a1cfc9eed3640097ef1238887ac3e262b8e0c5cd829ea7856518768b83"
+          "sha256": "32820b5fe235bf45d17986fb1b9b336365bef8b90c678f57d795b48082b2144e"
         },
         {
           "path": "docs/AUTO_UPDATE.md",
@@ -51,12 +51,12 @@
         {
           "path": "plugin.json",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/plugin.json",
-          "sha256": "69f543f68ffef9ac1ae7c0bbe8c587b28b7be0c037bd49899324da70cf3abf46"
+          "sha256": "e88c5125b8bd8f6e182adad813daf38b442e31edd85a12f8bd08cc78f5a8c89c"
         },
         {
           "path": "pyproject.toml",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/pyproject.toml",
-          "sha256": "dd92d626e7c4257157352863790ebdc7a5117a61e164b25f750d1ea21b29b97d"
+          "sha256": "b43df75b1a2625ed69ffdd7af4acfde2c3f0438411f25933580ea37a3e95ff5b"
         },
         {
           "path": "scripts/auto_refresh_sheets.py",
@@ -142,7 +142,7 @@
         {
           "path": "src/wb_control_center/__init__.py",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/src/wb_control_center/__init__.py",
-          "sha256": "0bb16adbb862f9fef0ec3f8514154e3d80ed046cf4a3ff5a29b655842973ffd7"
+          "sha256": "734327fd3f0204fbfa9d63890015e9f8b2f7c01a0ad528747ee25b2273a138dd"
         },
         {
           "path": "src/wb_control_center/__main__.py",
@@ -272,7 +272,7 @@
         {
           "path": "src/wb_control_center/api.py",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/src/wb_control_center/api.py",
-          "sha256": "fe134b2501faa325cebeba7569ff3dd411bc22ab281e02a85cb301971bcc6f54"
+          "sha256": "d34ddd8895fb99db228a77774883d88df994240533b0ca54f9d7bf443b12bddf"
         },
         {
           "path": "src/wb_control_center/auto_sheets.py",
@@ -417,7 +417,7 @@
         {
           "path": "src/wb_control_center/query_manager.py",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/src/wb_control_center/query_manager.py",
-          "sha256": "2f46e8bbf70c441cad6260a4beb18db14d7fce9a03f2b11a9a4a8dc762fb8932"
+          "sha256": "ea841dfe9de79b8a7934d9d36ce5fef7be15227ca7adeaaec9713aae06767b03"
         },
         {
           "path": "src/wb_control_center/remote_policy.py",
@@ -452,12 +452,12 @@
         {
           "path": "src/wb_control_center/ui/dashboard.html",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/src/wb_control_center/ui/dashboard.html",
-          "sha256": "c4875f10fab7d4eeebfa73c59b438ec7418e15055590e6d3184eb053586e9a98"
+          "sha256": "abf3546b50d8500783b1be920f6c4545bab2366d8e414d9affa9557b1c695571"
         },
         {
           "path": "src/wb_control_center/ui/dashboard.js",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/src/wb_control_center/ui/dashboard.js",
-          "sha256": "5aef31377ac6d1d8eacd4adff15c356db912e5132c66934c29424d7c75eda579"
+          "sha256": "412bf229394117e815f6189e0057fb6f95611edbbe4c4aeea14ec3ab7799e0fa"
         },
         {
           "path": "src/wb_control_center/updater.py",
@@ -478,6 +478,11 @@
           "path": "src/wb_control_center/worker_source.py",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/src/wb_control_center/worker_source.py",
           "sha256": "12186781f5b08216f1555bf7602b1a93254861d9636b987774ae744d49d5081e"
+        },
+        {
+          "path": "src/wb_control_center/cluster_advisor.py",
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/src/wb_control_center/cluster_advisor.py",
+          "sha256": "504b5251d352acf14e6f4fa77bf1aa2761a0b0608deb3c5b85a3c9592efef15b"
         }
       ]
     }

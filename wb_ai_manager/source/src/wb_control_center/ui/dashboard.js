@@ -771,6 +771,33 @@ function renderAdvertising(){
   $('ads-table').innerHTML=a.rows.length?a.rows.map(r=>{ const id=r.advertId??r.advert_id??r.id; const sp=Number(r.sum??r.spend??0)||0, or=Number(r.orders??r.ordersCount??0)||0, rev=Number(r.sum_price??r.revenue??0)||0, drr=rev>0?sp/rev*100:null, ctr=Number(r.ctr), cpc=Number(r.cpc); const related=plans.filter(p=>String(p.entity_id||'').split(':')[0]===String(id)); const action=related.length===1?related[0].recommended_actions?.[0]?.action:null; const advice=related.length>1?`${related.length} плана по товарам ниже`:action||'Нет проверенного плана по товару'; const nms=extractList(r?.nm_settings||r?.nmSettings||[]).map(x=>x.nm_id??x.nmId??x.nmID).filter(x=>!missing(x)); const arts=[...new Set(nms.map(entityName).filter(Boolean))]; return `<tr><td><strong>${esc(campaignLabel(id))}</strong><br><span class="muted">кампания ID ${esc(id??'—')}</span></td><td>${rub(sp)}</td><td>${num(or)}</td><td>${rub(rev)}</td><td>${pct(drr)}</td><td>${Number.isFinite(ctr)?pct(ctr):'—'}</td><td>${Number.isFinite(cpc)?rub(cpc):'—'}</td><td>${esc(humanizeText(advice))}</td></tr>`; }).join(''):`<tr><td colspan="8">${empty(a.error?'WB временно ограничил статистику рекламы. Нули не считаются фактом; система повторит чтение автоматически.':'Нет рекламных данных. Запусти проверку.')}</td></tr>`;
   const ev=(state.data.events||[]).filter(e=>['advertising_monitor','advertising_optimizer'].includes(e.agent)&&['critical','warning'].includes(e.severity)).slice(0,8); $('ads-signals').innerHTML=ev.length?ev.map(signalHtml).join(''):empty('Проблемных рекламных сигналов сейчас нет.');
   if($('ad-control-plans')) $('ad-control-plans').innerHTML=plans.length?plans.map(adPlanHtml).join(''):empty('Числовых планов пока нет. Запусти полный аудит.');
+  renderClusterAdvisor();
+}
+
+function renderClusterAdvisor(){
+  const analysis=state.data?.traffic?.cluster_analysis||{}, rows=analysis.rows||[], selected=state.selectedStore||'all';
+  const visible=rows.filter(r=>selected==='all'||r.shop===({sanych:'ap',air:'aa',hozyushka:'yv'}[selected]));
+  const body=$('cluster-analysis-table'), status=$('cluster-analysis-status'), kpis=$('cluster-analysis-kpis');
+  if(!body||!status||!kpis)return;
+  const advised=visible.filter(r=>!r.blockers?.length&&['ПРОВЕРИТЬ ИСКЛЮЧЕНИЕ КЛАСТЕРА','ТЕСТОВО СНИЗИТЬ СТАВКУ','ОСТАВИТЬ СТАВКУ'].includes(r.action)).length;
+  const blocked=visible.filter(r=>r.blockers?.length).length;
+  status.textContent=rows.length
+    ? `Источник: WB Promotion API · период ${state.data?.period?.from||'—'} — ${state.data?.period?.to||'—'} · ${visible.length} кластеров${selected==='all'?' по всем кабинетам':' в выбранном магазине'} · точные советы по ставке: ${advised} · заблокировано из-за неполных/устаревших связей: ${blocked}. Изменения в WB не выполняются.`
+    : `Кластерные данные не получены. ${state.data?.traffic?.error||'Проверь источник архивов GitHub и следующий сбор данных WB; пустой список не означает нулевую рекламу.'}`;
+  kpis.innerHTML=[
+    ['Кластеры в выборке',visible.length],['Точный совет',advised],['Заблокировано',blocked],['Ставка изменена автоматически','Нет']
+  ].map(([label,value])=>`<article class="metric-card"><span>${esc(label)}</span><strong>${typeof value==='number'?num(value):esc(value)}</strong></article>`).join('');
+  const rank={'ТЕСТОВО СНИЗИТЬ СТАВКУ':0,'ПРОВЕРИТЬ ИСКЛЮЧЕНИЕ КЛАСТЕРА':1,'СОВЕТ ПО СТАВКЕ ЗАБЛОКИРОВАН':2,'СОБРАТЬ БОЛЬШЕ ДАННЫХ':3,'ОСТАВИТЬ СТАВКУ':4,'ТРЕБУЕТ ПРОВЕРКИ':5};
+  const ordered=[...visible].sort((a,b)=>(rank[a.action]??9)-(rank[b.action]??9)||(Number(b.spend_rub)||0)-(Number(a.spend_rub)||0));
+  const exactRub=v=>missing(v)?'—':`${num(v,2)} ₽`;
+  body.innerHTML=ordered.length?ordered.map(r=>{
+    const position=r.organic_position_status==='fresh'?num(r.organic_position):'нет точного свежего факта';
+    const stateLabel=r.cluster_state==='active'?'активен':r.cluster_state==='excluded'?'исключён':'не подтверждён';
+    const target=r.target_bid_rub===null||r.target_bid_rub===undefined?'—':`${exactRub(r.target_bid_rub)} (−10% проба)`;
+    const blocker=r.blockers?.length?`<br><span class="muted">Блокировка: ${esc(r.blockers.join(' '))}</span>`:'';
+    const label=entityName(r.nm_id);
+    return `<tr><td><strong>${esc(r.store_name)} · ${esc(r.seller_article||label)}</strong><br><span class="muted">${esc(r.campaign_name||`Кампания ${r.advert_id}`)} · nmID ${esc(r.nm_id)} · ${stateLabel}</span></td><td>${esc(r.norm_query)}<br><span class="muted">${esc(r.date_from)} — ${esc(r.date_to)}</span></td><td>${esc(position)}</td><td>${num(r.views)}</td><td>${num(r.clicks)}</td><td>${num(r.atbs)}</td><td>${num(r.orders)}</td><td>${rub(r.spend_rub)}</td><td>${exactRub(r.cpc_rub)} / ${exactRub(r.cpa_rub)}<br><span class="muted">предел заказа ${exactRub(r.max_cpa_rub)}</span></td><td>${exactRub(r.current_bid_rub)}<br><span class="muted">снимок ${ago(r.bid_observed_at)}</span></td><td>${target}</td><td><strong>${esc(r.action)}</strong><br>${esc(r.reason)}${blocker}<br><span class="muted">${esc(r.quality||'качество источника не указано')}</span></td></tr>`;
+  }).join(''):`<tr><td colspan="12">${empty(selected==='all'?'По выбранному периоду нет полученных кластеров WB. Это не означает нулевые показы или расход.':'В этом магазине за выбранный период кластеры не получены.')}</td></tr>`;
 }
 
 function renderTraffic(){
@@ -1175,7 +1202,7 @@ if($('refresh-decisions')) $('refresh-decisions').addEventListener('click',refre
 if($('refresh-sheets')) $('refresh-sheets').addEventListener('click',refreshSheets);
 if($('refresh-remote-policy')) $('refresh-remote-policy').addEventListener('click',refreshRemotePolicy);
 $('run-audit').addEventListener('click',runAudit);
-for(const id of ['traffic-store-select','portfolio-store-select','funnel-store-select','price-store-select']) if($(id)) $(id).addEventListener('change',e=>{state.selectedStore=e.target.value||'all'; for(const other of ['traffic-store-select','portfolio-store-select','funnel-store-select','price-store-select'])if($(other))$(other).value=state.selectedStore; renderPortfolio(); renderTraffic(); renderFunnel(); renderPriceCalculator();});
+for(const id of ['traffic-store-select','portfolio-store-select','funnel-store-select','price-store-select']) if($(id)) $(id).addEventListener('change',e=>{state.selectedStore=e.target.value||'all'; for(const other of ['traffic-store-select','portfolio-store-select','funnel-store-select','price-store-select'])if($(other))$(other).value=state.selectedStore; renderPortfolio(); renderTraffic(); renderFunnel(); renderAdvertising(); renderPriceCalculator();});
 if($('funnel-product-select')) $('funnel-product-select').addEventListener('change',renderFunnel);
 if($('price-product-select')) $('price-product-select').addEventListener('change',e=>{state.priceProductKey=e.target.value||'';renderPriceCalculator();});
 document.addEventListener('input',e=>{if(e.target.matches('#price-inputs [data-price-field], #price-inputs [data-price-enabled]'))persistPriceScenario();});
@@ -1205,7 +1232,7 @@ document.addEventListener('click',e=>{
   const decisionFilter=e.target.closest('[data-decision-filter]');
   if(decisionFilter){ state.decisionFilter=decisionFilter.dataset.decisionFilter||'priority'; renderDecisions(); return; }
   const go=e.target.closest('[data-go-page]'); if(go){ setPage(go.dataset.goPage); return; }
-  const storeCard=e.target.closest('[data-store-id]'); if(storeCard){ state.selectedStore=storeCard.dataset.storeId||'all'; for(const other of ['traffic-store-select','portfolio-store-select','funnel-store-select','price-store-select'])if($(other))$(other).value=state.selectedStore; renderPortfolio(); renderTraffic(); renderFunnel(); renderPriceCalculator(); setPage('advertising'); return; }
+  const storeCard=e.target.closest('[data-store-id]'); if(storeCard){ state.selectedStore=storeCard.dataset.storeId||'all'; for(const other of ['traffic-store-select','portfolio-store-select','funnel-store-select','price-store-select'])if($(other))$(other).value=state.selectedStore; renderPortfolio(); renderTraffic(); renderFunnel(); renderAdvertising(); renderPriceCalculator(); setPage('advertising'); return; }
   const decisionEl=e.target.closest('[data-decision-key]');
   if(decisionEl){
     const key=decisionEl.dataset.decisionKey;

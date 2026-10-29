@@ -189,7 +189,8 @@ class QueryManager:
         cid=_text(r,"campaign_id","advert_id","advertId","campaign")
         bid=_first_num(r,"current_search_bid_rub","current_bid_rub","search_bid_rub","bid_rub","bid")
         ts=self._timestamps(p,r)
-        return {"sku":sku,"seller_article":article,"query":q,"normalized_query":_norm(q),"source":source,
+        return {"sku":sku,"seller_article":article,"query":q,"normalized_query":_norm(q),
+                "store_id":str(r.get("store_id") or r.get("shop") or p.get("store_id") or p.get("shop") or "").strip().lower(),"source":source,
                 "frequency":freq,"position":pos,"target_position":target,"organic_clicks":org,"paid_clicks":paid,
                 "clicks":clicks,"impressions":imp,"carts":carts,"orders":orders,
                 "ctr_pct":round(ctr,3) if ctr is not None else None,"cr_pct":round(cr,3) if cr is not None else None,
