@@ -208,6 +208,36 @@ if worker.exists():
     elif ozon_diag_marker not in worker_text and "function sellmonitorGithubPublishOzonSummaryOrders_" in worker_text:
         raise SystemExit("Ozon diagnostic response anchor changed")
 
+    resume_marker = "SELLMONITOR_OZON_CONTINUATION_GITHUB_ACTION_V1"
+    resume_anchor = "    if (action === 'seed_wb_tokens') {"
+    if resume_marker not in worker_text and resume_anchor in worker_text:
+        resume_route = """    /* SELLMONITOR_OZON_CONTINUATION_GITHUB_ACTION_V1 */
+    if (action === 'resume_ozon_export') {
+      var before = typeof sellmonitorGithubReadOzonExportDiagnostic === 'function' ? sellmonitorGithubReadOzonExportDiagnostic() : null;
+      try {
+        var continuationResult;
+        if (typeof exportDOM_continue === 'function') continuationResult = exportDOM_continue();
+        else if (typeof DOM !== 'undefined' && DOM && typeof DOM.exportDOM_continue === 'function') continuationResult = DOM.exportDOM_continue();
+        else throw new Error('OZON_CONTINUATION_FUNCTION_MISSING');
+        var after = typeof sellmonitorGithubReadOzonExportDiagnostic === 'function' ? sellmonitorGithubReadOzonExportDiagnostic() : null;
+        return sellmonitorGithubWebJson_({ok:true,action:action,result:{called:true,return_type:typeof continuationResult,diagnostic_before:before,diagnostic_after:after}});
+      } catch (continuationError) {
+        var message = String(continuationError && continuationError.message || continuationError)
+          .replace(/Bearer\\s+\\S+/ig,'Bearer [redacted]')
+          .replace(/\\b(token|secret|api[_ -]?key)\\b[=: ]+\\S+/ig,'$1=[redacted]')
+          .replace(/[A-Za-z0-9_-]{32,}/g,'[ID_REDACTED]')
+          .slice(0,300);
+        return sellmonitorGithubWebJson_({ok:false,action:action,error:'OZON_CONTINUATION_FAILED',message:message,
+          result:{diagnostic_before:before,diagnostic_after:typeof sellmonitorGithubReadOzonExportDiagnostic === 'function' ? sellmonitorGithubReadOzonExportDiagnostic() : null}});
+      }
+    }
+
+"""
+        worker_text = worker_text.replace(resume_anchor, resume_route + resume_anchor, 1)
+        print("OZON_CONTINUATION_GITHUB_ACTION=patched")
+    elif resume_marker not in worker_text and "function doPost(e)" in worker_text:
+        raise SystemExit("Ozon continuation action anchor changed")
+
     worker.write_text(worker_text, encoding="utf-8")
     print("WORKER_TRIGGER_REFRESH_V2=patched")
 candidates = []
