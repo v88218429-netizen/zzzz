@@ -105,7 +105,7 @@ jobs:
             cp SELLMONITOR_GITHUB_WORKER.gs /tmp/sellmonitor-gh-live/live-worker
             echo "gs" > /tmp/sellmonitor-gh-live/worker-extension
           elif [ -f SELLMONITOR_GITHUB_WORKER.js ]; then
-            cp SELLMONITOR_GITHUB_WORKER.gs /tmp/sellmonitor-gh-live/live-worker
+            cp SELLMONITOR_GITHUB_WORKER.js /tmp/sellmonitor-gh-live/live-worker
             echo "js" > /tmp/sellmonitor-gh-live/worker-extension
           else
             echo "LIVE_WORKER_FILE_MISSING"
