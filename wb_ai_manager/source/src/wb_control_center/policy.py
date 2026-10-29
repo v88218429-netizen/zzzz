@@ -90,7 +90,11 @@ class PolicyEngine:
         return True, "ok"
 
     def validate_action(self, action: ActionProposal) -> tuple[bool, str]:
-        if action.tool not in MANUAL_APPROVAL_TOOLS:
+        # Money-changing proposals may be validated and staged for review, but
+        # only MANUAL_APPROVAL_TOOLS are eligible for the execution button.
+        # Keeping those sets distinct prevents a good bid recommendation from
+        # becoming a write permission by passing numerical validation.
+        if action.tool not in MONEY_WRITE_TOOLS and action.tool not in MANUAL_APPROVAL_TOOLS:
             return False, f"tool {action.tool!r} is not enabled for human-approved writes"
         if action.tool == "wb_cards_recover":
             nm_ids = action.arguments.get("nm_ids")
