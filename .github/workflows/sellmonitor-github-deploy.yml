@@ -182,97 +182,67 @@ jobs:
           set -euo pipefail
           cd /tmp/sellmonitor-gh-worker
           python - <<'PY'
-          import json, os, pathlib, re, subprocess, urllib.error, urllib.request
+          import json, os, pathlib, subprocess, urllib.error, urllib.request
 
           source_file = None
-          source_body = ""
           for path in pathlib.Path(".").rglob("*"):
-              if path.suffix not in (".gs",".js",".ts"):
+              if path.suffix not in (".gs", ".js", ".ts"):
                   continue
               try:
                   content = path.read_text(encoding="utf-8")
               except Exception:
                   continue
-              match = re.search(r"function\s+exportDOM_continue\s*\([^)]*\)\s*\{",content)
-              if match:
-                  depth = 0
-                  quote = None
-                  escaped = False
-                  for pos in range(match.end()-1,len(content)):
-                      char = content[pos]
-                      if quote:
-                          if escaped: escaped = False
-                          elif char == "\\\\": escaped = True
-                          elif char == quote: quote = None
-                          continue
-                      if char in ("'","\"","\\`"): quote = char
-                      elif char == "{": depth += 1
-                      elif char == "}":
-                          depth -= 1
-                          if depth == 0:
-                              source_file = str(path)
-                              source_body = content[match.start():pos+1]
-                              break
-                  if source_file:
-                      break
-          if source_file:
-              calls = sorted(set(re.findall(r"\\b([A-Za-z_$][\\w$]*)\\s*\\(",source_body)))
-              messages = re.findall(r"Logger\\.log\\(\\s*['\"]([^'\"]{1,100})",source_body)
-              print("OZON_CONTINUATION_SOURCE_FILE=" + source_file)
-              print("OZON_CONTINUATION_CALLS=" + ",".join(calls[:30]))
-              print("OZON_CONTINUATION_LOG_MARKERS=" + "|".join(messages[:8]))
-          else:
+              index = content.find("function exportDOM_continue")
+              if index >= 0:
+                  source_file = str(path)
+                  snippet = content[index:index+800].replace(chr(10), " ")
+                  print("OZON_CONTINUATION_SOURCE_FILE=" + source_file)
+                  print("OZON_CONTINUATION_SOURCE_SNIPPET=" + snippet)
+                  break
+          if not source_file:
               print("OZON_CONTINUATION_SOURCE=not_found_in_project_files")
 
           proc = subprocess.run(
-              ["clasp","run","exportDOM_continue","--json"],
-              stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,check=False
+              ["clasp", "run", "exportDOM_continue", "--json"],
+              stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=False
           )
-          raw = re.sub(r"\x1b\[[0-9;]*m", "", proc.stdout.lstrip("\ufeff")).strip()
+          raw = proc.stdout.lstrip(chr(0xfeff)).strip()
+          execution = None
           try:
               execution = json.loads(raw)
           except Exception:
-              start_json = raw.find("{")
-              if start_json >= 0:
-                  try:
-                      execution, _ = json.JSONDecoder().raw_decode(raw[start_json:])
-                  except Exception:
-                      print("OZON_CONTINUATION_JSON=unparseable")
-                      raise SystemExit("OZON_CONTINUATION_RESPONSE_INVALID")
-              elif "Exception:" in proc.stderr or "Exception:" in raw:
-                  print("OZON_CONTINUATION_SCRIPT_ERROR=exception_text_returned")
+              if raw.startswith("Exception:"):
+                  print("OZON_CONTINUATION_SCRIPT_ERROR=" + raw.split("Exception:",1)[1][:240])
                   raise SystemExit("OZON_CONTINUATION_FUNCTION_FAILED")
-              elif proc.returncode == 0:
-                  execution = {"response":{"result":None}}
-                  plain = raw.lower()
-                  code = plain if plain in ("no response.","undefined","null","false","true") else "other"
-                  print("OZON_CONTINUATION_PLAIN_RESULT=" + code)
+              if raw.lower() in ("no response.", "undefined", "null", "false", "true", ""):
+                  print("OZON_CONTINUATION_PLAIN_RESULT=" + (raw.lower() or "empty"))
               else:
-                  print("OZON_CONTINUATION_EXIT=" + str(proc.returncode))
-                  raise SystemExit("OZON_CONTINUATION_COMMAND_FAILED")
-
-          error = execution.get("error") or {}
-          if error:
-              print("OZON_CONTINUATION_ERROR_CODE=" + str(error.get("code") or "unknown"))
-              details = error.get("details") or []
-              if details and isinstance(details[0],dict):
-                  message = str(details[0].get("errorMessage") or "")
-                  message = re.sub(r"(?i)(token|secret|authorization)\\s*[:=]\\s*\\S+",r"\\1=[REDACTED]",message)
-                  message = re.sub(r"[A-Za-z0-9_-]{32,}","[ID_REDACTED]",message)
-                  print("OZON_CONTINUATION_SCRIPT_ERROR=" + message.replace("\\n"," ")[:240])
-              raise SystemExit("OZON_CONTINUATION_FUNCTION_FAILED")
+                  print("OZON_CONTINUATION_RESPONSE_FORMAT=plain")
+                  print("OZON_CONTINUATION_RESPONSE_LENGTH=" + str(len(raw)))
+          if execution is not None:
+              error = execution.get("error") or {}
+              if error:
+                  print("OZON_CONTINUATION_ERROR_CODE=" + str(error.get("code") or "unknown"))
+                  details = error.get("details") or []
+                  if details and isinstance(details[0], dict):
+                      message = str(details[0].get("errorMessage") or "")
+                      for marker in ("Bearer ", "token=", "secret=", "authorization="):
+                          index = message.lower().find(marker.lower())
+                          if index >= 0:
+                              message = message[:index] + "[REDACTED]"
+                      print("OZON_CONTINUATION_SCRIPT_ERROR=" + message.replace(chr(10)," ")[:240])
+                  raise SystemExit("OZON_CONTINUATION_FUNCTION_FAILED")
+              result = (execution.get("response") or {}).get("result")
+              print("OZON_CONTINUATION_RESULT_TYPE=" + ("null" if result is None else type(result).__name__))
           if proc.returncode:
               print("OZON_CONTINUATION_EXIT=" + str(proc.returncode))
               raise SystemExit("OZON_CONTINUATION_COMMAND_FAILED")
-          result = (execution.get("response") or {}).get("result")
-          if result is not None:
-              print("OZON_CONTINUATION_RESULT_TYPE=" + type(result).__name__)
 
           url = "https://script.google.com/macros/s/" + os.environ["WEBAPP_DEPLOYMENT_ID"] + "/exec"
           payload = json.dumps({"token":os.environ["WEBHOOK_SECRET"],"action":"publish_ozon_summary_orders"}).encode()
-          req = urllib.request.Request(url,data=payload,headers={"Content-Type":"application/json"},method="POST")
+          req = urllib.request.Request(url, data=payload, headers={"Content-Type":"application/json"}, method="POST")
           try:
-              with urllib.request.urlopen(req,timeout=90) as response:
+              with urllib.request.urlopen(req, timeout=90) as response:
                   published = json.loads(response.read().decode("utf-8"))
           except urllib.error.HTTPError as exc:
               print("OZON_PUBLICATION_HTTP_STATUS=" + str(exc.code))
@@ -286,7 +256,7 @@ jobs:
               raise SystemExit("OZON_SOURCE_EXPORT_NOT_VERIFIED")
           stores = published.get("stores") or []
           actual = {x.get("store") for x in stores if x.get("ok") is True and x.get("readback") is True}
-          if actual != {"ДОМ","Хозяюшка"}:
+          if actual != {"ДОМ", "Хозяюшка"}:
               raise SystemExit("OZON_SUMMARY_READBACK_ACCEPTANCE_FAILED")
           print("OZON_SOURCE_UPDATED=" + str(published.get("source_updated")))
           print("OZON_SOURCE_ROWS=" + str(published.get("source_rows")))
