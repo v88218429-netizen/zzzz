@@ -190,21 +190,23 @@ def wait_bridge() -> None:
 
 def ingest(client: str, orders: list[dict]) -> dict:
     totals = {"received": 0, "inserted": 0, "existing": 0, "changed": 0, "events": 0}
-    attempts = 8
+    attempts = 10  # Exceeds the seven-minute per-client lease with bounded waits
     for p in range(0, len(orders), BATCH_SIZE):
         batch = orders[p:p+BATCH_SIZE]
         payload = {"token": BRIDGE_KEY, "action": "fbs_ingest_batch",
                    "client": client, "orders": batch}
+        network_failures = 0
         for attempt in range(1, attempts + 1):
             try:
-                obj = request(BRIDGE_URL, body=payload, timeout=390, retries=1)
+                obj = request(BRIDGE_URL, body=payload, timeout=300, retries=1)
             except RuntimeError as ex:
                 transient = str(ex) in {
                     "NETWORK_RETRY_EXHAUSTED", "HTTP_429", "HTTP_500",
                     "HTTP_502", "HTTP_503", "HTTP_504",
                     "INVALID_JSON_RESPONSE_RETRY_EXHAUSTED"
                 }
-                if not transient or attempt == attempts:
+                network_failures += 1
+                if not transient or network_failures >= 2 or attempt == attempts:
                     raise RuntimeError("FBS_INGEST_TRANSPORT_FAILED:" + str(ex)) from None
                 time.sleep(min(60, 10 * attempt))
                 continue
