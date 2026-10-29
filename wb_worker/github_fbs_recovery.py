@@ -30,6 +30,7 @@ BATCH_SIZE = int(os.environ.get("FBS_BATCH_SIZE", "5"))
 if not 1 <= BATCH_SIZE <= 1000:
     raise RuntimeError("FBS_BATCH_SIZE_INVALID")
 INGEST_ATTEMPTS = 10  # Retry window exceeds the seven-minute per-client lease before abandoning an idempotent batch
+NETWORK_FAILURE_LIMIT = 2  # Bound long bridge timeouts separately from quick lock-busy retries
 BRIDGE_INGEST_TIMEOUT = 330  # Return before Apps Script six-minute ceiling; retry only after bounded delay
 TIMEOUT = 120
 
@@ -236,6 +237,7 @@ def ingest(client: str, orders: list[dict]) -> dict:
         print("FBS_INGEST_BATCH_START="+json.dumps({"store":client,"batch":p//BATCH_SIZE+1,"orders":len(batch)}), flush=True)
         payload = {"token": BRIDGE_KEY, "action": "fbs_ingest_batch",
                    "client": client, "orders": batch}
+        network_failures = 0
         for attempt in range(1, INGEST_ATTEMPTS + 1):
             try:
                 obj = request(BRIDGE_URL, body=payload, max_attempts=1, timeout=BRIDGE_INGEST_TIMEOUT)
@@ -280,7 +282,8 @@ def ingest(client: str, orders: list[dict]) -> dict:
                 if reason in ("NETWORK_RETRY_EXHAUSTED", "INVALID_JSON_RESPONSE_RETRY_EXHAUSTED") or reason.startswith(("HTTP_500", "HTTP_502", "HTTP_503", "HTTP_504")):
                     # Ingest is an upsert keyed by WB order ID. Repeating this exact
                     # batch after a lost response is idempotent and recovers lost replies.
-                    if attempt == INGEST_ATTEMPTS:
+                    network_failures += 1
+                    if network_failures >= NETWORK_FAILURE_LIMIT or attempt == INGEST_ATTEMPTS:
                         raise RuntimeError("FBS_INGEST_OUTCOME_UNCERTAIN") from None
                     failure_match = re.match(r"HTTP_(\d{3})", reason)
                     failure_class = ("HTTP_" + failure_match.group(1)) if failure_match else reason
