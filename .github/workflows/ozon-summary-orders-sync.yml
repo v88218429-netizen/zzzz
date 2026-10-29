@@ -81,13 +81,13 @@ jobs:
                       isinstance(result, dict)
                       and result.get("ok") is False
                       and "OZON_SOURCE_EXPORT_NOT_VERIFIED" in str(result.get("reason") or "")
-                      and "выгрузка продолжается" in str(result.get("source_status") or "").lower()
+                      and any(state in str(result.get("source_status") or "").lower() for state in ("выгрузка продолжается", "нет успешного запуска"))
                   )
                   if isinstance(result, dict) and result.get("ok") is False and not transient_export:
                       break
                   if transient_export:
-                      last = "OZON_SOURCE_EXPORT_IN_PROGRESS"
-                      print(f"OZON_SOURCE_EXPORT_IN_PROGRESS attempt={attempt}/6")
+                      last = "OZON_SOURCE_EXPORT_NOT_VERIFIED"
+                      print(f"OZON_SOURCE_EXPORT_NOT_VERIFIED attempt={attempt}/6")
               if attempt < 6:
                   time.sleep(15 * attempt)
           if not result or result.get("ok") is not True:
