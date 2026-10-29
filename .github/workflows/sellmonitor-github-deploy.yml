@@ -233,7 +233,11 @@ jobs:
           python - <<'PY'
           import json, pathlib, re
           raw=pathlib.Path("/tmp/ozon-apps-script-logs.json").read_text(errors="replace").strip()
+          stderr=pathlib.Path("/tmp/ozon-apps-script-logs.stderr").read_text(errors="replace").strip()
           print("OZON_APPS_SCRIPT_LOGS_BYTES="+str(len(raw)))
+          if stderr:
+              stderr=re.sub(r"[A-Za-z0-9_-]{32,}","[ID_REDACTED]",stderr)
+              print("OZON_APPS_SCRIPT_LOGS_STDERR="+stderr[:240].replace("\\n"," "))
           try:
               payload=json.loads(raw)
           except Exception:
