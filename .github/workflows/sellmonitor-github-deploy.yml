@@ -410,7 +410,7 @@ jobs:
           PY
 
       - name: Push and redeploy stable adapter
-        if: github.event_name != 'push' || github.event.head_commit.message == 'Run Ozon export continuation via GitHub' || !contains(fromJSON('["Run Ozon export continuation via GitHub","Diagnose Ozon export status via GitHub"]'), github.event.head_commit.message)
+        if: github.event_name != 'push' || github.event.head_commit.message == 'Run Ozon export continuation via GitHub' || !contains(fromJSON('["Run Ozon export continuation via GitHub","Diagnose Ozon export status via GitHub","Repair and resume Ozon export via GitHub"]'), github.event.head_commit.message)
         shell: bash
         run: |
           set -euo pipefail
@@ -419,7 +419,7 @@ jobs:
           clasp redeploy "$WEBAPP_DEPLOYMENT_ID" -d "Sellmonitor GitHub Central Worker Web"
 
       - name: Invoke one authorized Ozon continuation through GitHub
-        if: github.event_name == 'push' && github.event.head_commit.message == 'Run Ozon export continuation via GitHub'
+        if: github.event_name == 'push' && contains(fromJSON('["Run Ozon export continuation via GitHub","Repair and resume Ozon export via GitHub"]'), github.event.head_commit.message)
         shell: bash
         run: |
           set -euo pipefail
@@ -455,7 +455,7 @@ jobs:
           PY
 
       - name: Verify protected bridge auth
-        if: github.event_name != 'push' || !contains(fromJSON('["Run Ozon export continuation via GitHub","Diagnose Ozon export status via GitHub"]'), github.event.head_commit.message)
+        if: github.event_name != 'push' || !contains(fromJSON('["Run Ozon export continuation via GitHub","Diagnose Ozon export status via GitHub","Repair and resume Ozon export via GitHub"]'), github.event.head_commit.message)
         shell: bash
         run: |
           set -euo pipefail
@@ -508,7 +508,7 @@ jobs:
           PY
 
       - name: Seed client WB tokens from GitHub Secrets
-        if: github.event_name != 'push' || !contains(fromJSON('["Run Ozon export continuation via GitHub","Diagnose Ozon export status via GitHub"]'), github.event.head_commit.message)
+        if: github.event_name != 'push' || !contains(fromJSON('["Run Ozon export continuation via GitHub","Diagnose Ozon export status via GitHub","Repair and resume Ozon export via GitHub"]'), github.event.head_commit.message)
         shell: bash
         run: |
           set -euo pipefail
@@ -555,7 +555,7 @@ jobs:
           PY
 
       - name: Run one authenticated Sellmonitor Inner finance tick
-        if: github.event_name != 'push' || !contains(fromJSON('["Run Ozon export continuation via GitHub","Diagnose Ozon export status via GitHub"]'), github.event.head_commit.message)
+        if: github.event_name != 'push' || !contains(fromJSON('["Run Ozon export continuation via GitHub","Diagnose Ozon export status via GitHub","Repair and resume Ozon export via GitHub"]'), github.event.head_commit.message)
         continue-on-error: true
         shell: bash
         run: |
@@ -607,7 +607,7 @@ jobs:
           PY
 
       - name: Run one authenticated worker tick
-        if: github.event_name != 'push' || !contains(fromJSON('["Run Ozon export continuation via GitHub","Diagnose Ozon export status via GitHub"]'), github.event.head_commit.message)
+        if: github.event_name != 'push' || !contains(fromJSON('["Run Ozon export continuation via GitHub","Diagnose Ozon export status via GitHub","Repair and resume Ozon export via GitHub"]'), github.event.head_commit.message)
         id: operational_tick
         continue-on-error: true
         shell: bash
@@ -662,7 +662,7 @@ jobs:
           PY
 
       - name: Pull back and verify live code
-        if: github.event_name != 'push' || !contains(fromJSON('["Run Ozon export continuation via GitHub","Diagnose Ozon export status via GitHub"]'), github.event.head_commit.message)
+        if: github.event_name != 'push' || !contains(fromJSON('["Run Ozon export continuation via GitHub","Diagnose Ozon export status via GitHub","Repair and resume Ozon export via GitHub"]'), github.event.head_commit.message)
         shell: bash
         run: |
           set -euo pipefail
