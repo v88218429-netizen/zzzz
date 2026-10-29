@@ -435,6 +435,10 @@ jobs:
           print("OZON_CONTINUATION_ACTION_OK="+str(result.get("ok") is True))
           print("OZON_CONTINUATION_CALLED="+str(body.get("called")))
           print("OZON_CONTINUATION_RETURN_TYPE="+str(body.get("return_type")))
+          outcome=body.get("continuation_result") or {}
+          allowed=("ok","started_fresh_export","continuation_pending","continued_existing_export","result_type","skipped","error_code","reason")
+          safe={key:outcome.get(key) for key in allowed if key in outcome}
+          print("OZON_CONTINUATION_OUTCOME="+json.dumps(safe,ensure_ascii=False)[:700])
           for label,key in (("BEFORE","diagnostic_before"),("AFTER","diagnostic_after")):
               diagnostic=body.get(key) or {}
               print("OZON_"+label+"_JOB="+str(diagnostic.get("job") or ""))
