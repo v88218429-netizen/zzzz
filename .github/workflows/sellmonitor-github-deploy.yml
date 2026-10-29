@@ -192,8 +192,10 @@ jobs:
             exit "$status"
           fi
           echo "OZON_CONTINUATION_EXECUTION=completed"
+          echo "OZON_CONTINUATION_METHOD=clasp_run"
 
       - name: Push and redeploy stable adapter
+        if: github.event_name != 'push' || github.event.head_commit.message != 'Run Ozon export continuation via GitHub'
         shell: bash
         run: |
           set -euo pipefail
@@ -202,6 +204,7 @@ jobs:
           clasp redeploy "$WEBAPP_DEPLOYMENT_ID" -d "Sellmonitor GitHub Central Worker Web"
 
       - name: Verify protected bridge auth
+        if: github.event_name != 'push' || github.event.head_commit.message != 'Run Ozon export continuation via GitHub'
         shell: bash
         run: |
           set -euo pipefail
@@ -254,6 +257,7 @@ jobs:
           PY
 
       - name: Seed client WB tokens from GitHub Secrets
+        if: github.event_name != 'push' || github.event.head_commit.message != 'Run Ozon export continuation via GitHub'
         shell: bash
         run: |
           set -euo pipefail
@@ -300,6 +304,7 @@ jobs:
           PY
 
       - name: Run one authenticated Sellmonitor Inner finance tick
+        if: github.event_name != 'push' || github.event.head_commit.message != 'Run Ozon export continuation via GitHub'
         continue-on-error: true
         shell: bash
         run: |
@@ -351,6 +356,7 @@ jobs:
           PY
 
       - name: Run one authenticated worker tick
+        if: github.event_name != 'push' || github.event.head_commit.message != 'Run Ozon export continuation via GitHub'
         id: operational_tick
         continue-on-error: true
         shell: bash
@@ -405,6 +411,7 @@ jobs:
           PY
 
       - name: Pull back and verify live code
+        if: github.event_name != 'push' || github.event.head_commit.message != 'Run Ozon export continuation via GitHub'
         shell: bash
         run: |
           set -euo pipefail
