@@ -14,6 +14,41 @@ marker = "SELLMONITOR_GITHUB_MASTER_HOOK_V1"
 worker = root / "SELLMONITOR_GITHUB_WORKER.gs"
 if worker.exists():
     worker_text = worker.read_text(encoding="utf-8")
+    # On an unknown Sellmonitor MCP tool, fetch the live tool names once and
+    # attach only that catalog to the existing per-store error log.
+    mcp_catalog_anchor = "  return sellmonitorGithubMcpData_(call.json);"
+    mcp_catalog_marker = "INNER_MCP_TOOL_CATALOG_DIAGNOSTIC_V1"
+    if mcp_catalog_anchor in worker_text and mcp_catalog_marker not in worker_text:
+        mcp_catalog_replacement = """  /* INNER_MCP_TOOL_CATALOG_DIAGNOSTIC_V1 */
+  try {
+    return sellmonitorGithubMcpData_(call.json);
+  } catch (innerError) {
+    var innerMessage = String(innerError && innerError.message ? innerError.message : innerError);
+    if (!/unknown tool|method not found/i.test(innerMessage)) throw innerError;
+    var innerProps = PropertiesService.getScriptProperties();
+    var cachedTools = String(innerProps.getProperty('SMC_INNER_MCP_TOOL_CATALOG_V1') || '');
+    if (!cachedTools) {
+      try {
+        var catalog = post({jsonrpc:'2.0',id:3,method:'tools/list',params:{}},call.session);
+        if (catalog.http >= 200 && catalog.http < 300) {
+          var catalogItem = catalog.json;
+          if (Array.isArray(catalogItem)) catalogItem = catalogItem.filter(function(x){return x && x.id === 3;})[0] || catalogItem[0];
+          var names = (((catalogItem || {}).result || {}).tools || []).map(function(x){return String(x && x.name || '');}).filter(Boolean);
+          cachedTools = names.join(',').slice(0,1200);
+          if (cachedTools) innerProps.setProperty('SMC_INNER_MCP_TOOL_CATALOG_V1',cachedTools);
+        } else {
+          cachedTools = 'TOOLS_LIST_HTTP_' + catalog.http;
+        }
+      } catch (catalogError) {
+        cachedTools = 'TOOLS_LIST_ERROR_' + String(catalogError && catalogError.message ? catalogError.message : catalogError).slice(0,180);
+      }
+    }
+    throw new Error((innerMessage + '|AVAILABLE_TOOLS=' + (cachedTools || 'unavailable')).slice(0,1100));
+  }"""
+        worker_text = worker_text.replace(mcp_catalog_anchor, mcp_catalog_replacement, 1)
+        print("INNER_MCP_TOOL_CATALOG=patched")
+    elif mcp_catalog_marker not in worker_text and "function sellmonitorGithubInnerMcpCallWithToken_" in worker_text:
+        raise SystemExit("Inner MCP tool catalog anchor changed")
     # Preserve the upstream MCP error code and a scrubbed, bounded message in
     # the existing per-store log. The previous generic error hid whether the
     # tool was unavailable or the OAuth session needed refresh.
