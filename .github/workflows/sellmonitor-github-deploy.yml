@@ -423,6 +423,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # One bounded invocation; the installed timer handles any remaining chunks.
           python - <<'PY'
           import json, os, urllib.request
           url="https://script.google.com/macros/s/"+os.environ["WEBAPP_DEPLOYMENT_ID"]+"/exec"
