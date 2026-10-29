@@ -265,6 +265,37 @@ if "if (result === false)" not in export_block:
 
 text = text[:export_start] + export_block + text[export_end:]
 
+
+diagnostic_marker = "SELLMONITOR_OZON_EXPORT_DIAGNOSTIC_V1"
+if diagnostic_marker not in text:
+    text += """
+
+    /* SELLMONITOR_OZON_EXPORT_DIAGNOSTIC_V1 */
+    function sellmonitorGithubReadOzonExportDiagnostic() {
+      var props = PropertiesService.getScriptProperties();
+      var handlers = ScriptApp.getProjectTriggers().map(function(t) {
+        return String(t.getHandlerFunction() || '');
+      });
+      var lastError = String(props.getProperty('OZON_FBS_LAST_ERROR') || '');
+      try {
+        if (typeof sanitizeAutomationError_ === 'function') lastError = sanitizeAutomationError_(lastError);
+      } catch (ignored) {}
+      lastError = lastError
+        .replace(/(token|secret|authorization)\\s*[:=]\\s*\\S+/ig, '$1=[REDACTED]')
+        .replace(/[A-Za-z0-9_-]{32,}/g, '[ID_REDACTED]')
+        .slice(0, 400);
+      return {
+        ok: true,
+        job: String(props.getProperty('dom.job') || ''),
+        in_progress: String(props.getProperty('OZON_FBS_IN_PROGRESS') || ''),
+        last_error: lastError,
+        last_attempt_at: String(props.getProperty('OZON_FBS_LAST_ATTEMPT_AT') || ''),
+        continuation_pending: handlers.indexOf('exportDOM_continue') >= 0
+      };
+    }
+    """
+    print("OZON_EXPORT_DIAGNOSTIC_WRAPPER=patched")
+
 if marker in text:
     if text != original_text:
         path.write_text(text, encoding="utf-8")

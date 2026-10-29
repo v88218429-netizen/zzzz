@@ -99,6 +99,29 @@ jobs:
           cd /tmp/sellmonitor-gh-worker
           clasp pull
           test -f appsscript.json
+          mkdir -p /tmp/sellmonitor-gh-live
+          cp appsscript.json /tmp/sellmonitor-gh-live/appsscript.json
+          if [ -f SELLMONITOR_GITHUB_WORKER.gs ]; then
+            cp SELLMONITOR_GITHUB_WORKER.gs /tmp/sellmonitor-gh-live/live-worker
+            echo "gs" > /tmp/sellmonitor-gh-live/worker-extension
+          elif [ -f SELLMONITOR_GITHUB_WORKER.js ]; then
+            cp SELLMONITOR_GITHUB_WORKER.gs /tmp/sellmonitor-gh-live/live-worker
+            echo "js" > /tmp/sellmonitor-gh-live/worker-extension
+          else
+            echo "LIVE_WORKER_FILE_MISSING"
+            exit 1
+          fi
+          python - <<'PY'
+          import hashlib, json, pathlib
+          root=pathlib.Path("/tmp/sellmonitor-gh-worker")
+          suffixes={".gs",".js",".ts",".html",".json"}
+          baseline={}
+          for p in root.rglob("*"):
+              if p.is_file() and p.suffix in suffixes:
+                  baseline[str(p.relative_to(root))]=hashlib.sha256(p.read_bytes()).hexdigest()
+          pathlib.Path("/tmp/sellmonitor-gh-live/baseline.json").write_text(json.dumps(baseline))
+          print("LIVE_PROJECT_BASELINE_FILES=" + str(len(baseline)))
+          PY
 
       - name: Install worker and master hook
         shell: bash
@@ -147,6 +170,90 @@ jobs:
           done < <(find /tmp/sellmonitor-gh-worker -type f \( -name '*.gs' -o -name '*.js' \) -print0)
           test "$COUNT" -gt 0
           echo "SYNTAX_OK=$COUNT"
+
+      - name: Read-only Ozon continuation diagnostic
+        if: github.event_name == 'push' && github.event.head_commit.message == 'Diagnose Ozon export status via GitHub'
+        shell: bash
+        run: |
+          set -euo pipefail
+          root=/tmp/sellmonitor-gh-worker
+          live=/tmp/sellmonitor-gh-live
+          rm -f "$root/SELLMONITOR_GITHUB_WORKER.gs" "$root/SELLMONITOR_GITHUB_WORKER.js"
+          ext="$(cat "$live/worker-extension")"
+          cp "$live/live-worker" "$root/SELLMONITOR_GITHUB_WORKER.$ext"
+          cp "$live/appsscript.json" "$root/appsscript.json"
+          python - <<'PY'
+          import hashlib, json, pathlib, sys
+          root=pathlib.Path("/tmp/sellmonitor-gh-worker")
+          baseline=json.loads(pathlib.Path("/tmp/sellmonitor-gh-live/baseline.json").read_text())
+          suffixes={".gs",".js",".ts",".html",".json"}
+          current={}
+          for p in root.rglob("*"):
+              if p.is_file() and p.suffix in suffixes:
+                  current[str(p.relative_to(root))]=hashlib.sha256(p.read_bytes()).hexdigest()
+          changed=sorted(p for p,h in baseline.items() if current.get(p)!=h)
+          changed += sorted(p for p in current if p not in baseline)
+          if len(changed)!=1 or not changed[0].endswith(("Код.js","Code.js")):
+              print("DIAGNOSTIC_PUSH_CHANGED_FILES=" + ",".join(changed))
+              raise SystemExit("DIAGNOSTIC_PUSH_SCOPE_CHECK_FAILED")
+          print("DIAGNOSTIC_PUSH_CHANGED_FILES=" + changed[0])
+          PY
+          cd "$root"
+          clasp push -f
+          set +e
+          clasp run sellmonitorGithubReadOzonExportDiagnostic --json >/tmp/ozon-export-diagnostic.json 2>/tmp/ozon-export-diagnostic.stderr
+          status=$?
+          set -e
+          if [ "$status" -ne 0 ]; then
+            echo "OZON_DIAGNOSTIC_RUN_EXIT=$status"
+            raise="OZON_DIAGNOSTIC_RUN_FAILED"
+            exit "$status"
+          fi
+          python - <<'PY'
+          import json, pathlib, re
+          raw=pathlib.Path("/tmp/ozon-export-diagnostic.json").read_text().strip()
+          try:
+              payload=json.loads(raw)
+          except Exception:
+              print("OZON_DIAGNOSTIC_RESPONSE=unparseable")
+              raise SystemExit("OZON_DIAGNOSTIC_RESPONSE_INVALID")
+          err=payload.get("error") or {}
+          if err:
+              print("OZON_DIAGNOSTIC_ERROR_CODE="+str(err.get("code") or "unknown"))
+              raise SystemExit("OZON_DIAGNOSTIC_FUNCTION_FAILED")
+          result=(payload.get("response") or {}).get("result") or {}
+          if not isinstance(result,dict) or result.get("ok") is not True:
+              raise SystemExit("OZON_DIAGNOSTIC_RESULT_INVALID")
+          print("OZON_EXPORT_JOB="+str(result.get("job") or ""))
+          print("OZON_EXPORT_IN_PROGRESS="+str(result.get("in_progress") or ""))
+          print("OZON_EXPORT_LAST_ATTEMPT_AT="+str(result.get("last_attempt_at") or ""))
+          print("OZON_CONTINUATION_PENDING="+str(result.get("continuation_pending")))
+          message=str(result.get("last_error") or "")
+          message=re.sub(r"(?i)(token|secret|authorization)\\s*[:=]\\s*\\S+",r"\\1=[REDACTED]",message)
+          message=re.sub(r"[A-Za-z0-9_-]{32,}","[ID_REDACTED]",message)
+          print("OZON_EXPORT_LAST_ERROR="+message.replace("\\n"," ")[:400])
+          PY
+          clasp pull
+          python - <<'PY'
+          import hashlib, json, pathlib
+          root=pathlib.Path("/tmp/sellmonitor-gh-worker")
+          baseline=json.loads(pathlib.Path("/tmp/sellmonitor-gh-live/baseline.json").read_text())
+          marker="SELLMONITOR_OZON_EXPORT_DIAGNOSTIC_V1"
+          masters=[p for p in root.rglob("*") if p.is_file() and p.suffix in (".gs",".js") and marker in p.read_text(errors="ignore")]
+          if len(masters)!=1:
+              raise SystemExit("OZON_DIAGNOSTIC_SOURCE_READBACK_FAILED")
+          suffixes={".gs",".js",".ts",".html",".json"}
+          current={}
+          for p in root.rglob("*"):
+              if p.is_file() and p.suffix in suffixes:
+                  current[str(p.relative_to(root))]=hashlib.sha256(p.read_bytes()).hexdigest()
+          changed=sorted(p for p,h in baseline.items() if current.get(p)!=h)
+          changed += sorted(p for p in current if p not in baseline)
+          if len(changed)!=1 or not changed[0].endswith(("Код.js","Code.js")):
+              raise SystemExit("OZON_DIAGNOSTIC_READBACK_SCOPE_FAILED")
+          print("OZON_DIAGNOSTIC_SOURCE_READBACK=verified")
+          print("OZON_DIAGNOSTIC_CHANGED_FILE=" + changed[0])
+          PY
 
       - name: Audit Apps Script version capacity
         if: github.event_name == 'push' && github.event.head_commit.message == 'Audit Apps Script version capacity'
@@ -273,7 +380,7 @@ jobs:
 
 
       - name: Push and redeploy stable adapter
-        if: github.event_name != 'push' || github.event.head_commit.message != 'Run Ozon export continuation via GitHub'
+        if: github.event_name != 'push' || !contains(fromJSON('["Run Ozon export continuation via GitHub","Diagnose Ozon export status via GitHub"]'), github.event.head_commit.message)
         shell: bash
         run: |
           set -euo pipefail
@@ -282,7 +389,7 @@ jobs:
           clasp redeploy "$WEBAPP_DEPLOYMENT_ID" -d "Sellmonitor GitHub Central Worker Web"
 
       - name: Verify protected bridge auth
-        if: github.event_name != 'push' || github.event.head_commit.message != 'Run Ozon export continuation via GitHub'
+        if: github.event_name != 'push' || !contains(fromJSON('["Run Ozon export continuation via GitHub","Diagnose Ozon export status via GitHub"]'), github.event.head_commit.message)
         shell: bash
         run: |
           set -euo pipefail
@@ -335,7 +442,7 @@ jobs:
           PY
 
       - name: Seed client WB tokens from GitHub Secrets
-        if: github.event_name != 'push' || github.event.head_commit.message != 'Run Ozon export continuation via GitHub'
+        if: github.event_name != 'push' || !contains(fromJSON('["Run Ozon export continuation via GitHub","Diagnose Ozon export status via GitHub"]'), github.event.head_commit.message)
         shell: bash
         run: |
           set -euo pipefail
@@ -382,7 +489,7 @@ jobs:
           PY
 
       - name: Run one authenticated Sellmonitor Inner finance tick
-        if: github.event_name != 'push' || github.event.head_commit.message != 'Run Ozon export continuation via GitHub'
+        if: github.event_name != 'push' || !contains(fromJSON('["Run Ozon export continuation via GitHub","Diagnose Ozon export status via GitHub"]'), github.event.head_commit.message)
         continue-on-error: true
         shell: bash
         run: |
@@ -434,7 +541,7 @@ jobs:
           PY
 
       - name: Run one authenticated worker tick
-        if: github.event_name != 'push' || github.event.head_commit.message != 'Run Ozon export continuation via GitHub'
+        if: github.event_name != 'push' || !contains(fromJSON('["Run Ozon export continuation via GitHub","Diagnose Ozon export status via GitHub"]'), github.event.head_commit.message)
         id: operational_tick
         continue-on-error: true
         shell: bash
@@ -489,7 +596,7 @@ jobs:
           PY
 
       - name: Pull back and verify live code
-        if: github.event_name != 'push' || github.event.head_commit.message != 'Run Ozon export continuation via GitHub'
+        if: github.event_name != 'push' || !contains(fromJSON('["Run Ozon export continuation via GitHub","Diagnose Ozon export status via GitHub"]'), github.event.head_commit.message)
         shell: bash
         run: |
           set -euo pipefail
