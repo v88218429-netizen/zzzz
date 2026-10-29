@@ -171,7 +171,7 @@ jobs:
           test "$COUNT" -gt 0
           echo "SYNTAX_OK=$COUNT"
 
-      - name: Read-only Ozon continuation diagnostic
+      - name: Ozon continuation diagnostic through scheduled worker
         if: github.event_name == 'push' && github.event.head_commit.message == 'Diagnose Ozon export status via GitHub'
         shell: bash
         run: |
@@ -183,9 +183,72 @@ jobs:
           cp "$live/live-worker" "$root/SELLMONITOR_GITHUB_WORKER.$ext"
           cp "$live/appsscript.json" "$root/appsscript.json"
           python - <<'PY'
-          import hashlib, json, pathlib, sys
+          import hashlib, json, pathlib
           root=pathlib.Path("/tmp/sellmonitor-gh-worker")
           baseline=json.loads(pathlib.Path("/tmp/sellmonitor-gh-live/baseline.json").read_text())
+          marker="SELLMONITOR_OZON_EXPORT_DIAGNOSTIC_V1"
+          masters=[p for p in root.rglob("*") if p.is_file() and p.suffix in (".gs",".js") and marker in p.read_text(errors="ignore")]
+          if len(masters)!=1:
+              raise SystemExit("OZON_DIAGNOSTIC_SOURCE_MISSING")
+          workers=[p for p in root.rglob("SELLMONITOR_GITHUB_WORKER.*") if p.is_file() and p.suffix in (".gs",".js")]
+          if len(workers)!=1:
+              raise SystemExit("OZON_DIAGNOSTIC_WORKER_SOURCE_MISSING")
+          worker=workers[0]; source=worker.read_text(encoding="utf-8")
+          worker_marker="SELLMONITOR_OZON_EXPORT_STATUS_SNAPSHOT_V1"
+          if worker_marker not in source:
+              tick_anchor="function sellmonitorGithubTick() {"
+              if source.count(tick_anchor)!=1:
+                  raise SystemExit("OZON_DIAGNOSTIC_TICK_ANCHOR_MISSING")
+              source=source.replace(tick_anchor,tick_anchor+"\n  try { sellmonitorGithubOzonExportDiagnosticTick_(); } catch (diagError) { Logger.log('OZON_DIAGNOSTIC_TICK_FAILED:' + String(diagError && diagError.message || diagError).slice(0,180)); }",1)
+              source += r"""
+          /* SELLMONITOR_OZON_EXPORT_STATUS_SNAPSHOT_V1 */
+          function sellmonitorGithubOzonExportDiagnosticTick_() {
+            var props=PropertiesService.getScriptProperties();
+            var job=String(props.getProperty('dom.job')||'');
+            var inProgress=String(props.getProperty('OZON_FBS_IN_PROGRESS')||'');
+            var lastAttempt=String(props.getProperty('OZON_FBS_LAST_ATTEMPT_AT')||'');
+            var lastError=String(props.getProperty('OZON_FBS_LAST_ERROR')||'');
+            try { if(typeof sanitizeAutomationError_==='function') lastError=sanitizeAutomationError_(lastError); } catch(ignored) {}
+            lastError=lastError.replace(/Bearer\s+\S+/ig,'Bearer [REDACTED]')
+              .replace(/(token|secret|authorization)\s*[:=]\s*\S+/ig,'$1=[REDACTED]')
+              .replace(/[A-Za-z0-9_-]{32,}/g,'[ID_REDACTED]').slice(0,500);
+            var handlers=ScriptApp.getProjectTriggers().map(function(t){return String(t.getHandlerFunction()||'');});
+            var pending=handlers.indexOf('exportDOM_continue')>=0;
+            var state=[job,inProgress,lastAttempt,pending?'да':'нет',lastError];
+            var stores=(typeof SMC_OZON_SUMMARY==='object'&&SMC_OZON_SUMMARY.stores)?SMC_OZON_SUMMARY.stores:{};
+            Object.keys(stores).forEach(function(storeId){
+              var cfg=stores[storeId],sig=JSON.stringify(state),sigKey='SMC_OZON_EXPORT_DIAG_SIG_'+storeId,atKey='SMC_OZON_EXPORT_DIAG_AT_'+storeId;
+              var now=Date.now(),last=Number(props.getProperty(atKey)||0);
+              if(props.getProperty(sigKey)===sig&&now-last<300000)return;
+              try {
+                var ss=SpreadsheetApp.openById(cfg.id),name='15_API_Экспорт_Диагностика_GH';
+                var sh=ss.getSheetByName(name)||ss.insertSheet(name);
+                var header=['Время наблюдения','Магазин','Задание экспорта','В процессе','Последняя попытка','Триггер продолжения','Последняя ошибка'];
+                if(sh.getLastRow()===0){
+                  sh.getRange(1,1,1,7).setValues([header]);sh.setFrozenRows(1);
+                  sh.getRange(1,1,1,7).setFontWeight('bold').setBackground('#17365D').setFontColor('#FFFFFF');
+                  sh.setColumnWidth(1,170);sh.setColumnWidth(2,130);sh.setColumnWidth(7,520);
+                  sh.getRange('A:A').setNumberFormat('yyyy-mm-dd hh:mm:ss');
+                } else if(JSON.stringify(sh.getRange(1,1,1,7).getDisplayValues()[0])!==JSON.stringify(header)) {
+                  throw new Error('OZON_DIAGNOSTIC_HEADER_MISMATCH');
+                }
+                var at=new Date(),row=[at,cfg.name,job,inProgress,lastAttempt,pending?'да':'нет',lastError],dst=sh.getLastRow()+1;
+                sh.getRange(dst,1,1,7).setValues([row]);SpreadsheetApp.flush();
+                var rb=sh.getRange(dst,1,1,7).getValues()[0];
+                var stamp=rb[0] instanceof Date?Utilities.formatDate(rb[0],ss.getSpreadsheetTimeZone(),'yyyy-MM-dd HH:mm:ss'):'';
+                if(!stamp||String(rb[1])!==cfg.name||JSON.stringify(rb.slice(2).map(String))!==JSON.stringify(row.slice(2).map(String)))throw new Error('OZON_DIAGNOSTIC_ROW_READBACK_MISMATCH');
+                var updates={};updates[sigKey]=sig;updates[atKey]=String(now);props.setProperties(updates,false);
+                Logger.log('OZON_DIAGNOSTIC_SNAPSHOT_OK:'+cfg.name+':'+stamp);
+              } catch(writeError) {
+                Logger.log('OZON_DIAGNOSTIC_SNAPSHOT_ERROR:'+cfg.name+':'+String(writeError&&writeError.message||writeError).slice(0,200));
+              }
+            });
+          }
+          """
+              worker.write_text(source,encoding="utf-8")
+              print("OZON_DIAGNOSTIC_WORKER_PATCH=added")
+          else:
+              print("OZON_DIAGNOSTIC_WORKER_PATCH=already_present")
           suffixes={".gs",".js",".ts",".html",".json"}
           current={}
           for p in root.rglob("*"):
@@ -193,15 +256,12 @@ jobs:
                   current[str(p.relative_to(root))]=hashlib.sha256(p.read_bytes()).hexdigest()
           changed=sorted(p for p,h in baseline.items() if current.get(p)!=h)
           changed += sorted(p for p in current if p not in baseline)
-          marker="SELLMONITOR_OZON_EXPORT_DIAGNOSTIC_V1"
-          masters=[p for p in root.rglob("*") if p.is_file() and p.suffix in (".gs",".js") and marker in p.read_text(errors="ignore")]
-          if len(changed)>1 or (changed and not changed[0].endswith(("Код.js","Code.js"))):
-              print("DIAGNOSTIC_PUSH_CHANGED_FILES=" + ",".join(changed))
+          allowed=lambda x: x.endswith(("Код.js","Code.js")) or pathlib.Path(x).name.startswith("SELLMONITOR_GITHUB_WORKER.")
+          if len(changed)>2 or any(not allowed(x) for x in changed):
+              print("DIAGNOSTIC_PUSH_CHANGED_FILES="+",".join(changed))
               raise SystemExit("DIAGNOSTIC_PUSH_SCOPE_CHECK_FAILED")
-          if len(masters)!=1:
-              raise SystemExit("OZON_DIAGNOSTIC_SOURCE_MISSING")
           pathlib.Path("/tmp/ozon-diagnostic-needs-push").write_text("1" if changed else "0")
-          print("DIAGNOSTIC_PUSH_CHANGED_FILES=" + (changed[0] if changed else "already_present"))
+          print("DIAGNOSTIC_PUSH_CHANGED_FILES="+(",".join(changed) if changed else "already_present"))
           PY
           cd "$root"
           if [ "$(cat /tmp/ozon-diagnostic-needs-push)" = "1" ]; then
@@ -225,36 +285,36 @@ jobs:
           print("OZON_PROJECT_HAS_EXPORT_CONTINUATION="+str("exportDOM_continue" in handlers))
           print("OZON_PROJECT_TRIGGER_HANDLERS="+",".join(str(x) for x in handlers if "exportDOM" in str(x) or "Marketplace" in str(x)))
           PY
-          set +e
-          clasp logs --json >/tmp/ozon-apps-script-logs.json 2>/tmp/ozon-apps-script-logs.stderr
-          log_status=$?
-          set -e
-          echo "OZON_APPS_SCRIPT_LOGS_EXIT=$log_status"
           python - <<'PY'
-          import json, pathlib, re
-          raw=pathlib.Path("/tmp/ozon-apps-script-logs.json").read_text(errors="replace").strip()
-          stderr=pathlib.Path("/tmp/ozon-apps-script-logs.stderr").read_text(errors="replace").strip()
-          print("OZON_APPS_SCRIPT_LOGS_BYTES="+str(len(raw)))
-          if stderr:
-              stderr=re.sub(r"[A-Za-z0-9_-]{32,}","[ID_REDACTED]",stderr)
-              print("OZON_APPS_SCRIPT_LOGS_STDERR="+stderr[:240].replace("\\n"," "))
-          try:
-              payload=json.loads(raw)
-          except Exception:
-              safe=re.sub(r"[A-Za-z0-9_-]{32,}","[ID_REDACTED]",raw)
-              print("OZON_APPS_SCRIPT_LOGS_RESPONSE="+safe[:180].replace("\\n"," "))
-              raise SystemExit(0)
-          items=payload if isinstance(payload,list) else payload.get("entries",payload.get("results",[]))
-          selected=[]
-          for item in items if isinstance(items,list) else []:
-              text=json.dumps(item,ensure_ascii=False)
-              if any(term.lower() in text.lower() for term in ("exportDOM_continue","OZON_FBS","dom.job","ошибк")):
-                  safe=re.sub(r"(?i)(token|secret|authorization)\\s*[:=]\\s*\\S+",r"\\1=[REDACTED]",text)
-                  safe=re.sub(r"[A-Za-z0-9_-]{32,}","[ID_REDACTED]",safe)
-                  selected.append(safe[:320])
-          print("OZON_APPS_SCRIPT_RELEVANT_LOGS="+str(len(selected)))
-          for item in selected[-8:]:
-              print("OZON_APPS_SCRIPT_LOG="+item)
+          import json, os, time, urllib.parse, urllib.request
+          cfg=json.loads(os.environ['CLASPRC_JSON'])
+          settings=cfg.get('oauth2ClientSettings') or {}; token=cfg.get('token') or {}
+          form=urllib.parse.urlencode({'client_id':settings.get('clientId',''),'client_secret':settings.get('clientSecret',''),'refresh_token':token.get('refresh_token',''),'grant_type':'refresh_token'}).encode()
+          req=urllib.request.Request('https://oauth2.googleapis.com/token',data=form,method='POST')
+          with urllib.request.urlopen(req,timeout=30) as response: access=json.loads(response.read().decode())['access_token']
+          ids={'ДОМ':'1g57et2zqlVfbs0_BoRobb5G-4Z2MTXZd028V7u4Kd-Q','Хозяюшка':'1Rl-IVihrZ56wKwDsf76wspZ53a8ntN3hCVN1gd4Tguo'}
+          tab='15_API_Экспорт_Диагностика_GH'; last={}
+          for attempt in range(1,10):
+              complete=True
+              for store,sid in ids.items():
+                  rng=urllib.parse.quote("'"+tab+"'!A1:G100",safe='')
+                  url='https://sheets.googleapis.com/v4/spreadsheets/'+sid+'/values/'+rng+'?majorDimension=ROWS'
+                  request=urllib.request.Request(url,headers={'Authorization':'Bearer '+access})
+                  try:
+                      with urllib.request.urlopen(request,timeout=30) as response: payload=json.loads(response.read().decode())
+                      rows=payload.get('values') or []; row=rows[-1] if len(rows)>1 else []
+                      if len(row)<7 or str(row[1])!=store: complete=False;last[store]='no_verified_row'
+                      else:last[store]=row
+                  except Exception as error:
+                      complete=False;last[store]=type(error).__name__
+              if complete:break
+              if attempt<9:time.sleep(10)
+          for store in ids:
+              row=last.get(store)
+              if not isinstance(row,list) or len(row)<7 or str(row[1])!=store:
+                  raise SystemExit('OZON_DIAGNOSTIC_SHEET_READBACK_FAILED:'+store+':'+str(row))
+              print('OZON_DIAGNOSTIC_STORE='+store+' OBSERVED='+str(row[0])+' JOB='+str(row[2])+' IN_PROGRESS='+str(row[3])+' LAST_ATTEMPT='+str(row[4])+' CONTINUATION='+str(row[5]))
+              print('OZON_DIAGNOSTIC_LAST_ERROR='+str(row[6]).replace('\\n',' ')[:500])
           PY
           clasp pull
           python - <<'PY'
@@ -272,10 +332,11 @@ jobs:
                   current[str(p.relative_to(root))]=hashlib.sha256(p.read_bytes()).hexdigest()
           changed=sorted(p for p,h in baseline.items() if current.get(p)!=h)
           changed += sorted(p for p in current if p not in baseline)
-          if len(changed)>1 or (changed and not changed[0].endswith(("Код.js","Code.js"))):
+          allowed=lambda x: x.endswith(("Код.js","Code.js")) or pathlib.Path(x).name.startswith("SELLMONITOR_GITHUB_WORKER.")
+          if len(changed)>2 or any(not allowed(x) for x in changed):
               raise SystemExit("OZON_DIAGNOSTIC_READBACK_SCOPE_FAILED")
           print("OZON_DIAGNOSTIC_SOURCE_READBACK=verified")
-          print("OZON_DIAGNOSTIC_CHANGED_FILE=" + (changed[0] if changed else "already_present"))
+          print("OZON_DIAGNOSTIC_CHANGED_FILES=" + (",".join(changed) if changed else "already_present"))
           PY
 
       - name: Audit Apps Script version capacity
