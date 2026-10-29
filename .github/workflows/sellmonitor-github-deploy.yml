@@ -153,51 +153,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python - <<'PY'
-          import json, os, time, urllib.error, urllib.request
-
-          cfg = json.loads(os.environ["CLASPRC_JSON"])
-          auth = cfg.get("token") or {}
-          access_token = auth.get("access_token") or auth.get("accessToken")
-          if not access_token:
-              raise SystemExit("APPS_SCRIPT_EXECUTION_TOKEN_UNAVAILABLE")
-          api = "https://script.googleapis.com/v1/scripts/" + os.environ["SCRIPT_ID"] + ":run"
-          payload = json.dumps({"function":"exportDOM_continue","devMode":False}).encode("utf-8")
-
-          def request(url, data=None):
-              headers = {"Authorization":"Bearer " + access_token}
-              if data is not None:
-                  headers["Content-Type"] = "application/json"
-              req = urllib.request.Request(url, data=data, headers=headers, method="POST" if data is not None else "GET")
-              with urllib.request.urlopen(req, timeout=90) as response:
-                  return json.loads(response.read().decode("utf-8"))
-
-          try:
-              operation = request(api, payload)
-              deadline = time.time() + 420
-              while not operation.get("done", True) and time.time() < deadline:
-                  name = str(operation.get("name") or "")
-                  if not name.startswith("scripts/"):
-                      raise SystemExit("APPS_SCRIPT_EXECUTION_OPERATION_NAME_INVALID")
-                  time.sleep(10)
-                  operation = request("https://script.googleapis.com/v1/" + name)
-              if not operation.get("done", True):
-                  raise SystemExit("APPS_SCRIPT_EXECUTION_TIMEOUT")
-              if operation.get("error"):
-                  err = operation["error"]
-                  print("OZON_CONTINUATION_EXECUTION_ERROR_CODE=" + str(err.get("code") or "unknown"))
-                  raise SystemExit("OZON_CONTINUATION_EXECUTION_FAILED")
-              response = operation.get("response") or {}
-              result = response.get("result")
-              print("OZON_CONTINUATION_EXECUTION=completed")
-              print("OZON_CONTINUATION_RESULT_TYPE=" + ("null" if result is None else type(result).__name__))
-          except urllib.error.HTTPError as exc:
-              print("OZON_CONTINUATION_HTTP_STATUS=" + str(exc.code))
-              raise SystemExit("OZON_CONTINUATION_API_REQUEST_FAILED")
-          except urllib.error.URLError as exc:
-              print("OZON_CONTINUATION_NETWORK_ERROR=" + type(exc.reason).__name__)
-              raise SystemExit("OZON_CONTINUATION_API_REQUEST_FAILED")
-          PY
+          cd /tmp/sellmonitor-gh-worker
+          log_file="$(mktemp)"
+          set +e
+          timeout 420s clasp run exportDOM_continue >"$log_file" 2>&1
+          status=$?
+          set -e
+          if [ "$status" -ne 0 ]; then
+            echo "OZON_CONTINUATION_CLASP_RUN_EXIT=$status"
+            echo "OZON_CONTINUATION_EXECUTION=failed"
+            exit "$status"
+          fi
+          echo "OZON_CONTINUATION_EXECUTION=completed"
 
       - name: Push and redeploy stable adapter
         shell: bash
