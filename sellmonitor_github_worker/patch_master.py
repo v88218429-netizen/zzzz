@@ -319,20 +319,18 @@ if continuation_end < 0:
 continuation_block = text[continuation_start:continuation_end]
 if continuation_marker not in continuation_block:
     lock_anchor = "var lockAcquired = lock.tryLock(1000);"
+    if lock_anchor in continuation_block:
+        continuation_block = continuation_block.replace(lock_anchor, "var lockAcquired = lock.tryLock(30000);", 1)
+    elif "lock.tryLock(30000)" not in continuation_block:
+        raise SystemExit("DOM continuation lock anchor changed")
     busy_anchor = "Logger.log('DOM continuation skipped: script lock is busy.');\n      return;"
-    if lock_anchor not in continuation_block or busy_anchor not in continuation_block:
-        raise SystemExit("DOM continuation lock anchors changed")
-    continuation_block = continuation_block.replace(lock_anchor, "var lockAcquired = lock.tryLock(30000);", 1)
-    continuation_block = continuation_block.replace(
-        busy_anchor,
-        "Logger.log('DOM continuation skipped: script lock is busy.');\n      return {ok:false,skipped:'script_lock_busy'};",
-        1,
-    )
-    active_anchor = re.compile(r"DOM\.init\(\s*SpreadsheetApp\.getActiveSpreadsheet\(\)\s*\);\s*DOM\.exportDOM_continue\(\);")
-    active_replacement = """var continuationBook = SpreadsheetApp.getActiveSpreadsheet();
-    if (!continuationBook) throw new Error('DOM_CONTINUATION_ACTIVE_BOOK_UNAVAILABLE');
-    DOM.init(continuationBook);
-    var continuationProperties = PropertiesService.getScriptProperties();
+    busy_return = "Logger.log('DOM continuation skipped: script lock is busy.');\n      return {ok:false,skipped:'script_lock_busy'};"
+    if busy_anchor in continuation_block:
+        continuation_block = continuation_block.replace(busy_anchor, busy_return, 1)
+    elif busy_return not in continuation_block:
+        raise SystemExit("DOM continuation busy-result anchor changed")
+
+    recovery_body = """var continuationProperties = PropertiesService.getScriptProperties();
     var continuationJob = String(continuationProperties.getProperty('dom.job') || '').trim();
     var continuationInProgress = String(continuationProperties.getProperty('OZON_FBS_IN_PROGRESS') || '').trim();
     var continuationAutomation = continuationBook.getSheetByName('Автоматизация');
@@ -358,9 +356,17 @@ if continuation_marker not in continuation_block:
     }
     var continuationResult = DOM.exportDOM_continue();
     return {ok:true,continued_existing_export:true,result_type:typeof continuationResult,health:continuationHealth};"""
+    active_anchor = re.compile(r"DOM\.init\(\s*SpreadsheetApp\.getActiveSpreadsheet\(\)\s*\);\s*DOM\.exportDOM_continue\(\);")
+    active_replacement = """var continuationBook = SpreadsheetApp.getActiveSpreadsheet();
+    if (!continuationBook) throw new Error('DOM_CONTINUATION_ACTIVE_BOOK_UNAVAILABLE');
+    DOM.init(continuationBook);
+    """ + recovery_body
     continuation_block, active_count = active_anchor.subn(active_replacement, continuation_block, count=1)
-    if active_count != 1:
-        raise SystemExit("DOM continuation invocation anchor changed")
+    if active_count == 0:
+        instrumented_anchor = "var continuationResult = DOM.exportDOM_continue();"
+        if instrumented_anchor not in continuation_block:
+            raise SystemExit("DOM continuation invocation anchor changed")
+        continuation_block = continuation_block.replace(instrumented_anchor, recovery_body, 1)
     continuation_block = continuation_block.replace(
         "function exportDOM_continue() {",
         "function exportDOM_continue() {\n  /* " + continuation_marker + " */",
