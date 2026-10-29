@@ -2130,8 +2130,10 @@ function sellmonitorGithubExecuteQueueRow_(ss, q, codeSheet, row) {
     return {id: id, file: file, ok: true, result: result};
   } catch (e) {
     var msg = String(e && (e.stack || e.message) || e).slice(0, SMC_GH.MAX_RESULT_CHARS);
-    q.getRange(row, 5, 1, 4).setValues([['ERROR', data[5] || new Date(), new Date(), msg]]);
-    throw e;
+    var queueFile = String(file || 'unknown').replace(/[^A-Za-z0-9_-]/g,'').slice(0,80);
+    var taggedMessage = 'QUEUE_FILE[' + queueFile + ']: ' + msg;
+    q.getRange(row, 5, 1, 4).setValues([['ERROR', data[5] || new Date(), new Date(), taggedMessage]]);
+    throw new Error(taggedMessage);
   }
 }
 
