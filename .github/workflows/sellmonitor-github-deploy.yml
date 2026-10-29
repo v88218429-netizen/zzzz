@@ -274,42 +274,28 @@ jobs:
             echo "OZON_DIAGNOSTIC_PUSH=already_present"
           fi
           python - <<'PY'
-          import json, os, urllib.request
-          url="https://script.google.com/macros/s/"+os.environ["WEBAPP_DEPLOYMENT_ID"]+"/exec"
-          body=json.dumps({"token":os.environ["WEBHOOK_SECRET"],"action":"health"}).encode()
-          req=urllib.request.Request(url,data=body,headers={"Content-Type":"application/json"},method="POST")
-          with urllib.request.urlopen(req,timeout=120) as response:
-              health=json.loads(response.read().decode("utf-8"))
-          if health.get("ok") is not True:
-              raise SystemExit("OZON_WORKER_HEALTH_READ_FAILED")
-          result=health.get("result") or {}
-          handlers=result.get("project_trigger_handlers") or []
-          print("OZON_WORKER_HEALTH_VERSION="+str(result.get("version") or ""))
-          print("OZON_WORKER_TRIGGER_OK="+str(result.get("trigger_ok")))
-          print("OZON_PROJECT_HAS_EXPORT_CONTINUATION="+str("exportDOM_continue" in handlers))
-          print("OZON_PROJECT_TRIGGER_HANDLERS="+",".join(str(x) for x in handlers if "exportDOM" in str(x) or "Marketplace" in str(x)))
-          PY
-          python - <<'PY'
-          import json, os, time, urllib.parse, urllib.request
+          import concurrent.futures, json, os, time, urllib.error, urllib.parse, urllib.request
           access=os.environ.get('SHEETS_ACCESS_TOKEN','')
           if not access: raise SystemExit('SHEETS_ACCESS_TOKEN_MISSING')
           ids={'ДОМ':'1g57et2zqlVfbs0_BoRobb5G-4Z2MTXZd028V7u4Kd-Q','Хозяюшка':'1Rl-IVihrZ56wKwDsf76wspZ53a8ntN3hCVN1gd4Tguo'}
           tab='15_API_Экспорт_Диагностика_GH'; last={}
-          for attempt in range(1,10):
-              complete=True
-              for store,sid in ids.items():
-                  rng=urllib.parse.quote("'"+tab+"'!A1:G100",safe='')
-                  url='https://sheets.googleapis.com/v4/spreadsheets/'+sid+'/values/'+rng+'?majorDimension=ROWS'
-                  request=urllib.request.Request(url,headers={'Authorization':'Bearer '+access})
-                  try:
-                      with urllib.request.urlopen(request,timeout=30) as response: payload=json.loads(response.read().decode())
-                      rows=payload.get('values') or []; row=rows[-1] if len(rows)>1 else []
-                      if len(row)<7 or str(row[1])!=store: complete=False;last[store]='no_verified_row'
-                      else:last[store]=row
-                  except Exception as error:
-                      complete=False;last[store]=type(error).__name__
-              if complete:break
-              if attempt<9:time.sleep(10)
+          def read_store(store,sid):
+              rng=urllib.parse.quote("'"+tab+"'!A1:G100",safe='')
+              url='https://sheets.googleapis.com/v4/spreadsheets/'+sid+'/values/'+rng+'?majorDimension=ROWS'
+              request=urllib.request.Request(url,headers={'Authorization':'Bearer '+access})
+              try:
+                  with urllib.request.urlopen(request,timeout=12) as response: payload=json.loads(response.read().decode())
+                  rows=payload.get('values') or []; row=rows[-1] if len(rows)>1 else []
+                  return store,row if len(row)>=7 and str(row[1])==store else 'no_verified_row'
+              except urllib.error.HTTPError as error:
+                  return store,'HTTP_'+str(error.code)
+              except Exception as error:
+                  return store,type(error).__name__
+          for attempt in range(1,13):
+              with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+                  for store,result in pool.map(lambda item:read_store(*item),ids.items()): last[store]=result
+              if all(isinstance(last.get(store),list) for store in ids): break
+              if attempt<12: time.sleep(8)
           for store in ids:
               row=last.get(store)
               if not isinstance(row,list) or len(row)<7 or str(row[1])!=store:
