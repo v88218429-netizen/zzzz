@@ -305,6 +305,34 @@ jobs:
                   print("WORKER_TICK_DEFERRED_BUSY=yes")
               else:
                   raise AssertionError(last)
+          inner_body=json.dumps({"token":os.environ["WEBHOOK_SECRET"],"action":"inner_finance_tick"}).encode()
+          inner_result=None
+          for attempt in range(1,5):
+              req=urllib.request.Request(url,data=inner_body,headers={"Content-Type":"application/json"},method="POST")
+              try:
+                  with urllib.request.urlopen(req,timeout=180) as r:
+                      inner_result=json.loads(r.read().decode("utf-8"))
+                  tick=inner_result.get("tick") or {}
+                  if tick.get("skipped") and tick.get("reason")=="shared_gateway_lock_busy":
+                      print(f"INNER_FINANCE_TICK_BUSY attempt={attempt}/4")
+                      if attempt<4:
+                          time.sleep(10)
+                          continue
+                  break
+              except (urllib.error.URLError,TimeoutError,json.JSONDecodeError) as exc:
+                  print("INNER_FINANCE_TICK_REQUEST_ERROR="+type(exc).__name__+":"+str(exc)[:180])
+                  break
+          if isinstance(inner_result,dict):
+              tick=inner_result.get("tick") or {}
+              result={
+                  "ok":tick.get("ok"),
+                  "store_id":tick.get("store_id"),
+                  "skipped":tick.get("skipped"),
+                  "reason":tick.get("reason"),
+                  "error":str(tick.get("error") or "").replace("Bearer ","Bearer [redacted] ")[:600],
+                  "schema_diagnostic":str(tick.get("schema_diagnostic") or "")[:1100],
+              }
+              print("INNER_FINANCE_TICK_RESULT="+json.dumps(result,ensure_ascii=False,sort_keys=True))
           PY
 
       - name: Pull back and verify live code
