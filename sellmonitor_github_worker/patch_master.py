@@ -80,6 +80,35 @@ if worker.exists():
     elif schema_patch_marker not in worker_text and "function sellmonitorGithubInnerMcpCallWithToken_" in worker_text:
         raise SystemExit("Sellmonitor catalog V4 patch anchor changed")
 
+    # Upgrade the live diagnostic to compact required/property keys so the
+    # replacement calls can be built from the actual MCP contract.
+    schema_keys_marker = "INNER_MCP_TOOL_SCHEMA_DIAGNOSTIC_V5"
+    schema_keys_anchor = "          if (cachedTools) innerProps.setProperty('SMC_INNER_MCP_TOOL_SCHEMA_V4',cachedTools);"
+    if schema_keys_marker not in worker_text and schema_keys_anchor in worker_text:
+        key_schema_code = """/* INNER_MCP_TOOL_SCHEMA_DIAGNOSTIC_V5 */
+          var keySchema = function(name) {
+            var item = allTools.filter(function(t){return String(t && t.name || '') === name;})[0] || {};
+            var schema = item.inputSchema || {};
+            var props = schema.properties || {};
+            var out = {required:schema.required || [],propertyTypes:{}};
+            Object.keys(props).forEach(function(key){
+              var p = props[key] || {};
+              out.propertyTypes[key] = p.type || '';
+              if (Array.isArray(p.enum)) out.propertyTypes[key] += ':' + p.enum.slice(0,6).join(',');
+            });
+            return JSON.stringify(out);
+          };
+          cachedTools = 'TOTAL=' + allTools.length + ';PRODUCT_KEYS=' + keySchema('analytics_get_product_list').slice(0,380) +
+            ';WB_EXPENSES_KEYS=' + keySchema('analytics_get_marketplace_expenses').slice(0,380);
+          if (cachedTools) innerProps.setProperty('SMC_INNER_MCP_TOOL_SCHEMA_V5',cachedTools);"""
+        if schema_keys_anchor not in worker_text:
+            raise SystemExit("Sellmonitor V5 schema cache anchor changed")
+        worker_text = worker_text.replace("SMC_INNER_MCP_TOOL_SCHEMA_V4", "SMC_INNER_MCP_TOOL_SCHEMA_V5")
+        worker_text = worker_text.replace(schema_keys_anchor, key_schema_code, 1)
+        print("INNER_MCP_TOOL_SCHEMA_DIAGNOSTIC_V5=patched")
+    elif schema_keys_marker not in worker_text and "function sellmonitorGithubInnerMcpCallWithToken_" in worker_text:
+        raise SystemExit("Sellmonitor V5 schema patch anchor changed")
+
     # Preserve the upstream MCP error code and a scrubbed, bounded message in
     # the existing per-store log. The previous generic error hid whether the
     # tool was unavailable or the OAuth session needed refresh.
