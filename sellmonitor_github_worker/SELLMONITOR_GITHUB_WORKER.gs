@@ -6038,23 +6038,11 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
         try { var writeError=JSON.parse(writeResponse.getContentText()||'{}').error||{}; writeDiagnostic=String(writeError.status||writeError.message||'UNKNOWN').slice(0,180); } catch(writeParseError) {}
         throw new Error('FBS_PATCH_BATCH_HTTP_'+writeCode+':'+writeDiagnostic);
       }
-      mark('STATE_VERIFY_START'); var verifyResponse=fetchSheetApi(apiBase+'/values:batchGetByDataFilter',{
-        method:'post',contentType:'application/json',
-        headers:{Authorization:'Bearer '+authToken},muteHttpExceptions:true,
-        payload:JSON.stringify({dataFilters:verifyFilters,valueRenderOption:'UNFORMATTED_VALUE'})
-      });
-      var verifyCode=verifyResponse.getResponseCode(); console.log('FBS_STAGE_STATE_VERIFY ms='+(Date.now()-fbsStarted)+' http='+verifyCode+' filters='+verifyFilters.length); mark('STATE_VERIFY_DONE_'+verifyCode);
-      if(verifyCode<200||verifyCode>=300){if(verifyCode!==403)throw new Error('FBS_PATCH_READBACK_HTTP_'+verifyCode);}
-      var verified;
-      if(verifyCode>=200&&verifyCode<300){
-        verified=JSON.parse(verifyResponse.getContentText()).valueRanges||[];
-      }else{throw new Error('FBS_PATCH_READBACK_HTTP_'+verifyCode);}
-      if(verified.length!==verifyFilters.length)throw new Error('FBS_PATCH_READBACK_COUNT_MISMATCH');
-      var rangeIndex=0;
+      mark('STATE_VERIFY_START_NATIVE');
       segments.forEach(function(seg){
-        var startRow=seg[0],endRow=seg[1];
-        var orderValues=(verified[rangeIndex++].valueRange||{}).values||[];
-        var timeValues=(verified[rangeIndex++].valueRange||{}).values||[];
+        var startRow=seg[0],endRow=seg[1],count=endRow-startRow+1;
+        var orderValues=orderSheetNative.getRange(startRow,1,count,7).getValues();
+        var timeValues=orderSheetNative.getRange(startRow,22,count,2).getValues();
         for(var rowNumber=startRow;rowNumber<=endRow;rowNumber++){
           var offset=rowNumber-2,rowOffset=rowNumber-startRow;
           var orderRow=orderValues[rowOffset]||[],timeRow=timeValues[rowOffset]||[];
