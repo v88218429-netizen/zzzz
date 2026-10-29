@@ -125,6 +125,11 @@ jobs:
           if not any(x.get('serviceId')=='sheets' for x in services):
               services.append({'userSymbol':'Sheets','serviceId':'sheets','version':'v4'})
           m.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding='utf-8')
+          match=__import__('re').search(r"VERSION:\\s*'([^']+)'", s)
+          if not match:
+              raise SystemExit('worker version missing')
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as env:
+              env.write('EXPECTED_WORKER_VERSION=' + match.group(1) + '\\n')
           PY
           python sellmonitor_github_worker/patch_master.py /tmp/sellmonitor-gh-worker
 
@@ -169,9 +174,13 @@ jobs:
                       obj=json.loads(r.read().decode("utf-8"))
                   last=obj
                   if obj.get("ok") is True and obj.get("action")=="health":
-                      health=obj.get("result") or {}
-                      break
-                  if obj.get("error")=="UNAUTHORIZED":
+                      candidate=obj.get("result") or {}
+                      if candidate.get("version")==os.environ["EXPECTED_WORKER_VERSION"]:
+                          health=candidate
+                          break
+                      last="WORKER_VERSION_PROPAGATION:" + str(candidate.get("version"))
+                      print(f"WORKER_VERSION_WAIT attempt={attempt}/8 observed={candidate.get('version')}")
+                  elif obj.get("error")=="UNAUTHORIZED":
                       last="UNAUTHORIZED during Apps Script deployment propagation"
                   else:
                       raise AssertionError(obj)
@@ -184,8 +193,10 @@ jobs:
               if attempt < 8:
                   print(f"PROTECTED_BRIDGE_WAIT attempt={attempt}/8 reason={last}")
                   time.sleep(10)
-          if health is None:
+          if health is None or health.get("version")!=os.environ["EXPECTED_WORKER_VERSION"]:
               raise AssertionError(last)
+          if health.get("trigger_ok") is not True:
+              raise AssertionError("TRIGGER_HEALTH_FAILED")
           print("PROTECTED_BRIDGE_AUTH=ok")
           print("WORKER_VERSION=" + str(health.get("version")))
           print("TRIGGER_OK=" + str(health.get("trigger_ok")))
@@ -306,7 +317,7 @@ jobs:
           clasp pull
           grep -Rqs "SELLMONITOR_GITHUB_MASTER_HOOK_V1" .
           grep -Rqs "function sellmonitorGithubEnsureTrigger_()" .
-          grep -RqsE "VERSION: 'github-worker-[0-9]+\\.[0-9]+\\.[0-9]+'" .
+          grep -RqsF "$EXPECTED_WORKER_VERSION" .
           grep -Rqs "SELLMONITOR_WEBHOOK_HASH_NOT_COMPILED" .
           python - <<'PY'
           import json
