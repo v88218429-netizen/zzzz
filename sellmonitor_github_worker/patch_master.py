@@ -197,6 +197,17 @@ if worker.exists():
         print("WB_INNER_DATE_READBACK=patched")
     elif date_readback_marker not in worker_text and "WB_INNER_READBACK_MISMATCH" in worker_text:
         raise SystemExit("WB inner readback comparison anchor changed")
+    # Include the exporter state in the publisher's fail-closed response.
+    # The GitHub schedule can then diagnose the trigger without direct Sheets API access.
+    ozon_diag_marker = "SELLMONITOR_OZON_EXPORT_DIAGNOSTIC_RESPONSE_V1"
+    ozon_diag_anchor = "source_status:sourceStatus,source_last_success:sourceLastSuccess||null,"
+    if ozon_diag_marker not in worker_text and ozon_diag_anchor in worker_text:
+        replacement = ozon_diag_anchor + "\\n      /* " + ozon_diag_marker + " */\\n      export_diagnostic: (typeof sellmonitorGithubReadOzonExportDiagnostic === 'function' ? sellmonitorGithubReadOzonExportDiagnostic() : null),"
+        worker_text = worker_text.replace(ozon_diag_anchor, replacement, 1)
+        print("OZON_EXPORT_DIAGNOSTIC_RESPONSE=patched")
+    elif ozon_diag_marker not in worker_text and "function sellmonitorGithubPublishOzonSummaryOrders_" in worker_text:
+        raise SystemExit("Ozon diagnostic response anchor changed")
+
     worker.write_text(worker_text, encoding="utf-8")
     print("WORKER_TRIGGER_REFRESH_V2=patched")
 candidates = []
