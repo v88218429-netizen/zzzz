@@ -14,7 +14,7 @@ permissions:
 
 concurrency:
   group: sellmonitor-github-worker-deploy
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   deploy:
