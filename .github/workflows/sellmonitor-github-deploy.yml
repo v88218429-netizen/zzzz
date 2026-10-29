@@ -383,7 +383,7 @@ jobs:
           PY
 
       - name: Inspect the existing Ozon continuation wrapper
-        if: github.event_name == 'push' && github.event.head_commit.message in fromJSON('["Run Ozon export continuation via GitHub","Repair and resume Ozon export via GitHub"]')
+        if: github.event_name == 'push' && contains(fromJSON('["Run Ozon export continuation via GitHub","Repair and resume Ozon export via GitHub"]'), github.event.head_commit.message)
         shell: bash
         run: |
           set -euo pipefail
