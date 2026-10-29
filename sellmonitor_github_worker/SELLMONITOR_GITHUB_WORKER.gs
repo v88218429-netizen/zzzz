@@ -293,8 +293,9 @@ function sellmonitorGithubTick() {
 }
 
 function sellmonitorGithubInnerFinanceTick() {
-  var scriptLock = LockService.getScriptLock();
-  if (!scriptLock.tryLock(5000)) return {ok:true,skipped:true,reason:'shared_gateway_lock_busy'};
+  // Keep this domain serialized without waiting behind long-running queue commands.
+  var financeLock = LockService.getUserLock();
+  if (!financeLock.tryLock(5000)) return {ok:true,skipped:true,reason:'shared_gateway_lock_busy'};
   var cc = null;
   var cfg = null;
   try {
@@ -323,7 +324,7 @@ function sellmonitorGithubInnerFinanceTick() {
     var schemaDiagnostic = String(PropertiesService.getScriptProperties().getProperty('SMC_INNER_MCP_TOOL_SCHEMA_V5') || '');
     return {ok:false,version:SMC_GH.VERSION,store_id:cfg ? cfg.storeId : '',error:message,schema_diagnostic:schemaDiagnostic.slice(0,1100)};
   } finally {
-    scriptLock.releaseLock();
+    financeLock.releaseLock();
   }
 }
 
