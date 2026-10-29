@@ -20,7 +20,7 @@ BRIDGE_URL = os.environ["GOOGLE_BRIDGE_URL"]
 BRIDGE_KEY = os.environ["GOOGLE_BRIDGE_KEY"]
 MAX_RECOVERY_DAYS = 90
 LOOKBACK_DAYS = max(1, min(MAX_RECOVERY_DAYS, int(os.environ.get("FBS_LOOKBACK_DAYS", "7"))))
-BATCH_SIZE = max(1, min(100, int(os.environ.get("FBS_BATCH_SIZE", "25"))))  # Keep Apps Script work bounded per gateway call
+BATCH_SIZE = max(1, min(100, int(os.environ.get("FBS_BATCH_SIZE", "5"))))  # Keep Apps Script work bounded per gateway call
 # [SANYCH-90D-SLICED] Seven-day segments are dispatched by the recovery workflow.
 TIMEOUT = 120
 
