@@ -26,7 +26,7 @@ LOOKBACK_DAYS = max(1, min(90, int(os.environ.get("FBS_LOOKBACK_DAYS", "7"))))
 # Recovery matrix includes the current UTC day so recent WB orders are reconciled too.
 # Current-day bounds are clamped to now before calling the official WB API.
 CLIENT_HINT = os.environ.get("FBS_CLIENT", "").strip().upper()
-BATCH_SIZE = int(os.environ.get("FBS_BATCH_SIZE", "25"))
+BATCH_SIZE = int(os.environ.get("FBS_BATCH_SIZE", "5"))
 if not 1 <= BATCH_SIZE <= 1000:
     raise RuntimeError("FBS_BATCH_SIZE_INVALID")
 INGEST_ATTEMPTS = 8  # Allow the seven-minute per-client lease to expire before abandoning an idempotent batch
