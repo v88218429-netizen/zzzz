@@ -147,9 +147,9 @@ jobs:
           datasets={
               "ads":("campaign_sku_day.csv",["shop","date","advert_id","nm_id","views","clicks","atbs","orders","spend_rub","order_sum_rub","source","quality","seller_article"]),
               "funnel":("funnel_sku_day.csv",["shop","date","nm_id","vendor_code","open_count","cart_count","order_count","order_sum_rub","source"]),
-              "organic":("organic_sku_day.csv",["shop","date","nm_id","vendor_code","total_open_count","paid_clicks","organic_clicks","source_total","source_paid","formula","coverage_status","campaigns_checked","campaigns_complete","formula_version"]),
-              "ads_poll":("ads_poll_snapshot.csv",["shop","observed_at","date","advert_id","nm_id","views","clicks","atbs","orders","spend_rub","order_sum_rub","source","measurement_grain","load_timestamp","coverage_status"]),
-              "funnel_poll":("funnel_poll_snapshot.csv",["shop","observed_at","date","sku_rows","open_count","cart_count","order_count","order_sum_rub","open_to_cart","cart_to_order","open_to_order","source","measurement_grain","load_timestamp","coverage_status"]),
+              "organic":("organic_sku_day.csv",["shop","date","nm_id","vendor_code","total_open_count","paid_clicks","organic_clicks","source_total","source_paid","formula","coverage_status","campaigns_checked","campaigns_without_period_statistics","campaigns_with_null_payload"]),
+              "ads_poll":("ads_poll_snapshot.csv",["shop","observed_at","date","campaign_sku_rows","campaigns_with_rows","views","clicks","cart_adds","orders","spend_rub","order_sum_rub","ctr","cpc_rub","drr","roas","source","measurement_grain"]),
+              "funnel_poll":("funnel_poll_snapshot.csv",["shop","observed_at","date","sku_rows","open_count","cart_count","order_count","order_sum_rub","open_to_cart","cart_to_order","open_to_order","source","measurement_grain"]),
           }
           all_rows={}
           for name,(filename,headers) in datasets.items():
