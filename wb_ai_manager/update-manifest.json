@@ -2,9 +2,9 @@
   "schema": 1,
   "channels": {
     "stable": {
-      "version": "1.1.14",
+      "version": "1.1.15",
       "channel": "stable",
-      "notes": "Реклама и воронка загружаются из зашифрованных данных в GitHub.",
+      "notes": "Сопоставление рекламы и воронки по магазинам, датам и nmID без ложной атрибуции.",
       "minimum_current_version": "1.0.0",
       "files": [
         {
@@ -20,7 +20,7 @@
         {
           "path": "RELEASE_NOTES.md",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/RELEASE_NOTES.md",
-          "sha256": "a2f6b5e27de22b94b0b86c7d182d825d24b3cdead822365985a0a03d044804c7"
+          "sha256": "36bb5a0df3d0b218c16566e9e5308eede824d3eec1850db754d81e0b387aeccc"
         },
         {
           "path": "START_WB_AI_MANAGER.command",
@@ -31,7 +31,7 @@
         {
           "path": "VERSION",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/VERSION",
-          "sha256": "0586123600ce6a745f0312d81d20d7d694fe8778dfff129f20e6aa374ae0d200"
+          "sha256": "17cc15d1cae95587e959b03abb6dd755c48fefcbff0f3a5f7a06c70aab87cc2e"
         },
         {
           "path": "docs/AUTO_UPDATE.md",
@@ -51,12 +51,12 @@
         {
           "path": "plugin.json",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/plugin.json",
-          "sha256": "f23ff9f42a793e9a28abf1c5c1eaa54ee254111c3eac65f17992d6a6f6c2cb63"
+          "sha256": "b67c89d4da45e9fdd68c03d211fe244f10ce19bba5999a6bd98e464998db02dc"
         },
         {
           "path": "pyproject.toml",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/pyproject.toml",
-          "sha256": "58c5e390934fc536e640a94860bb0d1ea4e89f3a8c80d630adf0682acc380561"
+          "sha256": "01531c3bfe6037444bce7b0b7107b2e27644848812fded49b7244eb3c613d344"
         },
         {
           "path": "scripts/auto_refresh_sheets.py",
@@ -142,7 +142,7 @@
         {
           "path": "src/wb_control_center/__init__.py",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/src/wb_control_center/__init__.py",
-          "sha256": "9aa74d5428b821a9529a8e573a682aa5cb2ca1536c22c3cb5b4f329187475d85"
+          "sha256": "6f5dab4f7af8045dca0459f7bce2dc0cb1f6dcd5c370ed1105f457b7d21458c5"
         },
         {
           "path": "src/wb_control_center/__main__.py",
@@ -272,7 +272,7 @@
         {
           "path": "src/wb_control_center/api.py",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/src/wb_control_center/api.py",
-          "sha256": "7f02d2463e34db233eaa0ff9bafcf38c3bddb9176806dba63a1f6bc8fa6b87d9"
+          "sha256": "6cf0a40f016ffef7bdf2a60d7a7035848b914ddb0bb5427918fb1e1bfb7c038f"
         },
         {
           "path": "src/wb_control_center/auto_sheets.py",
@@ -452,12 +452,12 @@
         {
           "path": "src/wb_control_center/ui/dashboard.html",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/src/wb_control_center/ui/dashboard.html",
-          "sha256": "04e6e6aec8c4e5f68503af6e93e4ddb8a47d46be106cc85845ffdb90ef26f41b"
+          "sha256": "184b00d856b7ee30d2eaea7c6af22213ea911f5437bfc2927989e5c650a0f78d"
         },
         {
           "path": "src/wb_control_center/ui/dashboard.js",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/src/wb_control_center/ui/dashboard.js",
-          "sha256": "fe9913aa3fed78ad8693b27c1e4ae765138eb6788a634f21a001fdb78ee77f9d"
+          "sha256": "52a14c44d797f7b091cbb9392997d43f997d0879ca60816486f215a516905fe8"
         },
         {
           "path": "src/wb_control_center/updater.py",

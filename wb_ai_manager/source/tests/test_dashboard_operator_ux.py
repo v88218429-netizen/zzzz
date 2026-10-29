@@ -108,11 +108,11 @@ def test_worker_traffic_dashboard_keeps_shop_breakdown_and_uses_wb_attribution()
         "source_health": {"status": "FRESH"},
         "status": {"shops": {"AP": {"ok": True}, "AA": {"ok": False}}},
         "ads": [
-            {"shop": "ap", "date": "2026-10-27", "views": "100", "clicks": "10", "atbs": "3", "orders": "2", "spend_rub": "50", "order_sum_rub": "500"},
+            {"shop": "ap", "date": "2026-10-27", "nm_id": "123", "views": "100", "clicks": "10", "atbs": "3", "orders": "2", "spend_rub": "50", "order_sum_rub": "500"},
             {"shop": "aa", "date": "2026-10-27", "views": "bad", "clicks": "0", "orders": "0", "spend_rub": "0", "order_sum_rub": "0"},
             {"shop": "yv", "date": "2026-10-20", "views": "999", "clicks": "9"},
         ],
-        "funnel": [{"shop": "ap", "date": "2026-10-27", "open_count": "20", "cart_count": "5", "order_count": "2"}],
+        "funnel": [{"shop": "ap", "date": "2026-10-27", "nm_id": "123", "open_count": "20", "cart_count": "5", "order_count": "2"}],
         "organic": [],
     }, {"from": "2026-10-27", "to": "2026-10-28"})
     stores = {x["id"]: x for x in result["shops"]}
@@ -123,6 +123,45 @@ def test_worker_traffic_dashboard_keeps_shop_breakdown_and_uses_wb_attribution()
     assert stores["air"]["summary"]["views"] is None
     assert len(result["ads"]) == 2
     assert result["funnel"][0]["cart_count"] == "5"
+    assert result["product_day_comparison"][0]["status"] == "both_sources"
+    assert result["product_day_summary"]["matched_pairs"] == 1
+
+
+def test_traffic_product_day_comparison_joins_exact_keys_without_claiming_attribution():
+    from wb_control_center.api import _traffic_product_day_comparison
+
+    rows, summary = _traffic_product_day_comparison(
+        ads=[
+            {"shop": "ap", "date": "2026-10-27", "nm_id": "123", "vendor_code": "SKU-A", "advert_id": "9", "views": "50", "clicks": "5", "orders": "1", "spend_rub": "30", "order_sum_rub": "200"},
+            {"shop": "ap", "date": "2026-10-27", "nm_id": "123", "vendor_code": "SKU-A", "advert_id": "10", "views": "50", "clicks": "5", "orders": "1", "spend_rub": "20", "order_sum_rub": "300"},
+            {"shop": "aa", "date": "2026-10-27", "nm_id": "123", "views": "10", "clicks": "1", "orders": "0", "spend_rub": "2", "order_sum_rub": "0"},
+            {"shop": "ap", "date": "2026-10-27", "vendor_code": "NO-NMID", "views": "7"},
+        ],
+        funnel=[
+            {"shop": "ap", "date": "27.10.2026", "nm_id": "123", "vendor_code": "SKU-A", "open_count": "20", "cart_count": "5", "order_count": "2", "order_sum_rub": "500"},
+            {"shop": "yv", "date": "2026-10-27", "nm_id": "777", "vendor_code": "SKU-B", "open_count": "8", "cart_count": "2", "order_count": "1", "order_sum_rub": "100"},
+        ],
+    )
+
+    by_key = {(row["store_id"], row["nm_id"]): row for row in rows}
+    matched = by_key[("sanych", "123")]
+    assert matched["status"] == "both_sources"
+    assert matched["ad_views"] == 100
+    assert matched["ad_spend_rub"] == 50
+    assert matched["ad_orders"] == 2
+    assert matched["funnel_orders"] == 2
+    assert by_key[("air", "123")]["status"] == "ads_only"
+    assert by_key[("hozyushka", "777")]["status"] == "funnel_only"
+    assert summary == {"matched_pairs": 1, "ads_only": 1, "funnel_only": 1, "unlinked_ads": 1, "unlinked_funnel": 0}
+
+
+def test_funnel_page_explains_separate_ad_and_funnel_measures():
+    root = Path(__file__).parents[1]
+    html = (root / "src" / "wb_control_center" / "ui" / "dashboard.html").read_text(encoding="utf-8")
+    js = (root / "src" / "wb_control_center" / "ui" / "dashboard.js").read_text(encoding="utf-8")
+    assert 'id="funnel-traffic-join-table"' in html
+    assert "точные совпадения магазин × день × nmID" in html
+    assert "Числа заказов из двух источников не складываются." in js
 
 
 def test_sheets_ads_hub_traffic_fallback_keeps_store_and_source_status():
