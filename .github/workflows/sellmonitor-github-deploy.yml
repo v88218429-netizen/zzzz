@@ -253,6 +253,49 @@ jobs:
           print("WB_CLIENT_TOKENS_SEEDED=3")
           PY
 
+      - name: Run one authenticated Sellmonitor Inner finance tick
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, time, urllib.error, urllib.request
+          url="https://script.google.com/macros/s/"+os.environ["WEBAPP_DEPLOYMENT_ID"]+"/exec"
+          body=json.dumps({"token":os.environ["WEBHOOK_SECRET"],"action":"inner_finance_tick"}).encode()
+          result=None
+          for attempt in range(1,9):
+              req=urllib.request.Request(url,data=body,headers={"Content-Type":"application/json"},method="POST")
+              try:
+                  with urllib.request.urlopen(req,timeout=180) as response:
+                      result=json.loads(response.read().decode("utf-8"))
+                  tick=result.get("tick") or {}
+                  if tick.get("skipped") and tick.get("reason") in ("shared_gateway_lock_busy","inner_finance_lease_busy"):
+                      print(f"INNER_FINANCE_TICK_BUSY attempt={attempt}/8 reason={tick.get('reason')}")
+                      if attempt<8:
+                          time.sleep(15)
+                          continue
+                  break
+              except (urllib.error.URLError,TimeoutError,json.JSONDecodeError) as exc:
+                  print("INNER_FINANCE_TICK_REQUEST_ERROR="+type(exc).__name__+":"+str(exc)[:180])
+                  if attempt<8:
+                      time.sleep(10)
+                      continue
+                  break
+          if isinstance(result,dict):
+              tick=result.get("tick") or {}
+              detail={
+                  "ok":tick.get("ok"),
+                  "store_id":tick.get("store_id"),
+                  "skipped":tick.get("skipped"),
+                  "reason":tick.get("reason"),
+                  "error":str(tick.get("error") or "").replace("Bearer ","Bearer [redacted] ")[:700],
+                  "schema_diagnostic":str(tick.get("schema_diagnostic") or "")[:1100],
+              }
+              print("INNER_FINANCE_TICK_RESULT="+json.dumps(detail,ensure_ascii=False,sort_keys=True))
+          else:
+              print("INNER_FINANCE_TICK_RESULT=unavailable")
+          PY
+
       - name: Run one authenticated worker tick
         id: operational_tick
         continue-on-error: true
@@ -305,49 +348,6 @@ jobs:
                   print("WORKER_TICK_DEFERRED_BUSY=yes")
               else:
                   raise AssertionError(last)
-          PY
-
-      - name: Run one authenticated Sellmonitor Inner finance tick
-        continue-on-error: true
-        shell: bash
-        run: |
-          set -euo pipefail
-          python - <<'PY'
-          import json, os, time, urllib.error, urllib.request
-          url="https://script.google.com/macros/s/"+os.environ["WEBAPP_DEPLOYMENT_ID"]+"/exec"
-          body=json.dumps({"token":os.environ["WEBHOOK_SECRET"],"action":"inner_finance_tick"}).encode()
-          result=None
-          for attempt in range(1,9):
-              req=urllib.request.Request(url,data=body,headers={"Content-Type":"application/json"},method="POST")
-              try:
-                  with urllib.request.urlopen(req,timeout=180) as response:
-                      result=json.loads(response.read().decode("utf-8"))
-                  tick=result.get("tick") or {}
-                  if tick.get("skipped") and tick.get("reason") in ("shared_gateway_lock_busy","inner_finance_lease_busy"):
-                      print(f"INNER_FINANCE_TICK_BUSY attempt={attempt}/8 reason={tick.get('reason')}")
-                      if attempt<8:
-                          time.sleep(15)
-                          continue
-                  break
-              except (urllib.error.URLError,TimeoutError,json.JSONDecodeError) as exc:
-                  print("INNER_FINANCE_TICK_REQUEST_ERROR="+type(exc).__name__+":"+str(exc)[:180])
-                  if attempt<8:
-                      time.sleep(10)
-                      continue
-                  break
-          if isinstance(result,dict):
-              tick=result.get("tick") or {}
-              detail={
-                  "ok":tick.get("ok"),
-                  "store_id":tick.get("store_id"),
-                  "skipped":tick.get("skipped"),
-                  "reason":tick.get("reason"),
-                  "error":str(tick.get("error") or "").replace("Bearer ","Bearer [redacted] ")[:700],
-                  "schema_diagnostic":str(tick.get("schema_diagnostic") or "")[:1100],
-              }
-              print("INNER_FINANCE_TICK_RESULT="+json.dumps(detail,ensure_ascii=False,sort_keys=True))
-          else:
-              print("INNER_FINANCE_TICK_RESULT=unavailable")
           PY
 
       - name: Pull back and verify live code
