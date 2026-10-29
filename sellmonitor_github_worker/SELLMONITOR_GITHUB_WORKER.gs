@@ -99,6 +99,7 @@ function sellmonitorGithubBootstrap() {
 function sellmonitorGithubHealth() {
   var triggerState = sellmonitorGithubEnsureTrigger_();
   var triggers = ScriptApp.getProjectTriggers();
+  var projectTriggerHandlers = triggers.map(function(t) { return String(t.getHandlerFunction() || ''); }).filter(Boolean).sort();
   var triggerCount = triggers.filter(function(t) {
     return t.getHandlerFunction() === 'sellmonitorGithubTick';
   }).length;
@@ -187,6 +188,7 @@ function sellmonitorGithubHealth() {
     trigger: triggerState,
     trigger_count: triggerCount,
     inner_finance_trigger_count:innerFinanceTriggerCount,
+    project_trigger_handlers:projectTriggerHandlers,
     fbs_ingest_stages: sellmonitorGithubFbsStageSnapshot_(),
     trigger_ok: triggerCount === 1 && innerFinanceTriggerCount === 1
   };

@@ -201,6 +201,7 @@ jobs:
           print("WORKER_VERSION=" + str(health.get("version")))
           print("TRIGGER_OK=" + str(health.get("trigger_ok")))
           print("TRIGGER_COUNT=" + str(health.get("trigger_count")))
+          print("PROJECT_TRIGGER_HANDLERS=" + ",".join(str(x) for x in (health.get("project_trigger_handlers") or [])))
           for client, stage in sorted((health.get("fbs_ingest_stages") or {}).items()):
               print("FBS_STAGE=" + str(client) + "," + str(stage.get("stage")) + ",elapsed_ms=" + str(stage.get("elapsedMs")) + ",at=" + str(stage.get("at")))
           for client in health.get("clients") or []:
@@ -286,6 +287,14 @@ jobs:
               detail={
                   "ok":tick.get("ok"),
                   "store_id":tick.get("store_id"),
+                  "attempted":tick.get("attempted"),
+                  "date":tick.get("date"),
+                  "next_date":tick.get("next_date"),
+                  "source_rows":tick.get("source_rows"),
+                  "finance_rows":tick.get("finance_rows"),
+                  "historical":tick.get("historical"),
+                  "partial":tick.get("partial"),
+                  "fresh_categories":tick.get("fresh_categories"),
                   "skipped":tick.get("skipped"),
                   "reason":tick.get("reason"),
                   "error":str(tick.get("error") or "").replace("Bearer ","Bearer [redacted] ")[:1600],
