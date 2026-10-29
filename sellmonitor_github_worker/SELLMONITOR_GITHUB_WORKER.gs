@@ -6018,13 +6018,27 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
       var rows=[];
       parsed.forEach(function(r){var row=byId[r.id];if(row)rows.push({id:r.id,row:row});});
       var stale=false;
-      mark('STATE_READ_START_NATIVE');
-      rows.forEach(function(item){
-        var values=orderSheetNative.getRange(item.row,1,1,7).getDisplayValues()[0]||[];
-        if(String(values[0]||'')!==item.id){stale=true;return;}
-        stateByRow[item.row]=values.slice(4,7);
-      });
-      mark('STATE_READ_DONE_NATIVE');
+      mark('STATE_READ_START_BATCH');
+      // Read up to 100 sparse rows in one Sheets API request instead of one
+      // SpreadsheetApp service call per order. This keeps large recoveries bounded.
+      for(var rp=0;rp<rows.length;rp+=100){
+        var readPart=rows.slice(rp,rp+100),query=readPart.map(function(item){
+          return 'ranges='+encodeURIComponent(orderSheet+'!A'+item.row+':G'+item.row);
+        }).join('&');
+        var readResponse=fetchSheetApi(apiBase+'/values:batchGet?'+query+'&valueRenderOption=FORMATTED_VALUE',{method:'get'});
+        var readCode=readResponse.getResponseCode();
+        if(readCode<200||readCode>=300)throw new Error('FBS_STATE_BATCH_READ_HTTP_'+readCode);
+        var readResult=JSON.parse(readResponse.getContentText()||'{}');
+        var valueRanges=readResult.valueRanges||[];
+        if(valueRanges.length!==readPart.length)throw new Error('FBS_STATE_BATCH_READ_COUNT_MISMATCH');
+        for(var ri=0;ri<readPart.length;ri++){
+          var values=((valueRanges[ri]||{}).values||[])[0]||[];
+          var item=readPart[ri];
+          if(String(values[0]||'')!==item.id){stale=true;continue;}
+          stateByRow[item.row]=[values[4]||'',values[5]||'',values[6]||''];
+        }
+      }
+      mark('STATE_READ_DONE_BATCH');
       return stale;
     }
     if(readExistingStates_()){
