@@ -20,7 +20,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: wb-fbs-google-adapter
+  group: wb-fbs-google-adapter-sanych
   cancel-in-progress: false
 
 jobs:
