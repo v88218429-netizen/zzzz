@@ -380,6 +380,33 @@ if continuation_marker not in continuation_block:
     text = text[:continuation_start] + continuation_block + text[continuation_end:]
     print("OZON_CONTINUATION_RECOVERY=patched")
 
+
+continuation_lock_marker = "OZON_CONTINUATION_USER_LOCK_V3"
+continuation_start = text.find("function exportDOM_continue() {")
+continuation_end = text.find("\\nfunction ", continuation_start + 10)
+if continuation_end < 0:
+    continuation_end = len(text)
+if continuation_start < 0:
+    raise SystemExit("DOM continuation wrapper missing for lock-scope update")
+continuation_block = text[continuation_start:continuation_end]
+if continuation_lock_marker not in continuation_block:
+    lock_call = "LockService.getScriptLock()"
+    if continuation_block.count(lock_call) != 1:
+        raise SystemExit("Ozon continuation lock-scope anchor changed")
+    continuation_block = continuation_block.replace(lock_call, "LockService.getUserLock()", 1)
+    continuation_block = continuation_block.replace(
+        "Logger.log('DOM continuation skipped: script lock is busy.');",
+        "Logger.log('DOM continuation skipped: user lock is busy.');",
+        1,
+    )
+    continuation_block = continuation_block.replace(
+        "function exportDOM_continue() {",
+        "function exportDOM_continue() {\\n  /* " + continuation_lock_marker + " */",
+        1,
+    )
+    text = text[:continuation_start] + continuation_block + text[continuation_end:]
+    print("OZON_CONTINUATION_USER_LOCK=patched")
+
 diagnostic_marker = "SELLMONITOR_OZON_EXPORT_DIAGNOSTIC_V1"
 if diagnostic_marker not in text:
     text += """
