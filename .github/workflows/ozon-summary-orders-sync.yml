@@ -25,7 +25,7 @@ jobs:
   publish:
     if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     env:
       WEBAPP_DEPLOYMENT_ID: AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw
       WEBHOOK_SECRET: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
@@ -46,79 +46,101 @@ jobs:
           import json, os, time, urllib.error, urllib.request
 
           url = "https://script.google.com/macros/s/" + os.environ["WEBAPP_DEPLOYMENT_ID"] + "/exec"
-          body = json.dumps({
-              "token": os.environ["WEBHOOK_SECRET"],
-              "action": "publish_ozon_summary_orders"
-          }).encode("utf-8")
-          last = None
-          result = None
-          for attempt in range(1, 7):
-              req = urllib.request.Request(
-                  url, data=body,
-                  headers={"Content-Type": "application/json"},
-                  method="POST",
-              )
+          token = os.environ["WEBHOOK_SECRET"]
+
+          def post(action, timeout=90):
+              payload=json.dumps({"token":token,"action":action}).encode("utf-8")
+              req=urllib.request.Request(url,data=payload,headers={"Content-Type":"application/json"},method="POST")
+              with urllib.request.urlopen(req,timeout=timeout) as response:
+                  return json.loads(response.read().decode("utf-8"))
+
+          def print_export_diagnostic(result, attempt):
+              diagnostic=(result.get("export_diagnostic") or {}) if isinstance(result,dict) else {}
+              print("OZON_SOURCE_STATUS="+str(result.get("source_status") or ""))
+              print("OZON_SOURCE_LAST_SUCCESS="+str(result.get("source_last_success") or result.get("source_updated") or ""))
+              for key,label in (("job","JOB"),("in_progress","IN_PROGRESS"),("last_attempt_at","LAST_ATTEMPT_AT"),("continuation_pending","CONTINUATION_PENDING"),("last_error","LAST_ERROR")):
+                  value=diagnostic.get(key)
+                  print("OZON_EXPORT_"+label+"="+str(value or "").replace("\\\\n"," ")[:400])
+              print(f"OZON_PUBLISH_ATTEMPT={attempt}/8")
+
+          def needs_resume(result):
+              status=str((result or {}).get("source_status") or "").lower()
+              reason=str((result or {}).get("reason") or "")
+              return "OZON_SOURCE_EXPORT_NOT_VERIFIED" in reason and ("нет успешного запуска" in status or "выгрузка продолжается" in status)
+
+          result=None
+          last=None
+          continuation_accepted=False
+          for attempt in range(1,9):
               try:
-                  with urllib.request.urlopen(req, timeout=90) as response:
-                      result = json.loads(response.read().decode("utf-8"))
-              except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
-                  last = type(exc).__name__ + ": " + str(exc)[:240]
+                  result=post("publish_ozon_summary_orders",timeout=90)
+              except (urllib.error.URLError,TimeoutError,json.JSONDecodeError) as exc:
+                  last=type(exc).__name__+": "+str(exc)[:240]
+                  print("OZON_PUBLISH_REQUEST_ERROR="+last)
               else:
-                  if isinstance(result, dict) and result.get("ok") is True:
+                  if isinstance(result,dict) and result.get("ok") is True:
                       break
-                  last = json.dumps({
-                      "action": result.get("action") if isinstance(result, dict) else None,
-                      "reason": result.get("reason") if isinstance(result, dict) else None,
-                      "source_status": result.get("source_status") if isinstance(result, dict) else None,
-                      "source_last_success": (result.get("source_last_success") or result.get("source_updated")) if isinstance(result, dict) else None,
-              "export_diagnostic": result.get("export_diagnostic") if isinstance(result, dict) else None,
-                      "stores": [
-                          {"store": x.get("store"), "error": x.get("error"), "ok": x.get("ok")}
-                          for x in (result.get("stores") or [])
-                      ] if isinstance(result, dict) else [],
-                  }, ensure_ascii=False)[:1200]
-                  # Retry only the explicit in-progress state; a missing export or rejected source remains a hard failure.
-                  transient_export = (
-                      isinstance(result, dict)
-                      and result.get("ok") is False
-                      and "OZON_SOURCE_EXPORT_NOT_VERIFIED" in str(result.get("reason") or "")
-                      and any(state in str(result.get("source_status") or "").lower() for state in ("выгрузка продолжается", "нет успешного запуска"))
-                  )
-                  if isinstance(result, dict) and result.get("ok") is False and not transient_export:
+                  last=json.dumps({
+                      "reason":result.get("reason") if isinstance(result,dict) else None,
+                      "source_status":result.get("source_status") if isinstance(result,dict) else None,
+                      "source_last_success":result.get("source_last_success") if isinstance(result,dict) else None,
+                      "stores":[{"store":x.get("store"),"ok":x.get("ok"),"error":x.get("error")} for x in (result.get("stores") or [])] if isinstance(result,dict) else []
+                  },ensure_ascii=False)[:1200]
+                  if needs_resume(result) and not continuation_accepted:
+                      print_export_diagnostic(result,attempt)
+                      resume_result=None
+                      resume_error=None
+                      for resume_attempt in range(1,4):
+                          try:
+                              resume_result=post("resume_ozon_export",timeout=180)
+                          except (urllib.error.URLError,TimeoutError,json.JSONDecodeError) as exc:
+                              resume_error=type(exc).__name__+": "+str(exc)[:240]
+                              print("OZON_CONTINUATION_REQUEST_ERROR="+resume_error)
+                          else:
+                              body=resume_result.get("result") or {}
+                              outcome=body.get("continuation_result") or {}
+                              resumed=outcome.get("started_fresh_export") is True or outcome.get("continued_existing_export") is True
+                              safe={k:outcome.get(k) for k in ("ok","started_fresh_export","continuation_pending","continued_existing_export","result_type","skipped","error_code","reason") if k in outcome}
+                              print("OZON_CONTINUATION_ATTEMPT="+str(resume_attempt)+"/3")
+                              print("OZON_CONTINUATION_OUTCOME="+json.dumps(safe,ensure_ascii=False)[:700])
+                              if resume_result.get("ok") is True and body.get("called") is True and outcome.get("ok") is True and resumed:
+                                  continuation_accepted=True
+                                  print("OZON_CONTINUATION_ACCEPTED=true")
+                                  break
+                              resume_error=str(safe or resume_result.get("error") or "continuation_not_accepted")
+                              if outcome.get("skipped")!="script_lock_busy":
+                                  break
+                          if resume_attempt<3:
+                              time.sleep(20*resume_attempt)
+                      if not continuation_accepted:
+                          last="OZON_CONTINUATION_FAILED: "+str(resume_error or last)
+                          print("OZON_CONTINUATION_ACCEPTED=false")
+                          break
+                  elif isinstance(result,dict) and result.get("ok") is False and not needs_resume(result):
                       break
-                  if transient_export:
-                      last = "OZON_SOURCE_EXPORT_NOT_VERIFIED"
-                      print("OZON_SOURCE_STATUS=" + str(result.get("source_status") or ""))
-                      print("OZON_SOURCE_LAST_SUCCESS=" + str(result.get("source_last_success") or result.get("source_updated") or ""))
-                      diagnostic = result.get("export_diagnostic") or {}
-                      if isinstance(diagnostic, dict):
-                          print("OZON_EXPORT_JOB=" + str(diagnostic.get("job") or ""))
-                          print("OZON_EXPORT_IN_PROGRESS=" + str(diagnostic.get("in_progress") or ""))
-                          print("OZON_EXPORT_LAST_ATTEMPT_AT=" + str(diagnostic.get("last_attempt_at") or ""))
-                          print("OZON_CONTINUATION_PENDING=" + str(diagnostic.get("continuation_pending")))
-                          print("OZON_EXPORT_LAST_ERROR=" + str(diagnostic.get("last_error") or "").replace("\\n", " ")[:400])
-                      print(f"OZON_SOURCE_EXPORT_NOT_VERIFIED attempt={attempt}/6")
-              if attempt < 6:
-                  time.sleep(15 * attempt)
+                  if needs_resume(result):
+                      print_export_diagnostic(result,attempt)
+              if attempt<8:
+                  time.sleep(min(60,15*attempt))
+
           if not result or result.get("ok") is not True:
-              raise SystemExit("Ozon summary publication failed after bounded retries: " + str(last))
-          stores = result.get("stores") or []
-          expected = {"ДОМ", "Хозяюшка"}
-          actual = {x.get("store") for x in stores if x.get("ok") is True and x.get("readback") is True}
-          if actual != expected:
-              raise SystemExit("Ozon summary readback acceptance failed: " + json.dumps(stores, ensure_ascii=False))
-          print("SOURCE_UPDATED=" + str(result.get("source_updated")))
-          print("SOURCE_ROWS=" + str(result.get("source_rows")))
+              raise SystemExit("Ozon summary publication failed after bounded source recovery: "+str(last))
+          stores=result.get("stores") or []
+          expected={"ДОМ","Хозяюшка"}
+          actual={x.get("store") for x in stores if x.get("ok") is True and x.get("readback") is True}
+          if actual!=expected:
+              raise SystemExit("Ozon summary readback acceptance failed: "+json.dumps(stores,ensure_ascii=False))
+          print("OZON_SOURCE_RECOVERED_BY_CONTINUATION="+str(continuation_accepted).lower())
+          print("SOURCE_UPDATED="+str(result.get("source_updated")))
+          print("SOURCE_ROWS="+str(result.get("source_rows")))
           for store in stores:
-              print(
-                  "STORE=" + str(store.get("store"))
-                  + " OK=" + str(store.get("ok"))
-                  + " SOURCE_ROWS=" + str(store.get("source_rows"))
-                  + " PERIOD=" + str(store.get("source_min")) + ".." + str(store.get("source_max"))
-                  + " DAILY_ROWS=" + str(store.get("daily_rows"))
-                  + " SKU_ROWS=" + str(store.get("sku_rows"))
-                  + " ARCHIVED_ROWS=" + str(store.get("archived_rows"))
-                  + " READBACK=" + str(store.get("readback"))
-                  + " SHA256=" + str(store.get("sha256"))
-              )
+              print("STORE="+str(store.get("store"))
+                    +" OK="+str(store.get("ok"))
+                    +" SOURCE_ROWS="+str(store.get("source_rows"))
+                    +" PERIOD="+str(store.get("source_min"))+".."+str(store.get("source_max"))
+                    +" DAILY_ROWS="+str(store.get("daily_rows"))
+                    +" SKU_ROWS="+str(store.get("sku_rows"))
+                    +" ARCHIVED_ROWS="+str(store.get("archived_rows"))
+                    +" READBACK="+str(store.get("readback"))
+                    +" SHA256="+str(store.get("sha256")))
           PY
