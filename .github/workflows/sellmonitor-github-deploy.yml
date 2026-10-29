@@ -148,6 +148,33 @@ jobs:
           test "$COUNT" -gt 0
           echo "SYNTAX_OK=$COUNT"
 
+      - name: Audit Apps Script version capacity
+        if: github.event_name == 'push' && github.event.head_commit.message == 'Audit Apps Script version capacity'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/sellmonitor-gh-worker
+          version_log="$(mktemp)"
+          deployment_log="$(mktemp)"
+          clasp list-versions >"$version_log" 2>&1
+          clasp list-deployments >"$deployment_log" 2>&1
+          python - "$version_log" "$deployment_log" <<'PY'
+          import pathlib, re, sys
+          versions = pathlib.Path(sys.argv[1]).read_text(errors="replace").splitlines()
+          deployments = pathlib.Path(sys.argv[2]).read_text(errors="replace").splitlines()
+          numbers = [int(m.group(1)) for line in versions if (m := re.match(r"\s*(\d+)\s+-", line))]
+          active = []
+          for line in deployments:
+              m = re.search(r"@\s*(\d+)", line) or re.search(r"version(?:Number)?\s*[:=]\s*(\d+)", line, re.I)
+              if m:
+                  active.append(int(m.group(1)))
+          print("APPS_SCRIPT_VERSION_COUNT=" + str(len(numbers)))
+          if numbers:
+              print("APPS_SCRIPT_VERSION_RANGE=" + str(min(numbers)) + ".." + str(max(numbers)))
+          print("APPS_SCRIPT_DEPLOYMENT_COUNT=" + str(len(active)))
+          print("APPS_SCRIPT_ACTIVE_VERSION_REFERENCES=" + ",".join(map(str, sorted(set(active)))) if active else "APPS_SCRIPT_ACTIVE_VERSION_REFERENCES=unparsed_or_none")
+          PY
+
       - name: Run the authorized Ozon continuation once
         if: github.event_name == 'push' && github.event.head_commit.message == 'Run Ozon export continuation via GitHub'
         shell: bash
