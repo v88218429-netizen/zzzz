@@ -1,10 +1,10 @@
 /**
- * Sellmonitor GitHub Central Worker v1.3.47
+ * Sellmonitor GitHub Central Worker v1.3.48
  * GitHub is source-of-truth/scheduler. This Apps Script project is only
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.47',
+  VERSION: 'github-worker-1.3.48',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -6033,6 +6033,15 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
     // timed out before the recovery could reach its bounded status reads.
     var orderSheetNative=SpreadsheetApp.openById(spreadsheetId).getSheetByName('📦 FBS Заказы');
     if(!orderSheetNative)throw new Error('FBS_ORDER_SHEET_NOT_FOUND');
+    var sheetTimeZone=orderSheetNative.getParent().getSpreadsheetTimeZone();
+    function fbsLocalSerial_(value){
+      if(value instanceof Date){
+        var local=Utilities.formatDate(value,sheetTimeZone,'yyyy-MM-dd HH:mm:ss').match(/^(\\d{4})-(\\d{2})-(\\d{2}) (\\d{2}):(\\d{2}):(\\d{2})$/);
+        if(!local)throw new Error('FBS_LOCAL_TIME_FORMAT_FAILED');
+        return Date.UTC(Number(local[1]),Number(local[2])-1,Number(local[3]),Number(local[4]),Number(local[5]),Number(local[6]))/86400000+25569;
+      }
+      return value==null?'':value;
+    }
     var last=orderSheetNative.getLastRow();
     if(last<1||last>100000)throw new Error('FBS_ROW_COUNT_UNEXPECTED');
     var head=orderSheetNative.getRange(1,1,1,7).getDisplayValues()[0]||[];
@@ -6117,7 +6126,7 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
         patchData.push({range:"'📦 FBS Заказы'!E"+startRow+":G"+endRow,
           majorDimension:'ROWS',values:Array.from({length:count},function(_,i){return (stateByRow[startRow+i]||[]).slice(0,3).map(asSheetValue);})});
         patchData.push({range:"'📦 FBS Заказы'!V"+startRow+":W"+endRow,
-          majorDimension:'ROWS',values:Array.from({length:count},function(_,i){return (syncTimesByRow[startRow+i]||[]).map(asSheetValue);})});
+          majorDimension:'ROWS',values:Array.from({length:count},function(_,i){return (syncTimesByRow[startRow+i]||[]).map(fbsLocalSerial_);})});
         verifyFilters.push({a1Range:"'📦 FBS Заказы'!A"+startRow+":G"+endRow});
         verifyFilters.push({a1Range:"'📦 FBS Заказы'!V"+startRow+":W"+endRow});
       });
@@ -6138,8 +6147,7 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
       // Read the bounded timestamp verification through SpreadsheetApp.
       // The REST batchGet endpoint intermittently times out even for one row
       // in large order books, despite the state read and write having succeeded.
-      var verifyTimeMatrix=orderSheetNative.getRange(verifyMin,22,verifyCount,2).getValues()
-        .map(function(row){return row.map(asSheetValue);});
+      var verifyTimeMatrix=orderSheetNative.getRange(verifyMin,22,verifyCount,2).getDisplayValues();
       segments.forEach(function(seg){
         for(var rowNumber=seg[0];rowNumber<=seg[1];rowNumber++){
           var rowOffset=rowNumber-verifyMin;
@@ -6151,10 +6159,10 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
              String(orderRow[6]||'')!==String(expectedState[2]||''))
             throw new Error('FBS_PATCH_READBACK_FAILED');
           for(var t=0;t<2;t++){
-            var expectedSerial=Number(asSheetValue(expectedTimes[t]));
-            var actualValue=timeRow[t]==null?'':Number(asSheetValue(timeRow[t]));
-            if(!isFinite(expectedSerial)||!isFinite(actualValue)||Math.abs(actualValue-expectedSerial)>0.0000001)
-              throw new Error('FBS_PATCH_TIME_READBACK_FAILED');
+            var expectedDisplay=expectedTimes[t] instanceof Date?Utilities.formatDate(expectedTimes[t],sheetTimeZone,'dd.MM.yyyy HH:mm:ss'):String(expectedTimes[t]||'');
+            var actualDisplay=String(timeRow[t]||'');
+            if(!expectedDisplay||actualDisplay!==expectedDisplay)
+              throw new Error('FBS_PATCH_TIME_READBACK_FAILED:row='+rowNumber+':column='+(22+t)+':expected='+expectedDisplay+':actual='+actualDisplay);
           }
         }
       });
