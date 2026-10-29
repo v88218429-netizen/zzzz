@@ -307,43 +307,67 @@ if "if (result === false)" not in export_block:
 text = text[:export_start] + export_block + text[export_end:]
 
 
-# Report lock contention instead of silently treating an unacquired
-# continuation call as success. Leave the DOM library and source book intact.
-continuation_result_marker = "EXPORTDOM_CONTINUATION_RESULT_V2"
+# Report lock contention, and recover only when diagnostics show an orphaned
+# continuation with no active job or source progress.
+continuation_marker = "OZON_CONTINUATION_RECOVERY_V2"
 continuation_start = text.find("function exportDOM_continue() {")
 if continuation_start < 0:
     raise SystemExit("DOM continuation wrapper missing")
-continuation_end = text.find("\\nfunction ", continuation_start + 10)
+continuation_end = text.find("\nfunction ", continuation_start + 10)
 if continuation_end < 0:
     continuation_end = len(text)
 continuation_block = text[continuation_start:continuation_end]
-if continuation_result_marker not in continuation_block:
+if continuation_marker not in continuation_block:
     lock_anchor = "var lockAcquired = lock.tryLock(1000);"
-    busy_anchor = "Logger.log('DOM continuation skipped: script lock is busy.');\\n      return;"
+    busy_anchor = "Logger.log('DOM continuation skipped: script lock is busy.');\n      return;"
     if lock_anchor not in continuation_block or busy_anchor not in continuation_block:
-        raise SystemExit("DOM continuation lock outcome anchors changed")
+        raise SystemExit("DOM continuation lock anchors changed")
     continuation_block = continuation_block.replace(lock_anchor, "var lockAcquired = lock.tryLock(30000);", 1)
     continuation_block = continuation_block.replace(
         busy_anchor,
-        "Logger.log('DOM continuation skipped: script lock is busy.');\\n      return {ok:false,skipped:'script_lock_busy'};",
+        "Logger.log('DOM continuation skipped: script lock is busy.');\n      return {ok:false,skipped:'script_lock_busy'};",
         1,
     )
-    active_anchor = re.compile(r"DOM\\.init\\(\\s*SpreadsheetApp\\.getActiveSpreadsheet\\(\\)\\s*\\);\\s*DOM\\.exportDOM_continue\\(\\);")
+    active_anchor = re.compile(r"DOM\.init\(\s*SpreadsheetApp\.getActiveSpreadsheet\(\)\s*\);\s*DOM\.exportDOM_continue\(\);")
     active_replacement = """var continuationBook = SpreadsheetApp.getActiveSpreadsheet();
     if (!continuationBook) throw new Error('DOM_CONTINUATION_ACTIVE_BOOK_UNAVAILABLE');
     DOM.init(continuationBook);
+    var continuationProperties = PropertiesService.getScriptProperties();
+    var continuationJob = String(continuationProperties.getProperty('dom.job') || '').trim();
+    var continuationInProgress = String(continuationProperties.getProperty('OZON_FBS_IN_PROGRESS') || '').trim();
+    var continuationAutomation = continuationBook.getSheetByName('Автоматизация');
+    var continuationHealth = '';
+    if (continuationAutomation) {
+      var continuationHealthRows = continuationAutomation.getRange(1,1,Math.max(1,continuationAutomation.getLastRow()),4).getDisplayValues();
+      for (var healthIndex=0;healthIndex<continuationHealthRows.length;healthIndex++) {
+        if (String(continuationHealthRows[healthIndex][0]||'').trim().toLowerCase()==='ozon заказы') {
+          continuationHealth=String(continuationHealthRows[healthIndex][3]||'').trim();
+          break;
+        }
+      }
+    }
+    var continuationHasLiveStatus = /выгрузка продолжается/i.test(continuationHealth);
+    var continuationNeedsRecovery = /ошибка|нет успешного запуска|не работает|не запущ/i.test(continuationHealth);
+    if (!continuationJob && !continuationInProgress && !continuationHasLiveStatus && continuationNeedsRecovery) {
+      ScriptApp.getProjectTriggers().filter(function(trigger){return trigger.getHandlerFunction()==='exportDOM_continue';}).forEach(function(trigger){ScriptApp.deleteTrigger(trigger);});
+      if (typeof DOM.exportOzonOrdersToSheet !== 'function') throw new Error('DOM_OZON_ORDERS_METHOD_MISSING');
+      var freshExportResult = DOM.exportOzonOrdersToSheet();
+      var continuationCreated = ScriptApp.getProjectTriggers().some(function(trigger){return trigger.getHandlerFunction()==='exportDOM_continue';});
+      if (freshExportResult === false && !continuationCreated) throw new Error('DOM_OZON_EXPORT_CONTINUATION_MISSING');
+      return {ok:true,started_fresh_export:true,continuation_pending:continuationCreated,result_type:typeof freshExportResult};
+    }
     var continuationResult = DOM.exportDOM_continue();
-    return {ok:true,active_book_present:true,continuation_result_type:typeof continuationResult};"""
+    return {ok:true,continued_existing_export:true,result_type:typeof continuationResult,health:continuationHealth};"""
     continuation_block, active_count = active_anchor.subn(active_replacement, continuation_block, count=1)
     if active_count != 1:
         raise SystemExit("DOM continuation invocation anchor changed")
     continuation_block = continuation_block.replace(
         "function exportDOM_continue() {",
-        "function exportDOM_continue() {\\n  /* " + continuation_result_marker + " */",
+        "function exportDOM_continue() {\n  /* " + continuation_marker + " */",
         1,
     )
     text = text[:continuation_start] + continuation_block + text[continuation_end:]
-    print("OZON_CONTINUATION_LOCK_OUTCOME=patched")
+    print("OZON_CONTINUATION_RECOVERY=patched")
 
 diagnostic_marker = "SELLMONITOR_OZON_EXPORT_DIAGNOSTIC_V1"
 if diagnostic_marker not in text:
