@@ -52,12 +52,15 @@ jobs:
           python - <<'PY'
           import json, os, urllib.error, urllib.parse, urllib.request
           cfg=json.loads(os.environ['CLASPRC_JSON'])
+          token_map=cfg.get('tokens') or {}
+          credentials=list(token_map.values()) if isinstance(token_map,dict) else (token_map if isinstance(token_map,list) else [])
+          print('CLASPRC_TOP_LEVEL_FIELDS='+','.join(sorted(cfg.keys())))
+          print('CLASPRC_CREDENTIAL_COUNT='+str(len(credentials)))
           def find(obj,names):
               wanted={x.lower().replace('_','') for x in names}
               if isinstance(obj,dict):
                   for key,value in obj.items():
-                      if str(key).lower().replace('_','') in wanted and isinstance(value,str) and value:
-                          return value
+                      if str(key).lower().replace('_','') in wanted and isinstance(value,str) and value:return value
                   for value in obj.values():
                       found=find(value,names)
                       if found:return found
@@ -66,34 +69,43 @@ jobs:
                       found=find(value,names)
                       if found:return found
               return ''
-          token_fields=cfg.get('tokens') or []
-          print('CLASPRC_TOP_LEVEL_FIELDS='+','.join(sorted(cfg.keys())))
-          print('CLASPRC_TOKEN_ENTRY_COUNT='+str(len(token_fields) if isinstance(token_fields,list) else 0))
-          if isinstance(token_fields,list) and token_fields and isinstance(token_fields[0],dict):
-              print('CLASPRC_TOKEN_ENTRY_FIELDS='+','.join(sorted(token_fields[0].keys())))
-          access=find(cfg,['access_token','accessToken'])
-          refresh=find(cfg,['refresh_token','refreshToken'])
-          client_id=find(cfg,['client_id','clientId'])
-          client_secret=find(cfg,['client_secret','clientSecret'])
           def probe(access):
               sheet='1qJvhEOIku7sOMydfrUz0PR5dkcU0sLjv433pa1MFBcM'
               url='https://sheets.googleapis.com/v4/spreadsheets/'+sheet+'?fields=spreadsheetId,properties.title'
               req=urllib.request.Request(url,headers={'Authorization':'Bearer '+access})
               with urllib.request.urlopen(req,timeout=20) as response:return json.loads(response.read().decode())
-          try:
-              result=probe(access) if access else None
-          except urllib.error.HTTPError as exc:
-              result=None
-              if exc.code!=401: raise
-          if result is None and refresh and client_id and client_secret:
-              form=urllib.parse.urlencode({'client_id':client_id,'client_secret':client_secret,'refresh_token':refresh,'grant_type':'refresh_token'}).encode()
-              req=urllib.request.Request('https://oauth2.googleapis.com/token',data=form,method='POST')
-              with urllib.request.urlopen(req,timeout=30) as response:
-                  auth=json.loads(response.read().decode())
-              access=auth['access_token']
-              result=probe(access)
-              print('DIRECT_SHEETS_TOKEN_REFRESH=ok')
-          if result is None:
+          result=None; access=''
+          candidates=sorted(credentials,key=lambda x:0 if 'spreadsheets' in str((x or {}).get('scope') or '').lower() else 1)
+          for index,cred in enumerate(candidates):
+              if not isinstance(cred,dict):continue
+              scopes=str(cred.get('scope') or '')
+              print('CLASPRC_PROFILE_'+str(index)+'_SHEETS_SCOPE='+str('spreadsheets' in scopes.lower()))
+              access=find(cred,['access_token','accessToken'])
+              refresh=find(cred,['refresh_token','refreshToken'])
+              if access:
+                  try:
+                      result=probe(access)
+                  except urllib.error.HTTPError as exc:
+                      detail=exc.read().decode('utf-8','replace')[:240].replace(chr(10),' ')
+                      print('DIRECT_SHEETS_PROFILE_'+str(index)+'_HTTP='+str(exc.code)+':'+detail)
+                      result=None
+                      if exc.code==403:continue
+                      if exc.code!=401:raise
+              if result is None and refresh:
+                  client_id=find(cred,['client_id','clientId']) or find(cfg,['client_id','clientId'])
+                  client_secret=find(cred,['client_secret','clientSecret']) or find(cfg,['client_secret','clientSecret'])
+                  if client_id and client_secret:
+                      form=urllib.parse.urlencode({'client_id':client_id,'client_secret':client_secret,'refresh_token':refresh,'grant_type':'refresh_token'}).encode()
+                      req=urllib.request.Request('https://oauth2.googleapis.com/token',data=form,method='POST')
+                      try:
+                          with urllib.request.urlopen(req,timeout=30) as response: auth=json.loads(response.read().decode())
+                          access=auth['access_token'];result=probe(access)
+                          print('DIRECT_SHEETS_TOKEN_REFRESH=ok')
+                      except urllib.error.HTTPError as exc:
+                          detail=exc.read().decode('utf-8','replace')[:240].replace(chr(10),' ')
+                          print('DIRECT_SHEETS_PROFILE_'+str(index)+'_REFRESH_HTTP='+str(exc.code)+':'+detail)
+              if result is not None:break
+          if result is None or not access:
               raise SystemExit('CLASPRC_USABLE_SHEETS_TOKEN_UNAVAILABLE')
           print('::add-mask::'+access)
           with open(os.environ['GITHUB_ENV'],'a',encoding='utf-8') as env:
