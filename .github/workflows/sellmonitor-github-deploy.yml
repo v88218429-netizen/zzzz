@@ -209,64 +209,48 @@ jobs:
           else
             echo "OZON_DIAGNOSTIC_PUSH=already_present"
           fi
-          set +e
-          clasp run sellmonitorGithubReadOzonExportDiagnostic --json >/tmp/ozon-export-diagnostic.json 2>/tmp/ozon-export-diagnostic.stderr
-          status=$?
-          set -e
-          if [ "$status" -ne 0 ]; then
-            echo "OZON_DIAGNOSTIC_RUN_EXIT=$status"
-            raise="OZON_DIAGNOSTIC_RUN_FAILED"
-            exit "$status"
-          fi
           python - <<'PY'
-          import json, os, pathlib, re
-          raw=pathlib.Path("/tmp/ozon-export-diagnostic.json").read_text().strip()
-          decoder=json.JSONDecoder()
-          payload=None
-          for offset,char in enumerate(raw):
-              if char!="{":
-                  continue
-              try:
-                  payload,_=decoder.raw_decode(raw,offset)
-                  break
-              except Exception:
-                  continue
-          if not isinstance(payload,dict):
-              safe=raw.replace(os.environ.get("WEBHOOK_SECRET",""),"[REDACTED]")
-              safe=re.sub(r"[A-Za-z0-9_-]{32,}","[ID_REDACTED]",safe)
-              print("OZON_DIAGNOSTIC_STDOUT_LENGTH="+str(len(raw)))
-              print("OZON_DIAGNOSTIC_STDOUT_PREFIX="+safe[:220].replace("\\n"," "))
-              stderr=pathlib.Path("/tmp/ozon-export-diagnostic.stderr").read_text(errors="replace").strip()
-              if stderr:
-                  stderr=re.sub(r"[A-Za-z0-9_-]{32,}","[ID_REDACTED]",stderr)
-                  print("OZON_DIAGNOSTIC_STDERR_PREFIX="+stderr[:220].replace("\\n"," "))
-              raise SystemExit("OZON_DIAGNOSTIC_RESPONSE_INVALID")
-          err=payload.get("error") or {}
-          if err:
-              print("OZON_DIAGNOSTIC_ERROR_CODE="+str(err.get("code") or "unknown"))
-              details=err.get("details") or []
-              if details and isinstance(details[0],dict):
-                  message=str(details[0].get("errorMessage") or "")
-                  message=message.replace(os.environ.get("WEBHOOK_SECRET",""),"[REDACTED]")
-                  message=re.sub(r"[A-Za-z0-9_-]{32,}","[ID_REDACTED]",message)
-                  print("OZON_DIAGNOSTIC_SCRIPT_ERROR="+message.replace("\\n"," ")[:240])
-              raise SystemExit("OZON_DIAGNOSTIC_FUNCTION_FAILED")
-          result=(payload.get("response") or {}).get("result") if isinstance(payload.get("response"),dict) else payload
-          if isinstance(result,str):
-              try:
-                  result=json.loads(result)
-              except Exception:
-                  pass
-          if not isinstance(result,dict) or result.get("ok") is not True:
-              print("OZON_DIAGNOSTIC_RESULT_TYPE="+type(result).__name__)
-              raise SystemExit("OZON_DIAGNOSTIC_RESULT_INVALID")
-          print("OZON_EXPORT_JOB="+str(result.get("job") or ""))
-          print("OZON_EXPORT_IN_PROGRESS="+str(result.get("in_progress") or ""))
-          print("OZON_EXPORT_LAST_ATTEMPT_AT="+str(result.get("last_attempt_at") or ""))
-          print("OZON_CONTINUATION_PENDING="+str(result.get("continuation_pending")))
-          message=str(result.get("last_error") or "").replace(os.environ.get("WEBHOOK_SECRET",""),"[REDACTED]")
-          message=re.sub(r"[A-Za-z0-9_-]{32,}","[ID_REDACTED]",message)
-          print("OZON_EXPORT_LAST_ERROR="+message.replace("\\n"," ")[:400])
+          import json, os, urllib.request
+          url="https://script.google.com/macros/s/"+os.environ["WEBAPP_DEPLOYMENT_ID"]+"/exec"
+          body=json.dumps({"token":os.environ["WEBHOOK_SECRET"],"action":"health"}).encode()
+          req=urllib.request.Request(url,data=body,headers={"Content-Type":"application/json"},method="POST")
+          with urllib.request.urlopen(req,timeout=120) as response:
+              health=json.loads(response.read().decode("utf-8"))
+          if health.get("ok") is not True:
+              raise SystemExit("OZON_WORKER_HEALTH_READ_FAILED")
+          result=health.get("result") or {}
+          handlers=result.get("project_trigger_handlers") or []
+          print("OZON_WORKER_HEALTH_VERSION="+str(result.get("version") or ""))
+          print("OZON_WORKER_TRIGGER_OK="+str(result.get("trigger_ok")))
+          print("OZON_PROJECT_HAS_EXPORT_CONTINUATION="+str("exportDOM_continue" in handlers))
+          print("OZON_PROJECT_TRIGGER_HANDLERS="+",".join(str(x) for x in handlers if "exportDOM" in str(x) or "Marketplace" in str(x)))
+          PY
+          set +e
+          clasp logs --json >/tmp/ozon-apps-script-logs.json 2>/tmp/ozon-apps-script-logs.stderr
+          log_status=$?
+          set -e
+          echo "OZON_APPS_SCRIPT_LOGS_EXIT=$log_status"
+          python - <<'PY'
+          import json, pathlib, re
+          raw=pathlib.Path("/tmp/ozon-apps-script-logs.json").read_text(errors="replace").strip()
+          print("OZON_APPS_SCRIPT_LOGS_BYTES="+str(len(raw)))
+          try:
+              payload=json.loads(raw)
+          except Exception:
+              safe=re.sub(r"[A-Za-z0-9_-]{32,}","[ID_REDACTED]",raw)
+              print("OZON_APPS_SCRIPT_LOGS_RESPONSE="+safe[:180].replace("\\n"," "))
+              raise SystemExit(0)
+          items=payload if isinstance(payload,list) else payload.get("entries",payload.get("results",[]))
+          selected=[]
+          for item in items if isinstance(items,list) else []:
+              text=json.dumps(item,ensure_ascii=False)
+              if any(term.lower() in text.lower() for term in ("exportDOM_continue","OZON_FBS","dom.job","ошибк")):
+                  safe=re.sub(r"(?i)(token|secret|authorization)\\s*[:=]\\s*\\S+",r"\\1=[REDACTED]",text)
+                  safe=re.sub(r"[A-Za-z0-9_-]{32,}","[ID_REDACTED]",safe)
+                  selected.append(safe[:320])
+          print("OZON_APPS_SCRIPT_RELEVANT_LOGS="+str(len(selected)))
+          for item in selected[-8:]:
+              print("OZON_APPS_SCRIPT_LOG="+item)
           PY
           clasp pull
           python - <<'PY'
