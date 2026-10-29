@@ -30,6 +30,7 @@ from .decision_groups import decision_group_summary, group_decisions
 from .discovery_engine import discover_cross_sku_patterns
 from .research_engine import build_research_agenda
 from .query_manager import QueryManager, QueryManagerConfig
+from .cluster_advisor import analyze_cluster_rows
 from .updater import UpdateManager, current_version
 from .policy import MANUAL_APPROVAL_TOOLS
 
@@ -937,6 +938,13 @@ async def dashboard_data(days: int = 7, from_date: str | None = None, to_date: s
                 traffic = _traffic_dashboard_payload(_traffic_bundle_cache, period)
         except Exception as exc:
             traffic["error"] = f"{type(exc).__name__}: {exc}"
+    traffic["cluster_analysis"] = analyze_cluster_rows(
+        traffic.get("clusters") or [],
+        traffic.get("campaign_settings") or [],
+        decisions,
+        query_layer,
+        economics_observed_at=audit_finished_at if audit_ready else (runs.get("advertising_optimizer") or {}).get("finished_at"),
+    )
     audit_agents = audit.get("agents") or {}
     audit_failed = sum(1 for x in audit_agents.values() if isinstance(x, dict) and x.get("status") == "error")
     return {

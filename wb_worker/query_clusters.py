@@ -23,14 +23,77 @@ COLUMNS = [
     "shop", "date", "advert_id", "nm_id", "norm_query", "views", "clicks",
     "atbs", "orders", "ordered_units", "spend_rub", "ad_avg_pos",
     "ctr_percent", "cpc_rub", "cpm_rub", "source", "quality",
+    "cluster_bid_kopecks", "cluster_state", "bid_observed_at",
 ]
+LEGACY_COLUMNS = COLUMNS[:-3]
 SOURCE = "WB /adv/v1/normquery/stats"
 QUALITY = "FACT_AD_CLUSTER_DAY_NOT_SEARCH_PHRASE"
 MIN_INTERVAL_SECONDS = 6.2  # Official limit: max 10 requests per minute.
 _last_request = 0.0
 
 
-def parse_rows(shop: str, payload: object) -> list[list]:
+def _norm_query(value: object) -> str:
+    return " ".join(str(value or "").casefold().split())
+
+
+def parse_bid_map(payload: object) -> dict[tuple[int, int, str], int]:
+    """Read exact current cluster bids; absent bids remain absent, never zero-filled."""
+    if not isinstance(payload, dict) or not isinstance(payload.get("bids"), list):
+        raise ValueError("WB cluster bids returned an unexpected response structure")
+    result = {}
+    for row in payload["bids"]:
+        if not isinstance(row, dict):
+            raise ValueError("WB cluster bid item is invalid")
+        try:
+            advert, nm = int(row.get("advert_id") or row.get("advertId")), int(row.get("nm_id") or row.get("nmId"))
+            bid = int(row.get("bid_kopecks") if row.get("bid_kopecks") is not None else row.get("bidKopecks"))
+        except (TypeError, ValueError):
+            raise ValueError("WB cluster bid lacks valid campaign, SKU, or kopeck amount") from None
+        query = _norm_query(row.get("norm_query") or row.get("normQuery"))
+        if advert <= 0 or nm <= 0 or bid < 0 or not query:
+            raise ValueError("WB cluster bid has invalid identifiers, amount, or query")
+        key = (advert, nm, query)
+        if key in result:
+            raise ValueError("Duplicate WB cluster bid")
+        result[key] = bid
+    return result
+
+
+def parse_state_map(payload: object) -> dict[tuple[int, int, str], str]:
+    """Read WB active/excluded state for exact campaign, SKU, and cluster."""
+    if not isinstance(payload, dict) or not isinstance(payload.get("items"), list):
+        raise ValueError("WB cluster list returned an unexpected response structure")
+    result = {}
+    for item in payload["items"]:
+        if not isinstance(item, dict):
+            raise ValueError("WB cluster list item is invalid")
+        try:
+            advert = int(item.get("advert_id") or item.get("advertId"))
+            nm = int(item.get("nm_id") or item.get("nmId"))
+        except (TypeError, ValueError):
+            raise ValueError("WB cluster list lacks campaign or SKU") from None
+        queries = item.get("normQueries") or item.get("norm_queries") or {}
+        if not isinstance(queries, dict):
+            continue
+        for state, names in (("active", ("active",)), ("excluded", ("excluded",))):
+            for field in names:
+                values = queries.get(field) or []
+                if not isinstance(values, list):
+                    raise ValueError("WB cluster state list is invalid")
+                for entry in values:
+                    query = entry if isinstance(entry, str) else (entry.get("normQuery") or entry.get("norm_query") or entry.get("query") or "") if isinstance(entry, dict) else ""
+                    key = (advert, nm, _norm_query(query))
+                    if key[2]:
+                        if key in result and result[key] != state:
+                            raise ValueError("WB cluster appears as both active and excluded")
+                        result[key] = state
+    return result
+
+
+def parse_rows(shop: str, payload: object,
+               bid_map: dict[tuple[int, int, str], int] | None = None,
+               state_map: dict[tuple[int, int, str], str] | None = None,
+               bid_observed_at: str = "") -> list[list]:
     if not isinstance(payload, dict) or not isinstance(payload.get("items"), list):
         raise ValueError("WB clusters returned an unexpected response structure")
     rows = []
@@ -66,7 +129,10 @@ def parse_rows(shop: str, payload: object) -> list[list]:
                 if number < 0 or not -1e15 < number < 1e15:
                     raise ValueError("Invalid cluster statistic")
                 numbers.append(value)
-            rows.append([shop, day, aid, nm, query, *numbers, SOURCE, QUALITY])
+            key = (int(aid), int(nm), _norm_query(query))
+            rows.append([shop, day, aid, nm, query, *numbers, SOURCE, QUALITY,
+                         (bid_map or {}).get(key, ""), (state_map or {}).get(key, ""),
+                         bid_observed_at if key in (bid_map or {}) or key in (state_map or {}) else ""])
     return rows
 
 
@@ -91,6 +157,8 @@ def existing_rows(shop: str) -> list[list[str]]:
         return []
     with path.open(encoding="utf-8-sig", newline="") as stream:
         reader = csv.DictReader(stream)
+        if reader.fieldnames == LEGACY_COLUMNS:
+            return [[r[name] for name in LEGACY_COLUMNS] + ["", "", ""] for r in reader]
         if reader.fieldnames != COLUMNS:
             raise ValueError("Cluster history schema mismatch")
         return [[r[name] for name in COLUMNS] for r in reader]
@@ -124,10 +192,32 @@ async def collect() -> dict:
                         await asyncio.sleep(max(0, MIN_INTERVAL_SECONDS - (loop.time() - _last_request)))
                     _last_request = loop.time()
                     try:
+                        batch = pairs[i:i + 100]
+                        snake = [{"advert_id": x["advertId"], "nm_id": x["nmId"]} for x in batch]
+                        camel = [{"advertId": x["advertId"], "nmId": x["nmId"]} for x in batch]
+                        bid_map, state_map = {}, {}
+                        bid_time = datetime.now(ZoneInfo("Europe/Moscow")).isoformat()
+                        # Auxiliary reads are allowed to fail independently. The
+                        # statistics still publish, but the panel will block any
+                        # numeric bid recommendation without a fresh exact bid.
+                        for endpoint, body, parser, target in (
+                            ("/adv/v0/normquery/get-bids", {"items": snake}, parse_bid_map, bid_map),
+                            ("/adv/v0/normquery/list", {"items": camel}, parse_state_map, state_map),
+                        ):
+                            try:
+                                loop = asyncio.get_running_loop()
+                                await asyncio.sleep(max(0, MIN_INTERVAL_SECONDS - (loop.time() - _last_request)))
+                                _last_request = loop.time()
+                                target.update(parser(await _request(client, token, "POST", PROMO + endpoint, json=body)))
+                            except Exception as aux_error:
+                                info.setdefault("bid_state_warnings", []).append(f"{endpoint}: {type(aux_error).__name__}")
+                        loop = asyncio.get_running_loop()
+                        await asyncio.sleep(max(0, MIN_INTERVAL_SECONDS - (loop.time() - _last_request)))
+                        _last_request = loop.time()
                         payload = await _request(
                             client, token, "POST", PROMO + "/adv/v1/normquery/stats",
-                            json={"from": begin, "to": end, "items": pairs[i:i + 100]})
-                        incoming.extend(parse_rows(shop, payload))
+                            json={"from": begin, "to": end, "items": camel})
+                        incoming.extend(parse_rows(shop, payload, bid_map, state_map, bid_time))
                         successful_batches += 1
                     except Exception as batch_error:
                         # Preserve successful prior chunks; never pretend to have
@@ -144,6 +234,8 @@ async def collect() -> dict:
                                  "history_rows": len(merged), "factual": bool(incoming),
                                  "batches_collected": successful_batches,
                                  "batches_expected": (len(pairs)+99)//100,
+                                 "bid_rows": sum(1 for r in incoming if len(r) > len(LEGACY_COLUMNS) and r[-3] != ""),
+                                 "clusters_without_fresh_bid": sum(1 for r in incoming if len(r) > len(LEGACY_COLUMNS) and r[-3] == ""),
                                  "note": "Empty valid API response retained as empty; not imputed"})
                 if batch_errors:
                     info["error"] = batch_errors[0]
