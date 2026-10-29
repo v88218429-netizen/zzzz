@@ -1,10 +1,10 @@
 /**
- * Sellmonitor GitHub Central Worker v1.3.37
+ * Sellmonitor GitHub Central Worker v1.3.43
  * GitHub is source-of-truth/scheduler. This Apps Script project is only
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.42',
+  VERSION: 'github-worker-1.3.43',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -3373,7 +3373,7 @@ function sellmonitorGithubWriteInnerFinancePart_(cfg, rows, from, runId) {
   var registryRow = [
     part.partId,'WB',cfg.storeId,'inner_finance',datasetClass,
     month + '-01',monthEnd,1,SMC_INNER_FINANCE.schemaVersion,part.id,url,
-    'get_product_list','SELLMONITOR_INNER_MCP',String(runId),new Date(),merged.length,
+    'analytics_get_product_list','SELLMONITOR_INNER_MCP',String(runId),new Date(),merged.length,
     Object.keys(byKey).length,dates[0] || '',dates[dates.length - 1] || '',digest,'OK','PASS','',''
   ];
   sellmonitorGithubTrafficPartRegistry_(registryRow);
@@ -3492,7 +3492,7 @@ function sellmonitorGithubMaybeSyncInnerFinance_(cfg,cc) {
   if (isPartialReplay) props.setProperty(partialReplayAtKey,String(now));
   try {
     var nextDay = sellmonitorGithubNextDate_(dateKey);
-    var data = sellmonitorGithubInnerMcpCall_(cfg.spreadsheetId,'get_product_list',{
+    var data = sellmonitorGithubInnerMcpCall_(cfg.spreadsheetId,'analytics_get_product_list',{
       marketplaceCode:'wb',marketplaceAccountId:cfg.accountId,
       from:dateKey,to:nextDay,after:0,limit:2000
     });
