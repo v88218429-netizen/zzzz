@@ -73,6 +73,16 @@ def test_stale_bid_and_non_cpm_campaign_block_change():
     assert row["blockers"]
 
 
+def test_automatic_bid_mode_blocks_cluster_bid_advice():
+    result = analyze_cluster_rows(
+        [source_row()], settings(bid_type="unified"), decisions(), now=NOW,
+        economics_observed_at="2026-10-29T11:00:00+03:00",
+    )
+    row = result["rows"][0]
+    assert row["target_bid_rub"] is None
+    assert any("ручную ставку CPM" in x for x in row["blockers"])
+
+
 def test_missing_or_stale_campaign_settings_block_even_with_fresh_cluster_metrics():
     result = analyze_cluster_rows(
         [source_row()], settings(observed_at="2026-10-27T12:00:00+03:00"), decisions(), now=NOW,

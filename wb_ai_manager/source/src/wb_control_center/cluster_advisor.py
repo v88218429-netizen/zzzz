@@ -120,6 +120,7 @@ def analyze_cluster_rows(
         state = str((bid_row or last).get("cluster_state") or "").lower()
         setting = settings.get((shop, advert, nm), {})
         payment_type = str(setting.get("payment_type") or "").lower()
+        bid_type = str(setting.get("bid_type") or "").lower()
         settings_time = _time(setting.get("observed_at"))
         max_cpa = caps.get((advert, nm))
         cpa = round(spend / orders, 2) if spend is not None and orders is not None and orders > 0 else None
@@ -145,8 +146,8 @@ def analyze_cluster_rows(
             blockers.append("Снимок настроек кампании устарел или отсутствует; обновить рекламу перед решением.")
         # WB exposes writable cluster bids only for manual CPM campaigns; require
         # the exact live per-cluster bid and a fresh campaign payment setting.
-        if payment_type != "cpm":
-            blockers.append("Настройки кампании не подтверждают ручную CPM-кампанию для изменения ставки кластера.")
+        if payment_type != "cpm" or bid_type != "manual":
+            blockers.append("Настройки кампании не подтверждают ручную ставку CPM, необходимую для изменения ставки кластера.")
         if state == "excluded":
             blockers.append("WB пометил кластер как исключённый; предложение изменить его ставку заблокировано.")
 
