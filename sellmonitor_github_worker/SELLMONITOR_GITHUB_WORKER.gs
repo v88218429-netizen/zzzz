@@ -1,10 +1,10 @@
 /**
- * Sellmonitor GitHub Central Worker v1.3.34
+ * Sellmonitor GitHub Central Worker v1.3.36
  * GitHub is source-of-truth/scheduler. This Apps Script project is only
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.35',
+  VERSION: 'github-worker-1.3.36',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -6018,27 +6018,21 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
       var rows=[];
       parsed.forEach(function(r){var row=byId[r.id];if(row)rows.push({id:r.id,row:row});});
       var stale=false;
-      mark('STATE_READ_START_BATCH');
-      // Read up to 100 sparse rows in one Sheets API request instead of one
-      // SpreadsheetApp service call per order. This keeps large recoveries bounded.
-      for(var rp=0;rp<rows.length;rp+=100){
-        var readPart=rows.slice(rp,rp+100),query=readPart.map(function(item){
-          return 'ranges='+encodeURIComponent(orderSheet+'!A'+item.row+':G'+item.row);
-        }).join('&');
-        var readResponse=fetchSheetApi(apiBase+'/values:batchGet?'+query+'&valueRenderOption=FORMATTED_VALUE',{method:'get'});
-        var readCode=readResponse.getResponseCode();
-        if(readCode<200||readCode>=300)throw new Error('FBS_STATE_BATCH_READ_HTTP_'+readCode);
-        var readResult=JSON.parse(readResponse.getContentText()||'{}');
-        var valueRanges=readResult.valueRanges||[];
-        if(valueRanges.length!==readPart.length)throw new Error('FBS_STATE_BATCH_READ_COUNT_MISMATCH');
-        for(var ri=0;ri<readPart.length;ri++){
-          var values=((valueRanges[ri]||{}).values||[])[0]||[];
-          var item=readPart[ri];
-          if(String(values[0]||'')!==item.id){stale=true;continue;}
-          stateByRow[item.row]=[values[4]||'',values[5]||'',values[6]||''];
-        }
+      mark('STATE_READ_START_BOUNDED');
+      // Read one narrow A:G rectangle spanning only the matched rows. A single
+      // native range read is more reliable than a multi-range REST request here.
+      var stateMin=0,stateMax=0,stateMatrix=[];
+      if(rows.length){
+        stateMin=rows[0].row;stateMax=rows[0].row;
+        rows.forEach(function(item){stateMin=Math.min(stateMin,item.row);stateMax=Math.max(stateMax,item.row);});
+        stateMatrix=orderSheetNative.getRange(stateMin,1,stateMax-stateMin+1,7).getDisplayValues();
       }
-      mark('STATE_READ_DONE_BATCH');
+      rows.forEach(function(item){
+        var values=stateMatrix[item.row-stateMin]||[];
+        if(String(values[0]||'')!==item.id){stale=true;return;}
+        stateByRow[item.row]=[values[4]||'',values[5]||'',values[6]||''];
+      });
+      mark('STATE_READ_DONE_BOUNDED');
       return stale;
     }
     if(readExistingStates_()){
@@ -6108,47 +6102,28 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
         try { var writeError=JSON.parse(writeResponse.getContentText()||'{}').error||{}; writeDiagnostic=String(writeError.status||writeError.message||'UNKNOWN').slice(0,180); } catch(writeParseError) {}
         throw new Error('FBS_PATCH_BATCH_HTTP_'+writeCode+':'+writeDiagnostic);
       }
-      mark('STATE_VERIFY_START_BATCH');
-      // Verify all sparse state and sync-time ranges with bounded Sheets API
-      // batchGet calls; per-segment SpreadsheetApp reads scale poorly on large books.
-      for(var vp=0;vp<segments.length;vp+=50){
-        var verifySegments=segments.slice(vp,vp+50),verifyRanges=[];
-        verifySegments.forEach(function(seg){
-          verifyRanges.push({segment:seg,kind:'state',range:orderSheet+'!A'+seg[0]+':G'+seg[1]});
-          verifyRanges.push({segment:seg,kind:'time',range:orderSheet+'!V'+seg[0]+':W'+seg[1]});
-        });
-        var verifyQuery=verifyRanges.map(function(item){return 'ranges='+encodeURIComponent(item.range);}).join('&');
-        var verifyResponse=fetchSheetApi(apiBase+'/values:batchGet?'+verifyQuery+'&valueRenderOption=UNFORMATTED_VALUE',{method:'get'});
-        var verifyCode=verifyResponse.getResponseCode();
-        if(verifyCode<200||verifyCode>=300)throw new Error('FBS_PATCH_VERIFY_BATCH_HTTP_'+verifyCode);
-        var verifyResult=JSON.parse(verifyResponse.getContentText()||'{}'),verifyValues=verifyResult.valueRanges||[];
-        if(verifyValues.length!==verifyRanges.length)throw new Error('FBS_PATCH_VERIFY_BATCH_COUNT_MISMATCH');
-        var verifyBySegment={};
-        verifyRanges.forEach(function(item,i){
-          var rows=((verifyValues[i]||{}).values||[]);
-          var key=String(item.segment[0])+':'+String(item.segment[1]);
-          if(!verifyBySegment[key])verifyBySegment[key]={};
-          verifyBySegment[key][item.kind]=rows;
-        });
-        verifySegments.forEach(function(seg){
-          var key=String(seg[0])+':'+String(seg[1]),paired=verifyBySegment[key]||{};
-          for(var rowNumber=seg[0];rowNumber<=seg[1];rowNumber++){
-            var rowOffset=rowNumber-seg[0],orderRow=(paired.state||[])[rowOffset]||[],timeRow=(paired.time||[])[rowOffset]||[];
-            var expectedState=stateByRow[rowNumber]||[],expectedTimes=syncTimesByRow[rowNumber]||[];
-            if(String(orderRow[0]||'')!==String(idByRow[rowNumber]||'')||
-               String(orderRow[4]||'')!==String(expectedState[0]||'')||
-               String(orderRow[5]||'')!==String(expectedState[1]||'')||
-               String(orderRow[6]||'')!==String(expectedState[2]||''))
-              throw new Error('FBS_PATCH_READBACK_FAILED');
-            for(var t=0;t<2;t++){
-              var expectedSerial=asSheetValue(expectedTimes[t]),actualSerial=Number(timeRow[t]);
-              if(!isFinite(actualSerial)||Math.abs(actualSerial-Number(expectedSerial))>0.00002)
-                throw new Error('FBS_PATCH_TIME_READBACK_FAILED');
-            }
+      mark('STATE_VERIFY_START_BOUNDED');
+      var verifyMin=segments[0][0],verifyMax=segments[segments.length-1][1],verifyCount=verifyMax-verifyMin+1;
+      var verifyStateMatrix=orderSheetNative.getRange(verifyMin,1,verifyCount,7).getValues();
+      var verifyTimeMatrix=orderSheetNative.getRange(verifyMin,22,verifyCount,2).getValues();
+      segments.forEach(function(seg){
+        for(var rowNumber=seg[0];rowNumber<=seg[1];rowNumber++){
+          var rowOffset=rowNumber-verifyMin;
+          var orderRow=verifyStateMatrix[rowOffset]||[],timeRow=verifyTimeMatrix[rowOffset]||[];
+          var expectedState=stateByRow[rowNumber]||[],expectedTimes=syncTimesByRow[rowNumber]||[];
+          if(String(orderRow[0]||'')!==String(idByRow[rowNumber]||'')||
+             String(orderRow[4]||'')!==String(expectedState[0]||'')||
+             String(orderRow[5]||'')!==String(expectedState[1]||'')||
+             String(orderRow[6]||'')!==String(expectedState[2]||''))
+            throw new Error('FBS_PATCH_READBACK_FAILED');
+          for(var t=0;t<2;t++){
+            var expectedSerial=asSheetValue(expectedTimes[t]),actualSerial=Number(timeRow[t]);
+            if(!isFinite(actualSerial)||Math.abs(actualSerial-Number(expectedSerial))>0.00002)
+              throw new Error('FBS_PATCH_TIME_READBACK_FAILED');
           }
-        });
-      }
-      mark('STATE_VERIFY_DONE_BATCH');
+        }
+      });
+      mark('STATE_VERIFY_DONE_BOUNDED');
     }
     console.log('FBS_STAGE_PATCH ms='+(Date.now()-fbsStarted)+' changed='+updated+' events='+events.length);
     if(insert.length){
