@@ -206,12 +206,28 @@ jobs:
                   ["clasp","run","exportDOM_continue","--json"],
                   stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,check=False
               )
+              raw = re.sub(r"\\x1b\\[[0-9;]*m", "", proc.stdout.lstrip("\\ufeff")).strip()
               try:
-                  execution = json.loads(proc.stdout)
+                  execution = json.loads(raw)
               except Exception:
-                  print("OZON_CONTINUATION_JSON=unparseable")
-                  print("OZON_CONTINUATION_EXIT=" + str(proc.returncode))
-                  raise SystemExit("OZON_CONTINUATION_RESPONSE_INVALID")
+                  start = raw.find("{")
+                  if start >= 0:
+                      try:
+                          execution, _ = json.JSONDecoder().raw_decode(raw[start:])
+                      except Exception:
+                          print("OZON_CONTINUATION_JSON=unparseable")
+                          print("OZON_CONTINUATION_PREFIX_CODE=" + str(ord(raw[0])) if raw else "OZON_CONTINUATION_PREFIX_CODE=empty")
+                          raise SystemExit("OZON_CONTINUATION_RESPONSE_INVALID")
+                  elif "Exception:" in proc.stderr or "Exception:" in raw:
+                      message = proc.stderr.split("Exception:",1)[-1] if "Exception:" in proc.stderr else raw.split("Exception:",1)[-1]
+                      print("OZON_CONTINUATION_SCRIPT_ERROR=" + safe_message(message))
+                      raise SystemExit("OZON_CONTINUATION_FUNCTION_FAILED")
+                  elif proc.returncode == 0:
+                      execution = {"response":{"result":None}}
+                      print("OZON_CONTINUATION_RESPONSE_FORMAT=plain")
+                  else:
+                      print("OZON_CONTINUATION_EXIT=" + str(proc.returncode))
+                      raise SystemExit("OZON_CONTINUATION_RESPONSE_INVALID")
               error = execution.get("error") or {}
               if error:
                   print("OZON_CONTINUATION_ERROR_CODE=" + str(error.get("code") or "unknown"))
