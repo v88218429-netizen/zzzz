@@ -5740,6 +5740,7 @@ function sellmonitorGithubPublishWbInnerPeriods_(onlyStore){
         week:sellmonitorGithubWbInnerUpsert_(ss,week,head,built.week,cfg.name),
         month:sellmonitorGithubWbInnerUpsert_(ss,month,head,built.month,cfg.name)
       };
+      res.dashboard=sellmonitorGithubWbBuildDashboard_(ss,cfg.name);
       results.push(res);
       var log=sellmonitorGithubWbInnerEnsureSheet_(ss,SMC_WB_INNER_SUMMARY_V1.tabs.log,['Время запуска','Магазин','Источник частей','Строк фактов','Период с','Период по','Дней точных','Дней предварительных','Строк день/неделя/месяц','Новых','Изменённых','Архивировано','SHA-256']);
       var counts=[res.day.rows,res.week.rows,res.month.rows],newCount=res.day.new_rows+res.week.new_rows+res.month.new_rows,changeCount=res.day.changed_rows+res.week.changed_rows+res.month.changed_rows,archCount=res.day.archived_rows+res.week.archived_rows+res.month.archived_rows;
@@ -5754,6 +5755,89 @@ function sellmonitorGithubPublishWbInnerPeriods_(onlyStore){
   var expectedCount=onlyStore?1:3;
   var ok=results.length===expectedCount&&results.every(function(x){return x.ok===true;});
   return {ok:ok,action:'publish_wb_inner_periods',stores:results};
+}
+
+
+function sellmonitorGithubWbBuildDashboard_(ss,storeName){
+  var specs=[{grain:'day',tab:SMC_WB_INNER_SUMMARY_V1.tabs.day,label:'Дни'},
+    {grain:'week',tab:SMC_WB_INNER_SUMMARY_V1.tabs.week,label:'Недели'},
+    {grain:'month',tab:SMC_WB_INNER_SUMMARY_V1.tabs.month,label:'Месяцы'}];
+  var data=ss.getSheetByName('__Динамика_данные');if(!data)data=ss.insertSheet('__Динамика_данные');
+  var archive=ss.getSheetByName('Архив_Динамика_данные');
+  if(!archive){archive=ss.insertSheet('Архив_Динамика_данные');archive.getRange(1,1,1,4).setValues([['Архивировано','Магазин','Период','Старые строки JSON']]);}
+  var starts=[1,8,15],tables=[],latest={},chartsMade=0;
+  function add(target,value){if(value===''||value==null||typeof value==='boolean'||!isFinite(Number(value)))target.unknown=true;else target.sum+=Number(value);}
+  specs.forEach(function(spec,si){
+    var src=ss.getSheetByName(spec.tab);if(!src)throw new Error('WB_DASHBOARD_FACT_TAB_MISSING:'+spec.tab);
+    var count=Math.max(0,src.getLastRow()-1),groups={};
+    if(count){
+      var base=src.getRange(2,1,count,5).getValues(),metrics=src.getRange(2,11,count,31).getValues();
+      for(var i=0;i<count;i++){
+        var m=metrics[i],days=Number(base[i][3]),expected=Number(base[i][4]);
+        if(String(m[30]||'')!=='FACTUAL_INNER_ANALYTICS'||!base[i][1]||!base[i][2]||
+          (isFinite(expected)&&expected>0&&days<expected))continue;
+        var start=sellmonitorGithubWbInnerDateKey_(base[i][1],ss.getSpreadsheetTimeZone());
+        var end=sellmonitorGithubWbInnerDateKey_(base[i][2],ss.getSpreadsheetTimeZone());
+        if(!start||!end||(spec.grain==='day'&&start!==end))continue;
+        var key=start+'|'+end,g=groups[key];
+        if(!g)g=groups[key]={start:start,end:end,orders:{sum:0,unknown:false},revenue:{sum:0,unknown:false},profit:{sum:0,unknown:false},ads:{sum:0,unknown:false}};
+        add(g.orders,m[0]);add(g.revenue,m[6]);add(g.ads,m[15]);add(g.profit,m[22]);
+      }
+    }
+    var periods=Object.keys(groups).map(function(k){return groups[k];}).sort(function(a,b){return a.start.localeCompare(b.start);});
+    var rows=[['Период','Заказы, шт','Выручка, ₽','Прибыль, ₽','Реклама, ₽','Маржа, %']];
+    periods.forEach(function(g){
+      var revenue=g.revenue.unknown?null:g.revenue.sum,profit=g.profit.unknown?null:g.profit.sum;
+      rows.push([new Date(g.start+'T12:00:00+03:00'),g.orders.unknown?null:g.orders.sum,revenue,profit,
+        g.ads.unknown?null:g.ads.sum,revenue==null||profit==null||revenue===0?null:profit/revenue]);
+    });
+    var col=starts[si],oldLast=Math.max(1,data.getLastRow()),old=data.getRange(1,col,oldLast,6).getValues().filter(function(r){return r.some(function(v){return v!==''&&v!=null;});});
+    function norm(a){return a.map(function(r){return r.map(function(v){return v instanceof Date?Utilities.formatDate(v,'GMT','yyyy-MM-dd'):v;});});}
+    var changed=JSON.stringify(norm(old))!==JSON.stringify(norm(rows));
+    if(changed&&old.length>1){
+      var save=old.slice(1).map(function(r){return [new Date(),storeName,spec.label,JSON.stringify(norm([r])[0])];});
+      var at=archive.getLastRow()+1;if(archive.getMaxRows()<at+save.length-1)archive.insertRowsAfter(archive.getMaxRows(),at+save.length-1-archive.getMaxRows());
+      archive.getRange(at,1,save.length,4).setValues(save);SpreadsheetApp.flush();
+      if(archive.getRange(at,4,save.length,1).getValues().some(function(r,i){return String(r[0])!==save[i][3];}))throw new Error('WB_DASHBOARD_ARCHIVE_READBACK_FAILED:'+spec.grain);
+    }
+    if(changed){
+      if(data.getMaxRows()<rows.length)data.insertRowsAfter(data.getMaxRows(),rows.length-data.getMaxRows());
+      data.getRange(1,col,Math.max(1,old.length,rows.length),6).clearContent();
+      data.getRange(1,col,rows.length,6).setValues(rows);
+      data.getRange(1,col,1,6).setBackground('#17365D').setFontColor('#FFFFFF').setFontWeight('bold');
+      if(rows.length>1){data.getRange(2,col+1,rows.length-1,1).setNumberFormat('#,##0');data.getRange(2,col+2,rows.length-1,3).setNumberFormat('#,##0.00');data.getRange(2,col+5,rows.length-1,1).setNumberFormat('0.0%');}
+      SpreadsheetApp.flush();
+    }
+    if(JSON.stringify(norm(data.getRange(1,col,rows.length,6).getValues()))!==JSON.stringify(norm(rows)))throw new Error('WB_DASHBOARD_DATA_READBACK_FAILED:'+spec.grain);
+    latest[spec.grain]=periods.length?periods[periods.length-1].end:'';
+    tables.push({grain:spec.grain,label:spec.label,col:col,rows:rows,periods:periods.length});
+  });
+  data.hideSheet();
+  var view=ss.getSheetByName('00_Динамика');if(!view)view=ss.insertSheet('00_Динамика',0);else{view.showSheet();view.setIndex(1);}
+  view.getCharts().forEach(function(ch){view.removeChart(ch);});
+  view.getRange(1,1,2,21).clearContent();view.setHiddenGridlines(true);view.setFrozenRows(2);view.setTabColor('#17365D');
+  view.getRange('A1').setValue(storeName+' · Динамика по точным фактам').setBackground('#17365D').setFontColor('#FFFFFF').setFontFamily('Arial').setFontSize(16).setFontWeight('bold');
+  view.getRange('A2').setValue('Sellmonitor Inner · только FACTUAL_INNER_ANALYTICS и полностью закрытые периоды; неполные и неизвестные значения пропущены.').setFontColor('#44546A').setWrap(true);
+  view.setColumnWidths(1,21,110);
+  tables.forEach(function(t,ti){
+    if(t.rows.length<2)return;
+    var baseRow=4+ti*20,domain=data.getRange(1,t.col,t.rows.length,1);
+    function addChart(title,ranges,rowOff,colOff,vTitle){
+      var b=view.newChart().setChartType(Charts.ChartType.LINE);ranges.forEach(function(r){b.addRange(r);});
+      b.setNumHeaders(1).setPosition(baseRow+rowOff,1+colOff,0,0)
+        .setOption('title',t.label+' · '+title).setOption('hAxis',{title:'Период',format:'dd.MM.yy'})
+        .setOption('vAxis',{title:vTitle}).setOption('legend',{position:'bottom'})
+        .setOption('interpolateNulls',false).setOption('width',620).setOption('height',320)
+        .setOption('backgroundColor','#FFFFFF');view.insertChart(b.build());chartsMade++;
+    }
+    var orders=data.getRange(1,t.col+1,t.rows.length,1),money=data.getRange(1,t.col+2,t.rows.length,3),margin=data.getRange(1,t.col+5,t.rows.length,1);
+    if(t.rows.slice(1).some(function(r){return r[1]!=null;}))addChart('Заказы',[domain,orders],0,0,'Штук');
+    if(t.rows.slice(1).some(function(r){return r[2]!=null||r[3]!=null||r[4]!=null;}))addChart('Выручка, прибыль и реклама',[domain,money],0,7,'Рубли');
+    if(t.rows.slice(1).some(function(r){return r[5]!=null;}))addChart('Маржа',[domain,margin],0,14,'Доля');
+  });
+  SpreadsheetApp.flush();
+  if(view.getCharts().length!==chartsMade)throw new Error('WB_DASHBOARD_CHART_READBACK_MISMATCH:'+view.getCharts().length+':'+chartsMade);
+  return {ok:true,chart_count:chartsMade,exact_periods:{day:tables[0].periods,week:tables[1].periods,month:tables[2].periods},latest_exact:latest,archived_rows:archive.getLastRow()-1};
 }
 
 function doPost(e) {
