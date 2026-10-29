@@ -577,6 +577,87 @@ def _query_manager_payload(
     return manager.build(portfolio_snapshot or portfolio.snapshot(), snapshots or _dashboard_snapshots())
 
 
+def _traffic_product_day_comparison(ads: list[dict[str, Any]], funnel: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], dict[str, int]]:
+    """Join advertising and overall funnel only by exact shop, day and nmID.
+
+    These remain independent marketplace measures. A shared key is not an
+    advertising attribution claim; rows without nmID are counted as unlinked.
+    """
+    shop_names = {"ap": ("sanych", "Саныч"), "aa": ("air", "AIR"), "yv": ("hozyushka", "Хозяюшка")}
+    grouped: dict[tuple[str, str, str], dict[str, Any]] = {}
+    summary = {"matched_pairs": 0, "ads_only": 0, "funnel_only": 0, "unlinked_ads": 0, "unlinked_funnel": 0}
+
+    def key(row: dict[str, Any]) -> tuple[str, str, str] | None:
+        shop = str(row.get("shop") or "").strip().lower()
+        raw_day = str(row.get("date") or "").strip()
+        day = None
+        try:
+            day = datetime.strptime(raw_day, "%d.%m.%Y").date().isoformat() if len(raw_day) == 10 and raw_day[2] == "." else date.fromisoformat(raw_day[:10]).isoformat()
+        except ValueError:
+            pass
+        nm_id = str(row.get("nm_id") or row.get("nmId") or "").strip()
+        if shop not in shop_names or not day or not nm_id:
+            return None
+        return shop, day, nm_id
+
+    def add(kind: str, rows: list[dict[str, Any]]) -> None:
+        for row in rows:
+            identity = key(row)
+            if identity is None:
+                summary[f"unlinked_{kind}"] += 1
+                continue
+            shop, day, nm_id = identity
+            item = grouped.setdefault(identity, {
+                "shop": shop, "store_id": shop_names[shop][0], "store_name": shop_names[shop][1],
+                "date": day, "nm_id": nm_id, "ads_rows": [], "funnel_rows": [],
+                "seller_article": None,
+            })
+            item[f"{kind}_rows"].append(row)
+            article = row.get("vendor_code") or row.get("seller_article")
+            if article and not item["seller_article"]:
+                item["seller_article"] = str(article)
+
+    add("ads", ads)
+    add("funnel", funnel)
+
+    def sum_known(rows: list[dict[str, Any]], field: str) -> float | None:
+        if not rows:
+            return None
+        values = []
+        for row in rows:
+            value = row.get(field)
+            try:
+                parsed = float(str(value).replace(",", ".")) if value is not None and str(value).strip() else None
+            except (TypeError, ValueError):
+                parsed = None
+            if parsed is None:
+                return None
+            values.append(parsed)
+        return round(sum(values), 2)
+
+    result = []
+    for item in grouped.values():
+        ad_rows, funnel_rows = item.pop("ads_rows"), item.pop("funnel_rows")
+        has_ads, has_funnel = bool(ad_rows), bool(funnel_rows)
+        status = "both_sources" if has_ads and has_funnel else "ads_only" if has_ads else "funnel_only"
+        summary["matched_pairs" if has_ads and has_funnel else status] += 1
+        item.update({
+            "status": status,
+            "seller_article": item["seller_article"] or item["nm_id"],
+            "campaign_count": len({str(r.get("advert_id") or r.get("advertId") or "") for r in ad_rows if r.get("advert_id") or r.get("advertId")}),
+            "ads_row_count": len(ad_rows), "funnel_row_count": len(funnel_rows),
+            "ad_views": sum_known(ad_rows, "views"), "ad_clicks": sum_known(ad_rows, "clicks"),
+            "ad_spend_rub": sum_known(ad_rows, "spend_rub"), "ad_orders": sum_known(ad_rows, "orders"),
+            "ad_order_sum_rub": sum_known(ad_rows, "order_sum_rub"),
+            "funnel_opens": sum_known(funnel_rows, "open_count"), "funnel_carts": sum_known(funnel_rows, "cart_count"),
+            "funnel_orders": sum_known(funnel_rows, "order_count"),
+            "funnel_order_sum_rub": sum_known(funnel_rows, "order_sum_rub"),
+        })
+        result.append(item)
+    result.sort(key=lambda x: (x["date"], x["store_name"], x["seller_article"]), reverse=True)
+    return result, summary
+
+
 def _traffic_dashboard_payload(bundle: dict[str, Any], period: dict[str, Any]) -> dict[str, Any]:
     """Prepare actual worker rows for the portfolio and per-store dashboard views."""
     start, end = period["from"], period["to"]
@@ -639,6 +720,7 @@ def _traffic_dashboard_payload(bundle: dict[str, Any], period: dict[str, Any]) -
     total_ads = [r for c in grouped.values() for r in c["ads"]]
     total_funnel = [r for c in grouped.values() for r in c["funnel"]]
     total_organic = [r for c in grouped.values() for r in c["organic"]]
+    product_day_comparison, product_day_summary = _traffic_product_day_comparison(total_ads, total_funnel)
     return {
         "source": bundle.get("source"), "retrieved_at": bundle.get("retrieved_at"),
         "health": bundle.get("source_health") or {}, "status": bundle.get("status") or {},
@@ -646,6 +728,7 @@ def _traffic_dashboard_payload(bundle: dict[str, Any], period: dict[str, Any]) -
         "ads": total_ads, "funnel": total_funnel, "organic": total_organic,
         "clusters": [r for c in grouped.values() for r in c["clusters"]],
         "campaign_settings": [r for c in grouped.values() for r in c["campaign_settings"]],
+        "product_day_comparison": product_day_comparison, "product_day_summary": product_day_summary,
     }
 
 

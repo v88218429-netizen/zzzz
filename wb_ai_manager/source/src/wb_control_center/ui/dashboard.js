@@ -761,7 +761,9 @@ function renderFunnel(){
   const select=$('funnel-product-select'); if(!select) return;
   if($('funnel-store-select')) $('funnel-store-select').value=state.selectedStore;
   const rows=(t.funnel||[]).filter(r=>state.selectedStore==='all'||idMap[String(r.shop||'').toUpperCase()]===state.selectedStore);
-  const products=[...new Map(rows.map(r=>[String(r.nm_id||r.vendor_code||''),{id:String(r.nm_id||r.vendor_code||''),label:String(r.vendor_code||r.nm_id||'Товар без артикула')}])).values()].filter(x=>x.id).sort((a,b)=>a.label.localeCompare(b.label,'ru'));
+  const comparisonRows=(t.product_day_comparison||[]).filter(r=>state.selectedStore==='all'||r.store_id===state.selectedStore);
+  const productOptions=[...rows.map(r=>({id:String(r.nm_id||r.vendor_code||''),label:String(r.vendor_code||r.nm_id||'Товар без артикула')})),...comparisonRows.map(r=>({id:String(r.nm_id||''),label:String(r.seller_article||r.nm_id||'Товар без артикула')}))];
+  const products=[...new Map(productOptions.filter(x=>x.id).map(x=>[x.id,x])).values()].sort((a,b)=>a.label.localeCompare(b.label,'ru'));
   const prior=select.value; select.innerHTML='<option value="">Все товары</option>'+products.map(x=>`<option value="${esc(x.id)}">${esc(x.label)}</option>`).join(''); if(products.some(x=>x.id===prior)) select.value=prior;
   const chosen=select.value; const visible=rows.filter(r=>!chosen||String(r.nm_id||r.vendor_code||'')===chosen);
   const total=k=>{if(!visible.length)return null;const v=visible.map(r=>missing(r[k])?null:Number(r[k]));return v.some(x=>x===null||!Number.isFinite(x))?null:v.reduce((a,b)=>a+b,0);};
@@ -774,6 +776,21 @@ function renderFunnel(){
   const days=Object.entries(byDay).sort(([a],[b])=>b.localeCompare(a));
   $('funnel-daily-table').innerHTML=days.length?days.map(([day,x])=>`<tr><td>${esc(day)}</td><td>${x.complete?num(x.open):'неполные данные'}</td><td>${x.complete?num(x.cart):'неполные данные'}</td><td>${x.complete?num(x.orders):'неполные данные'}</td><td>${x.complete&&x.open>0?pct(x.cart/x.open*100):'—'}</td><td>${x.complete&&x.cart>0?pct(x.orders/x.cart*100):'—'}</td><td>${esc([...x.source].join(', ')||'WB Analytics')}</td></tr>`).join(''):`<tr><td colspan="7">${esc(t.error||'Строк воронки не получено. Это не нулевые продажи.')}</td></tr>`;
   $('funnel-product-table').innerHTML=visible.length?visible.slice(0,1000).map(r=>{const o=Number(r.open_count),c=Number(r.cart_count),n=Number(r.order_count);return `<tr><td>${esc(labels[String(r.shop||'').toLowerCase()]||r.shop||'—')}</td><td>${esc(r.date||'—')}</td><td>${esc(r.vendor_code||r.nm_id||'—')}</td><td>${num(r.open_count)}</td><td>${num(r.cart_count)}</td><td>${num(r.order_count)}</td><td>${rub(r.order_sum_rub)}</td><td>${o>0?pct(c/o*100):'—'}</td><td>${c>0?pct(n/c*100):'—'}</td></tr>`;}).join(''):`<tr><td colspan="9">${esc(t.error||'Строк воронки не получено. Отчёт мог не завершиться или не содержать товаров.')}</td></tr>`;
+  const comparison=(t.product_day_comparison||[]).filter(r=>
+    (state.selectedStore==='all'||r.store_id===state.selectedStore)&&
+    (!chosen||String(r.nm_id||r.seller_article||'')===chosen)
+  );
+  const joinSummary={matched_pairs:0,ads_only:0,funnel_only:0};
+  comparison.forEach(r=>{if(Object.hasOwn(joinSummary,r.status))joinSummary[r.status]++;});
+  const statusLabel={both_sources:'Оба источника',ads_only:'Только реклама',funnel_only:'Только воронка'};
+  const globalJoinSummary=t.product_day_summary||{};
+  const joinScope=state.selectedStore==='all'?'все магазины':labels[state.selectedStore]||state.selectedStore;
+  const unlinkedNote=state.selectedStore==='all'&&!chosen?` · без nmID по всем магазинам: реклама ${num(globalJoinSummary.unlinked_ads)}, воронка ${num(globalJoinSummary.unlinked_funnel)}`:' · строки без nmID учитываются отдельно в общем срезе';
+  if($('funnel-traffic-join-summary')) $('funnel-traffic-join-summary').innerHTML=
+    `<strong>Сопоставлено товаро-дней: ${num(joinSummary.matched_pairs)}</strong><span>Срез: ${esc(joinScope)}${chosen?'; выбранный товар':''}. Только реклама: ${num(joinSummary.ads_only)} · только воронка: ${num(joinSummary.funnel_only)}${unlinkedNote}. Числа заказов из двух источников не складываются.</span>`;
+  $('funnel-traffic-join-table').innerHTML=comparison.length?comparison.slice(0,1000).map(r=>
+    `<tr><td>${esc(r.store_name||labels[r.shop]||r.shop||'—')}</td><td>${esc(r.date||'—')}</td><td>${esc(r.seller_article||r.nm_id||'—')}</td><td>${num(r.funnel_opens)}</td><td>${num(r.funnel_carts)}</td><td>${num(r.funnel_orders)}</td><td>${num(r.ad_views)}</td><td>${num(r.ad_clicks)}</td><td>${rub(r.ad_spend_rub)}</td><td>${num(r.ad_orders)}</td><td>${esc(statusLabel[r.status]||'—')}</td></tr>`
+  ).join(''):`<tr><td colspan="11">${esc(t.error||'Нет строк, которые можно сопоставить по магазину, дню и nmID. Это не нулевые показатели.')}</td></tr>`;
 }
 
 function renderPriceCalculator(){
