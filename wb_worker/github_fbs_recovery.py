@@ -24,6 +24,7 @@ LOOKBACK_DAYS = max(1, min(90, int(os.environ.get("FBS_LOOKBACK_DAYS", "7"))))
 # New recovery runs replace the stalled legacy matrix; upserts remain safe to resume.
 # Batch identity searches on the live gateway are bounded to the IDs in each idempotent batch.
 # Recovery matrix includes the current UTC day so recent WB orders are reconciled too.
+# Current-day bounds are clamped to now before calling the official WB API.
 CLIENT_HINT = os.environ.get("FBS_CLIENT", "").strip().upper()
 BATCH_SIZE = int(os.environ.get("FBS_BATCH_SIZE", "5" if CLIENT_HINT == "AIR" else "25"))
 if not 1 <= BATCH_SIZE <= 1000:
