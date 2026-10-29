@@ -175,24 +175,75 @@ jobs:
           print("APPS_SCRIPT_ACTIVE_VERSION_REFERENCES=" + ",".join(map(str, sorted(set(active)))) if active else "APPS_SCRIPT_ACTIVE_VERSION_REFERENCES=unparsed_or_none")
           PY
 
-      - name: Run the authorized Ozon continuation once
+      - name: Resume Ozon export and publish only after verification
         if: github.event_name == 'push' && github.event.head_commit.message == 'Run Ozon export continuation via GitHub'
         shell: bash
         run: |
           set -euo pipefail
           cd /tmp/sellmonitor-gh-worker
-          log_file="$(mktemp)"
-          set +e
-          timeout 420s clasp run exportDOM_continue >"$log_file" 2>&1
-          status=$?
-          set -e
-          if [ "$status" -ne 0 ]; then
-            echo "OZON_CONTINUATION_CLASP_RUN_EXIT=$status"
-            echo "OZON_CONTINUATION_EXECUTION=failed"
-            exit "$status"
-          fi
-          echo "OZON_CONTINUATION_EXECUTION=completed"
-          echo "OZON_CONTINUATION_METHOD=clasp_run"
+          python - <<'PY'
+          import json, os, subprocess, tempfile, time, urllib.error, urllib.request
+
+          url = "https://script.google.com/macros/s/" + os.environ["WEBAPP_DEPLOYMENT_ID"] + "/exec"
+          token = os.environ["WEBHOOK_SECRET"]
+          headers = {"Content-Type":"application/json"}
+          expected = {"ДОМ", "Хозяюшка"}
+
+          def publish():
+              payload = json.dumps({"token":token,"action":"publish_ozon_summary_orders"}).encode("utf-8")
+              req = urllib.request.Request(url,data=payload,headers=headers,method="POST")
+              with urllib.request.urlopen(req,timeout=90) as response:
+                  return json.loads(response.read().decode("utf-8"))
+
+          for attempt in range(1,5):
+              with tempfile.TemporaryFile() as out:
+                  proc = subprocess.run(
+                      ["timeout","120s","clasp","run","exportDOM_continue"],
+                      stdout=out,stderr=subprocess.STDOUT,check=False
+                  )
+              if proc.returncode:
+                  print("OZON_CONTINUATION_ATTEMPT=" + str(attempt) + " EXIT=" + str(proc.returncode))
+                  raise SystemExit("OZON_CONTINUATION_EXECUTION_FAILED")
+              print("OZON_CONTINUATION_ATTEMPT=" + str(attempt) + " EXECUTION=completed")
+              try:
+                  result = publish()
+              except urllib.error.HTTPError as exc:
+                  print("OZON_PUBLICATION_HTTP_STATUS=" + str(exc.code))
+                  raise SystemExit("OZON_PUBLICATION_CHECK_FAILED")
+              except urllib.error.URLError as exc:
+                  print("OZON_PUBLICATION_NETWORK_ERROR=" + type(exc.reason).__name__)
+                  raise SystemExit("OZON_PUBLICATION_CHECK_FAILED")
+              if result.get("ok") is True:
+                  stores = result.get("stores") or []
+                  actual = {x.get("store") for x in stores if x.get("ok") is True and x.get("readback") is True}
+                  if actual != expected:
+                      raise SystemExit("OZON_SUMMARY_READBACK_ACCEPTANCE_FAILED")
+                  print("OZON_SOURCE_UPDATED=" + str(result.get("source_updated")))
+                  print("OZON_SOURCE_ROWS=" + str(result.get("source_rows")))
+                  for store in stores:
+                      print("OZON_STORE=" + str(store.get("store"))
+                            + " SOURCE_ROWS=" + str(store.get("source_rows"))
+                            + " PERIOD=" + str(store.get("source_min")) + ".." + str(store.get("source_max"))
+                            + " DAILY_ROWS=" + str(store.get("daily_rows"))
+                            + " SKU_ROWS=" + str(store.get("sku_rows"))
+                            + " ARCHIVED_ROWS=" + str(store.get("archived_rows"))
+                            + " READBACK=" + str(store.get("readback"))
+                            + " SHA256=" + str(store.get("sha256")))
+                  raise SystemExit(0)
+              reason = str(result.get("reason") or "")
+              state = str(result.get("source_status") or "").lower()
+              if "OZON_SOURCE_EXPORT_NOT_VERIFIED" not in reason or not any(
+                  value in state for value in ("выгрузка продолжается","нет успешного запуска")
+              ):
+                  print("OZON_EXPORT_GUARD=non_retryable")
+                  raise SystemExit("OZON_SUMMARY_PUBLICATION_REJECTED")
+              state_code = "running" if "выгрузка продолжается" in state else "no_success_yet"
+              print("OZON_EXPORT_STATE=" + state_code + " RETRY=" + str(attempt) + "/4")
+              if attempt < 4:
+                  time.sleep(15)
+          raise SystemExit("OZON_EXPORT_NOT_VERIFIED_AFTER_BOUNDED_CONTINUATIONS")
+          PY
+
 
       - name: Push and redeploy stable adapter
         if: github.event_name != 'push' || github.event.head_commit.message != 'Run Ozon export continuation via GitHub'
