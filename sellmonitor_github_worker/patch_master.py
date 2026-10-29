@@ -14,6 +14,26 @@ marker = "SELLMONITOR_GITHUB_MASTER_HOOK_V1"
 worker = root / "SELLMONITOR_GITHUB_WORKER.gs"
 if worker.exists():
     worker_text = worker.read_text(encoding="utf-8")
+    # Preserve the upstream MCP error code and a scrubbed, bounded message in
+    # the existing per-store log. The previous generic error hid whether the
+    # tool was unavailable or the OAuth session needed refresh.
+    mcp_error_anchor = "if (item && item.error) throw new Error('INNER_MCP_RPC_ERROR');"
+    mcp_error_marker = "INNER_MCP_ERROR_DIAGNOSTIC_V1"
+    if mcp_error_anchor in worker_text and mcp_error_marker not in worker_text:
+        mcp_error_replacement = """/* INNER_MCP_ERROR_DIAGNOSTIC_V1 */
+  if (item && item.error) {
+    var rpcError = item.error || {};
+    var rpcCode = String(rpcError.code == null ? 'unknown' : rpcError.code).slice(0,40);
+    var rpcMessage = String(rpcError.message || 'unspecified')
+      .replace(/Bearer\\s+\\S+/ig,'Bearer [redacted]')
+      .replace(/\\b(?:access_token|refresh_token|token|secret|api[_ -]?key)\\b[=: ]+[^\\s,;]{1,120}/ig,'[redacted]')
+      .slice(0,180);
+    throw new Error('INNER_MCP_RPC_ERROR:' + rpcCode + ':' + rpcMessage);
+  }"""
+        worker_text = worker_text.replace(mcp_error_anchor, mcp_error_replacement, 1)
+        print("INNER_MCP_ERROR_DIAGNOSTIC=patched")
+    elif mcp_error_marker not in worker_text and "function sellmonitorGithubMcpData_" in worker_text:
+        raise SystemExit("Inner MCP error diagnostic anchor changed")
     worker_text = worker_text.replace(
         "var desiredVersion = 'worker-1m-v1';",
         "var desiredVersion = 'worker-1m-v2';",
