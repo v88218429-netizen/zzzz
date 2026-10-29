@@ -555,7 +555,7 @@ jobs:
           PY
 
       - name: Run one authenticated Sellmonitor Inner finance tick
-        if: github.event_name != 'push' || !contains(fromJSON('["Run Ozon export continuation via GitHub","Diagnose Ozon export status via GitHub","Repair and resume Ozon export via GitHub"]'), github.event.head_commit.message)
+        if: github.event_name != 'push' # Scheduled separately; avoid lock contention on code pushes.["Run Ozon export continuation via GitHub","Diagnose Ozon export status via GitHub","Repair and resume Ozon export via GitHub"]'), github.event.head_commit.message)
         continue-on-error: true
         shell: bash
         run: |
@@ -607,7 +607,7 @@ jobs:
           PY
 
       - name: Run one authenticated worker tick
-        if: github.event_name != 'push' || !contains(fromJSON('["Run Ozon export continuation via GitHub","Diagnose Ozon export status via GitHub","Repair and resume Ozon export via GitHub"]'), github.event.head_commit.message)
+        if: github.event_name != 'push' # Scheduled separately; avoid lock contention on code pushes.["Run Ozon export continuation via GitHub","Diagnose Ozon export status via GitHub","Repair and resume Ozon export via GitHub"]'), github.event.head_commit.message)
         id: operational_tick
         continue-on-error: true
         shell: bash
