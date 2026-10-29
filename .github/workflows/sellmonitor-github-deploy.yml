@@ -63,6 +63,10 @@ jobs:
               req=urllib.request.Request('https://oauth2.googleapis.com/token',data=form,method='POST')
               with urllib.request.urlopen(req,timeout=30) as response:
                   auth=json.loads(response.read().decode())
+              access=auth['access_token']
+              print('::add-mask::'+access)
+              with open(os.environ['GITHUB_ENV'],'a',encoding='utf-8') as env:
+                  env.write('SHEETS_ACCESS_TOKEN='+access+'\\n')
               scopes=auth.get('scope','')
               print('DIRECT_SHEETS_TOKEN_REFRESH=ok')
               print('DIRECT_SHEETS_SCOPE_PRESENT=' + str('https://www.googleapis.com/auth/spreadsheets' in scopes))
@@ -287,11 +291,8 @@ jobs:
           PY
           python - <<'PY'
           import json, os, time, urllib.parse, urllib.request
-          cfg=json.loads(os.environ['CLASPRC_JSON'])
-          settings=cfg.get('oauth2ClientSettings') or {}; token=cfg.get('token') or {}
-          form=urllib.parse.urlencode({'client_id':settings.get('clientId',''),'client_secret':settings.get('clientSecret',''),'refresh_token':token.get('refresh_token',''),'grant_type':'refresh_token'}).encode()
-          req=urllib.request.Request('https://oauth2.googleapis.com/token',data=form,method='POST')
-          with urllib.request.urlopen(req,timeout=30) as response: access=json.loads(response.read().decode())['access_token']
+          access=os.environ.get('SHEETS_ACCESS_TOKEN','')
+          if not access: raise SystemExit('SHEETS_ACCESS_TOKEN_MISSING')
           ids={'ДОМ':'1g57et2zqlVfbs0_BoRobb5G-4Z2MTXZd028V7u4Kd-Q','Хозяюшка':'1Rl-IVihrZ56wKwDsf76wspZ53a8ntN3hCVN1gd4Tguo'}
           tab='15_API_Экспорт_Диагностика_GH'; last={}
           for attempt in range(1,10):
