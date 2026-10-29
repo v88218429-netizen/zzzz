@@ -293,8 +293,9 @@ function sellmonitorGithubTick() {
 }
 
 function sellmonitorGithubInnerFinanceTick() {
-  // Keep this domain serialized without waiting behind long-running queue commands.
-  var financeLock = LockService.getUserLock();
+  // Finance is serialized with the worker tick, but never holds the user lock used
+  // by FBS lease claims. Slow finance requests must not block authenticated FBS ingest.
+  var financeLock = LockService.getScriptLock();
   if (!financeLock.tryLock(5000)) return {ok:true,skipped:true,reason:'shared_gateway_lock_busy'};
   var cc = null;
   var cfg = null;
