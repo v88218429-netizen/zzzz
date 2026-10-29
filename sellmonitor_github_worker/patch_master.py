@@ -383,7 +383,7 @@ if continuation_marker not in continuation_block:
 
 continuation_lock_marker = "OZON_CONTINUATION_USER_LOCK_V3"
 continuation_start = text.find("function exportDOM_continue() {")
-continuation_end = text.find("\\nfunction ", continuation_start + 10)
+continuation_end = text.find("\nfunction ", continuation_start + 10)
 if continuation_end < 0:
     continuation_end = len(text)
 if continuation_start < 0:
@@ -401,7 +401,7 @@ if continuation_lock_marker not in continuation_block:
     )
     continuation_block = continuation_block.replace(
         "function exportDOM_continue() {",
-        "function exportDOM_continue() {\\n  /* " + continuation_lock_marker + " */",
+        "function exportDOM_continue() {\n  /* " + continuation_lock_marker + " */",
         1,
     )
     text = text[:continuation_start] + continuation_block + text[continuation_end:]
