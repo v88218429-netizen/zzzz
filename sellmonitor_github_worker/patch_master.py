@@ -14,20 +14,19 @@ marker = "SELLMONITOR_GITHUB_MASTER_HOOK_V1"
 worker = root / "SELLMONITOR_GITHUB_WORKER.gs"
 if worker.exists():
     worker_text = worker.read_text(encoding="utf-8")
-    # For a removed tool, discover only finance/order/product tool schemas
-    # from the live Sellmonitor MCP catalog and attach a bounded excerpt to the
-    # existing per-store error log; no credentials or source rows are logged.
+    # On an unknown tool, expose the live finance/product/order/report names
+    # plus the bounded raw-report schema, never credentials or source rows.
     mcp_catalog_anchor = "  return sellmonitorGithubMcpData_(call.json);"
-    mcp_catalog_marker = "INNER_MCP_TOOL_SCHEMA_DIAGNOSTIC_V2"
+    mcp_catalog_marker = "INNER_MCP_TOOL_SCHEMA_DIAGNOSTIC_V3"
     if mcp_catalog_anchor in worker_text and mcp_catalog_marker not in worker_text:
-        mcp_catalog_replacement = """  /* INNER_MCP_TOOL_SCHEMA_DIAGNOSTIC_V2 */
+        mcp_catalog_replacement = """  /* INNER_MCP_TOOL_SCHEMA_DIAGNOSTIC_V3 */
   try {
     return sellmonitorGithubMcpData_(call.json);
   } catch (innerError) {
     var innerMessage = String(innerError && innerError.message ? innerError.message : innerError);
     if (!/unknown tool|method not found/i.test(innerMessage)) throw innerError;
     var innerProps = PropertiesService.getScriptProperties();
-    var cachedTools = String(innerProps.getProperty('SMC_INNER_MCP_TOOL_SCHEMA_V2') || '');
+    var cachedTools = String(innerProps.getProperty('SMC_INNER_MCP_TOOL_SCHEMA_V3') || '');
     if (!cachedTools) {
       try {
         var catalog = post({jsonrpc:'2.0',id:3,method:'tools/list',params:{}},call.session);
@@ -35,11 +34,10 @@ if worker.exists():
           var catalogItem = catalog.json;
           if (Array.isArray(catalogItem)) catalogItem = catalogItem.filter(function(x){return x && x.id === 3;})[0] || catalogItem[0];
           var allTools = (((catalogItem || {}).result || {}).tools || []);
-          var selected = allTools.filter(function(t){return /analytics_(get_marketplace_raw_report_rows|get_marketplace_expenses|call_live_wb_method|get_live_wb_snapshot|get_data_freshness|get_order_list)/i.test(String(t && t.name || ''));});
-          cachedTools = 'TOTAL=' + allTools.length + ';SCHEMAS=' + selected.map(function(t){
-            return String(t.name || '') + ':' + JSON.stringify(t.inputSchema || {}).slice(0,260) + ':' + String(t.description || '').slice(0,120);
-          }).join('|').slice(0,790);
-          if (cachedTools) innerProps.setProperty('SMC_INNER_MCP_TOOL_SCHEMA_V2',cachedTools);
+          var names = allTools.filter(function(t){return /finance|product|order|sales|report|wildberries|\\bwb\\b/i.test(String(t && t.name || ''));}).map(function(t){return String(t.name || '');});
+          var rawTool = allTools.filter(function(t){return String(t && t.name || '') === 'analytics_get_marketplace_raw_report_rows';})[0] || {};
+          cachedTools = 'TOTAL=' + allTools.length + ';NAMES=' + names.join(',').slice(0,460) + ';RAW_ROWS_SCHEMA=' + JSON.stringify(rawTool.inputSchema || {}).slice(0,310);
+          if (cachedTools) innerProps.setProperty('SMC_INNER_MCP_TOOL_SCHEMA_V3',cachedTools);
         } else {
           cachedTools = 'TOOLS_LIST_HTTP_' + catalog.http;
         }
