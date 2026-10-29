@@ -382,134 +382,69 @@ jobs:
           print("APPS_SCRIPT_ACTIVE_VERSION_REFERENCES=" + ",".join(map(str, sorted(set(active)))) if active else "APPS_SCRIPT_ACTIVE_VERSION_REFERENCES=unparsed_or_none")
           PY
 
-      - name: Diagnose and resume Ozon continuation
+      - name: Inspect the existing Ozon continuation wrapper
         if: github.event_name == 'push' && github.event.head_commit.message == 'Run Ozon export continuation via GitHub'
         shell: bash
         run: |
           set -euo pipefail
           cd /tmp/sellmonitor-gh-worker
           python - <<'PY'
-          import json, os, pathlib, subprocess, urllib.error, urllib.request
-
-          source_file = None
+          import pathlib
+          files=[]
           for path in pathlib.Path(".").rglob("*"):
-              if path.suffix not in (".gs", ".js", ".ts"):
+              if path.suffix not in (".gs",".js",".ts"):
                   continue
               try:
-                  content = path.read_text(encoding="utf-8")
+                  content=path.read_text(encoding="utf-8")
               except Exception:
                   continue
-              index = content.find("function exportDOM_continue")
-              if index >= 0:
-                  source_file = str(path)
-                  snippet = content[index:index+800].replace(chr(10), " ")
-                  print("OZON_CONTINUATION_SOURCE_FILE=" + source_file)
-                  print("OZON_CONTINUATION_SOURCE_SNIPPET=" + snippet)
-                  break
-          if not source_file:
-              print("OZON_CONTINUATION_SOURCE=not_found_in_project_files")
-
-          proc = subprocess.run(
-              ["clasp", "run", "exportDOM_continue", "--json"],
-              stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=False
-          )
-          raw = proc.stdout.lstrip(chr(0xfeff)).strip()
-          parsed = None
-          decoder = json.JSONDecoder()
-          for offset, char in enumerate(raw):
-              if char != "{":
-                  continue
-              try:
-                  parsed, _ = decoder.raw_decode(raw, offset)
-                  break
-              except Exception:
-                  continue
-          if parsed is None:
-              safe = raw.replace(os.environ.get("WEBHOOK_SECRET",""), "[REDACTED]")
-              safe = __import__("re").sub(r"(?i)(token|secret|authorization)\\s*[:=]\\s*\\S+", r"\\1=[REDACTED]", safe)
-              safe = __import__("re").sub(r"[A-Za-z0-9_-]{32,}", "[ID_REDACTED]", safe)
-              print("OZON_DIAGNOSTIC_STDOUT_LENGTH=" + str(len(raw)))
-              print("OZON_DIAGNOSTIC_STDOUT_PREFIX=" + safe[:220].replace(chr(10)," "))
-              stderr = proc.stderr.strip()
-              if stderr:
-                  stderr = __import__("re").sub(r"[A-Za-z0-9_-]{32,}", "[ID_REDACTED]", stderr)
-                  print("OZON_DIAGNOSTIC_STDERR_PREFIX=" + stderr[:220].replace(chr(10)," "))
-              raise SystemExit("OZON_DIAGNOSTIC_RESPONSE_INVALID")
-          if not isinstance(parsed, dict):
-              raise SystemExit("OZON_DIAGNOSTIC_RESPONSE_NOT_OBJECT")
-          error = parsed.get("error") or {}
-          if error:
-              print("OZON_DIAGNOSTIC_ERROR_CODE=" + str(error.get("code") or "unknown"))
-              details = error.get("details") or []
-              if details and isinstance(details[0], dict):
-                  message = str(details[0].get("errorMessage") or "")
-                  message = message.replace(os.environ.get("WEBHOOK_SECRET",""), "[REDACTED]")
-                  message = __import__("re").sub(r"[A-Za-z0-9_-]{32,}", "[ID_REDACTED]", message)
-                  print("OZON_DIAGNOSTIC_SCRIPT_ERROR=" + message.replace(chr(10)," ")[:240])
-              raise SystemExit("OZON_DIAGNOSTIC_FUNCTION_FAILED")
-          result = parsed.get("response", {}).get("result") if isinstance(parsed.get("response"), dict) else parsed
-          if isinstance(result, str):
-              try:
-                  result = json.loads(result)
-              except Exception:
-                  pass
-          if not isinstance(result, dict) or result.get("ok") is not True:
-              print("OZON_DIAGNOSTIC_RESULT_TYPE=" + type(result).__name__)
-              print("OZON_DIAGNOSTIC_RESULT_KEYS=" + ",".join(sorted(result.keys())[:15]) if isinstance(result,dict) else "OZON_DIAGNOSTIC_RESULT_KEYS=none")
-              raise SystemExit("OZON_DIAGNOSTIC_RESULT_INVALID")
-          print("OZON_EXPORT_JOB=" + str(result.get("job") or ""))
-          print("OZON_EXPORT_IN_PROGRESS=" + str(result.get("in_progress") or ""))
-          print("OZON_EXPORT_LAST_ATTEMPT_AT=" + str(result.get("last_attempt_at") or ""))
-          print("OZON_CONTINUATION_PENDING=" + str(result.get("continuation_pending")))
-          message = str(result.get("last_error") or "").replace(os.environ.get("WEBHOOK_SECRET",""), "[REDACTED]")
-          message = __import__("re").sub(r"[A-Za-z0-9_-]{32,}", "[ID_REDACTED]", message)
-          print("OZON_EXPORT_LAST_ERROR=" + message.replace(chr(10)," ")[:400])
-          if proc.returncode:
-              print("OZON_DIAGNOSTIC_EXIT=" + str(proc.returncode))
-              raise SystemExit("OZON_DIAGNOSTIC_COMMAND_FAILED")
-
-          url = "https://script.google.com/macros/s/" + os.environ["WEBAPP_DEPLOYMENT_ID"] + "/exec"
-          payload = json.dumps({"token":os.environ["WEBHOOK_SECRET"],"action":"publish_ozon_summary_orders"}).encode()
-          req = urllib.request.Request(url, data=payload, headers={"Content-Type":"application/json"}, method="POST")
-          try:
-              with urllib.request.urlopen(req, timeout=90) as response:
-                  published = json.loads(response.read().decode("utf-8"))
-          except urllib.error.HTTPError as exc:
-              print("OZON_PUBLICATION_HTTP_STATUS=" + str(exc.code))
-              raise SystemExit("OZON_PUBLICATION_CHECK_FAILED")
-          except urllib.error.URLError as exc:
-              print("OZON_PUBLICATION_NETWORK_ERROR=" + type(exc.reason).__name__)
-              raise SystemExit("OZON_PUBLICATION_CHECK_FAILED")
-          if published.get("ok") is not True:
-              state = str(published.get("source_status") or "").lower()
-              print("OZON_EXPORT_STATE=" + ("running" if "выгрузка продолжается" in state else "no_success_yet"))
-              raise SystemExit("OZON_SOURCE_EXPORT_NOT_VERIFIED")
-          stores = published.get("stores") or []
-          actual = {x.get("store") for x in stores if x.get("ok") is True and x.get("readback") is True}
-          if actual != {"ДОМ", "Хозяюшка"}:
-              raise SystemExit("OZON_SUMMARY_READBACK_ACCEPTANCE_FAILED")
-          print("OZON_SOURCE_UPDATED=" + str(published.get("source_updated")))
-          print("OZON_SOURCE_ROWS=" + str(published.get("source_rows")))
-          for store in stores:
-              print("OZON_STORE=" + str(store.get("store"))
-                    + " SOURCE_ROWS=" + str(store.get("source_rows"))
-                    + " PERIOD=" + str(store.get("source_min")) + ".." + str(store.get("source_max"))
-                    + " DAILY_ROWS=" + str(store.get("daily_rows"))
-                    + " SKU_ROWS=" + str(store.get("sku_rows"))
-                    + " ARCHIVED_ROWS=" + str(store.get("archived_rows"))
-                    + " READBACK=" + str(store.get("readback"))
-                    + " SHA256=" + str(store.get("sha256")))
+              index=content.find("function exportDOM_continue")
+              if index>=0:
+                  snippet=content[index:index+380].replace(chr(10)," ")
+                  files.append((str(path),snippet))
+          if files:
+              print("OZON_CONTINUATION_SOURCE_FILE="+files[0][0])
+              print("OZON_CONTINUATION_SOURCE_SNIPPET="+files[0][1])
+          else:
+              print("OZON_CONTINUATION_SOURCE=not_found_as_global_wrapper; authenticated endpoint will check the installed library entry")
           PY
 
-
       - name: Push and redeploy stable adapter
-        if: github.event_name != 'push' || !contains(fromJSON('["Run Ozon export continuation via GitHub","Diagnose Ozon export status via GitHub"]'), github.event.head_commit.message)
+        if: github.event_name != 'push' || github.event.head_commit.message == 'Run Ozon export continuation via GitHub' || !contains(fromJSON('["Run Ozon export continuation via GitHub","Diagnose Ozon export status via GitHub"]'), github.event.head_commit.message)
         shell: bash
         run: |
           set -euo pipefail
           cd /tmp/sellmonitor-gh-worker
           clasp push -f
           clasp redeploy "$WEBAPP_DEPLOYMENT_ID" -d "Sellmonitor GitHub Central Worker Web"
+
+      - name: Invoke one authorized Ozon continuation through GitHub
+        if: github.event_name == 'push' && github.event.head_commit.message == 'Run Ozon export continuation via GitHub'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, urllib.request
+          url="https://script.google.com/macros/s/"+os.environ["WEBAPP_DEPLOYMENT_ID"]+"/exec"
+          payload=json.dumps({"token":os.environ["WEBHOOK_SECRET"],"action":"resume_ozon_export"}).encode()
+          req=urllib.request.Request(url,data=payload,headers={"Content-Type":"application/json"},method="POST")
+          with urllib.request.urlopen(req,timeout=420) as response:
+              result=json.loads(response.read().decode("utf-8"))
+          body=result.get("result") or {}
+          print("OZON_CONTINUATION_ACTION_OK="+str(result.get("ok") is True))
+          print("OZON_CONTINUATION_CALLED="+str(body.get("called")))
+          print("OZON_CONTINUATION_RETURN_TYPE="+str(body.get("return_type")))
+          for label,key in (("BEFORE","diagnostic_before"),("AFTER","diagnostic_after")):
+              diagnostic=body.get(key) or {}
+              print("OZON_"+label+"_JOB="+str(diagnostic.get("job") or ""))
+              print("OZON_"+label+"_IN_PROGRESS="+str(diagnostic.get("in_progress") or ""))
+              print("OZON_"+label+"_LAST_ATTEMPT="+str(diagnostic.get("last_attempt_at") or ""))
+              print("OZON_"+label+"_CONTINUATION_PENDING="+str(diagnostic.get("continuation_pending")))
+              print("OZON_"+label+"_LAST_ERROR="+str(diagnostic.get("last_error") or "").replace("\\n"," ")[:400])
+          if result.get("ok") is not True or body.get("called") is not True:
+              print("OZON_CONTINUATION_ERROR="+str(result.get("error") or result.get("message") or "action_failed")[:300])
+              raise SystemExit("OZON_CONTINUATION_ACTION_FAILED")
+          PY
 
       - name: Verify protected bridge auth
         if: github.event_name != 'push' || !contains(fromJSON('["Run Ozon export continuation via GitHub","Diagnose Ozon export status via GitHub"]'), github.event.head_commit.message)
@@ -728,6 +663,8 @@ jobs:
           cd "$V"
           clasp pull
           grep -Rqs "SELLMONITOR_GITHUB_MASTER_HOOK_V1" .
+          grep -Rqs "SELLMONITOR_OZON_CONTINUATION_GITHUB_ACTION_V1" .
+          grep -Rqs "SELLMONITOR_OZON_EXPORT_DIAGNOSTIC_RESPONSE_V1" .
           grep -Rqs "function sellmonitorGithubEnsureTrigger_()" .
           grep -RqsF "$EXPECTED_WORKER_VERSION" .
           grep -Rqs "SELLMONITOR_WEBHOOK_HASH_NOT_COMPILED" .
