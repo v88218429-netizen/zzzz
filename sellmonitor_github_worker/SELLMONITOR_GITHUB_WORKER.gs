@@ -1,10 +1,10 @@
 /**
- * Sellmonitor GitHub Central Worker v1.3.36
+ * Sellmonitor GitHub Central Worker v1.3.37
  * GitHub is source-of-truth/scheduler. This Apps Script project is only
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.36',
+  VERSION: 'github-worker-1.3.37',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -6117,7 +6117,7 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
              String(orderRow[6]||'')!==String(expectedState[2]||''))
             throw new Error('FBS_PATCH_READBACK_FAILED');
           for(var t=0;t<2;t++){
-            var expectedSerial=asSheetValue(expectedTimes[t]),actualSerial=Number(timeRow[t]);
+            var expectedSerial=asSheetValue(expectedTimes[t]),actualSerial=Number(asSheetValue(timeRow[t]));
             if(!isFinite(actualSerial)||Math.abs(actualSerial-Number(expectedSerial))>0.00002)
               throw new Error('FBS_PATCH_TIME_READBACK_FAILED');
           }
