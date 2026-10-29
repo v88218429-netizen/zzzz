@@ -66,7 +66,7 @@ jobs:
               access=auth['access_token']
               print('::add-mask::'+access)
               with open(os.environ['GITHUB_ENV'],'a',encoding='utf-8') as env:
-                  env.write('SHEETS_ACCESS_TOKEN='+access+'\\n')
+                  env.write('SHEETS_ACCESS_TOKEN='+access+chr(10))
               scopes=auth.get('scope','')
               print('DIRECT_SHEETS_TOKEN_REFRESH=ok')
               print('DIRECT_SHEETS_SCOPE_PRESENT=' + str('https://www.googleapis.com/auth/spreadsheets' in scopes))
