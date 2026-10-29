@@ -5954,14 +5954,8 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
     if(!orderSheetNative)throw new Error('FBS_ORDER_SHEET_NOT_FOUND');
     var last=orderSheetNative.getLastRow();
     if(last<1||last>100000)throw new Error('FBS_ROW_COUNT_UNEXPECTED');
-    var initialUrl=apiBase+'/values:batchGet?ranges='+encodeURIComponent(orderSheet+'!A1:G1')+
-      '&valueRenderOption=UNFORMATTED_VALUE';
-    var initialResponse=fetchSheetApi(initialUrl),initialCode=initialResponse.getResponseCode();
-    mark('SHEET_READ_DONE_'+initialCode);
-    if(initialCode<200||initialCode>=300)throw new Error('FBS_SHEET_READ_HTTP_'+initialCode+':'+sheetApiFailure(initialResponse));
-    var initialRanges=JSON.parse(initialResponse.getContentText()).valueRanges||[];
-    if(initialRanges.length!==1)throw new Error('FBS_SHEET_READBACK_COUNT_MISMATCH');
-    var head=((initialRanges[0]||{}).values||[[]])[0]||[];
+    var head=orderSheetNative.getRange(1,1,1,7).getDisplayValues()[0]||[];
+    mark('SHEET_READ_DONE_NATIVE');
     if(String(head[0]||'')!=='ID заказа'||String(head[4]||'')!=='Статус продавца'||String(head[5]||'')!=='Статус WB')
       throw new Error('FBS_COLUMN_SCHEMA_MISMATCH');
     var ids=last>1?orderSheetNative.getRange(2,1,last-1,1).getDisplayValues().map(function(v){return [String((v||[])[0]||'')];}):[];
@@ -6071,11 +6065,8 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
       if(insertCode<200||insertCode>=300)throw new Error('FBS_INSERT_HTTP_'+insertCode);
       var insertResult=JSON.parse(insertResponse.getContentText()),updatedRange=insertResult.updates&&insertResult.updates.updatedRange;
       if(!updatedRange)throw new Error('FBS_INSERT_RANGE_MISSING');
-      var verifyRange=orderSheet+'!A'+(last+1)+':A'+(last+insert.length);
-      var verifyInsert=fetchSheetApi(apiBase+'/values/'+encodeURIComponent(verifyRange)+'?valueRenderOption=UNFORMATTED_VALUE');
-      var verifyCode=verifyInsert.getResponseCode();
-      if(verifyCode<200||verifyCode>=300)throw new Error('FBS_INSERT_VERIFY_HTTP_'+verifyCode);
-      var insertedIds=(JSON.parse(verifyInsert.getContentText()).values||[]).map(function(v){return String((v||[])[0]||'');});
+      var insertedIds=orderSheetNative.getRange(last+1,1,insert.length,1).getDisplayValues()
+        .map(function(v){return String((v||[])[0]||'');});
       if(insertedIds.length!==insert.length)throw new Error('FBS_INSERT_READBACK_COUNT_MISMATCH');
       for(var ii=0;ii<insert.length;ii++)if(insertedIds[ii]!==String(insert[ii][0]))throw new Error('FBS_INSERT_READBACK_FAILED');
     }
