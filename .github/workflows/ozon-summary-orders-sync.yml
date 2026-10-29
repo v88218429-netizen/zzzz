@@ -71,6 +71,7 @@ jobs:
                       "reason": result.get("reason") if isinstance(result, dict) else None,
                       "source_status": result.get("source_status") if isinstance(result, dict) else None,
                       "source_last_success": result.get("source_updated") if isinstance(result, dict) else None,
+              "export_diagnostic": result.get("export_diagnostic") if isinstance(result, dict) else None,
                       "stores": [
                           {"store": x.get("store"), "error": x.get("error"), "ok": x.get("ok")}
                           for x in (result.get("stores") or [])
