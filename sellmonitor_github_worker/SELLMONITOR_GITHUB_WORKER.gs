@@ -5958,9 +5958,22 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
     mark('SHEET_READ_DONE_NATIVE');
     if(String(head[0]||'')!=='ID заказа'||String(head[4]||'')!=='Статус продавца'||String(head[5]||'')!=='Статус WB')
       throw new Error('FBS_COLUMN_SCHEMA_MISMATCH');
-    var ids=last>1?orderSheetNative.getRange(2,1,last-1,1).getDisplayValues().map(function(v){return [String((v||[])[0]||'')];}):[];
-    var byId={};
-    ids.forEach(function(v,i){if(v[0]&&!Object.prototype.hasOwnProperty.call(byId,v[0]))byId[v[0]]=i+2;});
+    var byId={},idByRow={};
+    if(last>1&&parsed.length){
+      // Search only this batch's IDs instead of copying the full ID column on every call.
+      mark('ID_SEARCH_START');
+      var searchPattern='^(?:'+parsed.map(function(r){return r.id;}).join('|')+')$';
+      var foundCells=orderSheetNative.getRange(2,1,last-1,1).createTextFinder(searchPattern)
+        .useRegularExpression(true).matchEntireCell(true).matchCase(true).findAll();
+      foundCells.forEach(function(cell){
+        var value=String(cell.getDisplayValue()||''),row=cell.getRow();
+        if(value&&!Object.prototype.hasOwnProperty.call(byId,value)){
+          byId[value]=row;idByRow[row]=value;
+        }
+      });
+      mark('ID_SEARCH_DONE_'+foundCells.length);
+      console.log('FBS_STAGE_ID_SEARCH ms='+(Date.now()-fbsStarted)+' found='+foundCells.length);
+    }
     var readRows=[];
     parsed.forEach(function(r){var row=byId[r.id];if(row)readRows.push(row);});
     var stateByRow={},syncTimesByRow={};
@@ -6038,10 +6051,10 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
         var orderValues=orderSheetNative.getRange(startRow,1,count,7).getValues();
         var timeValues=orderSheetNative.getRange(startRow,22,count,2).getValues();
         for(var rowNumber=startRow;rowNumber<=endRow;rowNumber++){
-          var offset=rowNumber-2,rowOffset=rowNumber-startRow;
+          var rowOffset=rowNumber-startRow;
           var orderRow=orderValues[rowOffset]||[],timeRow=timeValues[rowOffset]||[];
           var expectedState=stateByRow[rowNumber]||[],expectedTimes=syncTimesByRow[rowNumber]||[];
-          if(String(orderRow[0]||'')!==String(ids[offset][0]||'')||
+          if(String(orderRow[0]||'')!==String(idByRow[rowNumber]||'')||
              String(orderRow[4]||'')!==String(expectedState[0]||'')||
              String(orderRow[5]||'')!==String(expectedState[1]||'')||
              String(orderRow[6]||'')!==String(expectedState[2]||''))
