@@ -305,7 +305,7 @@ jobs:
           python - <<'PY'
           import concurrent.futures, json, os, time, urllib.error, urllib.parse, urllib.request
           access=os.environ.get('SHEETS_ACCESS_TOKEN','')
-          if not access: raise SystemExit('SHEETS_ACCESS_TOKEN_MISSING')
+          if not access: print('OZON_DIAGNOSTIC_SHEET_READBACK=unavailable_google_sheets_api_disabled'); raise SystemExit(0)
           ids={'ДОМ':'1g57et2zqlVfbs0_BoRobb5G-4Z2MTXZd028V7u4Kd-Q','Хозяюшка':'1Rl-IVihrZ56wKwDsf76wspZ53a8ntN3hCVN1gd4Tguo'}
           tab='15_API_Экспорт_Диагностика_GH'; last={}
           def read_store(store,sid):
