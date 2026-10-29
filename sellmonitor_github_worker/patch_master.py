@@ -202,7 +202,7 @@ if worker.exists():
     ozon_diag_marker = "SELLMONITOR_OZON_EXPORT_DIAGNOSTIC_RESPONSE_V1"
     ozon_diag_anchor = "source_status:sourceStatus,source_last_success:sourceLastSuccess||null,"
     if ozon_diag_marker not in worker_text and ozon_diag_anchor in worker_text:
-        replacement = ozon_diag_anchor + "\\n      /* " + ozon_diag_marker + " */\\n      export_diagnostic: (typeof sellmonitorGithubReadOzonExportDiagnostic === 'function' ? sellmonitorGithubReadOzonExportDiagnostic() : null),"
+        replacement = ozon_diag_anchor + "\n      /* " + ozon_diag_marker + " */\n      export_diagnostic: (typeof sellmonitorGithubReadOzonExportDiagnostic === 'function' ? sellmonitorGithubReadOzonExportDiagnostic() : null),"
         worker_text = worker_text.replace(ozon_diag_anchor, replacement, 1)
         print("OZON_EXPORT_DIAGNOSTIC_RESPONSE=patched")
     elif ozon_diag_marker not in worker_text and "function sellmonitorGithubPublishOzonSummaryOrders_" in worker_text:
