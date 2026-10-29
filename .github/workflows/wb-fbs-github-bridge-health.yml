@@ -34,28 +34,26 @@ jobs:
           set -euo pipefail
           python3 - <<'PY'
           import datetime as dt
-          import json, os, time, urllib.request
+          import json, os, urllib.request
           if not os.environ.get('BRIDGE_KEY'):
               raise SystemExit('Missing authorized GitHub bridge secret')
           url=os.environ['BRIDGE_URL']
           payload=json.dumps({'token':os.environ['BRIDGE_KEY'],'action':'fbs_targets_health'}).encode()
           last_error='NO_RESPONSE'
           result=None
-          for attempt in range(1,7):
-              try:
-                  req=urllib.request.Request(url,data=payload,headers={'Content-Type':'application/json'},method='POST')
-                  with urllib.request.urlopen(req,timeout=60) as response:
-                      data=json.loads(response.read().decode('utf-8'))
-                  if data.get('ok') is True and data.get('action')=='fbs_targets_health':
-                      result=data.get('result') or {}
-                      stages=result.get('fbs_ingest_stages') or {}
-                      compact={k:{f:v.get(f) for f in ('client','stage','elapsedMs','at')} for k,v in stages.items() if isinstance(v,dict)}
-                      print('FBS_INGEST_STAGES='+json.dumps(compact,ensure_ascii=False,sort_keys=True),flush=True)
-                      break
+          try:
+              req=urllib.request.Request(url,data=payload,headers={'Content-Type':'application/json'},method='POST')
+              with urllib.request.urlopen(req,timeout=300) as response:
+                  data=json.loads(response.read().decode('utf-8'))
+              if data.get('ok') is True and data.get('action')=='fbs_targets_health':
+                  result=data.get('result') or {}
+                  stages=result.get('fbs_ingest_stages') or {}
+                  compact={k:{f:v.get(f) for f in ('client','stage','elapsedMs','at')} for k,v in stages.items() if isinstance(v,dict)}
+                  print('FBS_INGEST_STAGES='+json.dumps(compact,ensure_ascii=False,sort_keys=True),flush=True)
+              else:
                   last_error='NOT_READY_OR_NOT_DEPLOYED'
-              except Exception as exc:
-                  last_error=type(exc).__name__
-              if attempt<6: time.sleep(10)
+          except Exception as exc:
+              last_error=type(exc).__name__
           if result is None:
               raise SystemExit('Google adapter unavailable: '+last_error)
           found={row['client']:row for row in result.get('results') or []}
