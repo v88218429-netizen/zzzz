@@ -5971,16 +5971,13 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
     parsed.forEach(function(r){var row=byId[r.id];if(row)readRows.push(row);});
     var stateByRow={},syncTimesByRow={};
     if(readRows.length){
-      var readFilters=readRows.map(function(row){return {a1Range:orderSheet+'!E'+row+':G'+row};});
-      mark('STATE_READ_START'); var readResponse=fetchSheetApi(apiBase+'/values:batchGetByDataFilter',{
-        method:'post',contentType:'application/json',
-        payload:JSON.stringify({dataFilters:readFilters,valueRenderOption:'UNFORMATTED_VALUE'})
+      // Read only the selected status rows through the already-open spreadsheet.
+      // REST batchGetByDataFilter times out intermittently even for five ranges.
+      mark('STATE_READ_START_NATIVE');
+      readRows.forEach(function(row){
+        stateByRow[row]=orderSheetNative.getRange(row,5,1,3).getDisplayValues()[0]||[];
       });
-      var readCode=readResponse.getResponseCode(); mark('STATE_READ_DONE_'+readCode);
-      if(readCode<200||readCode>=300)throw new Error('FBS_STATE_BATCH_READ_HTTP_'+readCode+':'+sheetApiFailure(readResponse));
-      var readRanges=JSON.parse(readResponse.getContentText()).valueRanges||[];
-      if(readRanges.length!==readRows.length)throw new Error('FBS_STATE_READBACK_COUNT_MISMATCH');
-      readRows.forEach(function(row,index){stateByRow[row]=((readRanges[index].valueRange||{}).values||[[]])[0]||[];});
+      mark('STATE_READ_DONE_NATIVE');
     }
     var n=new Date(),insert=[],patch=[],events=[],already=0,updated=0,confirmed=0;
     parsed.forEach(function(r){
