@@ -4,7 +4,7 @@
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.39',
+  VERSION: 'github-worker-1.3.40',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -6154,30 +6154,25 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
     console.log('FBS_STAGE_PATCH ms='+(Date.now()-fbsStarted)+' changed='+updated+' events='+events.length);
     if(insert.length){
       mark('INSERT_START');
-      var insertResponse=fetchSheetApi(apiBase+'/values/'+encodeURIComponent(orderSheet+'!A:AS')+':append?valueInputOption=RAW&insertDataOption=INSERT_ROWS',{
+      var insertStart=last+1,insertEnd=last+insert.length;
+      var insertRange=orderSheet+'!A'+insertStart+':AS'+insertEnd;
+      var insertResponse=fetchSheetApi(apiBase+'/values:batchUpdate',{
         method:'post',contentType:'application/json',
-        payload:JSON.stringify({majorDimension:'ROWS',values:sheetRows(insert)})
+        payload:JSON.stringify({valueInputOption:'RAW',data:[{
+          range:insertRange,majorDimension:'ROWS',values:sheetRows(insert)
+        }]})
       });
       var insertCode=insertResponse.getResponseCode(); mark('INSERT_RESPONSE_'+insertCode);
       if(insertCode<200||insertCode>=300)throw new Error('FBS_INSERT_HTTP_'+insertCode);
-      var insertResult=JSON.parse(insertResponse.getContentText()),updatedRange=insertResult.updates&&insertResult.updates.updatedRange;
-      if(!updatedRange)throw new Error('FBS_INSERT_RANGE_MISSING');
-      // The Sheets append endpoint returns its actual destination. Do not assume
-      // SpreadsheetApp.getLastRow()+1: another writer or a non-table value can move it.
-      var appendMatch=String(updatedRange).match(/!A(\d+):AS(\d+)$/);
-      if(!appendMatch)throw new Error('FBS_INSERT_RANGE_UNPARSEABLE');
-      var appendStart=Number(appendMatch[1]),appendEnd=Number(appendMatch[2]);
-      if(!isFinite(appendStart)||!isFinite(appendEnd)||appendEnd-appendStart+1!==insert.length)
-        throw new Error('FBS_INSERT_RANGE_COUNT_MISMATCH');
-      var insertedIds=orderSheetNative.getRange(appendStart,1,insert.length,1).getDisplayValues()
+      var insertIds=orderSheetNative.getRange(insertStart,1,insert.length,1).getDisplayValues()
         .map(function(v){return String((v||[])[0]||'');});
-      if(insertedIds.length!==insert.length)throw new Error('FBS_INSERT_READBACK_COUNT_MISMATCH');
+      if(insertIds.length!==insert.length)throw new Error('FBS_INSERT_READBACK_COUNT_MISMATCH');
       for(var ii=0;ii<insert.length;ii++){
-        if(insertedIds[ii]!==String(insert[ii][0]))throw new Error('FBS_INSERT_READBACK_FAILED');
-        byId[insertedIds[ii]]=appendStart+ii;
-        idByRow[appendStart+ii]=insertedIds[ii];
+        if(insertIds[ii]!==String(insert[ii][0]))throw new Error('FBS_INSERT_READBACK_FAILED');
+        byId[insertIds[ii]]=insertStart+ii;
+        idByRow[insertStart+ii]=insertIds[ii];
       }
-      indexState.lastRow=Math.max(last,appendEnd);
+      indexState.lastRow=insertEnd;
       sellmonitorGithubFbsSaveIdIndex_(indexState.cache,indexState.prefix,indexState.client,indexState.lastRow,byId);
     }
     if(events.length){
