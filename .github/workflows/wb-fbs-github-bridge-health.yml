@@ -2,12 +2,16 @@ name: WB FBS GitHub bridge health
 
 on:
   workflow_dispatch:
+  push:
+    branches: [mainggg]
+    paths:
+      - ".github/workflows/wb-fbs-github-bridge-health.yml"
 
 permissions:
   contents: read
 
 concurrency:
-  group: wb-fbs-google-adapter
+  group: wb-fbs-health-read-only
   cancel-in-progress: false
 
 jobs:
@@ -16,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      BRIDGE_URL: https://script.google.com/macros/s/AKfycby28C0PxiijesmestUl54Nn94HCEYgk7wiGfef0Faufs29mlSwueJJpp84blSiFHFSC/exec
+      BRIDGE_URL: https://script.google.com/macros/s/AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw/exec
       BRIDGE_KEY: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
       WB_API_TOKEN_AP: ${{ secrets.WB_API_TOKEN_AP }}
       WB_API_TOKEN_AA: ${{ secrets.WB_API_TOKEN_AA }}
@@ -42,6 +46,9 @@ jobs:
                       data=json.loads(response.read().decode('utf-8'))
                   if data.get('ok') is True and data.get('action')=='fbs_targets_health':
                       result=data.get('result') or {}
+                      stages=result.get('fbs_ingest_stages') or {}
+                      compact={k:{f:v.get(f) for f in ('client','stage','elapsedMs','at')} for k,v in stages.items() if isinstance(v,dict)}
+                      print('FBS_INGEST_STAGES='+json.dumps(compact,ensure_ascii=False,sort_keys=True),flush=True)
                       break
                   last_error='NOT_READY_OR_NOT_DEPLOYED'
               except Exception as exc:
