@@ -6108,27 +6108,47 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
         try { var writeError=JSON.parse(writeResponse.getContentText()||'{}').error||{}; writeDiagnostic=String(writeError.status||writeError.message||'UNKNOWN').slice(0,180); } catch(writeParseError) {}
         throw new Error('FBS_PATCH_BATCH_HTTP_'+writeCode+':'+writeDiagnostic);
       }
-      mark('STATE_VERIFY_START_NATIVE');
-      segments.forEach(function(seg){
-        var startRow=seg[0],endRow=seg[1],count=endRow-startRow+1;
-        var orderValues=orderSheetNative.getRange(startRow,1,count,7).getValues();
-        var timeValues=orderSheetNative.getRange(startRow,22,count,2).getValues();
-        for(var rowNumber=startRow;rowNumber<=endRow;rowNumber++){
-          var rowOffset=rowNumber-startRow;
-          var orderRow=orderValues[rowOffset]||[],timeRow=timeValues[rowOffset]||[];
-          var expectedState=stateByRow[rowNumber]||[],expectedTimes=syncTimesByRow[rowNumber]||[];
-          if(String(orderRow[0]||'')!==String(idByRow[rowNumber]||'')||
-             String(orderRow[4]||'')!==String(expectedState[0]||'')||
-             String(orderRow[5]||'')!==String(expectedState[1]||'')||
-             String(orderRow[6]||'')!==String(expectedState[2]||''))
-            throw new Error('FBS_PATCH_READBACK_FAILED');
-          for(var t=0;t<2;t++){
-            var expectedSerial=asSheetValue(expectedTimes[t]),actualSerial=Number(timeRow[t]);
-            if(!isFinite(actualSerial)||Math.abs(actualSerial-Number(expectedSerial))>0.00002)
-              throw new Error('FBS_PATCH_TIME_READBACK_FAILED');
+      mark('STATE_VERIFY_START_BATCH');
+      // Verify all sparse state and sync-time ranges with bounded Sheets API
+      // batchGet calls; per-segment SpreadsheetApp reads scale poorly on large books.
+      for(var vp=0;vp<segments.length;vp+=50){
+        var verifySegments=segments.slice(vp,vp+50),verifyRanges=[];
+        verifySegments.forEach(function(seg){
+          verifyRanges.push({segment:seg,kind:'state',range:orderSheet+'!A'+seg[0]+':G'+seg[1]});
+          verifyRanges.push({segment:seg,kind:'time',range:orderSheet+'!V'+seg[0]+':W'+seg[1]});
+        });
+        var verifyQuery=verifyRanges.map(function(item){return 'ranges='+encodeURIComponent(item.range);}).join('&');
+        var verifyResponse=fetchSheetApi(apiBase+'/values:batchGet?'+verifyQuery+'&valueRenderOption=UNFORMATTED_VALUE',{method:'get'});
+        var verifyCode=verifyResponse.getResponseCode();
+        if(verifyCode<200||verifyCode>=300)throw new Error('FBS_PATCH_VERIFY_BATCH_HTTP_'+verifyCode);
+        var verifyResult=JSON.parse(verifyResponse.getContentText()||'{}'),verifyValues=verifyResult.valueRanges||[];
+        if(verifyValues.length!==verifyRanges.length)throw new Error('FBS_PATCH_VERIFY_BATCH_COUNT_MISMATCH');
+        var verifyBySegment={};
+        verifyRanges.forEach(function(item,i){
+          var rows=((verifyValues[i]||{}).values||[]);
+          var key=String(item.segment[0])+':'+String(item.segment[1]);
+          if(!verifyBySegment[key])verifyBySegment[key]={};
+          verifyBySegment[key][item.kind]=rows;
+        });
+        verifySegments.forEach(function(seg){
+          var key=String(seg[0])+':'+String(seg[1]),paired=verifyBySegment[key]||{};
+          for(var rowNumber=seg[0];rowNumber<=seg[1];rowNumber++){
+            var rowOffset=rowNumber-seg[0],orderRow=(paired.state||[])[rowOffset]||[],timeRow=(paired.time||[])[rowOffset]||[];
+            var expectedState=stateByRow[rowNumber]||[],expectedTimes=syncTimesByRow[rowNumber]||[];
+            if(String(orderRow[0]||'')!==String(idByRow[rowNumber]||'')||
+               String(orderRow[4]||'')!==String(expectedState[0]||'')||
+               String(orderRow[5]||'')!==String(expectedState[1]||'')||
+               String(orderRow[6]||'')!==String(expectedState[2]||''))
+              throw new Error('FBS_PATCH_READBACK_FAILED');
+            for(var t=0;t<2;t++){
+              var expectedSerial=asSheetValue(expectedTimes[t]),actualSerial=Number(timeRow[t]);
+              if(!isFinite(actualSerial)||Math.abs(actualSerial-Number(expectedSerial))>0.00002)
+                throw new Error('FBS_PATCH_TIME_READBACK_FAILED');
+            }
           }
-        }
-      });
+        });
+      }
+      mark('STATE_VERIFY_DONE_BATCH');
     }
     console.log('FBS_STAGE_PATCH ms='+(Date.now()-fbsStarted)+' changed='+updated+' events='+events.length);
     if(insert.length){
