@@ -6141,7 +6141,7 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
       if(!updatedRange)throw new Error('FBS_INSERT_RANGE_MISSING');
       // The Sheets append endpoint returns its actual destination. Do not assume
       // SpreadsheetApp.getLastRow()+1: another writer or a non-table value can move it.
-      var appendMatch=String(updatedRange).match(/!A(\\d+):AS(\\d+)$/);
+      var appendMatch=String(updatedRange).match(/!A(\d+):AS(\d+)$/);
       if(!appendMatch)throw new Error('FBS_INSERT_RANGE_UNPARSEABLE');
       var appendStart=Number(appendMatch[1]),appendEnd=Number(appendMatch[2]);
       if(!isFinite(appendStart)||!isFinite(appendEnd)||appendEnd-appendStart+1!==insert.length)
