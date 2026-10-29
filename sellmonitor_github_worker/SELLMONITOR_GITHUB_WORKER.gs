@@ -4,7 +4,7 @@
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.43',
+  VERSION: 'github-worker-1.3.44',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -6167,6 +6167,13 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
     if(insert.length){
       mark('INSERT_START');
       var insertStart=last+1,insertEnd=last+insert.length;
+      var currentGridRows=orderSheetNative.getMaxRows();
+      if(insertEnd>currentGridRows){
+        mark('GRID_EXTEND_START_'+currentGridRows+'_TO_'+insertEnd);
+        orderSheetNative.insertRowsAfter(currentGridRows,insertEnd-currentGridRows);
+        SpreadsheetApp.flush();
+        mark('GRID_EXTEND_DONE_'+orderSheetNative.getMaxRows());
+      }
       var insertRange=orderSheet+'!A'+insertStart+':AS'+insertEnd;
       var insertResponse=fetchSheetApi(apiBase+'/values:batchUpdate',{
         method:'post',contentType:'application/json',
@@ -6175,7 +6182,7 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
         }]})
       });
       var insertCode=insertResponse.getResponseCode(); mark('INSERT_RESPONSE_'+insertCode);
-      if(insertCode<200||insertCode>=300)throw new Error('FBS_INSERT_HTTP_'+insertCode);
+      if(insertCode<200||insertCode>=300)throw new Error('FBS_INSERT_HTTP_'+insertCode+':'+sheetApiFailure(insertResponse));
       var insertIds=orderSheetNative.getRange(insertStart,1,insert.length,1).getDisplayValues()
         .map(function(v){return String((v||[])[0]||'');});
       if(insertIds.length!==insert.length)throw new Error('FBS_INSERT_READBACK_COUNT_MISMATCH');
