@@ -71,10 +71,14 @@ jobs:
         - slice: 13
           start_date: "2026-10-22"
           end_date: "2026-10-27"
+        - slice: 14
+          start_date: "2026-10-28"
+          end_date: "2026-10-29"
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
       FBS_CLIENT: SANYCH
+      FBS_BATCH_SIZE: "25"
       WB_API_TOKEN_AP: ${{ secrets.WB_API_TOKEN_AP }}
       GOOGLE_BRIDGE_KEY: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
       GOOGLE_BRIDGE_URL: https://script.google.com/macros/s/AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw/exec
