@@ -182,12 +182,18 @@ jobs:
           set -euo pipefail
           cd /tmp/sellmonitor-gh-worker
           python - <<'PY'
-          import json, os, subprocess, tempfile, time, urllib.error, urllib.request
+          import json, os, re, subprocess, tempfile, time, urllib.error, urllib.request
 
           url = "https://script.google.com/macros/s/" + os.environ["WEBAPP_DEPLOYMENT_ID"] + "/exec"
           token = os.environ["WEBHOOK_SECRET"]
           headers = {"Content-Type":"application/json"}
           expected = {"ДОМ", "Хозяюшка"}
+
+          def safe_message(value):
+              value = str(value or "")
+              value = re.sub(r"(?i)(token|secret|authorization)\s*[:=]\s*\S+", r"\1=[REDACTED]", value)
+              value = re.sub(r"[A-Za-z0-9_-]{32,}", "[ID_REDACTED]", value)
+              return value.replace("\n"," ")[:240]
 
           def publish():
               payload = json.dumps({"token":token,"action":"publish_ozon_summary_orders"}).encode("utf-8")
@@ -196,30 +202,50 @@ jobs:
                   return json.loads(response.read().decode("utf-8"))
 
           for attempt in range(1,5):
-              with tempfile.TemporaryFile() as out:
-                  proc = subprocess.run(
-                      ["timeout","120s","clasp","run","exportDOM_continue"],
-                      stdout=out,stderr=subprocess.STDOUT,check=False
-                  )
-              if proc.returncode:
-                  print("OZON_CONTINUATION_ATTEMPT=" + str(attempt) + " EXIT=" + str(proc.returncode))
-                  raise SystemExit("OZON_CONTINUATION_EXECUTION_FAILED")
-              print("OZON_CONTINUATION_ATTEMPT=" + str(attempt) + " EXECUTION=completed")
+              proc = subprocess.run(
+                  ["clasp","run","exportDOM_continue","--json"],
+                  stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,check=False
+              )
               try:
-                  result = publish()
+                  execution = json.loads(proc.stdout)
+              except Exception:
+                  print("OZON_CONTINUATION_JSON=unparseable")
+                  print("OZON_CONTINUATION_EXIT=" + str(proc.returncode))
+                  raise SystemExit("OZON_CONTINUATION_RESPONSE_INVALID")
+              error = execution.get("error") or {}
+              if error:
+                  print("OZON_CONTINUATION_ERROR_CODE=" + str(error.get("code") or "unknown"))
+                  print("OZON_CONTINUATION_ERROR_MESSAGE=" + safe_message(error.get("message")))
+                  details = error.get("details") or []
+                  if details and isinstance(details[0],dict):
+                      print("OZON_CONTINUATION_SCRIPT_ERROR=" + safe_message(details[0].get("errorMessage")))
+                  raise SystemExit("OZON_CONTINUATION_FUNCTION_FAILED")
+              if proc.returncode:
+                  print("OZON_CONTINUATION_EXIT=" + str(proc.returncode))
+                  raise SystemExit("OZON_CONTINUATION_COMMAND_FAILED")
+              response = execution.get("response") or {}
+              result = response.get("result")
+              result_type = "null" if result is None else type(result).__name__
+              print("OZON_CONTINUATION_ATTEMPT=" + str(attempt) + " RESULT_TYPE=" + result_type)
+              if isinstance(result,dict):
+                  for key in ("ok","done","continued","hasMore","state","status","reason"):
+                      if key in result and isinstance(result[key],(str,int,float,bool)):
+                          print("OZON_CONTINUATION_" + key.upper() + "=" + safe_message(result[key]))
+              try:
+                  published = publish()
               except urllib.error.HTTPError as exc:
                   print("OZON_PUBLICATION_HTTP_STATUS=" + str(exc.code))
                   raise SystemExit("OZON_PUBLICATION_CHECK_FAILED")
               except urllib.error.URLError as exc:
                   print("OZON_PUBLICATION_NETWORK_ERROR=" + type(exc.reason).__name__)
                   raise SystemExit("OZON_PUBLICATION_CHECK_FAILED")
-              if result.get("ok") is True:
-                  stores = result.get("stores") or []
+              if published.get("ok") is True:
+                  stores = published.get("stores") or []
                   actual = {x.get("store") for x in stores if x.get("ok") is True and x.get("readback") is True}
                   if actual != expected:
                       raise SystemExit("OZON_SUMMARY_READBACK_ACCEPTANCE_FAILED")
-                  print("OZON_SOURCE_UPDATED=" + str(result.get("source_updated")))
-                  print("OZON_SOURCE_ROWS=" + str(result.get("source_rows")))
+                  print("OZON_SOURCE_UPDATED=" + str(published.get("source_updated")))
+                  print("OZON_SOURCE_ROWS=" + str(published.get("source_rows")))
                   for store in stores:
                       print("OZON_STORE=" + str(store.get("store"))
                             + " SOURCE_ROWS=" + str(store.get("source_rows"))
@@ -230,8 +256,8 @@ jobs:
                             + " READBACK=" + str(store.get("readback"))
                             + " SHA256=" + str(store.get("sha256")))
                   raise SystemExit(0)
-              reason = str(result.get("reason") or "")
-              state = str(result.get("source_status") or "").lower()
+              reason = str(published.get("reason") or "")
+              state = str(published.get("source_status") or "").lower()
               if "OZON_SOURCE_EXPORT_NOT_VERIFIED" not in reason or not any(
                   value in state for value in ("выгрузка продолжается","нет успешного запуска")
               ):
