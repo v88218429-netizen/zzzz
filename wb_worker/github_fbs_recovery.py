@@ -29,7 +29,7 @@ CLIENT_HINT = os.environ.get("FBS_CLIENT", "").strip().upper()
 BATCH_SIZE = int(os.environ.get("FBS_BATCH_SIZE", "5"))
 if not 1 <= BATCH_SIZE <= 1000:
     raise RuntimeError("FBS_BATCH_SIZE_INVALID")
-INGEST_ATTEMPTS = 8  # Allow the seven-minute per-client lease to expire before abandoning an idempotent batch
+INGEST_ATTEMPTS = 10  # Retry window exceeds the seven-minute per-client lease before abandoning an idempotent batch
 BRIDGE_INGEST_TIMEOUT = 330  # Return before Apps Script six-minute ceiling; retry only after bounded delay
 TIMEOUT = 120
 
