@@ -51,6 +51,35 @@ if worker.exists():
         print("INNER_MCP_TOOL_SCHEMA=patched")
     elif mcp_catalog_marker not in worker_text and "function sellmonitorGithubInnerMcpCallWithToken_" in worker_text:
         raise SystemExit("Inner MCP tool schema anchor changed")
+    # Refresh the cached Sellmonitor catalog schema in place when the live MCP
+    # renamed legacy tools. Keep diagnostics bounded and never log API rows.
+    schema_patch_marker = "INNER_MCP_TOOL_SCHEMA_DIAGNOSTIC_V4"
+    schema_patch_anchor = "cachedTools = 'TOTAL=' + allTools.length + ';NAMES=' + names.join(',').slice(0,460) + ';RAW_ROWS_SCHEMA=' + JSON.stringify(rawTool.inputSchema || {}).slice(0,310);"
+    if schema_patch_marker not in worker_text and schema_patch_anchor in worker_text:
+        v4_schema_code = """/* INNER_MCP_TOOL_SCHEMA_DIAGNOSTIC_V4 */
+          var compactSchema = function(name) {
+            var item = allTools.filter(function(t){return String(t && t.name || '') === name;})[0] || {};
+            var schema = item.inputSchema || {};
+            var props = schema.properties || {};
+            var compact = {required:schema.required || [],properties:{}};
+            Object.keys(props).forEach(function(key){
+              var p = props[key] || {};
+              compact.properties[key] = {type:p.type || '',description:String(p.description || '').slice(0,55)};
+              if (Array.isArray(p.enum)) compact.properties[key].enum = p.enum.slice(0,8);
+            });
+            return JSON.stringify(compact);
+          };
+          cachedTools = 'TOTAL=' + allTools.length + ';NAMES=' + names.filter(function(n){return /analytics.*(product|finance|order|sales|expense|wb)/i.test(n);}).join(',').slice(0,210) +
+            ';PRODUCT_LIST_SCHEMA=' + compactSchema('analytics_get_product_list').slice(0,350) +
+            ';WB_EXPENSES_SCHEMA=' + compactSchema('analytics_get_marketplace_expenses').slice(0,350);"""
+        if schema_patch_anchor not in worker_text:
+            raise SystemExit("Sellmonitor catalog cache anchor changed")
+        worker_text = worker_text.replace("SMC_INNER_MCP_TOOL_SCHEMA_V3", "SMC_INNER_MCP_TOOL_SCHEMA_V4")
+        worker_text = worker_text.replace(schema_patch_anchor, v4_schema_code, 1)
+        print("INNER_MCP_TOOL_SCHEMA_DIAGNOSTIC_V4=patched")
+    elif schema_patch_marker not in worker_text and "function sellmonitorGithubInnerMcpCallWithToken_" in worker_text:
+        raise SystemExit("Sellmonitor catalog V4 patch anchor changed")
+
     # Preserve the upstream MCP error code and a scrubbed, bounded message in
     # the existing per-store log. The previous generic error hid whether the
     # tool was unavailable or the OAuth session needed refresh.
