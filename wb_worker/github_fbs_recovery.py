@@ -106,7 +106,11 @@ def requested_window() -> tuple[int, int] | None:
     except ValueError:
         raise RuntimeError("FBS_DATE_RANGE_INVALID") from None
     now = dt.datetime.now(dt.timezone.utc)
-    if end_dt < start_dt or (end_dt.date() - start_dt.date()).days + 1 > 90 or end_dt > now + dt.timedelta(minutes=5):
+    if end_dt.date() > now.date():
+        raise RuntimeError("FBS_DATE_RANGE_OUT_OF_BOUNDS")
+    if end_dt.date() == now.date():
+        end_dt = now
+    if end_dt < start_dt or (end_dt.date() - start_dt.date()).days + 1 > 90:
         raise RuntimeError("FBS_DATE_RANGE_OUT_OF_BOUNDS")
     return int(start_dt.timestamp()), int(end_dt.timestamp())
 
