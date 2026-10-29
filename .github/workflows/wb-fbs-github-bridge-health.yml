@@ -1,6 +1,8 @@
 name: WB FBS GitHub bridge health
 
 on:
+  schedule:
+    - cron: "*/30 * * * *"
   workflow_dispatch:
   push:
     branches: [mainggg]
