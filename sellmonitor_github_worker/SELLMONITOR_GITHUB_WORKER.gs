@@ -5388,7 +5388,7 @@ function sellmonitorGithubPublishOzonSummaryOrders_() {
       if(log&&log.getLastRow()>1){
         var count=Math.min(80,log.getLastRow()-1),start=log.getLastRow()-count+1,values=log.getRange(start,1,count,12).getValues();
         for(var li=values.length-1;li>=0;li--){
-          var row=values[li],publishedAt=auditDate_(row[0]),periodEnd=String(row[6]||'').trim();
+          var row=values[li],publishedAt=auditDate_(row[0]),periodEnd=sellmonitorGithubOzonDateKey_(row[6]);
           if(String(row[1]||'')!==cfg.name||String(row[2]||'')!=='Ozon Заказы'||!String(row[3]||'').trim()||
              !(Number(row[4])>0)||!/^(OK:|OK\\b)/.test(String(row[11]||''))||!String(row[10]||'').trim()||
              periodEnd<minFreshDay||!publishedAt)continue;
@@ -5445,7 +5445,7 @@ function sellmonitorGithubPublishOzonSummaryOrders_() {
     if(JSON.stringify(skuSheet.getRange(4,1,1,12).getDisplayValues()[0])!==JSON.stringify(skuHeader))throw new Error('OZON_TARGET_SKU_HEADER_MISMATCH:'+cfg.name);
     var dailyRows=agg.summary.slice(1), dailyStart=5;
     var oldDaily=sellmonitorGithubOzonRows_(daily,dailyStart,1,10), oldSku=sellmonitorGithubOzonRows_(skuSheet,5,1,12), oldHelper=sellmonitorGithubOzonRows_(daily,2,12,4);
-    var oldStamp=daily.getRange(2,1).getValue(), newStamp='Источник: Ozon Заказы; последний успешный экспорт '+sourceUpdated+'; дата — «Принят в обработку» (UTC+3); заказ = кабинет + номер заказа, отправление = кабинет + posting number.';
+    var oldStamp=daily.getRange(2,1).getValue(), newStamp='Источник: Ozon Заказы; последний успешный экспорт '+sourceUpdated+(sourceFallback?'; источник heartbeat красный, повторно используется только совпавший проверенный снимок':'')+'; дата — «Принят в обработку» (UTC+3); заказ = кабинет + номер заказа, отправление = кабинет + posting number.';
     var helper=[['Полные дни — данные графика','Заказы','Отправления','Штук']].concat(agg.fullDays);
     var sameDaily=JSON.stringify(sellmonitorGithubOzonNormalizeRows_(oldDaily))===JSON.stringify(sellmonitorGithubOzonNormalizeRows_(dailyRows)), sameSku=JSON.stringify(sellmonitorGithubOzonNormalizeRows_(oldSku,true))===JSON.stringify(sellmonitorGithubOzonNormalizeRows_(agg.products,true)), sameHelper=JSON.stringify(sellmonitorGithubOzonNormalizeRows_(oldHelper))===JSON.stringify(sellmonitorGithubOzonNormalizeRows_(helper.slice(1))), sameStamp=String(oldStamp||'')===newStamp;
     if(sourceFallback){
