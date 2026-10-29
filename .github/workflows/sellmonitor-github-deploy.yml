@@ -193,13 +193,22 @@ jobs:
                   current[str(p.relative_to(root))]=hashlib.sha256(p.read_bytes()).hexdigest()
           changed=sorted(p for p,h in baseline.items() if current.get(p)!=h)
           changed += sorted(p for p in current if p not in baseline)
-          if len(changed)!=1 or not changed[0].endswith(("Код.js","Code.js")):
+          marker="SELLMONITOR_OZON_EXPORT_DIAGNOSTIC_V1"
+          masters=[p for p in root.rglob("*") if p.is_file() and p.suffix in (".gs",".js") and marker in p.read_text(errors="ignore")]
+          if len(changed)>1 or (changed and not changed[0].endswith(("Код.js","Code.js"))):
               print("DIAGNOSTIC_PUSH_CHANGED_FILES=" + ",".join(changed))
               raise SystemExit("DIAGNOSTIC_PUSH_SCOPE_CHECK_FAILED")
-          print("DIAGNOSTIC_PUSH_CHANGED_FILES=" + changed[0])
+          if len(masters)!=1:
+              raise SystemExit("OZON_DIAGNOSTIC_SOURCE_MISSING")
+          pathlib.Path("/tmp/ozon-diagnostic-needs-push").write_text("1" if changed else "0")
+          print("DIAGNOSTIC_PUSH_CHANGED_FILES=" + (changed[0] if changed else "already_present"))
           PY
           cd "$root"
-          clasp push -f
+          if [ "$(cat /tmp/ozon-diagnostic-needs-push)" = "1" ]; then
+            clasp push -f
+          else
+            echo "OZON_DIAGNOSTIC_PUSH=already_present"
+          fi
           set +e
           clasp run sellmonitorGithubReadOzonExportDiagnostic --json >/tmp/ozon-export-diagnostic.json 2>/tmp/ozon-export-diagnostic.stderr
           status=$?
@@ -275,10 +284,10 @@ jobs:
                   current[str(p.relative_to(root))]=hashlib.sha256(p.read_bytes()).hexdigest()
           changed=sorted(p for p,h in baseline.items() if current.get(p)!=h)
           changed += sorted(p for p in current if p not in baseline)
-          if len(changed)!=1 or not changed[0].endswith(("Код.js","Code.js")):
+          if len(changed)>1 or (changed and not changed[0].endswith(("Код.js","Code.js"))):
               raise SystemExit("OZON_DIAGNOSTIC_READBACK_SCOPE_FAILED")
           print("OZON_DIAGNOSTIC_SOURCE_READBACK=verified")
-          print("OZON_DIAGNOSTIC_CHANGED_FILE=" + changed[0])
+          print("OZON_DIAGNOSTIC_CHANGED_FILE=" + (changed[0] if changed else "already_present"))
           PY
 
       - name: Audit Apps Script version capacity
