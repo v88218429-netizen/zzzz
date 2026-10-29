@@ -5872,6 +5872,57 @@ function sellmonitorGithubFbsIngestBatchV1_(body) {
   }
 }
 
+function sellmonitorGithubFbsSaveIdIndex_(cache, prefix, client, lastRow, index) {
+  var json=JSON.stringify(index),chunkSize=60000,parts=[];
+  for(var i=0;i<json.length;i+=chunkSize)parts.push(json.slice(i,i+chunkSize));
+  for(var p=0;p<parts.length;p++)cache.put(prefix+'part_'+p,parts[p],21600);
+  cache.put(prefix+'meta',JSON.stringify({client:client,lastRow:lastRow,parts:parts.length}),21600);
+}
+
+function sellmonitorGithubFbsLoadIdIndex_(sheet, client, lastRow, mark, forceRebuild) {
+  var cache=CacheService.getScriptCache(),prefix='SMC_FBS_ID_INDEX_V1_',index=null,indexLast=0;
+  if(!forceRebuild){
+    try{
+      var meta=JSON.parse(cache.get(prefix+'meta')||'null');
+      if(meta&&meta.client===client&&Number(meta.parts)>0&&Number(meta.parts)<20&&Number(meta.lastRow)<=lastRow){
+        var chunks=[];
+        for(var i=0;i<meta.parts;i++){
+          var part=cache.get(prefix+'part_'+i);
+          if(part===null){chunks=[];break;}
+          chunks.push(part);
+        }
+        if(chunks.length===meta.parts){index=JSON.parse(chunks.join(''));indexLast=Number(meta.lastRow);}
+      }
+    }catch(ignoreIndexCache){index=null;}
+  }
+  var rebuilt=false;
+  if(!index||indexLast>lastRow){
+    mark('ID_INDEX_BUILD_START');
+    index={};
+    if(lastRow>1){
+      var values=sheet.getRange(2,1,lastRow-1,1).getDisplayValues();
+      for(var r=0;r<values.length;r++){
+        var id=String((values[r]||[])[0]||'');
+        if(id&&!Object.prototype.hasOwnProperty.call(index,id))index[id]=r+2;
+      }
+    }
+    indexLast=lastRow;rebuilt=true;
+    mark('ID_INDEX_BUILD_DONE_'+Object.keys(index).length);
+  }else if(indexLast<lastRow){
+    mark('ID_INDEX_TAIL_READ_START');
+    var tail=sheet.getRange(indexLast+1,1,lastRow-indexLast,1).getDisplayValues();
+    for(var t=0;t<tail.length;t++){
+      var tailId=String((tail[t]||[])[0]||'');
+      if(tailId&&!Object.prototype.hasOwnProperty.call(index,tailId))index[tailId]=indexLast+1+t;
+    }
+    indexLast=lastRow;rebuilt=true;
+    mark('ID_INDEX_TAIL_READ_DONE');
+  }
+  if(rebuilt)sellmonitorGithubFbsSaveIdIndex_(cache,prefix,client,indexLast,index);
+  return {map:index,lastRow:indexLast,cache:cache,prefix:prefix,client:client};
+}
+
+
 function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
   mark = typeof mark === 'function' ? mark : function() {};
   var stores={
@@ -5958,34 +6009,32 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
     mark('SHEET_READ_DONE_NATIVE');
     if(String(head[0]||'')!=='ID заказа'||String(head[4]||'')!=='Статус продавца'||String(head[5]||'')!=='Статус WB')
       throw new Error('FBS_COLUMN_SCHEMA_MISMATCH');
-    var byId={},idByRow={};
-    if(last>1&&parsed.length){
-      // Search only this batch's IDs instead of copying the full ID column on every call.
-      mark('ID_SEARCH_START');
-      var searchPattern='^(?:'+parsed.map(function(r){return r.id;}).join('|')+')$';
-      var foundCells=orderSheetNative.getRange(2,1,last-1,1).createTextFinder(searchPattern)
-        .useRegularExpression(true).matchEntireCell(true).matchCase(true).findAll();
-      foundCells.forEach(function(cell){
-        var value=String(cell.getDisplayValue()||''),row=cell.getRow();
-        if(value&&!Object.prototype.hasOwnProperty.call(byId,value)){
-          byId[value]=row;idByRow[row]=value;
-        }
-      });
-      mark('ID_SEARCH_DONE_'+foundCells.length);
-      console.log('FBS_STAGE_ID_SEARCH ms='+(Date.now()-fbsStarted)+' found='+foundCells.length);
-    }
-    var readRows=[];
-    parsed.forEach(function(r){var row=byId[r.id];if(row)readRows.push(row);});
+    mark('ID_INDEX_LOOKUP_START');
+    var indexState=sellmonitorGithubFbsLoadIdIndex_(orderSheetNative,client,last,mark,false);
+    var byId=indexState.map,idByRow={};
+    Object.keys(byId).forEach(function(id){idByRow[byId[id]]=id;});
     var stateByRow={},syncTimesByRow={};
-    if(readRows.length){
-      // Read only the selected status rows through the already-open spreadsheet.
-      // REST batchGetByDataFilter times out intermittently even for five ranges.
+    function readExistingStates_(){
+      var rows=[];
+      parsed.forEach(function(r){var row=byId[r.id];if(row)rows.push({id:r.id,row:row});});
+      var stale=false;
       mark('STATE_READ_START_NATIVE');
-      readRows.forEach(function(row){
-        stateByRow[row]=orderSheetNative.getRange(row,5,1,3).getDisplayValues()[0]||[];
+      rows.forEach(function(item){
+        var values=orderSheetNative.getRange(item.row,1,1,7).getDisplayValues()[0]||[];
+        if(String(values[0]||'')!==item.id){stale=true;return;}
+        stateByRow[item.row]=values.slice(4,7);
       });
       mark('STATE_READ_DONE_NATIVE');
+      return stale;
     }
+    if(readExistingStates_()){
+      mark('ID_INDEX_STALE_REBUILD');
+      indexState=sellmonitorGithubFbsLoadIdIndex_(orderSheetNative,client,last,mark,true);
+      byId=indexState.map;idByRow={};stateByRow={};
+      Object.keys(byId).forEach(function(id){idByRow[byId[id]]=id;});
+      if(readExistingStates_())throw new Error('FBS_ID_INDEX_STALE_AFTER_REBUILD');
+    }
+    console.log('FBS_STAGE_ID_INDEX ms='+(Date.now()-fbsStarted)+' entries='+Object.keys(byId).length);
     var n=new Date(),insert=[],patch=[],events=[],already=0,updated=0,confirmed=0;
     parsed.forEach(function(r){
       var o=r.source,id=r.id,rowNumber=byId[id];
@@ -6012,7 +6061,7 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
       row[27]='НЕТ';row[31]='НЕТ';row[32]='GITHUB_WB_FBS';
       row[34]=str(o.comment,500);row[36]=str(o.barcode,100);row[37]=str(o.chrtId,100);
       row[43]='❔ Не проверено';
-      insert.push(row);byId[id]=last+insert.length;
+      insert.push(row);byId[id]=last+insert.length;idByRow[last+insert.length]=id;
       events.push([n,id,str(o.article,300),r.created,'',r.seller,'',r.wb,age+' мин',
         'СНИМОК СТАТУСА','Статус WB подтверждён при импорте из GitHub','GITHUB_WB_FBS']);
     });
@@ -6082,6 +6131,8 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
         .map(function(v){return String((v||[])[0]||'');});
       if(insertedIds.length!==insert.length)throw new Error('FBS_INSERT_READBACK_COUNT_MISMATCH');
       for(var ii=0;ii<insert.length;ii++)if(insertedIds[ii]!==String(insert[ii][0]))throw new Error('FBS_INSERT_READBACK_FAILED');
+      indexState.lastRow=last+insert.length;
+      sellmonitorGithubFbsSaveIdIndex_(indexState.cache,indexState.prefix,indexState.client,indexState.lastRow,byId);
     }
     if(events.length){
       mark('HISTORY_WRITE_START');
