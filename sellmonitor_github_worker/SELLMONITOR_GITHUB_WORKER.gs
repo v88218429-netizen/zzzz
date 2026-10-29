@@ -4,7 +4,7 @@
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.44',
+  VERSION: 'github-worker-1.3.45',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -6135,14 +6135,11 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
       mark('STATE_VERIFY_START_BOUNDED');
       var verifyMin=segments[0][0],verifyMax=segments[segments.length-1][1],verifyCount=verifyMax-verifyMin+1;
       var verifyStateMatrix=orderSheetNative.getRange(verifyMin,1,verifyCount,7).getValues();
-      var timeReadbackUrl=apiBase+'/values:batchGet?ranges='+encodeURIComponent(orderSheet+'!V'+verifyMin+':W'+verifyMax)+'&valueRenderOption=UNFORMATTED_VALUE';
-      var timeReadbackResponse=fetchSheetApi(timeReadbackUrl,{method:'get'});
-      var timeReadbackCode=timeReadbackResponse.getResponseCode();
-      if(timeReadbackCode<200||timeReadbackCode>=300)
-        throw new Error('FBS_PATCH_TIME_READBACK_HTTP_'+timeReadbackCode);
-      var timeReadback=JSON.parse(timeReadbackResponse.getContentText()||'{}');
-      var timeReadbackRange=(timeReadback.valueRanges||[])[0]||{};
-      var verifyTimeMatrix=timeReadbackRange.values||[];
+      // Read the bounded timestamp verification through SpreadsheetApp.
+      // The REST batchGet endpoint intermittently times out even for one row
+      // in large order books, despite the state read and write having succeeded.
+      var verifyTimeMatrix=orderSheetNative.getRange(verifyMin,22,verifyCount,2).getValues()
+        .map(function(row){return row.map(asSheetValue);});
       segments.forEach(function(seg){
         for(var rowNumber=seg[0];rowNumber<=seg[1];rowNumber++){
           var rowOffset=rowNumber-verifyMin;
