@@ -210,26 +210,52 @@ jobs:
             exit "$status"
           fi
           python - <<'PY'
-          import json, pathlib, re
+          import json, os, pathlib, re
           raw=pathlib.Path("/tmp/ozon-export-diagnostic.json").read_text().strip()
-          try:
-              payload=json.loads(raw)
-          except Exception:
-              print("OZON_DIAGNOSTIC_RESPONSE=unparseable")
+          decoder=json.JSONDecoder()
+          payload=None
+          for offset,char in enumerate(raw):
+              if char!="{":
+                  continue
+              try:
+                  payload,_=decoder.raw_decode(raw,offset)
+                  break
+              except Exception:
+                  continue
+          if not isinstance(payload,dict):
+              safe=raw.replace(os.environ.get("WEBHOOK_SECRET",""),"[REDACTED]")
+              safe=re.sub(r"[A-Za-z0-9_-]{32,}","[ID_REDACTED]",safe)
+              print("OZON_DIAGNOSTIC_STDOUT_LENGTH="+str(len(raw)))
+              print("OZON_DIAGNOSTIC_STDOUT_PREFIX="+safe[:220].replace("\\n"," "))
+              stderr=pathlib.Path("/tmp/ozon-export-diagnostic.stderr").read_text(errors="replace").strip()
+              if stderr:
+                  stderr=re.sub(r"[A-Za-z0-9_-]{32,}","[ID_REDACTED]",stderr)
+                  print("OZON_DIAGNOSTIC_STDERR_PREFIX="+stderr[:220].replace("\\n"," "))
               raise SystemExit("OZON_DIAGNOSTIC_RESPONSE_INVALID")
           err=payload.get("error") or {}
           if err:
               print("OZON_DIAGNOSTIC_ERROR_CODE="+str(err.get("code") or "unknown"))
+              details=err.get("details") or []
+              if details and isinstance(details[0],dict):
+                  message=str(details[0].get("errorMessage") or "")
+                  message=message.replace(os.environ.get("WEBHOOK_SECRET",""),"[REDACTED]")
+                  message=re.sub(r"[A-Za-z0-9_-]{32,}","[ID_REDACTED]",message)
+                  print("OZON_DIAGNOSTIC_SCRIPT_ERROR="+message.replace("\\n"," ")[:240])
               raise SystemExit("OZON_DIAGNOSTIC_FUNCTION_FAILED")
-          result=(payload.get("response") or {}).get("result") or {}
+          result=(payload.get("response") or {}).get("result") if isinstance(payload.get("response"),dict) else payload
+          if isinstance(result,str):
+              try:
+                  result=json.loads(result)
+              except Exception:
+                  pass
           if not isinstance(result,dict) or result.get("ok") is not True:
+              print("OZON_DIAGNOSTIC_RESULT_TYPE="+type(result).__name__)
               raise SystemExit("OZON_DIAGNOSTIC_RESULT_INVALID")
           print("OZON_EXPORT_JOB="+str(result.get("job") or ""))
           print("OZON_EXPORT_IN_PROGRESS="+str(result.get("in_progress") or ""))
           print("OZON_EXPORT_LAST_ATTEMPT_AT="+str(result.get("last_attempt_at") or ""))
           print("OZON_CONTINUATION_PENDING="+str(result.get("continuation_pending")))
-          message=str(result.get("last_error") or "")
-          message=re.sub(r"(?i)(token|secret|authorization)\\s*[:=]\\s*\\S+",r"\\1=[REDACTED]",message)
+          message=str(result.get("last_error") or "").replace(os.environ.get("WEBHOOK_SECRET",""),"[REDACTED]")
           message=re.sub(r"[A-Za-z0-9_-]{32,}","[ID_REDACTED]",message)
           print("OZON_EXPORT_LAST_ERROR="+message.replace("\\n"," ")[:400])
           PY
