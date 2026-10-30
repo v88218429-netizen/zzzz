@@ -223,8 +223,10 @@ class AdvertisingOptimizerAgent(BaseAgent):
                 for nm in selected_nms
             }
             clusters_task = (
-                asyncio.create_task(limited("wb_advert_clusters", advert_id=cid))
-                if nms else None
+                asyncio.create_task(
+                    limited("wb_advert_clusters", advert_id=cid, nm_ids=selected_nms)
+                )
+                if selected_nms else None
             )
             cluster_stats_task = (
                 asyncio.create_task(

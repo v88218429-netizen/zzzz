@@ -2,9 +2,9 @@
   "schema": 1,
   "channels": {
     "stable": {
-      "version": "1.1.25",
+      "version": "1.1.26",
       "channel": "stable",
-      "notes": "Полный сохраняемый обход кампаний и товаров; явная привязка кабинета; раздельная свежесть фактов и ставок; защищённая передача рекомендаций панели через GitHub.",
+      "notes": "Исправлен сбор поисковых кластеров WB: точная связка кампания×товар и текущий формат запросов.",
       "minimum_current_version": "1.0.0",
       "files": [
         {
@@ -20,7 +20,7 @@
         {
           "path": "RELEASE_NOTES.md",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/RELEASE_NOTES.md",
-          "sha256": "b585c7290899d6433912e30e2ed050d0cd02bd18e62493cd50982777294b6d3f"
+          "sha256": "f7901e838489157b86843ff9086b9f2234bc98a3c355d35bf3b16241ddc752b1"
         },
         {
           "path": "START_WB_AI_MANAGER.command",
@@ -31,7 +31,7 @@
         {
           "path": "VERSION",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/VERSION",
-          "sha256": "630bf476293ccfa06ce40878def74e5fd79f8e209cad1451abaa97830589b71d"
+          "sha256": "f788eb0c60930fd7a6c76243fbf7a5acb4cd6d336de36d493818b9e438bfdc94"
         },
         {
           "path": "docs/AUTO_UPDATE.md",
@@ -56,7 +56,7 @@
         {
           "path": "pyproject.toml",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/pyproject.toml",
-          "sha256": "a21d377872dca502ec345682afe817565982bdbf75f791f7663b3519e293990c"
+          "sha256": "e9fe0f086955a1871013f8e9b168b8b470ee5df3f02b576118539b5153dcd492"
         },
         {
           "path": "scripts/auto_refresh_sheets.py",
@@ -162,7 +162,7 @@
         {
           "path": "src/wb_control_center/agents/advertising.py",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/src/wb_control_center/agents/advertising.py",
-          "sha256": "eaa0c921c321e1c90e5d951e1bba5c50aafef24afc57c37221e045e834f36c21"
+          "sha256": "b13ebaee7284376b158f300965ae2027773b4b59d30e9d0c221fc0f74b1c33a3"
         },
         {
           "path": "src/wb_control_center/agents/api_health.py",
@@ -467,12 +467,12 @@
         {
           "path": "src/wb_control_center/wb_mcp_runner.py",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/src/wb_control_center/wb_mcp_runner.py",
-          "sha256": "e7f4eafd032a058d250b85f0e0638f5457b5a23995bf038cafad9f9fabf987a2"
+          "sha256": "ac99317c20953ab8bdc391c0b98ab467101a295b378a8e7dfc3dd45fc2d9066a"
         },
         {
           "path": "src/wb_control_center/wb_mcp_runtime_patch.py",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/src/wb_control_center/wb_mcp_runtime_patch.py",
-          "sha256": "99cd97ea47c295790eea0b6fb2eb90f7bc50776677a54744197d2f43b23f8537"
+          "sha256": "15c322af66fc15e09e0d9947aa3f41c85dfe4a76abfac2092b631a8414a3de3b"
         },
         {
           "path": "src/wb_control_center/worker_source.py",
