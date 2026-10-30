@@ -18,7 +18,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: wb-sellmonitor-finance-publish
+  group: sellmonitor-summary-publish-serial
   cancel-in-progress: false
 
 jobs:
