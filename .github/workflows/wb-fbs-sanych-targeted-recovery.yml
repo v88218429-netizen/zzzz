@@ -5,6 +5,7 @@ on:
     branches: [mainggg]
     paths:
       - "wb_worker/sanych_fbs_recovery.py"
+      - ".github/workflows/wb-fbs-sanych-targeted-recovery.yml"
   workflow_dispatch:
     inputs:
       start_date:
@@ -32,6 +33,45 @@ jobs:
       max-parallel: 1
       matrix:
         include:
+        - slice: 1
+          start_date: "2026-07-30"
+          end_date: "2026-08-04"
+        - slice: 2
+          start_date: "2026-08-05"
+          end_date: "2026-08-11"
+        - slice: 3
+          start_date: "2026-08-12"
+          end_date: "2026-08-18"
+        - slice: 4
+          start_date: "2026-08-19"
+          end_date: "2026-08-25"
+        - slice: 5
+          start_date: "2026-08-26"
+          end_date: "2026-09-01"
+        - slice: 6
+          start_date: "2026-09-02"
+          end_date: "2026-09-08"
+        - slice: 7
+          start_date: "2026-09-09"
+          end_date: "2026-09-15"
+        - slice: 8
+          start_date: "2026-09-16"
+          end_date: "2026-09-22"
+        - slice: 9
+          start_date: "2026-09-23"
+          end_date: "2026-09-29"
+        - slice: 10
+          start_date: "2026-09-30"
+          end_date: "2026-10-06"
+        - slice: 11
+          start_date: "2026-10-07"
+          end_date: "2026-10-13"
+        - slice: 12
+          start_date: "2026-10-14"
+          end_date: "2026-10-20"
+        - slice: 13
+          start_date: "2026-10-21"
+          end_date: "2026-10-27"
         - slice: 14
           start_date: "2026-10-28"
           end_date: "2026-10-30"
