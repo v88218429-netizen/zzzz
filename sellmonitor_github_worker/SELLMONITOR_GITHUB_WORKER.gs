@@ -5885,6 +5885,10 @@ function doPost(e) {
       });
     }
 
+    if (action === 'bridge_ping') {
+      return sellmonitorGithubWebJson_({ok:true,action:action,version:SMC_GH.VERSION,checkedAt:new Date().toISOString()});
+    }
+
     if (action === 'fbs_ingest_batch') {
       var fbsResult = sellmonitorGithubFbsIngestBatchV1_(body);
       return sellmonitorGithubWebJson_({ok:fbsResult.ok===true,action:action,result:fbsResult});
