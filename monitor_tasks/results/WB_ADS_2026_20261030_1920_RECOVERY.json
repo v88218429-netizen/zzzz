@@ -1,0 +1,46 @@
+{
+  "task_id": "WB_ADS_2026",
+  "request": "WB_ADS_2026_20261030_1920_RECOVERY.json",
+  "query": "реклама Wildberries 2026",
+  "knowledge_tag": "WB_ADS",
+  "generated_at": "2026-10-30T16:20:54.761020+00:00",
+  "videos": [
+    {
+      "video_id": "WL5dIzkIydg",
+      "url": "https://www.youtube.com/watch?v=WL5dIzkIydg",
+      "title": "Music from the Wildberries commercial — Big Sale on WB (2026)",
+      "channel": "Музыка из рекламы",
+      "duration": 20,
+      "timestamp": null,
+      "query": "реклама Wildberries 2026",
+      "kind": "short",
+      "transcript": "transcripts/2026-10-30_WB_ADS_2026_short_WL5dIzkIydg.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "olxJviUnS-c",
+      "url": "https://www.youtube.com/watch?v=olxJviUnS-c",
+      "title": "How to set up advertising on Wildberries NOW? Manual, CPC, shelf, and unified advertising setup c...",
+      "channel": "Пивоваров на Маркетплейсах ",
+      "duration": 1205,
+      "timestamp": null,
+      "query": "реклама Wildberries 2026",
+      "kind": "video",
+      "transcript": "transcripts/2026-10-30_WB_ADS_2026_video_olxJviUnS-c.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "7xoTw8tWAVs",
+      "url": "https://www.youtube.com/watch?v=7xoTw8tWAVs",
+      "title": "Implement THIS into your business NOW! How to work with splicing on Wildberries",
+      "channel": "Данил Овчинников",
+      "duration": 757,
+      "timestamp": null,
+      "query": "реклама Wildberries 2026 shorts",
+      "kind": "video",
+      "transcript": "transcripts/2026-10-30_WB_ADS_2026_video_7xoTw8tWAVs.md",
+      "method": "FreeTranscriptAPI"
+    }
+  ],
+  "errors": []
+}

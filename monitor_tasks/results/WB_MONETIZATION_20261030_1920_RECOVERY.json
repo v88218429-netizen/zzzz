@@ -1,0 +1,59 @@
+{
+  "task_id": "WB_MONETIZATION",
+  "request": "WB_MONETIZATION_20261030_1920_RECOVERY.json",
+  "query": "как монетизировать экспертизу Wildberries кроме ведения кабинетов",
+  "knowledge_tag": "WB_MONETIZATION",
+  "generated_at": "2026-10-30T16:21:20.247784+00:00",
+  "videos": [
+    {
+      "video_id": "vn9df7hvFRQ",
+      "url": "https://www.youtube.com/watch?v=vn9df7hvFRQ",
+      "title": "ЭТИ правила Wildberries ДОЛЖЕН ЗНАТЬ каждый селлер! За что штрафует маркетплейс?",
+      "channel": "Эльвира Воробьёва. Бизнес на Wildberries",
+      "duration": 1045,
+      "timestamp": null,
+      "query": "сервис для селлеров Wildberries бизнес",
+      "kind": "video",
+      "transcript": "transcripts/2026-10-30_WB_MONETIZATION_video_vn9df7hvFRQ.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "Wx4PzVYUop4",
+      "url": "https://www.youtube.com/watch?v=Wx4PzVYUop4",
+      "title": "🔍 Как выбрать сервис аналитики для WB и Ozon: 5 критериев выбора для селлера + проверка до оплаты",
+      "channel": "Александр Федяев - Маркетплейсы от практика",
+      "duration": 723,
+      "timestamp": null,
+      "query": "сервис для селлеров Wildberries бизнес",
+      "kind": "video",
+      "transcript": "transcripts/2026-10-30_WB_MONETIZATION_video_Wx4PzVYUop4.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "Dra0ZJxVRwQ",
+      "url": "https://www.youtube.com/watch?v=Dra0ZJxVRwQ",
+      "title": "Wildberries запускает свой фулфилмент. ПОЧЕМУ ЭТО ОШИБКА для селлеров?",
+      "channel": "Фулфилмент Руставели 14 | WILDBERRIES | OZON",
+      "duration": 122,
+      "timestamp": null,
+      "query": "сервис для селлеров Wildberries бизнес",
+      "kind": "short",
+      "transcript": "transcripts/2026-10-30_WB_MONETIZATION_short_Dra0ZJxVRwQ.md",
+      "method": "FreeTranscriptAPI"
+    }
+  ],
+  "errors": [
+    {
+      "video_id": "",
+      "url": "",
+      "title": "как монетизировать экспертизу Wildberries кроме ведения кабинетов",
+      "error": "no results"
+    },
+    {
+      "video_id": "",
+      "url": "",
+      "title": "как монетизировать экспертизу Wildberries кроме ведения кабинетов shorts",
+      "error": "no results"
+    }
+  ]
+}

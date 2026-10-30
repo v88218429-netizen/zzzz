@@ -1,0 +1,34 @@
+{
+  "task_id": "TA_API_2026",
+  "request": "TA_API_2026_20261030_1920_RECOVERY.json",
+  "query": "Wildberries API аналитика поиск воронка 2026",
+  "knowledge_tag": "TREND_API",
+  "generated_at": "2026-10-30T16:20:38.783928+00:00",
+  "videos": [
+    {
+      "video_id": "2QuuYaI4zLM",
+      "url": "https://www.youtube.com/watch?v=2QuuYaI4zLM",
+      "title": "Аналитика МАРКЕТПЛЕЙСОВ 2026 | Как ЛЕГКО оцифровать свой бизнес на ВБ, с помощью сервиса TRUESTATS",
+      "channel": "Юлия Покоева | Менеджер Wildberries",
+      "duration": 655,
+      "timestamp": null,
+      "query": "Wildberries API аналитика поиск воронка 2026",
+      "kind": "video",
+      "transcript": "transcripts/2026-10-30_TA_API_2026_video_2QuuYaI4zLM.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "tVkzm28qoAI",
+      "url": "https://www.youtube.com/watch?v=tVkzm28qoAI",
+      "title": "Полная инструкция по Wildberries 2026: Китай, аналитика и продажи",
+      "channel": "Слава Каримов",
+      "duration": 825,
+      "timestamp": null,
+      "query": "Wildberries API аналитика поиск воронка 2026",
+      "kind": "video",
+      "transcript": "transcripts/2026-10-30_TA_API_2026_video_tVkzm28qoAI.md",
+      "method": "FreeTranscriptAPI"
+    }
+  ],
+  "errors": []
+}
