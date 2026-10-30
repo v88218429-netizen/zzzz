@@ -82,7 +82,7 @@ jobs:
     env:
       FBS_CLIENT: SANYCH
       FBS_INCLUDE_LIVE: "true"
-      FBS_BATCH_SIZE: "5"
+      FBS_BATCH_SIZE: "100"
       WB_API_TOKEN_AP: ${{ secrets.WB_API_TOKEN_AP }}
       GOOGLE_BRIDGE_KEY: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
       GOOGLE_BRIDGE_URL: https://script.google.com/macros/s/AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw/exec
