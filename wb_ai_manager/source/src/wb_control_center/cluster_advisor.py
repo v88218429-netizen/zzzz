@@ -62,12 +62,76 @@ def _decision_caps(
     return caps
 
 
+def _kopecks(value: Any) -> float | None:
+    number = _num(value)
+    return round(number / 100.0, 2) if number is not None and number >= 0 else None
+
+
+def _wb_bid_guidance(
+    campaigns: list[dict[str, Any]], observed_at: Any, now: datetime, freshness_hours: float
+) -> dict[tuple[str, str, str], dict[str, Any]]:
+    """Read only exact SKU × campaign WB recommendation bands from the optimizer snapshot."""
+    observed = _time(observed_at)
+    if observed is None or (now - observed).total_seconds() < 0 or (now - observed).total_seconds() > freshness_hours * 3600:
+        return {}
+    output: dict[tuple[str, str, str], dict[str, Any]] = {}
+    for item in campaigns:
+        if not isinstance(item, dict):
+            continue
+        advert = str(item.get("campaign_id") or "")
+        recommendations = item.get("recommendations") or {}
+        if not advert.isdigit() or not isinstance(recommendations, dict):
+            continue
+        for nm, raw in recommendations.items():
+            if not str(nm).isdigit() or not isinstance(raw, dict) or raw.get("_error"):
+                continue
+            data = raw.get("data") if isinstance(raw.get("data"), dict) else raw
+            base = data.get("base") if isinstance(data.get("base"), dict) else {}
+            competitive = base.get("competitiveBid") if isinstance(base.get("competitiveBid"), dict) else {}
+            leaders = base.get("leadersBid") if isinstance(base.get("leadersBid"), dict) else {}
+            cluster_bands: dict[str, dict[str, float]] = {}
+            norm_queries = data.get("normQueries") or []
+            if isinstance(norm_queries, dict):
+                norm_queries = norm_queries.get("items") or norm_queries.get("normQueries") or []
+            if isinstance(norm_queries, list):
+                for query in norm_queries:
+                    if not isinstance(query, dict):
+                        continue
+                    label = str(query.get("normQuery") or query.get("query") or "").strip()
+                    if not label:
+                        continue
+                    values = {}
+                    for band in ("reachMin", "reachMedium", "reachMax"):
+                        band_data = query.get(band) if isinstance(query.get(band), dict) else {}
+                        value = _kopecks(band_data.get("bidKopecks"))
+                        if value is not None:
+                            values[band] = value
+                    if values:
+                        cluster_bands[_key(label)] = values
+            for query, bands in cluster_bands.items():
+                # A recommendation is a whole product×campaign snapshot. Do not
+                # create fresh-looking partial bands from an old individual query.
+                target = output.setdefault((advert, str(nm), query), {})
+                target.update({
+                    "competitive_bid_rub": _kopecks(competitive.get("bidKopecks")),
+                    "leaders_bid_rub": _kopecks(leaders.get("bidKopecks")),
+                    "reach_min_bid_rub": bands.get("reachMin"),
+                    "reach_medium_bid_rub": bands.get("reachMedium"),
+                    "reach_max_bid_rub": bands.get("reachMax"),
+                    "observed_at": observed.isoformat(),
+                    "source": "WB wb_advert_bids_recommendations",
+                })
+    return output
+
+
 def analyze_cluster_rows(
     rows: list[dict[str, Any]],
     campaign_settings: list[dict[str, Any]],
     decisions: list[dict[str, Any]],
     query_manager: dict[str, Any] | None = None,
     *,
+    bid_recommendations: list[dict[str, Any]] | None = None,
+    bid_recommendations_observed_at: Any = None,
     now: datetime | None = None,
     freshness_hours: float = 36.0,
     economics_observed_at: Any = None,
@@ -82,6 +146,7 @@ def analyze_cluster_rows(
         if all(identity):
             settings[identity] = item
     caps = _decision_caps(decisions, economics_observed_at, now, freshness_hours)
+    wb_guidance = _wb_bid_guidance(bid_recommendations or [], bid_recommendations_observed_at, now, freshness_hours)
     positions: dict[tuple[str, str, str], dict[str, Any]] = {}
     for card in ((query_manager or {}).get("cards") or []):
         if not isinstance(card, dict):
@@ -140,6 +205,7 @@ def analyze_cluster_rows(
         ctr = round(clicks / views * 100, 2) if clicks is not None and views is not None and views > 0 else None
         cpc = round(spend / clicks, 2) if spend is not None and clicks is not None and clicks > 0 else None
         position = positions.get((shop, nm, query_key))
+        wb_bid_guidance = wb_guidance.get((advert, nm, query_key))
         position_value = _num(position.get("position")) if position else None
         position_freshness = ((position or {}).get("freshness") or {}).get("position") or {}
         blockers = []
@@ -193,6 +259,7 @@ def analyze_cluster_rows(
             "ctr_pct": ctr, "cpc_rub": cpc, "cpa_rub": cpa, "max_cpa_rub": max_cpa,
             "current_bid_rub": round(bid_kopecks / 100, 2) if bid_kopecks is not None else None,
             "current_bid_source": bid_source,
+            "wb_bid_guidance": wb_bid_guidance,
             "campaign_search_bid_rub": round(search_bid_kopecks / 100, 2) if campaign_search_bid_available else None,
             "campaign_search_bid_at": settings_time.isoformat() if campaign_search_bid_available and settings_time else None,
             "target_bid_rub": target_bid, "bid_observed_at": bid_time.isoformat() if bid_time else None,
