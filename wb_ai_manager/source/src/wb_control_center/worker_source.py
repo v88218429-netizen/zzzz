@@ -72,7 +72,7 @@ class WorkerSource:
 
     @classmethod
     def stream_meta(cls, payload: dict[str, Any], max_age_minutes: int) -> dict[str, Any]:
-        fact_at = payload.get("finishedAt") or payload.get("updatedAt") or payload.get("generated_at")
+        fact_at = payload.get("finishedAt") or payload.get("updatedAt") or payload.get("generated_at") or payload.get("observed_at")
         dt = cls._as_dt(fact_at)
         now = datetime.now(timezone.utc)
         age_minutes = None if dt is None else max(0.0, (now - dt.astimezone(timezone.utc)).total_seconds() / 60.0)
@@ -181,6 +181,71 @@ class WorkerSource:
         text = stream.read().decode("utf-8-sig")
         return list(csv.DictReader(io.StringIO(text)))
 
+    @staticmethod
+    def _json_from_archive(archive: tarfile.TarFile, suffix: str) -> dict[str, Any]:
+        member = next((item for item in archive.getmembers()
+                      if item.isfile() and item.name.endswith(suffix)), None)
+        if member is None:
+            return {}
+        stream = archive.extractfile(member)
+        if stream is None:
+            return {}
+        value = json.loads(stream.read().decode("utf-8"))
+        return value if isinstance(value, dict) else {}
+
+    async def optimizer_bundle(self) -> dict[str, Any]:
+        """Read the cabinet-scoped optimizer payload from encrypted GitHub state."""
+        if not self.traffic_configured:
+            raise WorkerSourceError("GitHub optimizer archive or local private key is not configured")
+        root = f"https://raw.githubusercontent.com/{self.traffic_github_repo}/optimizer-state/state"
+        async with httpx.AsyncClient(timeout=self.timeout_seconds, follow_redirects=True) as client:
+            archive_response, key_response = await asyncio.gather(
+                client.get(root + "/optimizer-dashboard.tar.gz.enc"),
+                client.get(root + "/optimizer-dashboard.key.enc"),
+            )
+            archive_response.raise_for_status()
+            key_response.raise_for_status()
+        with tempfile.TemporaryDirectory(prefix="wb-optimizer-github-") as folder:
+            folder_path = Path(folder)
+            encrypted_archive = folder_path / "optimizer.tar.gz.enc"
+            encrypted_key = folder_path / "optimizer.key.enc"
+            key_file = folder_path / "optimizer.key"
+            plain_archive = folder_path / "optimizer.tar.gz"
+            encrypted_archive.write_bytes(archive_response.content)
+            encrypted_key.write_bytes(key_response.content)
+            unwrap = subprocess.run(
+                ["openssl", "pkeyutl", "-decrypt", "-inkey", str(self.traffic_private_key_path),
+                 "-in", str(encrypted_key), "-out", str(key_file),
+                 "-pkeyopt", "rsa_padding_mode:oaep", "-pkeyopt", "rsa_oaep_md:sha256"],
+                capture_output=True, text=True, timeout=20,
+            )
+            if unwrap.returncode:
+                raise WorkerSourceError("GitHub optimizer key could not be decrypted locally")
+            os.chmod(key_file, 0o600)
+            decrypt = subprocess.run(
+                ["openssl", "enc", "-d", "-aes-256-cbc", "-pbkdf2", "-pass", f"file:{key_file}",
+                 "-in", str(encrypted_archive), "-out", str(plain_archive)],
+                capture_output=True, text=True, timeout=60,
+            )
+            if decrypt.returncode:
+                raise WorkerSourceError("GitHub optimizer archive decryption failed")
+            with tarfile.open(plain_archive, "r:gz") as archive:
+                for item in archive.getmembers():
+                    path = Path(item.name)
+                    if path.is_absolute() or ".." in path.parts:
+                        raise WorkerSourceError("Unsafe path in GitHub optimizer archive")
+                payload = self._json_from_archive(archive, "optimizer-state.json")
+        shops = payload.get("shops")
+        if payload.get("schema_version") != 1 or not isinstance(shops, dict):
+            raise WorkerSourceError("GitHub optimizer archive has an unsupported or incomplete schema")
+        return {
+            "source": "github-optimizer-state",
+            "retrieved_at": datetime.now(timezone.utc).isoformat(),
+            "generated_at": payload.get("generated_at"),
+            "shops": {key: value for key, value in shops.items()
+                      if key in {"ap", "aa", "yv"} and isinstance(value, dict)},
+        }
+
     async def traffic_bundle(self) -> dict[str, Any]:
         """Read private, encrypted WB traffic facts stored only in GitHub."""
         if not self.traffic_configured:
@@ -233,6 +298,8 @@ class WorkerSource:
                     "retrieved_at": datetime.now(timezone.utc).isoformat(),
                     "source_health": self.stream_meta(status, 180),
                     "status": status,
+                    "clusters_status": self._json_from_archive(archive, "traffic/clusters_status.json"),
+                    "campaign_settings_status": self._json_from_archive(archive, "traffic/campaign_settings_status.json"),
                     "ads": self._csv_from_archive(archive, "traffic/campaign_sku_day.csv"),
                     "funnel": self._csv_from_archive(archive, "traffic/funnel_sku_day.csv"),
                     "organic": self._csv_from_archive(archive, "traffic/organic_sku_day.csv"),

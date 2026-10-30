@@ -50,7 +50,7 @@ def _nm_ids(row: dict[str, Any]) -> list[int]:
 
 
 def _deep_scan_limits(runtime: dict[str, Any]) -> tuple[int, int, int]:
-    """Hard-bound supplementary WB API calls; rotate the eligible campaigns over time."""
+    """Hard-bound supplementary WB API calls per run."""
     def bounded(name: str, default: int, ceiling: int) -> int:
         try:
             value = int(runtime.get(name, default) or default)
@@ -81,6 +81,34 @@ def _rotating_nm_window(items: list[int], limit: int, window: int, campaign_id: 
     start = ((max(0, int(window)) + max(0, int(campaign_id))) * count) % len(items)
     doubled = items + items
     return doubled[start : start + count]
+
+
+def _scan_cursor(previous: Any, campaign_ids: list[int]) -> dict[str, Any]:
+    """Resume a fair per-cabinet sweep; reset only when the campaign catalog changes."""
+    saved = previous.get("data") if isinstance(previous, dict) else previous
+    saved = saved if isinstance(saved, dict) else {}
+    expected = [int(x) for x in campaign_ids]
+    if saved.get("campaign_ids") != expected:
+        return {"campaign_ids": expected, "next_campaign_index": 0, "next_nm_index": {},
+                "sweep_id": int(saved.get("sweep_id") or 0) + 1,
+                "swept_campaign_ids": [], "swept_nm_ids": {}}
+    return {
+        "campaign_ids": expected,
+        "next_campaign_index": max(0, int(saved.get("next_campaign_index") or 0)) % max(1, len(expected)),
+        "next_nm_index": dict(saved.get("next_nm_index") or {}),
+        "sweep_id": max(1, int(saved.get("sweep_id") or 1)),
+        "swept_campaign_ids": [int(x) for x in saved.get("swept_campaign_ids") or [] if str(x).isdigit()],
+        "swept_nm_ids": {str(k): [int(x) for x in v if str(x).isdigit()]
+                          for k, v in (saved.get("swept_nm_ids") or {}).items() if isinstance(v, list)},
+    }
+
+
+def _rotating_slice(items: list[Any], limit: int, start: int) -> list[Any]:
+    if not items or limit <= 0:
+        return []
+    count = min(limit, len(items))
+    start = max(0, int(start)) % len(items)
+    return (items + items)[start:start + count]
 
 
 class AdvertisingMonitorAgent(BaseAgent):
@@ -167,13 +195,13 @@ class AdvertisingOptimizerAgent(BaseAgent):
         stats_by_id = {str(_campaign_id(x) or ""): x for x in stat_rows}
         exact_nm_stats = extract_ad_nm_metrics(stats_raw)
 
-        # Deep scan highest-spend campaigns first to keep API load bounded.
-        def spend(c: dict[str, Any]) -> float:
-            row = stats_by_id.get(str(_campaign_id(c) or ""), {})
-            return float(to_number(row.get("sum") or row.get("spend") or row.get("cost")) or 0)
-        campaigns = sorted(campaigns, key=spend, reverse=True)
+        # Stable ID ordering plus a saved cursor prevents high-spend campaigns
+        # from starving the rest of a cabinet during repeated bounded runs.
+        campaigns = sorted(campaigns, key=lambda c: _campaign_id(c) or 0)
         runtime = (self.ctx.policy.raw.get("runtime") or {}).get("advertising", {})
         max_campaigns, max_nms, concurrency = _deep_scan_limits(runtime)
+        old_cursor = self.ctx.db.latest_snapshot(self.name, "deep_scan_cursor")
+        cursor = _scan_cursor(old_cursor, [_campaign_id(c) for c in campaigns if _campaign_id(c)])
         semaphore = asyncio.Semaphore(concurrency)
 
         async def limited(tool: str, **kwargs: Any) -> Any:
@@ -185,7 +213,8 @@ class AdvertisingOptimizerAgent(BaseAgent):
             if not cid:
                 return None
             nms = _nm_ids(campaign)
-            selected_nms = _rotating_nm_window(nms, max_nms, window_id, cid)
+            nm_start = max(0, int(cursor["next_nm_index"].get(str(cid), 0)))
+            selected_nms = _rotating_slice(nms, max_nms, nm_start)
             budget_task = asyncio.create_task(limited("wb_advert_budget", advert_id=cid))
             rec_tasks = {
                 str(nm): asyncio.create_task(
@@ -217,6 +246,10 @@ class AdvertisingOptimizerAgent(BaseAgent):
             }
             clusters = await clusters_task if clusters_task else {}
             cluster_stats = await cluster_stats_task if cluster_stats_task else {}
+            responses = [budget, clusters, cluster_stats, *recommendations.values()]
+            scan_complete = bool(responses) and all(
+                not (isinstance(value, dict) and value.get("_error")) for value in responses
+            )
             return {
                 "campaign": campaign,
                 "campaign_id": cid,
@@ -231,10 +264,12 @@ class AdvertisingOptimizerAgent(BaseAgent):
                 "recommendations": recommendations,
                 "clusters": clusters,
                 "cluster_stats": cluster_stats,
+                "scan_complete": scan_complete,
             }
 
-        window_id = int(datetime.now(timezone.utc).timestamp() // 900)
-        selected_campaigns = _rotating_campaign_window(campaigns, max_campaigns, window_id)
+        before = int(cursor["next_campaign_index"])
+        selected_campaigns = _rotating_slice(campaigns, max_campaigns, before)
+        cursor["next_campaign_index"] = (before + len(selected_campaigns)) % max(1, len(campaigns))
         results = await asyncio.gather(
             *(scan_campaign(c) for c in selected_campaigns),
             return_exceptions=True,
@@ -250,15 +285,46 @@ class AdvertisingOptimizerAgent(BaseAgent):
                     "_error": str(result),
                 })
             elif result is not None:
+                cid = _campaign_id(campaign)
+                scanned_nms = result.get("recommendation_nm_ids_scanned") or []
+                nms = result.get("nm_ids") or []
+                if cid:
+                    cursor["next_nm_index"][str(cid)] = (max(0, int(cursor["next_nm_index"].get(str(cid), 0))) + len(scanned_nms)) % max(1, len(nms))
+                    if result.get("scan_complete") is True:
+                        cursor["swept_campaign_ids"] = sorted(set(cursor["swept_campaign_ids"] + [cid]))
+                        done = set(cursor["swept_nm_ids"].get(str(cid), [])) | {int(x) for x in scanned_nms}
+                        cursor["swept_nm_ids"][str(cid)] = sorted(done)
                 scanned.append(result)
+
+        all_products_seen = all(
+            set(cursor["swept_nm_ids"].get(str(_campaign_id(c)), [])) >= set(_nm_ids(c))
+            for c in campaigns if _campaign_id(c)
+        )
+        swept_campaign_count = len(cursor["swept_campaign_ids"])
+        swept_product_count = sum(len(x) for x in cursor["swept_nm_ids"].values())
+        sweep_complete = (set(cursor["swept_campaign_ids"]) >= set(cursor["campaign_ids"])
+                          and all_products_seen
+                          and all(isinstance(item, dict) and item.get("scan_complete") is True for item in scanned))
+        if sweep_complete:
+            cursor["sweep_id"] += 1
+            cursor["swept_campaign_ids"] = []
+            cursor["swept_nm_ids"] = {}
 
         out.snapshots.append(("deep_scan", {
             "generated_for": {"from": start, "to": end},
-            "scan_window_utc_15m": window_id,
+            "sweep_id": cursor["sweep_id"],
+            "sweep_complete": sweep_complete,
+            "sweep_campaigns_seen": swept_campaign_count,
+            "sweep_campaigns_total": len(cursor["campaign_ids"]),
+            "sweep_products_seen": swept_product_count,
+            "sweep_products_total": sum(len(_nm_ids(c)) for c in campaigns),
+            "cursor_before": before,
+            "cursor_after": cursor["next_campaign_index"],
             "eligible_campaigns": len(campaigns),
             "campaigns_scanned": len(scanned),
             "hard_limits": {"campaigns": max_campaigns, "nms_per_campaign": max_nms, "concurrent_calls": concurrency},
             "campaigns": scanned,
         }))
+        out.snapshots.append(("deep_scan_cursor", cursor))
         out.snapshots.append(("stats_14d", stats_raw if isinstance(stats_raw, dict) else {"data": stats_raw}))
         return out

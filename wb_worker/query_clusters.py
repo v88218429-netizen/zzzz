@@ -23,9 +23,10 @@ COLUMNS = [
     "shop", "date", "advert_id", "nm_id", "norm_query", "views", "clicks",
     "atbs", "orders", "ordered_units", "spend_rub", "ad_avg_pos",
     "ctr_percent", "cpc_rub", "cpm_rub", "source", "quality",
-    "cluster_bid_kopecks", "cluster_state", "bid_observed_at",
+    "cluster_bid_kopecks", "cluster_state", "bid_observed_at", "cluster_state_observed_at",
 ]
-LEGACY_COLUMNS = COLUMNS[:-3]
+LEGACY_COLUMNS = COLUMNS[:-4]
+LEGACY_BID_COLUMNS = COLUMNS[:-1]
 SOURCE = "WB /adv/v1/normquery/stats"
 QUALITY = "FACT_AD_CLUSTER_DAY_NOT_SEARCH_PHRASE"
 MIN_INTERVAL_SECONDS = 6.2  # Official limit: max 10 requests per minute.
@@ -93,7 +94,7 @@ def parse_state_map(payload: object) -> dict[tuple[int, int, str], str]:
 def parse_rows(shop: str, payload: object,
                bid_map: dict[tuple[int, int, str], int] | None = None,
                state_map: dict[tuple[int, int, str], str] | None = None,
-               bid_observed_at: str = "") -> list[list]:
+               bid_observed_at: str = "", state_observed_at: str = "") -> list[list]:
     if not isinstance(payload, dict) or not isinstance(payload.get("items"), list):
         raise ValueError("WB clusters returned an unexpected response structure")
     rows = []
@@ -132,7 +133,8 @@ def parse_rows(shop: str, payload: object,
             key = (int(aid), int(nm), _norm_query(query))
             rows.append([shop, day, aid, nm, query, *numbers, SOURCE, QUALITY,
                          (bid_map or {}).get(key, ""), (state_map or {}).get(key, ""),
-                         bid_observed_at if key in (bid_map or {}) or key in (state_map or {}) else ""])
+                         bid_observed_at if key in (bid_map or {}) else "",
+                         state_observed_at if key in (state_map or {}) else ""])
     return rows
 
 
@@ -158,10 +160,28 @@ def existing_rows(shop: str) -> list[list[str]]:
     with path.open(encoding="utf-8-sig", newline="") as stream:
         reader = csv.DictReader(stream)
         if reader.fieldnames == LEGACY_COLUMNS:
-            return [[r[name] for name in LEGACY_COLUMNS] + ["", "", ""] for r in reader]
+            return [[r[name] for name in LEGACY_COLUMNS] + ["", "", "", ""] for r in reader]
+        if reader.fieldnames == LEGACY_BID_COLUMNS:
+            return [[r[name] for name in LEGACY_BID_COLUMNS] + [""] for r in reader]
         if reader.fieldnames != COLUMNS:
             raise ValueError("Cluster history schema mismatch")
         return [[r[name] for name in COLUMNS] for r in reader]
+
+
+def _preserve_prior_auxiliary(prior: list[list[str]], incoming: list[list[str]]) -> None:
+    """Retain old bid/state values with their old timestamps after a failed read."""
+    old_by_key = {
+        (str(r[0]), str(r[1]), str(r[2]), str(r[3]), _norm_query(r[4])): r
+        for r in prior if len(r) >= len(COLUMNS)
+    }
+    for row in incoming:
+        old = old_by_key.get((str(row[0]), str(row[1]), str(row[2]), str(row[3]), _norm_query(row[4])))
+        if not old:
+            continue
+        for value_index, observed_index in ((17, 19), (18, 20)):
+            if row[value_index] == "" and old[value_index] != "":
+                row[value_index] = old[value_index]
+                row[observed_index] = old[observed_index]
 
 
 async def collect() -> dict:
@@ -196,7 +216,7 @@ async def collect() -> dict:
                         snake = [{"advert_id": x["advertId"], "nm_id": x["nmId"]} for x in batch]
                         camel = [{"advertId": x["advertId"], "nmId": x["nmId"]} for x in batch]
                         bid_map, state_map = {}, {}
-                        bid_time = datetime.now(ZoneInfo("Europe/Moscow")).isoformat()
+                        bid_time = state_time = ""
                         # Auxiliary reads are allowed to fail independently. The
                         # statistics still publish, but the panel will block any
                         # numeric bid recommendation without a fresh exact bid.
@@ -209,6 +229,11 @@ async def collect() -> dict:
                                 await asyncio.sleep(max(0, MIN_INTERVAL_SECONDS - (loop.time() - _last_request)))
                                 _last_request = loop.time()
                                 target.update(parser(await _request(client, token, "POST", PROMO + endpoint, json=body)))
+                                observed = datetime.now(ZoneInfo("Europe/Moscow")).isoformat()
+                                if endpoint.endswith("get-bids"):
+                                    bid_time = observed
+                                else:
+                                    state_time = observed
                             except Exception as aux_error:
                                 info.setdefault("bid_state_warnings", []).append(f"{endpoint}: {type(aux_error).__name__}")
                         loop = asyncio.get_running_loop()
@@ -217,7 +242,7 @@ async def collect() -> dict:
                         payload = await _request(
                             client, token, "POST", PROMO + "/adv/v1/normquery/stats",
                             json={"from": begin, "to": end, "items": camel})
-                        incoming.extend(parse_rows(shop, payload, bid_map, state_map, bid_time))
+                        incoming.extend(parse_rows(shop, payload, bid_map, state_map, bid_time, state_time))
                         successful_batches += 1
                     except Exception as batch_error:
                         # Preserve successful prior chunks; never pretend to have
@@ -228,14 +253,18 @@ async def collect() -> dict:
                         break
                 if successful_batches:
                     prior = existing_rows(shop)
+                    # A failed auxiliary read must not erase an older observed
+                    # value. Its old timestamp travels with it and the advisor
+                    # will block it as stale.
+                    _preserve_prior_auxiliary(prior, incoming)
                     merged = _upsert_rows(prior, incoming, (0, 1, 2, 3, 4))
                     _atomic_csv(DATA_DIR / shop / "ad_clusters_day.csv", COLUMNS, merged)
                     info.update({"ok": not batch_errors, "new_rows": len(incoming),
                                  "history_rows": len(merged), "factual": bool(incoming),
                                  "batches_collected": successful_batches,
                                  "batches_expected": (len(pairs)+99)//100,
-                                 "bid_rows": sum(1 for r in incoming if len(r) > len(LEGACY_COLUMNS) and r[-3] != ""),
-                                 "clusters_without_fresh_bid": sum(1 for r in incoming if len(r) > len(LEGACY_COLUMNS) and r[-3] == ""),
+                                 "bid_rows": sum(1 for r in incoming if len(r) == len(COLUMNS) and r[-4] != ""),
+                                 "clusters_without_fresh_bid": sum(1 for r in incoming if len(r) == len(COLUMNS) and r[-4] == ""),
                                  "note": "Empty valid API response retained as empty; not imputed"})
                 if batch_errors:
                     info["error"] = batch_errors[0]

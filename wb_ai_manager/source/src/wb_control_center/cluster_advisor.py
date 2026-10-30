@@ -40,17 +40,24 @@ def _key(value: Any) -> str:
 
 
 def _decision_caps(
-    decisions: list[dict[str, Any]], economics_observed_at: Any, now: datetime, freshness_hours: float
-) -> dict[tuple[str, str], float]:
-    caps: dict[tuple[str, str], float] = {}
-    observed = _time(economics_observed_at)
-    if observed is None or (now - observed).total_seconds() > freshness_hours * 3600:
-        return caps
+    decisions: list[dict[str, Any]], economics_observed_at: Any, now: datetime, freshness_hours: float,
+) -> dict[tuple[str, str, str], float]:
+    caps: dict[tuple[str, str, str], float] = {}
     for card in decisions:
         if card.get("blockers") or str(card.get("confidence") or "").lower() == "low":
             continue
         key = str(card.get("decision_key") or "").split(":")
         if len(key) < 4 or key[0] != "advert" or not key[1].isdigit() or not key[2].isdigit():
+            continue
+        explicit_shop = str(card.get("shop") or card.get("store_id") or "").lower()
+        # Economics must carry the cabinet identity at the source. A unique
+        # campaign×SKU match is not proof of which seller token produced it.
+        if explicit_shop not in STORE_NAMES:
+            continue
+        observed_value = economics_observed_at.get(explicit_shop) if isinstance(economics_observed_at, dict) else economics_observed_at
+        observed = _time(observed_value)
+        age = (now - observed).total_seconds() if observed else None
+        if age is None or age < 0 or age > freshness_hours * 3600:
             continue
         cap = None
         for item in card.get("evidence") or []:
@@ -58,7 +65,7 @@ def _decision_caps(
                 cap = _num(item.get("value"))
                 break
         if cap is not None and cap >= 0:
-            caps[(key[1], key[2])] = cap
+            caps[(explicit_shop, key[1], key[2])] = cap
     return caps
 
 
@@ -68,13 +75,10 @@ def _kopecks(value: Any) -> float | None:
 
 
 def _wb_bid_guidance(
-    campaigns: list[dict[str, Any]], observed_at: Any, now: datetime, freshness_hours: float
-) -> dict[tuple[str, str, str], dict[str, Any]]:
+    campaigns: list[dict[str, Any]], observed_at: Any, now: datetime, freshness_hours: float,
+) -> dict[tuple[str, str, str, str], dict[str, Any]]:
     """Read only exact SKU × campaign WB recommendation bands from the optimizer snapshot."""
-    observed = _time(observed_at)
-    if observed is None or (now - observed).total_seconds() < 0 or (now - observed).total_seconds() > freshness_hours * 3600:
-        return {}
-    output: dict[tuple[str, str, str], dict[str, Any]] = {}
+    output: dict[tuple[str, str, str, str], dict[str, Any]] = {}
     for item in campaigns:
         if not isinstance(item, dict):
             continue
@@ -84,6 +88,17 @@ def _wb_bid_guidance(
             continue
         for nm, raw in recommendations.items():
             if not str(nm).isdigit() or not isinstance(raw, dict) or raw.get("_error"):
+                continue
+            explicit_shop = str(item.get("shop") or item.get("store_id") or "").lower()
+            # The caller must preserve the cabinet/token scope from collection.
+            if explicit_shop not in STORE_NAMES:
+                continue
+            observed_value = item.get("observed_at") or (
+                observed_at.get(explicit_shop) if isinstance(observed_at, dict) else observed_at
+            )
+            observed = _time(observed_value)
+            age = (now - observed).total_seconds() if observed else None
+            if age is None or age < 0 or age > freshness_hours * 3600:
                 continue
             data = raw.get("data") if isinstance(raw.get("data"), dict) else raw
             base = data.get("base") if isinstance(data.get("base"), dict) else {}
@@ -111,7 +126,7 @@ def _wb_bid_guidance(
             for query, bands in cluster_bands.items():
                 # A recommendation is a whole product×campaign snapshot. Do not
                 # create fresh-looking partial bands from an old individual query.
-                target = output.setdefault((advert, str(nm), query), {})
+                target = output.setdefault((explicit_shop, advert, str(nm), query), {})
                 target.update({
                     "competitive_bid_rub": _kopecks(competitive.get("bidKopecks")),
                     "leaders_bid_rub": _kopecks(leaders.get("bidKopecks")),
@@ -119,6 +134,7 @@ def _wb_bid_guidance(
                     "reach_medium_bid_rub": bands.get("reachMedium"),
                     "reach_max_bid_rub": bands.get("reachMax"),
                     "observed_at": observed.isoformat(),
+                    "age_hours": round(age / 3600, 2),
                     "source": "WB wb_advert_bids_recommendations",
                 })
     return output
@@ -135,6 +151,7 @@ def analyze_cluster_rows(
     now: datetime | None = None,
     freshness_hours: float = 36.0,
     economics_observed_at: Any = None,
+    cluster_data_observed_at: Any = None,
 ) -> dict[str, Any]:
     """Aggregate exact store × campaign × SKU × WB cluster rows and gate advice."""
     now = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
@@ -145,8 +162,17 @@ def analyze_cluster_rows(
         identity = (str(item.get("shop") or "").lower(), str(item.get("advert_id") or ""), str(item.get("nm_id") or ""))
         if all(identity):
             settings[identity] = item
-    caps = _decision_caps(decisions, economics_observed_at, now, freshness_hours)
-    wb_guidance = _wb_bid_guidance(bid_recommendations or [], bid_recommendations_observed_at, now, freshness_hours)
+    row_shops = {str(row.get("shop") or "").lower() for row in rows if isinstance(row, dict)}
+    # A single timestamp cannot establish which cabinet's economics were read
+    # when the result combines several shops. The live API path supplies a
+    # per-cabinet timestamp map; ambiguous shared inputs fail closed.
+    economics_time = economics_observed_at
+    if len(row_shops) > 1 and not isinstance(economics_observed_at, dict):
+        economics_time = None
+    caps = _decision_caps(decisions, economics_time, now, freshness_hours)
+    wb_guidance = _wb_bid_guidance(
+        bid_recommendations or [], bid_recommendations_observed_at, now, freshness_hours
+    )
     positions: dict[tuple[str, str, str], dict[str, Any]] = {}
     for card in ((query_manager or {}).get("cards") or []):
         if not isinstance(card, dict):
@@ -182,14 +208,18 @@ def analyze_cluster_rows(
         bid_row = max(matching_bids, key=lambda r: _time(r.get("bid_observed_at")) or datetime.min.replace(tzinfo=timezone.utc), default=None)
         bid_time = _time(bid_row.get("bid_observed_at")) if bid_row else None
         bid_kopecks = _num(bid_row.get("cluster_bid_kopecks")) if bid_row else None
-        state_rows = [r for r in day_rows if r.get("cluster_state") and r.get("bid_observed_at")]
-        state_row = max(state_rows, key=lambda r: _time(r.get("bid_observed_at")) or datetime.min.replace(tzinfo=timezone.utc), default=None)
+        state_rows = [r for r in day_rows if r.get("cluster_state") and r.get("cluster_state_observed_at")]
+        state_row = max(state_rows, key=lambda r: _time(r.get("cluster_state_observed_at")) or datetime.min.replace(tzinfo=timezone.utc), default=None)
+        state_time = _time((state_row or {}).get("cluster_state_observed_at"))
+        state_age = (now - state_time).total_seconds() if state_time else None
+        state_fresh = bool(state_age is not None and 0 <= state_age <= freshness_hours * 3600)
         state = str((state_row or bid_row or last).get("cluster_state") or "").lower()
         setting = settings.get((shop, advert, nm), {})
         payment_type = str(setting.get("payment_type") or "").lower()
         bid_type = str(setting.get("bid_type") or "").lower()
         settings_time = _time(setting.get("observed_at"))
-        setting_fresh = bool(settings_time and 0 <= (now - settings_time).total_seconds() <= freshness_hours * 3600)
+        setting_age = (now - settings_time).total_seconds() if settings_time else None
+        setting_fresh = bool(setting_age is not None and 0 <= setting_age <= freshness_hours * 3600)
         search_bid_kopecks = _num(setting.get("search_bid_kopecks"))
         search_placement = str(setting.get("search_placement") or "").strip().lower() in {"true", "1", "yes"}
         campaign_status = str(setting.get("status") or "")
@@ -200,15 +230,21 @@ def analyze_cluster_rows(
             and search_bid_kopecks is not None and search_bid_kopecks > 0
         )
         bid_source = "cluster" if bid_kopecks is not None else None
-        max_cpa = caps.get((advert, nm))
+        max_cpa = caps.get((shop, advert, nm))
         cpa = round(spend / orders, 2) if spend is not None and orders is not None and orders > 0 else None
         ctr = round(clicks / views * 100, 2) if clicks is not None and views is not None and views > 0 else None
         cpc = round(spend / clicks, 2) if spend is not None and clicks is not None and clicks > 0 else None
         position = positions.get((shop, nm, query_key))
-        wb_bid_guidance = wb_guidance.get((advert, nm, query_key))
+        wb_bid_guidance = wb_guidance.get((shop, advert, nm, query_key))
+        cluster_observed_value = cluster_data_observed_at.get(shop) if isinstance(cluster_data_observed_at, dict) else cluster_data_observed_at
+        cluster_observed = _time(cluster_observed_value)
+        cluster_age = (now - cluster_observed).total_seconds() if cluster_observed else None
+        cluster_fresh = bool(cluster_age is not None and 0 <= cluster_age <= freshness_hours * 3600)
         position_value = _num(position.get("position")) if position else None
         position_freshness = ((position or {}).get("freshness") or {}).get("position") or {}
         blockers = []
+        if not cluster_fresh:
+            blockers.append("Время получения фактической статистики WB по кластерам отсутствует, устарело или находится в будущем.")
         if clicks is None or spend is None or orders is None:
             blockers.append("Нет полных расходов, переходов и заказов по кластеру за выбранный период.")
         if max_cpa is None:
@@ -217,11 +253,11 @@ def analyze_cluster_rows(
             blockers.append("Точная экономика товара не допускает рекламных расходов; ставку по кластеру не предлагаем менять.")
         if bid_kopecks is None or bid_kopecks <= 0:
             blockers.append("Индивидуальная ставка этого кластера не получена; ставка поиска товара в кампании показана отдельно и не подменяет её.")
-        elif bid_time is None or (now - bid_time).total_seconds() > freshness_hours * 3600:
+        elif bid_time is None or not 0 <= (now - bid_time).total_seconds() <= freshness_hours * 3600:
             blockers.append("Снимок текущей ставки устарел; обновить рекламу перед решением.")
-        if state != "active":
+        if state != "active" or not state_fresh:
             blockers.append("Текущее активное состояние кластера WB не подтверждено.")
-        if settings_time is None or (now - settings_time).total_seconds() > freshness_hours * 3600:
+        if settings_time is None or not 0 <= (now - settings_time).total_seconds() <= freshness_hours * 3600:
             blockers.append("Снимок настроек кампании устарел или отсутствует; обновить рекламу перед решением.")
         # WB exposes writable cluster bids only for manual CPM campaigns; require
         # the exact live per-cluster bid and a fresh campaign payment setting.
@@ -237,9 +273,17 @@ def analyze_cluster_rows(
                 action = "ПРОВЕРИТЬ ИСКЛЮЧЕНИЕ КЛАСТЕРА"
                 reason = "Есть заметный расход и не менее 20 переходов без заказа; исключение требует ручной проверки состава кластера."
             elif cpa is not None and max_cpa is not None and cpa > max_cpa * 1.15:
-                action = "ТЕСТОВО СНИЗИТЬ СТАВКУ"
-                target_bid = round(current * 0.9, 2)
-                reason = f"CPA {cpa:.2f} ₽ выше лимита {max_cpa:.2f} ₽; предложен осторожный пробный шаг −10%, затем проверить результат через 1 и 3 дня."
+                reduction = min(0.15, max(0.0, 1.0 - max_cpa / cpa))
+                candidate = round(current * (1.0 - reduction), 2)
+                if candidate < current:
+                    action = "ТЕСТОВО СНИЗИТЬ СТАВКУ"
+                    target_bid = candidate
+                    reason = (f"CPA {cpa:.2f} ₽ выше лимита {max_cpa:.2f} ₽; расчётный шаг −{reduction * 100:.1f}% "
+                              "ограничен 15% за одну проверку. Это пробный шаг, а не обещание линейного снижения CPA; "
+                              "сверить расход и заказы через 1 и 3 дня.")
+                else:
+                    action = "СОБРАТЬ БОЛЬШЕ ДАННЫХ"
+                    reason = "Текущая ставка слишком мала для различимого денежного шага с точностью до 0,01 ₽."
             elif orders is not None and orders >= 2 and cpa is not None and max_cpa is not None and cpa <= max_cpa:
                 action = "ОСТАВИТЬ СТАВКУ"
                 target_bid = round(current, 2)
@@ -255,6 +299,8 @@ def analyze_cluster_rows(
             "seller_article": str(last.get("seller_article") or ""), "campaign_name": str(last.get("campaign_name") or ""),
             "norm_query": str(last.get("norm_query") or last.get("query") or ""),
             "date_from": min(str(r.get("date") or "") for r in day_rows), "date_to": max(str(r.get("date") or "") for r in day_rows),
+            "stats_observed_at": cluster_observed.isoformat() if cluster_observed else None,
+            "stats_age_hours": round(cluster_age / 3600, 2) if cluster_age is not None else None,
             "views": views, "clicks": clicks, "atbs": atbs, "orders": orders, "spend_rub": spend,
             "ctr_pct": ctr, "cpc_rub": cpc, "cpa_rub": cpa, "max_cpa_rub": max_cpa,
             "current_bid_rub": round(bid_kopecks / 100, 2) if bid_kopecks is not None else None,
@@ -263,7 +309,10 @@ def analyze_cluster_rows(
             "campaign_search_bid_rub": round(search_bid_kopecks / 100, 2) if campaign_search_bid_available else None,
             "campaign_search_bid_at": settings_time.isoformat() if campaign_search_bid_available and settings_time else None,
             "target_bid_rub": target_bid, "bid_observed_at": bid_time.isoformat() if bid_time else None,
-            "cluster_state": state or None, "organic_position": position_value,
+            "cluster_state": state or None,
+            "cluster_state_observed_at": state_time.isoformat() if state_time else None,
+            "cluster_state_age_hours": round(state_age / 3600, 2) if state_age is not None else None,
+            "organic_position": position_value,
             "organic_position_status": position_freshness.get("status", "missing"),
             "action": action, "reason": reason, "blockers": blockers,
             "source": str(last.get("source") or "WB /adv/v1/normquery/stats"),

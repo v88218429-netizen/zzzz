@@ -116,6 +116,34 @@ jobs:
           rm "$STATE_CIPHER"
           cp wb_ai_manager/source/github_site/data/health.json "$RUNNER_TEMP/wb-runtime-publish/state/health.json"
 
+      - name: Publish encrypted optimizer data for the local panel
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s traffic_state_public.pem
+          test -s wb_ai_manager/source/github_site/data/optimizer-state.json
+          mkdir -p "$RUNNER_TEMP/wb-optimizer-publish/state"
+          tar -czf "$RUNNER_TEMP/optimizer.tar.gz" -C wb_ai_manager/source/github_site/data optimizer-state.json
+          openssl rand -hex 32 > "$RUNNER_TEMP/optimizer-dashboard.key"
+          openssl enc -aes-256-cbc -salt -pbkdf2 \
+            -pass file:"$RUNNER_TEMP/optimizer-dashboard.key" \
+            -in "$RUNNER_TEMP/optimizer.tar.gz" \
+            -out "$RUNNER_TEMP/wb-optimizer-publish/state/optimizer-dashboard.tar.gz.enc"
+          openssl pkeyutl -encrypt -pubin -inkey traffic_state_public.pem \
+            -in "$RUNNER_TEMP/optimizer-dashboard.key" \
+            -out "$RUNNER_TEMP/wb-optimizer-publish/state/optimizer-dashboard.key.enc" \
+            -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:sha256
+          printf '%s\n' '# WB optimizer encrypted state' '' 'Optimizer facts are AES-256 encrypted. The key is wrapped for the configured local private key.' > "$RUNNER_TEMP/wb-optimizer-publish/README.md"
+          git worktree add --detach "$RUNNER_TEMP/wb-optimizer-state-branch" HEAD
+          git -C "$RUNNER_TEMP/wb-optimizer-state-branch" switch --orphan optimizer-state-next
+          git -C "$RUNNER_TEMP/wb-optimizer-state-branch" rm -rf . >/dev/null 2>&1 || true
+          cp -R "$RUNNER_TEMP/wb-optimizer-publish/." "$RUNNER_TEMP/wb-optimizer-state-branch/"
+          git -C "$RUNNER_TEMP/wb-optimizer-state-branch" config user.name "wb-ai-manager[bot]"
+          git -C "$RUNNER_TEMP/wb-optimizer-state-branch" config user.email "wb-ai-manager[bot]@users.noreply.github.com"
+          git -C "$RUNNER_TEMP/wb-optimizer-state-branch" add README.md state/optimizer-dashboard.tar.gz.enc state/optimizer-dashboard.key.enc
+          git -C "$RUNNER_TEMP/wb-optimizer-state-branch" commit -m "optimizer: encrypted three-cabinet recommendations"
+          git -C "$RUNNER_TEMP/wb-optimizer-state-branch" push origin HEAD:optimizer-state --force
+
       - name: Build non-sensitive GitHub status page
         shell: bash
         run: |

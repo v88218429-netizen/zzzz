@@ -341,7 +341,8 @@ def test_outcome_evaluation_is_interrupted_by_later_change():
 
 
 def test_advertising_deep_scan_is_hard_bounded_and_rotates():
-    from wb_control_center.agents.advertising import _deep_scan_limits, _rotating_campaign_window, _rotating_nm_window
+    from wb_control_center.agents.advertising import (_deep_scan_limits, _rotating_campaign_window,
+        _rotating_nm_window, _rotating_slice, _scan_cursor)
 
     assert _deep_scan_limits({"max_campaigns_deep_scan": 99, "max_nms_per_campaign": 12, "deep_scan_concurrency": 4}) == (2, 2, 2)
     assert _deep_scan_limits({}) == (2, 2, 2)
@@ -353,3 +354,9 @@ def test_advertising_deep_scan_is_hard_bounded_and_rotates():
     product_windows = [_rotating_nm_window(products, 2, step, 123) for step in range(5)]
     assert product_windows[0] != product_windows[1]
     assert sorted({nm for window in product_windows for nm in window}) == products
+    assert [x["advertId"] for x in _rotating_slice(campaigns, 2, 4)] == [4, 5]
+    cursor = _scan_cursor(None, [1, 2, 3])
+    cursor["next_campaign_index"] = 2
+    resumed = _scan_cursor({"data": cursor}, [1, 2, 3])
+    assert resumed["next_campaign_index"] == 2
+    assert _scan_cursor({"data": cursor}, [1, 2, 4])["next_campaign_index"] == 0

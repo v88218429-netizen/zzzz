@@ -1,10 +1,12 @@
 name: WB AI Manager UI audit
-# post-css-cache-bust verification
-# verified-after-fresh-source-deploy
-# final-production-ui-verification
+# GitHub-only local demo audit. This never contacts a deployed service.
 
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/wb-ai-manager-ui-audit.yml"
+      - "wb_ai_manager/source/src/wb_control_center/ui/**"
   push:
     branches: [mainggg]
     paths:
@@ -17,18 +19,39 @@ permissions:
 jobs:
   visual-audit:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
-      - name: Wait for production
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install local panel
+        run: python -m pip install -e wb_ai_manager/source
+
+      - name: Start local demo panel
         shell: bash
+        env:
+          WB_MODE: demo
+          DATA_DIR: ${{ runner.temp }}/wb-ai-manager-ui-audit
+          DASHBOARD_AUTH_REQUIRED: "false"
+          STARTUP_AUDIT_ENABLED: "false"
+          AUTO_UPDATE_ENABLED: "false"
+          ENABLE_PUBLIC_WB_SEARCH: "false"
+          GOOGLE_SHEETS_BRIDGE_URL: ""
+          GOOGLE_SHEETS_BRIDGE_KEY: ""
         run: |
           set -euo pipefail
+          python -m uvicorn wb_control_center.api:app --app-dir wb_ai_manager/source/src --host 127.0.0.1 --port 8788 > "$RUNNER_TEMP/wb-ui-panel.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/wb-ui-panel.pid"
           for i in $(seq 1 30); do
-            if curl -fsS --max-time 20 https://wb-ai-manager-live-production.up.railway.app/health >/dev/null; then
+            if curl -fsS --max-time 2 http://127.0.0.1:8788/health >/dev/null; then
               exit 0
             fi
-            sleep 10
+            sleep 2
           done
+          cat "$RUNNER_TEMP/wb-ui-panel.log"
           exit 1
 
       - uses: actions/setup-node@v5
@@ -41,10 +64,10 @@ jobs:
           npm install playwright@1.55.0 >/dev/null
           npx playwright install --with-deps chromium >/dev/null
 
-      - name: Audit live UI
+      - name: Audit local demo UI
         shell: bash
         env:
-          BASE_URL: https://wb-ai-manager-live-production.up.railway.app
+          BASE_URL: http://127.0.0.1:8788
         run: |
           mkdir -p ui-audit
           cat > ui-audit.mjs <<'NODE'
@@ -58,7 +81,7 @@ jobs:
             {name:'mobile', viewport:{width:390,height:844}},
           ];
           const browser=await chromium.launch({headless:true});
-          const report={generated_at:new Date().toISOString(),base,pages:{},console_errors:[]};
+          const report={generated_at:new Date().toISOString(),mode:'DEMO_NO_LIVE_DATA',base,pages:{},console_errors:[]};
 
           for(const mode of modes){
             const ctx=await browser.newContext({viewport:mode.viewport});

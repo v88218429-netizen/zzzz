@@ -14,6 +14,7 @@ def source_row(**overrides):
         "atbs": "5", "orders": "1", "spend_rub": "240",
         "cluster_bid_kopecks": "1000", "cluster_state": "active",
         "bid_observed_at": "2026-10-29T11:00:00+03:00",
+        "cluster_state_observed_at": "2026-10-29T11:00:00+03:00",
         "source": "WB /adv/v1/normquery/stats",
         "quality": "FACT_AD_CLUSTER_DAY_NOT_SEARCH_PHRASE",
     }
@@ -32,6 +33,7 @@ def settings(**overrides):
 def decisions(cap=200):
     return [{
         "decision_key": "advert:15:123:numeric_control",
+        "shop": "yv",
         "evidence": [{"metric": "max_ad_cost_per_order_rub", "value": cap}],
     }]
 
@@ -42,14 +44,15 @@ def test_exact_cluster_exposes_metrics_and_capped_test_bid_only_with_full_eviden
         "freshness": {"position": {"status": "fresh"}},
     }]}
     result = analyze_cluster_rows([source_row()], settings(), decisions(), position, now=NOW,
-                                 economics_observed_at="2026-10-29T11:00:00+03:00")
+                                 economics_observed_at="2026-10-29T11:00:00+03:00",
+                                 cluster_data_observed_at="2026-10-29T11:00:00+03:00")
     row = result["rows"][0]
     assert row["clicks"] == 30
     assert row["cpa_rub"] == 240
     assert row["current_bid_rub"] == 10
     assert row["current_bid_source"] == "cluster"
     assert row["campaign_search_bid_rub"] == 12
-    assert row["target_bid_rub"] == 9
+    assert row["target_bid_rub"] == 8.5
     assert row["action"] == "ТЕСТОВО СНИЗИТЬ СТАВКУ"
     assert row["organic_position"] == 18
     assert row["manual_only"] is True
@@ -152,6 +155,7 @@ def test_stale_unit_economics_block_any_bid_advice():
 
 def test_exact_fresh_wb_bid_bands_join_by_campaign_sku_and_normalized_query():
     recommendations = [{
+        "shop": "yv",
         "campaign_id": 15,
         "recommendations": {"123": {"data": {
             "base": {"competitiveBid": {"bidKopecks": 8000}, "leadersBid": {"bidKopecks": 15000}},
@@ -174,7 +178,7 @@ def test_exact_fresh_wb_bid_bands_join_by_campaign_sku_and_normalized_query():
 
 
 def test_wb_bid_guidance_does_not_cross_campaign_sku_query_or_freshness():
-    recommendations = [{"campaign_id": 999, "recommendations": {"123": {"data": {
+    recommendations = [{"shop": "yv", "campaign_id": 999, "recommendations": {"123": {"data": {
         "normQueries": [{"normQuery": "таз строительный", "reachMedium": {"bidKopecks": 7000}}],
     }}}}]
     result = analyze_cluster_rows(
@@ -184,6 +188,53 @@ def test_wb_bid_guidance_does_not_cross_campaign_sku_query_or_freshness():
         economics_observed_at="2026-10-29T11:00:00+03:00",
     )
     assert result["rows"][0]["wb_bid_guidance"] is None
+
+
+def test_wb_guidance_and_economic_caps_do_not_cross_ambiguous_store_scope():
+    recommendations = [{"campaign_id": 15, "recommendations": {"123": {"data": {
+        "normQueries": [{"normQuery": "таз строительный", "reachMedium": {"bidKopecks": 7000}}],
+    }}}}]
+    rows = [source_row(), source_row(shop="ap")]
+    campaign_settings = settings() + [dict(settings()[0], shop="ap")]
+    result = analyze_cluster_rows(
+        rows, campaign_settings, decisions(), now=NOW,
+        bid_recommendations=recommendations,
+        bid_recommendations_observed_at="2026-10-29T11:30:00+03:00",
+        economics_observed_at="2026-10-29T11:00:00+03:00",
+    )
+    assert len(result["rows"]) == 2
+    assert all(row["wb_bid_guidance"] is None for row in result["rows"])
+    assert all(row["max_cpa_rub"] is None for row in result["rows"])
+
+
+def test_missing_explicit_cabinet_blocks_inferred_wb_guidance_and_economics():
+    recommendations = [{"campaign_id": 15, "recommendations": {"123": {"data": {
+        "normQueries": [{"normQuery": "таз строительный", "reachMedium": {"bidKopecks": 7000}}],
+    }}}}]
+    card = {"decision_key": "advert:15:123:numeric_control",
+            "evidence": [{"metric": "max_ad_cost_per_order_rub", "value": 200}]}
+    result = analyze_cluster_rows(
+        [source_row()], settings(), [card], now=NOW,
+        bid_recommendations=recommendations,
+        bid_recommendations_observed_at="2026-10-29T11:30:00+03:00",
+        economics_observed_at="2026-10-29T11:00:00+03:00",
+    )
+    row = result["rows"][0]
+    assert row["wb_bid_guidance"] is None
+    assert row["max_cpa_rub"] is None
+    assert row["target_bid_rub"] is None
+
+
+def test_future_dated_economics_bid_and_campaign_snapshots_are_blocked():
+    result = analyze_cluster_rows(
+        [source_row(bid_observed_at="2026-10-30T13:00:00+03:00")],
+        settings(observed_at="2026-10-30T13:00:00+03:00"), decisions(), now=NOW,
+        economics_observed_at="2026-10-30T13:00:00+03:00",
+    )
+    row = result["rows"][0]
+    assert row["target_bid_rub"] is None
+    assert row["campaign_search_bid_rub"] is None
+    assert any("устарел" in blocker or "отсутствует" in blocker for blocker in row["blockers"])
     result = analyze_cluster_rows(
         [source_row()], settings(), decisions(), now=NOW,
         bid_recommendations=[{"campaign_id": 15, "recommendations": {"123": {"data": {
