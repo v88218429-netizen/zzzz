@@ -1,10 +1,10 @@
 /**
- * Sellmonitor GitHub Central Worker v1.3.49
+ * Sellmonitor GitHub Central Worker v1.3.53
  * GitHub is source-of-truth/scheduler. This Apps Script project is only
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.52',
+  VERSION: 'github-worker-1.3.53',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -6272,43 +6272,26 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
       var rows=[];
       parsed.forEach(function(r){var row=byId[r.id];if(row)rows.push({id:r.id,row:row});});
       var stale=false;
-      mark('STATE_READ_START_BATCHGET');
       rows.sort(function(a,b){return a.row-b.row;});
-      var stateRuns=[];
-      rows.forEach(function(item){
-        var run=stateRuns[stateRuns.length-1];
-        if(!run||item.row>run.end+1)stateRuns.push({start:item.row,end:item.row,items:[item]});
-        else {run.end=item.row;run.items.push(item);}
-      });
-      var batchSize=40,requestCount=0;
-      for(var offset=0;offset<stateRuns.length;offset+=batchSize){
-        var chunk=stateRuns.slice(offset,offset+batchSize);
-        var query=chunk.map(function(run){
-          return 'ranges='+encodeURIComponent(orderSheet+'!A'+run.start+':G'+run.end);
-        }).join('&')+'&valueRenderOption=FORMATTED_VALUE';
-        var response=fetchSheetApi(apiBase+'/values:batchGet?'+query,{method:'get'});
-        var code=response.getResponseCode();
-        if(code<200||code>=300){
-          throw new Error('FBS_STATE_BATCH_READ_HTTP_'+code+':'+sheetApiFailure(response));
-        }
-        var payload={};
-        try{payload=JSON.parse(response.getContentText()||'{}');}
-        catch(parseError){throw new Error('FBS_STATE_BATCH_READ_INVALID_JSON');}
-        var ranges=payload.valueRanges||[];
-        if(ranges.length!==chunk.length)
-          throw new Error('FBS_STATE_BATCH_READ_RANGE_COUNT_MISMATCH:'+ranges.length+':'+chunk.length);
-        ranges.forEach(function(rangeResult,index){
-          var matrix=rangeResult.values||[],run=chunk[index];
-          run.items.forEach(function(item){
-            var values=matrix[item.row-run.start]||[];
-            if(String(values[0]||'')!==item.id){stale=true;return;}
-            stateByRow[item.row]=[values[4]||'',values[5]||'',values[6]||''];
-          });
-        });
-        requestCount++;
+      if(!rows.length){
+        mark('STATE_READ_DONE_NATIVE_BLOCK_0_ROWS');
+        return false;
       }
-      mark('STATE_READ_DONE_BATCHGET_'+requestCount+'_RANGES_'+stateRuns.length);
-      console.log('FBS_STAGE_STATE_READ ranges='+stateRuns.length+' requests='+requestCount+' ms='+(Date.now()-fbsStarted));
+      // Read one bounded native block instead of calling Sheets REST for many
+      // scattered ranges. A 15k-row FBS ledger is at most ~105k cells (A:G),
+      // which avoids intermittent batchGet response timeouts during recovery.
+      var firstRow=rows[0].row,lastRow=rows[rows.length-1].row;
+      var span=lastRow-firstRow+1;
+      if(firstRow<2||span>20000)throw new Error('FBS_STATE_NATIVE_BLOCK_SPAN_UNEXPECTED:'+span);
+      mark('STATE_READ_START_NATIVE_BLOCK_'+span+'_ROWS');
+      var matrix=orderSheetNative.getRange(firstRow,1,span,7).getDisplayValues();
+      rows.forEach(function(item){
+        var values=matrix[item.row-firstRow]||[];
+        if(String(values[0]||'')!==item.id){stale=true;return;}
+        stateByRow[item.row]=[values[4]||'',values[5]||'',values[6]||''];
+      });
+      mark('STATE_READ_DONE_NATIVE_BLOCK_'+span+'_ROWS');
+      console.log('FBS_STAGE_STATE_READ_NATIVE rows='+rows.length+' span='+span+' ms='+(Date.now()-fbsStarted));
       return stale;
     }
     if(readExistingStates_()){
