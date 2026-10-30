@@ -5371,68 +5371,11 @@ function sellmonitorGithubPublishOzonSummaryOrders_() {
   }
   var sourceLastSuccess=ozonHealth?String(ozonHealth[1]||'').trim():'';
   var sourceStatus=ozonHealth?String(ozonHealth[3]||'').trim():'СТРОКА СТАТУСА НЕ НАЙДЕНА';
-  var sourceFallback=false, fallbackExpected={}, sourceActivityVerified=false, sourceActivityByCabinet={};
+  var sourceFallback=false, sourceActivityVerified=false;
   if(!ozonHealth||!sourceLastSuccess||!/работает/i.test(sourceStatus)){
-    var fallbackOk=true, fallbackStamps=[];
-    var todayKey=Utilities.formatDate(new Date(),SMC_OZON_SUMMARY.timezone,'yyyy-MM-dd');
-    var minFreshDay=sellmonitorGithubOzonShiftDay_(todayKey,-1);
-    var sourceActivityRows=sourceSheet.getRange(2,1,last-1,8).getValues(), sourceActivityNow=Date.now();
-    Object.keys(SMC_OZON_SUMMARY.stores).forEach(function(cabinet){sourceActivityByCabinet[cabinet]={rows:0,recentRows:0,maxMs:0,maxDay:'',minDay:''};});
-    sourceActivityRows.forEach(function(row){
-      var cabinet=String(row[0]||'').trim(),bucket=sourceActivityByCabinet[cabinet];
-      if(!bucket)return;
-      var stamp=row[7] instanceof Date?row[7]:new Date(row[7]);
-      if(isNaN(stamp.getTime()))return;
-      var day=Utilities.formatDate(stamp,SMC_OZON_SUMMARY.timezone,'yyyy-MM-dd'),ms=stamp.getTime();
-      bucket.rows++;if(!bucket.minDay||day<bucket.minDay)bucket.minDay=day;
-      if(ms>bucket.maxMs){bucket.maxMs=ms;bucket.maxDay=day;}
-      if(sourceActivityNow-ms>=0&&sourceActivityNow-ms<=36*60*60*1000)bucket.recentRows++;
-    });
-    var sourceActivityLatest=0, sourceActivityFresh=true;
-    Object.keys(sourceActivityByCabinet).forEach(function(cabinet){
-      var bucket=sourceActivityByCabinet[cabinet];
-      if(bucket.rows<100||bucket.recentRows<1||!bucket.maxDay||bucket.maxDay<minFreshDay||bucket.minDay>sellmonitorGithubOzonShiftDay_(todayKey,-7)||sourceActivityNow-bucket.maxMs>36*60*60*1000)sourceActivityFresh=false;
-      if(bucket.maxMs>sourceActivityLatest)sourceActivityLatest=bucket.maxMs;
-    });
-    function auditDate_(value){
-      if(value instanceof Date&&!isNaN(value.getTime()))return value;
-      var m=String(value||'').match(/^(\\d{2})\\.(\\d{2})\\.(\\d{4})(?:\\s+(\\d{1,2}):(\\d{2})(?::(\\d{2}))?)?$/);
-      if(!m)return null;
-      return new Date(Number(m[3]),Number(m[2])-1,Number(m[1]),Number(m[4]||0),Number(m[5]||0),Number(m[6]||0));
-    }
-    Object.keys(SMC_OZON_SUMMARY.stores).forEach(function(cabinet){
-      var cfg=SMC_OZON_SUMMARY.stores[cabinet],ss=SpreadsheetApp.openById(cfg.id),log=ss.getSheetByName('14_API_Заказы_Журнал');
-      var entry=null;
-      if(log&&log.getLastRow()>1){
-        var count=Math.min(80,log.getLastRow()-1),start=log.getLastRow()-count+1,values=log.getRange(start,1,count,12).getValues();
-        for(var li=values.length-1;li>=0;li--){
-          var row=values[li],publishedAt=auditDate_(row[0]),periodEnd=sellmonitorGithubOzonDateKey_(row[6]);
-          if(String(row[1]||'')!==cfg.name||String(row[2]||'')!=='Ozon Заказы'||!String(row[3]||'').trim()||
-             !(Number(row[4])>0)||!/^(OK:|OK\\b)/.test(String(row[11]||''))||!String(row[10]||'').trim()||
-             periodEnd<minFreshDay||!publishedAt)continue;
-          var age=Date.now()-publishedAt.getTime();
-          if(age<0||age>24*60*60*1000)continue;
-          entry={sha:String(row[10]),source_updated:String(row[3]),published_at:publishedAt.toISOString(),period_end:periodEnd};
-          break;
-        }
-      }
-      if(!entry)fallbackOk=false;
-      else{fallbackExpected[cabinet]=entry;fallbackStamps.push(entry.source_updated);}
-    });
-    if(!fallbackOk&&!sourceActivityFresh){
-      return {ok:false,action:'publish_ozon_summary_orders',source_id:SMC_OZON_SUMMARY.sourceId,
-        source_status:sourceStatus,source_last_success:sourceLastSuccess||null,
-        reason:'OZON_SOURCE_EXPORT_NOT_VERIFIED; no recent identical snapshot or validated per-cabinet activity; summaries preserved'};
-    }
-    sourceFallback=true;
-    if(sourceActivityFresh){
-      sourceActivityVerified=true;
-      sourceLastSuccess=new Date(sourceActivityLatest).toISOString();
-      sourceStatus='⚠ API heartbeat is red; per-cabinet order activity is recent and structurally validated';
-    }else{
-      sourceLastSuccess=fallbackStamps.sort().pop()||sourceLastSuccess;
-      sourceStatus='⚠ API heartbeat is red; publishing only an identical recent readback snapshot';
-    }
+    return {ok:false,action:'publish_ozon_summary_orders',source_id:SMC_OZON_SUMMARY.sourceId,
+      source_status:sourceStatus,source_last_success:sourceLastSuccess||null,
+      reason:'OZON_SOURCE_EXPORT_NOT_VERIFIED; summary workbooks preserved'};
   }
   var sourceUpdated=sourceLastSuccess;
   var raw=sourceSheet.getRange(1,1,last,19).getValues();
