@@ -82,6 +82,16 @@ def test_dashboard_has_multistore_advertising_funnel_and_price_scenario_tools():
     assert "async def traffic_bundle" in worker and "organic_sku_day.csv" in worker
 
 
+def test_unscoped_advertising_snapshot_is_hidden_for_selected_store():
+    root = Path(__file__).parents[1]
+    html = (root / "src" / "wb_control_center" / "ui" / "dashboard.html").read_text(encoding="utf-8")
+    js = (root / "src" / "wb_control_center" / "ui" / "dashboard.js").read_text(encoding="utf-8")
+    assert 'id="ads-scope-note"' in html and 'id="ads-connected-snapshot"' in html
+    assert "adsSnapshot.style.display=selected==='all'?'':'none'" in js
+    assert "его нельзя достоверно сопоставить с выбранным магазином" in js
+    assert "renderAdvertising();" in js
+
+
 def test_live_card_identity_overrides_historical_fallback():
     from wb_control_center.api import _entity_map
     portfolio = {"own_27": {"products": [{"sku": "111", "name": "СТАРЫЙ-АРТИКУЛ"}]}}

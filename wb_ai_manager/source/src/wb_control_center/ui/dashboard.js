@@ -761,6 +761,11 @@ async function reviewQueuedAction(button){
 
 function renderAdvertising(){
   const a=adSummary(), names=campaignNames();
+  const adsSnapshot=$('ads-connected-snapshot'), adsScopeNote=$('ads-scope-note'), selected=state.selectedStore||'all';
+  if(adsSnapshot) adsSnapshot.style.display=selected==='all'?'':'none';
+  if(adsScopeNote) adsScopeNote.textContent=selected==='all'
+    ?'Отдельный снимок подключённого рекламного кабинета. Его магазин не подтверждён, поэтому эти суммы не являются итогом по трём магазинам. Для сопоставления магазинов используйте таблицу выше; ставки по кластерам показаны ниже.'
+    :'Снимок подключённого рекламного кабинета скрыт: его нельзя достоверно сопоставить с выбранным магазином. Данные выбранного кабинета остаются в таблицах общего сборщика и ставок по кластерам.';
   const plans=(state.data.decisions||[]).filter(d=>String(d.decision_key||'').startsWith('advert:')&&(String(d.decision_key||'').includes('numeric_control')||String(d.decision_key||'').includes('zero_orders')));
   $('ads-spend').textContent=a.error&&!a.rows.length?'—':rub(a.spend);
   $('ads-orders').textContent=a.error&&!a.rows.length?'—':num(a.orders);
