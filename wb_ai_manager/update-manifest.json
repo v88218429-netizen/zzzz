@@ -51,7 +51,7 @@
         {
           "path": "plugin.json",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/plugin.json",
-          "sha256": "05b3dab3cdd0d55edb2f7cbe77b8c0741a7db7610cdc470093eb05a319081c52"
+          "sha256": "4b377e71a6522869cf202387469bf0bcce0b7d26097ce9cdb15db08db94f0172"
         },
         {
           "path": "pyproject.toml",
@@ -142,7 +142,7 @@
         {
           "path": "src/wb_control_center/__init__.py",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/src/wb_control_center/__init__.py",
-          "sha256": "1948417bebb6548c655a3e959ec4136b97fee58ffd347e3cdd1c0fddb878f79d"
+          "sha256": "9cc1506445aeaa29e12dfa795ad25ff33b984a32e8c1231b1fbfbd3b2887fde0"
         },
         {
           "path": "src/wb_control_center/__main__.py",
