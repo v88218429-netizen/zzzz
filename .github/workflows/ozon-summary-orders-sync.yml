@@ -172,26 +172,40 @@ jobs:
                   seen[posting_number] = signature
                   return True
 
+              def posting_day(timestamp, flow):
+                  try:
+                      parsed = datetime.datetime.fromisoformat(str(timestamp).replace("Z", "+00:00"))
+                      if parsed.tzinfo is None:
+                          raise ValueError("timezone missing")
+                      return parsed.astimezone(MOSCOW).date().isoformat()
+                  except (TypeError, ValueError) as exc:
+                      raise RuntimeError("OZON_" + flow + "_INVALID_POSTING_TIMESTAMP:" + label + ":" + str(exc)[:120])
+
               offset = 0
+              previous_fbo_oldest = None
               while True:
                   api_context.update({"store": label, "flow": "FBO", "page": store_pages + 1})
                   response = api_post("/v3/posting/fbo/list", {
-                      "dir": "ASC", "filter": dict(window), "limit": 100, "offset": offset,
+                      "dir": "DESC", "filter": dict(window), "limit": 100, "offset": offset,
                       "with": {"analytics_data": False, "financial_data": False},
                   }, headers)
                   page, postings, has_next = page_parts(response)
                   store_pages += 1
                   store_postings += len(postings)
+                  page_dates = []
                   for posting in postings:
                       timestamp = posting.get("in_process_at") or posting.get("created_at")
+                      if not timestamp:
+                          raise RuntimeError("OZON_FBO_REQUIRED_POSTING_FIELDS_MISSING:" + label)
+                      day = posting_day(timestamp, "FBO")
+                      page_dates.append(day)
+                      if day < COVERAGE_FROM or day > coverage_to:
+                          continue
                       posting_number = str(posting.get("posting_number") or "").strip()
                       order_id = str(posting.get("order_id") or "").strip()
-                      if not timestamp or not posting_number or not order_id:
+                      if not posting_number or not order_id:
                           raise RuntimeError("OZON_FBO_REQUIRED_POSTING_FIELDS_MISSING:" + label)
                       if not register_posting("FBO", posting, str(timestamp), posting_number, order_id):
-                          continue
-                      day = datetime.datetime.fromisoformat(str(timestamp).replace("Z", "+00:00")).astimezone(MOSCOW).date().isoformat()
-                      if not COVERAGE_FROM <= day <= coverage_to:
                           continue
                       products = posting.get("products")
                       if not isinstance(products, list) or not products:
@@ -205,6 +219,18 @@ jobs:
                               raise RuntimeError("OZON_FBO_PRODUCT_ID_OR_QUANTITY_MISSING:" + label)
                           row_key = (cabinet, day, posting_number, order_id, offer, sku, title)
                           records_by_key[row_key] = records_by_key.get(row_key, 0) + int(qty)
+                  if page_dates != sorted(page_dates, reverse=True):
+                      raise RuntimeError("OZON_FBO_DESCENDING_DATE_ORDER_UNVERIFIED:" + label)
+                  if page_dates:
+                      page_oldest, page_newest = min(page_dates), max(page_dates)
+                      if previous_fbo_oldest and page_newest > previous_fbo_oldest:
+                          raise RuntimeError("OZON_FBO_PAGE_BOUNDARY_ORDER_UNVERIFIED:" + label)
+                      retained = sum(COVERAGE_FROM <= day <= coverage_to for day in page_dates)
+                      print(f"OZON_API_{label}_FBO_PAGE_DATES={page_oldest}..{page_newest};retained={retained}")
+                      if page_oldest < COVERAGE_FROM:
+                          print(f"OZON_API_{label}_FBO_STOP=coverage_start;page={store_pages}")
+                          break
+                      previous_fbo_oldest = page_oldest
                   if not has_next:
                       break
                   if not postings:
@@ -215,26 +241,31 @@ jobs:
 
               cursor = ""
               seen_cursors = set()
+              previous_fbs_oldest = None
               while True:
                   api_context.update({"store": label, "flow": "FBS", "page": store_pages + 1})
                   body = {
-                      "dir": "ASC", "filter": dict(window, status=""), "limit": 100, "cursor": cursor,
+                      "dir": "DESC", "filter": dict(window, status=""), "limit": 100, "cursor": cursor,
                       "with": {"analytics_data": False, "financial_data": False},
                   }
                   response = api_post("/v4/posting/fbs/list", body, headers)
                   page, postings, has_next = page_parts(response)
                   store_pages += 1
                   store_postings += len(postings)
+                  page_dates = []
                   for posting in postings:
                       timestamp = posting.get("in_process_at") or posting.get("created_at")
+                      if not timestamp:
+                          raise RuntimeError("OZON_FBS_REQUIRED_POSTING_FIELDS_MISSING:" + label)
+                      day = posting_day(timestamp, "FBS")
+                      page_dates.append(day)
+                      if day < COVERAGE_FROM or day > coverage_to:
+                          continue
                       posting_number = str(posting.get("posting_number") or "").strip()
                       order_id = str(posting.get("order_id") or "").strip()
-                      if not timestamp or not posting_number or not order_id:
+                      if not posting_number or not order_id:
                           raise RuntimeError("OZON_FBS_REQUIRED_POSTING_FIELDS_MISSING:" + label)
                       if not register_posting("FBS", posting, str(timestamp), posting_number, order_id):
-                          continue
-                      day = datetime.datetime.fromisoformat(str(timestamp).replace("Z", "+00:00")).astimezone(MOSCOW).date().isoformat()
-                      if not COVERAGE_FROM <= day <= coverage_to:
                           continue
                       products = posting.get("products")
                       if not isinstance(products, list) or not products:
@@ -248,6 +279,18 @@ jobs:
                               raise RuntimeError("OZON_FBS_PRODUCT_ID_OR_QUANTITY_MISSING:" + label)
                           row_key = (cabinet, day, posting_number, order_id, offer, sku, title)
                           records_by_key[row_key] = records_by_key.get(row_key, 0) + int(qty)
+                  if page_dates != sorted(page_dates, reverse=True):
+                      raise RuntimeError("OZON_FBS_DESCENDING_DATE_ORDER_UNVERIFIED:" + label)
+                  if page_dates:
+                      page_oldest, page_newest = min(page_dates), max(page_dates)
+                      if previous_fbs_oldest and page_newest > previous_fbs_oldest:
+                          raise RuntimeError("OZON_FBS_PAGE_BOUNDARY_ORDER_UNVERIFIED:" + label)
+                      retained = sum(COVERAGE_FROM <= day <= coverage_to for day in page_dates)
+                      print(f"OZON_API_{label}_FBS_PAGE_DATES={page_oldest}..{page_newest};retained={retained}")
+                      if page_oldest < COVERAGE_FROM:
+                          print(f"OZON_API_{label}_FBS_STOP=coverage_start;page={store_pages}")
+                          break
+                      previous_fbs_oldest = page_oldest
                   if not has_next:
                       break
                   if not postings:
