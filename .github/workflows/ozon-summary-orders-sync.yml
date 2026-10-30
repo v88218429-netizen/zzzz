@@ -143,4 +143,8 @@ jobs:
                     +" ARCHIVED_ROWS="+str(store.get("archived_rows"))
                     +" READBACK="+str(store.get("readback"))
                     +" SHA256="+str(store.get("sha256")))
+          source_status=str(result.get("source_status") or "")
+          source_last_success=str(result.get("source_last_success") or "")
+          if "red" in source_status.lower() or not source_last_success:
+              raise SystemExit("OZON_SOURCE_NOT_HEALTHY: summaries were republished from an unverified source; see source status above")
           PY
