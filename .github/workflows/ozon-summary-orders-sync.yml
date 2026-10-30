@@ -83,7 +83,7 @@ jobs:
                   print("OZON_PUBLISH_REQUEST_ERROR="+last)
               else:
                   if isinstance(result,dict) and result.get("ok") is True and not needs_resume(result):
-                  break
+                      break
                   last=json.dumps({
                       "reason":result.get("reason") if isinstance(result,dict) else None,
                       "source_status":result.get("source_status") if isinstance(result,dict) else None,
