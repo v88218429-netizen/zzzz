@@ -1,0 +1,144 @@
+# WB AI Manager v1.1.19
+
+- В рекламе раздельно показываются индивидуальная ставка поискового кластера и ставка поиска товара из настроек кампании.
+- Ставка товара не выдаётся за ставку кластера и не используется для рекомендации, если индивидуальная ставка кластера не подтверждена.
+- Для всех магазинов и выбранного магазина видны счётчики наличия каждого уровня ставки.
+- Исправлена подпись целевой ставки: сохранение текущего значения больше не обозначается как пробное снижение на 10%.
+
+# WB AI Manager v1.1.18
+
+- Добавлен разбор рекламы по фактическим кластерам WB: показы, переходы, корзины, заказы, расход и текущая ставка.
+- Ставки и состояние кластера собираются отдельно по каждому магазину из Promotion API через GitHub-сборщик.
+- Панель показывает пробный план снижения только при свежей ставке, точной экономике товара и подтверждённой кампании CPM; остальные решения явно блокируются с причиной.
+- Позиция органики присоединяется только при точном совпадении магазина, nmID и кластера; рекламная позиция не подменяет органическую.
+- Панель остаётся без автоматических изменений ставок или исключения кластеров.
+
+# WB AI Manager v1.1.17
+
+## Сценарии по решениям и безопасное подтверждение
+
+- Из карточки решения можно собрать редактируемый черновик сценария с фактами, источниками, ограничениями и контрольной точкой.
+- Черновик требует подтверждённой привязки к магазину и не выполняет изменения.
+- Статус безопасности отражает реальные настройки: по умолчанию запись выключена, автоматические изменения запрещены.
+- Ручное выполнение допускает только постановку активной рекламной кампании на паузу и восстановление одной карточки из корзины; перед записью панель заново читает актуальное состояние именно подключённого кабинета.
+- Другие типы записей в очередь видны, но не могут быть выполнены до отдельной проверки их источников и целевого кабинета.
+- Для восстановления карточки панель показывает дату помещения в корзину и число дней до окончательного удаления. Перед отправкой повторно проверяется полный актуальный список корзины.
+- Корзина и восстановление подключены к официальному интерфейсу Wildberries из локального приложения, без стороннего посредника.
+
+# WB AI Manager v1.1.15
+
+## Сверка рекламы и воронки
+
+- В воронке добавлена таблица сопоставления рекламы и общей воронки только по одинаковым магазинам, датам и nmID.
+- Рекламные и общие заказы показываются раздельно; совпадение товара и даты не объявляется рекламной атрибуцией.
+- Строки без nmID и товаро-дни, имеющиеся только в одном источнике, видны отдельно.
+- Проверка работает в режиме чтения и не меняет ставки, цены или данные WB.
+
+# WB AI Manager v1.1.14
+
+## Изменения в 1.1.14
+
+- рекламная аналитика загружается из зашифрованного архива в GitHub и расшифровывается внутри панели;
+- сборщик проверяет полноту и уникальность строк по трём магазинам и сохраняет данные в зашифрованном виде;
+- передача рекламных данных через таблицы и внешние сценарии удалена из потока обновления.
+
+# WB AI Manager v1.1.13
+
+## Исправление в 1.1.13
+
+- манифест обновления ограничен путями, разрешёнными установщиком; проверка теперь подтверждает совместимость каждого пути.
+
+# WB AI Manager v1.1.12
+
+## Исправления в 1.1.12
+
+- пакет обновления теперь включает все модули панели и исполняемые сценарии запуска, включая проверку доступа к панели;
+- обновление с версии 1.1.10 устанавливает недостающие файлы, необходимые для запуска версии 1.1.11 и новее.
+
+Изменения данных, цены, ставки и остатки через панель не выполняются.
+
+# WB AI Manager v1.1.11
+
+## Новое в 1.1.11
+
+- добавлены сводка по магазинам и выбор одного кабинета для рекламной аналитики, воронки и расчёта цены;
+- в рекламе появились строки по товару и дню, а в воронке — открытия, корзины, заказы и конверсии между этапами;
+- добавлено сравнение платного и расчётного органического трафика с явным статусом полноты источника;
+- добавлен локальный калькулятор прибыли и безубыточной цены с переключателями расходов; сценарий хранится только в браузере;
+- трафик читается из прямой выгрузки сборщика, а при её отсутствии — из уже подключённой таблицы рекламного центра;
+- неподтверждённые расходы и отсутствующие строки не превращаются в нули; складские общие итоги не приписываются одному магазину.
+
+Изменения панели работают в режиме только чтения: они не меняют цены, ставки рекламы, остатки или таблицы.
+
+# WB AI Manager v1.1.10
+
+## Исправление в 1.1.10
+
+- в отчёт удержаний WB передаются обязательные `limit` и `offset`; метод больше не отвечает ошибкой 400 из-за отсутствующих параметров.
+
+# WB AI Manager v1.1.9
+
+## Исправление в 1.1.9
+
+- предел ответа финансового соединителя повышен до 12 000 000 знаков, чтобы вместить недельный отчёт целиком;
+- пустые переменные контейнера больше не перекрывают адрес и ключ таблицы из файла `.env`.
+
+# WB AI Manager v1.1.8
+
+## Исправление в 1.1.8
+
+- финансовая выгрузка запрашивает до 100 000 строк за страницу — предел метода WB;
+- предел ответа соединителя повышен до 1 000 000 знаков, чтобы все 778 строк недельного отчёта помещались в один ответ и курсор доходил до подтверждённого конца.
+
+# WB AI Manager v1.1.7
+
+## Исправление в 1.1.7
+
+- ответ WB без тела (`204`, который соединитель возвращает как пустой объект) считается подтверждённым концом финансовой выгрузки; пустая неделя отображается как полный отчёт с нулём строк, а не как сбой формата.
+
+# WB AI Manager v1.1.5
+
+## Новое в 1.1.5
+
+- агент читает новые новости портала WB по курсору, сохраняет исходный текст, дату, источник и отметку о возможной связи с работой магазина;
+- агент отдельно сверяет подписку «Джем» и подключённые опции конструктора тарифов; недоступность источника не затирает последний успешный снимок;
+- в панели добавлены разделы новостей, подписки и опций; публичная панель закрывается проверкой имени и пароля;
+- история снимков хранится в подключённом постоянном диске; изменения данных WB по-прежнему запрещены.
+
+Это обновление не включает автоответы покупателям, отправку жалоб, подключение услуг, изменение цен или остатков.
+
+## Исправления в 1.1.4
+
+Iterative stability audit of the standalone v1.1 control-and-learning release. The release gate is no longer a single successful run: any newly discovered defect resets the audit, and the candidate is accepted only after two consecutive independent clean passes.
+
+## Corrections in 1.1.4
+
+- made the read-only safety boundary a code-level build fuse: changing `.env`, policy, approval mode or guarded-auto settings cannot enable WB writes in this release;
+- removed the raw `wb-mcp` external example that could bypass the safe high-level gateway; both MCP configs now use the local guarded `stdio` launcher;
+- corrected the MCP setup error so it points to the real `START_WB_AI_MANAGER.command` launcher;
+- fixed `.env` credential writes so backslashes and regex replacement sequences in tokens/keys are stored literally;
+- AUTO now surfaces connection setup on first launch when no WB token is present;
+- blocking Google Sheets/browser and source-discovery work is moved off the FastAPI event loop;
+- Google Sheets browser export no longer fails merely because an unrelated stale `.crdownload` exists;
+- DEMO is now genuinely network-independent: no remote policy, auto-update or public WB storefront calls are needed for the demo run;
+- optional public competitor search now has bounded timeout/failure behavior instead of being able to stall a full audit for minutes;
+- AUTO sheet refresh prefers a configured Apps Script bridge before browser-export fallback;
+- runtime supervisor detects an already-running WB AI Manager before any update operation and detects dead child processes promptly;
+- both live launch paths (`AUTO` and `Мой Wildberries`) now restore `WB_MODE=live`, `DATA_DIR=./data` and public-search state after DEMO;
+- version metadata is aligned to `1.1.4` across the application, package and plugin.
+
+## Verification gate
+
+The final candidate is required to pass, from clean state/extraction:
+
+- complete Python test suite;
+- compile/shell/JavaScript syntax checks;
+- `update_smoke.py`;
+- deterministic DEMO with all registered agents and Decision Engine;
+- API/UI endpoint smoke tests and truthful read-only health state;
+- hard-fuse write-block probe under deliberately permissive runtime settings;
+- duplicate-instance supervisor behavior;
+- full ZIP update, deliberately broken update, rollback and executable-bit preservation;
+- preservation of tenant-owned `catalog.csv` and `watch_queries.yaml`;
+- real v1.0 SQLite schema/data migration;
+- package hygiene: no secrets, `.env`, venv, user databases, caches or build artifacts.
