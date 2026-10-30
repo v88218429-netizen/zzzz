@@ -16,7 +16,7 @@ permissions:
   actions: read
 
 concurrency:
-  group: wb-traffic-github-sync
+  group: sellmonitor-summary-publish-serial
   cancel-in-progress: false
 
 jobs:
