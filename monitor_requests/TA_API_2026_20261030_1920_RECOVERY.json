@@ -1,0 +1,14 @@
+{
+  "task_id": "TA_API_2026",
+  "query": "Wildberries API аналитика поиск воронка 2026",
+  "extra_queries": [
+    "Wordstat API Google Trends API 2026",
+    "TikTok Creative Center API тренды маркетплейсы"
+  ],
+  "content": "Видео",
+  "limit_video": 2,
+  "limit_shorts": 0,
+  "depth_days": 180,
+  "knowledge_tag": "TREND_API",
+  "language": "ru"
+}
