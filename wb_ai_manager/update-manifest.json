@@ -56,7 +56,7 @@
         {
           "path": "pyproject.toml",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/pyproject.toml",
-          "sha256": "e734fcbe9931806c18540906a8cc54e497bcc8d28d010bc2149fe09dc92cdd36"
+          "sha256": "f72adbfba5712ee1276f00a8622af6712cecaf7e015787ca61fac7ffb5ee82c8"
         },
         {
           "path": "scripts/auto_refresh_sheets.py",
