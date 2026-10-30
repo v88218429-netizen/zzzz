@@ -39,12 +39,26 @@ def _key(value: Any) -> str:
     return " ".join(str(value or "").casefold().split())
 
 
+def _campaign_shop_scopes(campaign_settings: list[dict[str, Any]]) -> dict[tuple[str, str], set[str]]:
+    scopes: dict[tuple[str, str], set[str]] = defaultdict(set)
+    for item in campaign_settings:
+        if not isinstance(item, dict):
+            continue
+        shop = str(item.get("shop") or item.get("store_id") or "").lower()
+        advert, nm = str(item.get("advert_id") or ""), str(item.get("nm_id") or "")
+        if shop in STORE_NAMES and advert.isdigit() and nm.isdigit():
+            scopes[(advert, nm)].add(shop)
+    return scopes
+
+
 def _decision_caps(
-    decisions: list[dict[str, Any]], economics_observed_at: Any, now: datetime, freshness_hours: float
-) -> dict[tuple[str, str], float]:
-    caps: dict[tuple[str, str], float] = {}
+    decisions: list[dict[str, Any]], economics_observed_at: Any, now: datetime, freshness_hours: float,
+    shop_scopes: dict[tuple[str, str], set[str]],
+) -> dict[tuple[str, str, str], float]:
+    caps: dict[tuple[str, str, str], float] = {}
     observed = _time(economics_observed_at)
-    if observed is None or (now - observed).total_seconds() > freshness_hours * 3600:
+    age = (now - observed).total_seconds() if observed else None
+    if age is None or age < 0 or age > freshness_hours * 3600:
         return caps
     for card in decisions:
         if card.get("blockers") or str(card.get("confidence") or "").lower() == "low":
@@ -52,13 +66,21 @@ def _decision_caps(
         key = str(card.get("decision_key") or "").split(":")
         if len(key) < 4 or key[0] != "advert" or not key[1].isdigit() or not key[2].isdigit():
             continue
+        known_shops = shop_scopes.get((key[1], key[2]), set())
+        explicit_shop = str(card.get("shop") or card.get("store_id") or "").lower()
+        if explicit_shop in STORE_NAMES:
+            shop = explicit_shop if not known_shops or explicit_shop in known_shops else ""
+        else:
+            shop = next(iter(known_shops)) if len(known_shops) == 1 else ""
+        if not shop:
+            continue
         cap = None
         for item in card.get("evidence") or []:
             if isinstance(item, dict) and item.get("metric") == "max_ad_cost_per_order_rub":
                 cap = _num(item.get("value"))
                 break
         if cap is not None and cap >= 0:
-            caps[(key[1], key[2])] = cap
+            caps[(shop, key[1], key[2])] = cap
     return caps
 
 
@@ -68,11 +90,13 @@ def _kopecks(value: Any) -> float | None:
 
 
 def _wb_bid_guidance(
-    campaigns: list[dict[str, Any]], observed_at: Any, now: datetime, freshness_hours: float
-) -> dict[tuple[str, str, str], dict[str, Any]]:
+    campaigns: list[dict[str, Any]], observed_at: Any, now: datetime, freshness_hours: float,
+    shop_scopes: dict[tuple[str, str], set[str]],
+) -> dict[tuple[str, str, str, str], dict[str, Any]]:
     """Read only exact SKU × campaign WB recommendation bands from the optimizer snapshot."""
     observed = _time(observed_at)
-    if observed is None or (now - observed).total_seconds() < 0 or (now - observed).total_seconds() > freshness_hours * 3600:
+    age = (now - observed).total_seconds() if observed else None
+    if age is None or age < 0 or age > freshness_hours * 3600:
         return {}
     output: dict[tuple[str, str, str], dict[str, Any]] = {}
     for item in campaigns:
@@ -84,6 +108,14 @@ def _wb_bid_guidance(
             continue
         for nm, raw in recommendations.items():
             if not str(nm).isdigit() or not isinstance(raw, dict) or raw.get("_error"):
+                continue
+            known_shops = shop_scopes.get((advert, str(nm)), set())
+            explicit_shop = str(item.get("shop") or item.get("store_id") or "").lower()
+            if explicit_shop in STORE_NAMES:
+                shop = explicit_shop if not known_shops or explicit_shop in known_shops else ""
+            else:
+                shop = next(iter(known_shops)) if len(known_shops) == 1 else ""
+            if not shop:
                 continue
             data = raw.get("data") if isinstance(raw.get("data"), dict) else raw
             base = data.get("base") if isinstance(data.get("base"), dict) else {}
@@ -111,7 +143,7 @@ def _wb_bid_guidance(
             for query, bands in cluster_bands.items():
                 # A recommendation is a whole product×campaign snapshot. Do not
                 # create fresh-looking partial bands from an old individual query.
-                target = output.setdefault((advert, str(nm), query), {})
+                target = output.setdefault((shop, advert, str(nm), query), {})
                 target.update({
                     "competitive_bid_rub": _kopecks(competitive.get("bidKopecks")),
                     "leaders_bid_rub": _kopecks(leaders.get("bidKopecks")),
@@ -145,8 +177,11 @@ def analyze_cluster_rows(
         identity = (str(item.get("shop") or "").lower(), str(item.get("advert_id") or ""), str(item.get("nm_id") or ""))
         if all(identity):
             settings[identity] = item
-    caps = _decision_caps(decisions, economics_observed_at, now, freshness_hours)
-    wb_guidance = _wb_bid_guidance(bid_recommendations or [], bid_recommendations_observed_at, now, freshness_hours)
+    shop_scopes = _campaign_shop_scopes(campaign_settings)
+    caps = _decision_caps(decisions, economics_observed_at, now, freshness_hours, shop_scopes)
+    wb_guidance = _wb_bid_guidance(
+        bid_recommendations or [], bid_recommendations_observed_at, now, freshness_hours, shop_scopes
+    )
     positions: dict[tuple[str, str, str], dict[str, Any]] = {}
     for card in ((query_manager or {}).get("cards") or []):
         if not isinstance(card, dict):
@@ -189,7 +224,8 @@ def analyze_cluster_rows(
         payment_type = str(setting.get("payment_type") or "").lower()
         bid_type = str(setting.get("bid_type") or "").lower()
         settings_time = _time(setting.get("observed_at"))
-        setting_fresh = bool(settings_time and 0 <= (now - settings_time).total_seconds() <= freshness_hours * 3600)
+        setting_age = (now - settings_time).total_seconds() if settings_time else None
+        setting_fresh = bool(setting_age is not None and 0 <= setting_age <= freshness_hours * 3600)
         search_bid_kopecks = _num(setting.get("search_bid_kopecks"))
         search_placement = str(setting.get("search_placement") or "").strip().lower() in {"true", "1", "yes"}
         campaign_status = str(setting.get("status") or "")
@@ -200,12 +236,12 @@ def analyze_cluster_rows(
             and search_bid_kopecks is not None and search_bid_kopecks > 0
         )
         bid_source = "cluster" if bid_kopecks is not None else None
-        max_cpa = caps.get((advert, nm))
+        max_cpa = caps.get((shop, advert, nm))
         cpa = round(spend / orders, 2) if spend is not None and orders is not None and orders > 0 else None
         ctr = round(clicks / views * 100, 2) if clicks is not None and views is not None and views > 0 else None
         cpc = round(spend / clicks, 2) if spend is not None and clicks is not None and clicks > 0 else None
         position = positions.get((shop, nm, query_key))
-        wb_bid_guidance = wb_guidance.get((advert, nm, query_key))
+        wb_bid_guidance = wb_guidance.get((shop, advert, nm, query_key))
         position_value = _num(position.get("position")) if position else None
         position_freshness = ((position or {}).get("freshness") or {}).get("position") or {}
         blockers = []
@@ -217,11 +253,11 @@ def analyze_cluster_rows(
             blockers.append("Точная экономика товара не допускает рекламных расходов; ставку по кластеру не предлагаем менять.")
         if bid_kopecks is None or bid_kopecks <= 0:
             blockers.append("Индивидуальная ставка этого кластера не получена; ставка поиска товара в кампании показана отдельно и не подменяет её.")
-        elif bid_time is None or (now - bid_time).total_seconds() > freshness_hours * 3600:
+        elif bid_time is None or not 0 <= (now - bid_time).total_seconds() <= freshness_hours * 3600:
             blockers.append("Снимок текущей ставки устарел; обновить рекламу перед решением.")
         if state != "active":
             blockers.append("Текущее активное состояние кластера WB не подтверждено.")
-        if settings_time is None or (now - settings_time).total_seconds() > freshness_hours * 3600:
+        if settings_time is None or not 0 <= (now - settings_time).total_seconds() <= freshness_hours * 3600:
             blockers.append("Снимок настроек кампании устарел или отсутствует; обновить рекламу перед решением.")
         # WB exposes writable cluster bids only for manual CPM campaigns; require
         # the exact live per-cluster bid and a fresh campaign payment setting.
@@ -237,9 +273,17 @@ def analyze_cluster_rows(
                 action = "ПРОВЕРИТЬ ИСКЛЮЧЕНИЕ КЛАСТЕРА"
                 reason = "Есть заметный расход и не менее 20 переходов без заказа; исключение требует ручной проверки состава кластера."
             elif cpa is not None and max_cpa is not None and cpa > max_cpa * 1.15:
-                action = "ТЕСТОВО СНИЗИТЬ СТАВКУ"
-                target_bid = round(current * 0.9, 2)
-                reason = f"CPA {cpa:.2f} ₽ выше лимита {max_cpa:.2f} ₽; предложен осторожный пробный шаг −10%, затем проверить результат через 1 и 3 дня."
+                reduction = min(0.15, max(0.0, 1.0 - max_cpa / cpa))
+                candidate = round(current * (1.0 - reduction), 2)
+                if candidate < current:
+                    action = "ТЕСТОВО СНИЗИТЬ СТАВКУ"
+                    target_bid = candidate
+                    reason = (f"CPA {cpa:.2f} ₽ выше лимита {max_cpa:.2f} ₽; расчётный шаг −{reduction * 100:.1f}% "
+                              "ограничен 15% за одну проверку. Это пробный шаг, а не обещание линейного снижения CPA; "
+                              "сверить расход и заказы через 1 и 3 дня.")
+                else:
+                    action = "СОБРАТЬ БОЛЬШЕ ДАННЫХ"
+                    reason = "Текущая ставка слишком мала для различимого денежного шага с точностью до 0,01 ₽."
             elif orders is not None and orders >= 2 and cpa is not None and max_cpa is not None and cpa <= max_cpa:
                 action = "ОСТАВИТЬ СТАВКУ"
                 target_bid = round(current, 2)
