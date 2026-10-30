@@ -5884,6 +5884,27 @@ function sellmonitorGithubWbBuildDashboard_(ss,storeName){
   return {ok:true,chart_count:chartsMade,exact_periods:{day:tables[0].periods,week:tables[1].periods,month:tables[2].periods},latest_exact:latest,archived_rows:archive.getLastRow()-1};
 }
 
+function sellmonitorGithubResumeOzonExport_() {
+  var triggers = ScriptApp.getProjectTriggers();
+  var existingContinuation = triggers.some(function(trigger) {
+    return trigger.getHandlerFunction() === 'exportDOM_continue';
+  });
+  if (existingContinuation) {
+    return {ok:true,continued_existing_export:true,continuation_pending:true,reason:'existing_continuation_trigger'};
+  }
+  var existingStart = triggers.some(function(trigger) {
+    return trigger.getHandlerFunction() === 'domExportOzonOrders';
+  });
+  if (existingStart) {
+    return {ok:true,continued_existing_export:true,continuation_pending:true,reason:'existing_export_trigger'};
+  }
+  if (typeof domExportOzonOrders !== 'function') {
+    throw new Error('OZON_EXPORT_WRAPPER_MISSING');
+  }
+  ScriptApp.newTrigger('domExportOzonOrders').timeBased().after(60 * 1000).create();
+  return {ok:true,started_fresh_export:true,continuation_pending:true,reason:'scheduled_existing_ozon_export_wrapper'};
+}
+
 function doPost(e) {
   try {
     var body = JSON.parse((e && e.postData && e.postData.contents) || '{}');
@@ -5944,6 +5965,16 @@ function doPost(e) {
 
     if (action === 'publish_ad_clusters') {
       return sellmonitorGithubWebJson_(sellmonitorGithubPublishAdClusters_(body));
+    }
+
+    if (action === 'resume_ozon_export') {
+      var continuationResult = sellmonitorGithubResumeOzonExport_();
+      return sellmonitorGithubWebJson_({
+        ok:continuationResult.ok === true,
+        action:action,
+        called:true,
+        result:{continuation_result:continuationResult}
+      });
     }
 
     if (action === 'publish_ozon_summary_orders') {
