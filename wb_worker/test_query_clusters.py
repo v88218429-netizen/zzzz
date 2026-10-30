@@ -24,6 +24,7 @@ class QueryClustersTest(unittest.TestCase):
         self.assertEqual(rows[0][5:12], [100, 12, 3, 1, 2, 45.5, 7.9])
         self.assertEqual(rows[0][15:17], [qc.SOURCE, qc.QUALITY])
         self.assertEqual(rows[0][17], "")  # current bid not guessed from historical performance
+        self.assertEqual(rows[0][20], "")  # state observation time stays separate
         self.assertEqual(rows[1][5], "")  # CPC payment can omit impressions
         self.assertEqual(rows[1][12:15], ["", "", ""])  # no CTR/CPC/CPM fabricated
 
@@ -106,8 +107,17 @@ class QueryClustersTest(unittest.TestCase):
         payload = {"items": [{"advertId": 8, "nmId": 91, "dailyStats": [
             {"date": "2026-10-29", "stat": {"normQuery": "таз строительный", "clicks": 3, "orders": 1, "spend": 20}}
         ]}]}
-        rows = qc.parse_rows("yv", payload, bids, states, "2026-10-29T12:00:00+03:00")
-        self.assertEqual(rows[0][-3:], [1200, "active", "2026-10-29T12:00:00+03:00"])
+        rows = qc.parse_rows("yv", payload, bids, states,
+                             "2026-10-29T12:00:00+03:00", "2026-10-29T12:01:00+03:00")
+        self.assertEqual(rows[0][-4:], [1200, "active", "2026-10-29T12:00:00+03:00", "2026-10-29T12:01:00+03:00"])
+
+    def test_failed_auxiliary_read_keeps_prior_value_with_its_own_timestamp(self):
+        prior = ["yv", "2026-10-29", 8, 91, "таз", *([""] * 10), qc.SOURCE, qc.QUALITY,
+                 1200, "active", "2026-10-29T10:00:00+03:00", "2026-10-29T10:05:00+03:00"]
+        incoming = ["yv", "2026-10-29", 8, 91, "ТАЗ", *([""] * 10), qc.SOURCE, qc.QUALITY,
+                    "", "", "", "2026-10-29T12:00:00+03:00"]
+        qc._preserve_prior_auxiliary([prior], [incoming])
+        self.assertEqual(incoming[-4:], [1200, "active", "2026-10-29T10:00:00+03:00", "2026-10-29T10:05:00+03:00"])
 
     def test_malformed_bid_response_fails_closed(self):
         with self.assertRaisesRegex(ValueError, "unexpected"):
