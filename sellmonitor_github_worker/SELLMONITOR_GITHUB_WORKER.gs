@@ -5821,7 +5821,7 @@ function sellmonitorGithubWbBuildDashboard_(ss,storeName){
         g.ads.unknown?null:g.ads.sum,revenue==null||profit==null||revenue===0?null:profit/revenue]);
     });
     var col=starts[si],oldLast=Math.max(1,data.getLastRow()),old=data.getRange(1,col,oldLast,6).getValues().filter(function(r){return r.some(function(v){return v!==''&&v!=null;});});
-    function norm(a){return a.map(function(r){return r.map(function(v){return v instanceof Date?Utilities.formatDate(v,'GMT','yyyy-MM-dd'):v;});});}
+    function norm(a){return a.map(function(r){return r.map(function(v){return v==null?'':(v instanceof Date?Utilities.formatDate(v,'GMT','yyyy-MM-dd'):v);});});}
     var changed=JSON.stringify(norm(old))!==JSON.stringify(norm(rows));
     if(changed&&old.length>1){
       var save=old.slice(1).map(function(r){return [new Date(),storeName,spec.label,JSON.stringify(norm([r])[0])];});
