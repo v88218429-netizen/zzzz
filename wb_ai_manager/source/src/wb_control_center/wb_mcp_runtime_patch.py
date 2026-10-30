@@ -95,8 +95,96 @@ async def _seller_rating(self: WBClient) -> dict:
     return await self._get(self._feedbacks, "/api/common/v1/rating")
 
 
+def _campaign_and_nm_ids(advert_id: Any, nm_ids: Any) -> tuple[int, list[int]]:
+    if isinstance(advert_id, bool):
+        raise ValueError("advert_id must be a positive integer")
+    try:
+        campaign_id = int(advert_id)
+    except (TypeError, ValueError):
+        raise ValueError("advert_id must be a positive integer") from None
+    if campaign_id <= 0:
+        raise ValueError("advert_id must be a positive integer")
+    if not isinstance(nm_ids, (list, tuple)):
+        raise ValueError("nm_ids must contain one or more positive integers")
+    normalized: list[int] = []
+    for value in nm_ids:
+        if isinstance(value, bool):
+            raise ValueError("nm_ids must contain only positive integers")
+        try:
+            nm_id = int(value)
+        except (TypeError, ValueError):
+            raise ValueError("nm_ids must contain only positive integers") from None
+        if nm_id <= 0:
+            raise ValueError("nm_ids must contain only positive integers")
+        if nm_id not in normalized:
+            normalized.append(nm_id)
+    if not normalized:
+        raise ValueError("nm_ids must contain one or more positive integers")
+    if len(normalized) > 100:
+        raise ValueError("nm_ids cannot contain more than 100 items")
+    return campaign_id, normalized
+
+
+def _iso_date(value: Any, field: str) -> str:
+    text = str(value or "").strip()[:10]
+    try:
+        return datetime.strptime(text, "%Y-%m-%d").date().isoformat()
+    except ValueError:
+        raise ValueError(f"{field} must use YYYY-MM-DD") from None
+
+
+async def _advert_clusters_list(self: WBClient, advert_id: int, nm_ids: list[int]) -> dict:
+    campaign_id, item_ids = _campaign_and_nm_ids(advert_id, nm_ids)
+    body = {"items": [{"advertId": campaign_id, "nmId": nm_id} for nm_id in item_ids]}
+    return await self._post(self._advert, "/adv/v0/normquery/list", body)
+
+
+async def _advert_clusters_stats(
+    self: WBClient,
+    advert_id: int,
+    date_from: str,
+    date_to: str,
+    nm_ids: list[int] | None = None,
+    daily: bool = False,
+) -> dict:
+    campaign_id, item_ids = _campaign_and_nm_ids(advert_id, nm_ids)
+    start, end = _iso_date(date_from, "date_from"), _iso_date(date_to, "date_to")
+    if start > end:
+        raise ValueError("date_from must not be later than date_to")
+    body = {
+        "from": start,
+        "to": end,
+        "items": [{"advertId": campaign_id, "nmId": nm_id} for nm_id in item_ids],
+    }
+    path = "/adv/v1/normquery/stats" if daily else "/adv/v0/normquery/stats"
+    return await self._post(self._advert, path, body)
+
+
+async def _clusters_tool_handler(client: WBClient, arguments: dict[str, Any]) -> Any:
+    return await client.advert_clusters_list(arguments["advert_id"], arguments.get("nm_ids"))
+
+
+def apply_wb_mcp_server_hotfixes(server: Any) -> None:
+    """Expose the exact product scope needed by the current WB cluster API."""
+    tool = next((item for item in server.TOOLS if item.name == "wb_advert_clusters"), None)
+    if tool is None:
+        raise RuntimeError("wb_advert_clusters tool is missing from the installed WB MCP server")
+    schema = dict(tool.inputSchema)
+    properties = dict(schema.get("properties") or {})
+    properties["nm_ids"] = {
+        "type": "array",
+        "items": {"type": "integer"},
+        "description": "WB item IDs scoped to this campaign",
+    }
+    schema["properties"] = properties
+    tool.inputSchema = schema
+    server.CLIENT_DISPATCH["wb_advert_clusters"] = _clusters_tool_handler
+
+
 def apply_wb_mcp_hotfixes() -> None:
     WBClient.promotions_list = _promotions_list
     WBClient.analytics_deductions = _analytics_deductions
     WBClient.documents_list = _documents_list
     WBClient.seller_rating = _seller_rating
+    WBClient.advert_clusters_list = _advert_clusters_list
+    WBClient.advert_clusters_stats = _advert_clusters_stats
