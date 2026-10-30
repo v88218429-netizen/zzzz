@@ -1,4 +1,6 @@
 from datetime import datetime, timedelta, timezone
+import importlib.util
+from pathlib import Path
 
 from wb_control_center.worker_source import WorkerSource
 
@@ -41,7 +43,11 @@ def test_optimizer_bundle_uses_separate_encrypted_github_state_branch():
 
 
 def test_optimizer_sweep_progress_contains_aggregate_counts_only():
-    from scripts.github_runtime import optimizer_sweep_progress
+    runtime_path = Path(__file__).resolve().parents[1] / "scripts" / "github_runtime.py"
+    spec = importlib.util.spec_from_file_location("github_runtime_test", runtime_path)
+    runtime = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(runtime)
+    optimizer_sweep_progress = runtime.optimizer_sweep_progress
 
     result = optimizer_sweep_progress({"shops": {
         "ap": {"sweep": {"sweep_id": 2, "sweep_campaigns_seen": 8, "sweep_campaigns_total": 45,
