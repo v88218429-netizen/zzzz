@@ -59,7 +59,7 @@ def _deep_scan_limits(runtime: dict[str, Any]) -> tuple[int, int, int]:
         return max(1, min(ceiling, value))
 
     return (
-        bounded("max_campaigns_deep_scan", 2, 2),
+        bounded("max_campaigns_deep_scan", 4, 4),
         bounded("max_nms_per_campaign", 2, 2),
         bounded("deep_scan_concurrency", 2, 2),
     )

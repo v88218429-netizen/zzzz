@@ -59,6 +59,28 @@ def query_manager(portfolio: dict[str, Any], snap: dict[str, Any]) -> dict[str, 
     ).build(portfolio, snap)
 
 
+def optimizer_sweep_progress(optimizer_state: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Expose aggregate progress only; campaign and product identifiers stay encrypted."""
+    shops = optimizer_state.get("shops")
+    if not isinstance(shops, dict):
+        return {}
+    progress: dict[str, dict[str, Any]] = {}
+    for code, shop in shops.items():
+        if not isinstance(shop, dict):
+            continue
+        sweep = shop.get("sweep")
+        sweep = sweep if isinstance(sweep, dict) else {}
+        progress[str(code)] = {
+            "sweep_id": sweep.get("sweep_id"),
+            "campaigns_seen": sweep.get("sweep_campaigns_seen", 0),
+            "campaigns_total": sweep.get("sweep_campaigns_total", 0),
+            "products_seen": sweep.get("sweep_products_seen", 0),
+            "products_total": sweep.get("sweep_products_total", 0),
+            "complete": sweep.get("sweep_complete") is True,
+        }
+    return progress
+
+
 def compact_decision(row: dict[str, Any], cabinet: str) -> dict[str, Any]:
     return {
         "cabinet": cabinet,
@@ -394,6 +416,7 @@ async def run() -> int:
         "dashboard_published": bool(dashboard_publish.get("ok")),
         "optimizer_state_shops": sum(1 for x in optimizer_state["shops"].values() if x.get("observed_at")),
         "optimizer_sweeps_complete": sum(1 for x in optimizer_state["shops"].values() if x.get("sweep", {}).get("sweep_complete") is True),
+        "optimizer_sweep_progress": optimizer_sweep_progress(optimizer_state),
         "query_status": (q.get("summary") or {}).get("query_status"),
         "query_facts_status": (q.get("summary") or {}).get("facts_status"),
         "query_operational_ready": bool((q.get("summary") or {}).get("operational_ready")),
