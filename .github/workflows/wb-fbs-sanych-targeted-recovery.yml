@@ -1,6 +1,8 @@
 name: WB FBS Sanych targeted recovery
 
 on:
+  schedule:
+    - cron: "17 */3 * * *"
   push:
     branches: [mainggg]
     paths:
@@ -134,5 +136,40 @@ jobs:
           test -n "$GOOGLE_BRIDGE_KEY"
           test -n "$WB_API_TOKEN_AP"
       - name: Reconcile SANYCH manual range
+        shell: bash
+        run: python wb_worker/sanych_fbs_recovery.py
+
+  recover_scheduled:
+    if: \${{ github.event_name == 'schedule' }}
+    name: "scheduled SANYCH FBS refresh"
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      FBS_CLIENT: SANYCH
+      WB_API_TOKEN_AP: \${{ secrets.WB_API_TOKEN_AP }}
+      GOOGLE_BRIDGE_KEY: \${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
+      GOOGLE_BRIDGE_URL: https://script.google.com/macros/s/AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw/exec
+      FBS_LOOKBACK_DAYS: "3"
+      FBS_BATCH_SIZE: "5"
+      FBS_INCLUDE_LIVE: "true"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: \${{ github.ref_name }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check source and credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile wb_worker/sanych_fbs_recovery.py
+          test -n "$GOOGLE_BRIDGE_KEY"
+          test -n "$WB_API_TOKEN_AP"
+          if [[ \${#WB_API_TOKEN_AP} -lt 30 ]]; then
+            echo "SANYCH_WB_TOKEN_MISSING"
+            exit 2
+          fi
+      - name: Refresh the latest SANYCH orders and statuses
         shell: bash
         run: python wb_worker/sanych_fbs_recovery.py
