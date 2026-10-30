@@ -234,6 +234,7 @@ def ingest(client: str, orders: list[dict]) -> dict:
     totals = {"received": 0, "inserted": 0, "existing": 0, "changed": 0, "events": 0}
     for p in range(0, len(orders), BATCH_SIZE):
         batch = orders[p:p+BATCH_SIZE]
+        batch_started = time.monotonic()
         print("FBS_INGEST_BATCH_START="+json.dumps({"store":client,"batch":p//BATCH_SIZE+1,"orders":len(batch)}), flush=True)
         payload = {"token": BRIDGE_KEY, "action": "fbs_ingest_batch",
                    "client": client, "orders": batch}
@@ -302,7 +303,8 @@ def ingest(client: str, orders: list[dict]) -> dict:
             totals[field] += int(result.get(field, 0))
         print(json.dumps({"store":client, "batch":p//BATCH_SIZE+1,
               "received":result.get("received"),"inserted":result.get("inserted"),
-              "changed":result.get("changed")}, ensure_ascii=False), flush=True)
+              "changed":result.get("changed"),"events":result.get("events"),
+              "elapsed_sec":round(time.monotonic()-batch_started,2)}, ensure_ascii=False), flush=True)
     return totals
 
 
