@@ -1,5 +1,5 @@
 /**
- * Sellmonitor GitHub Central Worker v1.3.48
+ * Sellmonitor GitHub Central Worker v1.3.49
  * GitHub is source-of-truth/scheduler. This Apps Script project is only
  * the authorized Google adapter. Make is not part of the execution path.
  */
@@ -5833,7 +5833,7 @@ function sellmonitorGithubWbBuildDashboard_(ss,storeName){
         g.ads.unknown?null:g.ads.sum,revenue==null||profit==null||revenue===0?null:profit/revenue]);
     });
     var col=starts[si],oldLast=Math.max(1,data.getLastRow()),old=data.getRange(1,col,oldLast,6).getValues().filter(function(r){return r.some(function(v){return v!==''&&v!=null;});});
-    function norm(a){return a.map(function(r){return r.map(function(v){return v==null?'':(v instanceof Date?Utilities.formatDate(v,'GMT','yyyy-MM-dd'):v);});});}
+    function norm(a){return a.map(function(r){return r.map(function(v){if(v==null||v==='')return '';if(v instanceof Date)return Utilities.formatDate(v,ss.getSpreadsheetTimeZone(),'yyyy-MM-dd');if(typeof v==='number')return Math.round(v*1000000)/1000000;return v;});});}
     var changed=JSON.stringify(norm(old))!==JSON.stringify(norm(rows));
     if(changed&&old.length>1){
       var save=old.slice(1).map(function(r){return [new Date(),storeName,spec.label,JSON.stringify(norm([r])[0])];});
@@ -5854,7 +5854,7 @@ function sellmonitorGithubWbBuildDashboard_(ss,storeName){
     tables.push({grain:spec.grain,label:spec.label,col:col,rows:rows,periods:periods.length});
   });
   data.hideSheet();
-  var view=ss.getSheetByName('00_Динамика');if(!view)view=ss.insertSheet('00_Динамика',0);else{view.showSheet();view.setIndex(1);}
+  var view=ss.getSheetByName('00_Динамика');if(!view)view=ss.insertSheet('00_Динамика',0);else view.showSheet();
   view.getCharts().forEach(function(ch){view.removeChart(ch);});
   view.getRange(1,1,2,21).clearContent();view.setHiddenGridlines(true);view.setFrozenRows(2);view.setTabColor('#17365D');
   view.getRange('A1').setValue(storeName+' · Динамика по точным фактам').setBackground('#17365D').setFontColor('#FFFFFF').setFontFamily('Arial').setFontSize(16).setFontWeight('bold');
