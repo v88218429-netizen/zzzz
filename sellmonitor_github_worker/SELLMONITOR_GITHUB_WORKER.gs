@@ -5752,7 +5752,7 @@ function sellmonitorGithubPublishWbInnerPeriods_(onlyStore){
         month:sellmonitorGithubWbInnerUpsert_(ss,month,head,built.month,cfg.name)
       };
       var periodChanges=res.day.new_rows+res.day.changed_rows+res.week.new_rows+res.week.changed_rows+res.month.new_rows+res.month.changed_rows;
-      res.dashboard=(shop==='sanych_wb'&&periodChanges===0)?{ok:true,skipped:true,reason:'WB_INNER_NO_PERIOD_CHANGES'}:sellmonitorGithubWbBuildDashboard_(ss,cfg.name);
+      var dashboardView=ss.getSheetByName('00_Динамика');var dashboardHasCharts=!!(dashboardView&&dashboardView.getCharts().length);res.dashboard=(shop==='sanych_wb'&&periodChanges===0&&dashboardHasCharts)?{ok:true,skipped:true,reason:'WB_INNER_NO_PERIOD_CHANGES'}:sellmonitorGithubWbBuildDashboard_(ss,cfg.name);
       results.push(res);
       var log=sellmonitorGithubWbInnerEnsureSheet_(ss,SMC_WB_INNER_SUMMARY_V1.tabs.log,['Время запуска','Магазин','Источник частей','Строк фактов','Период с','Период по','Дней точных','Дней предварительных','Строк день/неделя/месяц','Новых','Изменённых','Архивировано','SHA-256']);
       var counts=[res.day.rows,res.week.rows,res.month.rows],newCount=res.day.new_rows+res.week.new_rows+res.month.new_rows,changeCount=res.day.changed_rows+res.week.changed_rows+res.month.changed_rows,archCount=res.day.archived_rows+res.week.archived_rows+res.month.archived_rows;
