@@ -129,7 +129,7 @@ jobs:
               )
               time.sleep(5)
           actual = {item.get("store") for item in verified}
-          expected_names = ({"air_wb":"AIR","hozyayushka_wb":"Хозяюшка","sanych_wb":"Саныч"}[selected_store],) if selected_store in ("air_wb","hozyayushka_wb","sanych_wb") else {"AIR", "Хозяюшка", "Саныч"}
+          expected_names = {{"air_wb":"AIR","hozyayushka_wb":"Хозяюшка","sanych_wb":"Саныч"}[selected_store]} if selected_store in ("air_wb","hozyayushka_wb","sanych_wb") else {"AIR", "Хозяюшка", "Саныч"}
           if actual != expected_names:
               errors.append("WB summary stores readback acceptance failed: " + repr(actual))
           if errors:
