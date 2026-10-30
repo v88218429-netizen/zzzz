@@ -219,18 +219,13 @@ jobs:
                               raise RuntimeError("OZON_FBO_PRODUCT_ID_OR_QUANTITY_MISSING:" + label)
                           row_key = (cabinet, day, posting_number, order_id, offer, sku, title)
                           records_by_key[row_key] = records_by_key.get(row_key, 0) + int(qty)
-                  if page_dates != sorted(page_dates, reverse=True):
-                      raise RuntimeError("OZON_FBO_DESCENDING_DATE_ORDER_UNVERIFIED:" + label)
                   if page_dates:
                       page_oldest, page_newest = min(page_dates), max(page_dates)
-                      if previous_fbo_oldest and page_newest > previous_fbo_oldest:
-                          raise RuntimeError("OZON_FBO_PAGE_BOUNDARY_ORDER_UNVERIFIED:" + label)
                       retained = sum(COVERAGE_FROM <= day <= coverage_to for day in page_dates)
-                      print(f"OZON_API_{label}_FBO_PAGE_DATES={page_oldest}..{page_newest};retained={retained}")
-                      if page_oldest < COVERAGE_FROM:
-                          print(f"OZON_API_{label}_FBO_STOP=coverage_start;page={store_pages}")
-                          break
-                      previous_fbo_oldest = page_oldest
+                      outside = len(page_dates) - retained
+                      print(f"OZON_API_{label}_FBO_PAGE_DATES={page_oldest}..{page_newest};retained={retained};outside={outside}")
+                      if outside:
+                          raise RuntimeError("OZON_FBO_FILTER_DATES_OUTSIDE_COVERAGE:" + label + ":" + page_oldest + ".." + page_newest)
                   if not has_next:
                       break
                   if not postings:
@@ -279,18 +274,13 @@ jobs:
                               raise RuntimeError("OZON_FBS_PRODUCT_ID_OR_QUANTITY_MISSING:" + label)
                           row_key = (cabinet, day, posting_number, order_id, offer, sku, title)
                           records_by_key[row_key] = records_by_key.get(row_key, 0) + int(qty)
-                  if page_dates != sorted(page_dates, reverse=True):
-                      raise RuntimeError("OZON_FBS_DESCENDING_DATE_ORDER_UNVERIFIED:" + label)
                   if page_dates:
                       page_oldest, page_newest = min(page_dates), max(page_dates)
-                      if previous_fbs_oldest and page_newest > previous_fbs_oldest:
-                          raise RuntimeError("OZON_FBS_PAGE_BOUNDARY_ORDER_UNVERIFIED:" + label)
                       retained = sum(COVERAGE_FROM <= day <= coverage_to for day in page_dates)
-                      print(f"OZON_API_{label}_FBS_PAGE_DATES={page_oldest}..{page_newest};retained={retained}")
-                      if page_oldest < COVERAGE_FROM:
-                          print(f"OZON_API_{label}_FBS_STOP=coverage_start;page={store_pages}")
-                          break
-                      previous_fbs_oldest = page_oldest
+                      outside = len(page_dates) - retained
+                      print(f"OZON_API_{label}_FBS_PAGE_DATES={page_oldest}..{page_newest};retained={retained};outside={outside}")
+                      if outside:
+                          raise RuntimeError("OZON_FBS_FILTER_DATES_OUTSIDE_COVERAGE:" + label + ":" + page_oldest + ".." + page_newest)
                   if not has_next:
                       break
                   if not postings:
