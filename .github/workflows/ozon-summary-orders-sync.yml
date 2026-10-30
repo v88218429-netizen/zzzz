@@ -38,6 +38,29 @@ jobs:
           test -n "$WEBHOOK_SECRET"
           echo "::add-mask::$WEBHOOK_SECRET"
 
+      - name: Check Ozon Seller API secret configuration
+        shell: bash
+        env:
+          OZON_DOM_CLIENT_ID: ${{ secrets.OZON_SELLER_DOM_CLIENT_ID }}
+          OZON_DOM_API_KEY: ${{ secrets.OZON_SELLER_DOM_API_KEY }}
+          OZON_HOZYAYUSHKA_CLIENT_ID: ${{ secrets.OZON_SELLER_HOZYAYUSHKA_CLIENT_ID }}
+          OZON_HOZYAYUSHKA_API_KEY: ${{ secrets.OZON_SELLER_HOZYAYUSHKA_API_KEY }}
+        run: |
+          python - <<'PY'
+          import os
+          names = (
+              "OZON_DOM_CLIENT_ID",
+              "OZON_DOM_API_KEY",
+              "OZON_HOZYAYUSHKA_CLIENT_ID",
+              "OZON_HOZYAYUSHKA_API_KEY",
+          )
+          for name in names:
+              value = os.environ.get(name, "")
+              if value:
+                  print("::add-mask::" + value)
+              print(name + "=" + ("configured" if value else "missing"))
+          PY
+
       - name: Publish and verify both Ozon summaries
         shell: bash
         run: |
