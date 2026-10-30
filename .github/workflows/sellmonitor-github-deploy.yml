@@ -409,7 +409,7 @@ jobs:
               print("OZON_CONTINUATION_SOURCE=not_found_as_global_wrapper; authenticated endpoint will check the installed library entry")
           PY
 
-      - name: Prune only unassigned Apps Script versions
+      - name: Verify Apps Script version capacity and active deployments
         if: github.event_name != 'push' || github.event.head_commit.message != 'Run Ozon export continuation via GitHub' && !contains(fromJSON('["Diagnose Ozon export status via GitHub","Repair and resume Ozon export via GitHub"]'), github.event.head_commit.message)
         shell: bash
         run: |
@@ -420,44 +420,22 @@ jobs:
           clasp list-versions >"$versions_file" 2>&1
           clasp list-deployments >"$deployments_file" 2>&1
           python - "$versions_file" "$deployments_file" <<'PY'
-          import pathlib, re, sys
-          version_lines=pathlib.Path(sys.argv[1]).read_text(errors="replace").splitlines()
-          deployment_lines=pathlib.Path(sys.argv[2]).read_text(errors="replace").splitlines()
-          versions=[]
-          for line in version_lines:
-              match=re.match(r"\s*(\d+)\s+-",line)
-              if match: versions.append(int(match.group(1)))
-          active=set()
-          for line in deployment_lines:
-              match=re.search(r"@\s*(\d+)",line) or re.search(r"version(?:Number)?\s*[:=]\s*(\d+)",line,re.I)
-              if match: active.add(int(match.group(1)))
-          if not versions: raise SystemExit("APPS_SCRIPT_VERSION_LIST_UNPARSED")
-          if not active: raise SystemExit("APPS_SCRIPT_ACTIVE_DEPLOYMENTS_UNPARSED")
-          if 185 not in active or max(versions) not in active:
-              raise SystemExit("APPS_SCRIPT_ACTIVE_VERSION_GUARD_FAILED:"+",".join(map(str,sorted(active))))
-          eligible=sorted(set(versions)-active)
-          print("APPS_SCRIPT_VERSION_COUNT="+str(len(versions)))
-          print("APPS_SCRIPT_ACTIVE_VERSIONS="+",".join(map(str,sorted(active))))
-          print("APPS_SCRIPT_PRUNE_CANDIDATES="+",".join(map(str,eligible)))
-          if len(versions)>=200 and not eligible:
-              raise SystemExit("APPS_SCRIPT_NO_UNASSIGNED_VERSION_TO_PRUNE")
-          pathlib.Path("/tmp/sellmonitor-unassigned-versions.txt").write_text("\n".join(map(str,eligible)))
-          PY
-          while IFS= read -r version; do
-            test -n "$version" || continue
-            echo "PRUNING_UNASSIGNED_APPS_SCRIPT_VERSION=$version"
-            clasp delete-version "$version"
-            # One freed slot is sufficient; preserve every other historical version.
-            break
-          done < /tmp/sellmonitor-unassigned-versions.txt
-          clasp list-versions >"$versions_file" 2>&1
-          python - "$versions_file" <<'PY'
           import pathlib,re,sys
           lines=pathlib.Path(sys.argv[1]).read_text(errors="replace").splitlines()
-          nums=[int(m.group(1)) for line in lines if (m:=re.match(r"\s*(\d+)\s+-",line))]
-          print("APPS_SCRIPT_VERSION_COUNT_AFTER_PRUNE="+str(len(nums)))
-          if len(nums)>=200: raise SystemExit("APPS_SCRIPT_VERSION_CAPACITY_NOT_FREED")
-          PY
+          deployments=pathlib.Path(sys.argv[2]).read_text(errors="replace").splitlines()
+          versions=[int(m.group(1)) for line in lines if (m:=re.match(r"\\s*(\\d+)\\s+-",line))]
+          active=set()
+          for line in deployments:
+              m=re.search(r"@\\s*(\\d+)",line) or re.search(r"version(?:Number)?\\s*[:=]\\s*(\\d+)",line,re.I)
+              if m: active.add(int(m.group(1)))
+          if not versions: raise SystemExit("APPS_SCRIPT_VERSION_LIST_UNPARSED")
+          if 185 not in active or max(versions) not in active:
+              raise SystemExit("APPS_SCRIPT_ACTIVE_VERSION_GUARD_FAILED:"+",".join(map(str,sorted(active))))
+          print("APPS_SCRIPT_VERSION_COUNT="+str(len(versions)))
+          print("APPS_SCRIPT_ACTIVE_VERSIONS="+",".join(map(str,sorted(active))))
+          if len(versions)>=200:
+              raise SystemExit("APPS_SCRIPT_VERSION_CAPACITY_STILL_FULL")
+          print("APPS_SCRIPT_VERSION_CAPACITY=available")
 
       - name: Push and redeploy stable adapter
         if: github.event_name != 'push' || github.event.head_commit.message == 'Run Ozon export continuation via GitHub' || !contains(fromJSON('["Run Ozon export continuation via GitHub","Diagnose Ozon export status via GitHub","Repair and resume Ozon export via GitHub"]'), github.event.head_commit.message)
