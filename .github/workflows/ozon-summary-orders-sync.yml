@@ -130,123 +130,220 @@ jobs:
               raise SystemExit("OZON_SELLER_API_ALL_METHODS_FAILED")
           PY
 
-      - name: Publish and verify both Ozon summaries
+      - name: Fetch all Ozon Seller API pages, publish and verify both summaries
         shell: bash
+        env:
+          OZON_DOM_CLIENT_ID: ${{ secrets.OZON_SELLER_DOM_CLIENT_ID }}
+          OZON_DOM_API_KEY: ${{ secrets.OZON_SELLER_DOM_API_KEY }}
+          OZON_HOZYAYUSHKA_CLIENT_ID: ${{ secrets.OZON_SELLER_HOZYAYUSHKA_CLIENT_ID }}
+          OZON_HOZYAYUSHKA_API_KEY: ${{ secrets.OZON_SELLER_HOZYAYUSHKA_API_KEY }}
         run: |
           set -euo pipefail
           python - <<'PY'
-          import json, os, time, urllib.error, urllib.request
+          import datetime, json, os, time, urllib.error, urllib.request
+          from zoneinfo import ZoneInfo
 
+          MOSCOW = ZoneInfo("Europe/Moscow")
+          UTC = datetime.timezone.utc
+          COVERAGE_FROM = "2026-09-01"
+          now = datetime.datetime.now(UTC).replace(microsecond=0)
+          coverage_to = now.astimezone(MOSCOW).date().isoformat()
+          until = now.isoformat().replace("+00:00", "Z")
+          since = datetime.datetime(2026, 9, 1, tzinfo=UTC).isoformat().replace("+00:00", "Z")
+          stores = (
+              ("1", "DOM", "OZON_DOM_CLIENT_ID", "OZON_DOM_API_KEY"),
+              ("2", "HOZYAYUSHKA", "OZON_HOZYAYUSHKA_CLIENT_ID", "OZON_HOZYAYUSHKA_API_KEY"),
+          )
+
+          def api_post(endpoint, body, headers):
+              last = None
+              for attempt in range(5):
+                  req = urllib.request.Request(
+                      "https://api-seller.ozon.ru" + endpoint,
+                      data=json.dumps(body, separators=(",", ":")).encode("utf-8"),
+                      headers=headers,
+                      method="POST",
+                  )
+                  try:
+                      with urllib.request.urlopen(req, timeout=60) as response:
+                          parsed = json.loads(response.read().decode("utf-8"))
+                          if not isinstance(parsed, dict):
+                              raise RuntimeError("OZON_API_NON_OBJECT_RESPONSE:" + endpoint)
+                          return parsed
+                  except urllib.error.HTTPError as exc:
+                      detail = exc.read(1200).decode("utf-8", "replace").replace("\\n", " ")[:600]
+                      last = f"HTTP_{exc.code}:{detail}"
+                      if exc.code not in (429, 500, 502, 503, 504) or attempt == 4:
+                          raise RuntimeError("OZON_API_REQUEST_FAILED:" + endpoint + ":" + last)
+                      retry_after = exc.headers.get("Retry-After")
+                      delay = min(60, int(retry_after)) if retry_after and retry_after.isdigit() else 2 ** attempt
+                  except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+                      last = type(exc).__name__ + ":" + str(exc)[:240]
+                      if attempt == 4:
+                          raise RuntimeError("OZON_API_REQUEST_FAILED:" + endpoint + ":" + last)
+                      delay = 2 ** attempt
+                  time.sleep(delay)
+              raise RuntimeError("OZON_API_RETRY_EXHAUSTED:" + endpoint + ":" + str(last))
+
+          def page_parts(response):
+              result = response.get("result", response)
+              if not isinstance(result, dict):
+                  raise RuntimeError("OZON_API_INVALID_PAGE_SHAPE")
+              postings = result.get("postings")
+              if not isinstance(postings, list):
+                  raise RuntimeError("OZON_API_POSTINGS_MISSING")
+              return result, postings, bool(result.get("has_next", response.get("has_next", False)))
+
+          records_by_key = {}
+          completed_accounts = []
+          store_page_counts = {}
+          store_posting_counts = {}
+          for cabinet, label, client_var, key_var in stores:
+              client, key = os.environ.get(client_var, ""), os.environ.get(key_var, "")
+              if not client or not key:
+                  raise RuntimeError("OZON_API_CREDENTIALS_MISSING:" + label)
+              print("::add-mask::" + client)
+              print("::add-mask::" + key)
+              headers = {"Client-Id": client, "Api-Key": key, "Content-Type": "application/json"}
+              window = {"since": since, "to": until}
+              store_pages = 0
+              store_postings = 0
+
+              offset = 0
+              while True:
+                  response = api_post("/v3/posting/fbo/list", {
+                      "dir": "ASC", "filter": dict(window), "limit": 100, "offset": offset,
+                      "with": {"analytics_data": False, "financial_data": False},
+                  }, headers)
+                  page, postings, has_next = page_parts(response)
+                  store_pages += 1
+                  store_postings += len(postings)
+                  for posting in postings:
+                      timestamp = posting.get("in_process_at") or posting.get("created_at")
+                      posting_number = str(posting.get("posting_number") or "").strip()
+                      order_id = str(posting.get("order_id") or "").strip()
+                      if not timestamp or not posting_number or not order_id:
+                          raise RuntimeError("OZON_FBO_REQUIRED_POSTING_FIELDS_MISSING:" + label)
+                      day = datetime.datetime.fromisoformat(str(timestamp).replace("Z", "+00:00")).astimezone(MOSCOW).date().isoformat()
+                      if not COVERAGE_FROM <= day <= coverage_to:
+                          continue
+                      products = posting.get("products")
+                      if not isinstance(products, list) or not products:
+                          raise RuntimeError("OZON_FBO_PRODUCTS_MISSING:" + label)
+                      for product in products:
+                          offer = str(product.get("offer_id") or "").strip()
+                          sku = str(product.get("sku") or "").strip()
+                          title = str(product.get("name") or "").strip()
+                          qty = float(product.get("quantity") or 0)
+                          if not offer or not sku or not title or not qty.is_integer() or qty <= 0:
+                              raise RuntimeError("OZON_FBO_PRODUCT_ID_OR_QUANTITY_MISSING:" + label)
+                          row_key = (cabinet, day, posting_number, order_id, offer, sku, title)
+                          records_by_key[row_key] = records_by_key.get(row_key, 0) + int(qty)
+                  if not has_next:
+                      break
+                  if not postings:
+                      raise RuntimeError("OZON_FBO_EMPTY_PAGE_WITH_NEXT:" + label)
+                  offset += len(postings)
+                  if store_pages >= 5000:
+                      raise RuntimeError("OZON_FBO_PAGE_GUARD:" + label)
+
+              cursor = ""
+              seen_cursors = set()
+              while True:
+                  body = {
+                      "dir": "ASC", "filter": dict(window, status=""), "limit": 100, "cursor": cursor,
+                      "with": {"analytics_data": False, "financial_data": False},
+                  }
+                  response = api_post("/v4/posting/fbs/list", body, headers)
+                  page, postings, has_next = page_parts(response)
+                  store_pages += 1
+                  store_postings += len(postings)
+                  for posting in postings:
+                      timestamp = posting.get("in_process_at") or posting.get("created_at")
+                      posting_number = str(posting.get("posting_number") or "").strip()
+                      order_id = str(posting.get("order_id") or "").strip()
+                      if not timestamp or not posting_number or not order_id:
+                          raise RuntimeError("OZON_FBS_REQUIRED_POSTING_FIELDS_MISSING:" + label)
+                      day = datetime.datetime.fromisoformat(str(timestamp).replace("Z", "+00:00")).astimezone(MOSCOW).date().isoformat()
+                      if not COVERAGE_FROM <= day <= coverage_to:
+                          continue
+                      products = posting.get("products")
+                      if not isinstance(products, list) or not products:
+                          raise RuntimeError("OZON_FBS_PRODUCTS_MISSING:" + label)
+                      for product in products:
+                          offer = str(product.get("offer_id") or "").strip()
+                          sku = str(product.get("sku") or "").strip()
+                          title = str(product.get("name") or "").strip()
+                          qty = float(product.get("quantity") or 0)
+                          if not offer or not sku or not title or not qty.is_integer() or qty <= 0:
+                              raise RuntimeError("OZON_FBS_PRODUCT_ID_OR_QUANTITY_MISSING:" + label)
+                          row_key = (cabinet, day, posting_number, order_id, offer, sku, title)
+                          records_by_key[row_key] = records_by_key.get(row_key, 0) + int(qty)
+                  if not has_next:
+                      break
+                  if not postings:
+                      raise RuntimeError("OZON_FBS_EMPTY_PAGE_WITH_NEXT:" + label)
+                  next_cursor = str(page.get("cursor") or page.get("next_cursor") or response.get("cursor") or response.get("next_cursor") or "").strip()
+                  if not next_cursor or next_cursor == cursor or next_cursor in seen_cursors:
+                      raise RuntimeError("OZON_FBS_CURSOR_MISSING_OR_REPEATED:" + label)
+                  seen_cursors.add(next_cursor)
+                  cursor = next_cursor
+                  if store_pages >= 5000:
+                      raise RuntimeError("OZON_FBS_PAGE_GUARD:" + label)
+
+              completed_accounts.append(cabinet)
+              store_page_counts[label] = store_pages
+              store_posting_counts[label] = store_postings
+              print(f"OZON_API_{label}_COMPLETE=true;pages={store_pages};postings={store_postings}")
+
+          if sorted(completed_accounts) != ["1", "2"] or not records_by_key:
+              raise RuntimeError("OZON_API_BOTH_CABINETS_AND_NONEMPTY_HISTORY_REQUIRED")
+          records = [
+              {"cabinet": key[0], "day": key[1], "posting": key[2], "order": key[3],
+               "offer": key[4], "sku": key[5], "title": key[6], "qty": qty}
+              for key, qty in sorted(records_by_key.items())
+          ]
+          payload = {
+              "token": os.environ["WEBHOOK_SECRET"],
+              "action": "publish_ozon_api_orders",
+              "source": "ozon_seller_api",
+              "complete": True,
+              "completed_accounts": completed_accounts,
+              "exported_at": now.isoformat().replace("+00:00", "Z"),
+              "coverage_from": COVERAGE_FROM,
+              "coverage_to": coverage_to,
+              "records": records,
+          }
+          body = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+          print(f"OZON_API_EXPORT_COMPLETE=true;records={len(records)};bytes={len(body)};coverage={COVERAGE_FROM}..{coverage_to}")
           url = "https://script.google.com/macros/s/" + os.environ["WEBAPP_DEPLOYMENT_ID"] + "/exec"
-          token = os.environ["WEBHOOK_SECRET"]
-
-          def post(action, timeout=90):
-              payload=json.dumps({"token":token,"action":action}).encode("utf-8")
-              req=urllib.request.Request(url,data=payload,headers={"Content-Type":"application/json"},method="POST")
-              with urllib.request.urlopen(req,timeout=timeout) as response:
-                  return json.loads(response.read().decode("utf-8"))
-
-          def print_export_diagnostic(result, attempt):
-              diagnostic=(result.get("export_diagnostic") or {}) if isinstance(result,dict) else {}
-              print("OZON_SOURCE_STATUS="+str(result.get("source_status") or ""))
-              print("OZON_SOURCE_LAST_SUCCESS="+str(result.get("source_last_success") or result.get("source_updated") or ""))
-              for key,label in (("job","JOB"),("in_progress","IN_PROGRESS"),("last_attempt_at","LAST_ATTEMPT_AT"),("continuation_pending","CONTINUATION_PENDING"),("last_error","LAST_ERROR")):
-                  value=diagnostic.get(key)
-                  print("OZON_EXPORT_"+label+"="+str(value or "").replace("\\\\n"," ")[:400])
-              print(f"OZON_PUBLISH_ATTEMPT={attempt}/8")
-
-          def needs_resume(result):
-              # Existing order activity can be readable while the exporter heartbeat is red.
-              reason=str((result or {}).get("reason") or "")
-              status=str((result or {}).get("source_status") or "").lower()
-              last_success=str((result or {}).get("source_last_success") or "")
-              return ("OZON_SOURCE_EXPORT_NOT_VERIFIED" in reason
-                      or "red" in status
-                      or not last_success)
-
-          result=None
-          last=None
-          continuation_accepted=False
-          for attempt in range(1,9):
-              try:
-                  result=post("publish_ozon_summary_orders",timeout=90)
-              except (urllib.error.URLError,TimeoutError,json.JSONDecodeError) as exc:
-                  last=type(exc).__name__+": "+str(exc)[:240]
-                  print("OZON_PUBLISH_REQUEST_ERROR="+last)
-              else:
-                  if isinstance(result,dict) and result.get("ok") is True and not needs_resume(result):
-                      break
-                  last=json.dumps({
-                      "reason":result.get("reason") if isinstance(result,dict) else None,
-                      "source_status":result.get("source_status") if isinstance(result,dict) else None,
-                      "source_last_success":result.get("source_last_success") if isinstance(result,dict) else None,
-                      "stores":[{"store":x.get("store"),"ok":x.get("ok"),"error":x.get("error")} for x in (result.get("stores") or [])] if isinstance(result,dict) else []
-                  },ensure_ascii=False)[:1200]
-                  if needs_resume(result) and not continuation_accepted:
-                      print_export_diagnostic(result,attempt)
-                      resume_result=None
-                      resume_error=None
-                      for resume_attempt in range(1,4):
-                          try:
-                              resume_result=post("resume_ozon_export",timeout=180)
-                          except (urllib.error.URLError,TimeoutError,json.JSONDecodeError) as exc:
-                              resume_error=type(exc).__name__+": "+str(exc)[:240]
-                              print("OZON_CONTINUATION_REQUEST_ERROR="+resume_error)
-                          else:
-                              body=resume_result.get("result") or {}
-                              outcome=body.get("continuation_result") or {}
-                              resumed=outcome.get("started_fresh_export") is True or outcome.get("continued_existing_export") is True
-                              safe={k:outcome.get(k) for k in ("ok","started_fresh_export","continuation_pending","continued_existing_export","result_type","skipped","error_code","reason") if k in outcome}
-                              print("OZON_CONTINUATION_ATTEMPT="+str(resume_attempt)+"/3")
-                              print("OZON_CONTINUATION_OUTCOME="+json.dumps(safe,ensure_ascii=False)[:700])
-                              if resume_result.get("ok") is True and body.get("called") is True and outcome.get("ok") is True and resumed:
-                                  continuation_accepted=True
-                                  print("OZON_CONTINUATION_ACCEPTED=true")
-                                  break
-                              resume_error=str(safe or resume_result.get("error") or "continuation_not_accepted")
-                              if outcome.get("skipped")!="script_lock_busy":
-                                  break
-                          if resume_attempt<3:
-                              time.sleep(20*resume_attempt)
-                      if not continuation_accepted:
-                          last="OZON_CONTINUATION_FAILED: "+str(resume_error or last)
-                          print("OZON_CONTINUATION_ACCEPTED=false")
-                          break
-                  elif isinstance(result,dict) and result.get("ok") is False and not needs_resume(result):
-                      break
-                  if needs_resume(result):
-                      print_export_diagnostic(result,attempt)
-              # The exporter is asynchronous. Do not republish the same source snapshot
-              # repeatedly in this run: that only duplicates journal entries. The next
-              # scheduled run will verify the exporter heartbeat and publish once fresh.
-              if continuation_accepted:
-                  print("OZON_CONTINUATION_SCHEDULED=true; waiting for next scheduled verification")
-                  break
-              if attempt<8:
-                  time.sleep(min(60,15*attempt))
-
-          if not result or result.get("ok") is not True:
-              raise SystemExit("Ozon summary publication failed after bounded source recovery: "+str(last))
-          stores=result.get("stores") or []
-          expected={"ДОМ","Хозяюшка"}
-          actual={x.get("store") for x in stores if x.get("ok") is True and x.get("readback") is True}
-          if actual!=expected:
-              raise SystemExit("Ozon summary readback acceptance failed: "+json.dumps(stores,ensure_ascii=False))
-          print("OZON_SOURCE_RECOVERED_BY_CONTINUATION="+str(continuation_accepted).lower())
-          print("SOURCE_UPDATED="+str(result.get("source_updated")))
-          print("SOURCE_ROWS="+str(result.get("source_rows")))
-          for store in stores:
-              print("STORE="+str(store.get("store"))
-                    +" OK="+str(store.get("ok"))
-                    +" SOURCE_ROWS="+str(store.get("source_rows"))
-                    +" PERIOD="+str(store.get("source_min"))+".."+str(store.get("source_max"))
-                    +" DAILY_ROWS="+str(store.get("daily_rows"))
-                    +" SKU_ROWS="+str(store.get("sku_rows"))
-                    +" ARCHIVED_ROWS="+str(store.get("archived_rows"))
-                    +" READBACK="+str(store.get("readback"))
-                    +" SHA256="+str(store.get("sha256")))
-          source_status=str(result.get("source_status") or "")
-          source_last_success=str(result.get("source_last_success") or "")
-          if "red" in source_status.lower() or not source_last_success:
-              raise SystemExit("OZON_SOURCE_NOT_HEALTHY: summaries were republished from an unverified source; see source status above")
+          req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"}, method="POST")
+          try:
+              with urllib.request.urlopen(req, timeout=420) as response:
+                  result = json.loads(response.read().decode("utf-8"))
+          except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+              raise RuntimeError("OZON_API_PUBLISH_REQUEST_FAILED:" + type(exc).__name__ + ":" + str(exc)[:300])
+          if not isinstance(result, dict) or result.get("action") != "publish_ozon_api_orders":
+              print("OZON_API_PUBLISH_ROUTE_UNAVAILABLE=" + json.dumps(result, ensure_ascii=False)[:700])
+              raise SystemExit("OZON_API_PUBLISH_ROUTE_UNAVAILABLE_PRESERVE")
+          if result.get("ok") is not True:
+              raise SystemExit("OZON_API_PUBLISH_FAILED_PRESERVED:" + json.dumps({
+                  "reason": result.get("reason"), "stores": result.get("stores"),
+                  "error": result.get("error")
+              }, ensure_ascii=False)[:1400])
+          stores = result.get("stores") or []
+          expected = {"ДОМ", "Хозяюшка"}
+          readback = {item.get("store") for item in stores if item.get("ok") is True and item.get("readback") is True}
+          if readback != expected:
+              raise SystemExit("OZON_API_READBACK_ACCEPTANCE_FAILED:" + json.dumps(stores, ensure_ascii=False)[:1400])
+          print("OZON_API_PUBLISH_OK=true")
+          for item in stores:
+              print("STORE=" + str(item.get("store")) + " OK=" + str(item.get("ok"))
+                    + " SOURCE_ROWS=" + str(item.get("source_rows"))
+                    + " PERIOD=" + str(item.get("source_min")) + ".." + str(item.get("source_max"))
+                    + " DAILY_ROWS=" + str(item.get("daily_rows"))
+                    + " SKU_ROWS=" + str(item.get("sku_rows"))
+                    + " ARCHIVED_ROWS=" + str(item.get("archived_rows"))
+                    + " READBACK=" + str(item.get("readback"))
+                    + " SHA256=" + str(item.get("sha256")))
           PY
