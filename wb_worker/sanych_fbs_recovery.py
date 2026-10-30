@@ -178,8 +178,8 @@ def collect(token: str) -> list[dict]:
 def wait_bridge() -> None:
     for attempt in range(1, 9):
         try:
-            data = request(BRIDGE_URL, body={"token": BRIDGE_KEY, "action": "fbs_targets_health"})
-            if data.get("ok") is True and data.get("action") == "fbs_targets_health":
+            data = request(BRIDGE_URL, body={"token": BRIDGE_KEY, "action": "bridge_ping"})
+            if data.get("ok") is True and data.get("action") == "bridge_ping":
                 print("FBS_AUTHENTICATED_BRIDGE_READY=yes", flush=True)
                 return
         except RuntimeError:
