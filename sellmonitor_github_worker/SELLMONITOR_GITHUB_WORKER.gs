@@ -5463,13 +5463,25 @@ function sellmonitorGithubPublishOzonSummaryOrders_() {
     var storeRecords=records.filter(function(r){return r.cabinet===cabinet;});
     if(!storeRecords.length){results.push({store:cfg.name,ok:true,skipped:true,reason:'empty_source_preserved'});return;}
     var agg=sellmonitorGithubOzonAgg_(records,cabinet,today);
+    if(sourceActivityVerified){
+      agg.summary.forEach(function(row){
+        if(['День','Неделя','Месяц'].indexOf(String(row[0]||''))<0)return;
+        row[9]=(String(row[9]||'').indexOf('Частичный период:')===0?String(row[9])+'; ':'')+'Предварительно: heartbeat API красный, полнота выгрузки не подтверждена';
+      });
+      agg.products.forEach(function(row){
+        if(!row[0])return;
+        row[10]=(String(row[10]||'').indexOf('Частичный период:')===0?String(row[10])+'; ':'')+'Предварительно: heartbeat API красный, полнота выгрузки не подтверждена';
+      });
+    }
     var dailyHeader=['Дневные итоги','Начало','Конец','Заказы, уникальные','Отправления, уникальные','Штук','SKU/offer','Строки товаров','Дней с данными','Состояние'];
     var skuHeader=['Тип периода','Начало','Конец','offer_id','SKU','Наименование','Заказы, уникальные','Отправления, уникальные','Штук','Строк товаров','Состояние периода','Источник'];
     if(JSON.stringify(daily.getRange(4,1,1,10).getDisplayValues()[0])!==JSON.stringify(dailyHeader))throw new Error('OZON_TARGET_DAILY_HEADER_MISMATCH:'+cfg.name);
     if(JSON.stringify(skuSheet.getRange(4,1,1,12).getDisplayValues()[0])!==JSON.stringify(skuHeader))throw new Error('OZON_TARGET_SKU_HEADER_MISMATCH:'+cfg.name);
     var dailyRows=agg.summary.slice(1), dailyStart=5;
     var oldDaily=sellmonitorGithubOzonRows_(daily,dailyStart,1,10), oldSku=sellmonitorGithubOzonRows_(skuSheet,5,1,12), oldHelper=sellmonitorGithubOzonRows_(daily,2,12,4);
-    var oldStamp=daily.getRange(2,1).getValue(), newStamp='Источник: Ozon Заказы; последний успешный экспорт '+sourceUpdated+(sourceFallback?'; источник heartbeat красный, повторно используется только совпавший проверенный снимок':'')+'; дата — «Принят в обработку» (UTC+3); заказ = кабинет + номер заказа, отправление = кабинет + posting number.';
+    var oldStamp=daily.getRange(2,1).getValue(), newStamp=sourceActivityVerified
+      ?'Источник: Ozon Заказы; последняя запись в выгрузке: '+sourceUpdated+'; heartbeat API красный, полнота выгрузки не подтверждена — показатели предварительные; дата — «Принят в обработку» (UTC+3); заказ = кабинет + номер заказа, отправление = кабинет + posting number.'
+      :'Источник: Ozon Заказы; последняя подтверждённая выгрузка '+sourceUpdated+(sourceFallback?'; API heartbeat красный, используются только строки, совпавшие с последним проверенным снимком':'')+'; дата — «Принят в обработку» (UTC+3); заказ = кабинет + номер заказа, отправление = кабинет + posting number.';
     var helper=[['Полные дни — данные графика','Заказы','Отправления','Штук']].concat(agg.fullDays);
     var sameDaily=JSON.stringify(sellmonitorGithubOzonNormalizeRows_(oldDaily))===JSON.stringify(sellmonitorGithubOzonNormalizeRows_(dailyRows)), sameSku=JSON.stringify(sellmonitorGithubOzonNormalizeRows_(oldSku,true))===JSON.stringify(sellmonitorGithubOzonNormalizeRows_(agg.products,true)), sameHelper=JSON.stringify(sellmonitorGithubOzonNormalizeRows_(oldHelper))===JSON.stringify(sellmonitorGithubOzonNormalizeRows_(helper.slice(1))), sameStamp=String(oldStamp||'')===newStamp;
     if(sourceFallback&&!sourceActivityVerified){
