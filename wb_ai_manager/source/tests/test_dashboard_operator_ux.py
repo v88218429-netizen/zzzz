@@ -138,6 +138,80 @@ def test_worker_traffic_dashboard_keeps_shop_breakdown_and_uses_wb_attribution()
     assert result["product_day_summary"]["matched_pairs"] == 1
 
 
+@pytest.mark.asyncio
+async def test_github_bundle_refresh_preserves_last_good_snapshot_on_failure():
+    from datetime import datetime, timedelta, timezone
+    from wb_control_center.api import _refresh_bundle_cache
+
+    old_read = datetime.now(timezone.utc) - timedelta(minutes=10)
+    now = datetime.now(timezone.utc)
+    cache = {"ads": [{"shop": "ap", "views": 12}]}
+
+    async def fail_read():
+        raise TimeoutError("transport details")
+
+    result, read_at, error = await _refresh_bundle_cache(cache, old_read, fail_read, now)
+    assert result == cache
+    assert read_at == old_read
+    assert isinstance(error, TimeoutError)
+    assert cache["ads"][0]["views"] == 12
+
+
+@pytest.mark.asyncio
+async def test_github_bundle_refresh_replaces_snapshot_only_after_success():
+    from datetime import datetime, timezone
+    from wb_control_center.api import _refresh_bundle_cache
+
+    now = datetime.now(timezone.utc)
+    cache = {"ads": ["old"]}
+
+    async def load():
+        return {"ads": ["new"]}
+
+    result, read_at, error = await _refresh_bundle_cache(cache, None, load, now)
+    assert error is None
+    assert result == {"ads": ["new"]}
+    assert cache == result
+    assert read_at == now
+
+
+@pytest.mark.asyncio
+async def test_github_bundle_refresh_preserves_last_good_snapshot_on_failure():
+    from datetime import datetime, timedelta, timezone
+    from wb_control_center.api import _refresh_bundle_cache
+
+    old_read = datetime.now(timezone.utc) - timedelta(minutes=10)
+    now = datetime.now(timezone.utc)
+    cache = {"ads": [{"shop": "ap", "views": 12}]}
+
+    async def fail_read():
+        raise TimeoutError("private transport details must not appear in UI")
+
+    result, read_at, error = await _refresh_bundle_cache(cache, old_read, fail_read, now)
+    assert result == cache
+    assert read_at == old_read
+    assert isinstance(error, TimeoutError)
+    assert cache["ads"][0]["views"] == 12
+
+
+@pytest.mark.asyncio
+async def test_github_bundle_refresh_replaces_snapshot_only_after_success():
+    from datetime import datetime, timezone
+    from wb_control_center.api import _refresh_bundle_cache
+
+    now = datetime.now(timezone.utc)
+    cache = {"ads": ["old"]}
+
+    async def load():
+        return {"ads": ["new"]}
+
+    result, read_at, error = await _refresh_bundle_cache(cache, None, load, now)
+    assert error is None
+    assert result == {"ads": ["new"]}
+    assert cache == result
+    assert read_at == now
+
+
 def test_traffic_product_day_comparison_joins_exact_keys_without_claiming_attribution():
     from wb_control_center.api import _traffic_product_day_comparison
 
