@@ -29,3 +29,12 @@ def test_worker_stream_meta_partial_when_one_shop_failed():
 def test_worker_stream_meta_unreliable_without_fact_time():
     meta = WorkerSource.stream_meta({"phase": "done"}, 120)
     assert meta["status"] == "UNRELIABLE"
+
+
+def test_optimizer_bundle_uses_separate_encrypted_github_state_branch():
+    import inspect
+    source = inspect.getsource(WorkerSource.optimizer_bundle)
+    assert "optimizer-state/state" in source
+    assert "optimizer-dashboard.tar.gz.enc" in source
+    assert "optimizer-dashboard.key.enc" in source
+    assert "schema_version" in source
