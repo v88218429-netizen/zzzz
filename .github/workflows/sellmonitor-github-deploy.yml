@@ -6,6 +6,7 @@ on:
     paths:
       - "sellmonitor_github_worker/SELLMONITOR_GITHUB_WORKER.gs"
       - "sellmonitor_github_worker/patch_master.py"
+      - "wb_os/apps_script/WB_FBS_SUPPLY_DIRECT.gs"
       - ".github/workflows/sellmonitor-github-deploy.yml"
   workflow_dispatch:
 
@@ -162,6 +163,7 @@ jobs:
           set -euo pipefail
           rm -f /tmp/sellmonitor-gh-worker/SELLMONITOR_GITHUB_WORKER.js /tmp/sellmonitor-gh-worker/SELLMONITOR_GITHUB_WORKER.gs
           cp sellmonitor_github_worker/SELLMONITOR_GITHUB_WORKER.gs /tmp/sellmonitor-gh-worker/SELLMONITOR_GITHUB_WORKER.gs
+          cp wb_os/apps_script/WB_FBS_SUPPLY_DIRECT.gs /tmp/sellmonitor-gh-worker/WB_FBS_SUPPLY_DIRECT.gs
           python - <<'PY'
           import hashlib, json, os, pathlib
           root=pathlib.Path('/tmp/sellmonitor-gh-worker')
@@ -700,6 +702,8 @@ jobs:
           cd "$V"
           clasp pull
           grep -Rqs "SELLMONITOR_GITHUB_MASTER_HOOK_V1" .
+          grep -RqsF "spreadsheetId: '1v0qt-thJDOw3tLFdZVGhdXJdBM8rDPRz9mHlcHmuuyM'" WB_FBS_SUPPLY_DIRECT.gs
+          ! grep -qF "1_rMW6w4a7ZKhsWAyVo4B4Hn2x1cXwJWVW7K4JAHpjI8" WB_FBS_SUPPLY_DIRECT.gs
           grep -Rqs "SELLMONITOR_OZON_CONTINUATION_GITHUB_ACTION_V1" .
           grep -Rqs "SELLMONITOR_OZON_EXPORT_DIAGNOSTIC_RESPONSE_V1" .
           grep -Rqs "function sellmonitorGithubEnsureTrigger_()" .
