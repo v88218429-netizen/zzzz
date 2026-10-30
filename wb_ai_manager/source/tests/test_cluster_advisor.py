@@ -49,7 +49,7 @@ def test_exact_cluster_exposes_metrics_and_capped_test_bid_only_with_full_eviden
     assert row["current_bid_rub"] == 10
     assert row["current_bid_source"] == "cluster"
     assert row["campaign_search_bid_rub"] == 12
-    assert row["target_bid_rub"] == 9
+    assert row["target_bid_rub"] == 8.5
     assert row["action"] == "ТЕСТОВО СНИЗИТЬ СТАВКУ"
     assert row["organic_position"] == 18
     assert row["manual_only"] is True
@@ -184,6 +184,35 @@ def test_wb_bid_guidance_does_not_cross_campaign_sku_query_or_freshness():
         economics_observed_at="2026-10-29T11:00:00+03:00",
     )
     assert result["rows"][0]["wb_bid_guidance"] is None
+
+
+def test_wb_guidance_and_economic_caps_do_not_cross_ambiguous_store_scope():
+    recommendations = [{"campaign_id": 15, "recommendations": {"123": {"data": {
+        "normQueries": [{"normQuery": "таз строительный", "reachMedium": {"bidKopecks": 7000}}],
+    }}}}]
+    rows = [source_row(), source_row(shop="ap")]
+    campaign_settings = settings() + [dict(settings()[0], shop="ap")]
+    result = analyze_cluster_rows(
+        rows, campaign_settings, decisions(), now=NOW,
+        bid_recommendations=recommendations,
+        bid_recommendations_observed_at="2026-10-29T11:30:00+03:00",
+        economics_observed_at="2026-10-29T11:00:00+03:00",
+    )
+    assert len(result["rows"]) == 2
+    assert all(row["wb_bid_guidance"] is None for row in result["rows"])
+    assert all(row["max_cpa_rub"] is None for row in result["rows"])
+
+
+def test_future_dated_economics_bid_and_campaign_snapshots_are_blocked():
+    result = analyze_cluster_rows(
+        [source_row(bid_observed_at="2026-10-30T13:00:00+03:00")],
+        settings(observed_at="2026-10-30T13:00:00+03:00"), decisions(), now=NOW,
+        economics_observed_at="2026-10-30T13:00:00+03:00",
+    )
+    row = result["rows"][0]
+    assert row["target_bid_rub"] is None
+    assert row["campaign_search_bid_rub"] is None
+    assert any("устарел" in blocker or "отсутствует" in blocker for blocker in row["blockers"])
     result = analyze_cluster_rows(
         [source_row()], settings(), decisions(), now=NOW,
         bid_recommendations=[{"campaign_id": 15, "recommendations": {"123": {"data": {
