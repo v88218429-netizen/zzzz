@@ -208,9 +208,12 @@ def ingest(client: str, orders: list[dict]) -> dict:
                     "INVALID_JSON_RESPONSE_RETRY_EXHAUSTED"
                 }
                 network_failures += 1
-                if not transient or network_failures >= 2 or attempt == attempts:
+                if not transient or network_failures >= 3 or attempt == attempts:
                     raise RuntimeError("FBS_INGEST_TRANSPORT_FAILED:" + str(ex)) from None
-                time.sleep(min(60, 10 * attempt))
+                retry_wait_seconds = min(240, 140 * network_failures)
+                print("FBS_INGEST_RETRY=" + str(attempt) + ":" + str(ex) +
+                      ":SAME_IDEMPOTENT_BATCH:WAIT_SECONDS=" + str(retry_wait_seconds), flush=True)
+                time.sleep(retry_wait_seconds)
                 continue
 
             result = obj.get("result") or {}
