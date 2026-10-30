@@ -2,9 +2,9 @@
   "schema": 1,
   "channels": {
     "stable": {
-      "version": "1.1.21",
+      "version": "1.1.22",
       "channel": "stable",
-      "notes": "Исправлена привязка рекламного снимка к выбранному магазину.",
+      "notes": "Обновлена метка кэша сценария панели для надёжной установки исправления.",
       "minimum_current_version": "1.0.0",
       "files": [
         {
@@ -20,7 +20,7 @@
         {
           "path": "RELEASE_NOTES.md",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/RELEASE_NOTES.md",
-          "sha256": "52c8b55152530475fdc20922e6a7df887a2b9aa3a65e2f298afed9d52b4875ea"
+          "sha256": "0c28ab7e81eb54c156668e367a8643e5dd8c8afd8810f6d29a1dc5293f1745cb"
         },
         {
           "path": "START_WB_AI_MANAGER.command",
@@ -31,7 +31,7 @@
         {
           "path": "VERSION",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/VERSION",
-          "sha256": "70b81d82e8266d08667122b296cada1b21cf8cd1cd20126e5f827ab240442d3c"
+          "sha256": "9b3b81e5314efb5d2f9c0897cfd1621c3aaa2b83e900ad599d07a28b314b5b80"
         },
         {
           "path": "docs/AUTO_UPDATE.md",
@@ -51,12 +51,12 @@
         {
           "path": "plugin.json",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/plugin.json",
-          "sha256": "32a9513d297480eef43567143e1a51d7d852b1a3c5161047789d3a6ee694c099"
+          "sha256": "8306622bc4772eb22b6a88a7c91a614135ca389d1dc5109acb3432f6f7673d35"
         },
         {
           "path": "pyproject.toml",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/pyproject.toml",
-          "sha256": "4e51873057c090a09193ddf95be53cbd0d7903a1438dae20290bf9f88638641f"
+          "sha256": "4cc4e043490ae5842f634a16444fa367744942c1ac76001ba13bc113c8a43b02"
         },
         {
           "path": "scripts/auto_refresh_sheets.py",
@@ -142,7 +142,7 @@
         {
           "path": "src/wb_control_center/__init__.py",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/src/wb_control_center/__init__.py",
-          "sha256": "8462fe000ad0d00a5b7b9b0e4ec9fdb6ec0f1d2dfa6b6b61bfa6b4b322346b08"
+          "sha256": "56404c78b358b4226f3b8a04900c7546eab84c3f91a01e7d52f0c35966dfcbaa"
         },
         {
           "path": "src/wb_control_center/__main__.py",
@@ -452,7 +452,7 @@
         {
           "path": "src/wb_control_center/ui/dashboard.html",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/src/wb_control_center/ui/dashboard.html",
-          "sha256": "993efc5eb61cc6387a6112038711ca855db9b809bad056ac693b9d5af31e05fe"
+          "sha256": "18011ee0a4390a89d8275d0ce103e4f646602f63ffa0a8d6a7f74d64a34d87a8"
         },
         {
           "path": "src/wb_control_center/ui/dashboard.js",
