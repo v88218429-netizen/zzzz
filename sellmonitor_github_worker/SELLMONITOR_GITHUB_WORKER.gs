@@ -5371,11 +5371,29 @@ function sellmonitorGithubPublishOzonSummaryOrders_() {
   }
   var sourceLastSuccess=ozonHealth?String(ozonHealth[1]||'').trim():'';
   var sourceStatus=ozonHealth?String(ozonHealth[3]||'').trim():'СТРОКА СТАТУСА НЕ НАЙДЕНА';
-  var sourceFallback=false, fallbackExpected={};
+  var sourceFallback=false, fallbackExpected={}, sourceActivityVerified=false, sourceActivityByCabinet={};
   if(!ozonHealth||!sourceLastSuccess||!/работает/i.test(sourceStatus)){
     var fallbackOk=true, fallbackStamps=[];
     var todayKey=Utilities.formatDate(new Date(),SMC_OZON_SUMMARY.timezone,'yyyy-MM-dd');
     var minFreshDay=sellmonitorGithubOzonShiftDay_(todayKey,-1);
+    var sourceActivityRows=sourceSheet.getRange(2,1,last-1,8).getValues(), sourceActivityNow=Date.now();
+    Object.keys(SMC_OZON_SUMMARY.stores).forEach(function(cabinet){sourceActivityByCabinet[cabinet]={rows:0,recentRows:0,maxMs:0,maxDay:'',minDay:''};});
+    sourceActivityRows.forEach(function(row){
+      var cabinet=String(row[0]||'').trim(),bucket=sourceActivityByCabinet[cabinet];
+      if(!bucket)return;
+      var stamp=row[7] instanceof Date?row[7]:new Date(row[7]);
+      if(isNaN(stamp.getTime()))return;
+      var day=Utilities.formatDate(stamp,SMC_OZON_SUMMARY.timezone,'yyyy-MM-dd'),ms=stamp.getTime();
+      bucket.rows++;if(!bucket.minDay||day<bucket.minDay)bucket.minDay=day;
+      if(ms>bucket.maxMs){bucket.maxMs=ms;bucket.maxDay=day;}
+      if(sourceActivityNow-ms>=0&&sourceActivityNow-ms<=36*60*60*1000)bucket.recentRows++;
+    });
+    var sourceActivityLatest=0, sourceActivityFresh=true;
+    Object.keys(sourceActivityByCabinet).forEach(function(cabinet){
+      var bucket=sourceActivityByCabinet[cabinet];
+      if(bucket.rows<100||bucket.recentRows<1||!bucket.maxDay||bucket.maxDay<minFreshDay||bucket.minDay>sellmonitorGithubOzonShiftDay_(todayKey,-7)||sourceActivityNow-bucket.maxMs>36*60*60*1000)sourceActivityFresh=false;
+      if(bucket.maxMs>sourceActivityLatest)sourceActivityLatest=bucket.maxMs;
+    });
     function auditDate_(value){
       if(value instanceof Date&&!isNaN(value.getTime()))return value;
       var m=String(value||'').match(/^(\\d{2})\\.(\\d{2})\\.(\\d{4})(?:\\s+(\\d{1,2}):(\\d{2})(?::(\\d{2}))?)?$/);
@@ -5401,14 +5419,20 @@ function sellmonitorGithubPublishOzonSummaryOrders_() {
       if(!entry)fallbackOk=false;
       else{fallbackExpected[cabinet]=entry;fallbackStamps.push(entry.source_updated);}
     });
-    if(!fallbackOk){
+    if(!fallbackOk&&!sourceActivityFresh){
       return {ok:false,action:'publish_ozon_summary_orders',source_id:SMC_OZON_SUMMARY.sourceId,
         source_status:sourceStatus,source_last_success:sourceLastSuccess||null,
-        reason:'OZON_SOURCE_EXPORT_NOT_VERIFIED; no recent identical readback snapshot; summaries preserved'};
+        reason:'OZON_SOURCE_EXPORT_NOT_VERIFIED; no recent identical snapshot or validated per-cabinet activity; summaries preserved'};
     }
     sourceFallback=true;
-    sourceLastSuccess=fallbackStamps.sort().pop()||sourceLastSuccess;
-    sourceStatus='⚠ API heartbeat is red; publish only if source matches a recent readback snapshot';
+    if(sourceActivityFresh){
+      sourceActivityVerified=true;
+      sourceLastSuccess=new Date(sourceActivityLatest).toISOString();
+      sourceStatus='⚠ API heartbeat is red; per-cabinet order activity is recent and structurally validated';
+    }else{
+      sourceLastSuccess=fallbackStamps.sort().pop()||sourceLastSuccess;
+      sourceStatus='⚠ API heartbeat is red; publishing only an identical recent readback snapshot';
+    }
   }
   var sourceUpdated=sourceLastSuccess;
   var raw=sourceSheet.getRange(1,1,last,19).getValues();
@@ -5448,7 +5472,7 @@ function sellmonitorGithubPublishOzonSummaryOrders_() {
     var oldStamp=daily.getRange(2,1).getValue(), newStamp='Источник: Ozon Заказы; последний успешный экспорт '+sourceUpdated+(sourceFallback?'; источник heartbeat красный, повторно используется только совпавший проверенный снимок':'')+'; дата — «Принят в обработку» (UTC+3); заказ = кабинет + номер заказа, отправление = кабинет + posting number.';
     var helper=[['Полные дни — данные графика','Заказы','Отправления','Штук']].concat(agg.fullDays);
     var sameDaily=JSON.stringify(sellmonitorGithubOzonNormalizeRows_(oldDaily))===JSON.stringify(sellmonitorGithubOzonNormalizeRows_(dailyRows)), sameSku=JSON.stringify(sellmonitorGithubOzonNormalizeRows_(oldSku,true))===JSON.stringify(sellmonitorGithubOzonNormalizeRows_(agg.products,true)), sameHelper=JSON.stringify(sellmonitorGithubOzonNormalizeRows_(oldHelper))===JSON.stringify(sellmonitorGithubOzonNormalizeRows_(helper.slice(1))), sameStamp=String(oldStamp||'')===newStamp;
-    if(sourceFallback){
+    if(sourceFallback&&!sourceActivityVerified){
       var oldSkuWithoutTotals=oldSku.filter(function(row){return String(row[0]||'').indexOf('ИТОГО МАГАЗИНА ·')!==0;});
       var fallbackSame=JSON.stringify(sellmonitorGithubOzonNormalizeRows_(oldDaily))===JSON.stringify(sellmonitorGithubOzonNormalizeRows_(dailyRows))&&
         JSON.stringify(sellmonitorGithubOzonNormalizeRows_(oldSkuWithoutTotals,true))===JSON.stringify(sellmonitorGithubOzonNormalizeRows_(agg.products.filter(function(row){return String(row[0]||'').indexOf('ИТОГО МАГАЗИНА ·')!==0;}),true))&&
@@ -5465,6 +5489,10 @@ function sellmonitorGithubPublishOzonSummaryOrders_() {
     if(!sameSku) archived+=sellmonitorGithubOzonArchive_(archive,'12_API_Заказы_SKU','A5:L'+(4+oldSku.length),oldSku,sourceUpdated,archiveId);
     if(!sameHelper) archived+=sellmonitorGithubOzonArchive_(archive,'11_API_Заказы','L1:O'+(1+oldHelper.length),oldHelper,sourceUpdated,archiveId);
     var written=0;
+    if(sourceActivityVerified){
+      var activity=sourceActivityByCabinet[cabinet];
+      if(Number(activity.rows)!==Number(agg.sourceRows)||String(activity.maxDay)!==String(agg.maxDay))throw new Error('OZON_SOURCE_ACTIVITY_READBACK_MISMATCH:'+cfg.name);
+    }
     if(!sameStamp)daily.getRange(2,1,1,1).setValue(newStamp);
     if(!sameDaily){
       var need=dailyStart+dailyRows.length-1;sellmonitorGithubOzonEnsureRows_(daily,need);
@@ -5519,7 +5547,8 @@ function sellmonitorGithubPublishOzonSummaryOrders_() {
     if(!log){log=ss.insertSheet('14_API_Заказы_Журнал');log.getRange(1,1,1,12).setValues([['Время запуска','Магазин','Источник','Последний успешный экспорт','Строк источника','Период с','Период по','Строк сводки','Строк SKU','Строк в архиве','SHA-256 сводки','Проверка']]);}
     else if(log.getLastRow()===0)log.getRange(1,1,1,12).setValues([['Время','Магазин','Источник','Время изменения источника','Строк источника','Период с','Период по','Строк сводки','Строк SKU','Строк в архиве','SHA-256 сводки','Проверка']]);
     var finalHash=sellmonitorGithubOzonHash_({summary:newDaily,products:newSku,helper:newHelper});
-    var logRow=[new Date(),cfg.name,SMC_OZON_SUMMARY.sourceSheet,sourceUpdated,agg.sourceRows,agg.minDay,agg.maxDay,newDaily.length,newSku.length,archived,finalHash,'OK: запись и чтение сводки совпали; пустые дни не заменены нулями'];
+    var logStatus=sourceActivityVerified?'ПРЕДУПРЕЖДЕНИЕ: API heartbeat красный; свежесть по датам каждой выгрузки кабинета подтверждена; запись перечитана':'OK: запись и чтение сводки совпали; пустые дни не заменены нулями';
+    var logRow=[new Date(),cfg.name,SMC_OZON_SUMMARY.sourceSheet,sourceUpdated,agg.sourceRows,agg.minDay,agg.maxDay,newDaily.length,newSku.length,archived,finalHash,logStatus];
     var logAt=log.getLastRow()+1;sellmonitorGithubOzonEnsureRows_(log,logAt);log.getRange(logAt,1,1,12).setValues([logRow]);
     var logRead=log.getRange(logAt,1,1,12).getValues()[0];
     if(String(logRead[10])!==finalHash||String(logRead[11])!==logRow[11])throw new Error('OZON_LOG_READBACK_MISMATCH:'+cfg.name);
@@ -5528,7 +5557,7 @@ function sellmonitorGithubPublishOzonSummaryOrders_() {
       results.push({store:cfg.name,ok:false,error:String(err && err.message || err),source_updated:sourceUpdated});
     }
   });
-  return {ok:results.every(function(x){return x.ok===true;}),action:'publish_ozon_summary_orders',source_id:SMC_OZON_SUMMARY.sourceId,source_rows:records.length,ignored_rows:ignored,source_updated:sourceUpdated,source_status:sourceStatus,source_fallback_used:sourceFallback,stores:results};
+  return {ok:results.every(function(x){return x.ok===true;}),action:'publish_ozon_summary_orders',source_id:SMC_OZON_SUMMARY.sourceId,source_rows:records.length,ignored_rows:ignored,source_updated:sourceUpdated,source_status:sourceStatus,source_fallback_used:sourceFallback,source_activity_verified:sourceActivityVerified,stores:results};
 }
 
 
