@@ -163,6 +163,7 @@ jobs:
           set -euo pipefail
           rm -f /tmp/sellmonitor-gh-worker/SELLMONITOR_GITHUB_WORKER.js /tmp/sellmonitor-gh-worker/SELLMONITOR_GITHUB_WORKER.gs
           cp sellmonitor_github_worker/SELLMONITOR_GITHUB_WORKER.gs /tmp/sellmonitor-gh-worker/SELLMONITOR_GITHUB_WORKER.gs
+          rm -f /tmp/sellmonitor-gh-worker/WB_FBS_SUPPLY_DIRECT.js /tmp/sellmonitor-gh-worker/WB_FBS_SUPPLY_DIRECT.gs
           cp wb_os/apps_script/WB_FBS_SUPPLY_DIRECT.gs /tmp/sellmonitor-gh-worker/WB_FBS_SUPPLY_DIRECT.gs
           python - <<'PY'
           import hashlib, json, os, pathlib
