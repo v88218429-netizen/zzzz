@@ -943,7 +943,7 @@ async def dashboard_data(days: int = 7, from_date: str | None = None, to_date: s
         traffic.get("campaign_settings") or [],
         decisions,
         query_layer,
-        economics_observed_at=audit_finished_at if audit_ready else (runs.get("advertising_optimizer") or {}).get("finished_at"),
+        economics_observed_at=audit_finished if audit_ready else (runs.get("advertising_optimizer") or {}).get("finished_at"),
     )
     audit_agents = audit.get("agents") or {}
     audit_failed = sum(1 for x in audit_agents.values() if isinstance(x, dict) and x.get("status") == "error")
