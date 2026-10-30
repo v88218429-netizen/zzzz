@@ -6,7 +6,7 @@ on:
     workflows: ["Sellmonitor GitHub worker deploy"]
     types: [completed]
   schedule:
-    - cron: "*/5 * * * *"
+    - cron: "3,13,23,33,43,53 * * * *"
   push:
     branches:
       - mainggg
