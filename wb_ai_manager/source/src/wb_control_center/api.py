@@ -50,6 +50,8 @@ _photo_csv_sem = asyncio.Semaphore(1)
 _traffic_bundle_cache: dict[str, Any] = {}
 _traffic_bundle_cached_at: datetime | None = None
 _traffic_bundle_lock = asyncio.Lock()
+_optimizer_bundle_cache: dict[str, Any] = {}
+_optimizer_bundle_cached_at: datetime | None = None
 
 
 def _iso_dt(value: Any) -> datetime | None:
@@ -877,7 +879,7 @@ def _action_preview(action: dict[str, Any]) -> dict[str, Any]:
 
 @app.get("/api/dashboard-data")
 async def dashboard_data(days: int = 7, from_date: str | None = None, to_date: str | None = None) -> dict[str, Any]:
-    global _traffic_bundle_cached_at
+    global _traffic_bundle_cached_at, _optimizer_bundle_cached_at
     period = _dashboard_period(days, from_date, to_date)
     period_ctx = PeriodContext.from_strings(period["from"], period["to"])
     audit = center.period_audit_status(period_ctx)
@@ -928,6 +930,7 @@ async def dashboard_data(days: int = 7, from_date: str | None = None, to_date: s
     research_agenda["discovery_count"] = len(research_agenda["discoveries"])
     query_layer = _query_manager_payload(portfolio_snapshot, snapshots)
     traffic = {"source": "github-traffic-state", "health": {"status": "UNAVAILABLE"}, "shops": [], "ads": [], "funnel": [], "organic": [], "error": "Зашифрованный архив GitHub или локальный ключ не настроен."}
+    optimizer_bundle: dict[str, Any] = {}
     if center.worker.traffic_configured:
         try:
             async with _traffic_bundle_lock:
@@ -937,18 +940,55 @@ async def dashboard_data(days: int = 7, from_date: str | None = None, to_date: s
                     _traffic_bundle_cache.update(await center.worker.traffic_bundle())
                     _traffic_bundle_cached_at = now_utc
                 traffic = _traffic_dashboard_payload(_traffic_bundle_cache, period)
+            try:
+                async with _traffic_bundle_lock:
+                    now_utc = datetime.now(timezone.utc)
+                    if not _optimizer_bundle_cache or not _optimizer_bundle_cached_at or (now_utc - _optimizer_bundle_cached_at).total_seconds() >= 120:
+                        _optimizer_bundle_cache.clear()
+                        _optimizer_bundle_cache.update(await center.worker.optimizer_bundle())
+                        _optimizer_bundle_cached_at = now_utc
+                    optimizer_bundle = dict(_optimizer_bundle_cache)
+            except Exception as exc:
+                traffic["optimizer_error"] = f"{type(exc).__name__}: {exc}"
         except Exception as exc:
             traffic["error"] = f"{type(exc).__name__}: {exc}"
-    optimizer_snapshot = snapshots.get("advertising_optimizer", {}).get("deep_scan", {})
-    optimizer_data = optimizer_snapshot.get("data") if isinstance(optimizer_snapshot, dict) else {}
+    optimizer_shops = optimizer_bundle.get("shops") if isinstance(optimizer_bundle.get("shops"), dict) else {}
+    optimizer_campaigns: list[dict[str, Any]] = []
+    optimizer_decisions: list[dict[str, Any]] = []
+    recommendation_times: dict[str, Any] = {}
+    economics_times: dict[str, Any] = {}
+    for shop_code, shop_payload in optimizer_shops.items():
+        if not isinstance(shop_payload, dict):
+            continue
+        recommendation_times[shop_code] = shop_payload.get("observed_at")
+        economics_times[shop_code] = shop_payload.get("economics_observed_at")
+        for item in shop_payload.get("campaigns") or []:
+            if isinstance(item, dict):
+                optimizer_campaigns.append(dict(item, shop=shop_code))
+        for item in shop_payload.get("decisions") or []:
+            if isinstance(item, dict):
+                optimizer_decisions.append(dict(item, shop=shop_code))
+    cluster_state = _traffic_bundle_cache.get("clusters_status") if isinstance(_traffic_bundle_cache.get("clusters_status"), dict) else {}
+    cluster_shop_status = cluster_state.get("shops") if isinstance(cluster_state.get("shops"), dict) else {}
+    cluster_times = {shop: cluster_state.get("observed_at")
+                     if (cluster_shop_status.get(shop) or {}).get("ok") is True else None
+                     for shop in ("ap", "aa", "yv")}
+    traffic["optimizer_summary"] = {
+        "source": optimizer_bundle.get("source"),
+        "generated_at": optimizer_bundle.get("generated_at"),
+        "shops": {key: {"status": value.get("status"), "wb_connected": value.get("wb_connected"),
+                         "sweep": value.get("sweep") or {}}
+                  for key, value in optimizer_shops.items() if isinstance(value, dict)},
+    }
     traffic["cluster_analysis"] = analyze_cluster_rows(
         traffic.get("clusters") or [],
         traffic.get("campaign_settings") or [],
-        decisions,
+        optimizer_decisions,
         query_layer,
-        bid_recommendations=(optimizer_data or {}).get("campaigns", []) if isinstance(optimizer_data, dict) else [],
-        bid_recommendations_observed_at=(optimizer_snapshot.get("created_at") or optimizer_snapshot.get("data", {}).get("generated_at")) if isinstance(optimizer_snapshot, dict) else None,
-        economics_observed_at=audit_finished if audit_ready else (runs.get("advertising_optimizer") or {}).get("finished_at"),
+        bid_recommendations=optimizer_campaigns,
+        bid_recommendations_observed_at=recommendation_times,
+        economics_observed_at=economics_times,
+        cluster_data_observed_at=cluster_times,
     )
     audit_agents = audit.get("agents") or {}
     audit_failed = sum(1 for x in audit_agents.values() if isinstance(x, dict) and x.get("status") == "error")
