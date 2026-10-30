@@ -132,6 +132,7 @@ def collect(token: str) -> list[dict]:
         window_end = window_start - 1
     # A bounded historical run may explicitly include live open orders when
     # repairing a freshness gap. The IDs are upserted, so overlap is safe.
+    # The targeted mainggg window uses this to close recent WB freshness gaps.
     include_live = window is None or os.getenv("FBS_INCLUDE_LIVE", "").strip().lower() in {"1", "true", "yes"}
     if include_live:
         for order in endpoint(token, "/api/v3/orders/new").get("orders") or []:
