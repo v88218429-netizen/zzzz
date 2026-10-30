@@ -95,6 +95,7 @@ jobs:
               for label, endpoint, body in methods:
                   result = None
                   code = 0
+                  detail = ""
                   for attempt in range(3):
                       req = urllib.request.Request(
                           "https://api-seller.ozon.ru" + endpoint,
@@ -109,12 +110,13 @@ jobs:
                           break
                       except urllib.error.HTTPError as exc:
                           code = exc.code
+                          detail = exc.read(1000).decode("utf-8", "replace").replace("\\n", " ")[:600]
                           if code not in (429,500,502,503,504) or attempt == 2: break
                       except (urllib.error.URLError, TimeoutError, json.JSONDecodeError):
                           if attempt == 2: break
                       time.sleep(2 ** attempt)
                   if code != 200 or not isinstance(result, dict):
-                      print(f"OZON_API_{store}_{label}=http_{code}")
+                      print(f"OZON_API_{store}_{label}=http_{code};detail={detail}")
                       failures += 1
                       continue
                   records = result.get("postings")
