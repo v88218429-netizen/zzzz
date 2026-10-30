@@ -5356,7 +5356,29 @@ function sellmonitorGithubOzonAgg_(records, storeId, today) {
   return {summary:summary,products:products,fullDays:fullDays,minDay:minDay,maxDay:maxDay,sourceRows:records.filter(function(r){return r.cabinet===storeId;}).length};
 }
 
-function sellmonitorGithubPublishOzonSummaryOrders_() {
+function sellmonitorGithubPublishOzonSummaryOrders_(payload) { 
+  var apiMode=!!(payload&&payload.source==='ozon_seller_api');
+  var sourceFallback=false,sourceActivityVerified=false,records=[],ignored=0;
+  var sourceStatus='',sourceLastSuccess='',sourceUpdated='',coverageFrom='',coverageTo='';
+  if(apiMode){
+    if(payload.complete!==true)throw new Error('OZON_API_EXPORT_INCOMPLETE_PRESERVE');
+    var completed=(payload.completed_accounts||[]).map(String).sort();
+    if(JSON.stringify(completed)!==JSON.stringify(['1','2']))throw new Error('OZON_API_ACCOUNT_COVERAGE_INCOMPLETE_PRESERVE');
+    sourceUpdated=String(payload.exported_at||'').trim();
+    if(!sourceUpdated||!isFinite(new Date(sourceUpdated).getTime()))throw new Error('OZON_API_EXPORT_TIMESTAMP_INVALID');
+    sourceLastSuccess=sourceUpdated;
+    coverageFrom=String(payload.coverage_from||'').trim();
+    coverageTo=String(payload.coverage_to||'').trim();
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(coverageFrom)||!/^\d{4}-\d{2}-\d{2}$/.test(coverageTo)||coverageFrom>'2026-09-01'||coverageTo<coverageFrom)throw new Error('OZON_API_COVERAGE_WINDOW_INVALID');
+    sourceStatus='🟢 Ozon Seller API · GitHub · FBO/FBS, все страницы получены';
+    (payload.records||[]).forEach(function(r,index){
+      var cabinet=String(r.cabinet||'').trim(),day=String(r.day||'').trim(),posting=String(r.posting||'').trim(),order=String(r.order||'').trim();
+      var offer=String(r.offer||'').trim(),sku=String(r.sku||'').trim(),title=String(r.title||'').trim(),qty=Number(r.qty);
+      if(!SMC_OZON_SUMMARY.stores[cabinet]||!/^\d{4}-\d{2}-\d{2}$/.test(day)||day<coverageFrom||day>coverageTo||!posting||!order||!offer||!sku||!isFinite(qty)||qty<=0)throw new Error('OZON_API_INVALID_RECORD:'+String(index+1));
+      records.push({cabinet:cabinet,day:day,posting:posting,order:order,offer:offer,sku:sku,title:title,qty:qty});
+    });
+    if(!records.length)throw new Error('OZON_API_EMPTY_EXPORT_PRESERVE');
+  } else {
   var source=SpreadsheetApp.openById(SMC_OZON_SUMMARY.sourceId);
   var sourceSheet=source.getSheetByName(SMC_OZON_SUMMARY.sourceSheet);
   if(!sourceSheet)throw new Error('OZON_SOURCE_TAB_MISSING');
@@ -5397,6 +5419,8 @@ function sellmonitorGithubPublishOzonSummaryOrders_() {
     records.push({cabinet:cabinet,day:day,posting:posting,order:order,offer:offer,sku:sku,title:title,qty:qty});
   }
   if(!records.length)throw new Error('OZON_SOURCE_NO_VALID_ROWS_PRESERVE');
+
+  }
   var today=Utilities.formatDate(new Date(),SMC_OZON_SUMMARY.timezone,'yyyy-MM-dd'), results=[];
   Object.keys(SMC_OZON_SUMMARY.stores).forEach(function(cabinet){
     var cfg=SMC_OZON_SUMMARY.stores[cabinet];
@@ -5422,9 +5446,11 @@ function sellmonitorGithubPublishOzonSummaryOrders_() {
     if(JSON.stringify(skuSheet.getRange(4,1,1,12).getDisplayValues()[0])!==JSON.stringify(skuHeader))throw new Error('OZON_TARGET_SKU_HEADER_MISMATCH:'+cfg.name);
     var dailyRows=agg.summary.slice(1), dailyStart=5;
     var oldDaily=sellmonitorGithubOzonRows_(daily,dailyStart,1,10), oldSku=sellmonitorGithubOzonRows_(skuSheet,5,1,12), oldHelper=sellmonitorGithubOzonRows_(daily,2,12,4);
-    var oldStamp=daily.getRange(2,1).getValue(), newStamp=sourceActivityVerified
-      ?'Источник: Ozon Заказы; последняя запись в выгрузке: '+sourceUpdated+'; heartbeat API красный, полнота выгрузки не подтверждена — показатели предварительные; дата — «Принят в обработку» (UTC+3); заказ = кабинет + номер заказа, отправление = кабинет + posting number.'
-      :'Источник: Ozon Заказы; последняя подтверждённая выгрузка '+sourceUpdated+(sourceFallback?'; API heartbeat красный, используются только строки, совпавшие с последним проверенным снимком':'')+'; дата — «Принят в обработку» (UTC+3); заказ = кабинет + номер заказа, отправление = кабинет + posting number.';
+    var oldStamp=daily.getRange(2,1).getValue(), newStamp=apiMode
+      ?'Источник: Ozon Seller API через GitHub; полная выгрузка всех страниц за '+coverageFrom+'–'+coverageTo+'; обновлено '+sourceUpdated.slice(0,10)+'; текущий день предварительный; дата — «Принят в обработку» (UTC+3); заказ = кабинет + номер заказа, отправление = кабинет + posting number.'
+      :(sourceActivityVerified
+        ?'Источник: Ozon Заказы; последняя запись в выгрузке: '+sourceUpdated+'; heartbeat API красный, полнота выгрузки не подтверждена — показатели предварительные; дата — «Принят в обработку» (UTC+3); заказ = кабинет + номер заказа, отправление = кабинет + posting number.'
+        :'Источник: Ozon Заказы; последняя подтверждённая выгрузка '+sourceUpdated+(sourceFallback?'; API heartbeat красный, используются только строки, совпавшие с последним проверенным снимком':'')+'; дата — «Принят в обработку» (UTC+3); заказ = кабинет + номер заказа, отправление = кабинет + posting number.');
     var helper=[['Полные дни — данные графика','Заказы','Отправления','Штук']].concat(agg.fullDays);
     var sameDaily=JSON.stringify(sellmonitorGithubOzonNormalizeRows_(oldDaily))===JSON.stringify(sellmonitorGithubOzonNormalizeRows_(dailyRows)), sameSku=JSON.stringify(sellmonitorGithubOzonNormalizeRows_(oldSku,true))===JSON.stringify(sellmonitorGithubOzonNormalizeRows_(agg.products,true)), sameHelper=JSON.stringify(sellmonitorGithubOzonNormalizeRows_(oldHelper))===JSON.stringify(sellmonitorGithubOzonNormalizeRows_(helper.slice(1))), sameStamp=String(oldStamp||'')===newStamp;
     if(sourceFallback&&!sourceActivityVerified){
@@ -5502,8 +5528,8 @@ function sellmonitorGithubPublishOzonSummaryOrders_() {
     if(!log){log=ss.insertSheet('14_API_Заказы_Журнал');log.getRange(1,1,1,12).setValues([['Время запуска','Магазин','Источник','Последний успешный экспорт','Строк источника','Период с','Период по','Строк сводки','Строк SKU','Строк в архиве','SHA-256 сводки','Проверка']]);}
     else if(log.getLastRow()===0)log.getRange(1,1,1,12).setValues([['Время','Магазин','Источник','Время изменения источника','Строк источника','Период с','Период по','Строк сводки','Строк SKU','Строк в архиве','SHA-256 сводки','Проверка']]);
     var finalHash=sellmonitorGithubOzonHash_({summary:newDaily,products:newSku,helper:newHelper});
-    var logStatus=sourceActivityVerified?'ПРЕДУПРЕЖДЕНИЕ: API heartbeat красный; свежесть по датам каждой выгрузки кабинета подтверждена; запись перечитана':'OK: запись и чтение сводки совпали; пустые дни не заменены нулями';
-    var logRow=[new Date(),cfg.name,SMC_OZON_SUMMARY.sourceSheet,sourceUpdated,agg.sourceRows,agg.minDay,agg.maxDay,newDaily.length,newSku.length,archived,finalHash,logStatus];
+    var logStatus=apiMode?'OK: FBO/FBS API; все страницы периода получены; запись перечитана':'OK: запись и чтение сводки совпали; пустые дни не заменены нулями';
+    var logRow=[new Date(),cfg.name,apiMode?'Ozon Seller API через GitHub':SMC_OZON_SUMMARY.sourceSheet,sourceUpdated,agg.sourceRows,agg.minDay,agg.maxDay,newDaily.length,newSku.length,archived,finalHash,logStatus];
     var logAt=log.getLastRow()+1;sellmonitorGithubOzonEnsureRows_(log,logAt);log.getRange(logAt,1,1,12).setValues([logRow]);
     var logRead=log.getRange(logAt,1,1,12).getValues()[0];
     if(String(logRead[10])!==finalHash||String(logRead[11])!==logRow[11])throw new Error('OZON_LOG_READBACK_MISMATCH:'+cfg.name);
@@ -5918,6 +5944,10 @@ function doPost(e) {
         called:true,
         result:{continuation_result:continuationResult}
       });
+    }
+
+    if (action === 'publish_ozon_api_orders') {
+      return sellmonitorGithubWebJson_(sellmonitorGithubPublishOzonSummaryOrders_(body));
     }
 
     if (action === 'publish_ozon_summary_orders') {
