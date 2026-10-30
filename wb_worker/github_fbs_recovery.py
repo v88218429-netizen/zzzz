@@ -30,7 +30,7 @@ BATCH_SIZE = int(os.environ.get("FBS_BATCH_SIZE", "5"))
 if not 1 <= BATCH_SIZE <= 1000:
     raise RuntimeError("FBS_BATCH_SIZE_INVALID")
 INGEST_ATTEMPTS = 10  # Retry window exceeds the seven-minute per-client lease before abandoning an idempotent batch
-NETWORK_FAILURE_LIMIT = 2  # Bound long bridge timeouts separately from quick lock-busy retries
+NETWORK_FAILURE_LIMIT = 3  # Allow one bounded retry after the seven-minute Apps Script lease expires
 BRIDGE_INGEST_TIMEOUT = 330  # Return before Apps Script six-minute ceiling; retry only after bounded delay
 TIMEOUT = 120
 
@@ -287,8 +287,10 @@ def ingest(client: str, orders: list[dict]) -> dict:
                         raise RuntimeError("FBS_INGEST_OUTCOME_UNCERTAIN") from None
                     failure_match = re.match(r"HTTP_(\d{3})", reason)
                     failure_class = ("HTTP_" + failure_match.group(1)) if failure_match else reason
-                    print("FBS_INGEST_RETRY=" + str(attempt) + ":" + failure_class + ":SAME_IDEMPOTENT_BATCH", flush=True)
-                    time.sleep(min(60, 15 * attempt))
+                    retry_wait_seconds = min(180, 90 * network_failures)
+                    print("FBS_INGEST_RETRY=" + str(attempt) + ":" + failure_class +
+                          ":SAME_IDEMPOTENT_BATCH:WAIT_SECONDS=" + str(retry_wait_seconds), flush=True)
+                    time.sleep(retry_wait_seconds)
                     continue
                 if attempt == INGEST_ATTEMPTS:
                     raise
