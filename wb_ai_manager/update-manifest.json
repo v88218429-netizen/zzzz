@@ -2,9 +2,9 @@
   "schema": 1,
   "channels": {
     "stable": {
-      "version": "1.1.28",
+      "version": "1.1.29",
       "channel": "stable",
-      "notes": "Снижение нагрузки на панель и защита от повторных фоновых загрузок.",
+      "notes": "Ускоренный обход рекламы и счётчики охвата в GitHub.",
       "minimum_current_version": "1.0.0",
       "files": [
         {
@@ -73,7 +73,7 @@
         {
           "path": "scripts/github_runtime.py",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/scripts/github_runtime.py",
-          "sha256": "870fa7082b5ebbc508a8079e4f32fb9d128ee0d358269b773934f1d657a0a568"
+          "sha256": "92bc6c71bcfa058dacc39364e46971c7fe96b2866cfa0f9c79ee8d43c5180ba3"
         },
         {
           "path": "scripts/install_launchd.sh",
@@ -162,7 +162,7 @@
         {
           "path": "src/wb_control_center/agents/advertising.py",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/src/wb_control_center/agents/advertising.py",
-          "sha256": "b13ebaee7284376b158f300965ae2027773b4b59d30e9d0c221fc0f74b1c33a3"
+          "sha256": "a686b857a22542daa9b2509422ad500e6cceb42b5a31606c17af9f72b9f1f7f9"
         },
         {
           "path": "src/wb_control_center/agents/api_health.py",
