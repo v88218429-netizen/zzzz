@@ -139,6 +139,7 @@ jobs:
           (pathlib.Path(os.environ['RUNNER_TEMP'])/'wb-traffic-publish'/'README.md').write_text(
               '\n'.join(lines)+'\n', encoding='utf-8')
           PY
+          git worktree add --detach "$RUNNER_TEMP/wb-traffic-state-branch" HEAD
           git -C "$RUNNER_TEMP/wb-traffic-state-branch" switch --orphan traffic-state-next
           git -C "$RUNNER_TEMP/wb-traffic-state-branch" rm -rf . >/dev/null 2>&1 || true
           cp -R "$RUNNER_TEMP/wb-traffic-publish/." "$RUNNER_TEMP/wb-traffic-state-branch/"
