@@ -205,8 +205,8 @@ jobs:
         run: python wb_worker/github_fbs_recovery.py
 
   recover_scheduled:
-    if: \${{ github.event_name == 'schedule' }}
-    name: "scheduled FBS refresh \${{ matrix.client }}"
+    if: ${{ github.event_name == 'schedule' }}
+    name: "scheduled FBS refresh ${{ matrix.client }}"
     runs-on: ubuntu-latest
     timeout-minutes: 90
     strategy:
@@ -215,17 +215,17 @@ jobs:
       matrix:
         client: [AIR, HOZYAYUSHKA]
     env:
-      FBS_CLIENT: \${{ matrix.client }}
-      WB_API_TOKEN_AA: \${{ secrets.WB_API_TOKEN_AA }}
-      WB_API_TOKEN_YV: \${{ secrets.WB_API_TOKEN_YV }}
-      GOOGLE_BRIDGE_KEY: \${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
+      FBS_CLIENT: ${{ matrix.client }}
+      WB_API_TOKEN_AA: ${{ secrets.WB_API_TOKEN_AA }}
+      WB_API_TOKEN_YV: ${{ secrets.WB_API_TOKEN_YV }}
+      GOOGLE_BRIDGE_KEY: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
       GOOGLE_BRIDGE_URL: https://script.google.com/macros/s/AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw/exec
       FBS_LOOKBACK_DAYS: "3"
       FBS_BATCH_SIZE: "25"
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: \${{ github.ref_name }}
+          ref: ${{ github.ref_name }}
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -242,6 +242,6 @@ jobs:
           else
             exit 2
           fi
-      - name: Refresh recent orders and statuses for \${{ matrix.client }}
+      - name: Refresh recent orders and statuses for ${{ matrix.client }}
         shell: bash
         run: python wb_worker/github_fbs_recovery.py
