@@ -136,7 +136,7 @@ jobs:
           test -n "$WEBHOOK_SECRET"
           echo "::add-mask::$WEBHOOK_SECRET"
           python - <<'PY'
-          import csv, json, os, pathlib, time, urllib.error, urllib.request
+          import csv, json, math, os, pathlib, time, urllib.error, urllib.request
 
           root=pathlib.Path(os.environ["DATA_DIR"])/"traffic"
           status=json.loads((root/"status.json").read_text(encoding="utf-8"))
@@ -175,6 +175,76 @@ jobs:
                       last=type(exc).__name__+":"+str(exc)[:180]
                   if attempt<5: time.sleep(min(60,15*(2**(attempt-1))))
               raise RuntimeError("WB_TRAFFIC_PUBLISH_REQUEST_FAILED:"+str(last))
+          def compact_daily_view(datasets, alias, store_name, run_id):
+              def metric():
+                  return {"sum": 0.0, "unknown": False}
+              def group_for(day):
+                  day=str(day or "").strip()[:10]
+                  if len(day)!=10 or day[4]!="-" or day[7]!="-":
+                      raise RuntimeError("WB_TRAFFIC_DAILY_VIEW_INVALID_DATE:"+day)
+                  if day not in groups:
+                      groups[day]={
+                          "ads":{"rows":0,"values":{"views":metric(),"clicks":metric(),"spend":metric(),"orders":metric()}},
+                          "funnel":{"rows":0,"values":{"opens":metric(),"carts":metric(),"orders":metric(),"rub":metric()}},
+                          "organic":{"rows":0,"complete":True,"values":{"total":metric(),"paid":metric(),"clicks":metric()}},
+                      }
+                  return groups[day]
+              def add(target, raw):
+                  if raw is None or raw=="" or isinstance(raw,bool):
+                      target["unknown"]=True
+                      return
+                  try:
+                      value=float(raw)
+                  except (TypeError,ValueError):
+                      target["unknown"]=True
+                      return
+                  if not math.isfinite(value):
+                      target["unknown"]=True
+                      return
+                  target["sum"]+=value
+              groups={}
+              for row in datasets.get("ads",[]):
+                  group=group_for(row[1]); target=group["ads"]; target["rows"]+=1
+                  add(target["values"]["views"],row[4]); add(target["values"]["clicks"],row[5])
+                  add(target["values"]["orders"],row[7]); add(target["values"]["spend"],row[8])
+              for row in datasets.get("funnel",[]):
+                  group=group_for(row[1]); target=group["funnel"]; target["rows"]+=1
+                  add(target["values"]["opens"],row[4]); add(target["values"]["carts"],row[5])
+                  add(target["values"]["orders"],row[6]); add(target["values"]["rub"],row[7])
+              for row in datasets.get("organic",[]):
+                  group=group_for(row[1]); target=group["organic"]; target["rows"]+=1
+                  if str(row[10] or "")!="DERIVED_COMPLETE": target["complete"]=False
+                  add(target["values"]["total"],row[4]); add(target["values"]["paid"],row[5])
+                  add(target["values"]["clicks"],row[6])
+              def value(dataset,name):
+                  target=dataset["values"][name]
+                  return target["sum"] if dataset["rows"] and not target["unknown"] else ""
+              def all_known(dataset):
+                  return dataset["rows"]>0 and all(not item["unknown"] for item in dataset["values"].values())
+              output=[]
+              for day,group in sorted(groups.items()):
+                  ads,funnel,organic=group["ads"],group["funnel"],group["organic"]
+                  traffic_known=(ads["rows"]>0 and not ads["values"]["clicks"]["unknown"] and
+                      funnel["rows"]>0 and not funnel["values"]["opens"]["unknown"] and
+                      organic["rows"]>0 and organic["complete"] and all_known(organic))
+                  reconciles=(traffic_known and ads["values"]["clicks"]["sum"]==organic["values"]["paid"]["sum"] and
+                      funnel["values"]["opens"]["sum"]==organic["values"]["total"]["sum"] and
+                      organic["values"]["clicks"]["sum"]==organic["values"]["total"]["sum"]-organic["values"]["paid"]["sum"])
+                  organic_status="НЕПОЛНО · не считать нулём"
+                  paid_clicks=""; organic_clicks=""
+                  if reconciles:
+                      organic_status="ПОЛНЫЙ РАСЧЁТ"
+                      paid_clicks=organic["values"]["paid"]["sum"]
+                      organic_clicks=organic["values"]["clicks"]["sum"]
+                  elif all_known(ads) and all_known(funnel) and all_known(organic) and organic["complete"]:
+                      organic_status="РАСХОЖДЕНИЕ · значения скрыты"
+                  output.append([
+                      day,store_name,value(ads,"views"),value(ads,"clicks"),value(ads,"spend"),value(ads,"orders"),
+                      value(funnel,"opens"),value(funnel,"carts"),value(funnel,"orders"),value(funnel,"rub"),
+                      paid_clicks,organic_clicks,organic_status,ads["rows"],funnel["rows"],organic["rows"],str(run_id)
+                  ])
+              return output
+
           errors=[]
           for alias in expected:
               data={name:[row for row in rows if str(row[0]).strip()==alias] for name,rows in all_rows.items()}
@@ -199,7 +269,11 @@ jobs:
                   print("WB_TRAFFIC_STORE_FAILED="+alias+" partition failed; visible summary preserved")
                   continue
               try:
-                  view=post(dict(common,daily_view_store=True,store_name=names[alias]))
+                  daily_rows=compact_daily_view(data,alias,names[alias],status["finishedAt"])
+                  view_payload={"action":"publish_wb_traffic","sync_status":status,"datasets":{},
+                      "daily_view_store":True,"store_name":names[alias],"daily_view_rows":daily_rows}
+                  print("WB_TRAFFIC_DAILY_VIEW_COMPACT_INPUT="+alias+" rows="+str(len(daily_rows)))
+                  view=post(view_payload)
                   daily=((view.get("partitions") or {}).get("daily_view") or {})
                   lite=daily.get("lite_tables") or {}
                   if view.get("ok") is not True or daily.get("ok") is not True or lite.get("ok") is not True or names[alias] not in (lite.get("stores") or []):

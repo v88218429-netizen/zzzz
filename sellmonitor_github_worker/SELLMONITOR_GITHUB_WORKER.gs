@@ -4,7 +4,7 @@
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.53',
+  VERSION: 'github-worker-1.3.54',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -3711,6 +3711,33 @@ function sellmonitorGithubWriteWbTrafficDailyView_(prepared, runId, options) {
     return dataset.rows>0 && Object.keys(dataset.values).every(function(name){return !dataset.values[name].unknown;});
   }
   var freshRows=[];
+  if (options.precomputedRows != null) {
+    if (!Array.isArray(options.precomputedRows)) throw new Error('WB_TRAFFIC_DAILY_VIEW_PRECOMPUTED_NOT_ARRAY');
+    var precomputedStore = String(options.storeName || '').trim();
+    if (!precomputedStore) throw new Error('WB_TRAFFIC_DAILY_VIEW_PRECOMPUTED_STORE_REQUIRED');
+    var seenPrecomputed = {};
+    freshRows = options.precomputedRows.map(function(row,index) {
+      if (!Array.isArray(row) || row.length !== headers.length) throw new Error('WB_TRAFFIC_DAILY_VIEW_PRECOMPUTED_WIDTH:' + index);
+      var day = String(row[0] || '').trim().slice(0,10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) throw new Error('WB_TRAFFIC_DAILY_VIEW_PRECOMPUTED_DATE:' + index);
+      if (String(row[1] || '').trim() !== precomputedStore) throw new Error('WB_TRAFFIC_DAILY_VIEW_PRECOMPUTED_STORE:' + index);
+      var key = precomputedStore + '|' + day;
+      if (seenPrecomputed[key]) throw new Error('WB_TRAFFIC_DAILY_VIEW_PRECOMPUTED_DUPLICATE:' + key);
+      seenPrecomputed[key] = true;
+      [2,3,4,5,6,7,8,9,10,11,13,14,15].forEach(function(column) {
+        var value = row[column];
+        if (value === '' || value == null) return;
+        if (typeof value === 'boolean' || !isFinite(Number(value))) throw new Error('WB_TRAFFIC_DAILY_VIEW_PRECOMPUTED_NUMBER:' + index + ':' + column);
+      });
+      if (['ПОЛНЫЙ РАСЧЁТ','РАСХОЖДЕНИЕ · значения скрыты','НЕПОЛНО · не считать нулём'].indexOf(String(row[12] || '')) < 0) {
+        throw new Error('WB_TRAFFIC_DAILY_VIEW_PRECOMPUTED_STATUS:' + index);
+      }
+      if (String(row[16] || '') !== String(runId)) throw new Error('WB_TRAFFIC_DAILY_VIEW_PRECOMPUTED_RUN:' + index);
+      var copied = row.slice();
+      copied[0] = day;
+      return copied;
+    });
+  } else {
   Object.keys(grouped).sort(function(a,b){return grouped[a].day.localeCompare(grouped[b].day)||grouped[a].name.localeCompare(grouped[b].name);}).forEach(function(key){
     var g=grouped[key], organicStatus='НЕПОЛНО · не считать нулём', paidClicks='', organicClicks='';
     var trafficMetricsKnown = g.ads.rows>0 && !g.ads.values.clicks.unknown &&
@@ -3732,6 +3759,7 @@ function sellmonitorGithubWriteWbTrafficDailyView_(prepared, runId, options) {
       paidClicks,organicClicks,organicStatus,g.ads.rows,g.funnel.rows,g.organic.rows,String(runId)
     ]);
   });
+  }
   if (options.storeName) freshRows = freshRows.filter(function(row){return String(row[1]||'')===options.storeName;});
   if (!freshRows.length && options.archiveOnly === true && last <= 1) return {ok:true,archive_only:true,fresh_rows:0,rows:0,added:0,updated:0,max_date:''};
   var byKey={};
@@ -4670,7 +4698,11 @@ function sellmonitorGithubPublishWbTraffic_(body) {
   if (body.daily_view_store === true) {
     var storeName = String(body.store_name || '').trim();
     if (['Саныч','AIR','Хозяюшка'].indexOf(storeName) < 0) throw new Error('WB_TRAFFIC_DAILY_VIEW_STORE_INVALID');
-    var storeView = sellmonitorGithubWriteWbTrafficDailyView_(prepared, status.finishedAt, {storeName:storeName,writeArchive:false});
+    var dailyRows = body.daily_view_rows;
+    if (dailyRows != null && !Array.isArray(dailyRows)) throw new Error('WB_TRAFFIC_DAILY_VIEW_ROWS_NOT_ARRAY');
+    var storeView = sellmonitorGithubWriteWbTrafficDailyView_(prepared, status.finishedAt, {
+      storeName:storeName,writeArchive:false,precomputedRows:dailyRows
+    });
     return {ok:storeView.lite_tables && storeView.lite_tables.ok === true,
       action:'publish_wb_traffic',sync_finished_at:status.finishedAt,
       partitions:{daily_view:storeView}};

@@ -254,6 +254,18 @@ assert.equal(dashboardBooks.get(dashboardIds[0]).dashboard.values[6][9], 10, 'Sa
 assert.equal(dashboardBooks.get(dashboardIds[0]).dashboard.values[7][9], 0, 'valid zero organic stays zero');
 assert.equal(dashboardBooks.get(dashboardIds[1]).dashboard.values[7][9], '—', 'incomplete AIR organic stays unavailable');
 assert.equal(dashboardBooks.get(dashboardIds[2]).dashboard.values[6][9], '—', 'missing Hozy traffic stays unavailable');
+
+const compactStoreResult = publish({
+  sync_status: status,
+  datasets: {},
+  daily_view_store: true,
+  store_name: 'Саныч',
+  daily_view_rows: [['2026-10-09','Саныч',100,10,3.5,1,10,2,1,50,10,0,'ПОЛНЫЙ РАСЧЁТ',1,1,1,status.finishedAt]]
+});
+assert.equal(compactStoreResult.ok, true, 'a compact store summary can be published without raw traffic rows');
+assert.equal(compactStoreResult.partitions.daily_view.fresh_rows, 1);
+assert.equal(compactStoreResult.partitions.daily_view.rows, 2);
+assert.equal(liteBooks.get(liteIds[0]).traffic.values[1][10], 0, 'compact organic zero stays factual zero');
 assert.equal(partitionBooks.size, 3, 'organic and poll facts use separate bounded tabs in their existing store-month books');
 assert.equal(sheets['12_ADS_CAMPAIGN_DAY'].values.length, 1, 'do not copy facts into the full aggregate book');
 assert.equal(sheets['13_FUNNEL_DAY'].values.length, 1, 'do not copy facts into the full aggregate book');
