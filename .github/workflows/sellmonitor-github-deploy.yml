@@ -423,10 +423,10 @@ jobs:
           import pathlib,re,sys
           lines=pathlib.Path(sys.argv[1]).read_text(errors="replace").splitlines()
           deployments=pathlib.Path(sys.argv[2]).read_text(errors="replace").splitlines()
-          versions=[int(m.group(1)) for line in lines if (m:=re.match(r"\\s*(\\d+)\\s+-",line))]
+          versions=[int(m.group(1)) for line in lines if (m:=re.match(r"\s*(\d+)\s+-",line))]
           active=set()
           for line in deployments:
-              m=re.search(r"@\\s*(\\d+)",line) or re.search(r"version(?:Number)?\\s*[:=]\\s*(\\d+)",line,re.I)
+              m=re.search(r"@\s*(\d+)",line) or re.search(r"version(?:Number)?\s*[:=]\s*(\d+)",line,re.I)
               if m: active.add(int(m.group(1)))
           if not versions: raise SystemExit("APPS_SCRIPT_VERSION_LIST_UNPARSED")
           if 185 not in active or max(versions) not in active:
@@ -436,6 +436,7 @@ jobs:
           if len(versions)>=200:
               raise SystemExit("APPS_SCRIPT_VERSION_CAPACITY_STILL_FULL")
           print("APPS_SCRIPT_VERSION_CAPACITY=available")
+          PY
 
       - name: Push and redeploy stable adapter
         if: github.event_name != 'push' || github.event.head_commit.message == 'Run Ozon export continuation via GitHub' || !contains(fromJSON('["Run Ozon export continuation via GitHub","Diagnose Ozon export status via GitHub","Repair and resume Ozon export via GitHub"]'), github.event.head_commit.message)
