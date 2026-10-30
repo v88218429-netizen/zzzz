@@ -64,9 +64,10 @@ jobs:
               print(f"OZON_PUBLISH_ATTEMPT={attempt}/8")
 
           def needs_resume(result):
-              status=str((result or {}).get("source_status") or "").lower()
+              # The publisher reports the source failure code consistently;
+              # Russian heartbeat wording varies between source-sheet states.
               reason=str((result or {}).get("reason") or "")
-              return "OZON_SOURCE_EXPORT_NOT_VERIFIED" in reason and ("нет успешного запуска" in status or "выгрузка продолжается" in status)
+              return "OZON_SOURCE_EXPORT_NOT_VERIFIED" in reason
 
           result=None
           last=None
