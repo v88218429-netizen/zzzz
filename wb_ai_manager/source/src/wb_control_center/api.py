@@ -1053,6 +1053,11 @@ async def dashboard_data(days: int = 7, from_date: str | None = None, to_date: s
         cluster_data_observed_at=cluster_times,
         freshness_hours=3.0,
     )
+    # Raw cluster inputs are already represented by the enriched analysis rows.
+    # Returning both copies multiplies the largest dashboard payload without
+    # serving any UI consumer; the detail table keeps the complete row set.
+    traffic.pop("clusters", None)
+    traffic.pop("campaign_settings", None)
     audit_agents = audit.get("agents") or {}
     audit_failed = sum(1 for x in audit_agents.values() if isinstance(x, dict) and x.get("status") == "error")
     return {

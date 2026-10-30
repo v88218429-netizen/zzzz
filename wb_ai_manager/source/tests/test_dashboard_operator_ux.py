@@ -50,6 +50,24 @@ def test_dashboard_renderers_do_not_turn_missing_values_into_zero():
     assert "Number(null)" not in js
 
 
+def test_dashboard_does_not_poll_hidden_tabs_or_overlap_large_refreshes():
+    js = (Path(__file__).parents[1] / "src" / "wb_control_center" / "ui" / "dashboard.js").read_text(encoding="utf-8")
+    assert "let dashboardFetchInFlight=false" in js
+    assert "if(dashboardFetchInFlight)return" in js
+    assert "if(!document.hidden)fetchData(false)" in js
+    assert "},60000)" in js
+
+
+def test_dashboard_returns_enriched_cluster_rows_without_duplicate_raw_inputs():
+    root = Path(__file__).parents[1] / "src" / "wb_control_center"
+    api = (root / "api.py").read_text(encoding="utf-8")
+    js = (root / "ui" / "dashboard.js").read_text(encoding="utf-8")
+    assert 'traffic.pop("clusters", None)' in api
+    assert 'traffic.pop("campaign_settings", None)' in api
+    assert "analysis.rows||[]" in js
+    assert "traffic.clusters" not in js
+
+
 def test_dashboard_uses_seller_article_and_drilldowns():
     js = (Path(__file__).parents[1] / "src" / "wb_control_center" / "ui" / "dashboard.js").read_text(encoding="utf-8")
     html = (Path(__file__).parents[1] / "src" / "wb_control_center" / "ui" / "dashboard.html").read_text(encoding="utf-8")
