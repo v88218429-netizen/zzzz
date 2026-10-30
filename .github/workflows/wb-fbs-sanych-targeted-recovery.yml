@@ -81,7 +81,7 @@ jobs:
     timeout-minutes: 90
     env:
       FBS_CLIENT: SANYCH
-      FBS_INCLUDE_LIVE: "true"
+      FBS_INCLUDE_LIVE: "false"
       FBS_BATCH_SIZE: "100"
       WB_API_TOKEN_AP: ${{ secrets.WB_API_TOKEN_AP }}
       GOOGLE_BRIDGE_KEY: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
