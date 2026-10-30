@@ -4,7 +4,7 @@
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.50',
+  VERSION: 'github-worker-1.3.51',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -5724,8 +5724,9 @@ function sellmonitorGithubWbInnerUpsert_(ss,sh,headers,rows,storeName){
   verifiedRows.forEach(function(r){var k=String(r[keyCol-1]||''),rb=finalMap[k];if(!rb)throw new Error('WB_INNER_READBACK_MISSING:'+sh.getName()+':'+k);if(rb.join('|')!==r.join('|'))throw new Error('WB_INNER_READBACK_MISMATCH:'+sh.getName()+':'+k);verified++;});
   if(final.length!==Object.keys(finalMap).length)throw new Error('WB_INNER_READBACK_COUNT_MISMATCH:'+sh.getName());
   if(final.length>1){
-    sh.getRange(2,2,final.length,2).setNumberFormat('dd.mm.yyyy');
-    headers.forEach(function(h,i){if(/_rub$/.test(String(h)))sh.getRange(2,i+1,final.length,1).setNumberFormat('#,##0.00');else if(/^(margin|roi|buyout)$/.test(String(h)))sh.getRange(2,i+1,final.length,1).setNumberFormat('0.0%');else if(/(_qty|_count)$/.test(String(h)))sh.getRange(2,i+1,final.length,1).setNumberFormat('#,##0.##');});
+    var fmts=new Array(keyCol).fill('');fmts[1]='dd.mm.yyyy';fmts[2]='dd.mm.yyyy';
+    headers.forEach(function(h,i){if(/_rub$/.test(String(h)))fmts[i]='#,##0.00';else if(/^(margin|roi|buyout)$/.test(String(h)))fmts[i]='0.0%';else if(/(_qty|_count)$/.test(String(h)))fmts[i]='#,##0.##';});
+    var fmtStart=-1,fmtCurrent='';for(var fi=0;fi<=fmts.length;fi++){var fmt=fi<fmts.length?fmts[fi]:'';if(fmt!==fmtCurrent){if(fmtCurrent)sh.getRange(2,fmtStart+1,final.length,fi-fmtStart).setNumberFormat(fmtCurrent);fmtCurrent=fmt;fmtStart=fi;}}
     if(!sh.getFilter())sh.getRange(1,1,finalLast,keyCol).createFilter();
   }
   var digest=Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,JSON.stringify(final),Utilities.Charset.UTF_8).map(function(b){var v=(b<0?b+256:b).toString(16);return v.length===1?'0'+v:v;}).join('');
