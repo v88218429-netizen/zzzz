@@ -29,7 +29,7 @@ jobs:
     env:
       WEBAPP_DEPLOYMENT_ID: AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw
       WEBHOOK_SECRET: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
-      PUBLISH_ONLY_STORE: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[sanych-only]') && 'sanych_wb' || '' }}
+      PUBLISH_ONLY_STORE: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[air-only]') && 'air_wb' || github.event_name == 'push' && contains(github.event.head_commit.message, '[hozyayushka-only]') && 'hozyayushka_wb' || github.event_name == 'push' && contains(github.event.head_commit.message, '[sanych-only]') && 'sanych_wb' || '' }}
     steps:
       - name: Check configured authorization
         shell: bash
@@ -48,7 +48,7 @@ jobs:
 
           url = "https://script.google.com/macros/s/" + os.environ["WEBAPP_DEPLOYMENT_ID"] + "/exec"
           selected_store = os.environ.get("PUBLISH_ONLY_STORE", "").strip()
-          expected = (selected_store,) if selected_store == "sanych_wb" else ("air_wb", "hozyayushka_wb", "sanych_wb")
+          expected = (selected_store,) if selected_store in ("air_wb", "hozyayushka_wb", "sanych_wb") else ("air_wb", "hozyayushka_wb", "sanych_wb")
           print("PUBLISH_SCOPE=" + (selected_store or "all_stores"))
           verified = []
           errors = []
@@ -83,8 +83,11 @@ jobs:
                           ] if isinstance(result, dict) else [],
                       }, ensure_ascii=False)[:1200]
                       if isinstance(result, dict) and result.get("ok") is False:
-                          break
-                  if attempt < 4:
+                          store_errors = result.get("stores") or []
+                          retryable = any("Service Spreadsheets failed while accessing document" in str(item.get("error", "")) for item in store_errors if isinstance(item, dict))
+                          if not retryable:
+                              break
+                  if attempt < 3:
                       time.sleep(15 * attempt)
               if not isinstance(result, dict) or result.get("ok") is not True:
                   message = "WB finance publication failed for " + store_id + ": " + str(last)
@@ -126,7 +129,7 @@ jobs:
               )
               time.sleep(5)
           actual = {item.get("store") for item in verified}
-          expected_names = {"Саныч"} if selected_store == "sanych_wb" else {"AIR", "Хозяюшка", "Саныч"}
+          expected_names = ({"air_wb":"AIR","hozyayushka_wb":"Хозяюшка","sanych_wb":"Саныч"}[selected_store],) if selected_store in ("air_wb","hozyayushka_wb","sanych_wb") else {"AIR", "Хозяюшка", "Саныч"}
           if actual != expected_names:
               errors.append("WB summary stores readback acceptance failed: " + repr(actual))
           if errors:
