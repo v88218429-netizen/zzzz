@@ -217,8 +217,8 @@ def wait_bridge() -> None:
     last_error = "BRIDGE_RESPONSE_INVALID"
     for attempt in range(1, 7):
         try:
-            data = request(BRIDGE_URL, body={"token": BRIDGE_KEY, "action": "fbs_targets_health"}, max_attempts=1, timeout=120)
-            if data.get("ok") is True and data.get("action") == "fbs_targets_health":
+            data = request(BRIDGE_URL, body={"token": BRIDGE_KEY, "action": "bridge_ping"}, max_attempts=1, timeout=120)
+            if data.get("ok") is True and data.get("action") == "bridge_ping":
                 print("FBS_AUTHENTICATED_BRIDGE_READY=yes", flush=True)
                 return
             last_error = "BRIDGE_RESPONSE_INVALID"
