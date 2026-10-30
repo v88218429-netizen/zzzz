@@ -73,7 +73,7 @@
         {
           "path": "scripts/github_runtime.py",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/scripts/github_runtime.py",
-          "sha256": "92bc6c71bcfa058dacc39364e46971c7fe96b2866cfa0f9c79ee8d43c5180ba3"
+          "sha256": "33d3945eaac70ffb4eb218c7fe5aa3e913694b2caac197bcb057afcbdb5bfff1"
         },
         {
           "path": "scripts/install_launchd.sh",
@@ -142,7 +142,7 @@
         {
           "path": "src/wb_control_center/__init__.py",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/src/wb_control_center/__init__.py",
-          "sha256": "6822640778e2b483059af1d4deab1364d609cfbc01c4adeef619e79e8230611b"
+          "sha256": "0cea6c65a3750005d92b28434047b11e63e8aac4540e52775204d8bd6224f3f3"
         },
         {
           "path": "src/wb_control_center/__main__.py",
@@ -162,7 +162,7 @@
         {
           "path": "src/wb_control_center/agents/advertising.py",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/src/wb_control_center/agents/advertising.py",
-          "sha256": "a686b857a22542daa9b2509422ad500e6cceb42b5a31606c17af9f72b9f1f7f9"
+          "sha256": "aad349bef6ffae0ee4e35ca28932f1fd3cbb515516f7f14cb3fb54868deb4c89"
         },
         {
           "path": "src/wb_control_center/agents/api_health.py",
