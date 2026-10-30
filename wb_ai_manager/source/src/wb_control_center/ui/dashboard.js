@@ -781,6 +781,7 @@ function renderAdvertising(){
 
 function renderClusterAdvisor(){
   const analysis=state.data?.traffic?.cluster_analysis||{}, rows=analysis.rows||[], selected=state.selectedStore||'all';
+  const optimizerSummary=state.data?.traffic?.optimizer_summary||{}, optimizerShops=optimizerSummary.shops||{};
   const visible=rows.filter(r=>selected==='all'||r.shop===({sanych:'ap',air:'aa',hozyushka:'yv'}[selected]));
   const body=$('cluster-analysis-table'), status=$('cluster-analysis-status'), kpis=$('cluster-analysis-kpis');
   if(!body||!status||!kpis)return;
@@ -789,8 +790,9 @@ function renderClusterAdvisor(){
   const exactClusterBids=visible.filter(r=>r.current_bid_rub!==null&&r.current_bid_rub!==undefined).length;
   const campaignSearchBids=visible.filter(r=>r.campaign_search_bid_rub!==null&&r.campaign_search_bid_rub!==undefined).length;
   const wbGuidance=visible.filter(r=>r.wb_bid_guidance).length;
+  const coverageText=Object.entries(optimizerShops).filter(([shop])=>selected==='all'||shop===({sanych:'ap',air:'aa',hozyushka:'yv'}[selected])).map(([shop,data])=>{const s=data.sweep||{};return `${({ap:'Саныч',aa:'AIR',yv:'Хозяюшка'})[shop]||shop}: кампании ${s.sweep_campaigns_seen??0}/${s.sweep_campaigns_total??s.eligible_campaigns??0}, товары ${s.sweep_products_seen??0}/${s.sweep_products_total??0}, цикл ${s.sweep_complete===true?'завершён':'не завершён'}`;}).join(' · ')||'охват оптимизатора не подтверждён';
   status.textContent=rows.length
-    ? `Источник: WB Promotion API · период ${state.data?.period?.from||'—'} — ${state.data?.period?.to||'—'} · ${visible.length} кластеров${selected==='all'?' по всем кабинетам':' в выбранном магазине'} · ставка кластера: ${exactClusterBids} · ставка поиска товара: ${campaignSearchBids} · подсказка WB по диапазону: ${wbGuidance} · наши точные советы: ${advised} · заблокировано: ${blocked}. Изменения в WB не выполняются.`
+    ? `Источник: WB Promotion API + зашифрованные данные GitHub · период ${state.data?.period?.from||'—'} — ${state.data?.period?.to||'—'} · ${visible.length} кластеров${selected==='all'?' по всем кабинетам':' в выбранном магазине'} · ставка кластера: ${exactClusterBids} · ставка поиска товара: ${campaignSearchBids} · подсказка WB по диапазону: ${wbGuidance} · наши точные советы: ${advised} · заблокировано: ${blocked}. ${coverageText}. Изменения в WB не выполняются.`
     : `Кластерные данные не получены. ${state.data?.traffic?.error||'Проверь источник архивов GitHub и следующий сбор данных WB; пустой список не означает нулевую рекламу.'}`;
   kpis.innerHTML=[
     ['Кластеры в выборке',visible.length],['Ставка кластера',exactClusterBids],['Подсказка WB по диапазону',wbGuidance],['Изменения ставок автоматически','Нет']
@@ -801,13 +803,14 @@ function renderClusterAdvisor(){
   body.innerHTML=ordered.length?ordered.map(r=>{
     const position=r.organic_position_status==='fresh'?num(r.organic_position):'нет точного свежего факта';
     const stateLabel=r.cluster_state==='active'?'активен':r.cluster_state==='excluded'?'исключён':'не подтверждён';
-    const target=r.target_bid_rub===null||r.target_bid_rub===undefined?'—':`${exactRub(r.target_bid_rub)}${r.action==='ТЕСТОВО СНИЗИТЬ СТАВКУ'?' (тест −10%)':r.action==='ОСТАВИТЬ СТАВКУ'?' (оставить)':''}`;
+    const targetChange=Number(r.current_bid_rub)>0&&Number.isFinite(Number(r.target_bid_rub))?Math.abs((Number(r.target_bid_rub)/Number(r.current_bid_rub)-1)*100):null;
+    const target=r.target_bid_rub===null||r.target_bid_rub===undefined?'—':`${exactRub(r.target_bid_rub)}${r.action==='ТЕСТОВО СНИЗИТЬ СТАВКУ'?` (пробный шаг −${targetChange===null?'—':targetChange.toFixed(1)}%)`:r.action==='ОСТАВИТЬ СТАВКУ'?' (оставить)':''}`;
     const blocker=r.blockers?.length?`<br><span class="muted">Блокировка: ${esc(r.blockers.join(' '))}</span>`:'';
     const label=entityName(r.nm_id);
     const campaignSearch=r.campaign_search_bid_rub===null||r.campaign_search_bid_rub===undefined?'—':`${exactRub(r.campaign_search_bid_rub)}<br><span class="muted">настройка товара · снимок ${ago(r.campaign_search_bid_at)}</span>`;
     const clusterBid=r.current_bid_rub===null||r.current_bid_rub===undefined?'не найдено в снимке':`${exactRub(r.current_bid_rub)}<br><span class="muted">из WB /adv/v0/normquery/get-bids · снимок ${ago(r.bid_observed_at)}</span>`;
     const guidance=r.wb_bid_guidance?`${exactRub(r.wb_bid_guidance.reach_min_bid_rub)} / ${exactRub(r.wb_bid_guidance.reach_medium_bid_rub)} / ${exactRub(r.wb_bid_guidance.reach_max_bid_rub)}<br><span class="muted">WB · конкурентная ${exactRub(r.wb_bid_guidance.competitive_bid_rub)} · лидеры ${exactRub(r.wb_bid_guidance.leaders_bid_rub)} · ${ago(r.wb_bid_guidance.observed_at)}</span>`:'нет точной свежей подсказки WB';
-    return `<tr><td><strong>${esc(r.store_name)} · ${esc(r.seller_article||label)}</strong><br><span class="muted">${esc(r.campaign_name||`Кампания ${r.advert_id}`)} · nmID ${esc(r.nm_id)} · ${stateLabel}</span></td><td>${esc(r.norm_query)}<br><span class="muted">${esc(r.date_from)} — ${esc(r.date_to)}</span></td><td>${esc(position)}</td><td>${num(r.views)}</td><td>${num(r.clicks)}</td><td>${num(r.atbs)}</td><td>${num(r.orders)}</td><td>${rub(r.spend_rub)}</td><td>${exactRub(r.cpc_rub)} / ${exactRub(r.cpa_rub)}<br><span class="muted">предел заказа ${exactRub(r.max_cpa_rub)}</span></td><td>${clusterBid}</td><td>${campaignSearch}</td><td>${guidance}</td><td>${target}</td><td><strong>${esc(r.action)}</strong><br>${esc(r.reason)}${blocker}<br><span class="muted">${esc(r.quality||'качество источника не указано')}</span></td></tr>`;
+    return `<tr><td><strong>${esc(r.store_name)} · ${esc(r.seller_article||label)}</strong><br><span class="muted">${esc(r.campaign_name||`Кампания ${r.advert_id}`)} · nmID ${esc(r.nm_id)} · ${stateLabel}</span></td><td>${esc(r.norm_query)}<br><span class="muted">${esc(r.date_from)} — ${esc(r.date_to)} · данные ${ago(r.stats_observed_at)}</span></td><td>${esc(position)}</td><td>${num(r.views)}</td><td>${num(r.clicks)}</td><td>${num(r.atbs)}</td><td>${num(r.orders)}</td><td>${rub(r.spend_rub)}</td><td>${exactRub(r.cpc_rub)} / ${exactRub(r.cpa_rub)}<br><span class="muted">предел заказа ${exactRub(r.max_cpa_rub)}</span></td><td>${clusterBid}</td><td>${campaignSearch}</td><td>${guidance}</td><td>${target}</td><td><strong>${esc(r.action)}</strong><br>${esc(r.reason)}${blocker}<br><span class="muted">${esc(r.quality||'качество источника не указано')}</span></td></tr>`;
   }).join(''):`<tr><td colspan="14">${empty(selected==='all'?'По выбранному периоду нет полученных кластеров WB. Это не означает нулевые показы или расход.':'В этом магазине за выбранный период кластеры не получены.')}</td></tr>`;
 }
 
