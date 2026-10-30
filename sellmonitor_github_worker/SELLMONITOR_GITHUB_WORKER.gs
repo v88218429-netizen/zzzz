@@ -4,7 +4,7 @@
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.51',
+  VERSION: 'github-worker-1.3.52',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -6270,16 +6270,20 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
       mark('STATE_READ_START_BOUNDED');
       // Read one narrow A:G rectangle spanning only the matched rows. A single
       // native range read is more reliable than a multi-range REST request here.
-      var stateMin=0,stateMax=0,stateMatrix=[];
-      if(rows.length){
-        stateMin=rows[0].row;stateMax=rows[0].row;
-        rows.forEach(function(item){stateMin=Math.min(stateMin,item.row);stateMax=Math.max(stateMax,item.row);});
-        stateMatrix=orderSheetNative.getRange(stateMin,1,stateMax-stateMin+1,7).getDisplayValues();
-      }
+      rows.sort(function(a,b){return a.row-b.row;});
+      var stateRuns=[];
       rows.forEach(function(item){
-        var values=stateMatrix[item.row-stateMin]||[];
-        if(String(values[0]||'')!==item.id){stale=true;return;}
-        stateByRow[item.row]=[values[4]||'',values[5]||'',values[6]||''];
+        var run=stateRuns[stateRuns.length-1];
+        if(!run||item.row>run.end+1)stateRuns.push({start:item.row,end:item.row,items:[item]});
+        else {run.end=item.row;run.items.push(item);}
+      });
+      stateRuns.forEach(function(run){
+        var matrix=orderSheetNative.getRange(run.start,1,run.end-run.start+1,7).getDisplayValues();
+        run.items.forEach(function(item){
+          var values=matrix[item.row-run.start]||[];
+          if(String(values[0]||'')!==item.id){stale=true;return;}
+          stateByRow[item.row]=[values[4]||'',values[5]||'',values[6]||''];
+        });
       });
       mark('STATE_READ_DONE_BOUNDED');
       return stale;
@@ -6352,18 +6356,17 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
         throw new Error('FBS_PATCH_BATCH_HTTP_'+writeCode+':'+writeDiagnostic);
       }
       mark('STATE_VERIFY_START_BOUNDED');
-      var verifyMin=segments[0][0],verifyMax=segments[segments.length-1][1],verifyCount=verifyMax-verifyMin+1;
       // Force pending Sheets writes to become visible before readback verification.
       SpreadsheetApp.flush();
       Utilities.sleep(500);
-      var verifyStateMatrix=orderSheetNative.getRange(verifyMin,1,verifyCount,7).getValues();
-      // Read the bounded timestamp verification through SpreadsheetApp.
-      // The REST batchGet endpoint intermittently times out even for one row
-      // in large order books, despite the state read and write having succeeded.
-      var verifyTimeMatrix=orderSheetNative.getRange(verifyMin,22,verifyCount,2).getDisplayValues();
+      // Read only the changed segments. A single min-to-max range can span tens
+      // of thousands of unrelated rows when a small batch contains scattered IDs.
       segments.forEach(function(seg){
-        for(var rowNumber=seg[0];rowNumber<=seg[1];rowNumber++){
-          var rowOffset=rowNumber-verifyMin;
+        var startRow=seg[0],endRow=seg[1],count=endRow-startRow+1;
+        var verifyStateMatrix=orderSheetNative.getRange(startRow,1,count,7).getValues();
+        var verifyTimeMatrix=orderSheetNative.getRange(startRow,22,count,2).getDisplayValues();
+        for(var rowNumber=startRow;rowNumber<=endRow;rowNumber++){
+          var rowOffset=rowNumber-startRow;
           var orderRow=verifyStateMatrix[rowOffset]||[],timeRow=verifyTimeMatrix[rowOffset]||[];
           var expectedState=stateByRow[rowNumber]||[],expectedTimes=syncTimesByRow[rowNumber]||[];
           if(String(orderRow[0]||'')!==String(idByRow[rowNumber]||'')||
