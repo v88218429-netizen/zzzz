@@ -155,10 +155,12 @@ jobs:
               ("2", "HOZYAYUSHKA", "OZON_HOZYAYUSHKA_CLIENT_ID", "OZON_HOZYAYUSHKA_API_KEY"),
           )
 
+          api_context = {"store": "", "flow": "", "page": 0}
+
           def api_post(endpoint, body, headers):
               last = None
-              for attempt in range(3):
-                  print(f"OZON_API_REQUEST={endpoint};attempt={attempt + 1}", flush=True)
+              for attempt in range(5):
+                  print("OZON_API_REQUEST=store="+str(api_context["store"])+";flow="+str(api_context["flow"])+";page="+str(api_context["page"])+";endpoint="+endpoint+";attempt="+str(attempt+1), flush=True)
                   req = urllib.request.Request(
                       "https://api-seller.ozon.ru" + endpoint,
                       data=json.dumps(body, separators=(",", ":")).encode("utf-8"),
@@ -174,13 +176,13 @@ jobs:
                           page_rows = result.get("postings") if isinstance(result, dict) else None
                           page_has_next = result.get("has_next", parsed.get("has_next", False)) if isinstance(result, dict) else parsed.get("has_next", False)
                           page_cursor = result.get("cursor") or result.get("next_cursor") if isinstance(result, dict) else None
-                          print(f"OZON_API_RESPONSE={endpoint};rows={len(page_rows) if isinstance(page_rows, list) else -1};has_next={bool(page_has_next)};cursor={bool(page_cursor)}", flush=True)
+                          print("OZON_API_RESPONSE=store="+str(api_context["store"])+";flow="+str(api_context["flow"])+";page="+str(api_context["page"])+";endpoint="+endpoint+";rows="+str(len(page_rows) if isinstance(page_rows,list) else -1)+";has_next="+str(bool(page_has_next))+";cursor="+str(bool(page_cursor)), flush=True)
                           return parsed
                   except urllib.error.HTTPError as exc:
                       detail = exc.read(1200).decode("utf-8", "replace").replace("\\n", " ")[:600]
                       last = f"HTTP_{exc.code}:{detail}"
-                      if exc.code not in (429, 500, 502, 503, 504) or attempt == 2:
-                          raise RuntimeError("OZON_API_REQUEST_FAILED:" + endpoint + ":" + last)
+                      if exc.code not in (429, 500, 502, 503, 504) or attempt == 4:
+                          raise RuntimeError("OZON_API_REQUEST_FAILED:" + api_context["store"] + ":" + api_context["flow"] + ":" + str(api_context["page"]) + ":" + endpoint + ":" + last)
                       retry_after = exc.headers.get("Retry-After")
                       delay = min(60, int(retry_after)) if retry_after and retry_after.isdigit() else 2 ** attempt
                   except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, ConnectionError, OSError) as exc:
@@ -217,6 +219,7 @@ jobs:
 
               offset = 0
               while True:
+                  api_context.update({"store": label, "flow": "FBO", "page": store_pages + 1})
                   response = api_post("/v3/posting/fbo/list", {
                       "dir": "ASC", "filter": dict(window), "limit": 100, "offset": offset,
                       "with": {"analytics_data": False, "financial_data": False},
@@ -256,6 +259,7 @@ jobs:
               cursor = ""
               seen_cursors = set()
               while True:
+                  api_context.update({"store": label, "flow": "FBS", "page": store_pages + 1})
                   body = {
                       "dir": "ASC", "filter": dict(window, status=""), "limit": 100, "cursor": cursor,
                       "with": {"analytics_data": False, "financial_data": False},
