@@ -148,3 +148,48 @@ def test_stale_unit_economics_block_any_bid_advice():
     row = result["rows"][0]
     assert row["target_bid_rub"] is None
     assert any("свежий точный допустимый расход" in x for x in row["blockers"])
+
+
+def test_exact_fresh_wb_bid_bands_join_by_campaign_sku_and_normalized_query():
+    recommendations = [{
+        "campaign_id": 15,
+        "recommendations": {"123": {"data": {
+            "base": {"competitiveBid": {"bidKopecks": 8000}, "leadersBid": {"bidKopecks": 15000}},
+            "normQueries": [{"normQuery": "Таз   строительный", "reachMin": {"bidKopecks": 5000},
+                             "reachMedium": {"bidKopecks": 7000}, "reachMax": {"bidKopecks": 9000}}],
+        }}},
+    }]
+    result = analyze_cluster_rows(
+        [source_row()], settings(), decisions(), now=NOW,
+        bid_recommendations=recommendations,
+        bid_recommendations_observed_at="2026-10-29T11:30:00+03:00",
+        economics_observed_at="2026-10-29T11:00:00+03:00",
+    )
+    guidance = result["rows"][0]["wb_bid_guidance"]
+    assert guidance["competitive_bid_rub"] == 80
+    assert guidance["leaders_bid_rub"] == 150
+    assert guidance["reach_min_bid_rub"] == 50
+    assert guidance["reach_medium_bid_rub"] == 70
+    assert guidance["reach_max_bid_rub"] == 90
+
+
+def test_wb_bid_guidance_does_not_cross_campaign_sku_query_or_freshness():
+    recommendations = [{"campaign_id": 999, "recommendations": {"123": {"data": {
+        "normQueries": [{"normQuery": "таз строительный", "reachMedium": {"bidKopecks": 7000}}],
+    }}}}]
+    result = analyze_cluster_rows(
+        [source_row()], settings(), decisions(), now=NOW,
+        bid_recommendations=recommendations,
+        bid_recommendations_observed_at="2026-10-29T11:30:00+03:00",
+        economics_observed_at="2026-10-29T11:00:00+03:00",
+    )
+    assert result["rows"][0]["wb_bid_guidance"] is None
+    result = analyze_cluster_rows(
+        [source_row()], settings(), decisions(), now=NOW,
+        bid_recommendations=[{"campaign_id": 15, "recommendations": {"123": {"data": {
+            "normQueries": [{"normQuery": "другой запрос", "reachMedium": {"bidKopecks": 7000}}],
+        }}}}],
+        bid_recommendations_observed_at="2026-10-27T12:00:00+03:00",
+        economics_observed_at="2026-10-29T11:00:00+03:00",
+    )
+    assert result["rows"][0]["wb_bid_guidance"] is None

@@ -73,6 +73,16 @@ def _rotating_campaign_window(items: list[dict[str, Any]], limit: int, window: i
     return (items + items)[start : start + count]
 
 
+def _rotating_nm_window(items: list[int], limit: int, window: int, campaign_id: int) -> list[int]:
+    """Rotate product recommendations within each campaign without raising WB call volume."""
+    if not items or limit <= 0:
+        return []
+    count = min(limit, len(items))
+    start = ((max(0, int(window)) + max(0, int(campaign_id))) * count) % len(items)
+    doubled = items + items
+    return doubled[start : start + count]
+
+
 class AdvertisingMonitorAgent(BaseAgent):
     name = "advertising_monitor"
 
@@ -175,7 +185,7 @@ class AdvertisingOptimizerAgent(BaseAgent):
             if not cid:
                 return None
             nms = _nm_ids(campaign)
-            selected_nms = nms[:max_nms]
+            selected_nms = _rotating_nm_window(nms, max_nms, window_id, cid)
             budget_task = asyncio.create_task(limited("wb_advert_budget", advert_id=cid))
             rec_tasks = {
                 str(nm): asyncio.create_task(
@@ -211,6 +221,7 @@ class AdvertisingOptimizerAgent(BaseAgent):
                 "campaign": campaign,
                 "campaign_id": cid,
                 "nm_ids": nms,
+                "recommendation_nm_ids_scanned": selected_nms,
                 "stats": stats_by_id.get(str(cid), {}),
                 "stats_by_nm": {
                     str(nm): exact_nm_stats[(cid, nm)]
@@ -235,6 +246,7 @@ class AdvertisingOptimizerAgent(BaseAgent):
                     "campaign": campaign,
                     "campaign_id": _campaign_id(campaign),
                     "nm_ids": _nm_ids(campaign),
+                    "recommendation_nm_ids_scanned": [],
                     "_error": str(result),
                 })
             elif result is not None:

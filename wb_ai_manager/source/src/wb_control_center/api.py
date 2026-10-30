@@ -495,6 +495,7 @@ SNAPSHOT_SPEC: dict[str, list[str]] = {
     "api_health": ["shops", "token_info", "degradations", "worker_source_health"],
     "cards": ["card_errors", "banned_products", "price_quarantine", "card_catalog"],
     "advertising_monitor": ["active_campaigns", "stats_7d"],
+    "advertising_optimizer": ["deep_scan"],
     "inventory": ["coverage"],
     "supply": ["acceptance"],
     "funnel": ["funnel_7d"],
@@ -938,11 +939,15 @@ async def dashboard_data(days: int = 7, from_date: str | None = None, to_date: s
                 traffic = _traffic_dashboard_payload(_traffic_bundle_cache, period)
         except Exception as exc:
             traffic["error"] = f"{type(exc).__name__}: {exc}"
+    optimizer_snapshot = snapshots.get("advertising_optimizer", {}).get("deep_scan", {})
+    optimizer_data = optimizer_snapshot.get("data") if isinstance(optimizer_snapshot, dict) else {}
     traffic["cluster_analysis"] = analyze_cluster_rows(
         traffic.get("clusters") or [],
         traffic.get("campaign_settings") or [],
         decisions,
         query_layer,
+        bid_recommendations=(optimizer_data or {}).get("campaigns", []) if isinstance(optimizer_data, dict) else [],
+        bid_recommendations_observed_at=(optimizer_snapshot.get("created_at") or optimizer_snapshot.get("data", {}).get("generated_at")) if isinstance(optimizer_snapshot, dict) else None,
         economics_observed_at=audit_finished if audit_ready else (runs.get("advertising_optimizer") or {}).get("finished_at"),
     )
     audit_agents = audit.get("agents") or {}
