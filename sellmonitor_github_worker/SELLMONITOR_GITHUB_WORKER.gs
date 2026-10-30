@@ -6227,7 +6227,7 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
     var sheetTimeZone=orderSheetNative.getParent().getSpreadsheetTimeZone();
     function fbsLocalSerial_(value){
       if(value instanceof Date){
-        var local=Utilities.formatDate(value,sheetTimeZone,'yyyy-MM-dd HH:mm:ss').match(/^(\\d{4})-(\\d{2})-(\\d{2}) (\\d{2}):(\\d{2}):(\\d{2})$/);
+        var local=Utilities.formatDate(value,sheetTimeZone,'yyyy-MM-dd HH:mm:ss').match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/);
         if(!local)throw new Error('FBS_LOCAL_TIME_FORMAT_FAILED');
         return Date.UTC(Number(local[1]),Number(local[2])-1,Number(local[3]),Number(local[4]),Number(local[5]),Number(local[6]))/86400000+25569;
       }
