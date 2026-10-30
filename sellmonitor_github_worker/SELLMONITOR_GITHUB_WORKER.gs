@@ -6271,9 +6271,7 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
       var rows=[];
       parsed.forEach(function(r){var row=byId[r.id];if(row)rows.push({id:r.id,row:row});});
       var stale=false;
-      mark('STATE_READ_START_BOUNDED');
-      // Read one narrow A:G rectangle spanning only the matched rows. A single
-      // native range read is more reliable than a multi-range REST request here.
+      mark('STATE_READ_START_BATCHGET');
       rows.sort(function(a,b){return a.row-b.row;});
       var stateRuns=[];
       rows.forEach(function(item){
@@ -6281,15 +6279,35 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
         if(!run||item.row>run.end+1)stateRuns.push({start:item.row,end:item.row,items:[item]});
         else {run.end=item.row;run.items.push(item);}
       });
-      stateRuns.forEach(function(run){
-        var matrix=orderSheetNative.getRange(run.start,1,run.end-run.start+1,7).getDisplayValues();
-        run.items.forEach(function(item){
-          var values=matrix[item.row-run.start]||[];
-          if(String(values[0]||'')!==item.id){stale=true;return;}
-          stateByRow[item.row]=[values[4]||'',values[5]||'',values[6]||''];
+      var batchSize=40,requestCount=0;
+      for(var offset=0;offset<stateRuns.length;offset+=batchSize){
+        var chunk=stateRuns.slice(offset,offset+batchSize);
+        var query=chunk.map(function(run){
+          return 'ranges='+encodeURIComponent(orderSheet+'!A'+run.start+':G'+run.end);
+        }).join('&')+'&valueRenderOption=FORMATTED_VALUE';
+        var response=fetchSheetApi(apiBase+'/values:batchGet?'+query,{method:'get'});
+        var code=response.getResponseCode();
+        if(code<200||code>=300){
+          throw new Error('FBS_STATE_BATCH_READ_HTTP_'+code+':'+sheetApiFailure(response));
+        }
+        var payload={};
+        try{payload=JSON.parse(response.getContentText()||'{}');}
+        catch(parseError){throw new Error('FBS_STATE_BATCH_READ_INVALID_JSON');}
+        var ranges=payload.valueRanges||[];
+        if(ranges.length!==chunk.length)
+          throw new Error('FBS_STATE_BATCH_READ_RANGE_COUNT_MISMATCH:'+ranges.length+':'+chunk.length);
+        ranges.forEach(function(rangeResult,index){
+          var matrix=rangeResult.values||[],run=chunk[index];
+          run.items.forEach(function(item){
+            var values=matrix[item.row-run.start]||[];
+            if(String(values[0]||'')!==item.id){stale=true;return;}
+            stateByRow[item.row]=[values[4]||'',values[5]||'',values[6]||''];
+          });
         });
-      });
-      mark('STATE_READ_DONE_BOUNDED');
+        requestCount++;
+      }
+      mark('STATE_READ_DONE_BATCHGET_'+requestCount+'_RANGES_'+stateRuns.length);
+      console.log('FBS_STAGE_STATE_READ ranges='+stateRuns.length+' requests='+requestCount+' ms='+(Date.now()-fbsStarted));
       return stale;
     }
     if(readExistingStates_()){
