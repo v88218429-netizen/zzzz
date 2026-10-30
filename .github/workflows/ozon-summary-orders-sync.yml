@@ -80,7 +80,7 @@ jobs:
               ("HOZYAYUSHKA", "OZON_HOZYAYUSHKA_CLIENT_ID", "OZON_HOZYAYUSHKA_API_KEY"),
           )
           methods = (
-              ("FBO", "/v3/posting/fbo/list", {"dir":"ASC","filter":dict(window), "limit":1000,"offset":0,"with":{"analytics_data":True,"financial_data":True}}),
+              ("FBO", "/v3/posting/fbo/list", {"dir":"ASC","filter":dict(window), "limit":100,"offset":0,"with":{"analytics_data":True,"financial_data":True}}),
               ("FBS", "/v4/posting/fbs/list", {"dir":"ASC","filter":dict(window,status=""),"limit":100,"cursor":"","with":{"analytics_data":True,"financial_data":True}}),
           )
           failures = 0
