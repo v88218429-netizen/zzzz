@@ -30,7 +30,7 @@ BATCH_SIZE = int(os.environ.get("FBS_BATCH_SIZE", "5"))
 if not 1 <= BATCH_SIZE <= 1000:
     raise RuntimeError("FBS_BATCH_SIZE_INVALID")
 INGEST_ATTEMPTS = 10  # Retry window exceeds the seven-minute per-client lease before abandoning an idempotent batch
-NETWORK_FAILURE_LIMIT = 3  # Allow one bounded retry after the seven-minute Apps Script lease expires
+NETWORK_FAILURE_LIMIT = INGEST_ATTEMPTS  # Keep retrying the exact idempotent batch after a lost response
 BRIDGE_INGEST_TIMEOUT = 330  # Return before Apps Script six-minute ceiling; retry only after bounded delay
 TIMEOUT = 120
 
@@ -249,7 +249,7 @@ def ingest(client: str, orders: list[dict]) -> dict:
                     marker in details for marker in (
                         "GITHUB_FBS_LOCK_BUSY", "Service invoked too many times",
                         "Service Spreadsheets failed", "Exceeded maximum execution",
-                        "Internal error", "backendError"
+                        "Internal error", "backendError", "Timeout:", "timed out"
                     )
                 )
                 if not retryable and details:
@@ -283,8 +283,8 @@ def ingest(client: str, orders: list[dict]) -> dict:
                     # Ingest is an upsert keyed by WB order ID. Repeating this exact
                     # batch after a lost response is idempotent and recovers lost replies.
                     network_failures += 1
-                    if network_failures >= NETWORK_FAILURE_LIMIT or attempt == INGEST_ATTEMPTS:
-                        raise RuntimeError("FBS_INGEST_OUTCOME_UNCERTAIN") from None
+                    if attempt == INGEST_ATTEMPTS:
+                        raise RuntimeError("FBS_INGEST_OUTCOME_UNCERTAIN_AFTER_IDEMPOTENT_RETRIES") from None
                     failure_match = re.match(r"HTTP_(\d{3})", reason)
                     failure_class = ("HTTP_" + failure_match.group(1)) if failure_match else reason
                     retry_wait_seconds = min(180, 90 * network_failures)
