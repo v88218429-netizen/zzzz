@@ -94,27 +94,51 @@ jobs:
             -out "$RUNNER_TEMP/wb-traffic-publish/state/traffic-dashboard.key.enc" \
             -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:sha256
           python - <<'PY'
-          import json, os, pathlib
+          import csv, json, os, pathlib
           root=pathlib.Path(os.environ['DATA_DIR'])/'traffic'
           status_path=root/'status.json'
           status=json.loads(status_path.read_text(encoding='utf-8')) if status_path.exists() else {}
           lines=[
               '# WB traffic encrypted state',
               '',
-              '> Business rows are AES-256 encrypted. This branch contains no plain traffic rows or API tokens.',
+              '> Business rows and bid values are encrypted. This branch exposes only aggregate coverage counts and source status.',
               '',
               f"- Last collector finish: {status.get('finishedAt','unknown')}",
               f"- Last collector complete: {status.get('complete',status.get('ok',False))}",
               f"- Advertising window: {status.get('period','unknown')}",
               f"- Funnel window: {status.get('funnel_period','unknown')}",
           ]
+          def row_count(path):
+              if not path.is_file(): return 0
+              with path.open('r',encoding='utf-8-sig',newline='') as stream:
+                  return max(0,sum(1 for _ in stream)-1)
+          def nonempty_count(path, field):
+              if not path.is_file(): return 0
+              with path.open('r',encoding='utf-8-sig',newline='') as stream:
+                  return sum(1 for row in csv.DictReader(stream) if str(row.get(field) or '').strip())
+          def state_for(filename, shop):
+              path=root/filename
+              if not path.is_file(): return 'UNAVAILABLE'
+              value=json.loads(path.read_text(encoding='utf-8'))
+              return 'OK' if (value.get('shops') or {}).get(shop,{}).get('ok') is True else 'PARTIAL'
           for shop, detail in sorted((status.get('shops') or {}).items()):
-              state='OK' if detail.get('ok') else 'FAILED'
-              lines.append(f"- {shop}: {state}")
+              folder=root/shop
+              source='OK' if detail.get('ok') is True else 'FAILED'
+              ads=row_count(folder/'campaign_sku_day.csv')
+              funnel=row_count(folder/'funnel_sku_day.csv')
+              organic=row_count(folder/'organic_sku_day.csv')
+              clusters=folder/'ad_clusters_day.csv'
+              settings=folder/'campaign_settings_current.csv'
+              lines.append(
+                  f"- {shop}: source={source}; ads={ads}; funnel={funnel}; organic={organic}; "
+                  f"clusters={row_count(clusters)} ({state_for('clusters_status.json',shop)}); "
+                  f"exact_cluster_bids={nonempty_count(clusters,'cluster_bid_kopecks')}; "
+                  f"campaign_skus={row_count(settings)} ({state_for('campaign_settings_status.json',shop)}); "
+                  f"exact_search_bids={nonempty_count(settings,'search_bid_kopecks')}"
+              )
           (pathlib.Path(os.environ['RUNNER_TEMP'])/'wb-traffic-publish'/'README.md').write_text(
               '\n'.join(lines)+'\n', encoding='utf-8')
           PY
-          git worktree add --detach "$RUNNER_TEMP/wb-traffic-state-branch" HEAD
           git -C "$RUNNER_TEMP/wb-traffic-state-branch" switch --orphan traffic-state-next
           git -C "$RUNNER_TEMP/wb-traffic-state-branch" rm -rf . >/dev/null 2>&1 || true
           cp -R "$RUNNER_TEMP/wb-traffic-publish/." "$RUNNER_TEMP/wb-traffic-state-branch/"
@@ -123,165 +147,4 @@ jobs:
           git -C "$RUNNER_TEMP/wb-traffic-state-branch" add README.md state/traffic.tar.gz.enc state/traffic-dashboard.tar.gz.enc state/traffic-dashboard.key.enc
           git -C "$RUNNER_TEMP/wb-traffic-state-branch" commit -m "traffic: encrypted collected history"
           git -C "$RUNNER_TEMP/wb-traffic-state-branch" push origin HEAD:traffic-state --force
-
-      - name: Publish verified traffic to the three store summaries
-        if: steps.archive.outcome == 'success'
-        shell: bash
-        env:
-          DATA_DIR: ${{ runner.temp }}/wb-traffic/data
-          WEBAPP_DEPLOYMENT_ID: AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw
-          WEBHOOK_SECRET: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
-        run: |
-          set -euo pipefail
-          test -n "$WEBHOOK_SECRET"
-          echo "::add-mask::$WEBHOOK_SECRET"
-          python - <<'PY'
-          import csv, json, math, os, pathlib, time, urllib.error, urllib.request
-
-          root=pathlib.Path(os.environ["DATA_DIR"])/"traffic"
-          status=json.loads((root/"status.json").read_text(encoding="utf-8"))
-          expected=("ap","aa","yv")
-          shops=status.get("shops") or {}
-          if status.get("ok") is not True or not status.get("finishedAt") or any((shops.get(x) or {}).get("ok") is not True for x in expected):
-              raise SystemExit("WB_TRAFFIC_SOURCE_GATE_FAILED")
-          datasets={
-              "ads":("campaign_sku_day.csv",["shop","date","advert_id","nm_id","views","clicks","atbs","orders","spend_rub","order_sum_rub","source","quality","seller_article"]),
-              "funnel":("funnel_sku_day.csv",["shop","date","nm_id","vendor_code","open_count","cart_count","order_count","order_sum_rub","source"]),
-              "organic":("organic_sku_day.csv",["shop","date","nm_id","vendor_code","total_open_count","paid_clicks","organic_clicks","source_total","source_paid","formula","coverage_status","campaigns_checked","campaigns_without_period_statistics","campaigns_with_null_payload"]),
-              "ads_poll":("ads_poll_snapshot.csv",["shop","observed_at","date","campaign_sku_rows","campaigns_with_rows","views","clicks","cart_adds","orders","spend_rub","order_sum_rub","ctr","cpc_rub","drr","roas","source","measurement_grain"]),
-              "funnel_poll":("funnel_poll_snapshot.csv",["shop","observed_at","date","sku_rows","open_count","cart_count","order_count","order_sum_rub","open_to_cart","cart_to_order","open_to_order","source","measurement_grain"]),
-          }
-          all_rows={}
-          for name,(filename,headers) in datasets.items():
-              with (root/filename).open("r",encoding="utf-8-sig",newline="") as fh:
-                  reader=csv.DictReader(fh)
-                  if reader.fieldnames!=headers: raise SystemExit("WB_TRAFFIC_HEADER_MISMATCH:"+name)
-                  all_rows[name]=[[row[h] for h in headers] for row in reader]
-          names={"ap":"Саныч","aa":"AIR","yv":"Хозяюшка"}
-          url="https://script.google.com/macros/s/"+os.environ["WEBAPP_DEPLOYMENT_ID"]+"/exec"
-          token=os.environ["WEBHOOK_SECRET"]
-          def post(payload):
-              body=json.dumps(dict(payload,token=token),ensure_ascii=False,separators=(",",":")).encode("utf-8")
-              req=urllib.request.Request(url,data=body,headers={"Content-Type":"application/json"},method="POST")
-              last=None
-              for attempt in range(1,6):
-                  try:
-                      with urllib.request.urlopen(req,timeout=360) as response:
-                          return json.loads(response.read().decode("utf-8"))
-                  except urllib.error.HTTPError as exc:
-                      last="HTTP_"+str(exc.code)
-                      if exc.code<500 and exc.code!=429: break
-                  except (urllib.error.URLError,TimeoutError,OSError,json.JSONDecodeError) as exc:
-                      last=type(exc).__name__+":"+str(exc)[:180]
-                  if attempt<5: time.sleep(min(60,15*(2**(attempt-1))))
-              raise RuntimeError("WB_TRAFFIC_PUBLISH_REQUEST_FAILED:"+str(last))
-          def compact_daily_view(datasets, alias, store_name, run_id):
-              def metric():
-                  return {"sum": 0.0, "unknown": False}
-              def group_for(day):
-                  day=str(day or "").strip()[:10]
-                  if len(day)!=10 or day[4]!="-" or day[7]!="-":
-                      raise RuntimeError("WB_TRAFFIC_DAILY_VIEW_INVALID_DATE:"+day)
-                  if day not in groups:
-                      groups[day]={
-                          "ads":{"rows":0,"values":{"views":metric(),"clicks":metric(),"spend":metric(),"orders":metric()}},
-                          "funnel":{"rows":0,"values":{"opens":metric(),"carts":metric(),"orders":metric(),"rub":metric()}},
-                          "organic":{"rows":0,"complete":True,"values":{"total":metric(),"paid":metric(),"clicks":metric()}},
-                      }
-                  return groups[day]
-              def add(target, raw):
-                  if raw is None or raw=="" or isinstance(raw,bool):
-                      target["unknown"]=True
-                      return
-                  try:
-                      value=float(raw)
-                  except (TypeError,ValueError):
-                      target["unknown"]=True
-                      return
-                  if not math.isfinite(value):
-                      target["unknown"]=True
-                      return
-                  target["sum"]+=value
-              groups={}
-              for row in datasets.get("ads",[]):
-                  group=group_for(row[1]); target=group["ads"]; target["rows"]+=1
-                  add(target["values"]["views"],row[4]); add(target["values"]["clicks"],row[5])
-                  add(target["values"]["orders"],row[7]); add(target["values"]["spend"],row[8])
-              for row in datasets.get("funnel",[]):
-                  group=group_for(row[1]); target=group["funnel"]; target["rows"]+=1
-                  add(target["values"]["opens"],row[4]); add(target["values"]["carts"],row[5])
-                  add(target["values"]["orders"],row[6]); add(target["values"]["rub"],row[7])
-              for row in datasets.get("organic",[]):
-                  group=group_for(row[1]); target=group["organic"]; target["rows"]+=1
-                  if str(row[10] or "")!="DERIVED_COMPLETE": target["complete"]=False
-                  add(target["values"]["total"],row[4]); add(target["values"]["paid"],row[5])
-                  add(target["values"]["clicks"],row[6])
-              def value(dataset,name):
-                  target=dataset["values"][name]
-                  return target["sum"] if dataset["rows"] and not target["unknown"] else ""
-              def all_known(dataset):
-                  return dataset["rows"]>0 and all(not item["unknown"] for item in dataset["values"].values())
-              output=[]
-              for day,group in sorted(groups.items()):
-                  ads,funnel,organic=group["ads"],group["funnel"],group["organic"]
-                  traffic_known=(ads["rows"]>0 and not ads["values"]["clicks"]["unknown"] and
-                      funnel["rows"]>0 and not funnel["values"]["opens"]["unknown"] and
-                      organic["rows"]>0 and organic["complete"] and all_known(organic))
-                  reconciles=(traffic_known and ads["values"]["clicks"]["sum"]==organic["values"]["paid"]["sum"] and
-                      funnel["values"]["opens"]["sum"]==organic["values"]["total"]["sum"] and
-                      organic["values"]["clicks"]["sum"]==organic["values"]["total"]["sum"]-organic["values"]["paid"]["sum"])
-                  organic_status="НЕПОЛНО · не считать нулём"
-                  paid_clicks=""; organic_clicks=""
-                  if reconciles:
-                      organic_status="ПОЛНЫЙ РАСЧЁТ"
-                      paid_clicks=organic["values"]["paid"]["sum"]
-                      organic_clicks=organic["values"]["clicks"]["sum"]
-                  elif all_known(ads) and all_known(funnel) and all_known(organic) and organic["complete"]:
-                      organic_status="РАСХОЖДЕНИЕ · значения скрыты"
-                  output.append([
-                      day,store_name,value(ads,"views"),value(ads,"clicks"),value(ads,"spend"),value(ads,"orders"),
-                      value(funnel,"opens"),value(funnel,"carts"),value(funnel,"orders"),value(funnel,"rub"),
-                      paid_clicks,organic_clicks,organic_status,ads["rows"],funnel["rows"],organic["rows"],str(run_id)
-                  ])
-              return output
-
-          errors=[]
-          for alias in expected:
-              data={name:[row for row in rows if str(row[0]).strip()==alias] for name,rows in all_rows.items()}
-              print("WB_TRAFFIC_STORE_INPUT="+alias+" "+json.dumps({k:len(v) for k,v in data.items()},sort_keys=True))
-              common={"action":"publish_wb_traffic","sync_status":status,"datasets":data}
-              failed=[]
-              for dataset_name,rows in data.items():
-                  if not rows: continue
-                  try:
-                      payload=dict(common,datasets={dataset_name:rows},partition_only=True,skip_daily_view=True)
-                      partition=post(payload)
-                      parts=partition.get("partitions") or {}
-                      actual=(parts.get("datasets") or {}).get(dataset_name) or {}
-                      if partition.get("ok") is not True or parts.get("ok") is not True or actual.get("skipped") is True or not actual.get("parts"):
-                          raise RuntimeError("partition_readback_failed:"+json.dumps(partition,ensure_ascii=False)[:700])
-                      print("WB_TRAFFIC_DATASET_PARTITION_OK="+alias+" "+dataset_name+" "+json.dumps({"input":len(rows),"written":actual.get("written"),"added":actual.get("added"),"updated":actual.get("updated"),"parts":len(actual.get("parts") or [])},ensure_ascii=False,sort_keys=True))
-                  except Exception as exc:
-                      failed.append(dataset_name+":"+str(exc)[:700])
-                      print("WB_TRAFFIC_DATASET_FAILED="+alias+" "+dataset_name+" "+str(exc)[:700])
-              if failed:
-                  errors.append(alias+":partition:"+json.dumps(failed,ensure_ascii=False))
-                  print("WB_TRAFFIC_STORE_FAILED="+alias+" partition failed; visible summary preserved")
-                  continue
-              try:
-                  daily_rows=compact_daily_view(data,alias,names[alias],status["finishedAt"])
-                  view_payload={"action":"publish_wb_traffic","sync_status":status,"datasets":{},
-                      "daily_view_store":True,"store_name":names[alias],"daily_view_rows":daily_rows}
-                  print("WB_TRAFFIC_DAILY_VIEW_COMPACT_INPUT="+alias+" rows="+str(len(daily_rows)))
-                  view=post(view_payload)
-                  daily=((view.get("partitions") or {}).get("daily_view") or {})
-                  lite=daily.get("lite_tables") or {}
-                  if view.get("ok") is not True or daily.get("ok") is not True or lite.get("ok") is not True or names[alias] not in (lite.get("stores") or []):
-                      raise RuntimeError("summary_readback_failed:"+json.dumps(view,ensure_ascii=False)[:900])
-                  print("WB_TRAFFIC_SUMMARY_READBACK_OK="+alias+" "+json.dumps({"store":names[alias],"fresh_rows":daily.get("fresh_rows"),"rows":daily.get("rows"),"added":daily.get("added"),"updated":daily.get("updated"),"max_date":daily.get("max_date"),"written":lite.get("stores")},ensure_ascii=False))
-              except Exception as exc:
-                  errors.append(alias+":summary:"+str(exc)[:1000])
-                  print("WB_TRAFFIC_STORE_FAILED="+alias+" "+str(exc)[:1000])
-          if errors: raise SystemExit("WB_TRAFFIC_SUMMARY_PUBLICATION_FAILED:"+json.dumps(errors,ensure_ascii=False))
-          PY
 
