@@ -5,17 +5,21 @@ import copy
 import json
 import os
 import shutil
+import tarfile
+import tempfile
 import traceback
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 import httpx
+import subprocess
 
 from wb_control_center.config import Settings, load_policy
 from wb_control_center.engine import ControlCenter
 from wb_control_center.portfolio import PortfolioService
 from wb_control_center.query_manager import QueryManager, QueryManagerConfig
+from wb_control_center.worker_source import WorkerSource
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = Path(os.environ.get("GITHUB_RUNTIME_OUTPUT", ROOT / "github_site")).resolve()
@@ -45,6 +49,31 @@ def snapshots(center: ControlCenter) -> dict[str, Any]:
         if rows:
             out[source] = rows
     return out
+
+def restore_optimizer_scan_cursors(
+    center: ControlCenter,
+    optimizer_state: dict[str, Any] | None,
+    shop_code: str,
+) -> bool:
+    """Resume bounded deep scans across ephemeral GitHub Actions runners."""
+    shops = (optimizer_state or {}).get("shops")
+    shop = shops.get(shop_code) if isinstance(shops, dict) else None
+    cursor = shop.get("scan_cursor") if isinstance(shop, dict) else None
+    if not isinstance(cursor, dict) or not cursor.get("campaign_ids"):
+        return False
+    center.db.save_snapshot(
+        "advertising_optimizer",
+        "deep_scan_cursor",
+        cursor,
+        datetime.now(timezone.utc).isoformat(),
+    )
+    return True
+
+
+def optimizer_scan_cursor(snap: dict[str, Any]) -> dict[str, Any] | None:
+    item = ((snap.get("advertising_optimizer") or {}).get("deep_scan_cursor") or {})
+    cursor = item.get("data") if isinstance(item, dict) else None
+    return copy.deepcopy(cursor) if isinstance(cursor, dict) and cursor.get("campaign_ids") else None
 
 
 def query_manager(portfolio: dict[str, Any], snap: dict[str, Any]) -> dict[str, Any]:
@@ -142,10 +171,12 @@ def publish_private_dashboard(dashboard: dict[str, Any]) -> dict[str, Any]:
 
 async def run_cabinet(
     slug: str,
+    code: str,
     name: str,
     token: str,
     portfolio_snapshot: dict[str, Any],
     shared_live_path: Path,
+    previous_optimizer_state: dict[str, Any] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     cab_dir = DATA_ROOT / "cabinets" / slug
     cab_dir.mkdir(parents=True, exist_ok=True)
@@ -162,6 +193,7 @@ async def run_cabinet(
         operation_mode="shadow",
     )
     center = ControlCenter(settings)
+    restore_optimizer_scan_cursors(center, previous_optimizer_state, code)
     errors: list[dict[str, str]] = []
     wb_connected = False
     run_results: list[dict[str, Any]] = []
@@ -341,6 +373,7 @@ async def run() -> int:
             "economics_observed_at": (portfolio_snapshot or {}).get("generated_at"),
             "campaigns": campaigns,
             "decisions": decisions,
+            "scan_cursor": optimizer_scan_cursor(cabinet_snapshots_for_shop),
             "sweep": {
                 key: deep_scan.get(key)
                 for key in ("sweep_id", "sweep_complete", "sweep_campaigns_seen",
