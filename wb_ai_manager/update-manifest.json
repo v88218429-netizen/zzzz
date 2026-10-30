@@ -2,9 +2,9 @@
   "schema": 1,
   "channels": {
     "stable": {
-      "version": "1.1.26",
+      "version": "1.1.27",
       "channel": "stable",
-      "notes": "Исправлен сбор поисковых кластеров WB: точная связка кампания×товар и текущий формат запросов.",
+      "notes": "Сохранение последнего снимка при сбое GitHub и блокировка устаревших числовых советов.",
       "minimum_current_version": "1.0.0",
       "files": [
         {
@@ -20,7 +20,7 @@
         {
           "path": "RELEASE_NOTES.md",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/RELEASE_NOTES.md",
-          "sha256": "f7901e838489157b86843ff9086b9f2234bc98a3c355d35bf3b16241ddc752b1"
+          "sha256": "cf1f33ef293789c29dd672eac6a0f1559ab6bef86d607241085842caaf701930"
         },
         {
           "path": "START_WB_AI_MANAGER.command",
@@ -31,7 +31,7 @@
         {
           "path": "VERSION",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/VERSION",
-          "sha256": "f788eb0c60930fd7a6c76243fbf7a5acb4cd6d336de36d493818b9e438bfdc94"
+          "sha256": "3d901930de0e241026725466cc51b31b51951b7c18e55360047c8dcb459d9332"
         },
         {
           "path": "docs/AUTO_UPDATE.md",
@@ -51,12 +51,12 @@
         {
           "path": "plugin.json",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/plugin.json",
-          "sha256": "4b377e71a6522869cf202387469bf0bcce0b7d26097ce9cdb15db08db94f0172"
+          "sha256": "bba8a7f5c708da39769ff2ef385a163ffc0fb566c5fc18a76d6d355c481f0197"
         },
         {
           "path": "pyproject.toml",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/pyproject.toml",
-          "sha256": "e9fe0f086955a1871013f8e9b168b8b470ee5df3f02b576118539b5153dcd492"
+          "sha256": "d71b540dc42599a9ab0fb5c2d9f885dbe715281492b50a7d6361cee3fda1edde"
         },
         {
           "path": "scripts/auto_refresh_sheets.py",
@@ -142,7 +142,7 @@
         {
           "path": "src/wb_control_center/__init__.py",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/src/wb_control_center/__init__.py",
-          "sha256": "9cc1506445aeaa29e12dfa795ad25ff33b984a32e8c1231b1fbfbd3b2887fde0"
+          "sha256": "21cd6ae62365605971af250d9f8f6d223a752ad57ef0332a0ec3d01c1d1f36d6"
         },
         {
           "path": "src/wb_control_center/__main__.py",
@@ -272,7 +272,7 @@
         {
           "path": "src/wb_control_center/api.py",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/src/wb_control_center/api.py",
-          "sha256": "8ddd086eef82121aee8411335c346563896e2fef78e00636dbf413bd4409294d"
+          "sha256": "bf9762112dce2dd95d8188aeb74f10774b24c1898cf5cae289189d0d6057e679"
         },
         {
           "path": "src/wb_control_center/auto_sheets.py",
@@ -457,7 +457,7 @@
         {
           "path": "src/wb_control_center/ui/dashboard.js",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/src/wb_control_center/ui/dashboard.js",
-          "sha256": "6014994336eff5250d5702d5e77ffebd929c95eb755f30d2e4ca37cb5e6b24f0"
+          "sha256": "751af8f449a05dcbb4d7a5bf063b661c645bdb7338f2f897d92f46ddfe989695"
         },
         {
           "path": "src/wb_control_center/updater.py",

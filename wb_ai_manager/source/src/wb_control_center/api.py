@@ -54,6 +54,28 @@ _optimizer_bundle_cache: dict[str, Any] = {}
 _optimizer_bundle_cached_at: datetime | None = None
 
 
+async def _refresh_bundle_cache(
+    cache: dict[str, Any],
+    cached_at: datetime | None,
+    loader: Any,
+    now: datetime,
+    *,
+    ttl_seconds: int = 120,
+) -> tuple[dict[str, Any], datetime | None, Exception | None]:
+    """Refresh an encrypted GitHub bundle without discarding the last good read."""
+    if cache and cached_at and (now - cached_at).total_seconds() < ttl_seconds:
+        return dict(cache), cached_at, None
+    try:
+        candidate = await loader()
+    except Exception as exc:
+        return dict(cache), cached_at, exc
+    if not isinstance(candidate, dict):
+        return dict(cache), cached_at, TypeError("GitHub bundle returned a non-object")
+    cache.clear()
+    cache.update(candidate)
+    return dict(cache), now, None
+
+
 def _iso_dt(value: Any) -> datetime | None:
     if not value:
         return None
@@ -810,7 +832,14 @@ def _traffic_dashboard_payload(bundle: dict[str, Any], period: dict[str, Any]) -
             grouped[shops[code]]["campaign_settings"].append(row)
     shop_status = bundle.get("status", {}).get("shops", {}) if isinstance(bundle.get("status"), dict) else {}
     for cabinet in grouped.values():
-        cabinet["coverage"] = shop_status.get(cabinet["shop_code"].lower()) or shop_status.get(cabinet["shop_code"]) or {}
+        coverage = dict(shop_status.get(cabinet["shop_code"].lower()) or shop_status.get(cabinet["shop_code"]) or {})
+        coverage.setdefault(
+            "status",
+            "ПОЛУЧЕНО" if coverage.get("ok") is True else "ОШИБКА" if coverage.get("error") else "НЕ ПРОВЕРЕНО",
+        )
+        coverage["last_ads_date"] = max((str(r.get("date") or "")[:10] for r in cabinet["ads"] if r.get("date")), default=None)
+        coverage["last_funnel_date"] = max((str(r.get("date") or "")[:10] for r in cabinet["funnel"] if r.get("date")), default=None)
+        cabinet["coverage"] = coverage
         rows = cabinet["ads"]
         totals = {key: total(rows, field) for key, field in (
             ("views", "views"), ("clicks", "clicks"), ("cart_adds", "atbs"),
@@ -931,27 +960,53 @@ async def dashboard_data(days: int = 7, from_date: str | None = None, to_date: s
     query_layer = _query_manager_payload(portfolio_snapshot, snapshots)
     traffic = {"source": "github-traffic-state", "health": {"status": "UNAVAILABLE"}, "shops": [], "ads": [], "funnel": [], "organic": [], "error": "Зашифрованный архив GitHub или локальный ключ не настроен."}
     optimizer_bundle: dict[str, Any] = {}
+    traffic_read_error: Exception | None = None
+    optimizer_read_error: Exception | None = None
+    traffic_read_at: datetime | None = None
+    optimizer_read_at: datetime | None = None
     if center.worker.traffic_configured:
         try:
             async with _traffic_bundle_lock:
                 now_utc = datetime.now(timezone.utc)
-                if not _traffic_bundle_cache or not _traffic_bundle_cached_at or (now_utc - _traffic_bundle_cached_at).total_seconds() >= 120:
-                    _traffic_bundle_cache.clear()
-                    _traffic_bundle_cache.update(await center.worker.traffic_bundle())
-                    _traffic_bundle_cached_at = now_utc
-                traffic = _traffic_dashboard_payload(_traffic_bundle_cache, period)
+                traffic_bundle, _traffic_bundle_cached_at, traffic_read_error = await _refresh_bundle_cache(
+                    _traffic_bundle_cache, _traffic_bundle_cached_at, center.worker.traffic_bundle, now_utc,
+                )
+                traffic_read_at = _traffic_bundle_cached_at
+                if traffic_bundle:
+                    traffic = _traffic_dashboard_payload(traffic_bundle, period)
+            if traffic_read_error:
+                traffic["error"] = "GitHub не обновил рекламный архив; показан последний удачный снимок, если он был."
+                traffic["cache_mode"] = "last_successful_snapshot" if traffic_bundle else "unavailable"
+                traffic["last_successful_read_at"] = traffic_read_at.isoformat() if traffic_read_at else None
+                traffic["refresh_error_type"] = type(traffic_read_error).__name__
+                traffic["health"] = {**(traffic.get("health") or {}), "status": "STALE", "refresh_status": "FAILED"}
+            elif traffic_bundle:
+                traffic["cache_mode"] = "current_github_snapshot"
+                traffic["last_successful_read_at"] = traffic_read_at.isoformat() if traffic_read_at else None
             try:
                 async with _traffic_bundle_lock:
                     now_utc = datetime.now(timezone.utc)
-                    if not _optimizer_bundle_cache or not _optimizer_bundle_cached_at or (now_utc - _optimizer_bundle_cached_at).total_seconds() >= 120:
-                        _optimizer_bundle_cache.clear()
-                        _optimizer_bundle_cache.update(await center.worker.optimizer_bundle())
-                        _optimizer_bundle_cached_at = now_utc
-                    optimizer_bundle = dict(_optimizer_bundle_cache)
+                    optimizer_bundle, _optimizer_bundle_cached_at, optimizer_read_error = await _refresh_bundle_cache(
+                        _optimizer_bundle_cache, _optimizer_bundle_cached_at, center.worker.optimizer_bundle, now_utc,
+                    )
+                    optimizer_read_at = _optimizer_bundle_cached_at
+                if optimizer_read_error:
+                    traffic["optimizer_error"] = "GitHub не обновил снимок оптимизатора; последний снимок не используется для числовых советов."
             except Exception as exc:
-                traffic["optimizer_error"] = f"{type(exc).__name__}: {exc}"
+                optimizer_read_error = exc
+                traffic["optimizer_error"] = "Не удалось прочитать снимок оптимизатора GitHub."
         except Exception as exc:
-            traffic["error"] = f"{type(exc).__name__}: {exc}"
+            traffic["error"] = "Не удалось прочитать архив рекламы GitHub."
+            traffic["refresh_error_type"] = type(exc).__name__
+            traffic["cache_mode"] = "last_successful_snapshot" if _traffic_bundle_cache else "unavailable"
+            traffic["last_successful_read_at"] = _traffic_bundle_cached_at.isoformat() if _traffic_bundle_cached_at else None
+            if _traffic_bundle_cache:
+                traffic = _traffic_dashboard_payload(dict(_traffic_bundle_cache), period)
+                traffic["error"] = "Не удалось обновить архив рекламы GitHub; показан последний удачный снимок."
+                traffic["refresh_error_type"] = type(exc).__name__
+                traffic["cache_mode"] = "last_successful_snapshot"
+                traffic["last_successful_read_at"] = _traffic_bundle_cached_at.isoformat() if _traffic_bundle_cached_at else None
+                traffic["health"] = {**(traffic.get("health") or {}), "status": "STALE", "refresh_status": "FAILED"}
     optimizer_shops = optimizer_bundle.get("shops") if isinstance(optimizer_bundle.get("shops"), dict) else {}
     optimizer_campaigns: list[dict[str, Any]] = []
     optimizer_decisions: list[dict[str, Any]] = []
@@ -968,14 +1023,21 @@ async def dashboard_data(days: int = 7, from_date: str | None = None, to_date: s
         for item in shop_payload.get("decisions") or []:
             if isinstance(item, dict):
                 optimizer_decisions.append(dict(item, shop=shop_code))
+    if optimizer_read_error:
+        # A cached optimizer archive is useful for display, but cannot authorize
+        # a current numeric recommendation after its refresh failed.
+        recommendation_times = {shop: None for shop in recommendation_times}
+        economics_times = {shop: None for shop in economics_times}
     cluster_state = _traffic_bundle_cache.get("clusters_status") if isinstance(_traffic_bundle_cache.get("clusters_status"), dict) else {}
     cluster_shop_status = cluster_state.get("shops") if isinstance(cluster_state.get("shops"), dict) else {}
     cluster_times = {shop: cluster_state.get("observed_at")
-                     if (cluster_shop_status.get(shop) or {}).get("ok") is True else None
+                     if traffic_read_error is None and (cluster_shop_status.get(shop) or {}).get("ok") is True else None
                      for shop in ("ap", "aa", "yv")}
     traffic["optimizer_summary"] = {
         "source": optimizer_bundle.get("source"),
         "generated_at": optimizer_bundle.get("generated_at"),
+        "last_successful_read_at": optimizer_read_at.isoformat() if optimizer_read_at else None,
+        "refresh_status": "FAILED" if optimizer_read_error else "OK" if optimizer_bundle else "UNAVAILABLE",
         "shops": {key: {"status": value.get("status"), "wb_connected": value.get("wb_connected"),
                          "sweep": value.get("sweep") or {}}
                   for key, value in optimizer_shops.items() if isinstance(value, dict)},
@@ -989,6 +1051,7 @@ async def dashboard_data(days: int = 7, from_date: str | None = None, to_date: s
         bid_recommendations_observed_at=recommendation_times,
         economics_observed_at=economics_times,
         cluster_data_observed_at=cluster_times,
+        freshness_hours=3.0,
     )
     audit_agents = audit.get("agents") or {}
     audit_failed = sum(1 for x in audit_agents.values() if isinstance(x, dict) and x.get("status") == "error")

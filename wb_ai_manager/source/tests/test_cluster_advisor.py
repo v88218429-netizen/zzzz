@@ -59,6 +59,20 @@ def test_exact_cluster_exposes_metrics_and_capped_test_bid_only_with_full_eviden
     assert result["write_mode"] == "read_only_recommendations"
 
 
+def test_three_hour_freshness_limit_blocks_old_cluster_bid_and_economics():
+    result = analyze_cluster_rows(
+        [source_row(bid_observed_at="2026-10-29T07:00:00+03:00", cluster_state_observed_at="2026-10-29T07:00:00+03:00")],
+        settings(observed_at="2026-10-29T07:00:00+03:00"), decisions(), now=NOW,
+        economics_observed_at="2026-10-29T07:00:00+03:00",
+        cluster_data_observed_at="2026-10-29T07:00:00+03:00",
+        freshness_hours=3.0,
+    )
+    row = result["rows"][0]
+    assert row["target_bid_rub"] is None
+    assert row["action"] == "СОВЕТ ПО СТАВКЕ ЗАБЛОКИРОВАН"
+    assert any("устар" in text.lower() for text in row["blockers"])
+
+
 def test_missing_exact_bid_or_economics_blocks_numeric_recommendation():
     result = analyze_cluster_rows([source_row(cluster_bid_kopecks="")], settings(search_bid_kopecks="2000"), [], now=NOW,
                                  economics_observed_at="2026-10-29T11:00:00+03:00")
