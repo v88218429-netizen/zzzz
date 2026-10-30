@@ -6277,21 +6277,42 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
         mark('STATE_READ_DONE_NATIVE_BLOCK_0_ROWS');
         return false;
       }
-      // Read one bounded native block instead of calling Sheets REST for many
-      // scattered ranges. A 15k-row FBS ledger is at most ~105k cells (A:G),
-      // which avoids intermittent batchGet response timeouts during recovery.
-      var firstRow=rows[0].row,lastRow=rows[rows.length-1].row;
-      var span=lastRow-firstRow+1;
-      if(firstRow<2||span>20000)throw new Error('FBS_STATE_NATIVE_BLOCK_SPAN_UNEXPECTED:'+span);
-      mark('STATE_READ_START_NATIVE_BLOCK_'+span+'_ROWS');
-      var matrix=orderSheetNative.getRange(firstRow,1,span,7).getDisplayValues();
+      // Ask Sheets for only the rows belonging to this idempotent batch.
+      // The previous native read fetched every row between the first and last
+      // matching ID, which could be tens of thousands of unrelated rows.
+      var groups=[];
       rows.forEach(function(item){
-        var values=matrix[item.row-firstRow]||[];
-        if(String(values[0]||'')!==item.id){stale=true;return;}
-        stateByRow[item.row]=[values[4]||'',values[5]||'',values[6]||''];
+        var group=groups.length?groups[groups.length-1]:null;
+        if(!group||item.row!==group.end+1){
+          group={start:item.row,end:item.row,items:[]};
+          groups.push(group);
+        }else{
+          group.end=item.row;
+        }
+        group.items.push(item);
       });
-      mark('STATE_READ_DONE_NATIVE_BLOCK_'+span+'_ROWS');
-      console.log('FBS_STAGE_STATE_READ_NATIVE rows='+rows.length+' span='+span+' ms='+(Date.now()-fbsStarted));
+      var query=groups.map(function(group){
+        return 'ranges='+encodeURIComponent(orderSheet+'!A'+group.start+':G'+group.end);
+      }).join('&');
+      mark('STATE_BATCH_READ_START_'+rows.length+'_IDS_'+groups.length+'_RANGES');
+      var response=fetchSheetApi(apiBase+'/values:batchGet?majorDimension=ROWS&valueRenderOption=FORMATTED_VALUE&'+query,{method:'get'});
+      var code=response.getResponseCode();
+      if(code<200||code>=300)throw new Error('FBS_STATE_BATCH_READ_HTTP_'+code+':'+sheetApiFailure(response));
+      var payload;
+      try{payload=JSON.parse(response.getContentText()||'{}');}
+      catch(parseError){throw new Error('FBS_STATE_BATCH_READ_INVALID_JSON');}
+      var valueRanges=payload.valueRanges||[];
+      if(valueRanges.length!==groups.length)throw new Error('FBS_STATE_BATCH_READ_RANGE_COUNT_MISMATCH');
+      groups.forEach(function(group,groupIndex){
+        var values=(valueRanges[groupIndex]||{}).values||[];
+        group.items.forEach(function(item){
+          var rowValues=values[item.row-group.start]||[];
+          if(String(rowValues[0]||'')!==item.id){stale=true;return;}
+          stateByRow[item.row]=[rowValues[4]||'',rowValues[5]||'',rowValues[6]||''];
+        });
+      });
+      mark('STATE_BATCH_READ_DONE_'+rows.length+'_IDS_'+groups.length+'_RANGES');
+      console.log('FBS_STAGE_STATE_BATCH_READ rows='+rows.length+' ranges='+groups.length+' ms='+(Date.now()-fbsStarted));
       return stale;
     }
     if(readExistingStates_()){
