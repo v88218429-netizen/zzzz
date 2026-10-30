@@ -12,8 +12,8 @@
  * 5) is throttled and lock-protected, so it is safe to call from the fast order loop.
  */
 
-var WB_FBS_DIRECT_SUPPLY_CFG = {
-  spreadsheetId: '1_rMW6w4a7ZKhsWAyVo4B4Hn2x1cXwJWVW7K4JAHpjI8',
+// Canonical Sanych production workbook; the former ID was an alternate copy.\nvar WB_FBS_DIRECT_SUPPLY_CFG = {
+  spreadsheetId: '1v0qt-thJDOw3tLFdZVGhdXJdBM8rDPRz9mHlcHmuuyM',
   ordersSheet: '📦 FBS Заказы',
   suppliesSheet: '🚚 Поставки FBS',
   historySheet: '🕘 История статусов',
