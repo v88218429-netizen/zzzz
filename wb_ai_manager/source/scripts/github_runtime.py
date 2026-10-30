@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import json
 import os
 import shutil
@@ -306,6 +307,50 @@ async def run() -> int:
             search_publish[slug] = {"ok": False, "error": str(exc)}
             source_errors.append({"stage": f"search.publish.{slug}", "error": str(exc)})
 
+    # The panel reads this cabinet-scoped, non-secret payload from a separate
+    # encrypted GitHub state branch. It is never put into the public site or
+    # sent through the Sheets bridge.
+    shop_codes = {"sanych": "ap", "air": "aa", "hozyushka": "yv"}
+    optimizer_state: dict[str, Any] = {
+        "schema_version": 1,
+        "generated_at": generated_at,
+        "shops": {},
+    }
+    for slug, code in shop_codes.items():
+        cabinet = cabinets.get(slug) or {}
+        cabinet_snapshots_for_shop = cabinet_snapshots.get(slug) or {}
+        optimizer_snapshot = ((cabinet_snapshots_for_shop.get("advertising_optimizer") or {}).get("deep_scan") or {})
+        deep_scan = copy.deepcopy(optimizer_snapshot.get("data") or {})
+        campaigns = deep_scan.get("campaigns") if isinstance(deep_scan, dict) else []
+        if not isinstance(campaigns, list):
+            campaigns = []
+        for campaign in campaigns:
+            if isinstance(campaign, dict):
+                campaign["shop"] = code
+        decisions = []
+        for row in cabinet.get("decisions") or []:
+            if isinstance(row, dict):
+                scoped = copy.deepcopy(row)
+                scoped["shop"] = code
+                decisions.append(scoped)
+        optimizer_state["shops"][code] = {
+            "name": cabinet.get("name"),
+            "status": cabinet.get("status", "missing"),
+            "wb_connected": cabinet.get("wb_connected") is True,
+            "observed_at": optimizer_snapshot.get("created_at"),
+            "economics_observed_at": (portfolio_snapshot or {}).get("generated_at"),
+            "campaigns": campaigns,
+            "decisions": decisions,
+            "sweep": {
+                key: deep_scan.get(key)
+                for key in ("sweep_id", "sweep_complete", "sweep_campaigns_seen",
+                            "sweep_campaigns_total", "sweep_products_seen", "sweep_products_total",
+                            "cursor_before", "cursor_after", "eligible_campaigns", "campaigns_scanned")
+                if key in deep_scan
+            },
+        }
+    dump("optimizer-state.json", optimizer_state)
+
     q = query_manager(portfolio_snapshot, cabinet_snapshots.get("sanych") or {})
     healthy_cabs = sum(1 for c in cabinets.values() if c.get("wb_connected"))
     clean_cabs = sum(1 for c in cabinets.values() if c.get("status") == "ok")
@@ -347,6 +392,8 @@ async def run() -> int:
         "expected_cabinets": len(CABINETS),
         "sheets_live": not any(x.get("stage") == "portfolio.refresh" for x in source_errors),
         "dashboard_published": bool(dashboard_publish.get("ok")),
+        "optimizer_state_shops": sum(1 for x in optimizer_state["shops"].values() if x.get("observed_at")),
+        "optimizer_sweeps_complete": sum(1 for x in optimizer_state["shops"].values() if x.get("sweep", {}).get("sweep_complete") is True),
         "query_status": (q.get("summary") or {}).get("query_status"),
         "query_facts_status": (q.get("summary") or {}).get("facts_status"),
         "query_operational_ready": bool((q.get("summary") or {}).get("operational_ready")),
