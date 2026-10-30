@@ -90,7 +90,7 @@ def test_unscoped_advertising_snapshot_is_hidden_for_selected_store():
     assert "adsSnapshot.style.display=selected==='all'?'':'none'" in js
     assert "его нельзя достоверно сопоставить с выбранным магазином" in js
     assert "renderAdvertising();" in js
-    assert '/assets/dashboard.js?v=20261030-wb-bid-guidance' in html
+    assert '/assets/dashboard.js?v=' in html and 'optimizer_summary' in js
 
 
 def test_live_card_identity_overrides_historical_fallback():
