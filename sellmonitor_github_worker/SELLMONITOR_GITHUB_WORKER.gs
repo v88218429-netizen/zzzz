@@ -6352,6 +6352,9 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
       }
       mark('STATE_VERIFY_START_BOUNDED');
       var verifyMin=segments[0][0],verifyMax=segments[segments.length-1][1],verifyCount=verifyMax-verifyMin+1;
+      // Force pending Sheets writes to become visible before readback verification.
+      SpreadsheetApp.flush();
+      Utilities.sleep(500);
       var verifyStateMatrix=orderSheetNative.getRange(verifyMin,1,verifyCount,7).getValues();
       // Read the bounded timestamp verification through SpreadsheetApp.
       // The REST batchGet endpoint intermittently times out even for one row
