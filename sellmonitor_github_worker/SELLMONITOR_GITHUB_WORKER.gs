@@ -4,7 +4,7 @@
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.48',
+  VERSION: 'github-worker-1.3.50',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -5815,7 +5815,7 @@ function sellmonitorGithubWbBuildDashboard_(ss,storeName){
       var base=src.getRange(2,1,count,5).getValues(),metrics=src.getRange(2,11,count,31).getValues();
       for(var i=0;i<count;i++){
         var m=metrics[i],days=Number(base[i][3]),expected=Number(base[i][4]);
-        if(String(m[30]||'')!=='FACTUAL_INNER_ANALYTICS'||!base[i][1]||!base[i][2]||
+        if(['FACTUAL_INNER_ANALYTICS','FACTUAL_COMPLETE'].indexOf(String(m[30]||''))<0||!base[i][1]||!base[i][2]||
           (isFinite(expected)&&expected>0&&days<expected))continue;
         var start=sellmonitorGithubWbInnerDateKey_(base[i][1],ss.getSpreadsheetTimeZone());
         var end=sellmonitorGithubWbInnerDateKey_(base[i][2],ss.getSpreadsheetTimeZone());
@@ -5871,9 +5871,11 @@ function sellmonitorGithubWbBuildDashboard_(ss,storeName){
         .setOption('interpolateNulls',false).setOption('width',620).setOption('height',320)
         .setOption('backgroundColor','#FFFFFF');view.insertChart(b.build());chartsMade++;
     }
-    var orders=data.getRange(1,t.col+1,t.rows.length,1),money=data.getRange(1,t.col+2,t.rows.length,3),margin=data.getRange(1,t.col+5,t.rows.length,1);
+    var orders=data.getRange(1,t.col+1,t.rows.length,1),margin=data.getRange(1,t.col+5,t.rows.length,1);
     if(t.rows.slice(1).some(function(r){return r[1]!=null;}))addChart('Заказы',[domain,orders],0,0,'Штук');
-    if(t.rows.slice(1).some(function(r){return r[2]!=null||r[3]!=null||r[4]!=null;}))addChart('Выручка, прибыль и реклама',[domain,money],0,7,'Рубли');
+    var moneyRanges=[],moneyNames=[];
+    [[2,'Выручка'],[3,'Прибыль'],[4,'Реклама']].forEach(function(x){if(t.rows.slice(1).some(function(r){return r[x[0]]!=null;})){moneyRanges.push(data.getRange(1,t.col+x[0],t.rows.length,1));moneyNames.push(x[1]);}});
+    if(moneyRanges.length)addChart(moneyNames.join(' и '),[domain].concat(moneyRanges),0,7,'Рубли');
     if(t.rows.slice(1).some(function(r){return r[5]!=null;}))addChart('Маржа',[domain,margin],0,14,'Доля');
   });
   SpreadsheetApp.flush();
