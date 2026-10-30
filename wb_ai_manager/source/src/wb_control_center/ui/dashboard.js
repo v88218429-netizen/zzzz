@@ -379,7 +379,10 @@ function setPage(page){
   const t=titles[page]||titles.overview; $('page-kicker').textContent=t[0]; $('page-title').textContent=t[1]; $('sidebar').classList.remove('open'); if(page==='price'&&state.data)renderPriceCalculator();
 }
 
+let dashboardFetchInFlight=false;
 async function fetchData(showLoader=false){
+  if(dashboardFetchInFlight)return;
+  dashboardFetchInFlight=true;
   if(showLoader) $('loading-state').classList.remove('hidden');
   try{
     const params=new URLSearchParams(); if(state.periodFrom) params.set('from_date',state.periodFrom); if(state.periodTo) params.set('to_date',state.periodTo);
@@ -402,6 +405,7 @@ async function fetchData(showLoader=false){
       clearTimeout(state.periodPollTimer);
     }
   }catch(e){ $('loading-state').classList.remove('hidden'); $('loading-state').innerHTML=`<div class="event-severity critical">!</div><div><strong>Не удалось получить данные</strong><span>${esc(e.message)}. Проверь, что WB AI Manager запущен.</span></div>`; }
+  finally{dashboardFetchInFlight=false;}
 }
 
 async function runAudit(){
@@ -1280,4 +1284,4 @@ document.addEventListener('keydown',e=>{
   if((e.key==='Enter'||e.key===' ') && document.activeElement?.dataset?.decisionKey){ e.preventDefault(); document.activeElement.click(); }
 });
 window.addEventListener('hashchange',()=>setPage(location.hash.replace('#','')||'overview'));
-initNav(); fetchData(true); setInterval(()=>fetchData(false),15000);
+initNav(); fetchData(true); setInterval(()=>{if(!document.hidden)fetchData(false);},60000); document.addEventListener('visibilitychange',()=>{if(!document.hidden)fetchData(false);});

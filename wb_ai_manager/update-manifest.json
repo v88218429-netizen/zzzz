@@ -2,9 +2,9 @@
   "schema": 1,
   "channels": {
     "stable": {
-      "version": "1.1.27",
+      "version": "1.1.28",
       "channel": "stable",
-      "notes": "Сохранение последнего снимка при сбое GitHub и блокировка устаревших числовых советов.",
+      "notes": "Снижение нагрузки на панель и защита от повторных фоновых загрузок.",
       "minimum_current_version": "1.0.0",
       "files": [
         {
@@ -20,7 +20,7 @@
         {
           "path": "RELEASE_NOTES.md",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/RELEASE_NOTES.md",
-          "sha256": "cf1f33ef293789c29dd672eac6a0f1559ab6bef86d607241085842caaf701930"
+          "sha256": "cb68fbf96da63697e7e0effff631c96a2c2952dc17111c4e3a7c00e601e02cd8"
         },
         {
           "path": "START_WB_AI_MANAGER.command",
@@ -31,7 +31,7 @@
         {
           "path": "VERSION",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/VERSION",
-          "sha256": "3d901930de0e241026725466cc51b31b51951b7c18e55360047c8dcb459d9332"
+          "sha256": "88804ba15933968c7cdea26762dc0a9a6d938a2a816b48b5c270931c7fc9e982"
         },
         {
           "path": "docs/AUTO_UPDATE.md",
@@ -56,7 +56,7 @@
         {
           "path": "pyproject.toml",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/pyproject.toml",
-          "sha256": "d71b540dc42599a9ab0fb5c2d9f885dbe715281492b50a7d6361cee3fda1edde"
+          "sha256": "e734fcbe9931806c18540906a8cc54e497bcc8d28d010bc2149fe09dc92cdd36"
         },
         {
           "path": "scripts/auto_refresh_sheets.py",
@@ -272,7 +272,7 @@
         {
           "path": "src/wb_control_center/api.py",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/src/wb_control_center/api.py",
-          "sha256": "bf9762112dce2dd95d8188aeb74f10774b24c1898cf5cae289189d0d6057e679"
+          "sha256": "f7a46ebe52d2e9083dd2e41a3d131fdf4d3213b1f5a4475ade310793b1ee2af1"
         },
         {
           "path": "src/wb_control_center/auto_sheets.py",
@@ -457,7 +457,7 @@
         {
           "path": "src/wb_control_center/ui/dashboard.js",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/src/wb_control_center/ui/dashboard.js",
-          "sha256": "751af8f449a05dcbb4d7a5bf063b661c645bdb7338f2f897d92f46ddfe989695"
+          "sha256": "ff7cc0f2974ff63f192f30386b29ac12d4d9262310faa989fd0d5f3d1b895b40"
         },
         {
           "path": "src/wb_control_center/updater.py",

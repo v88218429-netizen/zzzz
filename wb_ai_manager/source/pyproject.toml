@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "wb-ai-control-center"
-version = "1.1.27"
+version = "1.1.28"
 description = "WB AI operating system with evidence-backed analysis, staged scenarios, guarded manual actions and safe rollback"
 readme = "README.md"
 requires-python = ">=3.11"
