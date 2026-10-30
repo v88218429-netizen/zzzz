@@ -124,6 +124,12 @@ jobs:
                       break
                   if needs_resume(result):
                       print_export_diagnostic(result,attempt)
+              # The exporter is asynchronous. Do not republish the same source snapshot
+              # repeatedly in this run: that only duplicates journal entries. The next
+              # scheduled run will verify the exporter heartbeat and publish once fresh.
+              if continuation_accepted:
+                  print("OZON_CONTINUATION_SCHEDULED=true; waiting for next scheduled verification")
+                  break
               if attempt<8:
                   time.sleep(min(60,15*attempt))
 
