@@ -117,11 +117,24 @@ def analyze_cluster_rows(
         bid_row = max(matching_bids, key=lambda r: _time(r.get("bid_observed_at")) or datetime.min.replace(tzinfo=timezone.utc), default=None)
         bid_time = _time(bid_row.get("bid_observed_at")) if bid_row else None
         bid_kopecks = _num(bid_row.get("cluster_bid_kopecks")) if bid_row else None
-        state = str((bid_row or last).get("cluster_state") or "").lower()
+        state_rows = [r for r in day_rows if r.get("cluster_state") and r.get("bid_observed_at")]
+        state_row = max(state_rows, key=lambda r: _time(r.get("bid_observed_at")) or datetime.min.replace(tzinfo=timezone.utc), default=None)
+        state = str((state_row or bid_row or last).get("cluster_state") or "").lower()
         setting = settings.get((shop, advert, nm), {})
         payment_type = str(setting.get("payment_type") or "").lower()
         bid_type = str(setting.get("bid_type") or "").lower()
         settings_time = _time(setting.get("observed_at"))
+        setting_fresh = bool(settings_time and 0 <= (now - settings_time).total_seconds() <= freshness_hours * 3600)
+        search_bid_kopecks = _num(setting.get("search_bid_kopecks"))
+        search_placement = str(setting.get("search_placement") or "").strip().lower() in {"true", "1", "yes"}
+        campaign_status = str(setting.get("status") or "")
+        campaign_search_bid_available = bool(
+            setting_fresh and campaign_status == "9"
+            and payment_type == "cpm" and bid_type == "manual" and search_placement
+            and str(setting.get("currency") or "").upper() == "RUB"
+            and search_bid_kopecks is not None and search_bid_kopecks > 0
+        )
+        bid_source = "cluster" if bid_kopecks is not None else None
         max_cpa = caps.get((advert, nm))
         cpa = round(spend / orders, 2) if spend is not None and orders is not None and orders > 0 else None
         ctr = round(clicks / views * 100, 2) if clicks is not None and views is not None and views > 0 else None
@@ -137,7 +150,7 @@ def analyze_cluster_rows(
         elif max_cpa <= 0:
             blockers.append("Точная экономика товара не допускает рекламных расходов; ставку по кластеру не предлагаем менять.")
         if bid_kopecks is None or bid_kopecks <= 0:
-            blockers.append("Не получена точная текущая ставка этого кластера из WB.")
+            blockers.append("Индивидуальная ставка этого кластера не получена; ставка поиска товара в кампании показана отдельно и не подменяет её.")
         elif bid_time is None or (now - bid_time).total_seconds() > freshness_hours * 3600:
             blockers.append("Снимок текущей ставки устарел; обновить рекламу перед решением.")
         if state != "active":
@@ -179,6 +192,9 @@ def analyze_cluster_rows(
             "views": views, "clicks": clicks, "atbs": atbs, "orders": orders, "spend_rub": spend,
             "ctr_pct": ctr, "cpc_rub": cpc, "cpa_rub": cpa, "max_cpa_rub": max_cpa,
             "current_bid_rub": round(bid_kopecks / 100, 2) if bid_kopecks is not None else None,
+            "current_bid_source": bid_source,
+            "campaign_search_bid_rub": round(search_bid_kopecks / 100, 2) if campaign_search_bid_available else None,
+            "campaign_search_bid_at": settings_time.isoformat() if campaign_search_bid_available and settings_time else None,
             "target_bid_rub": target_bid, "bid_observed_at": bid_time.isoformat() if bid_time else None,
             "cluster_state": state or None, "organic_position": position_value,
             "organic_position_status": position_freshness.get("status", "missing"),

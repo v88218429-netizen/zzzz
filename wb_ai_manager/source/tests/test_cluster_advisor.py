@@ -23,6 +23,7 @@ def source_row(**overrides):
 
 def settings(**overrides):
     row = {"shop": "yv", "advert_id": "15", "nm_id": "123", "payment_type": "cpm", "bid_type": "manual",
+           "status": "9", "currency": "RUB", "search_bid_kopecks": "1200", "search_placement": "True",
            "observed_at": "2026-10-29T11:00:00+03:00"}
     row.update(overrides)
     return [row]
@@ -46,6 +47,8 @@ def test_exact_cluster_exposes_metrics_and_capped_test_bid_only_with_full_eviden
     assert row["clicks"] == 30
     assert row["cpa_rub"] == 240
     assert row["current_bid_rub"] == 10
+    assert row["current_bid_source"] == "cluster"
+    assert row["campaign_search_bid_rub"] == 12
     assert row["target_bid_rub"] == 9
     assert row["action"] == "ТЕСТОВО СНИЗИТЬ СТАВКУ"
     assert row["organic_position"] == 18
@@ -54,12 +57,35 @@ def test_exact_cluster_exposes_metrics_and_capped_test_bid_only_with_full_eviden
 
 
 def test_missing_exact_bid_or_economics_blocks_numeric_recommendation():
-    result = analyze_cluster_rows([source_row(cluster_bid_kopecks="")], settings(), [], now=NOW,
+    result = analyze_cluster_rows([source_row(cluster_bid_kopecks="")], settings(search_bid_kopecks="2000"), [], now=NOW,
                                  economics_observed_at="2026-10-29T11:00:00+03:00")
     row = result["rows"][0]
     assert row["target_bid_rub"] is None
+    assert row["current_bid_rub"] is None
+    assert row["campaign_search_bid_rub"] == 20
     assert row["action"] == "СОВЕТ ПО СТАВКЕ ЗАБЛОКИРОВАН"
+    assert any("не подменяет её" in reason for reason in row["blockers"])
     assert len(row["blockers"]) >= 2
+
+
+def test_campaign_search_rate_is_shown_separately_and_never_claimed_as_cluster_bid():
+    result = analyze_cluster_rows(
+        [source_row(cluster_bid_kopecks="", bid_observed_at="")],
+        settings(search_bid_kopecks="1550"), decisions(), now=NOW,
+        economics_observed_at="2026-10-29T11:00:00+03:00",
+    )
+    row = result["rows"][0]
+    assert row["campaign_search_bid_rub"] == 15.5
+    assert row["current_bid_rub"] is None
+    assert row["target_bid_rub"] is None
+    assert row["action"] == "СОВЕТ ПО СТАВКЕ ЗАБЛОКИРОВАН"
+
+
+def test_campaign_search_rate_is_hidden_for_paused_or_non_rub_campaigns():
+    for overrides in ({"status": "11"}, {"currency": "KZT"}):
+        result = analyze_cluster_rows([source_row()], settings(**overrides), [], now=NOW,
+                                     economics_observed_at="2026-10-29T11:00:00+03:00")
+        assert result["rows"][0]["campaign_search_bid_rub"] is None
 
 
 def test_stale_bid_and_non_cpm_campaign_block_change():
