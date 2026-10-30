@@ -118,8 +118,8 @@ jobs:
                       delay = min(60, int(retry_after)) if retry_after and retry_after.isdigit() else 2 ** attempt
                   except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, ConnectionError, OSError) as exc:
                       last = type(exc).__name__ + ":" + str(exc)[:240]
-                      if attempt == 2:
-                          raise RuntimeError("OZON_API_REQUEST_FAILED:" + endpoint + ":" + last)
+                      if attempt == 4:
+                          raise RuntimeError("OZON_API_REQUEST_FAILED:" + api_context["store"] + ":" + api_context["flow"] + ":" + str(api_context["page"]) + ":" + endpoint + ":" + last)
                       delay = 2 ** attempt
                   time.sleep(delay)
               raise RuntimeError("OZON_API_RETRY_EXHAUSTED:" + endpoint + ":" + str(last))
@@ -152,7 +152,7 @@ jobs:
               seen_fbs_postings = {}
 
               def register_posting(flow, posting, timestamp, posting_number, order_id):
-                  nonlocal duplicate_postings
+                  global duplicate_postings
                   products = posting.get("products")
                   signature = json.dumps(
                       [timestamp, order_id, sorted([
