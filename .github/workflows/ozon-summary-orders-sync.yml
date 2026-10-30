@@ -61,6 +61,73 @@ jobs:
               print(name + "=" + ("configured" if value else "missing"))
           PY
 
+      - name: Probe current Ozon Seller API access
+        continue-on-error: true
+        shell: bash
+        env:
+          OZON_DOM_CLIENT_ID: ${{ secrets.OZON_SELLER_DOM_CLIENT_ID }}
+          OZON_DOM_API_KEY: ${{ secrets.OZON_SELLER_DOM_API_KEY }}
+          OZON_HOZYAYUSHKA_CLIENT_ID: ${{ secrets.OZON_SELLER_HOZYAYUSHKA_CLIENT_ID }}
+          OZON_HOZYAYUSHKA_API_KEY: ${{ secrets.OZON_SELLER_HOZYAYUSHKA_API_KEY }}
+        run: |
+          python - <<'PY'
+          import datetime, json, os, time, urllib.error, urllib.request
+          until = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)
+          since = until - datetime.timedelta(days=60)
+          window = {"since": since.isoformat().replace("+00:00", "Z"), "to": until.isoformat().replace("+00:00", "Z")}
+          stores = (
+              ("DOM", "OZON_DOM_CLIENT_ID", "OZON_DOM_API_KEY"),
+              ("HOZYAYUSHKA", "OZON_HOZYAYUSHKA_CLIENT_ID", "OZON_HOZYAYUSHKA_API_KEY"),
+          )
+          methods = (
+              ("FBO", "/v3/posting/fbo/list", {"dir":"ASC","filter":dict(window,status="",), "limit":1000,"offset":0,"with":{"analytics_data":True,"financial_data":True}}),
+              ("FBS", "/v4/posting/fbs/list", {"dir":"ASC","filter":dict(window,status=""),"limit":100,"cursor":"","with":{"analytics_data":True,"financial_data":True}}),
+          )
+          failures = 0
+          for store, client_key, api_key in stores:
+              client, key = os.environ.get(client_key, ""), os.environ.get(api_key, "")
+              if client: print("::add-mask::" + client)
+              if key: print("::add-mask::" + key)
+              if not client or not key:
+                  print(f"OZON_API_{store}_credentials=missing")
+                  failures += 2
+                  continue
+              for label, endpoint, body in methods:
+                  result = None
+                  code = 0
+                  for attempt in range(3):
+                      req = urllib.request.Request(
+                          "https://api-seller.ozon.ru" + endpoint,
+                          data=json.dumps(body).encode(),
+                          headers={"Client-Id":client,"Api-Key":key,"Content-Type":"application/json"},
+                          method="POST",
+                      )
+                      try:
+                          with urllib.request.urlopen(req, timeout=45) as response:
+                              code = response.status
+                              result = json.loads(response.read().decode())
+                          break
+                      except urllib.error.HTTPError as exc:
+                          code = exc.code
+                          if code not in (429,500,502,503,504) or attempt == 2: break
+                      except (urllib.error.URLError, TimeoutError, json.JSONDecodeError):
+                          if attempt == 2: break
+                      time.sleep(2 ** attempt)
+                  if code != 200 or not isinstance(result, dict):
+                      print(f"OZON_API_{store}_{label}=http_{code}")
+                      failures += 1
+                      continue
+                  records = result.get("postings")
+                  if records is None:
+                      records = result.get("result")
+                  if isinstance(records, dict):
+                      records = records.get("postings") or records.get("items") or []
+                  count = len(records) if isinstance(records, list) else 0
+                  print(f"OZON_API_{store}_{label}=ok;rows={count};has_next={bool(result.get('has_next'))}")
+          if failures == 4:
+              raise SystemExit("OZON_SELLER_API_ALL_METHODS_FAILED")
+          PY
+
       - name: Publish and verify both Ozon summaries
         shell: bash
         run: |
