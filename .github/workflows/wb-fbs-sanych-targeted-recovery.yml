@@ -20,7 +20,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: wb-fbs-recovery-global
+  group: wb-fbs-recovery-live-v2
   cancel-in-progress: false
 
 jobs:
@@ -34,50 +34,12 @@ jobs:
         include:
         - slice: 14
           start_date: "2026-10-28"
-          end_date: "2026-10-29"
-        - slice: 13
-          start_date: "2026-10-22"
-          end_date: "2026-10-27"
-        - slice: 12
-          start_date: "2026-10-15"
-          end_date: "2026-10-21"
-        - slice: 11
-          start_date: "2026-10-08"
-          end_date: "2026-10-14"
-        - slice: 10
-          start_date: "2026-10-01"
-          end_date: "2026-10-07"
-        - slice: 9
-          start_date: "2026-09-24"
-          end_date: "2026-09-30"
-        - slice: 8
-          start_date: "2026-09-17"
-          end_date: "2026-09-23"
-        - slice: 7
-          start_date: "2026-09-10"
-          end_date: "2026-09-16"
-        - slice: 6
-          start_date: "2026-09-03"
-          end_date: "2026-09-09"
-        - slice: 5
-          start_date: "2026-08-27"
-          end_date: "2026-09-02"
-        - slice: 4
-          start_date: "2026-08-20"
-          end_date: "2026-08-26"
-        - slice: 3
-          start_date: "2026-08-13"
-          end_date: "2026-08-19"
-        - slice: 2
-          start_date: "2026-08-06"
-          end_date: "2026-08-12"
-        - slice: 1
-          start_date: "2026-07-30"
-          end_date: "2026-08-05"
+          end_date: "2026-10-30"
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
       FBS_CLIENT: SANYCH
+      FBS_INCLUDE_LIVE: "true"
       FBS_BATCH_SIZE: "5"
       WB_API_TOKEN_AP: ${{ secrets.WB_API_TOKEN_AP }}
       GOOGLE_BRIDGE_KEY: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
