@@ -51,7 +51,7 @@
         {
           "path": "plugin.json",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/plugin.json",
-          "sha256": "8480c479d8464f6a39c65f4870a91a5e653f20cb85551b4027263c33e11c0bb7"
+          "sha256": "9b1b87af379ef238ab7909c2dce840d0f7c0ebb89414c5da19139329f7a335e8"
         },
         {
           "path": "pyproject.toml",
