@@ -18,14 +18,14 @@ permissions:
   contents: read
 
 concurrency:
-  group: sellmonitor-summary-publish-serial
+  group: ozon-summary-orders
   cancel-in-progress: false
 
 jobs:
   publish:
     if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     env:
       WEBAPP_DEPLOYMENT_ID: AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw
       WEBHOOK_SECRET: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
@@ -61,75 +61,6 @@ jobs:
               print(name + "=" + ("configured" if value else "missing"))
           PY
 
-      - name: Probe current Ozon Seller API access
-        continue-on-error: true
-        shell: bash
-        env:
-          OZON_DOM_CLIENT_ID: ${{ secrets.OZON_SELLER_DOM_CLIENT_ID }}
-          OZON_DOM_API_KEY: ${{ secrets.OZON_SELLER_DOM_API_KEY }}
-          OZON_HOZYAYUSHKA_CLIENT_ID: ${{ secrets.OZON_SELLER_HOZYAYUSHKA_CLIENT_ID }}
-          OZON_HOZYAYUSHKA_API_KEY: ${{ secrets.OZON_SELLER_HOZYAYUSHKA_API_KEY }}
-        run: |
-          python - <<'PY'
-          import datetime, json, os, time, urllib.error, urllib.request
-          until = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)
-          since = until - datetime.timedelta(days=60)
-          window = {"since": since.isoformat().replace("+00:00", "Z"), "to": until.isoformat().replace("+00:00", "Z")}
-          stores = (
-              ("DOM", "OZON_DOM_CLIENT_ID", "OZON_DOM_API_KEY"),
-              ("HOZYAYUSHKA", "OZON_HOZYAYUSHKA_CLIENT_ID", "OZON_HOZYAYUSHKA_API_KEY"),
-          )
-          methods = (
-              ("FBO", "/v3/posting/fbo/list", {"dir":"ASC","filter":dict(window), "limit":100,"offset":0,"with":{"analytics_data":True,"financial_data":True}}),
-              ("FBS", "/v4/posting/fbs/list", {"dir":"ASC","filter":dict(window,status=""),"limit":100,"cursor":"","with":{"analytics_data":True,"financial_data":True}}),
-          )
-          failures = 0
-          for store, client_key, api_key in stores:
-              client, key = os.environ.get(client_key, ""), os.environ.get(api_key, "")
-              if client: print("::add-mask::" + client)
-              if key: print("::add-mask::" + key)
-              if not client or not key:
-                  print(f"OZON_API_{store}_credentials=missing")
-                  failures += 2
-                  continue
-              for label, endpoint, body in methods:
-                  result = None
-                  code = 0
-                  detail = ""
-                  for attempt in range(3):
-                      req = urllib.request.Request(
-                          "https://api-seller.ozon.ru" + endpoint,
-                          data=json.dumps(body).encode(),
-                          headers={"Client-Id":client,"Api-Key":key,"Content-Type":"application/json"},
-                          method="POST",
-                      )
-                      try:
-                          with urllib.request.urlopen(req, timeout=45) as response:
-                              code = response.status
-                              result = json.loads(response.read().decode())
-                          break
-                      except urllib.error.HTTPError as exc:
-                          code = exc.code
-                          detail = exc.read(1000).decode("utf-8", "replace").replace("\\n", " ")[:600]
-                          if code not in (429,500,502,503,504) or attempt == 2: break
-                      except (urllib.error.URLError, TimeoutError, json.JSONDecodeError):
-                          if attempt == 2: break
-                      time.sleep(2 ** attempt)
-                  if code != 200 or not isinstance(result, dict):
-                      print(f"OZON_API_{store}_{label}=http_{code};detail={detail}")
-                      failures += 1
-                      continue
-                  records = result.get("postings")
-                  if records is None:
-                      records = result.get("result")
-                  if isinstance(records, dict):
-                      records = records.get("postings") or records.get("items") or []
-                  count = len(records) if isinstance(records, list) else 0
-                  print(f"OZON_API_{store}_{label}=ok;rows={count};has_next={bool(result.get('has_next'))}")
-          if failures == 4:
-              raise SystemExit("OZON_SELLER_API_ALL_METHODS_FAILED")
-          PY
-
       - name: Fetch all Ozon Seller API pages, publish and verify both summaries
         shell: bash
         env:
@@ -149,7 +80,7 @@ jobs:
           now = datetime.datetime.now(UTC).replace(microsecond=0)
           coverage_to = now.astimezone(MOSCOW).date().isoformat()
           until = now.isoformat().replace("+00:00", "Z")
-          since = datetime.datetime(2026, 9, 1, tzinfo=UTC).isoformat().replace("+00:00", "Z")
+          since = datetime.datetime(2026, 9, 1, tzinfo=MOSCOW).astimezone(UTC).isoformat().replace("+00:00", "Z")
           stores = (
               ("1", "DOM", "OZON_DOM_CLIENT_ID", "OZON_DOM_API_KEY"),
               ("2", "HOZYAYUSHKA", "OZON_HOZYAYUSHKA_CLIENT_ID", "OZON_HOZYAYUSHKA_API_KEY"),
@@ -216,6 +147,30 @@ jobs:
               window = {"since": since, "to": until}
               store_pages = 0
               store_postings = 0
+              duplicate_postings = 0
+              seen_fbo_postings = {}
+              seen_fbs_postings = {}
+
+              def register_posting(flow, posting, timestamp, posting_number, order_id):
+                  nonlocal duplicate_postings
+                  products = posting.get("products")
+                  signature = json.dumps(
+                      [timestamp, order_id, sorted([
+                          [str(p.get("offer_id") or ""), str(p.get("sku") or ""),
+                           str(p.get("name") or ""), str(p.get("quantity") or "")]
+                          for p in products if isinstance(p, dict)
+                      ]) if isinstance(products, list) else None],
+                      ensure_ascii=False, separators=(",", ":"),
+                  )
+                  seen = seen_fbo_postings if flow == "FBO" else seen_fbs_postings
+                  prior = seen.get(posting_number)
+                  if prior is not None:
+                      if prior != signature:
+                          raise RuntimeError("OZON_" + flow + "_POSTING_CHANGED_DURING_PAGINATION:" + label)
+                      duplicate_postings += 1
+                      return False
+                  seen[posting_number] = signature
+                  return True
 
               offset = 0
               while True:
@@ -233,6 +188,8 @@ jobs:
                       order_id = str(posting.get("order_id") or "").strip()
                       if not timestamp or not posting_number or not order_id:
                           raise RuntimeError("OZON_FBO_REQUIRED_POSTING_FIELDS_MISSING:" + label)
+                      if not register_posting("FBO", posting, str(timestamp), posting_number, order_id):
+                          continue
                       day = datetime.datetime.fromisoformat(str(timestamp).replace("Z", "+00:00")).astimezone(MOSCOW).date().isoformat()
                       if not COVERAGE_FROM <= day <= coverage_to:
                           continue
@@ -274,6 +231,8 @@ jobs:
                       order_id = str(posting.get("order_id") or "").strip()
                       if not timestamp or not posting_number or not order_id:
                           raise RuntimeError("OZON_FBS_REQUIRED_POSTING_FIELDS_MISSING:" + label)
+                      if not register_posting("FBS", posting, str(timestamp), posting_number, order_id):
+                          continue
                       day = datetime.datetime.fromisoformat(str(timestamp).replace("Z", "+00:00")).astimezone(MOSCOW).date().isoformat()
                       if not COVERAGE_FROM <= day <= coverage_to:
                           continue
@@ -304,7 +263,7 @@ jobs:
               completed_accounts.append(cabinet)
               store_page_counts[label] = store_pages
               store_posting_counts[label] = store_postings
-              print(f"OZON_API_{label}_COMPLETE=true;pages={store_pages};postings={store_postings}")
+              print(f"OZON_API_{label}_COMPLETE=true;pages={store_pages};postings={store_postings};duplicate_postings_skipped={duplicate_postings}")
 
           if sorted(completed_accounts) != ["1", "2"] or not records_by_key:
               raise RuntimeError("OZON_API_BOTH_CABINETS_AND_NONEMPTY_HISTORY_REQUIRED")
