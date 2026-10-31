@@ -263,7 +263,17 @@ def post_publish(payload):
                 and result.get("helper_readback") is True
             ):
                 return result
-            raise RuntimeError("OZON_PUBLISH_INVALID_READBACK_RESPONSE")
+            safe_result = {
+                "ok": result.get("ok") if isinstance(result, dict) else None,
+                "action": result.get("action") if isinstance(result, dict) else None,
+                "error": result.get("error") if isinstance(result, dict) else None,
+                "message": result.get("message") if isinstance(result, dict) else None,
+                "result_keys": sorted((result.get("result") or {}).keys()) if isinstance(result, dict) and isinstance(result.get("result"), dict) else [],
+                "top_level_keys": sorted(result.keys()) if isinstance(result, dict) else [],
+                "response_type": type(result).__name__,
+            }
+            print("OZON_PUBLISH_RESPONSE=" + json.dumps(safe_result, ensure_ascii=False, separators=(",", ":")), flush=True)
+            raise RuntimeError("OZON_PUBLISH_INVALID_READBACK_RESPONSE:" + str(safe_result.get("error") or safe_result.get("message") or safe_result.get("top_level_keys")))
         except urllib.error.HTTPError as exc:
             last = "HTTP_" + str(exc.code)
             if exc.code not in {408, 425, 429, 500, 502, 503, 504} or attempt == 5:
