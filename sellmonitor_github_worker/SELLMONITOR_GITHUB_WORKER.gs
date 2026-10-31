@@ -1,10 +1,10 @@
 /**
- * Sellmonitor GitHub Central Worker v1.3.53
+ * Sellmonitor GitHub Central Worker v1.3.55
  * GitHub is source-of-truth/scheduler. This Apps Script project is only
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.54',
+  VERSION: 'github-worker-1.3.55',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -6475,14 +6475,31 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
         mark('GRID_EXTEND_DONE_'+orderSheetNative.getMaxRows());
       }
       var insertRange=orderSheet+'!A'+insertStart+':AS'+insertEnd;
-      var insertResponse=fetchSheetApi(apiBase+'/values:batchUpdate',{
-        method:'post',contentType:'application/json',
-        payload:JSON.stringify({valueInputOption:'RAW',includeValuesInResponse:true,
-          responseValueRenderOption:'UNFORMATTED_VALUE',data:[{
-            range:insertRange,majorDimension:'ROWS',values:sheetRows(insert)
-          }]})
-      });
-      var insertCode=insertResponse.getResponseCode(); mark('INSERT_RESPONSE_'+insertCode);
+      var insertRequestBody=JSON.stringify({valueInputOption:'RAW',includeValuesInResponse:true,
+        responseValueRenderOption:'UNFORMATTED_VALUE',data:[{
+          range:insertRange,majorDimension:'ROWS',values:sheetRows(insert)
+        }]});
+      var insertResponse=null,insertCode=0,insertWriteError='';
+      // A timeout may occur after Sheets has committed the fixed-range write.
+      // Retrying this exact RAW range is idempotent and avoids losing the batch.
+      for(var insertWriteAttempt=0;insertWriteAttempt<3;insertWriteAttempt++){
+        mark('INSERT_WRITE_ATTEMPT_'+(insertWriteAttempt+1));
+        try{
+          insertResponse=fetchSheetApi(apiBase+'/values:batchUpdate',{
+            method:'post',contentType:'application/json',payload:insertRequestBody
+          });
+          insertCode=insertResponse.getResponseCode();
+          if(insertCode>=200&&insertCode<300)break;
+          if(insertCode!==429&&insertCode<500)break;
+          insertWriteError='HTTP_'+insertCode;
+        }catch(insertWriteException){
+          insertWriteError=/timeout|timed out/i.test(String(insertWriteException))?'TIMEOUT':'EXCEPTION';
+          if(insertWriteError!=='TIMEOUT'||insertWriteAttempt>=2)throw new Error('FBS_INSERT_WRITE_'+insertWriteError);
+        }
+        if(insertWriteAttempt<2)Utilities.sleep([1000,3000][insertWriteAttempt]);
+      }
+      if(!insertResponse)throw new Error('FBS_INSERT_WRITE_'+(insertWriteError||'NO_RESPONSE'));
+      mark('INSERT_RESPONSE_'+insertCode);
       if(insertCode<200||insertCode>=300)throw new Error('FBS_INSERT_HTTP_'+insertCode+':'+sheetApiFailure(insertResponse));
       // The Sheets API write response can include persisted values, avoiding
       // a second read request that may time out under API load. Fall back to a
