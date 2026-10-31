@@ -6983,29 +6983,67 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
       // Force pending Sheets writes to become visible before readback verification.
       SpreadsheetApp.flush();
       Utilities.sleep(500);
-      // Read only the changed segments. A single min-to-max range can span tens
-      // of thousands of unrelated rows when a small batch contains scattered IDs.
+      // Verify all disjoint changed ranges with one bounded Sheets API request.
+      // Calling SpreadsheetApp.getRange twice per sparse segment caused dozens
+      // of slow service round trips for small status batches.
+      var verifyByA1={},verifyFilters=[];
       segments.forEach(function(seg){
-        var startRow=seg[0],endRow=seg[1],count=endRow-startRow+1;
-        var verifyStateMatrix=orderSheetNative.getRange(startRow,1,count,7).getValues();
-        var verifyTimeMatrix=orderSheetNative.getRange(startRow,22,count,2).getDisplayValues();
-        for(var rowNumber=startRow;rowNumber<=endRow;rowNumber++){
-          var rowOffset=rowNumber-startRow;
-          var orderRow=verifyStateMatrix[rowOffset]||[],timeRow=verifyTimeMatrix[rowOffset]||[];
+        var stateA1=orderSheet+'!A'+seg[0]+':G'+seg[1];
+        var timesA1=orderSheet+'!V'+seg[0]+':W'+seg[1];
+        verifyByA1[stateA1]={segment:seg,kind:'state'};
+        verifyByA1[timesA1]={segment:seg,kind:'times'};
+        verifyFilters.push({a1Range:stateA1},{a1Range:timesA1});
+      });
+      mark('STATE_VERIFY_START_BATCHED_'+segments.length+'_SEGMENTS');
+      var verifyResponse=fetchSheetApi(apiBase+'/values:batchGetByDataFilter',{
+        method:'post',contentType:'application/json',
+        payload:JSON.stringify({dataFilters:verifyFilters,majorDimension:'ROWS',valueRenderOption:'FORMATTED_VALUE'})
+      });
+      var verifyCode=verifyResponse.getResponseCode();
+      if(verifyCode<200||verifyCode>=300)
+        throw new Error('FBS_PATCH_READBACK_HTTP_'+verifyCode+':'+sheetApiFailure(verifyResponse));
+      var verifyPayload;
+      try{verifyPayload=JSON.parse(verifyResponse.getContentText()||'{}');}
+      catch(verifyParseError){throw new Error('FBS_PATCH_READBACK_INVALID_JSON');}
+      var verifyRanges=verifyPayload.valueRanges||[];
+      if(verifyRanges.length!==verifyFilters.length)
+        throw new Error('FBS_PATCH_READBACK_RANGE_COUNT_MISMATCH');
+      var verifiedA1={};
+      verifyRanges.forEach(function(match){
+        var spec=null;
+        (match.dataFilters||[]).some(function(filter){
+          spec=verifyByA1[String(filter.a1Range||'')]||null;
+          return !!spec;
+        });
+        if(!spec)throw new Error('FBS_PATCH_READBACK_RANGE_MAPPING_INVALID');
+        var a1=String(((match.dataFilters||[]).filter(function(filter){
+          return verifyByA1[String(filter.a1Range||'')];
+        })[0]||{}).a1Range||'');
+        if(verifiedA1[a1])throw new Error('FBS_PATCH_READBACK_RANGE_DUPLICATE');
+        verifiedA1[a1]=true;
+        var seg=spec.segment,values=((match.valueRange||{}).values)||[];
+        for(var rowNumber=seg[0];rowNumber<=seg[1];rowNumber++){
+          var rowOffset=rowNumber-seg[0],rowValues=values[rowOffset]||[];
           var expectedState=stateByRow[rowNumber]||[],expectedTimes=syncTimesByRow[rowNumber]||[];
-          if(String(orderRow[0]||'')!==String(idByRow[rowNumber]||'')||
-             String(orderRow[4]||'')!==String(expectedState[0]||'')||
-             String(orderRow[5]||'')!==String(expectedState[1]||'')||
-             String(orderRow[6]||'')!==String(expectedState[2]||''))
-            throw new Error('FBS_PATCH_READBACK_FAILED');
-          for(var t=0;t<2;t++){
-            var expectedDisplay=expectedTimes[t] instanceof Date?Utilities.formatDate(expectedTimes[t],sheetTimeZone,'dd.MM.yyyy HH:mm:ss'):String(expectedTimes[t]||'');
-            var actualDisplay=String(timeRow[t]||'');
-            if(!expectedDisplay||actualDisplay!==expectedDisplay)
-              throw new Error('FBS_PATCH_TIME_READBACK_FAILED:row='+rowNumber+':column='+(22+t)+':expected='+expectedDisplay+':actual='+actualDisplay);
+          if(spec.kind==='state'){
+            if(String(rowValues[0]||'')!==String(idByRow[rowNumber]||'')||
+               String(rowValues[4]||'')!==String(expectedState[0]||'')||
+               String(rowValues[5]||'')!==String(expectedState[1]||'')||
+               String(rowValues[6]||'')!==String(expectedState[2]||''))
+              throw new Error('FBS_PATCH_READBACK_FAILED');
+          }else{
+            for(var t=0;t<2;t++){
+              var expectedDisplay=expectedTimes[t] instanceof Date?
+                Utilities.formatDate(expectedTimes[t],sheetTimeZone,'dd.MM.yyyy HH:mm:ss'):String(expectedTimes[t]||'');
+              var actualDisplay=String(rowValues[t]||'');
+              if(!expectedDisplay||actualDisplay!==expectedDisplay)
+                throw new Error('FBS_PATCH_TIME_READBACK_FAILED:row='+rowNumber+':column='+(22+t)+':expected='+expectedDisplay+':actual='+actualDisplay);
+            }
           }
         }
       });
+      if(Object.keys(verifiedA1).length!==verifyFilters.length)
+        throw new Error('FBS_PATCH_READBACK_RANGE_MISSING');
       mark('STATE_VERIFY_DONE_BOUNDED');
     }
     console.log('FBS_STAGE_PATCH ms='+(Date.now()-fbsStarted)+' changed='+updated+' events='+events.length);
