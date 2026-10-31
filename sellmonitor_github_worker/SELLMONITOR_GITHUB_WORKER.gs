@@ -5858,6 +5858,14 @@ function sellmonitorGithubWbBuildDashboard_(ss,storeName){
   });
   data.hideSheet();
   var view=ss.getSheetByName('00_Динамика');if(!view)view=ss.insertSheet('00_Динамика',0);else view.showSheet();
+  var rnpCharts=ss.getSheetByName('05_Графики_РНП');
+  if(String(storeName).toLowerCase().indexOf('сан')>=0&&rnpCharts&&rnpCharts.getCharts().length>=9){
+    view.setHiddenGridlines(true);view.setFrozenRows(2);view.setTabColor('#17365D');
+    view.getRange('A1').setValue('Саныч · динамика по дням, неделям и месяцам').setBackground('#17365D').setFontColor('#FFFFFF').setFontFamily('Arial').setFontSize(16).setFontWeight('bold');
+    view.getRange('A2').setValue('Графики и разрезы РНП находятся на листе 05_Графики_РНП. Витрина данных обновлена: дни '+latest.day+'; недели '+latest.week+'; месяцы '+latest.month+'.').setFontColor('#44546A').setWrap(true);
+    SpreadsheetApp.flush();
+    return {ok:true,chart_count:rnpCharts.getCharts().length,dashboard_sheet:'05_Графики_РНП',dashboard_skipped:true,reason:'SANYCH_DEDICATED_RNP_CHARTS',exact_periods:{day:tables[0].periods,week:tables[1].periods,month:tables[2].periods},latest_exact:latest,archived_rows:archive.getLastRow()-1};
+  }
   view.getCharts().forEach(function(ch){view.removeChart(ch);});
   view.getRange(1,1,2,21).clearContent();view.setHiddenGridlines(true);view.setFrozenRows(2);view.setTabColor('#17365D');
   view.getRange('A1').setValue(storeName+' · Динамика по точным фактам').setBackground('#17365D').setFontColor('#FFFFFF').setFontFamily('Arial').setFontSize(16).setFontWeight('bold');
