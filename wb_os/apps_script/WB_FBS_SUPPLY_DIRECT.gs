@@ -403,37 +403,73 @@ function wbFbsSupplySyncCore_() {
 }
 
 function wbFbsSupplySyncAllStores_() {
-  var scriptProps=PropertiesService.getScriptProperties(),leaseKey='WB_FBS_DIRECT_ALL_STORES_LEASE';
-  var leaseToken=Utilities.getUuid(),lock=LockService.getUserLock();
-  if(!lock.tryLock(10000))throw new Error('WB_FBS_DIRECT: credential store is busy');
-  try{
-    var active=null;try{active=JSON.parse(scriptProps.getProperty(leaseKey)||'null');}catch(ignored){}
-    if(active&&Number(active.expiresAt)>Date.now())throw new Error('WB_FBS_DIRECT: supply sync already running');
-    scriptProps.setProperty(leaseKey,JSON.stringify({token:leaseToken,expiresAt:Date.now()+8*60*1000}));
-  }finally{lock.releaseLock();}
-  var original=WB_FBS_DIRECT_SUPPLY_CFG,results=[];
-  try{
-    ['SANYCH','AIR','HOZYAYUSHKA'].forEach(function(name){
-      var cfg=WB_FBS_DIRECT_SUPPLY_STORES[name];WB_FBS_DIRECT_SUPPLY_CFG=cfg;
-      try{results.push(wbFbsSupplySyncCore_());}
-      catch(e){
-        var message=String(e&&e.message?e.message:e).slice(0,1000);
-        try{sellmonitorClientProperties_(cfg.propertiesSpreadsheetId).setProperties({
-          WB_FBS_DIRECT_LAST_ERROR_AT:new Date().toISOString(),WB_FBS_DIRECT_LAST_STATUS:'ERROR',WB_FBS_DIRECT_LAST_ERROR:message
-        });}catch(ignoredProps){}
-        try{wbFbsSupplyWriteHealth_(wbFbsSupplySpreadsheet_(),'ERROR',message);}catch(ignoredHealth){}
-        Logger.log('WB_FBS_DIRECT_ERROR client='+cfg.client+' '+message);
-        results.push({ok:false,client:cfg.client,error:message});
+  // One cabinet per invocation keeps the official WB/API and Sheets work below the
+  // Apps Script execution ceiling. GitHub Actions calls this function once per cabinet.
+  var storeNames = ['SANYCH', 'AIR', 'HOZYAYUSHKA'];
+  var scriptProps = PropertiesService.getScriptProperties();
+  var leaseKey = 'WB_FBS_DIRECT_ALL_STORES_LEASE';
+  var cursorKey = 'WB_FBS_DIRECT_NEXT_STORE_INDEX';
+  var leaseToken = Utilities.getUuid();
+  var lock = LockService.getUserLock();
+  if (!lock.tryLock(10000)) throw new Error('WB_FBS_DIRECT: credential store is busy');
+
+  var index = 0;
+  try {
+    var active = null;
+    try { active = JSON.parse(scriptProps.getProperty(leaseKey) || 'null'); } catch (ignored) {}
+    if (active && Number(active.expiresAt) > Date.now()) {
+      throw new Error('WB_FBS_DIRECT: supply sync already running');
+    }
+    index = Number(scriptProps.getProperty(cursorKey) || 0);
+    if (!isFinite(index) || index < 0 || index >= storeNames.length || Math.floor(index) !== index) index = 0;
+    scriptProps.setProperty(leaseKey, JSON.stringify({
+      token: leaseToken,
+      expiresAt: Date.now() + 8 * 60 * 1000
+    }));
+  } finally {
+    lock.releaseLock();
+  }
+
+  var original = WB_FBS_DIRECT_SUPPLY_CFG;
+  var cfg = WB_FBS_DIRECT_SUPPLY_STORES[storeNames[index]];
+  WB_FBS_DIRECT_SUPPLY_CFG = cfg;
+  try {
+    try {
+      var result = wbFbsSupplySyncCore_();
+      if (!result || result.ok !== true) {
+        throw new Error('WB_FBS_DIRECT: client sync did not return ok=true');
       }
-    });
-    return {ok:results.every(function(x){return x.ok===true;}),stores:results};
-  }finally{
-    WB_FBS_DIRECT_SUPPLY_CFG=original;
-    if(lock.tryLock(10000)){
-      try{
-        var active=null;try{active=JSON.parse(scriptProps.getProperty(leaseKey)||'null');}catch(ignored){}
-        if(active&&active.token===leaseToken)scriptProps.deleteProperty(leaseKey);
-      }finally{lock.releaseLock();}
+      scriptProps.setProperty(cursorKey, String((index + 1) % storeNames.length));
+      return {
+        ok: true,
+        stores: [result],
+        nextClient: storeNames[(index + 1) % storeNames.length]
+      };
+    } catch (e) {
+      var message = String(e && e.message ? e.message : e).slice(0, 1000);
+      try {
+        sellmonitorClientProperties_(cfg.propertiesSpreadsheetId).setProperties({
+          WB_FBS_DIRECT_LAST_ERROR_AT: new Date().toISOString(),
+          WB_FBS_DIRECT_LAST_STATUS: 'ERROR',
+          WB_FBS_DIRECT_LAST_ERROR: message
+        });
+      } catch (ignoredProps) {}
+      try {
+        wbFbsSupplyWriteHealth_(wbFbsSupplySpreadsheet_(), 'ERROR', message);
+      } catch (ignoredHealth) {}
+      Logger.log('WB_FBS_DIRECT_ERROR client=' + cfg.client + ' ' + message);
+      return {ok: false, stores: [{ok: false, client: cfg.client, error: message}]};
+    }
+  } finally {
+    WB_FBS_DIRECT_SUPPLY_CFG = original;
+    if (lock.tryLock(10000)) {
+      try {
+        var held = null;
+        try { held = JSON.parse(scriptProps.getProperty(leaseKey) || 'null'); } catch (ignored) {}
+        if (held && held.token === leaseToken) scriptProps.deleteProperty(leaseKey);
+      } finally {
+        lock.releaseLock();
+      }
     }
   }
 }
