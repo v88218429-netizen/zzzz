@@ -711,7 +711,7 @@ jobs:
           grep -Rqs "SELLMONITOR_OZON_EXPORT_DIAGNOSTIC_RESPONSE_V1" .
           grep -Rqs "function sellmonitorGithubEnsureTrigger_()" .
           grep -RqsF "$EXPECTED_WORKER_VERSION" .
-          grep -RqsF 'oldRnpNote.match(/Реклама доступна[\\s\\S]*?без SKU(?:\\/offer_id)?\\./)' .
+          grep -RqsF 'oldRnpNote.match(/Реклама доступна[\s\S]*?без SKU(?:\/offer_id)?\./)' .
           grep -Rqs "SELLMONITOR_WEBHOOK_HASH_NOT_COMPILED" .
           python - <<'PY'
           import json
