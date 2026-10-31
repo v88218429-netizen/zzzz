@@ -102,7 +102,7 @@ jobs:
                   continue
               rows.append({"client": client, "start_date": start, "end_date": end,
                            "script": script, "batch_size": batch})
-          rows.sort(key=lambda row: (row["start_date"], row["client"]))
+          rows.sort(key=lambda row: (row["start_date"], row["client"]), reverse=True)
           groups = {
               "air": [row for row in rows if row["client"] == "AIR"],
               "hozy": [row for row in rows if row["client"] == "HOZYAYUSHKA"],
