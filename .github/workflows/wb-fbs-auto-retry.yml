@@ -42,7 +42,7 @@ jobs:
           REPOSITORY: ${{ github.repository }}
         run: |
           python - <<'PY'
-          import datetime as dt, json, os, re, urllib.request
+          import datetime as dt, json, os, re, time, urllib.request
           run_ids = [value.strip() for value in os.environ["RUN_IDS"].split(",") if value.strip()]
           if not run_ids or any(not value.isdecimal() for value in run_ids):
               raise SystemExit("INVALID_GITHUB_RUN_IDS")
