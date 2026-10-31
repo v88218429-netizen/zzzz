@@ -5,6 +5,8 @@ import json
 import os
 import sys
 import time
+import urllib.error
+import urllib.request
 
 import requests
 from cryptography.hazmat.primitives import hashes, serialization
@@ -216,11 +218,71 @@ def emit_encrypted(bundle):
     print("OZON_PAYLOAD_END")
 
 
+def perf_rows(bundle, key):
+    out = []
+    for window in bundle.get(key) or []:
+        response = window.get("response") or {}
+        rows = response.get("rows") or []
+        if not isinstance(rows, list):
+            raise RuntimeError("OZON_PERF_ROWS_INVALID:" + key)
+        for row in rows:
+            if not isinstance(row, dict):
+                raise RuntimeError("OZON_PERF_ROW_INVALID:" + key)
+            item = dict(row)
+            if key == "campaign_product":
+                item["from"] = str(window.get("from") or "")
+                item["to"] = str(window.get("to") or "")
+            out.append(item)
+    return out
+
+
+def post_publish(payload):
+    deployment = os.getenv("WEBAPP_DEPLOYMENT_ID", "").strip()
+    secret = os.getenv("OZON_PUBLISH_WEBHOOK_SECRET", "").strip()
+    if not deployment or not secret:
+        raise RuntimeError("OZON_PUBLISH_BRIDGE_NOT_CONFIGURED")
+    print("::add-mask::" + secret)
+    body = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    url = "https://script.google.com/macros/s/" + deployment + "/exec"
+    last = ""
+    for attempt in range(1, 6):
+        req = urllib.request.Request(
+            url,
+            data=body,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=420) as response:
+                result = json.loads(response.read().decode("utf-8"))
+            if (
+                isinstance(result, dict)
+                and result.get("ok") is True
+                and result.get("action") == "publish_ozon_performance_daily"
+                and result.get("readback") is True
+                and result.get("helper_readback") is True
+            ):
+                return result
+            raise RuntimeError("OZON_PUBLISH_INVALID_READBACK_RESPONSE")
+        except urllib.error.HTTPError as exc:
+            last = "HTTP_" + str(exc.code)
+            if exc.code not in {408, 425, 429, 500, 502, 503, 504} or attempt == 5:
+                raise RuntimeError("OZON_PUBLISH_FAILED:" + last)
+        except (urllib.error.URLError, TimeoutError, ConnectionError, OSError, json.JSONDecodeError) as exc:
+            last = type(exc).__name__
+            if attempt == 5:
+                raise RuntimeError("OZON_PUBLISH_FAILED:" + last)
+        delay = min(10 * (2 ** (attempt - 1)), 120)
+        print(f"OZON_PUBLISH_RETRY=store={payload.get('store')};attempt={attempt+1}/5;after={last};wait={delay}s", flush=True)
+        time.sleep(delay)
+    raise RuntimeError("OZON_PUBLISH_RETRY_EXHAUSTED:" + last)
+
+
 def main():
     store = os.getenv("OZON_STORE", "UNKNOWN")
     client_id = os.getenv("OZON_PERF_CLIENT_ID", "")
     secret = os.getenv("OZON_PERF_CLIENT_SECRET", "")
-    last_date = dt.datetime.now(dt.timezone.utc).date()
+    last_date = dt.datetime.now(dt.timezone.utc).astimezone(dt.timezone(dt.timedelta(hours=3))).date() - dt.timedelta(days=1)
     bundle = collect_store(store, client_id, secret, last_date)
     for group_name in ("daily", "campaign_product"):
         windows_data = bundle.get(group_name) or []
@@ -231,7 +293,13 @@ def main():
             if isinstance(row, dict)
         ]
         dates = [str(row.get("date")) for row in rows if row.get("date")]
-        keys = sorted({str(key) for row in rows[:3] for key in row.keys()})
+        keys = sorted({str(key) for row in rows[:50] for key in row.keys()})
+        distinct_keys = set()
+        for row in rows:
+            if group_name == "daily":
+                distinct_keys.add((str(row.get("date") or ""), str(row.get("id") or "")))
+            else:
+                distinct_keys.add((str(row.get("id") or ""),))
         print(
             "OZON_PERF_SHAPE="
             + json.dumps(
@@ -243,6 +311,7 @@ def main():
                     "date_min": min(dates) if dates else None,
                     "date_max": max(dates) if dates else None,
                     "distinct_days": len(set(dates)),
+                    "distinct_keys": len(distinct_keys),
                     "sample_field_names": keys,
                     "errors": [
                         {
@@ -260,9 +329,67 @@ def main():
             ),
             flush=True,
         )
-    emit_encrypted(bundle)
-    return 0 if not bundle["errors"] else 4
+    if bundle.get("errors"):
+        print("OZON_PERF_PUBLISH=skipped;reason=incomplete_source_response", flush=True)
+        return 4
 
+    daily_rows = perf_rows(bundle, "daily")
+    period_rows = perf_rows(bundle, "campaign_product")
+    if not daily_rows or not period_rows:
+        raise RuntimeError("OZON_PERF_EMPTY_EXPORT_PRESERVE")
+    dates = sorted({str(row.get("date") or "") for row in daily_rows})
+    if not dates or any(not d for d in dates):
+        raise RuntimeError("OZON_PERF_DATE_MISSING")
+    parsed_dates = [dt.date.fromisoformat(d) for d in dates]
+    expected = []
+    cursor = parsed_dates[0]
+    while cursor <= parsed_dates[-1]:
+        expected.append(cursor.isoformat())
+        cursor += dt.timedelta(days=1)
+    if dates != expected:
+        raise RuntimeError("OZON_PERF_DAILY_DATE_GAPS:" + str(len(dates)) + ":" + str(len(expected)))
+
+    daily_keys = [(str(row.get("date") or ""), str(row.get("id") or "")) for row in daily_rows]
+    if len(set(daily_keys)) != len(daily_keys):
+        raise RuntimeError("OZON_PERF_DAILY_DUPLICATE_KEYS")
+    period_keys = [
+        (str(row.get("from") or ""), str(row.get("to") or ""), str(row.get("id") or ""))
+        for row in period_rows
+    ]
+    if len(set(period_keys)) != len(period_keys):
+        raise RuntimeError("OZON_PERF_PERIOD_DUPLICATE_KEYS")
+
+    payload = {
+        "token": os.getenv("OZON_PUBLISH_WEBHOOK_SECRET", ""),
+        "action": "publish_ozon_performance_daily",
+        "store": store,
+        "source": "ozon_performance_api",
+        "complete": True,
+        "coverage_from": dates[0],
+        "coverage_to": dates[-1],
+        "daily_rows": daily_rows,
+        "period_rows": period_rows,
+    }
+    result = post_publish(payload)
+    print(
+        "OZON_PERF_PUBLISH=success"
+        + ";store=" + str(result.get("store"))
+        + ";coverage=" + str(result.get("coverage_from")) + ".." + str(result.get("coverage_to"))
+        + ";daily_source=" + str(result.get("source_daily_rows"))
+        + ";daily_added=" + str(result.get("daily_added"))
+        + ";daily_changed=" + str(result.get("daily_changed"))
+        + ";period_source=" + str(result.get("source_period_rows"))
+        + ";period_added=" + str(result.get("period_added"))
+        + ";period_changed=" + str(result.get("period_changed"))
+        + ";archived=" + str(result.get("archived_rows"))
+        + ";readback=" + str(result.get("readback"))
+        + ";helpers=" + str(result.get("helper_readback"))
+        + ";charts=" + str(result.get("charts"))
+        + ";daily_sha256=" + str(result.get("daily_sha256"))
+        + ";period_sha256=" + str(result.get("period_sha256")),
+        flush=True,
+    )
+    return 0
 
 if __name__ == "__main__":
     raise SystemExit(main())
