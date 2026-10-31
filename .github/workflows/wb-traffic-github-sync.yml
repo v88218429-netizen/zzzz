@@ -151,3 +151,10 @@ jobs:
           git -C "$RUNNER_TEMP/wb-traffic-state-branch" commit -m "traffic: encrypted collected history"
           git -C "$RUNNER_TEMP/wb-traffic-state-branch" push origin HEAD:traffic-state --force
 
+      - name: Publish verified daily traffic to WB summary books
+        if: steps.collect.outcome == 'success' && steps.archive.outcome == 'success'
+        env:
+          DATA_DIR: ${{ runner.temp }}/wb-traffic/data
+          WEBAPP_DEPLOYMENT_ID: AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw
+          WEBHOOK_SECRET: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
+        run: python wb_worker/github_traffic_sync.py --publish-summaries
