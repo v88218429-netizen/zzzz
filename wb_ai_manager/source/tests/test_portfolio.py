@@ -186,3 +186,52 @@ def test_recent_source_facts_do_not_hide_old_saved_snapshot():
 
     assert current is False
     assert "снимок получен" in reason
+
+
+def test_github_portfolio_snapshot_is_used_and_freshness_is_rechecked(tmp_path):
+    from datetime import timedelta
+
+    now = datetime.now(timezone.utc)
+    yesterday = (now - timedelta(days=1)).date().isoformat()
+    snapshot = {
+        "mode": "live",
+        "generated_at": now.isoformat(),
+        "source_health": [
+            {"id": source_id, "name": source_id, "status": "fresh", "freshness": yesterday}
+            for source_id in ("own_27", "weekly_summary", "sanych_sellmonitor")
+        ],
+        "stores": [],
+    }
+    service = PortfolioService(Settings(data_dir=str(tmp_path), wb_api_token=""))
+
+    assert service.set_github_snapshot(snapshot) is True
+    result = service.snapshot()
+
+    assert result["data_origin"] == "github_encrypted_runtime"
+    assert result["current_data"] is True
+    assert result["data_status"] == "current"
+
+
+def test_github_portfolio_snapshot_cannot_bypass_stale_source_gate(tmp_path):
+    from datetime import timedelta
+
+    now = datetime.now(timezone.utc)
+    old_date = (now - timedelta(days=10)).date().isoformat()
+    snapshot = {
+        "mode": "live",
+        "generated_at": now.isoformat(),
+        "source_health": [
+            {"id": source_id, "name": source_id, "status": "fresh", "freshness": old_date}
+            for source_id in ("own_27", "weekly_summary", "sanych_sellmonitor")
+        ],
+        "stores": [],
+    }
+    service = PortfolioService(Settings(data_dir=str(tmp_path), wb_api_token=""))
+
+    assert service.set_github_snapshot(snapshot) is True
+    result = service.snapshot()
+
+    assert result["data_origin"] == "github_encrypted_runtime"
+    assert result["current_data"] is False
+    assert result["data_status"] == "stale_source_snapshot"
+    assert "Текущие решения" in result["stale_reason"]
