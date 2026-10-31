@@ -40,6 +40,18 @@ def _atomic_json(path, data):
     temp.replace(path)
 
 
+def _row_count_for_shop(path, shop):
+    """Count rows for one shop in an aggregate CSV containing several shops."""
+    path = Path(path)
+    if not path.is_file():
+        return 0
+    with path.open("r", encoding="utf-8-sig", newline="") as stream:
+        return sum(
+            1 for row in csv.DictReader(stream)
+            if str(row.get("shop") or "").strip() == str(shop)
+        )
+
+
 def _atomic_csv(path, header, rows):
     path.parent.mkdir(parents=True, exist_ok=True)
     temp = path.with_suffix(path.suffix + ".tmp")
