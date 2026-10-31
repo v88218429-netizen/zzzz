@@ -217,3 +217,45 @@ def test_season_mode_can_scale_when_search_frequency_accelerates():
     assert p.decision == "SCALE_UP"
     assert p.target_bid_rub > p.current_bid_rub
     assert any("сезон" in x.lower() for x in p.reasons)
+
+
+def test_missing_exact_current_bid_blocks_numeric_decision():
+    c = AdvertisingController(cfg(organic_growth_hold_threshold_pct=99))
+    campaign = {"advertId": 25, "nmIds": [925]}
+    stats = {
+        "advertId": 25, "sum": 500, "orders": 10, "sum_price": 20000,
+        "clicks": 400, "views": 8000, "days": daily([1, 1, 1, 1, 1, 1, 1]),
+    }
+    product = {
+        "sku": "925", "price_client_rub": 1000, "profit_rub": 250,
+        "drr_pct": 5, "safe_stock": 1000, "orders_per_day": 10,
+    }
+
+    plan = c.build_plan(campaign, stats, product, {})
+
+    assert plan.current_bid_rub is None
+    assert plan.target_bid_rub is None
+    assert plan.bid_change_pct is None
+    assert plan.decision == "NEEDS_DATA"
+    assert "заблокирована" in plan.decision_label.lower()
+    assert "нельзя проверить" in " ".join(plan.blockers).lower()
+    assert "нельзя" in plan.action_text.lower()
+    assert "оставить" not in plan.action_text.lower()
+
+
+def test_exact_current_bid_keeps_numeric_decision_available():
+    c = AdvertisingController(cfg(organic_growth_hold_threshold_pct=99))
+    campaign = {"advertId": 26, "nmIds": [926], "bidKopecks": 5000}
+    stats = {
+        "advertId": 26, "sum": 500, "orders": 10, "sum_price": 20000,
+        "clicks": 400, "views": 8000, "days": daily([1, 1, 1, 1, 1, 1, 1]),
+    }
+    product = {
+        "sku": "926", "price_client_rub": 1000, "profit_rub": 250,
+        "drr_pct": 5, "safe_stock": 1000, "orders_per_day": 10,
+    }
+
+    plan = c.build_plan(campaign, stats, product, {})
+
+    assert plan.current_bid_rub == 50
+    assert plan.decision != "NEEDS_DATA"
