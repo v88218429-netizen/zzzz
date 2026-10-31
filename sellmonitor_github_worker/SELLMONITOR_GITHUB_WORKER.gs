@@ -5578,7 +5578,9 @@ function sellmonitorGithubPublishOzonSummaryOrders_(payload) {
       var oldBody=oldLast>4?view.getRange(5,1,oldLast-4,12).getValues():[];
       var oldHeader=view.getRange(4,1,1,12).getDisplayValues()[0];
       var oldMeta=view.getRange(1,1,3,1).getDisplayValues().map(function(r){return String(r[0]||'');});
-      var sameView=JSON.stringify(oldHeader)===JSON.stringify(viewHeader)&&
+      var datesTyped=oldBody.every(function(row){return row[1] instanceof Date&&row[2] instanceof Date;});
+      var storedViewRows=viewRows.map(function(row){var copy=row.slice();copy[1]=new Date(String(row[1])+'T00:00:00');copy[2]=new Date(String(row[2])+'T00:00:00');return copy;});
+      var sameView=datesTyped&&JSON.stringify(oldHeader)===JSON.stringify(viewHeader)&&
         JSON.stringify(sellmonitorGithubOzonNormalizeRows_(oldBody,true))===JSON.stringify(sellmonitorGithubOzonNormalizeRows_(viewRows,true))&&
         oldMeta[0]===viewTitle[0]&&oldMeta[1]===viewDescription[0]&&oldMeta[2]===viewCoverage[0];
       if(!sameView){
@@ -5591,7 +5593,7 @@ function sellmonitorGithubPublishOzonSummaryOrders_(payload) {
         view.getRange(1,1,Math.max(oldLast,viewNeed),oldWidth).clearContent();
         view.getRange(1,1,3,1).setValues([[viewTitle[0]],[viewDescription[0]],[viewCoverage[0]]]);
         view.getRange(4,1,1,12).setValues([viewHeader]);
-        view.getRange(5,1,viewRows.length,12).setValues(viewRows);
+        view.getRange(5,1,storedViewRows.length,12).setValues(storedViewRows);
         view.setFrozenRows(4);
         view.setHiddenGridlines(true);
         view.getRange(4,1,1,12).setBackground('#17365D').setFontColor('#FFFFFF').setFontWeight('bold').setWrap(true);
