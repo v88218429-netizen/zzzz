@@ -4,7 +4,6 @@
 Reads WB Marketplace API; writes only via the authenticated GitHub Google adapter.
 No credentials or individual order records are printed or committed.
 """
-# [FBS-90D-SLICED] Replay after bridge append/readback fixes; idempotent order-ID upserts safely resume.
 
 from __future__ import annotations
 import datetime as dt
@@ -320,6 +319,51 @@ def ingest(client: str, orders: list[dict]) -> dict:
 
 
 
+
+def read_current_states(client: str, orders: list[dict]) -> dict[str, dict[str, str]]:
+    states: dict[str, dict[str, str]] = {}
+    ids = [str(order.get("id") or "") for order in orders]
+    for offset in range(0, len(ids), 1000):
+        batch_ids = ids[offset:offset + 1000]
+        reply = request(
+            BRIDGE_URL,
+            body={"token": BRIDGE_KEY, "action": "fbs_status_read",
+                  "client": client, "orderIds": batch_ids},
+            timeout=120,
+        )
+        result = reply.get("result") or {}
+        if (reply.get("ok") is not True or reply.get("action") != "fbs_status_read"
+                or result.get("ok") is not True
+                or int(result.get("requested", -1)) != len(batch_ids)):
+            raise RuntimeError(client + ":FBS_STATUS_READ_REJECTED")
+        batch_states = result.get("statuses")
+        if not isinstance(batch_states, dict):
+            raise RuntimeError(client + ":FBS_STATUS_READ_INVALID")
+        allowed = set(batch_ids)
+        for oid, pair in batch_states.items():
+            if oid not in allowed or not isinstance(pair, dict):
+                raise RuntimeError(client + ":FBS_STATUS_READ_INVALID")
+            seller = pair.get("supplierStatus")
+            wb = pair.get("wbStatus")
+            if not isinstance(seller, str) or not isinstance(wb, str):
+                raise RuntimeError(client + ":FBS_STATUS_READ_INVALID")
+            states[oid] = {"supplierStatus": seller, "wbStatus": wb}
+    return states
+
+
+def select_changed_orders(client: str, orders: list[dict]) -> tuple[list[dict], int]:
+    states = read_current_states(client, orders)
+    changed = []
+    for order in orders:
+        oid = str(order.get("id") or "")
+        current = states.get(oid)
+        if (current is None
+                or current["supplierStatus"] != str(order.get("supplierStatus") or "").strip()
+                or current["wbStatus"] != str(order.get("wbStatus") or "").strip()):
+            changed.append(order)
+    return changed, len(orders) - len(changed)
+
+
 def main() -> None:
     if len(BRIDGE_KEY) < 16:
         raise RuntimeError("BRIDGE_AUTH_NOT_CONFIGURED")
@@ -346,12 +390,23 @@ def main() -> None:
             raise RuntimeError(client + ":WB_TOKEN_MISSING")
         orders = collect(token)
         if not orders:
-            summary[client] = {"received": 0, "inserted": 0, "existing": 0}
+            summary[client] = {"received": 0, "inserted": 0, "existing": 0, "changed": 0, "events": 0}
             continue
-        counts = ingest(client, orders)
-        if counts["received"] != len(orders):
+        candidates, unchanged = select_changed_orders(client, orders)
+        print(client + "_FBS_UNCHANGED_SKIPPED=" + str(unchanged), flush=True)
+        counts = ingest(client, candidates) if candidates else {
+            "received": 0, "inserted": 0, "existing": 0, "changed": 0, "events": 0
+        }
+        if (counts["received"] != len(candidates)
+                or counts["inserted"] + counts["existing"] != len(candidates)):
             raise RuntimeError(client + ":ROWS_UNACCOUNTED")
-        summary[client] = counts
+        summary[client] = {
+            "received": len(orders),
+            "inserted": counts["inserted"],
+            "existing": counts["existing"] + unchanged,
+            "changed": counts["changed"],
+            "events": counts["events"],
+        }
     print("FBS_GITHUB_SYNC_SUMMARY=" + json.dumps(summary, ensure_ascii=False), flush=True)
 
 if __name__ == "__main__":
