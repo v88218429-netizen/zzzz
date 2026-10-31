@@ -5484,7 +5484,19 @@ function sellmonitorGithubPublishOzonSummaryOrders_(payload) {
         ?'Источник: Ozon Заказы; последняя запись в выгрузке: '+sourceUpdated+'; heartbeat API красный, полнота выгрузки не подтверждена — показатели предварительные; дата — «Принят в обработку» (UTC+3); заказ = кабинет + номер заказа, отправление = кабинет + posting number.'
         :'Источник: Ozon Заказы; последняя подтверждённая выгрузка '+sourceUpdated+(sourceFallback?'; API heartbeat красный, используются только строки, совпавшие с последним проверенным снимком':'')+'; дата — «Принят в обработку» (UTC+3); заказ = кабинет + номер заказа, отправление = кабинет + posting number.');
     var helper=[['Полные дни — данные графика','Заказы','Отправления','Штук']].concat(agg.fullDays);
-    var sameDaily=JSON.stringify(sellmonitorGithubOzonNormalizeRows_(oldDaily))===JSON.stringify(sellmonitorGithubOzonNormalizeRows_(dailyRows)), sameSku=JSON.stringify(sellmonitorGithubOzonNormalizeRows_(oldSku,true))===JSON.stringify(sellmonitorGithubOzonNormalizeRows_(agg.products,true)), sameHelper=JSON.stringify(sellmonitorGithubOzonNormalizeRows_(oldHelper))===JSON.stringify(sellmonitorGithubOzonNormalizeRows_(helper.slice(1))), sameStamp=String(oldStamp||'')===newStamp;
+    function hasTypedOzonPeriodDates_(rows){
+      var periodRows=(rows||[]).filter(function(row){return ['День','Неделя','Месяц'].indexOf(String(row[0]||''))>=0||String(row[0]||'').indexOf('ИТОГО МАГАЗИНА ·')===0;});
+      return periodRows.length>0&&periodRows.every(function(row){return row[1] instanceof Date&&row[2] instanceof Date;});
+    }
+    function toTypedOzonPeriodDates_(rows,columns){
+      return (rows||[]).map(function(row){var copy=row.slice();columns.forEach(function(column){if(/^\\d{4}-\\d{2}-\\d{2}$/.test(String(copy[column]||'')))copy[column]=Utilities.parseDate(String(copy[column]),SMC_OZON_SUMMARY.timezone,'yyyy-MM-dd');});return copy;});
+    }
+    var dailyDatesTyped=hasTypedOzonPeriodDates_(oldDaily),skuDatesTyped=hasTypedOzonPeriodDates_(oldSku);
+    var helperDatesTyped=oldHelper.length>0&&oldHelper.every(function(row){return row[0] instanceof Date;});
+    var dailyRowsForWrite=toTypedOzonPeriodDates_(dailyRows,[1,2]);
+    var skuRowsForWrite=toTypedOzonPeriodDates_(agg.products,[1,2]);
+    var helperRowsForWrite=toTypedOzonPeriodDates_(helper.slice(1),[0]);
+    var sameDaily=dailyDatesTyped&&JSON.stringify(sellmonitorGithubOzonNormalizeRows_(oldDaily))===JSON.stringify(sellmonitorGithubOzonNormalizeRows_(dailyRows)), sameSku=skuDatesTyped&&JSON.stringify(sellmonitorGithubOzonNormalizeRows_(oldSku,true))===JSON.stringify(sellmonitorGithubOzonNormalizeRows_(agg.products,true)), sameHelper=helperDatesTyped&&JSON.stringify(sellmonitorGithubOzonNormalizeRows_(oldHelper))===JSON.stringify(sellmonitorGithubOzonNormalizeRows_(helper.slice(1))), sameStamp=String(oldStamp||'')===newStamp;
     if(sourceFallback&&!sourceActivityVerified){
       var oldSkuWithoutTotals=oldSku.filter(function(row){return String(row[0]||'').indexOf('ИТОГО МАГАЗИНА ·')!==0;});
       var fallbackSame=JSON.stringify(sellmonitorGithubOzonNormalizeRows_(oldDaily))===JSON.stringify(sellmonitorGithubOzonNormalizeRows_(dailyRows))&&
@@ -5511,21 +5523,21 @@ function sellmonitorGithubPublishOzonSummaryOrders_(payload) {
       var need=dailyStart+dailyRows.length-1;sellmonitorGithubOzonEnsureRows_(daily,need);
       var clear=Math.max(oldDaily.length,dailyRows.length);
       if(clear)daily.getRange(dailyStart,1,clear,10).clearContent();
-      if(dailyRows.length)daily.getRange(dailyStart,1,dailyRows.length,10).setValues(dailyRows);
+      if(dailyRows.length)daily.getRange(dailyStart,1,dailyRowsForWrite.length,10).setValues(dailyRowsForWrite);
       written+=dailyRows.length;
     }
     if(!sameSku){
       var skuRows=agg.products,skuStart=5,skuNeed=skuStart+skuRows.length-1;sellmonitorGithubOzonEnsureRows_(skuSheet,skuNeed);
       var skuClear=Math.max(oldSku.length,skuRows.length);
       if(skuClear)skuSheet.getRange(skuStart,1,skuClear,12).clearContent();
-      if(skuRows.length)skuSheet.getRange(skuStart,1,skuRows.length,12).setValues(skuRows);
+      if(skuRows.length)skuSheet.getRange(skuStart,1,skuRowsForWrite.length,12).setValues(skuRowsForWrite);
       written+=skuRows.length;
     }
     if(!sameHelper){
       var helpNeed=1+helper.length;sellmonitorGithubOzonEnsureRows_(daily,helpNeed);
       var helpClear=Math.max(oldHelper.length,helper.length-1);
       if(helpClear)daily.getRange(2,12,helpClear,4).clearContent();
-      daily.getRange(1,12,helper.length,4).setValues(helper);
+      daily.getRange(1,12,1,4).setValues([helper[0]]);\n      if(helperRowsForWrite.length)daily.getRange(2,12,helperRowsForWrite.length,4).setValues(helperRowsForWrite);
     }
     var newDaily=sellmonitorGithubOzonRows_(daily,dailyStart,1,10),newSku=sellmonitorGithubOzonRows_(skuSheet,5,1,12),newHelper=sellmonitorGithubOzonRows_(daily,1,12,4);
     if(JSON.stringify(sellmonitorGithubOzonNormalizeRows_(newDaily))!==JSON.stringify(sellmonitorGithubOzonNormalizeRows_(dailyRows)))throw new Error('OZON_DAILY_READBACK_MISMATCH:'+cfg.name);
@@ -5548,6 +5560,8 @@ function sellmonitorGithubPublishOzonSummaryOrders_(payload) {
     skuSheet.setHiddenGridlines(true);
     skuSheet.getRange(4,1,1,12).setBackground('#17365D').setFontColor('#FFFFFF').setFontWeight('bold').setWrap(true);
     skuSheet.getRange(5,2,Math.max(1,newSku.length),2).setNumberFormat('dd.mm.yyyy');
+    if(newDaily.length)daily.getRange(dailyStart,2,newDaily.length,2).setNumberFormat('dd.mm.yyyy');
+    if(newHelper.length>1)daily.getRange(2,12,newHelper.length-1,1).setNumberFormat('dd.mm.yyyy');
     skuSheet.getRange(5,7,Math.max(1,newSku.length),2).setNumberFormat('#,##0');
     skuSheet.getRange(5,9,Math.max(1,newSku.length),2).setNumberFormat('#,##0.###');
     var groupRanges=[];
