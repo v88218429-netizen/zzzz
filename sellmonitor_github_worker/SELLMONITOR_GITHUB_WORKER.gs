@@ -4,7 +4,7 @@
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.57',
+  VERSION: 'github-worker-1.3.58',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -6248,6 +6248,7 @@ function sellmonitorGithubPublishWbInnerPeriods_(onlyStore){
         week:sellmonitorGithubWbInnerUpsert_(ss,week,head,built.week,cfg.name),
         month:sellmonitorGithubWbInnerUpsert_(ss,month,head,built.month,cfg.name)
       };
+      res.rnp=sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,cfg.name,shop);
       var periodChanges=res.day.new_rows+res.day.changed_rows+res.week.new_rows+res.week.changed_rows+res.month.new_rows+res.month.changed_rows;
       var dashboardView=ss.getSheetByName('00_Динамика');var dashboardHasCharts=!!(dashboardView&&dashboardView.getCharts().length);res.dashboard=(shop==='sanych_wb'&&periodChanges===0&&dashboardHasCharts)?{ok:true,skipped:true,reason:'WB_INNER_NO_PERIOD_CHANGES'}:sellmonitorGithubWbBuildDashboard_(ss,cfg.name);
       results.push(res);
@@ -6264,6 +6265,223 @@ function sellmonitorGithubPublishWbInnerPeriods_(onlyStore){
   var expectedCount=onlyStore?1:3;
   var ok=results.length===expectedCount&&results.every(function(x){return x.ok===true;});
   return {ok:ok,action:'publish_wb_inner_periods',stores:results};
+}
+
+
+
+function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId){
+  var specs=[
+    {name:'01_Дни',grain:'day',rows:built.day,min:'2026-09-01',format:'dd.mm.yyyy'},
+    {name:'02_Недели',grain:'week',rows:built.week,min:'2026-09-07',format:'dd.mm.yyyy'},
+    {name:'03_Месяцы',grain:'month',rows:built.month,min:'2026-09-01',format:'mmm yyyy'}
+  ];
+  var metricIx={};built.metricHeaders.forEach(function(h,i){metricIx[String(h)]=10+i;});
+  function key(v){
+    if(v instanceof Date&&!isNaN(v.getTime()))return Utilities.formatDate(v,ss.getSpreadsheetTimeZone(),'yyyy-MM-dd');
+    var s=String(v==null?'':v).trim(),m=s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if(m)return m[1]+'-'+m[2]+'-'+m[3];
+    m=s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/);
+    return m?m[3]+'-'+('0'+m[2]).slice(-2)+'-'+('0'+m[1]).slice(-2):'';
+  }
+  function date_(s){var p=s.split('-').map(Number);return new Date(p[0],p[1]-1,p[2],12,0,0);}
+  function cellKey(v){if(v===''||v==null)return '';if(v instanceof Date)return Utilities.formatDate(v,ss.getSpreadsheetTimeZone(),'yyyy-MM-dd');return String(v);}
+  var archiveName='Архив_RNP_матрицы_до_обновления_20261031';
+  var archive=ss.getSheetByName(archiveName);
+  if(!archive){archive=ss.insertSheet(archiveName);archive.getRange(1,1,1,7).setValues([['Архивировано','Магазин','Лист','Период','Начальная строка','Старые значения JSON','Причина']]);archive.setFrozenRows(1);archive.setTabColor('#7F6000');}
+  function archiveSnapshot(sh,col,period,reason,last){
+    var before=archive.getLastRow()+1,records=[];
+    for(var st=1;st<=last;st+=250){
+      var n=Math.min(250,last-st+1),v=sh.getRange(st,col,n,1).getValues().map(function(r){return r[0];});
+      records.push([new Date(),storeName,sh.getName(),period,st,JSON.stringify(v),reason]);
+    }
+    for(var off=0;off<records.length;off+=200){
+      var part=records.slice(off,off+200),at=archive.getLastRow()+1,need=at+part.length-1;
+      if(need>archive.getMaxRows())archive.insertRowsAfter(archive.getMaxRows(),Math.max(100,need-archive.getMaxRows()));
+      archive.getRange(at,1,part.length,7).setValues(part);
+      var rb=archive.getRange(at,1,part.length,7).getValues();
+      for(var j=0;j<part.length;j++)if(String(rb[j][5])!==String(part[j][5]))throw new Error('WB_RNP_ARCHIVE_READBACK_FAILED:'+sh.getName()+':'+period);
+    }
+    return archive.getLastRow()-before+1;
+  }
+  function val(r,code){
+    if(!r)return '';
+    function g(n){var i=metricIx[n];if(i==null)return null;var v=r[i];return v===''||v==null||typeof v==='boolean'||!isFinite(Number(v))?null:Number(v);}
+    function ratio(a,b){var x=g(a),y=g(b);return x==null||y==null||y===0?'':x/y;}
+    var direct={
+      fin_Profit:'profit_rub',fin_margin:'margin',fin_roi:'roi',
+      pcs_ordersCount:'orders_qty',pcs_ordersSumRub:'orders_revenue_rub',
+      fin_sales_total_sum:'revenue_rub',fin_sales_total_qnt:'net_sales_qty',
+      newfin_sales_qnt:'net_sales_qty',newfin_retail_price_withdisc:'revenue_rub',
+      newfin_return_qnt:'returns_qty',newfin_retail_price_withdisc_return:'returns_revenue_rub',
+      expAdCosts:'ad_rub',fin_Costs:'expenses_total_rub',fin_purchase:'prime_cost_rub',
+      fin_comis:'commission_rub',fin_logistics:'logistic_rub',
+      storage_warehousePrice:'storage_rub',acceptance_total:'paid_acceptance_rub',
+      newfin_penalty:'fines_rub',fin_taxpay:'tax_rub',
+      newfin_deductions:'deduction_rub',newfin_delivery_sum:'delivery_logistic_rub',
+      newfin_delivery_return_sum:'return_logistic_rub'
+    };
+    if(direct[code]){var x=g(direct[code]);return x==null?'':x;}
+    if(code==='reductOrdToSale')return ratio('orders_qty','net_sales_qty');
+    if(code==='fin_avgBillSPP')return ratio('customer_revenue_rub','net_sales_qty');
+    if(code==='fin_avgBillnoSPP')return ratio('revenue_rub','net_sales_qty');
+    if(code==='fin_SPP_Rate')return ratio('marketplace_discount_rub','revenue_rub');
+    if(code==='drr_orders')return ratio('ad_rub','orders_revenue_rub');
+    if(code==='fin_DRR')return ratio('ad_rub','revenue_rub');
+    if(code==='expCostsByUnit')return ratio('expenses_total_rub','net_sales_qty');
+    if(code==='ext_purchase_unit')return ratio('prime_cost_rub','net_sales_qty');
+    if(code==='fin_logisticsByUnit')return ratio('logistic_rub','net_sales_qty');
+    if(code==='fin_storagesByUnit')return ratio('storage_rub','net_sales_qty');
+    if(code==='cr_sale_order')return ratio('paid_order_qty','orders_qty');
+    return null;
+  }
+  function supported(code){return val({length:built.metricHeaders.length+10},code)!==null;}
+  function aggregate(list,code){
+    if(!list||!list.length)return null;
+    var directCodes={
+      fin_Profit:'profit_rub',pcs_ordersCount:'orders_qty',pcs_ordersSumRub:'orders_revenue_rub',
+      fin_sales_total_sum:'revenue_rub',fin_sales_total_qnt:'net_sales_qty',newfin_sales_qnt:'net_sales_qty',
+      newfin_retail_price_withdisc:'revenue_rub',newfin_return_qnt:'returns_qty',
+      newfin_retail_price_withdisc_return:'returns_revenue_rub',expAdCosts:'ad_rub',
+      fin_Costs:'expenses_total_rub',fin_purchase:'prime_cost_rub',fin_comis:'commission_rub',
+      fin_logistics:'logistic_rub',storage_warehousePrice:'storage_rub',acceptance_total:'paid_acceptance_rub',
+      newfin_penalty:'fines_rub',fin_taxpay:'tax_rub',newfin_deductions:'deduction_rub',
+      newfin_delivery_sum:'delivery_logistic_rub',newfin_delivery_return_sum:'return_logistic_rub'
+    };
+    function sum(name){var total=0;for(var i=0;i<list.length;i++){var x=val(list[i],name);if(x===''||x==null||!isFinite(Number(x)))return null;total+=Number(x);}return total;}
+    if(directCodes[code])return sum(code);
+    var numerator='',denominator='';
+    if(code==='fin_margin'){numerator='fin_Profit';denominator='fin_sales_total_sum';}
+    else if(code==='fin_roi'){numerator='fin_Profit';denominator='fin_Costs';}
+    else if(code==='reductOrdToSale'){numerator='pcs_ordersCount';denominator='fin_sales_total_qnt';}
+    else if(code==='fin_avgBillSPP'){numerator='customer_revenue_rub';denominator='fin_sales_total_qnt';}
+    else if(code==='fin_avgBillnoSPP'){numerator='fin_sales_total_sum';denominator='fin_sales_total_qnt';}
+    else if(code==='fin_SPP_Rate'){numerator='marketplace_discount_rub';denominator='fin_sales_total_sum';}
+    else if(code==='drr_orders'){numerator='expAdCosts';denominator='pcs_ordersSumRub';}
+    else if(code==='fin_DRR'){numerator='expAdCosts';denominator='fin_sales_total_sum';}
+    else if(code==='expCostsByUnit'){numerator='fin_Costs';denominator='fin_sales_total_qnt';}
+    else if(code==='ext_purchase_unit'){numerator='fin_purchase';denominator='fin_sales_total_qnt';}
+    else if(code==='fin_logisticsByUnit'){numerator='fin_logistics';denominator='fin_sales_total_qnt';}
+    else if(code==='fin_storagesByUnit'){numerator='storage_warehousePrice';denominator='fin_sales_total_qnt';}
+    else if(code==='cr_sale_order'){numerator='pcs_ordersCount';denominator='pcs_ordersCount';return '';}
+    else return null;
+    var a,b;
+    if(numerator==='fin_Profit')a=sum('fin_Profit');else if(numerator==='customer_revenue_rub')a=sum('fin_avgBillSPP')===null?null:sum('fin_avgBillSPP')*sum('fin_sales_total_qnt');else if(numerator==='marketplace_discount_rub')a=sum('fin_SPP_Rate')===null?null:sum('fin_SPP_Rate')*sum('fin_sales_total_sum');else a=sum(numerator);
+    if(denominator==='fin_Costs')b=sum('fin_Costs');else if(denominator==='fin_sales_total_qnt')b=sum('fin_sales_total_qnt');else if(denominator==='fin_sales_total_sum')b=sum('fin_sales_total_sum');else if(denominator==='pcs_ordersSumRub')b=sum('pcs_ordersSumRub');else b=sum(denominator);
+    if(a==null||b==null||b===0)return '';
+    return a/b;
+  }
+  function rnpValue(list,code){
+    if(!list||!list.length)return '';
+    if(list.length===1)return val(list[0],code);
+    var x=aggregate(list,code);return x==null?'':x;
+  }
+  var exactMax='';
+  built.day.forEach(function(r){if(String(r[10+built.metricHeaders.length]||'')==='FACTUAL_INNER_ANALYTICS'&&String(r[1])>exactMax)exactMax=String(r[1]);});
+  var stats=[];
+  specs.forEach(function(spec){
+    var sh=ss.getSheetByName(spec.name);if(!sh)throw new Error('WB_RNP_MATRIX_MISSING:'+spec.name);
+    var periodMap={},periodStatus={};
+    spec.rows.forEach(function(r){
+      var period=String(r[1]||''),nm=String(r[6]||''),status=String(r[10+built.metricHeaders.length]||'');
+      if(period<spec.min)return;
+      var g=periodMap[period]||(periodMap[period]={}),arr=g[nm]||(g[nm]=[]);
+      arr.push(r);
+      var ss0=periodStatus[period]||(periodStatus[period]={partial:false,exact:0,other:0});
+      if(/PARTIAL|PRELIMINARY/.test(status))ss0.partial=true;else if(/FACTUAL/.test(status))ss0.exact++;else ss0.other++;
+    });
+    var targets=Object.keys(periodMap).sort();
+    var lastCol=Math.max(13,sh.getLastColumn()),heads=lastCol>=14?sh.getRange(2,14,1,lastCol-13).getValues()[0]:[];
+    var positions={};
+    for(var ci=0;ci<heads.length;ci++){
+      var k=key(heads[ci]);if(!k)continue;
+      if(periodMap[k]){
+        if(!positions[k])positions[k]=[];
+        positions[k].push(14+ci);
+      }
+    }
+    var dupDates=Object.keys(positions).filter(function(k){return positions[k].length>1;}).sort();
+    dupDates.forEach(function(k){
+      var cols=positions[k],keep=cols[0];
+      for(var di=1;di<cols.length;di++){
+        var drop=cols[di],last=sh.getLastRow();
+        archiveSnapshot(sh,drop,k,'Удаление повторного столбца даты',last);
+        var a=sh.getRange(1,keep,last,1).getValues().map(function(r){return r[0];});
+        var b=sh.getRange(1,drop,last,1).getValues().map(function(r){return r[0];});
+        var changed=false;for(var rr=0;rr<last;rr++)if((a[rr]===''||a[rr]==null)&&(b[rr]!==''&&b[rr]!=null)){a[rr]=b[rr];changed=true;}
+        if(changed)sh.getRange(1,keep,last,1).setValues(a.map(function(v){return [v];}));
+        sh.deleteColumn(drop);
+      }
+      SpreadsheetApp.flush();
+    });
+    function refreshHeads(){
+      lastCol=Math.max(13,sh.getLastColumn());
+      heads=lastCol>=14?sh.getRange(2,14,1,lastCol-13).getValues()[0]:[];
+      positions={};
+      for(var ci=0;ci<heads.length;ci++){var k=key(heads[ci]);if(k&&periodMap[k]){if(!positions[k])positions[k]=[];positions[k].push(14+ci);}}
+    }
+    refreshHeads();
+    targets.sort().reverse().forEach(function(period){
+      if(positions[period]&&positions[period].length)return;
+      var insertAt=lastCol+1;
+      for(var ci=0;ci<heads.length;ci++){var old=key(heads[ci]);if(old&&old<period){insertAt=14+ci;break;}}
+      if(insertAt<=lastCol)sh.insertColumnBefore(insertAt);else sh.insertColumnAfter(Math.max(13,lastCol));
+      if(insertAt>14&&insertAt-1<=sh.getMaxColumns())sh.getRange(1,insertAt-1,sh.getMaxRows(),1).copyTo(sh.getRange(1,insertAt,sh.getMaxRows(),1),SpreadsheetApp.CopyPasteType.PASTE_FORMAT,false);
+      sh.getRange(2,insertAt).setValue(date_(period)).setNumberFormat(spec.format);
+      SpreadsheetApp.flush();
+      refreshHeads();
+    });
+    var rowCount=Math.max(0,sh.getLastRow()-2),meta=rowCount?sh.getRange(3,1,rowCount,13).getValues():[];
+    var updates=[],written=0,archives=0,periodCount=0;
+    targets.sort().forEach(function(period){
+      var col=(positions[period]||[])[0];if(!col)throw new Error('WB_RNP_DATE_AXIS_MISSING:'+spec.name+':'+period);
+      var last=sh.getLastRow(),current=sh.getRange(1,col,last,1).getValues().map(function(r){return r[0];}),next=current.slice();
+      var pstat=periodStatus[period]||{partial:false,exact:0,other:0};
+      next[0]=pstat.partial?'🟡 ПРЕДВ.':(pstat.other?'🟠 НЕПОЛНЫЙ':'🟢 ФАКТ');
+      next[1]=date_(period);
+      var productMap=periodMap[period],list=Object.keys(productMap).filter(function(n){return n!=='';}).map(function(n){return productMap[n][0];});
+      for(var ri=0;ri<meta.length;ri++){
+        var level=String(meta[ri][0]||''),nm=String(meta[ri][5]||''),code=String(meta[ri][8]||'');
+        if(!supported(code))continue;
+        var v='';
+        if(level==='МАГАЗИН'){
+          var all=Object.keys(productMap).filter(function(n){return n!=='';}).map(function(n){return productMap[n][0];});
+          v=rnpValue(all,code);
+        }else if(nm&&productMap[nm])v=rnpValue(productMap[nm],code);
+        next[ri+2]=v;
+        if(v!==''&&v!=null)written++;
+      }
+      var changed=false;for(var q=0;q<last;q++)if(cellKey(current[q])!==cellKey(next[q])){changed=true;break;}
+      if(changed){archives+=archiveSnapshot(sh,col,period,'Значения заменены проверенными фактами Sellmonitor Inner',last);updates.push({col:col,values:next});periodCount++;}
+    });
+    updates.sort(function(a,b){return a.col-b.col;});
+    var ui=0;
+    while(ui<updates.length){
+      var uj=ui+1;while(uj<updates.length&&updates[uj].col===updates[uj-1].col+1)uj++;
+      var block=updates.slice(ui,uj),last=sh.getLastRow(),matrix=[];
+      for(var rr=0;rr<last;rr++){var line=[];for(var bj=0;bj<block.length;bj++)line.push(block[bj].values[rr]);matrix.push(line);}
+      sh.getRange(1,block[0].col,last,block.length).setValues(matrix);
+      var rb=sh.getRange(1,block[0].col,last,block.length).getValues();
+      for(var rr=0;rr<last;rr++)for(var bj=0;bj<block.length;bj++)if(cellKey(rb[rr][bj])!==cellKey(block[bj].values[rr]))throw new Error('WB_RNP_MATRIX_READBACK_MISMATCH:'+spec.name+':'+block[bj].col+':'+(rr+1));
+      ui=uj;
+    }
+    if(spec.name==='01_Дни'&&exactMax){
+      var oldExact=sh.getRange('H1').getValue(),newExact=Utilities.formatDate(date_(exactMax),ss.getSpreadsheetTimeZone(),'dd.MM.yyyy');
+      if(String(oldExact||'')!==newExact){
+        var at=archive.getLastRow()+1;if(at>archive.getMaxRows())archive.insertRowsAfter(archive.getMaxRows(),100);
+        archive.getRange(at,1,1,7).setValues([[new Date(),storeName,sh.getName(),exactMax,1,JSON.stringify([oldExact]),'Обновление метки последнего точного факта']]);
+        var check=archive.getRange(at,1,1,7).getValues()[0];if(String(check[5])!==JSON.stringify([oldExact]))throw new Error('WB_RNP_METADATA_ARCHIVE_READBACK_FAILED');
+        sh.getRange('H1').setValue(newExact);
+        if(String(sh.getRange('H1').getDisplayValue())!==newExact)throw new Error('WB_RNP_METADATA_READBACK_FAILED');
+      }
+    }
+    stats.push({sheet:spec.name,target_periods:targets.length,updated_columns:updates.length,archived_segments:archives,written_values:written,duplicates_removed:dupDates.length,min:targets[0]||'',max:targets.at(-1)||''});
+  });
+  archive.hideSheet();
+  var chartTab=ss.getSheetByName('05_Графики_РНП'),charts=chartTab?chartTab.getCharts():[];
+  var rangeCount=charts.reduce(function(n,ch){return n+ch.getRanges().length;},0);
+  if(charts.length&&rangeCount<charts.length)throw new Error('WB_RNP_CHART_RANGE_READBACK_FAILED');
+  SpreadsheetApp.flush();
+  return {ok:true,store:storeName,last_exact:exactMax,matrices:stats,archive:archiveName,archive_rows:archive.getLastRow()-1,rnp_charts:charts.length,chart_ranges:rangeCount,readback:true};
 }
 
 
