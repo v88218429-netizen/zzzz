@@ -153,11 +153,17 @@ def collect(token: str) -> list[dict]:
         if len(found) > 30000:
             raise RuntimeError("ORDERS_ROW_LIMIT_EXCEEDED")
         window_end = window_start - 1
-    # /new includes orders not yet present in the paginated history.
-    for order in endpoint(token, "/api/v3/orders/new").get("orders") or []:
-        oid = str(order.get("id") or order.get("orderId") or "")
-        if oid.isdecimal():
-            found[oid] = order
+    # Only current refreshes need the live /new feed; replaying it for every
+    # historical date repeats the full open-order list and creates needless writes.
+    include_live = window is None or (
+        dt.datetime.fromtimestamp(window[1], tz=dt.timezone.utc).date()
+        >= dt.datetime.now(dt.timezone.utc).date()
+    )
+    if include_live:
+        for order in endpoint(token, "/api/v3/orders/new").get("orders") or []:
+            oid = str(order.get("id") or order.get("orderId") or "")
+            if oid.isdecimal():
+                found[oid] = order
     if len(found) > 30000:
         raise RuntimeError("ORDERS_ROW_LIMIT_EXCEEDED")
     out = []
