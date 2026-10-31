@@ -537,6 +537,35 @@ SNAPSHOT_SPEC: dict[str, list[str]] = {
 }
 
 
+def _query_manager_with_source(payload: dict[str, Any], source: str) -> dict[str, Any]:
+    result = dict(payload) if isinstance(payload, dict) else {}
+    generated = _iso_dt(result.get("generated_at"))
+    age_minutes = None if generated is None else max(
+        0.0, (datetime.now(timezone.utc) - generated.astimezone(timezone.utc)).total_seconds() / 60.0
+    )
+    fresh = source == "github_encrypted_runtime" and age_minutes is not None and age_minutes <= 60
+    result["data_source"] = source
+    result["data_age_minutes"] = round(age_minutes, 1) if age_minutes is not None else None
+    result["data_fresh"] = fresh
+    if not fresh:
+        result["source_status"] = "STALE" if source == "github_encrypted_runtime" else "LOCAL_SNAPSHOT"
+        summary = dict(result.get("summary") or {})
+        summary["operational_ready"] = False
+        summary["ready_query_actions"] = 0
+        summary["query_status"] = "stale" if source == "github_encrypted_runtime" else summary.get("query_status")
+        result["summary"] = summary
+        for card in result.get("cards") or []:
+            if isinstance(card, dict):
+                card["actionable"] = False
+                blockers = list(card.get("blockers") or [])
+                if "Свежий GitHub-снимок запросов недоступен" not in blockers:
+                    blockers.append("Свежий GitHub-снимок запросов недоступен")
+                card["blockers"] = blockers
+    else:
+        result["source_status"] = "FRESH"
+    return result
+
+
 def _dashboard_snapshots(period_key: str | None = None) -> dict[str, dict[str, Any]]:
     out: dict[str, dict[str, Any]] = {}
     for source, keys in SNAPSHOT_SPEC.items():
@@ -1008,6 +1037,11 @@ async def dashboard_data(days: int = 7, from_date: str | None = None, to_date: s
                 traffic["last_successful_read_at"] = _traffic_bundle_cached_at.isoformat() if _traffic_bundle_cached_at else None
                 traffic["health"] = {**(traffic.get("health") or {}), "status": "STALE", "refresh_status": "FAILED"}
     optimizer_shops = optimizer_bundle.get("shops") if isinstance(optimizer_bundle.get("shops"), dict) else {}
+    private_query = optimizer_bundle.get("query_manager") if isinstance(optimizer_bundle.get("query_manager"), dict) else {}
+    if private_query:
+        query_layer = _query_manager_with_source(private_query, "github_encrypted_runtime")
+    else:
+        query_layer = _query_manager_with_source(query_layer, "local_snapshot")
     optimizer_campaigns: list[dict[str, Any]] = []
     optimizer_decisions: list[dict[str, Any]] = []
     recommendation_times: dict[str, Any] = {}
@@ -1202,7 +1236,14 @@ async def portfolio_data() -> dict[str, Any]:
 
 @app.get("/api/query-manager")
 async def query_manager() -> dict[str, Any]:
-    return _query_manager_payload()
+    try:
+        bundle = await center.worker.optimizer_bundle()
+        private_query = bundle.get("query_manager") if isinstance(bundle, dict) else None
+        if isinstance(private_query, dict) and private_query:
+            return _query_manager_with_source(private_query, "github_encrypted_runtime")
+    except Exception as exc:
+        log.warning("Private GitHub query report unavailable: %s", type(exc).__name__)
+    return _query_manager_with_source(_query_manager_payload(), "local_snapshot")
 
 
 @app.get("/api/operator-brief")
