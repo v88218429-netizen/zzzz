@@ -361,26 +361,29 @@ def read_current_states(client: str, orders: list[dict]) -> dict[str, dict[str, 
                 batch_states = result.get("statuses")
                 if not isinstance(batch_states, dict):
                     last_detail = "FBS_STATUS_READ_INVALID"
-                else:
-                    allowed = set(batch_ids)
-                    valid = True
-                    for oid, pair in batch_states.items():
-                        if oid not in allowed or not isinstance(pair, dict):
-                            valid = False
-                            break
-                        seller = pair.get("supplierStatus")
-                        wb = pair.get("wbStatus")
-                        if not isinstance(seller, str) or not isinstance(wb, str):
-                            valid = False
-                            break
-                    if valid:
-                        for oid, pair in batch_states.items():
-                            states[oid] = {
-                                "supplierStatus": pair["supplierStatus"],
-                                "wbStatus": pair["wbStatus"],
-                            }
+                    print(client + "_FBS_STATUS_READ_REJECT=" + last_detail, flush=True)
+                    raise RuntimeError(client + ":FBS_STATUS_READ_INVALID")
+                allowed = set(batch_ids)
+                valid = True
+                for oid, pair in batch_states.items():
+                    if oid not in allowed or not isinstance(pair, dict):
+                        valid = False
                         break
+                    seller = pair.get("supplierStatus")
+                    wb = pair.get("wbStatus")
+                    if not isinstance(seller, str) or not isinstance(wb, str):
+                        valid = False
+                        break
+                if not valid:
                     last_detail = "FBS_STATUS_READ_INVALID"
+                    print(client + "_FBS_STATUS_READ_REJECT=" + last_detail, flush=True)
+                    raise RuntimeError(client + ":FBS_STATUS_READ_INVALID")
+                for oid, pair in batch_states.items():
+                    states[oid] = {
+                        "supplierStatus": pair["supplierStatus"],
+                        "wbStatus": pair["wbStatus"],
+                    }
+                break
             else:
                 last_detail = str(reply.get("error") or result.get("error") or (
                     "shape: outer_ok=" + str(reply.get("ok")) +
