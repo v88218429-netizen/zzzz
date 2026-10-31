@@ -19,8 +19,8 @@
         },
         {
           "path": "RELEASE_NOTES.md",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/a70db23e37b51d8f870bb1fabed48ac312e2877d/wb_ai_manager/source/RELEASE_NOTES.md",
-          "sha256": "9a5af044a3b78af3d113e3e645b972517e7b5a5dc6cf60dbd169f847e86474fb"
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/b3e15c7218cca182efd1aa58cd10509b9ed85cec/wb_ai_manager/source/RELEASE_NOTES.md",
+          "sha256": "69b153cffaebeb3c6a78727bd3732da9326bc6b3c0b4dc1e54639532c8ea42e4"
         },
         {
           "path": "START_WB_AI_MANAGER.command",
@@ -30,8 +30,8 @@
         },
         {
           "path": "VERSION",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/a70db23e37b51d8f870bb1fabed48ac312e2877d/wb_ai_manager/source/VERSION",
-          "sha256": "b45949f45253000082f2e3b97248d8bf71be86d593b35db6033a809d759ef48b"
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/b3e15c7218cca182efd1aa58cd10509b9ed85cec/wb_ai_manager/source/VERSION",
+          "sha256": "d0e515322be087ad49e9f33e6a513ab5607cd94d35ebd3db6deaf98694ac4fa7"
         },
         {
           "path": "docs/AUTO_UPDATE.md",
@@ -55,8 +55,8 @@
         },
         {
           "path": "pyproject.toml",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/a70db23e37b51d8f870bb1fabed48ac312e2877d/wb_ai_manager/source/pyproject.toml",
-          "sha256": "6ad5d6b1576a4b6c69bd41bd3194ad663ef84a997cdf7f40bc8c077d397858a4"
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/b3e15c7218cca182efd1aa58cd10509b9ed85cec/wb_ai_manager/source/pyproject.toml",
+          "sha256": "97377f1c9dc1c85edc1666940b1fb612c497ac3779d7a3b28912836292ba11fa"
         },
         {
           "path": "scripts/auto_refresh_sheets.py",
