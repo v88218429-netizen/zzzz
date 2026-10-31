@@ -122,6 +122,8 @@ jobs:
               print("FBS_TARGET_HEALTH_FAILED "+json.dumps(health,ensure_ascii=False)[:6000],flush=True)
               raise SystemExit("FBS_TARGET_HEALTH_FAILED")
           print("FBS_TARGET_HEALTH="+json.dumps(health["result"],ensure_ascii=False,separators=(",",":")),flush=True)
+          quality_issues=[]
+          expected_charts={"SANYCH":27,"AIR":2,"HOZYAYUSHKA":22}
           for client in ("SANYCH","AIR","HOZYAYUSHKA","ARCHIVES"):
               payload=json.dumps({"token":key,"action":"fbs_acceptance_audit","client":client},
                                  ensure_ascii=False).encode("utf-8")
@@ -134,7 +136,39 @@ jobs:
                   print("FBS_AUDIT_FAILED client="+client+" response="+
                         json.dumps(result,ensure_ascii=False,separators=(",",":"))[:6000],flush=True)
                   raise SystemExit("FBS_PRODUCTION_ACCEPTANCE_FAILED:"+client)
+              audit_data=result["result"]
               print("FBS_AUDIT_RESULT client="+client+" data="+
-                    json.dumps(result["result"],ensure_ascii=False,separators=(",",":")),flush=True)
+                    json.dumps(audit_data,ensure_ascii=False,separators=(",",":")),flush=True)
+              if client=="ARCHIVES":
+                  for archive in audit_data.get("archives") or []:
+                      if not archive.get("accessible"):
+                          quality_issues.append("ARCHIVE_UNAVAILABLE:"+str(archive.get("name")))
+                      if not archive.get("ownerTargetMatches"):
+                          quality_issues.append("ARCHIVE_OWNER_MISMATCH:"+str(archive.get("name")))
+                      if (archive.get("archiveOrders") or {}).get("duplicateRows",0):
+                          quality_issues.append("ARCHIVE_DUPLICATE_ORDERS:"+str(archive.get("name")))
+              else:
+                  client_data=(audit_data.get("clients") or {}).get(client) or {}
+                  orders=client_data.get("orders") or {}
+                  for field in ("duplicateRows","invalidIds","missingSupplierStatus","missingWbStatus","missingBothStatuses"):
+                      if orders.get(field,0):
+                          quality_issues.append(client+":"+field+"="+str(orders.get(field)))
+                  analytics=client_data.get("analytics") or []
+                  formula_errors=sum(int(sheet.get("formulaErrorCount") or 0) for sheet in analytics)
+                  if formula_errors:
+                      quality_issues.append(client+":formulaErrors="+str(formula_errors))
+                  chart_total=int((client_data.get("charts") or {}).get("total") or 0)
+                  if chart_total!=expected_charts[client]:
+                      quality_issues.append(client+":charts="+str(chart_total)+" expected="+str(expected_charts[client]))
+                  supply=client_data.get("supply") or {}
+                  if not supply.get("exists"):
+                      quality_issues.append(client+":SUPPLY_SHEET_MISSING")
+              if client=="SANYCH":
+                  alt=((audit_data.get("clients") or {}).get("SANYCH") or {}).get("alternate") or {}
+                  if not alt.get("accessible"):
+                      quality_issues.append("SANYCH_ALTERNATE_BOOK_UNAVAILABLE")
+          if quality_issues:
+              print("FBS_ACCEPTANCE_QUALITY_ISSUES="+json.dumps(quality_issues,ensure_ascii=False),flush=True)
+              raise SystemExit("FBS_PRODUCTION_ACCEPTANCE_FAILED:QUALITY_GATE")
           print("FBS_PRODUCTION_ACCEPTANCE_AUDIT=PASS")
           PY
