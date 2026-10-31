@@ -384,7 +384,7 @@ def main():
     }
     result = post_publish(payload)
     print(
-        "OZON_PERF_PUBLISH=success"
+        "OZON_PERF_PUBLISH=success;schema=2"
         + ";store=" + str(result.get("store"))
         + ";coverage=" + str(result.get("coverage_from")) + ".." + str(result.get("coverage_to"))
         + ";daily_source=" + str(result.get("source_daily_rows"))
