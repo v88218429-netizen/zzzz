@@ -34,6 +34,7 @@ var WB_FBS_DIRECT_SUPPLY_STORES = {
   }),
   AIR: Object.assign({}, WB_FBS_DIRECT_SUPPLY_BASE_CFG, {
     client: 'AIR',
+    orderTailRows: 1000,
     propertiesSpreadsheetId: '1SmsoG8zKx3hbTtTzS-zLekTFiWEQN8eIwHOxXq-5RHo',
     tokenKey: 'FBS_CLIENT__AIR__WB_API_TOKEN',
     spreadsheetId: '1qJvhEOIku7sOMydfrUz0PR5dkcU0sLjv433pa1MFBcM'
