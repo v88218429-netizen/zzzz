@@ -1,4 +1,5 @@
 import base64
+import hashlib
 import json
 from io import BytesIO
 from pathlib import Path
@@ -147,5 +148,34 @@ def test_raw_github_manifest_is_read_from_fresh_contents_api(monkeypatch, tmp_pa
     assert requests == [(
         "https://api.github.com/repos/owner/repo/contents/wb_ai_manager/update-manifest.json?ref=mainggg",
         12,
+        "application/vnd.github+json",
+    )]
+
+
+def test_raw_update_file_is_fetched_through_github_contents_api(monkeypatch, tmp_path: Path):
+    raw = b"1.1.31\\n"
+    encoded = base64.b64encode(raw).decode("ascii")
+    response = json.dumps({"encoding": "base64", "content": encoded}).encode("utf-8")
+    requests = []
+
+    def fake_urlopen(request, timeout):
+        requests.append((request.full_url, timeout, request.get_header("Accept")))
+        return BytesIO(response)
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    manager = UpdateManager(tmp_path, "https://example.test/manifest.json")
+    manager._apply_file_patch(
+        [{
+            "path": "VERSION",
+            "url": "https://raw.githubusercontent.com/owner/repo/mainggg/VERSION",
+            "sha256": hashlib.sha256(raw).hexdigest(),
+        }],
+        tmp_path / "stage",
+    )
+
+    assert (tmp_path / "VERSION").read_bytes() == raw
+    assert requests == [(
+        "https://api.github.com/repos/owner/repo/contents/VERSION?ref=mainggg",
+        30,
         "application/vnd.github+json",
     )]
