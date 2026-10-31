@@ -1,3 +1,7 @@
+import base64
+import hashlib
+import json
+from io import BytesIO
 from pathlib import Path
 import zipfile
 import pytest
@@ -107,3 +111,83 @@ def test_rollback_is_not_reported_ok_until_smoke_passes(tmp_path: Path):
     mgr._smoke=lambda: (False,'broken restored package')
     with pytest.raises(RuntimeError, match='rollback smoke'):
         mgr._restore_and_verify(backup,'after failed update')
+
+
+def test_raw_github_manifest_is_read_from_fresh_contents_api(monkeypatch, tmp_path: Path):
+    document = {
+        "channels": {
+            "stable": {
+                "version": "1.1.31",
+                "files": [{
+                    "path": "VERSION",
+                    "url": "https://raw.githubusercontent.com/owner/repo/mainggg/VERSION",
+                    "sha256": "a" * 64,
+                }],
+            }
+        }
+    }
+    encoded = base64.b64encode(json.dumps(document).encode("utf-8")).decode("ascii")
+    response = json.dumps({"encoding": "base64", "content": encoded}).encode("utf-8")
+    requests = []
+
+    def fake_urlopen(request, timeout):
+        requests.append((request.full_url, timeout, request.get_header("Accept")))
+        return BytesIO(response)
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    manager = UpdateManager(
+        tmp_path,
+        "https://raw.githubusercontent.com/owner/repo/mainggg/wb_ai_manager/update-manifest.json",
+        "stable",
+    )
+
+    manifest = manager.fetch_manifest()
+    assert manager.fetch_manifest().version == "1.1.31"
+
+    assert manifest.version == "1.1.31"
+    assert requests == [(
+        "https://api.github.com/repos/owner/repo/contents/wb_ai_manager/update-manifest.json?ref=mainggg",
+        12,
+        "application/vnd.github+json",
+    )]
+
+
+def test_raw_update_file_is_fetched_through_github_contents_api(monkeypatch, tmp_path: Path):
+    raw = b"1.1.31\\n"
+    encoded = base64.b64encode(raw).decode("ascii")
+    response = json.dumps({"encoding": "base64", "content": encoded}).encode("utf-8")
+    requests = []
+
+    def fake_urlopen(request, timeout):
+        requests.append((request.full_url, timeout, request.get_header("Accept")))
+        return BytesIO(response)
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    manager = UpdateManager(tmp_path, "https://example.test/manifest.json")
+    manager._apply_file_patch(
+        [{
+            "path": "VERSION",
+            "url": "https://raw.githubusercontent.com/owner/repo/mainggg/VERSION",
+            "sha256": hashlib.sha256(raw).hexdigest(),
+        }],
+        tmp_path / "stage",
+    )
+
+    assert (tmp_path / "VERSION").read_bytes() == raw
+    assert requests == [(
+        "https://api.github.com/repos/owner/repo/contents/VERSION?ref=mainggg",
+        30,
+        "application/vnd.github+json",
+    )]
+
+
+def test_raw_github_commit_sha_file_uses_immutable_raw_url():
+    url = "https://raw.githubusercontent.com/owner/repo/" + "a" * 40 + "/VERSION"
+    assert UpdateManager._github_contents_api_url(url) is None
+
+
+def test_raw_github_branch_file_uses_contents_api():
+    url = "https://raw.githubusercontent.com/owner/repo/main/VERSION"
+    assert UpdateManager._github_contents_api_url(url) == (
+        "https://api.github.com/repos/owner/repo/contents/VERSION?ref=main"
+    )

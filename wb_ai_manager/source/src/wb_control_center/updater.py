@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 import os
@@ -9,6 +10,7 @@ import sys
 import tempfile
 import time
 import urllib.request
+from urllib.parse import quote, urlencode, urlsplit
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -107,6 +109,7 @@ class UpdateManager:
         self.manifest_url=(manifest_url or '').strip()
         self.channel=channel or 'stable'
         self.state_dir=self.root / '.updates'
+        self._manifest_cache: tuple[float, UpdateManifest] | None = None
         self.state_dir.mkdir(parents=True, exist_ok=True)
         self.status_path=self.state_dir / 'status.json'
 
@@ -128,11 +131,43 @@ class UpdateManager:
     def fetch_manifest(self) -> UpdateManifest:
         if not self.manifest_url:
             raise RuntimeError('manifest URL is empty')
+        cached=self._manifest_cache
+        if cached and time.monotonic() - cached[0] < 300:
+            return cached[1]
         sep='&' if '?' in self.manifest_url else '?'
         url=f"{self.manifest_url}{sep}t={int(time.time())}"
-        req=urllib.request.Request(url,headers={'User-Agent':'WB-AI-Manager-Updater/1.0','Cache-Control':'no-cache'})
-        with urllib.request.urlopen(req,timeout=12) as resp:
-            data=json.loads(resp.read().decode('utf-8'))
+        parsed=urlsplit(url)
+        if parsed.hostname == 'raw.githubusercontent.com':
+            parts=parsed.path.strip('/').split('/')
+            if len(parts) < 4:
+                raise ValueError('raw GitHub manifest URL must include owner, repository, ref, and file path')
+            owner, repo, ref = parts[:3]
+            file_path = '/'.join(parts[3:])
+            api_url=(
+                f"https://api.github.com/repos/{owner}/{repo}/contents/"
+                f"{quote(file_path, safe='/')}?{urlencode({'ref': ref})}"
+            )
+            req=urllib.request.Request(
+                api_url,
+                headers={
+                    'User-Agent':'WB-AI-Manager-Updater/1.0',
+                    'Accept':'application/vnd.github+json',
+                    'Cache-Control':'no-cache',
+                },
+            )
+            with urllib.request.urlopen(req,timeout=12) as resp:
+                api_payload=json.loads(resp.read().decode('utf-8'))
+            if api_payload.get('encoding') != 'base64' or not api_payload.get('content'):
+                raise ValueError('GitHub contents API returned no base64 manifest content')
+            raw=base64.b64decode(api_payload['content'])
+            data=json.loads(raw.decode('utf-8'))
+        else:
+            req=urllib.request.Request(
+                url,
+                headers={'User-Agent':'WB-AI-Manager-Updater/1.0','Cache-Control':'no-cache'},
+            )
+            with urllib.request.urlopen(req,timeout=12) as resp:
+                data=json.loads(resp.read().decode('utf-8'))
         if not isinstance(data,dict):
             raise ValueError('update manifest must be an object')
         m=UpdateManifest.from_dict(data,self.channel)
@@ -141,6 +176,7 @@ class UpdateManager:
         # An empty patch list is valid for the currently published baseline version.
         if not m.version or not (archive_ok or files_ok):
             raise ValueError('update manifest is incomplete')
+        self._manifest_cache=(time.monotonic(),m)
         return m
 
     def check(self) -> dict[str, Any]:
@@ -293,6 +329,25 @@ class UpdateManager:
                 return False,(p.stdout+'\n'+p.stderr).strip()[-6000:]
         return True,'ok'
 
+    @staticmethod
+    def _github_contents_api_url(url: str) -> str | None:
+        parsed=urlsplit(url)
+        if parsed.hostname != 'raw.githubusercontent.com':
+            return None
+        parts=parsed.path.strip('/').split('/')
+        if len(parts) < 4:
+            raise ValueError('raw GitHub file URL must include owner, repository, ref, and file path')
+        owner, repo, ref = parts[:3]
+        file_path = '/'.join(parts[3:])
+        # Immutable commit URLs bypass GitHub's unauthenticated Contents API
+        # rate limit and cannot be served stale for a moving branch ref.
+        if len(ref) == 40 and all(ch in '0123456789abcdefABCDEF' for ch in ref):
+            return None
+        return (
+            f"https://api.github.com/repos/{owner}/{repo}/contents/"
+            f"{quote(file_path, safe='/')}?{urlencode({'ref': ref})}"
+        )
+
     def _apply_file_patch(self, files: list[dict[str, Any]], temp_dir: Path) -> None:
         for item in files:
             rel=Path(str(item.get('path') or ''))
@@ -310,9 +365,25 @@ class UpdateManager:
             expected=str(item.get('sha256') or '').lower()
             local=temp_dir/rel
             local.parent.mkdir(parents=True,exist_ok=True)
-            req=urllib.request.Request(url,headers={'User-Agent':'WB-AI-Manager-Updater/1.0','Cache-Control':'no-cache'})
-            with urllib.request.urlopen(req,timeout=30) as resp, local.open('wb') as f:
-                shutil.copyfileobj(resp,f)
+            api_url=self._github_contents_api_url(url)
+            if api_url:
+                req=urllib.request.Request(
+                    api_url,
+                    headers={
+                        'User-Agent':'WB-AI-Manager-Updater/1.0',
+                        'Accept':'application/vnd.github+json',
+                        'Cache-Control':'no-cache',
+                    },
+                )
+                with urllib.request.urlopen(req,timeout=30) as resp:
+                    api_payload=json.loads(resp.read().decode('utf-8'))
+                if api_payload.get('encoding') != 'base64' or not api_payload.get('content'):
+                    raise ValueError(f'GitHub contents API returned no base64 file for {rel}')
+                local.write_bytes(base64.b64decode(api_payload['content']))
+            else:
+                req=urllib.request.Request(url,headers={'User-Agent':'WB-AI-Manager-Updater/1.0','Cache-Control':'no-cache'})
+                with urllib.request.urlopen(req,timeout=30) as resp, local.open('wb') as f:
+                    shutil.copyfileobj(resp,f)
             got=self._sha256(local)
             if got != expected:
                 raise ValueError(f'checksum mismatch for {rel}: expected {expected}, got {got}')
