@@ -15,6 +15,7 @@ permissions:
 concurrency:
   group: wb-fbs-data-mutations
   cancel-in-progress: false
+  queue: max
 
 jobs:
   discover:
