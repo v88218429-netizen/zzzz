@@ -5242,13 +5242,16 @@ function sellmonitorGithubOzonPerfDate_(value) {
 function sellmonitorGithubOzonPerfNumber_(value, label, allowNegative) {
   if (value == null) return '';
   var raw=typeof value==='string'?value.trim():value;
-  if (raw==='') return '';
-  if(typeof raw==='string'&&/^(?:-|—|–|n\/a|na)$/i.test(raw))return '';
   if(typeof raw==='string'){
-    raw=raw.replace(/[\s\u00a0\u202f]/g,'').replace(/[₽]/g,'').replace(/руб\.?$/i,'').replace(/,/g,'.');
+    raw=raw.replace(/[\s\u00a0\u202f]/g,'').replace(/[₽]/g,'').replace(/руб\.?$/i,'');
+    if(raw===''||/^(?:[-—–−]+|n\/a|na)$/i.test(raw))return '';
+    raw=raw.replace(/,/g,'.');
   }
   var n=Number(raw);
-  if (!isFinite(n) || (!allowNegative && n < 0)) throw new Error('OZON_PERF_INVALID_NUMBER:' + label + ':' + (!isFinite(n) ? 'nonnumeric' : 'negative'));
+  if (!isFinite(n) || (!allowNegative && n < 0)) {
+    var shape=typeof raw==='string'?raw.replace(/[0-9]/g,'#').replace(/[A-Za-zА-Яа-я]/g,'a').replace(/[^#a]/g,'?').slice(0,24):typeof raw;
+    throw new Error('OZON_PERF_INVALID_NUMBER:' + label + ':' + (!isFinite(n) ? 'nonnumeric' : 'negative')+':type='+typeof raw+':shape='+shape);
+  }
   return n;
 }
 function sellmonitorGithubOzonPerfDigest_(value) {
