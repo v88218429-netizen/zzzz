@@ -1,10 +1,10 @@
 /**
- * Sellmonitor GitHub Central Worker v1.3.56
+ * Sellmonitor GitHub Central Worker v1.3.61
  * GitHub is source-of-truth/scheduler. This Apps Script project is only
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.60',
+  VERSION: 'github-worker-1.3.61',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -7068,17 +7068,40 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
       parsed.forEach(function(r){var row=byId[r.id];if(row)rows.push({id:r.id,row:Number(row)});});
       if(!rows.length){mark('STATE_READ_DONE_NATIVE_BLOCK_0_ROWS');return false;}
       rows.sort(function(a,b){return a.row-b.row;});
-      mark('STATE_READ_START_NATIVE_'+rows.length+'_IDS_'+Math.max(0,last-1)+'_ROWS');
-      var usedRows=Math.max(0,last-1), idValues=usedRows?orderSheetNative.getRange(2,1,usedRows,1).getDisplayValues():[];
-      var statusValues=usedRows?orderSheetNative.getRange(2,5,usedRows,3).getDisplayValues():[];
-      var stale=false;
-      rows.forEach(function(item){
-        var offset=item.row-2, idRow=idValues[offset]||[], stateRow=statusValues[offset]||[];
-        if(String(idRow[0]||'')!==item.id){stale=true;return;}
-        stateByRow[item.row]=[stateRow[0]||'',stateRow[1]||'',stateRow[2]||''];
-      });
-      mark('STATE_READ_DONE_NATIVE_'+rows.length+'_IDS_'+usedRows+'_ROWS');
-      console.log('FBS_STAGE_STATE_READ_NATIVE ids='+rows.length+' used_rows='+usedRows+' ms='+(Date.now()-fbsStarted));
+      var usedRows=Math.max(0,last-1),stale=false;
+      mark('STATE_READ_START_NATIVE_'+rows.length+'_IDS_'+usedRows+'_ROWS');
+      if(rows.length<=20){
+        // Small changed batches are sparse; read only their contiguous row groups.
+        var groups=[];
+        rows.forEach(function(item){
+          var group=groups.length?groups[groups.length-1]:null;
+          if(!group||item.row!==group.end+1){group={start:item.row,end:item.row,items:[]};groups.push(group);}
+          else group.end=item.row;
+          group.items.push(item);
+        });
+        groups.forEach(function(group){
+          var values=orderSheetNative.getRange(group.start,1,group.end-group.start+1,7).getDisplayValues();
+          group.items.forEach(function(item){
+            var rowValues=values[item.row-group.start]||[];
+            if(String(rowValues[0]||'')!==item.id){stale=true;return;}
+            stateByRow[item.row]=[rowValues[4]||'',rowValues[5]||'',rowValues[6]||''];
+          });
+        });
+        mark('STATE_READ_DONE_NATIVE_SPARSE_'+rows.length+'_IDS_'+groups.length+'_RANGES');
+        console.log('FBS_STAGE_STATE_READ_NATIVE_SPARSE ids='+rows.length+' ranges='+groups.length+' ms='+(Date.now()-fbsStarted));
+      }else{
+        // Larger batches use two bounded whole-column reads instead of hundreds
+        // of individual service calls for scattered rows.
+        var idValues=usedRows?orderSheetNative.getRange(2,1,usedRows,1).getDisplayValues():[];
+        var statusValues=usedRows?orderSheetNative.getRange(2,5,usedRows,3).getDisplayValues():[];
+        rows.forEach(function(item){
+          var offset=item.row-2,idRow=idValues[offset]||[],stateRow=statusValues[offset]||[];
+          if(String(idRow[0]||'')!==item.id){stale=true;return;}
+          stateByRow[item.row]=[stateRow[0]||'',stateRow[1]||'',stateRow[2]||''];
+        });
+        mark('STATE_READ_DONE_NATIVE_FULL_'+rows.length+'_IDS_'+usedRows+'_ROWS');
+        console.log('FBS_STAGE_STATE_READ_NATIVE_FULL ids='+rows.length+' used_rows='+usedRows+' ms='+(Date.now()-fbsStarted));
+      }
       return stale||rows.some(function(item){return !Object.prototype.hasOwnProperty.call(stateByRow,item.row);});
     }
     if(readExistingStates_()){
