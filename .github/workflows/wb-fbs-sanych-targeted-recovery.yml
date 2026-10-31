@@ -18,6 +18,11 @@ on:
         description: "Конец периода UTC, YYYY-MM-DD"
         required: true
         type: string
+      include_live:
+        description: "Добавить текущие активные заказы WB к сверке"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -122,6 +127,8 @@ jobs:
       FBS_START_DATE: ${{ inputs.start_date }}
       FBS_END_DATE: ${{ inputs.end_date }}
       FBS_BATCH_SIZE: "50"
+      FBS_LOOKBACK_DAYS: "3"
+      FBS_INCLUDE_LIVE: ${{ inputs.include_live }}
     steps:
       - uses: actions/checkout@v4
         with:
