@@ -46,7 +46,7 @@ jobs:
           rows = []
           pattern = re.compile(r"^recover (AIR|HOZYAYUSHKA|SANYCH) (\d{4}-\d{2}-\d{2}).*(\d{4}-\d{2}-\d{2})$")
           for job in jobs:
-              if job.get("conclusion") != "failure":
+              if job.get("conclusion") not in ("failure", "cancelled"):
                   continue
               match = pattern.match(str(job.get("name") or ""))
               if not match:
