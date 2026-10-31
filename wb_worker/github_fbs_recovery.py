@@ -117,6 +117,7 @@ def requested_window() -> tuple[int, int] | None:
 
 
 def collect(token: str) -> list[dict]:
+    collect_started = time.monotonic()
     window = requested_window()
     if window is None:
         now = dt.datetime.now(dt.timezone.utc)
@@ -124,6 +125,7 @@ def collect(token: str) -> list[dict]:
         start = int((now - dt.timedelta(days=LOOKBACK_DAYS)).timestamp())
     else:
         start, end = window
+    print("FBS_WB_COLLECT_START="+json.dumps({"start_epoch":start,"end_epoch":end,"window_days":max(1,(end-start)//86400+1)}),flush=True)
     found: dict[str, dict] = {}
     window_end = end
     while window_end > start:
@@ -134,11 +136,14 @@ def collect(token: str) -> list[dict]:
             if next_cursor in cursors:
                 raise RuntimeError("REPEATED_CURSOR")
             cursors.add(next_cursor)
+            page_started = time.monotonic()
             page = endpoint(
                 token,
                 f"/api/v3/orders?limit=1000&next={next_cursor}&dateFrom={window_start}&dateTo={window_end}",
             )
-            for order in page.get("orders") or []:
+            page_orders = page.get("orders") or []
+            print("FBS_WB_ORDERS_PAGE="+json.dumps({"received":len(page_orders),"elapsed_sec":round(time.monotonic()-page_started,2)}),flush=True)
+            for order in page_orders:
                 oid = str(order.get("id") or order.get("orderId") or "")
                 if oid.isdecimal():
                     found[oid] = order
@@ -167,9 +172,13 @@ def collect(token: str) -> list[dict]:
         raise RuntimeError("ORDERS_ROW_LIMIT_EXCEEDED")
     out = []
     ids = list(found)
+    status_chunks = (len(ids)+99)//100
+    print("FBS_WB_STATUS_ENRICH_START="+json.dumps({"orders":len(ids),"chunks":status_chunks}),flush=True)
     for pos in range(0, len(ids), 100):
         subset = ids[pos:pos + 100]
+        status_started = time.monotonic()
         reply = endpoint(token, "/api/v3/orders/status", {"orders": [int(x) for x in subset]})
+        print("FBS_WB_STATUS_CHUNK="+json.dumps({"chunk":pos//100+1,"chunks":status_chunks,"requested":len(subset),"returned":len(reply.get("orders") or []),"elapsed_sec":round(time.monotonic()-status_started,2)}),flush=True)
         status = {
             str(x.get("id") or x.get("orderId") or ""): x
             for x in (reply.get("orders") or [])
@@ -216,6 +225,7 @@ def collect(token: str) -> list[dict]:
                 "barcode": (o.get("skus") or [""])[0],
                 "chrtId": o.get("chrtId") or o.get("chrtID") or "",
             })
+    print("FBS_WB_COLLECT_DONE="+json.dumps({"orders":len(out),"elapsed_sec":round(time.monotonic()-collect_started,2)}),flush=True)
     return out
 
 def wait_bridge() -> None:
