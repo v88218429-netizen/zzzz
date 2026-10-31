@@ -1,10 +1,10 @@
 /**
- * Sellmonitor GitHub Central Worker v1.3.67
+ * Sellmonitor GitHub Central Worker v1.3.68
  * GitHub is source-of-truth/scheduler. This Apps Script project is only
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.67',
+  VERSION: 'github-worker-1.3.68',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -6901,30 +6901,44 @@ function sellmonitorGithubFbsStatusReadV1_(body) {
     ids.forEach(function(id){var row=indexState.map[id];if(row)matches.push({id:id,row:Number(row)});});
     if(!matches.length)return false;
     matches.sort(function(a,b){return a.row-b.row;});
-    // Read bounded row groups containing requested orders only. This avoids
-    // scanning every used row for each small date window during backfill.
-    var blocks=[];
-    matches.forEach(function(item){
-      var block=blocks.length?blocks[blocks.length-1]:null;
-      if(!block||item.row-block.end>3||item.row-block.start+1>250){
-        block={start:item.row,end:item.row,matches:[item]};
-        blocks.push(block);
-      } else {
-        block.end=item.row;
-        block.matches.push(item);
-      }
-    });
-    var readStarted=Date.now(),stale=false;
-    blocks.forEach(function(block){
-      var values=sheet.getRange(block.start,1,block.end-block.start+1,6).getDisplayValues();
-      rowsRead+=block.end-block.start+1;
-      rowReadGroups++;
-      block.matches.forEach(function(item){
-        var row=values[item.row-block.start]||[];
-        if(String(row[0]||'')!==item.id){stale=true;return;}
-        states[item.id]={supplierStatus:String(row[4]||''),wbStatus:String(row[5]||'')};
+    var stale=false,readStarted=Date.now();
+    if(matches.length<=20){
+      // Small sparse checks stay local to short order row groups.
+      var blocks=[];
+      matches.forEach(function(item){
+        var block=blocks.length?blocks[blocks.length-1]:null;
+        if(!block||item.row-block.end>25||item.row-block.start+1>250){
+          block={start:item.row,end:item.row,matches:[item]};
+          blocks.push(block);
+        } else {
+          block.end=item.row;
+          block.matches.push(item);
+        }
       });
-    });
+      blocks.forEach(function(block){
+        var values=sheet.getRange(block.start,1,block.end-block.start+1,6).getDisplayValues();
+        rowsRead+=block.end-block.start+1;
+        rowReadGroups++;
+        block.matches.forEach(function(item){
+          var row=values[item.row-block.start]||[];
+          if(String(row[0]||'')!==item.id){stale=true;return;}
+          states[item.id]={supplierStatus:String(row[4]||''),wbStatus:String(row[5]||'')};
+        });
+      });
+    } else {
+      // Larger reconciliation windows use only two native reads, avoiding
+      // hundreds of small spreadsheet service calls for scattered rows.
+      var usedRows=Math.max(0,last-1);
+      var idValues=usedRows?sheet.getRange(2,1,usedRows,1).getDisplayValues():[];
+      var statusValues=usedRows?sheet.getRange(2,5,usedRows,2).getDisplayValues():[];
+      rowsRead=usedRows;
+      rowReadGroups=2;
+      matches.forEach(function(item){
+        var offset=item.row-2,idRow=idValues[offset]||[],statusRow=statusValues[offset]||[];
+        if(String(idRow[0]||'')!==item.id){stale=true;return;}
+        states[item.id]={supplierStatus:String(statusRow[0]||''),wbStatus:String(statusRow[1]||'')};
+      });
+    }
     rowReadMs+=Date.now()-readStarted;
     return stale||Object.keys(states).length!==matches.length;
   }
