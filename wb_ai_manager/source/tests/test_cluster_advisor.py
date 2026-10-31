@@ -287,7 +287,7 @@ def test_exact_live_cluster_bid_endpoint_fills_missing_stats_bid_and_joins_by_st
 def test_exact_live_cluster_bid_requires_matching_rub_currency_and_fresh_timestamp():
     campaigns = [{
         "shop": "yv", "campaign_id": 15,
-        "cluster_bids_observed_at": "2026-10-29T06:00:00+03:00",
+        "cluster_bids_observed_at": "2026-10-25T06:00:00+03:00",
         "cluster_bids": {"bids": [{
             "advert_id": 15, "nm_id": 123, "norm_query": "таз строительный",
             "bid_kopecks": 12345, "currency": "RUB",
