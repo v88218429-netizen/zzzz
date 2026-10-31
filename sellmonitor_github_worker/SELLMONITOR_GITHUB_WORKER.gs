@@ -1,10 +1,10 @@
 /**
- * Sellmonitor GitHub Central Worker v1.3.69
+ * Sellmonitor GitHub Central Worker v1.3.70
  * GitHub is source-of-truth/scheduler. This Apps Script project is only
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.69',
+  VERSION: 'github-worker-1.3.70',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -6935,8 +6935,8 @@ function sellmonitorGithubFbsStatusReadV1_(body) {
       var valueRanges=payload.valueRanges||[];
       if(valueRanges.length!==part.length)throw new Error("FBS_STATUS_READ_RANGE_COUNT_MISMATCH");
       apiRequests++;
-      part.forEach(function(blockIndex,itemIndex){
-        var block=part[blockIndex],range=valueRanges[blockIndex]||{},values=range.values||[];
+      part.forEach(function(block,blockIndex){
+        var range=valueRanges[blockIndex]||{},values=range.values||[];
         rowsRead+=block.end-block.start+1;
         block.matches.forEach(function(item){
           var row=values[item.row-block.start]||[];
