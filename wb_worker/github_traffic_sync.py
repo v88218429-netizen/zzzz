@@ -207,8 +207,12 @@ def _publish_summaries() -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--publish", action="store_true", help="publish previously collected exports")
+    parser.add_argument("--publish", action="store_true", help="validate previously collected exports")
+    parser.add_argument("--publish-summaries", action="store_true", help="publish verified facts to the three summary books")
     args = parser.parse_args()
+    if args.publish_summaries:
+        _publish_summaries()
+        return 0
     if args.publish:
         _publish()
         return 0
