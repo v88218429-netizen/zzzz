@@ -329,20 +329,31 @@ jobs:
                   result = json.loads(response.read().decode("utf-8"))
           except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
               raise RuntimeError("OZON_API_PUBLISH_REQUEST_FAILED:" + type(exc).__name__ + ":" + str(exc)[:300])
-          if not isinstance(result, dict) or result.get("action") != "publish_ozon_api_orders":
+          accepted_actions = {"publish_ozon_api_orders", "publish_ozon_summary_orders"}
+          if not isinstance(result, dict) or result.get("action") not in accepted_actions:
               print("OZON_API_PUBLISH_ROUTE_UNAVAILABLE=" + json.dumps(result, ensure_ascii=False)[:700])
               raise SystemExit("OZON_API_PUBLISH_ROUTE_UNAVAILABLE_PRESERVE")
-          if result.get("ok") is not True:
+          if result.get("ok") is not True or result.get("source_fallback_used") is True:
               raise SystemExit("OZON_API_PUBLISH_FAILED_PRESERVED:" + json.dumps({
-                  "reason": result.get("reason"), "stores": result.get("stores"),
-                  "error": result.get("error")
+                  "action": result.get("action"), "reason": result.get("reason"),
+                  "source_fallback_used": result.get("source_fallback_used"),
+                  "stores": result.get("stores"), "error": result.get("error")
               }, ensure_ascii=False)[:1400])
           stores = result.get("stores") or []
           expected = {"ДОМ", "Хозяюшка"}
-          readback = {item.get("store") for item in stores if item.get("ok") is True and item.get("readback") is True}
-          if readback != expected:
+          verified = {
+              item.get("store") for item in stores
+              if item.get("ok") is True
+              and item.get("readback") is True
+              and int(item.get("source_rows") or 0) > 0
+              and item.get("source_min")
+              and item.get("source_max")
+              and item.get("sha256")
+          }
+          if verified != expected:
               raise SystemExit("OZON_API_READBACK_ACCEPTANCE_FAILED:" + json.dumps(stores, ensure_ascii=False)[:1400])
-          print("OZON_API_PUBLISH_OK=true")
+          print("OZON_API_PUBLISH_OK=true;action=" + str(result.get("action"))
+                + ";source_activity_verified=" + str(result.get("source_activity_verified")))
           for item in stores:
               print("STORE=" + str(item.get("store")) + " OK=" + str(item.get("ok"))
                     + " SOURCE_ROWS=" + str(item.get("source_rows"))
