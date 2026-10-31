@@ -2,9 +2,9 @@
   "schema": 1,
   "channels": {
     "stable": {
-      "version": "1.1.33",
+      "version": "1.1.34",
       "channel": "stable",
-      "notes": "Устаревшие данные портфеля блокируют текущие решения и показывают даты источников.",
+      "notes": "Свежий отчёт поисковых запросов доступен панели через закрытую зашифрованную ветку GitHub.",
       "minimum_current_version": "1.0.0",
       "files": [
         {
@@ -72,8 +72,8 @@
         },
         {
           "path": "scripts/github_runtime.py",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/a70db23e37b51d8f870bb1fabed48ac312e2877d/wb_ai_manager/source/scripts/github_runtime.py",
-          "sha256": "33d3945eaac70ffb4eb218c7fe5aa3e913694b2caac197bcb057afcbdb5bfff1"
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/7b678079a6297a56db4e1026ee012ca1d55f2a92/wb_ai_manager/source/scripts/github_runtime.py",
+          "sha256": "c27564251b9b185fd06070962417cf87c7bba24ebbe4ef167864fe107b7be361"
         },
         {
           "path": "scripts/install_launchd.sh",
@@ -271,8 +271,8 @@
         },
         {
           "path": "src/wb_control_center/api.py",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/a70db23e37b51d8f870bb1fabed48ac312e2877d/wb_ai_manager/source/src/wb_control_center/api.py",
-          "sha256": "f7a46ebe52d2e9083dd2e41a3d131fdf4d3213b1f5a4475ade310793b1ee2af1"
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/7b678079a6297a56db4e1026ee012ca1d55f2a92/wb_ai_manager/source/src/wb_control_center/api.py",
+          "sha256": "5321ac072d0c4fc53cbe0a217e6c2a53cab44699c69829086586b06bd692b0bf"
         },
         {
           "path": "src/wb_control_center/auto_sheets.py",
@@ -476,8 +476,8 @@
         },
         {
           "path": "src/wb_control_center/worker_source.py",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/a70db23e37b51d8f870bb1fabed48ac312e2877d/wb_ai_manager/source/src/wb_control_center/worker_source.py",
-          "sha256": "0fde88e4b7f7c15310e8e0e7b13ea2869e957e90708001da123f26be36b6fefd"
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/7b678079a6297a56db4e1026ee012ca1d55f2a92/wb_ai_manager/source/src/wb_control_center/worker_source.py",
+          "sha256": "62e62325e03d621fad22c5cdd087b165dd87a2eb2968478611869b3df06675bb"
         },
         {
           "path": "src/wb_control_center/cluster_advisor.py",
