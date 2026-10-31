@@ -5383,31 +5383,97 @@ function sellmonitorGithubPublishOzonPerformanceDaily_(body) {
   periodKeys.sort().forEach(function(k){var old=oldPeriods.map[k],row=periodMap[k];if(!old)periodAdds.push(row);else if(JSON.stringify(old.values)!==JSON.stringify(row))periodChanges.push({row:old.row,old:old.values,next:row});});
 
   var helperSpecs=[
-    {name:'06_Магазин_дни',kind:'day',firstMetricRow:8,lastMetricRow:17,note:'Источник рекламы: Ozon Performance API по кампаниям; покрытие '+coverageFrom+'–'+coverageTo+'. Текущий день не включён; незаполненный день не считается нулём.'},
-    {name:'07_Магазин_недели',kind:'week',firstMetricRow:8,lastMetricRow:17,note:'Реклама: Ozon Performance API по кампаниям; суммы только по датам источника. Незаполненные даты не являются нулём; неполная неделя отмечена.'},
-    {name:'08_Магазин_месяцы',kind:'month',firstMetricRow:8,lastMetricRow:17,note:'Реклама: Ozon Performance API по кампаниям; октябрь '+coverageTo+'; неполные месяцы отмечены.'}
+    {name:'06_Магазин_дни',kind:'day',firstMetricRow:8,lastMetricRow:17,note:'Источник рекламы: Ozon Performance API по кампаниям; покрытие '+coverageFrom+'–'+coverageTo+'. Данные до 30.10; 31.10 предварительно в других источниках; пустое значение не считается нулём.'},
+    {name:'07_Магазин_недели',kind:'week',firstMetricRow:8,lastMetricRow:17,note:'Реклама: Ozon Performance API по кампаниям; суммы только по датам источника. Последняя неделя неполная; незаполненные метрики не считаются нулём.'},
+    {name:'08_Магазин_месяцы',kind:'month',firstMetricRow:8,lastMetricRow:17,note:'Реклама: Ozon Performance API по кампаниям; текущий месяц неполный. Пустое значение не считается нулём.'}
   ];
+  function ozonPerfExpectedPeriods_(kind){
+    var out=[];
+    if(kind==='day'){
+      for(var d=coverageFrom;d<=coverageTo;d=sellmonitorGithubOzonShiftDay_(d,1)){
+        var p=d.split('-').map(Number);
+        out.push({from:d,to:d,header:new Date(Date.UTC(p[0],p[1]-1,p[2],12,0,0))});
+      }
+      return out;
+    }
+    if(kind==='week'){
+      var monday=sellmonitorGithubOzonWeekStart_(coverageFrom);
+      while(monday<=coverageTo){
+        var sunday=sellmonitorGithubOzonShiftDay_(monday,6),a=monday.split('-').map(Number),b=sunday.split('-').map(Number);
+        var label=('0'+a[2]).slice(-2)+'.'+('0'+a[1]).slice(-2)+'–'+('0'+b[2]).slice(-2)+'.'+('0'+b[1]).slice(-2)+'.'+b[0];
+        out.push({from:monday,to:sunday,header:label});
+        monday=sellmonitorGithubOzonShiftDay_(monday,7);
+      }
+      return out;
+    }
+    var cursor=coverageFrom.slice(0,7)+'-01';
+    var monthNames=['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+    while(cursor<=coverageTo){
+      var end=sellmonitorGithubOzonMonthEnd_(cursor),parts=cursor.split('-').map(Number);
+      out.push({from:cursor,to:end,header:monthNames[parts[1]-1]+' '+parts[0]});
+      cursor=Utilities.formatDate(new Date(Date.UTC(parts[0],parts[1],1,12,0,0)),'UTC','yyyy-MM-dd');
+    }
+    return out;
+  }
+  function colLabel_(n){var name='';while(n>0){var r=(n-1)%26;name=String.fromCharCode(65+r)+name;n=Math.floor((n-1)/26);}return name;}
   var helperWrites=[],chartSheet=ss.getSheetByName('10_Графики_магазина');
   var helperArchive=[];
   helperSpecs.forEach(function(spec){
     var sh=ss.getSheetByName(spec.name);
     if(!sh)throw new Error('OZON_PERF_HELPER_MISSING:'+spec.name);
-    var lastCol=sh.getLastColumn(), startCol=6, count=Math.max(0,lastCol-startCol+1);
-    var headers=sh.getRange(2,startCol,1,count).getValues()[0],shown=sh.getRange(2,startCol,1,count).getDisplayValues()[0];
-    var oldRows=[],newRows=[];
-    for(var r=spec.firstMetricRow;r<=spec.lastMetricRow;r++){
-      oldRows.push(sh.getRange(r,startCol,1,count).getValues()[0]);
-      newRows.push(oldRows[oldRows.length-1].slice());
+    var startCol=6,scanLastCol=sh.getLastColumn(),scanCount=Math.max(0,scanLastCol-startCol+1);
+    var scannedHeaders=scanCount?sh.getRange(2,startCol,1,scanCount).getValues()[0]:[];
+    var scannedShown=scanCount?sh.getRange(2,startCol,1,scanCount).getDisplayValues()[0]:[];
+    var scannedRows=[];
+    for(var r=spec.firstMetricRow;r<=spec.lastMetricRow;r++)scannedRows.push(scanCount?sh.getRange(r,startCol,1,scanCount).getValues()[0]:[]);
+    var usedCount=0;
+    for(var h=0;h<scannedHeaders.length;h++)if(String(scannedShown[h]||scannedHeaders[h]||'').trim()!=='')usedCount=h+1;
+    for(var rr=0;rr<scannedRows.length;rr++)for(var cc=usedCount;cc<scannedRows[rr].length;cc++)
+      if(scannedRows[rr][cc]!==''&&scannedRows[rr][cc]!==null)throw new Error('OZON_PERF_HELPER_ORPHAN_VALUE:'+spec.name+':'+colLabel_(startCol+cc));
+    var oldHeaders=scannedHeaders.slice(0,usedCount),oldShown=scannedShown.slice(0,usedCount);
+    var oldRows=scannedRows.map(function(row){return row.slice(0,usedCount);});
+    var headers=oldHeaders.slice(),shown=oldShown.slice(),expected=ozonPerfExpectedPeriods_(spec.kind),axisChanged=false;
+    expected.forEach(function(want){
+      var found=-1,partial=-1;
+      for(var c=0;c<headers.length;c++){
+        var have=sellmonitorGithubOzonPerfParsePeriod_(spec.kind,headers[c],shown[c]);
+        if(!have)continue;
+        if(have.from===want.from&&have.to===want.to){found=c;break;}
+        if(spec.kind==='week'&&have.from===want.from&&have.to<want.to)partial=c;
+      }
+      if(found>=0)return;
+      if(partial>=0){
+        headers[partial]=want.header;shown[partial]=String(want.header);
+        if(want.header instanceof Date)shown[partial]=Utilities.formatDate(want.header,ss.getSpreadsheetTimeZone(),'dd.MM.yyyy');
+        axisChanged=true;return;
+      }
+      headers.push(want.header);
+      shown.push(want.header instanceof Date?Utilities.formatDate(want.header,ss.getSpreadsheetTimeZone(),'dd.MM.yyyy'):String(want.header));
+      axisChanged=true;
+    });
+    var count=headers.length,oldCount=oldHeaders.length,newLastCol=startCol+count-1;
+    if(newLastCol>sh.getMaxColumns())sh.insertColumnsAfter(sh.getMaxColumns(),newLastCol-sh.getMaxColumns());
+    if(count>oldCount&&oldCount>0){
+      var formatSource=sh.getRange(1,startCol+oldCount-1,18,1);
+      formatSource.copyTo(sh.getRange(1,startCol+oldCount,18,count-oldCount),SpreadsheetApp.CopyPasteType.PASTE_FORMAT,false);
     }
-    var rowsChanged=false;
+    var newRows=[];
+    for(var ri=0;ri<oldRows.length;ri++){
+      var row=oldRows[ri].slice();
+      while(row.length<count)row.push('');
+      newRows.push(row);
+    }
+    if(axisChanged&&oldCount>0)helperArchive.push({sheet:spec.name,range:'F2:'+colLabel_(startCol+oldCount-1)+'2',values:oldHeaders});
     for(var col=0;col<count;col++){
       var period=sellmonitorGithubOzonPerfParsePeriod_(spec.kind,headers[col],shown[col]);
-      if(!period)continue;
-      var intersect=period.to>=coverageFrom&&period.from<=coverageTo;
-      if(!intersect)continue;
+      if(!period||period.to<coverageFrom||period.from>coverageTo)continue;
       var sums={views:0,clicks:0,spend:0,orders:0,orderMoney:0,days:0,unknown:{}};
       Object.keys(dailyByDate).forEach(function(day){
-        if(day>=period.from&&day<=period.to){var d=dailyByDate[day];['views','clicks','spend','orders','orderMoney'].forEach(function(k){if(d.unknown[k])sums.unknown[k]=true;sums[k]+=d[k];});sums.days++;}
+        if(day>=period.from&&day<=period.to){
+          var d=dailyByDate[day];
+          ['views','clicks','spend','orders','orderMoney'].forEach(function(k){if(d.unknown[k])sums.unknown[k]=true;sums[k]+=d[k];});
+          sums.days++;
+        }
       });
       if(!sums.days)continue;
       var vals=[
@@ -5422,11 +5488,12 @@ function sellmonitorGithubPublishOzonPerformanceDaily_(body) {
       ];
       for(var j=0;j<vals.length;j++)newRows[j][col]=vals[j];
     }
-    newRows.forEach(function(row,i){if(JSON.stringify(row)!==JSON.stringify(oldRows[i]))rowsChanged=true;});
-    var noteCell=spec.kind==='day'?'A1':'A1',oldNote=sh.getRange(noteCell).getValue();
-    if(rowsChanged){for(var j=0;j<oldRows.length;j++)helperArchive.push({sheet:spec.name,range:(spec.firstMetricRow+j)+':'+spec.lastMetricRow,values:oldRows[j]});}
-    if(String(oldNote||'')!==spec.note)helperArchive.push({sheet:spec.name,range:noteCell,values:[oldNote]});
-    helperWrites.push({spec:spec,sh:sh,startCol:startCol,oldRows:oldRows,newRows:newRows,note:spec.note,rowsChanged:rowsChanged});
+    var rowsChanged=axisChanged||newRows.some(function(row,i){return JSON.stringify(row)!==JSON.stringify(oldRows[i]||[]);});
+    var oldNote=sh.getRange('A1').getValue();
+    if(rowsChanged){for(var j=0;j<oldRows.length;j++)if(oldRows[j].length)helperArchive.push({sheet:spec.name,range:(spec.firstMetricRow+j)+':'+(spec.firstMetricRow+j)+'!F:'+colLabel_(startCol+oldCount-1),values:oldRows[j]});}
+    if(String(oldNote||'')!==spec.note)helperArchive.push({sheet:spec.name,range:'A1',values:[oldNote]});
+    helperWrites.push({spec:spec,sh:sh,startCol:startCol,oldRows:oldRows,newRows:newRows,
+      oldHeaders:oldHeaders,headers:headers,axisChanged:axisChanged,newLastCol:newLastCol,note:spec.note,rowsChanged:rowsChanged});
   });
   if(chartSheet){
     var oldChartNote=chartSheet.getRange('A2').getValue();
