@@ -250,7 +250,11 @@ def ingest(client: str, orders: list[dict]) -> dict:
                     marker in details for marker in (
                         "GITHUB_FBS_LOCK_BUSY", "Service invoked too many times",
                         "Service Spreadsheets failed", "Exceeded maximum execution",
-                        "Internal error", "backendError", "Timeout:", "timed out"
+                        "Internal error", "backendError", "Timeout:", "timed out",
+                        # Fixed-range order-ID upserts are safe to retry after ambiguous responses.
+                        "FBS_INSERT_WRITE_TIMEOUT", "FBS_INSERT_WRITE_EXCEPTION",
+                        "FBS_INSERT_HTTP_429", "FBS_INSERT_HTTP_500",
+                        "FBS_INSERT_HTTP_502", "FBS_INSERT_HTTP_503", "FBS_INSERT_HTTP_504"
                     )
                 )
                 if not retryable and details:
