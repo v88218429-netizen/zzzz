@@ -406,8 +406,8 @@
         },
         {
           "path": "src/wb_control_center/portfolio.py",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/f1b3c14891576c5f92acdd31155590be2183ba9c/wb_ai_manager/source/src/wb_control_center/portfolio.py",
-          "sha256": "56fc36a614896f5169d8ca0e16eee2d7366d0bc3ee0667e21fbc684b3fccc81d"
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/299a607fe3230363143e4b8ed891b289cda52e17/wb_ai_manager/source/src/wb_control_center/portfolio.py",
+          "sha256": "75c6066c6c4fc02f9dd8abf5c79747fcdb5c1420b813f1da3eef6826a81ebe55"
         },
         {
           "path": "src/wb_control_center/public_wb.py",
