@@ -39,6 +39,7 @@ concurrency:
   # unique groups so they cannot occupy or replace the production mutation queue.
   group: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[FBS-90D-SLICED]') && 'wb-fbs-data-mutations' || github.event_name != 'push' && 'wb-fbs-data-mutations' || format('wb-fbs-noop-{0}', github.run_id) }}
   cancel-in-progress: false
+  queue: max
 
 jobs:
   recover:
