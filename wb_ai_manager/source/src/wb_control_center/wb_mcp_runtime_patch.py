@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
+from mcp.types import Tool
 from wb_mcp.client import WBClient
 
 
@@ -160,6 +161,18 @@ async def _advert_clusters_stats(
     return await self._post(self._advert, path, body)
 
 
+
+async def _advert_cluster_bids_get(self: WBClient, advert_id: int, nm_ids: list[int]) -> dict:
+    """POST /adv/v0/normquery/get-bids: read current bid per campaign × item × cluster."""
+    campaign_id, item_ids = _campaign_and_nm_ids(advert_id, nm_ids)
+    body = {"items": [{"advert_id": campaign_id, "nm_id": nm_id} for nm_id in item_ids]}
+    return await self._post(self._advert, "/adv/v0/normquery/get-bids", body)
+
+
+async def _cluster_bids_get_handler(client: WBClient, arguments: dict[str, Any]) -> Any:
+    return await client.advert_cluster_bids_get(arguments["advert_id"], arguments["nm_ids"])
+
+
 async def _clusters_tool_handler(client: WBClient, arguments: dict[str, Any]) -> Any:
     return await client.advert_clusters_list(arguments["advert_id"], arguments.get("nm_ids"))
 
@@ -180,6 +193,26 @@ def apply_wb_mcp_server_hotfixes(server: Any) -> None:
     tool.inputSchema = schema
     server.CLIENT_DISPATCH["wb_advert_clusters"] = _clusters_tool_handler
 
+    bids_tool_name = "wb_advert_cluster_bids_get"
+    if not any(item.name == bids_tool_name for item in server.TOOLS):
+        server.TOOLS.append(Tool(
+            name=bids_tool_name,
+            description="Read current per-cluster bids by campaign and product. Read-only; no bid changes.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "shop_id": {"type": "string"},
+                    "advert_id": {"type": "integer", "minimum": 1},
+                    "nm_ids": {
+                        "type": "array", "items": {"type": "integer", "minimum": 1},
+                        "minItems": 1, "maxItems": 100,
+                    },
+                },
+                "required": ["advert_id", "nm_ids"],
+            },
+        ))
+    server.CLIENT_DISPATCH[bids_tool_name] = _cluster_bids_get_handler
+
 
 def apply_wb_mcp_hotfixes() -> None:
     WBClient.promotions_list = _promotions_list
@@ -188,3 +221,4 @@ def apply_wb_mcp_hotfixes() -> None:
     WBClient.seller_rating = _seller_rating
     WBClient.advert_clusters_list = _advert_clusters_list
     WBClient.advert_clusters_stats = _advert_clusters_stats
+    WBClient.advert_cluster_bids_get = _advert_cluster_bids_get

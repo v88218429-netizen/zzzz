@@ -140,6 +140,73 @@ def _wb_bid_guidance(
     return output
 
 
+
+def _current_cluster_bid_facts(
+    campaigns: list[dict[str, Any]], observed_at: Any, now: datetime, freshness_hours: float,
+) -> dict[tuple[str, str, str, str], dict[str, Any]]:
+    """Index exact current WB bids by seller × campaign × SKU × normalized query."""
+    output: dict[tuple[str, str, str, str], dict[str, Any]] = {}
+    for item in campaigns:
+        if not isinstance(item, dict):
+            continue
+        shop = str(item.get("shop") or item.get("store_id") or "").lower()
+        advert = str(item.get("campaign_id") or "")
+        raw = item.get("cluster_bids")
+        if shop not in STORE_NAMES or not advert.isdigit() or not isinstance(raw, (dict, list)):
+            continue
+        if isinstance(raw, dict) and raw.get("_error"):
+            continue
+        if isinstance(raw, list):
+            bid_rows = raw
+            response_currency = None
+        else:
+            bid_rows = raw.get("bids") or raw.get("data") or raw.get("items") or []
+            response_currency = raw.get("currency")
+        if not isinstance(bid_rows, list):
+            continue
+        observed_value = item.get("cluster_bids_observed_at") or (
+            observed_at.get(shop) if isinstance(observed_at, dict) else observed_at
+        )
+        for bid in bid_rows:
+            if not isinstance(bid, dict):
+                continue
+            bid_advert = str(bid.get("advert_id") or bid.get("advertId") or advert)
+            nm = str(bid.get("nm_id") or bid.get("nmId") or "")
+            query = str(bid.get("norm_query") or bid.get("normQuery") or "").strip()
+            currency = str(bid.get("currency") or response_currency or "").upper()
+            if bid_advert != advert or not nm.isdigit() or not query or currency != "RUB":
+                continue
+            observed = _time(bid.get("observed_at") or bid.get("observedAt") or observed_value)
+            age = (now - observed).total_seconds() if observed else None
+            if age is None or age < 0 or age > freshness_hours * 3600:
+                continue
+            minor = None
+            for field in ("id_kopecks", "bid_kopecks", "bidKopecks", "bid_minor_units"):
+                minor = _num(bid.get(field))
+                if minor is not None:
+                    break
+            if minor is not None and minor >= 0:
+                rub = round(minor / 100.0, 2)
+                units = "kopecks"
+            else:
+                # The official legacy bid field is whole RUB.
+                direct = _num(bid.get("bid"))
+                if direct is None or direct < 0:
+                    continue
+                rub = round(direct, 2)
+                units = "RUB"
+            output[(shop, advert, nm, _key(query))] = {
+                "current_bid_rub": rub,
+                "observed_at": observed.isoformat(),
+                "age_hours": round(age / 3600, 2),
+                "source": "WB /adv/v0/normquery/get-bids",
+                "currency": currency,
+                "units_source": units,
+            }
+    return output
+
+
+
 def analyze_cluster_rows(
     rows: list[dict[str, Any]],
     campaign_settings: list[dict[str, Any]],
@@ -171,6 +238,9 @@ def analyze_cluster_rows(
         economics_time = None
     caps = _decision_caps(decisions, economics_time, now, freshness_hours)
     wb_guidance = _wb_bid_guidance(
+        bid_recommendations or [], bid_recommendations_observed_at, now, freshness_hours
+    )
+    exact_cluster_bids = _current_cluster_bid_facts(
         bid_recommendations or [], bid_recommendations_observed_at, now, freshness_hours
     )
     positions: dict[tuple[str, str, str], dict[str, Any]] = {}
@@ -208,6 +278,11 @@ def analyze_cluster_rows(
         bid_row = max(matching_bids, key=lambda r: _time(r.get("bid_observed_at")) or datetime.min.replace(tzinfo=timezone.utc), default=None)
         bid_time = _time(bid_row.get("bid_observed_at")) if bid_row else None
         bid_kopecks = _num(bid_row.get("cluster_bid_kopecks")) if bid_row else None
+        api_bid = exact_cluster_bids.get((shop, advert, nm, query_key))
+        api_bid_time = _time((api_bid or {}).get("observed_at"))
+        if api_bid and (bid_time is None or (api_bid_time and api_bid_time > bid_time)):
+            bid_time = api_bid_time
+            bid_kopecks = round(float(api_bid["current_bid_rub"]) * 100, 0)
         state_rows = [r for r in day_rows if r.get("cluster_state") and r.get("cluster_state_observed_at")]
         state_row = max(state_rows, key=lambda r: _time(r.get("cluster_state_observed_at")) or datetime.min.replace(tzinfo=timezone.utc), default=None)
         state_time = _time((state_row or {}).get("cluster_state_observed_at"))
@@ -236,6 +311,11 @@ def analyze_cluster_rows(
         cpc = round(spend / clicks, 2) if spend is not None and clicks is not None and clicks > 0 else None
         position = positions.get((shop, nm, query_key))
         wb_bid_guidance = wb_guidance.get((shop, advert, nm, query_key))
+        if api_bid:
+            wb_bid_guidance = dict(wb_bid_guidance or {})
+            wb_bid_guidance["current_bid_rub"] = api_bid.get("current_bid_rub")
+            wb_bid_guidance["current_bid_observed_at"] = api_bid.get("observed_at")
+            wb_bid_guidance["current_bid_source"] = api_bid.get("source")
         cluster_observed_value = cluster_data_observed_at.get(shop) if isinstance(cluster_data_observed_at, dict) else cluster_data_observed_at
         cluster_observed = _time(cluster_observed_value)
         cluster_age = (now - cluster_observed).total_seconds() if cluster_observed else None
@@ -305,6 +385,7 @@ def analyze_cluster_rows(
             "ctr_pct": ctr, "cpc_rub": cpc, "cpa_rub": cpa, "max_cpa_rub": max_cpa,
             "current_bid_rub": round(bid_kopecks / 100, 2) if bid_kopecks is not None else None,
             "current_bid_source": bid_source,
+            "current_bid_source_detail": (api_bid or {}).get("source") if api_bid else (str(last.get("source") or "") if bid_kopecks is not None else None),
             "wb_bid_guidance": wb_bid_guidance,
             "campaign_search_bid_rub": round(search_bid_kopecks / 100, 2) if campaign_search_bid_available else None,
             "campaign_search_bid_at": settings_time.isoformat() if campaign_search_bid_available and settings_time else None,

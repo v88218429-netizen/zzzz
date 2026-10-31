@@ -241,6 +241,12 @@ class AdvertisingOptimizerAgent(BaseAgent):
                 )
                 if nms else None
             )
+            cluster_bids_task = (
+                asyncio.create_task(
+                    limited("wb_advert_cluster_bids_get", advert_id=cid, nm_ids=selected_nms)
+                )
+                if selected_nms else None
+            )
             budget = await budget_task
             recommendations = {
                 nm: await task
@@ -248,7 +254,11 @@ class AdvertisingOptimizerAgent(BaseAgent):
             }
             clusters = await clusters_task if clusters_task else {}
             cluster_stats = await cluster_stats_task if cluster_stats_task else {}
+            cluster_bids = await cluster_bids_task if cluster_bids_task else {}
+            cluster_bids_observed_at = datetime.now(timezone.utc).isoformat() if cluster_bids_task else None
             responses = [budget, clusters, cluster_stats, *recommendations.values()]
+            if cluster_bids_task:
+                responses.append(cluster_bids)
             scan_complete = bool(responses) and all(
                 not (isinstance(value, dict) and value.get("_error")) for value in responses
             )
@@ -266,6 +276,8 @@ class AdvertisingOptimizerAgent(BaseAgent):
                 "recommendations": recommendations,
                 "clusters": clusters,
                 "cluster_stats": cluster_stats,
+                "cluster_bids": cluster_bids,
+                "cluster_bids_observed_at": cluster_bids_observed_at,
                 "scan_complete": scan_complete,
             }
 

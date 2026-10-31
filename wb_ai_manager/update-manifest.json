@@ -2,9 +2,9 @@
   "schema": 1,
   "channels": {
     "stable": {
-      "version": "1.1.34",
+      "version": "1.1.35",
       "channel": "stable",
-      "notes": "Свежий отчёт поисковых запросов доступен панели через закрытую зашифрованную ветку GitHub.",
+      "notes": "Добавлено чтение фактических ставок поисковых кластеров WB; числовые советы требуют свежей подтверждённой экономики.",
       "minimum_current_version": "1.0.0",
       "files": [
         {
@@ -19,8 +19,8 @@
         },
         {
           "path": "RELEASE_NOTES.md",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/b3e15c7218cca182efd1aa58cd10509b9ed85cec/wb_ai_manager/source/RELEASE_NOTES.md",
-          "sha256": "69b153cffaebeb3c6a78727bd3732da9326bc6b3c0b4dc1e54639532c8ea42e4"
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/f6ff9560e6040b5664b4a7e591ec65b1f5a528d4/wb_ai_manager/source/RELEASE_NOTES.md",
+          "sha256": "64a36df07b36df7a7446a3f479bb99ec24bacc4167ddbbd51ff0980597535fcd"
         },
         {
           "path": "START_WB_AI_MANAGER.command",
@@ -30,8 +30,8 @@
         },
         {
           "path": "VERSION",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/b3e15c7218cca182efd1aa58cd10509b9ed85cec/wb_ai_manager/source/VERSION",
-          "sha256": "d0e515322be087ad49e9f33e6a513ab5607cd94d35ebd3db6deaf98694ac4fa7"
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/f6ff9560e6040b5664b4a7e591ec65b1f5a528d4/wb_ai_manager/source/VERSION",
+          "sha256": "f1568b28ff17ec5c429f2070d8fea5bc3f0704879e2a72b4989d2d66bee41737"
         },
         {
           "path": "docs/AUTO_UPDATE.md",
@@ -50,13 +50,13 @@
         },
         {
           "path": "plugin.json",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/cd675004604d89310758c2a69b6e89ca879c4c16/wb_ai_manager/source/plugin.json",
-          "sha256": "745582fb9548ccc9535c4915dc6667ebf788fd4f7eb4986856268c667b263052"
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/f6ff9560e6040b5664b4a7e591ec65b1f5a528d4/wb_ai_manager/source/plugin.json",
+          "sha256": "2d6fa51e8b3259e257843db844e21f03c6389d43b08dfc45e64e9e26afee4dc1"
         },
         {
           "path": "pyproject.toml",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/b3e15c7218cca182efd1aa58cd10509b9ed85cec/wb_ai_manager/source/pyproject.toml",
-          "sha256": "97377f1c9dc1c85edc1666940b1fb612c497ac3779d7a3b28912836292ba11fa"
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/f6ff9560e6040b5664b4a7e591ec65b1f5a528d4/wb_ai_manager/source/pyproject.toml",
+          "sha256": "d89e862a3d099c824747ba88d557ad28147164e9a64a5eda22fb365667b10766"
         },
         {
           "path": "scripts/auto_refresh_sheets.py",
@@ -141,8 +141,8 @@
         },
         {
           "path": "src/wb_control_center/__init__.py",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/cd675004604d89310758c2a69b6e89ca879c4c16/wb_ai_manager/source/src/wb_control_center/__init__.py",
-          "sha256": "c9102fa99d006fe49f21b133125da6c018bad46deae3d24814f9972ec8f37f4e"
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/f6ff9560e6040b5664b4a7e591ec65b1f5a528d4/wb_ai_manager/source/src/wb_control_center/__init__.py",
+          "sha256": "7ebd1848ef3ae4745685fb9a672f96bd5006c0d5b4f0828e44459f212c20ef3d"
         },
         {
           "path": "src/wb_control_center/__main__.py",
@@ -161,8 +161,8 @@
         },
         {
           "path": "src/wb_control_center/agents/advertising.py",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/a70db23e37b51d8f870bb1fabed48ac312e2877d/wb_ai_manager/source/src/wb_control_center/agents/advertising.py",
-          "sha256": "aad349bef6ffae0ee4e35ca28932f1fd3cbb515516f7f14cb3fb54868deb4c89"
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/f6ff9560e6040b5664b4a7e591ec65b1f5a528d4/wb_ai_manager/source/src/wb_control_center/agents/advertising.py",
+          "sha256": "4dd1c71fb0c6ac20a8dbb55de1d1c77a010ec627a933ca47f962ccb44e1a2bc0"
         },
         {
           "path": "src/wb_control_center/agents/api_health.py",
@@ -471,8 +471,8 @@
         },
         {
           "path": "src/wb_control_center/wb_mcp_runtime_patch.py",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/a70db23e37b51d8f870bb1fabed48ac312e2877d/wb_ai_manager/source/src/wb_control_center/wb_mcp_runtime_patch.py",
-          "sha256": "15c322af66fc15e09e0d9947aa3f41c85dfe4a76abfac2092b631a8414a3de3b"
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/f6ff9560e6040b5664b4a7e591ec65b1f5a528d4/wb_ai_manager/source/src/wb_control_center/wb_mcp_runtime_patch.py",
+          "sha256": "e07c3bcde910bd43577d525edc518ab52ef7231d120b0c3d74d24200a6c31e43"
         },
         {
           "path": "src/wb_control_center/worker_source.py",
@@ -481,8 +481,8 @@
         },
         {
           "path": "src/wb_control_center/cluster_advisor.py",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/a70db23e37b51d8f870bb1fabed48ac312e2877d/wb_ai_manager/source/src/wb_control_center/cluster_advisor.py",
-          "sha256": "e6a9bc225b9d79a90e30157d9f02d771099d8df9fffdf632013db63ce23e4330"
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/f6ff9560e6040b5664b4a7e591ec65b1f5a528d4/wb_ai_manager/source/src/wb_control_center/cluster_advisor.py",
+          "sha256": "d14748b8bf4f7037e79b952d0ee45271996269b29b8210189f48074316dabf78"
         }
       ]
     }
