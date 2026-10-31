@@ -18,7 +18,7 @@ concurrency:
 jobs:
   discover:
     if: >-
-      ${{ github.event.workflow_run.conclusion == 'failure'
+      ${{ contains(fromJson('["failure","cancelled"]'), github.event.workflow_run.conclusion)
           && github.event.workflow_run.head_branch == 'mainggg'
           && github.event.workflow_run.event == 'push' }}
     runs-on: ubuntu-latest
