@@ -11,10 +11,23 @@ import httpx
 import traffic_sync
 from traffic_sync import (_campaign_ids, _stats_rows, _funnel_rows, _upsert_rows,
                           _rows_from_monitoring_start, _derive_organic_rows,
-                          _number_sum, MONITORING_START)
+                          _number_sum, MONITORING_START, _row_count_for_shop)
 
 
 class TrafficParsingTest(unittest.TestCase):
+    def test_row_count_for_shop_counts_aggregate_organic_file_by_shop(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "organic_sku_day.csv"
+            with path.open("w", encoding="utf-8", newline="") as stream:
+                writer = csv.DictWriter(stream, fieldnames=traffic_sync.ORGANIC_COLUMNS)
+                writer.writeheader()
+                for shop in ("ap", "aa", "ap", "yv"):
+                    writer.writerow({"shop": shop})
+            self.assertEqual(_row_count_for_shop(path, "ap"), 2)
+            self.assertEqual(_row_count_for_shop(path, "aa"), 1)
+            self.assertEqual(_row_count_for_shop(path, "yv"), 1)
+            self.assertEqual(_row_count_for_shop(path, "missing"), 0)
+
     def test_organic_is_derived_only_when_both_sources_are_complete(self):
         funnel = [
             ["ap", "2026-10-09", 42, "SKU42", 50, 9, 3, 100, "WB Analytics products/history"],
