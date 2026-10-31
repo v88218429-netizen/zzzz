@@ -5239,10 +5239,10 @@ function sellmonitorGithubOzonPerfDate_(value) {
   if (!isFinite(d.getTime())) throw new Error('OZON_PERF_INVALID_DATE');
   return Utilities.formatDate(d, 'UTC', 'yyyy-MM-dd');
 }
-function sellmonitorGithubOzonPerfNumber_(value, label) {
+function sellmonitorGithubOzonPerfNumber_(value, label, allowNegative) {
   if (value == null || value === '') return '';
   var n = Number(value);
-  if (!isFinite(n) || n < 0) throw new Error('OZON_PERF_INVALID_NUMBER:' + label);
+  if (!isFinite(n) || (!allowNegative && n < 0)) throw new Error('OZON_PERF_INVALID_NUMBER:' + label + ':' + (!isFinite(n) ? 'nonnumeric' : 'negative'));
   return n;
 }
 function sellmonitorGithubOzonPerfDigest_(value) {
@@ -5306,8 +5306,8 @@ function sellmonitorGithubPublishOzonPerformanceDaily_(body) {
     var key=day+'|'+cfg.key+'|'+id;
     if(dailyMap[key])throw new Error('OZON_PERF_DAILY_DUPLICATE:'+key);
     var views=sellmonitorGithubOzonPerfNumber_(x.views,'views'),clicks=sellmonitorGithubOzonPerfNumber_(x.clicks,'clicks');
-    var spend=sellmonitorGithubOzonPerfNumber_(x.moneySpent,'moneySpent'),orders=sellmonitorGithubOzonPerfNumber_(x.orders,'orders');
-    var orderMoney=sellmonitorGithubOzonPerfNumber_(x.ordersMoney,'ordersMoney');
+    var spend=sellmonitorGithubOzonPerfNumber_(x.moneySpent,'moneySpent',true),orders=sellmonitorGithubOzonPerfNumber_(x.orders,'orders');
+    var orderMoney=sellmonitorGithubOzonPerfNumber_(x.ordersMoney,'ordersMoney',true);
     var row=[cfg.key,day,cfg.name,id,String(x.title||''),'','','',views,clicks,spend,orders,orderMoney,
       views!==''&&Number(views)>0?Number(clicks||0)/Number(views)*100:'',
       clicks!==''&&Number(clicks)>0?Number(spend||0)/Number(clicks):'',
@@ -5335,8 +5335,8 @@ function sellmonitorGithubPublishOzonPerformanceDaily_(body) {
     var key=from+'|'+to+'|'+cfg.key+'|'+id;
     if(periodMap[key])throw new Error('OZON_PERF_PERIOD_DUPLICATE:'+key);
     var views=sellmonitorGithubOzonPerfNumber_(x.views,'period.views'),clicks=sellmonitorGithubOzonPerfNumber_(x.clicks,'period.clicks');
-    var spend=sellmonitorGithubOzonPerfNumber_(x.moneySpent,'period.moneySpent'),toCart=sellmonitorGithubOzonPerfNumber_(x.toCart,'period.toCart');
-    var orders=sellmonitorGithubOzonPerfNumber_(x.orders,'period.orders'),orderMoney=sellmonitorGithubOzonPerfNumber_(x.ordersMoney,'period.ordersMoney');
+    var spend=sellmonitorGithubOzonPerfNumber_(x.moneySpent,'period.moneySpent',true),toCart=sellmonitorGithubOzonPerfNumber_(x.toCart,'period.toCart');
+    var orders=sellmonitorGithubOzonPerfNumber_(x.orders,'period.orders'),orderMoney=sellmonitorGithubOzonPerfNumber_(x.ordersMoney,'period.ordersMoney',true);
     var ctr=sellmonitorGithubOzonPerfNumber_(x.ctr,'period.ctr'),cpc=sellmonitorGithubOzonPerfNumber_(x.clickPrice,'period.clickPrice');
     var drr=sellmonitorGithubOzonPerfNumber_(x.drr,'period.drr'),budget=sellmonitorGithubOzonPerfNumber_(x.budget,'period.budget');
     var weekly=sellmonitorGithubOzonPerfNumber_(x.weeklyBudget,'period.weeklyBudget');
