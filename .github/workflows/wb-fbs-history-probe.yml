@@ -27,7 +27,7 @@ jobs:
           ];
           const sleep = n => new Promise(r=>setTimeout(r,n));
           async function safeProbe(store, route, name) {
-            let status = 'NO_TOKEN', count = null, hasNext = false, fields = [];
+            let status = 'NO_TOKEN', count = null, hasNext = false, fields = [], nestedFields = {};
             if (store.token && store.token.length>30) {
               try {
                 const r = await fetch('https://marketplace-api.wildberries.ru'+route,{
@@ -41,8 +41,7 @@ jobs:
                   count=list.length;
                   const sample=list[0]||{};
                   fields=Object.keys(sample).sort();
-                  const nestedFields={};
-                  for(const key of ['product','priceInfo','meta','metaDetails','options','supplierStatus','wbStatus']){
+                            for(const key of ['product','priceInfo','meta','metaDetails','options','supplierStatus','wbStatus']){
                     const value=sample[key];
                     if(value && typeof value==='object'){
                       nestedFields[key]=Array.isArray(value)
@@ -54,7 +53,7 @@ jobs:
                 }
               } catch(e) {status='FETCH_'+e.name;}
             }
-            console.log(JSON.stringify({store:store.label,endpoint:name,status,pageCount:count,hasNext,fields,nestedFields:typeof nestedFields==='undefined'?{}:nestedFields}));
+            console.log(JSON.stringify({store:store.label,endpoint:name,status,pageCount:count,hasNext,fields,nestedFields}));
           }
           for(const store of stores) {
             await safeProbe(store,'/api/v3/orders?limit=1000&next=0&dateFrom='+start+'&dateTo='+end,'recent_7d');
