@@ -72,8 +72,13 @@ class WBMCPClient:
     ) -> None:
         """Own the stdio/AnyIO context for its full lifetime in one task."""
         try:
-            from mcp import ClientSession, StdioServerParameters
-            from mcp.client.stdio import stdio_client
+            try:
+                from mcp import ClientSession, StdioServerParameters
+                from mcp.client.stdio import stdio_client
+            except ImportError as exc:
+                raise WBMCPError(
+                    "MCP package is not installed. Configure the local WB Manager installation first."
+                ) from exc
 
             env = {
                 "WB_API_TOKEN": self.token,
