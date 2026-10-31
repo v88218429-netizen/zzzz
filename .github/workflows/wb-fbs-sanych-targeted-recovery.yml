@@ -7,7 +7,6 @@ on:
     branches: [mainggg]
     paths:
       - "wb_worker/sanych_fbs_recovery.py"
-      - ".github/workflows/wb-fbs-sanych-targeted-recovery.yml"
   workflow_dispatch:
     inputs:
       start_date:
