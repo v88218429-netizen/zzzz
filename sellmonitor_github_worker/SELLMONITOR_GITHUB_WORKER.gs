@@ -6477,19 +6477,32 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
       var insertRange=orderSheet+'!A'+insertStart+':AS'+insertEnd;
       var insertResponse=fetchSheetApi(apiBase+'/values:batchUpdate',{
         method:'post',contentType:'application/json',
-        payload:JSON.stringify({valueInputOption:'RAW',data:[{
-          range:insertRange,majorDimension:'ROWS',values:sheetRows(insert)
-        }]})
+        payload:JSON.stringify({valueInputOption:'RAW',includeValuesInResponse:true,
+          responseValueRenderOption:'UNFORMATTED_VALUE',data:[{
+            range:insertRange,majorDimension:'ROWS',values:sheetRows(insert)
+          }]})
       });
       var insertCode=insertResponse.getResponseCode(); mark('INSERT_RESPONSE_'+insertCode);
       if(insertCode<200||insertCode>=300)throw new Error('FBS_INSERT_HTTP_'+insertCode+':'+sheetApiFailure(insertResponse));
-      // Writes are sent through the Sheets REST API above. SpreadsheetApp can
-      // briefly expose a stale cache on its immediate readback, so verify through
-      // the same API and retry boundedly before classifying a successful insert
-      // as failed. This also makes the verified IDs match the API's persisted view.
+      // The Sheets API write response can include persisted values, avoiding
+      // a second read request that may time out under API load. Fall back to a
+      // bounded readback only if the response omits or mismatches those values.
       SpreadsheetApp.flush();
       var insertIds=[],insertReadbackMatched=false,insertReadbackAttempts=0,insertReadbackApiError='';
-      for(var insertAttempt=0;insertAttempt<4;insertAttempt++){
+      try{
+        var insertWritePayload=JSON.parse(insertResponse.getContentText()||'{}');
+        var insertWriteRows=((((insertWritePayload.responses)||[])[0]||{}).updatedData||{}).values||[];
+        insertIds=insertWriteRows.map(function(v){return String((v||[])[0]||'');});
+        insertReadbackMatched=insertIds.length===insert.length;
+        if(insertReadbackMatched){
+          for(var writeVerifyIndex=0;writeVerifyIndex<insert.length;writeVerifyIndex++){
+            if(insertIds[writeVerifyIndex]!==String(insert[writeVerifyIndex][0])){
+              insertReadbackMatched=false;break;
+            }
+          }
+        }
+      }catch(insertWriteParseError){insertReadbackMatched=false;}
+      if(!insertReadbackMatched)for(var insertAttempt=0;insertAttempt<4;insertAttempt++){
         insertReadbackAttempts=insertAttempt+1;
         try{
           var insertVerifyResponse=fetchSheetApi(apiBase+'/values/'+
