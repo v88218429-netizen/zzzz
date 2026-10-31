@@ -43,11 +43,11 @@ jobs:
 
           logs_url = f"https://api.github.com/repos/{repo}/actions/runs/{run_id}/logs"
           archive = zipfile.ZipFile(io.BytesIO(get(logs_url)))
-          log_text = "\\n".join(
+          log_text = "\n".join(
               archive.read(name).decode("utf-8", errors="replace")
               for name in archive.namelist() if name.endswith(".txt")
           )
-          failures = re.findall(r"FBS_HEALTH_FAILED=([^\\r\\n]+)", log_text)
+          failures = re.findall(r"FBS_HEALTH_FAILED=([^\r\n]+)", log_text)
           if not failures:
               print("FBS_AUTO_REPAIR=not_applicable")
               raise SystemExit(0)
