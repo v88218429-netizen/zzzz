@@ -281,6 +281,18 @@ def read_current_states(client: str, orders: list[dict]) -> dict[str, dict[str, 
         if (reply.get("ok") is not True or reply.get("action") != "fbs_status_read"
                 or result.get("ok") is not True
                 or int(result.get("requested", -1)) != len(batch_ids)):
+            detail = str(reply.get("error") or result.get("error") or (
+                "shape: outer_ok=" + str(reply.get("ok")) +
+                " action=" + str(reply.get("action")) +
+                " result_ok=" + str(result.get("ok")) +
+                " requested=" + str(result.get("requested")) +
+                " expected=" + str(len(batch_ids))
+            ))
+            detail = detail.replace(BRIDGE_KEY, "[redacted]").replace(
+                os.environ.get("WB_API_TOKEN_AP", ""), "[redacted]"
+            )
+            detail = re.sub(r"\\b\\d{6,20}\\b", "[order-id]", detail)
+            print(client + "_FBS_STATUS_READ_REJECT=" + re.sub(r"\\s+", " ", detail)[:240], flush=True)
             raise RuntimeError(client + ":FBS_STATUS_READ_REJECTED")
         batch_states = result.get("statuses")
         if not isinstance(batch_states, dict):
