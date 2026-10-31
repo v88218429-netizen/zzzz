@@ -2,9 +2,9 @@
   "schema": 1,
   "channels": {
     "stable": {
-      "version": "1.1.29",
+      "version": "1.1.30",
       "channel": "stable",
-      "notes": "Ускоренный обход рекламы и счётчики охвата в GitHub.",
+      "notes": "Исправлен жизненный цикл соединения WB; проверены конкурентный запуск и таймауты.",
       "minimum_current_version": "1.0.0",
       "files": [
         {
@@ -20,7 +20,7 @@
         {
           "path": "RELEASE_NOTES.md",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/RELEASE_NOTES.md",
-          "sha256": "8b08a46a0e50e42c1ae6adda68dfb163bf1287162ea6769b5898ea47b422ff26"
+          "sha256": "2ebb6b7673601c4e9a1e168ac2dd8158ac92a77053cf692d89cc247f80b1bbd2"
         },
         {
           "path": "START_WB_AI_MANAGER.command",
@@ -31,7 +31,7 @@
         {
           "path": "VERSION",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/VERSION",
-          "sha256": "f4fb95ed8ab3f613774e30982f3dd3e4b88a69200b2e2b96f44deef85c3b830f"
+          "sha256": "2e29c092adf46d99be4be11363737f197817c2c84951567f2d152863c6d51b1b"
         },
         {
           "path": "docs/AUTO_UPDATE.md",
@@ -56,7 +56,7 @@
         {
           "path": "pyproject.toml",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/pyproject.toml",
-          "sha256": "f72adbfba5712ee1276f00a8622af6712cecaf7e015787ca61fac7ffb5ee82c8"
+          "sha256": "d59700b230463805b41f5ece43e948628df10b15463ae8997ccaa034f402b146"
         },
         {
           "path": "scripts/auto_refresh_sheets.py",
@@ -357,7 +357,7 @@
         {
           "path": "src/wb_control_center/mcp_client.py",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/src/wb_control_center/mcp_client.py",
-          "sha256": "c543653dc2198f245f56a1094d408555291792e790050d92a53bfc6be959ceee"
+          "sha256": "ad10684af0e32c22598335c9c5810b69cc9434331f18970e180fc5363a23cdce"
         },
         {
           "path": "src/wb_control_center/metrics.py",
