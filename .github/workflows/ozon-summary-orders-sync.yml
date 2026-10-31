@@ -304,72 +304,88 @@ jobs:
                "offer": key[4], "sku": key[5], "title": key[6], "qty": qty}
               for key, qty in sorted(records_by_key.items())
           ]
-          payload = {
-              "token": os.environ["WEBHOOK_SECRET"],
-              "action": "publish_ozon_api_orders",
-              "source": "ozon_seller_api",
-              "complete": True,
-              "completed_accounts": completed_accounts,
-              "exported_at": now.isoformat().replace("+00:00", "Z"),
-              "coverage_from": COVERAGE_FROM,
-              "coverage_to": coverage_to,
-              "records": records,
-          }
-          body = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-          print(f"OZON_API_EXPORT_COMPLETE=true;records={len(records)};bytes={len(body)};coverage={COVERAGE_FROM}..{coverage_to}")
           url = "https://script.google.com/macros/s/" + os.environ["WEBAPP_DEPLOYMENT_ID"] + "/exec"
-          result = None
-          publish_error = None
-          for attempt in range(1, 6):
-              req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"}, method="POST")
-              try:
-                  with urllib.request.urlopen(req, timeout=420) as response:
-                      result = json.loads(response.read().decode("utf-8"))
-                  break
-              except urllib.error.HTTPError as exc:
-                  if exc.code not in {408, 425, 429, 500, 502, 503, 504}:
-                      raise RuntimeError("OZON_API_PUBLISH_HTTP_FAILED:" + str(exc.code))
-                  publish_error = "HTTPError:" + str(exc.code)
-              except (urllib.error.URLError, TimeoutError, http.client.HTTPException, ConnectionError, OSError, json.JSONDecodeError) as exc:
-                  publish_error = type(exc).__name__ + ":" + str(exc)[:240]
-              if attempt < 5:
-                  delay = min(15 * (2 ** (attempt - 1)), 120)
-                  print(f"OZON_API_PUBLISH_RETRY=attempt:{attempt+1}/5;after:{publish_error};wait:{delay}s", flush=True)
-                  time.sleep(delay)
-          if result is None:
-              raise RuntimeError("OZON_API_PUBLISH_REQUEST_FAILED_AFTER_5_ATTEMPTS:" + str(publish_error))
+          exported_at = now.isoformat().replace("+00:00", "Z")
           accepted_actions = {"publish_ozon_api_orders", "publish_ozon_summary_orders"}
-          if not isinstance(result, dict) or result.get("action") not in accepted_actions:
-              print("OZON_API_PUBLISH_ROUTE_UNAVAILABLE=" + json.dumps(result, ensure_ascii=False)[:700])
-              raise SystemExit("OZON_API_PUBLISH_ROUTE_UNAVAILABLE_PRESERVE")
-          if result.get("ok") is not True or result.get("source_fallback_used") is True:
-              raise SystemExit("OZON_API_PUBLISH_FAILED_PRESERVED:" + json.dumps({
-                  "action": result.get("action"), "reason": result.get("reason"),
-                  "source_fallback_used": result.get("source_fallback_used"),
-                  "stores": result.get("stores"), "error": result.get("error")
-              }, ensure_ascii=False)[:1400])
-          stores = result.get("stores") or []
-          expected = {"ДОМ", "Хозяюшка"}
-          verified = {
-              item.get("store") for item in stores
-              if item.get("ok") is True
-              and item.get("readback") is True
-              and int(item.get("source_rows") or 0) > 0
-              and item.get("source_min")
-              and item.get("source_max")
-              and item.get("sha256")
-          }
-          if verified != expected:
-              raise SystemExit("OZON_API_READBACK_ACCEPTANCE_FAILED:" + json.dumps(stores, ensure_ascii=False)[:1400])
-          print("OZON_API_PUBLISH_OK=true;action=" + str(result.get("action"))
-                + ";source_activity_verified=" + str(result.get("source_activity_verified")))
-          for item in stores:
-              print("STORE=" + str(item.get("store")) + " OK=" + str(item.get("ok"))
-                    + " SOURCE_ROWS=" + str(item.get("source_rows"))
-                    + " PERIOD=" + str(item.get("source_min")) + ".." + str(item.get("source_max"))
-                    + " DAILY_ROWS=" + str(item.get("daily_rows"))
-                    + " SKU_ROWS=" + str(item.get("sku_rows"))
-                    + " ARCHIVED_ROWS=" + str(item.get("archived_rows"))
-                    + " READBACK=" + str(item.get("readback"))
-                    + " SHA256=" + str(item.get("sha256")))
+          store_jobs = (("1", "ДОМ"), ("2", "Хозяюшка"))
+          records_by_cabinet = {cabinet: [] for cabinet, _ in store_jobs}
+          for record in records:
+              records_by_cabinet[record["cabinet"]].append(record)
+          published = {}
+          failures = []
+          for cabinet, store_name in store_jobs:
+              store_records = records_by_cabinet[cabinet]
+              if not store_records:
+                  failures.append(store_name + ":EMPTY_COMPLETE_EXPORT")
+                  print("STORE=" + store_name + " OK=false ERROR=EMPTY_COMPLETE_EXPORT", flush=True)
+                  continue
+              payload = {
+                  "token": os.environ["WEBHOOK_SECRET"],
+                  "action": "publish_ozon_api_orders",
+                  "source": "ozon_seller_api",
+                  "complete": True,
+                  "completed_accounts": completed_accounts,
+                  "exported_at": exported_at,
+                  "coverage_from": COVERAGE_FROM,
+                  "coverage_to": coverage_to,
+                  "records": store_records,
+              }
+              body = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+              print(f"OZON_API_STORE_EXPORT=store={store_name};records={len(store_records)};bytes={len(body)};coverage={COVERAGE_FROM}..{coverage_to}", flush=True)
+              result = None
+              publish_error = None
+              for attempt in range(1, 6):
+                  req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"}, method="POST")
+                  try:
+                      with urllib.request.urlopen(req, timeout=420) as response:
+                          response_text = response.read().decode("utf-8").strip()
+                      if not response_text:
+                          raise json.JSONDecodeError("empty Apps Script response", "", 0)
+                      result = json.loads(response_text)
+                      break
+                  except urllib.error.HTTPError as exc:
+                      if exc.code not in {408, 425, 429, 500, 502, 503, 504}:
+                          publish_error = "HTTPError:" + str(exc.code)
+                          break
+                      publish_error = "HTTPError:" + str(exc.code)
+                  except (urllib.error.URLError, TimeoutError, ConnectionError, OSError, json.JSONDecodeError) as exc:
+                      publish_error = type(exc).__name__ + ":" + str(exc)[:240]
+                  if attempt < 5:
+                      delay = min(10 * (2 ** (attempt - 1)), 120)
+                      print(f"OZON_API_STORE_RETRY=store={store_name};attempt:{attempt+1}/5;after:{publish_error};wait:{delay}s", flush=True)
+                      time.sleep(delay)
+              if result is None:
+                  failures.append(store_name + ":" + str(publish_error))
+                  print("STORE=" + store_name + " OK=false ERROR=" + str(publish_error), flush=True)
+                  continue
+              if not isinstance(result, dict) or result.get("action") not in accepted_actions:
+                  failures.append(store_name + ":INVALID_ACTION_RESPONSE")
+                  print("STORE=" + store_name + " OK=false ERROR=INVALID_ACTION_RESPONSE", flush=True)
+                  continue
+              if result.get("source_fallback_used") is True:
+                  failures.append(store_name + ":SOURCE_FALLBACK_USED")
+                  print("STORE=" + store_name + " OK=false ERROR=SOURCE_FALLBACK_USED", flush=True)
+                  continue
+              store_result = next((item for item in (result.get("stores") or []) if item.get("store") == store_name), None)
+              if not store_result or store_result.get("ok") is not True or store_result.get("readback") is not True:
+                  failures.append(store_name + ":" + json.dumps(store_result or result, ensure_ascii=False)[:1200])
+                  print("STORE=" + store_name + " OK=false ERROR=READBACK_FAILED", flush=True)
+                  continue
+              if int(store_result.get("source_rows") or 0) <= 0 or not store_result.get("source_min") or not store_result.get("source_max") or not store_result.get("sha256"):
+                  failures.append(store_name + ":INCOMPLETE_READBACK")
+                  print("STORE=" + store_name + " OK=false ERROR=INCOMPLETE_READBACK", flush=True)
+                  continue
+              published[store_name] = store_result
+              print("STORE=" + store_name + " OK=true SOURCE_ROWS=" + str(store_result.get("source_rows"))
+                    + " PERIOD=" + str(store_result.get("source_min")) + ".." + str(store_result.get("source_max"))
+                    + " DAILY_ROWS=" + str(store_result.get("daily_rows"))
+                    + " SKU_ROWS=" + str(store_result.get("sku_rows"))
+                    + " ARCHIVED_ROWS=" + str(store_result.get("archived_rows"))
+                    + " READBACK=" + str(store_result.get("readback"))
+                    + " SHA256=" + str(store_result.get("sha256")), flush=True)
+          if failures:
+              raise SystemExit("OZON_API_STORE_PUBLISH_FAILED:" + json.dumps(failures, ensure_ascii=False)[:2400])
+          if set(published) != {"ДОМ", "Хозяюшка"}:
+              raise SystemExit("OZON_API_BOTH_STORE_READBACKS_REQUIRED:" + json.dumps(sorted(published), ensure_ascii=False))
+          print("OZON_API_PUBLISH_OK=true;stores=2;coverage=" + COVERAGE_FROM + ".." + coverage_to)
           PY
