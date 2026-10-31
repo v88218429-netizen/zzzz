@@ -50,8 +50,8 @@
         },
         {
           "path": "plugin.json",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/a70db23e37b51d8f870bb1fabed48ac312e2877d/wb_ai_manager/source/plugin.json",
-          "sha256": "6fa6a9ed13ce518467617a15557f57dc328f3015c72b3c8a767ba4ca1a87c7c7"
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/cd675004604d89310758c2a69b6e89ca879c4c16/wb_ai_manager/source/plugin.json",
+          "sha256": "745582fb9548ccc9535c4915dc6667ebf788fd4f7eb4986856268c667b263052"
         },
         {
           "path": "pyproject.toml",
@@ -141,8 +141,8 @@
         },
         {
           "path": "src/wb_control_center/__init__.py",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/a70db23e37b51d8f870bb1fabed48ac312e2877d/wb_ai_manager/source/src/wb_control_center/__init__.py",
-          "sha256": "15ba0daa1c22c89b423ad34005b535d77bdc07b4e9442f2236f9c7572c0b3ccd"
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/cd675004604d89310758c2a69b6e89ca879c4c16/wb_ai_manager/source/src/wb_control_center/__init__.py",
+          "sha256": "c9102fa99d006fe49f21b133125da6c018bad46deae3d24814f9972ec8f37f4e"
         },
         {
           "path": "src/wb_control_center/__main__.py",
