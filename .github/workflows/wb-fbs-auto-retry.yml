@@ -78,6 +78,7 @@ jobs:
                   continue
               rows.append({"client": client, "start_date": start, "end_date": end,
                            "script": script, "batch_size": batch})
+          rows.sort(key=lambda row: (row["start_date"], row["client"]))
           output = {"include": rows}
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as stream:
               stream.write("matrix=" + json.dumps(output, separators=(",", ":")) + "\n")
@@ -93,7 +94,7 @@ jobs:
     name: "retry ${{ matrix.client }} ${{ matrix.start_date }}–${{ matrix.end_date }} [batch=${{ matrix.batch_size }}]"
     strategy:
       fail-fast: false
-      max-parallel: 1
+      max-parallel: 2
       matrix: ${{ fromJson(needs.discover.outputs.matrix) }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
