@@ -68,6 +68,19 @@ jobs:
           key=os.environ["BRIDGE_KEY"]
           if not key:
               raise SystemExit("FBS_AUDIT_BRIDGE_SECRET_MISSING")
+          runtime_payload=json.dumps({"token":key,"action":"health"}).encode("utf-8")
+          runtime_request=urllib.request.Request(url,data=runtime_payload,
+                headers={"Content-Type":"application/json"},method="POST")
+          with urllib.request.urlopen(runtime_request,timeout=480) as response:
+              runtime=json.loads(response.read().decode("utf-8"))
+          runtime_result=runtime.get("result") or {}
+          if runtime.get("ok") is not True or runtime_result.get("ok") is not True:
+              print("FBS_RUNTIME_HEALTH_FAILED "+json.dumps(runtime,ensure_ascii=False)[:6000],flush=True)
+              raise SystemExit("FBS_RUNTIME_HEALTH_FAILED")
+          print("FBS_RUNTIME_HEALTH="+json.dumps({k:runtime_result.get(k) for k in
+                ("version","runtime","trigger","trigger_count","inner_finance_trigger_count",
+                 "project_trigger_handlers","trigger_ok","fbs_ingest_stages")},
+                ensure_ascii=False,separators=(",",":")),flush=True)
           health_payload=json.dumps({"token":key,"action":"fbs_targets_health"}).encode("utf-8")
           health_request=urllib.request.Request(url,data=health_payload,
                 headers={"Content-Type":"application/json"},method="POST")
