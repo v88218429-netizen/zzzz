@@ -54,7 +54,7 @@ jobs:
               with urllib.request.urlopen(req, timeout=20) as response:
                   runs = json.load(response).get('workflow_runs', [])
               names = {'WB FBS GitHub recovery', 'WB FBS Sanych targeted recovery',
-                       'WB FBS retry failed recovery windows'}
+                       'WB FBS retry failed recovery windows', 'WB FBS supply sync via GitHub'}
               active = any(item.get('name') in names and item.get('status') in
                            {'queued', 'in_progress', 'pending', 'waiting', 'requested'}
                            for item in runs)
