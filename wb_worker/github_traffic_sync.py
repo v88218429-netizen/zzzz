@@ -96,6 +96,115 @@ def _publish() -> None:
     }, ensure_ascii=False, sort_keys=True))
 
 
+
+def _publish_summaries() -> None:
+    """Send verified per-store traffic facts to the existing Apps Script publisher."""
+    import http.client
+    import time
+    import urllib.error
+    import urllib.request
+
+    status = _load_status()
+    if status.get("ok") is not True or not status.get("finishedAt"):
+        raise RuntimeError("WB traffic collection is not complete; summaries preserved")
+    aliases = {"ap": "Саныч", "aa": "AIR", "yv": "Хозяюшка"}
+    shops = status.get("shops") or {}
+    if any((shops.get(alias) or {}).get("ok") is not True for alias in aliases):
+        raise RuntimeError("A WB source is incomplete; summaries preserved")
+
+    definitions = {
+        "ads": ("campaign_sku_day.csv", COLUMNS),
+        "funnel": ("funnel_sku_day.csv", FUNNEL_COLUMNS),
+        "organic": ("organic_sku_day.csv", ORGANIC_COLUMNS),
+    }
+    by_shop = {alias: {name: [] for name in definitions} for alias in aliases}
+    counts = {alias: {} for alias in aliases}
+    for name, (filename, columns) in definitions.items():
+        for row in _read_rows(DATA_DIR / filename, columns):
+            alias = str(row[0] or "").strip()
+            if alias not in by_shop:
+                raise RuntimeError(f"Unknown store in {filename}: {alias}")
+            by_shop[alias][name].append(row)
+            counts[alias][name] = counts[alias].get(name, 0) + 1
+
+    missing = [aliases[a] for a in aliases
+               if not by_shop[a]["ads"] or not by_shop[a]["funnel"] or not by_shop[a]["organic"]]
+    if missing:
+        raise RuntimeError("Required verified traffic rows are missing for: " + ", ".join(missing))
+
+    deployment_id = os.environ.get("WEBAPP_DEPLOYMENT_ID", "").strip()
+    token = os.environ.get("WEBHOOK_SECRET", "").strip()
+    if not deployment_id or not token:
+        raise RuntimeError("Existing GitHub publisher credentials are not configured")
+    url = "https://script.google.com/macros/s/" + deployment_id + "/exec"
+    sync_status = {
+        "ok": True,
+        "finishedAt": status["finishedAt"],
+        "shops": {alias: {"ok": True} for alias in aliases},
+    }
+
+    failures = []
+    for alias, store_name in aliases.items():
+        datasets = by_shop[alias]
+        source_dates = [str(row[1])[:10] for rows in datasets.values() for row in rows]
+        expected_max = max(source_dates)
+        payload = {
+            "token": token,
+            "action": "publish_wb_traffic",
+            "sync_status": sync_status,
+            "datasets": datasets,
+            "daily_view_store": True,
+            "store_name": store_name,
+        }
+        body = json.dumps(payload, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+        result = None
+        last_error = ""
+        for attempt in range(1, 4):
+            request = urllib.request.Request(
+                url, data=body, headers={"Content-Type": "application/json"}, method="POST"
+            )
+            try:
+                with urllib.request.urlopen(request, timeout=420) as response:
+                    result = json.loads(response.read().decode("utf-8"))
+                view = (((result or {}).get("partitions") or {}).get("daily_view") or {})
+                lite = view.get("lite_tables") or {}
+                published_date = str(view.get("max_date") or "")[:10]
+                if (isinstance(result, dict) and result.get("ok") is True
+                        and view.get("ok") is True and lite.get("ok") is True
+                        and store_name in (lite.get("stores") or [])
+                        and published_date >= expected_max):
+                    print(
+                        "WB_TRAFFIC_SUMMARY_STORE=" + store_name
+                        + " OK=yes ADS_ROWS=" + str(len(datasets["ads"]))
+                        + " FUNNEL_ROWS=" + str(len(datasets["funnel"]))
+                        + " ORGANIC_ROWS=" + str(len(datasets["organic"]))
+                        + " FRESH_DAYS=" + str(view.get("fresh_rows"))
+                        + " MAX_DATE=" + published_date
+                        + " READBACK=yes"
+                    )
+                    break
+                last_error = json.dumps({
+                    "ok": result.get("ok") if isinstance(result, dict) else None,
+                    "view_ok": view.get("ok"),
+                    "lite_ok": lite.get("ok"),
+                    "stores": lite.get("stores"),
+                    "max_date": published_date,
+                }, ensure_ascii=False)[:700]
+            except (urllib.error.URLError, http.client.HTTPException, OSError,
+                    TimeoutError, json.JSONDecodeError) as exc:
+                last_error = type(exc).__name__ + ": " + str(exc)[:240]
+            if attempt < 3:
+                time.sleep(15 * attempt)
+        else:
+            failures.append(store_name + ": " + (last_error or "publisher readback did not match"))
+            print("WB_TRAFFIC_SUMMARY_STORE=" + store_name + " OK=no ERROR=" + failures[-1])
+
+    print("WB_TRAFFIC_SUMMARY_PUBLISH complete=" + str(not failures).lower()
+          + " stores=" + str(len(aliases) - len(failures)) + "/3")
+    if failures:
+        raise RuntimeError("; ".join(failures))
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--publish", action="store_true", help="publish previously collected exports")
