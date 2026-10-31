@@ -86,8 +86,8 @@ jobs:
           }
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as stream:
               for name, items in groups.items():
-                  stream.write(name + "_matrix=" + json.dumps({"include": items}, separators=(",", ":")) + "\\n")
-                  stream.write(name + "_count=" + str(len(items)) + "\\n")
+                  stream.write(name + "_matrix=" + json.dumps({"include": items}, separators=(",", ":")) + "\n")
+                  stream.write(name + "_count=" + str(len(items)) + "\n")
           print("FAILED_OR_CANCELLED_WINDOWS_REQUEUED=" + str(len(rows)), flush=True)
           print("MULTI_DAY_WINDOWS_SPLIT_TO_DAYS=" + str(split_count), flush=True)
           print("RETRY_LIMIT_REACHED=" + str(exhausted), flush=True)
@@ -109,7 +109,7 @@ jobs:
       FBS_LOOKBACK_DAYS: "7"
       FBS_START_DATE: ${{ matrix.start_date }}
       FBS_END_DATE: ${{ matrix.end_date }}
-      WB_API_TOKEN_WB_API_TOKEN_AA: ${{ secrets.WB_API_TOKEN_AA }}
+      WB_API_TOKEN_AA: ${{ secrets.WB_API_TOKEN_AA }}
       GOOGLE_BRIDGE_KEY: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
       GOOGLE_BRIDGE_URL: https://script.google.com/macros/s/AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw/exec
     steps:
@@ -161,7 +161,7 @@ jobs:
       FBS_LOOKBACK_DAYS: "7"
       FBS_START_DATE: ${{ matrix.start_date }}
       FBS_END_DATE: ${{ matrix.end_date }}
-      WB_API_TOKEN_WB_API_TOKEN_YV: ${{ secrets.WB_API_TOKEN_YV }}
+      WB_API_TOKEN_YV: ${{ secrets.WB_API_TOKEN_YV }}
       GOOGLE_BRIDGE_KEY: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
       GOOGLE_BRIDGE_URL: https://script.google.com/macros/s/AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw/exec
     steps:
@@ -213,7 +213,7 @@ jobs:
       FBS_LOOKBACK_DAYS: "7"
       FBS_START_DATE: ${{ matrix.start_date }}
       FBS_END_DATE: ${{ matrix.end_date }}
-      WB_API_TOKEN_WB_API_TOKEN_AP: ${{ secrets.WB_API_TOKEN_AP }}
+      WB_API_TOKEN_AP: ${{ secrets.WB_API_TOKEN_AP }}
       GOOGLE_BRIDGE_KEY: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
       GOOGLE_BRIDGE_URL: https://script.google.com/macros/s/AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw/exec
     steps:
