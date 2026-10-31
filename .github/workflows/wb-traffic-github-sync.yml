@@ -94,7 +94,9 @@ jobs:
             -out "$RUNNER_TEMP/wb-traffic-publish/state/traffic-dashboard.key.enc" \
             -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:sha256
           python - <<'PY'
-          import csv, json, os, pathlib
+          import csv, json, os, pathlib, sys
+          sys.path.insert(0, str(pathlib.Path.cwd()/'wb_worker'))
+          from traffic_sync import _row_count_for_shop
           root=pathlib.Path(os.environ['DATA_DIR'])/'traffic'
           status_path=root/'status.json'
           status=json.loads(status_path.read_text(encoding='utf-8')) if status_path.exists() else {}
@@ -126,7 +128,7 @@ jobs:
               source='OK' if detail.get('ok') is True else 'FAILED'
               ads=row_count(folder/'campaign_sku_day.csv')
               funnel=row_count(folder/'funnel_sku_day.csv')
-              organic=row_count(folder/'organic_sku_day.csv')
+              organic=_row_count_for_shop(root/'organic_sku_day.csv',shop)
               clusters=folder/'ad_clusters_day.csv'
               settings=folder/'campaign_settings_current.csv'
               lines.append(
