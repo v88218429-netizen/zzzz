@@ -141,6 +141,7 @@ def test_raw_github_manifest_is_read_from_fresh_contents_api(monkeypatch, tmp_pa
     )
 
     manifest = manager.fetch_manifest()
+    assert manager.fetch_manifest().version == "1.1.31"
 
     assert manifest.version == "1.1.31"
     assert requests == [(
