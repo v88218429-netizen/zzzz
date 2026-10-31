@@ -5582,7 +5582,8 @@ function sellmonitorGithubPublishOzonSummaryOrders_(payload) {
         oldMeta[0]===viewTitle[0]&&oldMeta[1]===viewDescription[0]&&oldMeta[2]===viewCoverage[0];
       if(!sameView){
         var viewArchiveId=archiveId;
-        archived+=sellmonitorGithubOzonArchive_(archive,target.name,'A1:'+String.fromCharCode(64+oldWidth)+oldLast,oldView,sourceUpdated,viewArchiveId);
+        var archiveColNumber=oldWidth,archiveColName='';while(archiveColNumber>0){var archiveRemainder=(archiveColNumber-1)%26;archiveColName=String.fromCharCode(65+archiveRemainder)+archiveColName;archiveColNumber=Math.floor((archiveColNumber-1)/26);}
+        archived+=sellmonitorGithubOzonArchive_(archive,target.name,'A1:'+archiveColName+oldLast,oldView,sourceUpdated,viewArchiveId);
         var viewNeed=4+viewRows.length;
         sellmonitorGithubOzonEnsureRows_(view,viewNeed);
         if(view.getFilter())view.getFilter().remove();
