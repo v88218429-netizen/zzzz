@@ -1518,6 +1518,7 @@ class PortfolioService:
         merged=self._merge_bridge(payload)
         merged["mode"] = origin
         self.live_path.write_text(json.dumps(merged, ensure_ascii=False, indent=2), encoding="utf-8")
+        self._github_snapshot = None
         return merged
 
     def refresh(self) -> dict[str, Any]:
@@ -1546,6 +1547,7 @@ class PortfolioService:
                         raise RuntimeError(str(payload.get("error") or "Sheets bridge returned error"))
                     merged = self._merge_bridge(payload)
                     self.live_path.write_text(json.dumps(merged, ensure_ascii=False, indent=2), encoding="utf-8")
+                    self._github_snapshot = None
                     return merged
                 except (httpx.HTTPError, RuntimeError, ValueError) as exc:
                     last_error = exc
