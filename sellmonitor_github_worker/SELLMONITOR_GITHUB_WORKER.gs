@@ -5501,6 +5501,15 @@ function sellmonitorGithubPublishOzonPerformanceDaily_(body) {
     if(String(oldChartNote||'')!==newChartNote)helperArchive.push({sheet:'10_Графики_магазина',range:'A2',values:[oldChartNote]});
     helperWrites.push({spec:{name:'10_Графики_магазина',kind:'note'},sh:chartSheet,note:newChartNote});
   }
+  var rnpSheet=ss.getSheetByName('00_РНП_магазин');
+  if(!rnpSheet)throw new Error('OZON_PERF_RNP_NOTE_SHEET_MISSING:'+cfg.name);
+  var oldRnpNote=String(rnpSheet.getRange('A2').getValue()||'');
+  var rnpNoteMatch=oldRnpNote.match(/Реклама доступна[^.]*\./);
+  if(!rnpNoteMatch)throw new Error('OZON_PERF_RNP_AD_NOTE_NOT_FOUND:'+cfg.name);
+  var newRnpNote=oldRnpNote.replace(rnpNoteMatch[0],
+    'Реклама доступна только по кампаниям; дневные данные '+coverageFrom+'–'+coverageTo+', без SKU/offer_id.');
+  if(oldRnpNote!==newRnpNote)helperArchive.push({sheet:'00_РНП_магазин',range:'A2',values:[oldRnpNote]});
+  helperWrites.push({spec:{name:'00_РНП_магазин',kind:'rnpnote'},sh:rnpSheet,note:newRnpNote});
   var dailySheetTitle='Ozon Performance API / statistics/daily/json · кампании; доступные дни '+coverageFrom+'–'+coverageTo; 
   var oldDailyTitle=dailySheet.getRange('A1').getValue();
   if(String(oldDailyTitle||'')!==dailySheetTitle)helperArchive.push({sheet:'04_Реклама_Дни',range:'A1',values:[oldDailyTitle]});
@@ -5546,7 +5555,7 @@ function sellmonitorGithubPublishOzonPerformanceDaily_(body) {
     if(x.rowsChanged){
       x.newRows.forEach(function(row,i){x.sh.getRange(x.spec.firstMetricRow+i,x.startCol,1,row.length).setValues([row]);});
     }
-    if(x.note!==undefined)x.sh.getRange(x.spec.kind==='note'?'A2':'A1').setValue(x.note);
+    if(x.note!==undefined)x.sh.getRange(x.spec.kind==='note'||x.spec.kind==='rnpnote'?'A2':'A1').setValue(x.note);
   });
   dailySheet.getRange('A1').setValue(dailySheetTitle);
   periodSheet.getRange('A1').setValue(periodSheetTitle);
@@ -5582,6 +5591,8 @@ function sellmonitorGithubPublishOzonPerformanceDaily_(body) {
     var rb=x.sh.getRange(2,x.startCol,1,x.headers.length).getDisplayValues()[0];
     return rb.length===x.shown.length&&rb.every(function(v,i){return String(v||'')===String(x.shown[i]||'');});
   });
+  var rnpNoteReadback=helperWrites.filter(function(x){return x.spec.kind==='rnpnote';})
+    .every(function(x){return String(x.sh.getRange('A2').getValue()||'')===String(x.note||'');});
   var chartsAfter=chartSheet?chartSheet.getCharts():[];
   var chartRangesOk=chartRangeExpected.every(function(expected){
     var chart=chartsAfter.filter(function(c){return c.getChartId()===expected.id;})[0];
@@ -5589,14 +5600,14 @@ function sellmonitorGithubPublishOzonPerformanceDaily_(body) {
     var ranges=chart.getRanges();
     return expected.checks.every(function(check){return ranges.some(function(r){return r.getSheet().getName()===check.sheet&&r.getColumn()===check.start&&r.getLastColumn()>=check.end;});});
   });
-  if(!dailyOk||!periodOk||!aggregatesOk||!axesOk||!chartRangesOk)throw new Error('OZON_PERF_READBACK_FAILED:'+cfg.name+':'+dailyOk+':'+periodOk+':'+aggregatesOk+':'+axesOk+':'+chartRangesOk);
+  if(!dailyOk||!periodOk||!aggregatesOk||!axesOk||!rnpNoteReadback||!chartRangesOk)throw new Error('OZON_PERF_READBACK_FAILED:'+cfg.name+':'+dailyOk+':'+periodOk+':'+aggregatesOk+':'+axesOk+':'+rnpNoteReadback+':'+chartRangesOk);
   var charts=chartsAfter.length;
   if(charts<1)throw new Error('OZON_PERF_CHARTS_MISSING:'+cfg.name);
   return {ok:true,action:'publish_ozon_performance_daily',store:cfg.name,coverage_from:coverageFrom,coverage_to:coverageTo,
     source_daily_rows:inputDaily.length,daily_added:dailyAdded,daily_changed:dailyChanges.length,daily_archived:dailyChanges.length,
     source_period_rows:inputPeriods.length,period_added:periodsAdded,period_changed:periodChanges.length,period_archived:periodChanges.length,
     archived_rows:archiveRows.length,archive_sheet:archiveTab.getName(),readback:true,daily_keys_readback:dailyKeys.length,
-    period_keys_readback:periodKeys.length,helper_readback:aggregatesOk,axes_readback:axesOk,chart_ranges_updated:chartRangesUpdated,chart_ranges_readback:chartRangesOk,charts:charts,
+    period_keys_readback:periodKeys.length,helper_readback:aggregatesOk,axes_readback:axesOk,rnp_note_readback:rnpNoteReadback,chart_ranges_updated:chartRangesUpdated,chart_ranges_readback:chartRangesOk,charts:charts,
     daily_sha256:sellmonitorGithubOzonPerfDigest_(dailyKeys.map(function(k){return dailyMap[k];})),
     period_sha256:sellmonitorGithubOzonPerfDigest_(periodKeys.map(function(k){return periodMap[k];}))};
 }
