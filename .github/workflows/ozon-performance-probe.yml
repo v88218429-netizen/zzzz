@@ -5,6 +5,7 @@ on:
     paths:
       - "ozon_performance_radar/**"
       - ".github/workflows/ozon-performance-probe.yml"
+      - "sellmonitor_github_worker/SELLMONITOR_GITHUB_WORKER.gs"
   workflow_dispatch:
   schedule:
     - cron: "17 */4 * * *"
