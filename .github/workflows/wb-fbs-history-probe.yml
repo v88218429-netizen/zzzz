@@ -39,12 +39,22 @@ jobs:
                   const list=Array.isArray(body.orders)?body.orders:
                      Array.isArray(body.data?.orders)?body.data.orders: [];
                   count=list.length;
-                  fields=Object.keys(list[0]||{}).sort();
+                  const sample=list[0]||{};
+                  fields=Object.keys(sample).sort();
+                  const nestedFields={};
+                  for(const key of ['product','priceInfo','meta','metaDetails','options','supplierStatus','wbStatus']){
+                    const value=sample[key];
+                    if(value && typeof value==='object'){
+                      nestedFields[key]=Array.isArray(value)
+                        ? (value.length && value[0] && typeof value[0]==='object' ? Object.keys(value[0]).sort() : [])
+                        : Object.keys(value).sort();
+                    }
+                  }
                   hasNext=Boolean(body.next && body.next!==0 && body.next!=='0');
                 }
               } catch(e) {status='FETCH_'+e.name;}
             }
-            console.log(JSON.stringify({store:store.label,endpoint:name,status,pageCount:count,hasNext,fields}));
+            console.log(JSON.stringify({store:store.label,endpoint:name,status,pageCount:count,hasNext,fields,nestedFields:typeof nestedFields==='undefined'?{}:nestedFields}));
           }
           for(const store of stores) {
             await safeProbe(store,'/api/v3/orders?limit=1000&next=0&dateFrom='+start+'&dateTo='+end,'recent_7d');
