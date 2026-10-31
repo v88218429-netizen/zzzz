@@ -5579,7 +5579,7 @@ function sellmonitorGithubPublishOzonSummaryOrders_(payload) {
       var oldHeader=view.getRange(4,1,1,12).getDisplayValues()[0];
       var oldMeta=view.getRange(1,1,3,1).getDisplayValues().map(function(r){return String(r[0]||'');});
       var datesTyped=oldBody.every(function(row){return row[1] instanceof Date&&row[2] instanceof Date;});
-      var storedViewRows=viewRows.map(function(row){var copy=row.slice();copy[1]=new Date(String(row[1])+'T00:00:00');copy[2]=new Date(String(row[2])+'T00:00:00');return copy;});
+      var storedViewRows=viewRows.map(function(row){var copy=row.slice();copy[1]=Utilities.parseDate(String(row[1]),SMC_OZON_SUMMARY.timezone,'yyyy-MM-dd');copy[2]=Utilities.parseDate(String(row[2]),SMC_OZON_SUMMARY.timezone,'yyyy-MM-dd');return copy;});
       var sameView=datesTyped&&JSON.stringify(oldHeader)===JSON.stringify(viewHeader)&&
         JSON.stringify(sellmonitorGithubOzonNormalizeRows_(oldBody,true))===JSON.stringify(sellmonitorGithubOzonNormalizeRows_(viewRows,true))&&
         oldMeta[0]===viewTitle[0]&&oldMeta[1]===viewDescription[0]&&oldMeta[2]===viewCoverage[0];
