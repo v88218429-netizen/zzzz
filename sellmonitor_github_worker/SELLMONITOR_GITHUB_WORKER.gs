@@ -6322,6 +6322,8 @@ function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId){
   }
 
   function restoreBase_(spec,sh){
+    var oldFormula=sh.getRange(1,1).getFormula();
+    if(String(oldFormula||'').indexOf('=ARRAYFORMULA(')!==0)return {rows:0,columns:spec.baseCols,shiftedDayAxis:false,alreadyRestored:true};
     var src=ss.getSheetByName(spec.source);
     if(!src)throw new Error('WB_RNP_BASE_SOURCE_MISSING:'+spec.source);
     var n=src.getLastRow();
@@ -6350,8 +6352,6 @@ function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId){
       if(cc<formulas[0].length)for(var fr=0;fr<formulas.length&&!has;fr++)if(formulas[fr][cc])has=true;
       if(has)archiveSnapshot(sh,cc+1,'BASE_'+(cc+1),'Восстановление основы после ошибки развёртывания',currentLast,colVals);
     }
-    var oldFormula=sh.getRange(1,1).getFormula();
-    if(String(oldFormula||'').indexOf('=ARRAYFORMULA(')!==0)return {rows:0,columns:spec.baseCols,shiftedDayAxis:false,alreadyRestored:true};
     if(oldFormula){
       var ar=archive.getLastRow()+1;
       if(ar>archive.getMaxRows())archive.insertRowsAfter(archive.getMaxRows(),100);
