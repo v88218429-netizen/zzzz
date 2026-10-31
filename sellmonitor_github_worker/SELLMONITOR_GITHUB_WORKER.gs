@@ -6252,13 +6252,13 @@ function sellmonitorGithubPublishWbInnerPeriods_(onlyStore){
       var periodChanges=res.day.new_rows+res.day.changed_rows+res.week.new_rows+res.week.changed_rows+res.month.new_rows+res.month.changed_rows;
       var dashboardView=ss.getSheetByName('00_Динамика');var dashboardHasCharts=!!(dashboardView&&dashboardView.getCharts().length);res.dashboard=(shop==='sanych_wb'&&periodChanges===0&&dashboardHasCharts)?{ok:true,skipped:true,reason:'WB_INNER_NO_PERIOD_CHANGES'}:sellmonitorGithubWbBuildDashboard_(ss,cfg.name);
       results.push(res);
-      var log=sellmonitorGithubWbInnerEnsureSheet_(ss,SMC_WB_INNER_SUMMARY_V1.tabs.log,['Время запуска','Магазин','Источник частей','Строк фактов','Период с','Период по','Дней точных','Дней предварительных','Строк день/неделя/месяц','Новых','Изменённых','Архивировано','SHA-256','Проверка матриц РНП']);
+      var log=sellmonitorGithubWbInnerEnsureSheet_(ss,SMC_WB_INNER_SUMMARY_V1.tabs.log,['Время запуска','Магазин','Источник частей','Строк фактов','Период с','Период по','Дней точных','Дней предварительных','Строк день/неделя/месяц','Новых','Изменённых','Архивировано','SHA-256']);
       var counts=[res.day.rows,res.week.rows,res.month.rows],newCount=res.day.new_rows+res.week.new_rows+res.month.new_rows,changeCount=res.day.changed_rows+res.week.changed_rows+res.month.changed_rows,archCount=res.day.archived_rows+res.week.archived_rows+res.month.archived_rows;
-      var logRow=[new Date(),cfg.name,sourceIds.join(','),built.sourceRows,built.min,built.max,built.factualDays,built.partialDays,counts.join('/'),newCount,changeCount,archCount,[res.day.sha256,res.week.sha256,res.month.sha256].join('/'),JSON.stringify({ok:res.rnp.ok,last_exact:res.rnp.last_exact,matrices:res.rnp.matrices,readback:res.rnp.readback,charts:res.rnp.rnp_charts})];
+      var logRow=[new Date(),cfg.name,sourceIds.join(','),built.sourceRows,built.min,built.max,built.factualDays,built.partialDays,counts.join('/'),newCount,changeCount,archCount,[res.day.sha256,res.week.sha256,res.month.sha256].join('/')];
       var at=log.getLastRow()+1;if(at>log.getMaxRows())log.insertRowsAfter(log.getMaxRows(),100);
-      log.getRange(at,1,1,14).setValues([logRow]);
-      var check=log.getRange(at,1,1,14).getValues()[0];
-      if(String(check[12])!==String(logRow[12])||String(check[13])!==String(logRow[13]))throw new Error('WB_INNER_STORE_LOG_READBACK_FAILED:'+cfg.name);
+      log.getRange(at,1,1,13).setValues([logRow]);
+      var check=log.getRange(at,1,1,13).getValues()[0];
+      if(String(check[12])!==String(logRow[12]))throw new Error('WB_INNER_STORE_LOG_READBACK_FAILED:'+cfg.name);
       SpreadsheetApp.flush();
     }catch(e){results.push({store:cfg.name,ok:false,error:String(e&&e.message||e)});}
   });
@@ -6271,9 +6271,9 @@ function sellmonitorGithubPublishWbInnerPeriods_(onlyStore){
 
 function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId){
   var specs=[
-    {name:'01_Дни',grain:'day',rows:built.day,min:'2026-09-01',format:'dd.mm.yyyy'},
-    {name:'02_Недели',grain:'week',rows:built.week,min:'2026-09-07',format:'dd.mm.yyyy'},
-    {name:'03_Месяцы',grain:'month',rows:built.month,min:'2026-09-01',format:'mmm yyyy'}
+    {name:'01_Дни',grain:'day',rows:built.day,min:'2026-09-01',format:'dd.mm.yyyy',startCol:15,baseCols:14,source:'Источник_дни'},
+    {name:'02_Недели',grain:'week',rows:built.week,min:'2026-09-07',format:'dd.mm.yyyy',startCol:15,baseCols:14,source:'Источник_недели'},
+    {name:'03_Месяцы',grain:'month',rows:built.month,min:'2026-09-01',format:'mmm yyyy',startCol:14,baseCols:13,source:'Источник_месяцы'}
   ];
   var metricIx={};built.metricHeaders.forEach(function(h,i){metricIx[String(h)]=10+i;});
   function key(v){
@@ -6302,6 +6302,60 @@ function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId){
     return archive.getLastRow()-before+1;
   }
 
+  function restoreBase_(spec,sh){
+    var src=ss.getSheetByName(spec.source);
+    if(!src)throw new Error('WB_RNP_BASE_SOURCE_MISSING:'+spec.source);
+    var n=src.getLastRow();
+    if(!n||n>10000)throw new Error('WB_RNP_BASE_ROW_COUNT_INVALID:'+spec.source+':'+n);
+    var sourceWidth=spec.grain==='day'?12:spec.baseCols;
+    var left=src.getRange(1,1,n,sourceWidth).getValues();
+    var base=left;
+    if(spec.grain==='day'){
+      var snap=ss.getSheetByName('Матрица_15_16');
+      if(!snap||snap.getLastRow()<n)throw new Error('WB_RNP_DAY_SNAPSHOT_SOURCE_MISSING');
+      var pair=snap.getRange(1,1,n,2).getValues();
+      base=left.map(function(r,i){return r.concat(pair[i]);});
+    }
+    if(base[0].length!==spec.baseCols)throw new Error('WB_RNP_BASE_WIDTH_INVALID:'+spec.name);
+    var oldN1=spec.grain==='day'?sh.getRange(1,14).getDisplayValue():'';
+    var oldN2=spec.grain==='day'?sh.getRange(2,14).getValue():'';
+    var n1Status=/^(🟡 ПРЕДВ\.|🟢 ФАКТ|🟠 НЕПОЛНЫЙ)$/.test(String(oldN1||'').trim());
+    var nHeader=spec.grain==='day'?key(oldN2):'';
+    var currentLast=Math.min(Math.max(sh.getLastRow(),n),sh.getMaxRows());
+    var archiveCols=Math.max(spec.baseCols,spec.startCol-1);
+    var existing=sh.getRange(1,1,currentLast,archiveCols).getValues();
+    var formulas=sh.getRange(1,1,Math.min(currentLast,n),archiveCols).getFormulas();
+    for(var cc=0;cc<archiveCols;cc++){
+      var colVals=existing.map(function(r){return r[cc];});
+      var has=colVals.some(function(v){return v!==''&&v!=null;});
+      if(cc<formulas[0].length)for(var fr=0;fr<formulas.length&&!has;fr++)if(formulas[fr][cc])has=true;
+      if(has)archiveSnapshot(sh,cc+1,'BASE_'+(cc+1),'Восстановление основы после ошибки развёртывания',currentLast,colVals);
+    }
+    var oldFormula=sh.getRange(1,1).getFormula();
+    if(oldFormula){
+      var ar=archive.getLastRow()+1;
+      if(ar>archive.getMaxRows())archive.insertRowsAfter(archive.getMaxRows(),100);
+      var record=[new Date(),storeName,sh.getName(),'BASE_FORMULA_A1',1,JSON.stringify({formula:oldFormula,value:sh.getRange(1,1).getDisplayValue()}),'Сохранение формулы перед восстановлением основы'];
+      archive.getRange(ar,1,1,7).setValues([record]);
+      if(String(archive.getRange(ar,6).getValue())!==record[5])throw new Error('WB_RNP_FORMULA_ARCHIVE_READBACK_FAILED:'+spec.name);
+    }
+    if(spec.grain==='day'&&n1Status&&nHeader){
+      archiveSnapshot(sh,14,nHeader,'Перемещение оси дат из неверной колонки N в O',currentLast,existing.map(function(r){return r[13];}));
+      sh.insertColumnBefore(15);
+      sh.getRange(1,14,sh.getMaxRows(),1).copyTo(sh.getRange(1,15,sh.getMaxRows(),1),SpreadsheetApp.CopyPasteType.PASTE_NORMAL,false);
+      SpreadsheetApp.flush();
+    }
+    for(var off=0;off<n;off+=500){
+      var count=Math.min(500,n-off),block=base.slice(off,off+count);
+      sh.getRange(off+1,1,count,spec.baseCols).setValues(block);
+    }
+    SpreadsheetApp.flush();
+    var verify=sh.getRange(1,1,n,spec.baseCols).getValues();
+    if(verify.length!==n||verify[0].length!==spec.baseCols)throw new Error('WB_RNP_BASE_READBACK_SIZE:'+spec.name);
+    var sampleRows=[0,Math.floor(n/2),n-1];
+    sampleRows.forEach(function(i){for(var j=0;j<spec.baseCols;j++)if(String(verify[i][j]||'')!==String(base[i][j]||''))throw new Error('WB_RNP_BASE_READBACK_MISMATCH:'+spec.name+':'+(i+1)+':'+(j+1));});
+    return {rows:n,columns:spec.baseCols,shiftedDayAxis:spec.grain==='day'&&n1Status&&!!nHeader};
+  }
   function val(r,code){
     if(!r)return '';
     function g(n){var i=metricIx[n];if(i==null)return null;var v=r[i];return v===''||v==null||typeof v==='boolean'||!isFinite(Number(v))?null:Number(v);}
@@ -6376,6 +6430,7 @@ function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId){
   specs.forEach(function(spec){
     var sh=ss.getSheetByName(spec.name);if(!sh)throw new Error('WB_RNP_MATRIX_MISSING:'+spec.name);
     var periodMap={},periodStatus={};
+    var baseStatus=restoreBase_(spec,sh);
     spec.rows.forEach(function(r){
       var period=String(r[1]||''),nm=String(r[6]||''),status=String(r[10+built.metricHeaders.length]||'');
       if(period<spec.min)return;
@@ -6385,13 +6440,13 @@ function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId){
       if(/PARTIAL|PRELIMINARY/.test(status))ss0.partial=true;else if(/FACTUAL/.test(status))ss0.exact++;else ss0.other++;
     });
     var targets=Object.keys(periodMap).sort();
-    var lastCol=Math.max(13,sh.getLastColumn()),heads=lastCol>=14?sh.getRange(2,14,1,lastCol-13).getValues()[0]:[];
+    var startCol=spec.startCol,lastCol=Math.max(startCol-1,sh.getLastColumn()),heads=lastCol>=startCol?sh.getRange(2,startCol,1,lastCol-startCol+1).getValues()[0]:[];
     var positions={};
     for(var ci=0;ci<heads.length;ci++){
       var k=key(heads[ci]);if(!k)continue;
       if(periodMap[k]){
         if(!positions[k])positions[k]=[];
-        positions[k].push(14+ci);
+        positions[k].push(startCol+ci);
       }
     }
     var dupDates=Object.keys(positions).filter(function(k){return positions[k].length>1;}).sort();
@@ -6412,16 +6467,16 @@ function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId){
       lastCol=Math.max(13,sh.getLastColumn());
       heads=lastCol>=14?sh.getRange(2,14,1,lastCol-13).getValues()[0]:[];
       positions={};
-      for(var ci=0;ci<heads.length;ci++){var k=key(heads[ci]);if(k&&periodMap[k]){if(!positions[k])positions[k]=[];positions[k].push(14+ci);}}
+      for(var ci=0;ci<heads.length;ci++){var k=key(heads[ci]);if(k&&periodMap[k]){if(!positions[k])positions[k]=[];positions[k].push(startCol+ci);}}
     }
     refreshHeads();
     var existedBefore={};Object.keys(positions).forEach(function(k){if(positions[k]&&positions[k].length)existedBefore[k]=true;});
     targets.sort().reverse().forEach(function(period){
       if(positions[period]&&positions[period].length)return;
       var insertAt=lastCol+1;
-      for(var ci=0;ci<heads.length;ci++){var old=key(heads[ci]);if(old&&old<period){insertAt=14+ci;break;}}
-      if(insertAt<=lastCol)sh.insertColumnBefore(insertAt);else sh.insertColumnAfter(Math.max(13,lastCol));
-      if(insertAt>14&&insertAt-1<=sh.getMaxColumns())sh.getRange(1,insertAt-1,sh.getMaxRows(),1).copyTo(sh.getRange(1,insertAt,sh.getMaxRows(),1),SpreadsheetApp.CopyPasteType.PASTE_FORMAT,false);
+      for(var ci=0;ci<heads.length;ci++){var old=key(heads[ci]);if(old&&old<period){insertAt=startCol+ci;break;}}
+      if(insertAt<=lastCol)sh.insertColumnBefore(insertAt);else sh.insertColumnAfter(Math.max(startCol-1,lastCol));
+      if(insertAt>startCol&&insertAt-1<=sh.getMaxColumns())sh.getRange(1,insertAt-1,sh.getMaxRows(),1).copyTo(sh.getRange(1,insertAt,sh.getMaxRows(),1),SpreadsheetApp.CopyPasteType.PASTE_FORMAT,false);
       sh.getRange(2,insertAt).setValue(date_(period)).setNumberFormat(spec.format);
       SpreadsheetApp.flush();
       refreshHeads();
@@ -6477,7 +6532,7 @@ function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId){
   var rangeCount=charts.reduce(function(n,ch){return n+ch.getRanges().length;},0);
   if(charts.length&&rangeCount<charts.length)throw new Error('WB_RNP_CHART_RANGE_READBACK_FAILED');
   SpreadsheetApp.flush();
-  return {ok:true,store:storeName,last_exact:exactMax,matrices:stats,archive:archiveName,archive_rows:archive.getLastRow()-1,rnp_charts:charts.length,chart_ranges:rangeCount,readback:true};
+  return {ok:true,store:storeName,last_exact:exactMax,matrices:stats,archive:archiveName,archive_rows:archive.getLastRow()-1,rnp_charts:charts.length,base:specs.map(function(x){return {sheet:x.name,start_col:x.startCol,base_cols:x.baseCols};}),chart_ranges:rangeCount,readback:true};
 }
 
 
