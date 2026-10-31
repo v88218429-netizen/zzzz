@@ -1,8 +1,14 @@
 name: WB FBS retry failed recovery windows
+run-name: WB FBS recovery pass ${{ inputs.pass || '1' }}
 
 on:
   workflow_dispatch:
     inputs:
+      pass:
+        description: "Bounded automatic continuation pass"
+        required: false
+        default: "1"
+        type: string
       run_id:
         description: "GitHub Actions run IDs, comma-separated, containing failed FBS windows"
         required: true
