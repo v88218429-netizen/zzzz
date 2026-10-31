@@ -2,9 +2,9 @@
   "schema": 1,
   "channels": {
     "stable": {
-      "version": "1.1.36",
+      "version": "1.1.37",
       "channel": "stable",
-      "notes": "Портфель передаётся из зашифрованного GitHub-архива до расчёта панели; свежесть экономики проверяется по датам источников.",
+      "notes": "Исправлено чтение манифеста напрямую из GitHub Raw; контроль целостности файлов по SHA-256 сохранён.",
       "minimum_current_version": "1.0.0",
       "files": [
         {
@@ -19,8 +19,8 @@
         },
         {
           "path": "RELEASE_NOTES.md",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/f1b3c14891576c5f92acdd31155590be2183ba9c/wb_ai_manager/source/RELEASE_NOTES.md",
-          "sha256": "c84d93e4a2f08ef39dcea4d48fed642c5a7a2be1fe01ad664e5429e4b8b6844e"
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/9e57ff106b5a1934f71f9ee635b1dd946af6c843/wb_ai_manager/source/RELEASE_NOTES.md",
+          "sha256": "1a4e5fd539265a6c95836295b27f61c8d7e1c1526db6f36f386a5b5a66392056"
         },
         {
           "path": "START_WB_AI_MANAGER.command",
@@ -30,8 +30,8 @@
         },
         {
           "path": "VERSION",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/f1b3c14891576c5f92acdd31155590be2183ba9c/wb_ai_manager/source/VERSION",
-          "sha256": "201d4fd98e4c46f7fc89a0b9f6d518323ca98476311a47dfeafee99277eeaf6d"
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/9e57ff106b5a1934f71f9ee635b1dd946af6c843/wb_ai_manager/source/VERSION",
+          "sha256": "51fa819e127a14961ff10d59cdddd651d436b52b3103002b7a88121b321bd4da"
         },
         {
           "path": "docs/AUTO_UPDATE.md",
@@ -50,13 +50,13 @@
         },
         {
           "path": "plugin.json",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/fb312e619706cdd8d9f56bce30379131b576fc7a/wb_ai_manager/source/plugin.json",
-          "sha256": "19ade7dd8891f44bd011f22e96396796a0a2d7507fa3eeef55501c06113a8940"
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/9e57ff106b5a1934f71f9ee635b1dd946af6c843/wb_ai_manager/source/plugin.json",
+          "sha256": "e707cf27773a5519ba8f9237a87def6a3859c36582b48fc7469acf5f1c06d80f"
         },
         {
           "path": "pyproject.toml",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/f1b3c14891576c5f92acdd31155590be2183ba9c/wb_ai_manager/source/pyproject.toml",
-          "sha256": "55d511a254b31e82bac1a787eb7d72c7b3497bbc03a4617d6cc86a7efe1cd1e0"
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/9e57ff106b5a1934f71f9ee635b1dd946af6c843/wb_ai_manager/source/pyproject.toml",
+          "sha256": "679385409ad4c29a64a5339008d99e5990a2dc65abfa0a37c52f36cbe9564380"
         },
         {
           "path": "scripts/auto_refresh_sheets.py",
@@ -141,8 +141,8 @@
         },
         {
           "path": "src/wb_control_center/__init__.py",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/f1b3c14891576c5f92acdd31155590be2183ba9c/wb_ai_manager/source/src/wb_control_center/__init__.py",
-          "sha256": "838b63a7a89b978350a1c5a06d1a331a65cdf45363ff0ec179371bd88d9afe01"
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/9e57ff106b5a1934f71f9ee635b1dd946af6c843/wb_ai_manager/source/src/wb_control_center/__init__.py",
+          "sha256": "1e244ebaf5a102429376b1f03aca5fbf80c13f5b1c3f1999c474d03403192c26"
         },
         {
           "path": "src/wb_control_center/__main__.py",
@@ -461,8 +461,8 @@
         },
         {
           "path": "src/wb_control_center/updater.py",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/a70db23e37b51d8f870bb1fabed48ac312e2877d/wb_ai_manager/source/src/wb_control_center/updater.py",
-          "sha256": "2e3e780fea47b8cc36ea9ec0c526fe3c6d5dd439f72eacc0f398bbb9e0ebf208"
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/9e57ff106b5a1934f71f9ee635b1dd946af6c843/wb_ai_manager/source/src/wb_control_center/updater.py",
+          "sha256": "2a472c3bd907a0b0ac08648f1c0de823ad2213a20b05fd79c59e4154c1cb8855"
         },
         {
           "path": "src/wb_control_center/wb_mcp_runner.py",

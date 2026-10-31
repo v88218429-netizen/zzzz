@@ -113,7 +113,7 @@ def test_rollback_is_not_reported_ok_until_smoke_passes(tmp_path: Path):
         mgr._restore_and_verify(backup,'after failed update')
 
 
-def test_raw_github_manifest_is_read_from_fresh_contents_api(monkeypatch, tmp_path: Path):
+def test_raw_github_manifest_is_fetched_directly_without_contents_api(monkeypatch, tmp_path: Path):
     document = {
         "channels": {
             "stable": {
@@ -126,8 +126,7 @@ def test_raw_github_manifest_is_read_from_fresh_contents_api(monkeypatch, tmp_pa
             }
         }
     }
-    encoded = base64.b64encode(json.dumps(document).encode("utf-8")).decode("ascii")
-    response = json.dumps({"encoding": "base64", "content": encoded}).encode("utf-8")
+    response = json.dumps(document).encode("utf-8")
     requests = []
 
     def fake_urlopen(request, timeout):
@@ -145,11 +144,11 @@ def test_raw_github_manifest_is_read_from_fresh_contents_api(monkeypatch, tmp_pa
     assert manager.fetch_manifest().version == "1.1.31"
 
     assert manifest.version == "1.1.31"
-    assert requests == [(
-        "https://api.github.com/repos/owner/repo/contents/wb_ai_manager/update-manifest.json?ref=mainggg",
-        12,
-        "application/vnd.github+json",
-    )]
+    assert len(requests) == 1
+    assert requests[0][0].startswith(
+        "https://raw.githubusercontent.com/owner/repo/mainggg/wb_ai_manager/update-manifest.json?t="
+    )
+    assert requests[0][1:] == (12, None)
 
 
 def test_raw_update_file_is_fetched_through_github_contents_api(monkeypatch, tmp_path: Path):

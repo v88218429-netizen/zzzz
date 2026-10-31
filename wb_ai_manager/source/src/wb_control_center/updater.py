@@ -136,38 +136,12 @@ class UpdateManager:
             return cached[1]
         sep='&' if '?' in self.manifest_url else '?'
         url=f"{self.manifest_url}{sep}t={int(time.time())}"
-        parsed=urlsplit(url)
-        if parsed.hostname == 'raw.githubusercontent.com':
-            parts=parsed.path.strip('/').split('/')
-            if len(parts) < 4:
-                raise ValueError('raw GitHub manifest URL must include owner, repository, ref, and file path')
-            owner, repo, ref = parts[:3]
-            file_path = '/'.join(parts[3:])
-            api_url=(
-                f"https://api.github.com/repos/{owner}/{repo}/contents/"
-                f"{quote(file_path, safe='/')}?{urlencode({'ref': ref})}"
-            )
-            req=urllib.request.Request(
-                api_url,
-                headers={
-                    'User-Agent':'WB-AI-Manager-Updater/1.0',
-                    'Accept':'application/vnd.github+json',
-                    'Cache-Control':'no-cache',
-                },
-            )
-            with urllib.request.urlopen(req,timeout=12) as resp:
-                api_payload=json.loads(resp.read().decode('utf-8'))
-            if api_payload.get('encoding') != 'base64' or not api_payload.get('content'):
-                raise ValueError('GitHub contents API returned no base64 manifest content')
-            raw=base64.b64decode(api_payload['content'])
-            data=json.loads(raw.decode('utf-8'))
-        else:
-            req=urllib.request.Request(
-                url,
-                headers={'User-Agent':'WB-AI-Manager-Updater/1.0','Cache-Control':'no-cache'},
-            )
-            with urllib.request.urlopen(req,timeout=12) as resp:
-                data=json.loads(resp.read().decode('utf-8'))
+        req=urllib.request.Request(
+            url,
+            headers={'User-Agent':'WB-AI-Manager-Updater/1.0','Cache-Control':'no-cache'},
+        )
+        with urllib.request.urlopen(req,timeout=12) as resp:
+            data=json.loads(resp.read().decode('utf-8'))
         if not isinstance(data,dict):
             raise ValueError('update manifest must be an object')
         m=UpdateManifest.from_dict(data,self.channel)
