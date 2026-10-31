@@ -6337,7 +6337,7 @@ function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId){
   function supported(code){return val({length:built.metricHeaders.length+10},code)!==null;}
   function aggregate(list,code){
     if(!list||!list.length)return null;
-    var directCodes={
+    var directFields={
       fin_Profit:'profit_rub',pcs_ordersCount:'orders_qty',pcs_ordersSumRub:'orders_revenue_rub',
       fin_sales_total_sum:'revenue_rub',fin_sales_total_qnt:'net_sales_qty',newfin_sales_qnt:'net_sales_qty',
       newfin_retail_price_withdisc:'revenue_rub',newfin_return_qnt:'returns_qty',
@@ -6347,28 +6347,24 @@ function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId){
       newfin_penalty:'fines_rub',fin_taxpay:'tax_rub',newfin_deductions:'deduction_rub',
       newfin_delivery_sum:'delivery_logistic_rub',newfin_delivery_return_sum:'return_logistic_rub'
     };
-    function sum(name){var total=0;for(var i=0;i<list.length;i++){var x=val(list[i],name);if(x===''||x==null||!isFinite(Number(x)))return null;total+=Number(x);}return total;}
-    if(directCodes[code])return sum(code);
-    var numerator='',denominator='';
-    if(code==='fin_margin'){numerator='fin_Profit';denominator='fin_sales_total_sum';}
-    else if(code==='fin_roi'){numerator='fin_Profit';denominator='fin_Costs';}
-    else if(code==='reductOrdToSale'){numerator='pcs_ordersCount';denominator='fin_sales_total_qnt';}
-    else if(code==='fin_avgBillSPP'){numerator='customer_revenue_rub';denominator='fin_sales_total_qnt';}
-    else if(code==='fin_avgBillnoSPP'){numerator='fin_sales_total_sum';denominator='fin_sales_total_qnt';}
-    else if(code==='fin_SPP_Rate'){numerator='marketplace_discount_rub';denominator='fin_sales_total_sum';}
-    else if(code==='drr_orders'){numerator='expAdCosts';denominator='pcs_ordersSumRub';}
-    else if(code==='fin_DRR'){numerator='expAdCosts';denominator='fin_sales_total_sum';}
-    else if(code==='expCostsByUnit'){numerator='fin_Costs';denominator='fin_sales_total_qnt';}
-    else if(code==='ext_purchase_unit'){numerator='fin_purchase';denominator='fin_sales_total_qnt';}
-    else if(code==='fin_logisticsByUnit'){numerator='fin_logistics';denominator='fin_sales_total_qnt';}
-    else if(code==='fin_storagesByUnit'){numerator='storage_warehousePrice';denominator='fin_sales_total_qnt';}
-    else if(code==='cr_sale_order'){numerator='pcs_ordersCount';denominator='pcs_ordersCount';return '';}
+    function sumField(field){var total=0;for(var i=0;i<list.length;i++){var q=metricIx[field],v=q==null?null:list[i][q];if(v===''||v==null||typeof v==='boolean'||!isFinite(Number(v)))return null;total+=Number(v);}return total;}
+    if(directFields[code])return sumField(directFields[code]);
+    var n='',d='';
+    if(code==='fin_margin'){n='profit_rub';d='revenue_rub';}
+    else if(code==='fin_roi'){n='profit_rub';d='expenses_total_rub';}
+    else if(code==='reductOrdToSale'){n='orders_qty';d='net_sales_qty';}
+    else if(code==='fin_avgBillSPP'){n='customer_revenue_rub';d='net_sales_qty';}
+    else if(code==='fin_avgBillnoSPP'){n='revenue_rub';d='net_sales_qty';}
+    else if(code==='fin_SPP_Rate'){n='marketplace_discount_rub';d='revenue_rub';}
+    else if(code==='drr_orders'){n='ad_rub';d='orders_revenue_rub';}
+    else if(code==='fin_DRR'){n='ad_rub';d='revenue_rub';}
+    else if(code==='expCostsByUnit'){n='expenses_total_rub';d='net_sales_qty';}
+    else if(code==='ext_purchase_unit'){n='prime_cost_rub';d='net_sales_qty';}
+    else if(code==='fin_logisticsByUnit'){n='logistic_rub';d='net_sales_qty';}
+    else if(code==='fin_storagesByUnit'){n='storage_rub';d='net_sales_qty';}
+    else if(code==='cr_sale_order'){n='paid_order_qty';d='orders_qty';}
     else return null;
-    var a,b;
-    if(numerator==='fin_Profit')a=sum('fin_Profit');else if(numerator==='customer_revenue_rub')a=sum('fin_avgBillSPP')===null?null:sum('fin_avgBillSPP')*sum('fin_sales_total_qnt');else if(numerator==='marketplace_discount_rub')a=sum('fin_SPP_Rate')===null?null:sum('fin_SPP_Rate')*sum('fin_sales_total_sum');else a=sum(numerator);
-    if(denominator==='fin_Costs')b=sum('fin_Costs');else if(denominator==='fin_sales_total_qnt')b=sum('fin_sales_total_qnt');else if(denominator==='fin_sales_total_sum')b=sum('fin_sales_total_sum');else if(denominator==='pcs_ordersSumRub')b=sum('pcs_ordersSumRub');else b=sum(denominator);
-    if(a==null||b==null||b===0)return '';
-    return a/b;
+    var a=sumField(n),b=sumField(d);return a==null||b==null||b===0?'':a/b;
   }
   function rnpValue(list,code){
     if(!list||!list.length)return '';
@@ -6402,7 +6398,7 @@ function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId){
     var dupDates=Object.keys(positions).filter(function(k){return positions[k].length>1;}).sort();
     dupDates.forEach(function(k){
       var cols=positions[k],keep=cols[0];
-      for(var di=1;di<cols.length;di++){
+      for(var di=cols.length-1;di>=1;di--){
         var drop=cols[di],last=sh.getLastRow();
         archiveSnapshot(sh,drop,k,'Удаление повторного столбца даты',last);
         var a=sh.getRange(1,keep,last,1).getValues().map(function(r){return r[0];});
@@ -6474,7 +6470,7 @@ function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId){
         if(String(sh.getRange('H1').getDisplayValue())!==newExact)throw new Error('WB_RNP_METADATA_READBACK_FAILED');
       }
     }
-    stats.push({sheet:spec.name,target_periods:targets.length,updated_columns:updates.length,archived_segments:archives,written_values:written,duplicates_removed:dupDates.length,min:targets[0]||'',max:targets.at(-1)||''});
+    stats.push({sheet:spec.name,target_periods:targets.length,updated_columns:updates.length,archived_segments:archives,written_values:written,duplicates_removed:dupDates.length,min:targets[0]||'',max:targets.length?targets[targets.length-1]:''});
   });
   archive.hideSheet();
   var chartTab=ss.getSheetByName('05_Графики_РНП'),charts=chartTab?chartTab.getCharts():[];
