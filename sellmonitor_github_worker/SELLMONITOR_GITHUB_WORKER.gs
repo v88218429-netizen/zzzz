@@ -6351,6 +6351,7 @@ function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId){
       if(has)archiveSnapshot(sh,cc+1,'BASE_'+(cc+1),'Восстановление основы после ошибки развёртывания',currentLast,colVals);
     }
     var oldFormula=sh.getRange(1,1).getFormula();
+    if(String(oldFormula||'').indexOf('=ARRAYFORMULA(')!==0)return {rows:0,columns:spec.baseCols,shiftedDayAxis:false,alreadyRestored:true};
     if(oldFormula){
       var ar=archive.getLastRow()+1;
       if(ar>archive.getMaxRows())archive.insertRowsAfter(archive.getMaxRows(),100);
@@ -6484,7 +6485,7 @@ function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId){
     });
     function refreshHeads(){
       lastCol=Math.max(13,sh.getLastColumn());
-      heads=lastCol>=14?sh.getRange(2,14,1,lastCol-13).getValues()[0]:[];
+      heads=lastCol>=startCol?sh.getRange(2,startCol,1,lastCol-startCol+1).getValues()[0]:[];
       positions={};
       for(var ci=0;ci<heads.length;ci++){var k=key(heads[ci]);if(k&&periodMap[k]){if(!positions[k])positions[k]=[];positions[k].push(startCol+ci);}}
     }
