@@ -4,7 +4,7 @@
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.65',
+  VERSION: 'github-worker-1.3.66',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -6359,12 +6359,14 @@ function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId){
       archive.getRange(ar,1,1,7).setValues([record]);
       if(String(archive.getRange(ar,6).getValue())!==record[5])throw new Error('WB_RNP_FORMULA_ARCHIVE_READBACK_FAILED:'+spec.name);
     }
-    if(spec.grain==='day'&&n1Status&&nHeader){
+    var oHeader=spec.grain==='day'?key(sh.getRange(2,15).getValue()):'';
+    if(spec.grain==='day'&&n1Status&&nHeader&&nHeader!==oHeader){
       archiveSnapshot(sh,14,nHeader,'Перемещение оси дат из неверной колонки N в O',currentLast,existing.map(function(r){return r[13];}));
       sh.insertColumnBefore(15);
       sh.getRange(1,14,sh.getMaxRows(),1).copyTo(sh.getRange(1,15,sh.getMaxRows(),1),SpreadsheetApp.CopyPasteType.PASTE_NORMAL,false);
       SpreadsheetApp.flush();
     }
+    if(spec.baseCols>=11)sh.getRange(1,11).clearDataValidations();
     for(var off=0;off<n;off+=500){
       var count=Math.min(500,n-off),block=base.slice(off,off+count);
       sh.getRange(off+1,1,count,spec.baseCols).setValues(block);
