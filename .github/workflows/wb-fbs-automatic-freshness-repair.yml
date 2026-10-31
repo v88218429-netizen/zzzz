@@ -64,6 +64,27 @@ jobs:
               print("FBS_AUTO_REPAIR=not_applicable")
               raise SystemExit(0)
 
+          runs_url = f"https://api.github.com/repos/{repo}/actions/runs?per_page=100"
+          runs = json.loads(get(runs_url)).get("workflow_runs", [])
+          mutation_names = {
+              "WB FBS GitHub recovery",
+              "WB FBS Sanych targeted recovery",
+              "WB FBS retry failed recovery windows",
+              "WB FBS supply sync via GitHub",
+          }
+          active_mutation = next((
+              item for item in runs
+              if item.get("name") in mutation_names
+              and item.get("status") in {"queued", "in_progress", "pending", "waiting", "requested"}
+          ), None)
+          if active_mutation:
+              print(
+                  "FBS_AUTO_REPAIR=deferred_active_mutation "
+                  + active_mutation.get("name", "unknown")
+                  + " run=" + str(active_mutation.get("id", "unknown"))
+              )
+              raise SystemExit(0)
+
           today = dt.datetime.now(dt.timezone.utc).date().isoformat()
           targets = {
               "AIR": (
