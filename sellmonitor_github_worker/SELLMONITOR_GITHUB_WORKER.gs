@@ -5233,6 +5233,266 @@ function sellmonitorGithubSeedWbTokens_(payload) {
 
 
 
+
+function sellmonitorGithubOzonPerfDate_(value) {
+  var d = value instanceof Date ? value : new Date(String(value || '') + 'T00:00:00Z');
+  if (!isFinite(d.getTime())) throw new Error('OZON_PERF_INVALID_DATE');
+  return Utilities.formatDate(d, 'UTC', 'yyyy-MM-dd');
+}
+function sellmonitorGithubOzonPerfNumber_(value, label) {
+  if (value == null || value === '') return '';
+  var n = Number(value);
+  if (!isFinite(n) || n < 0) throw new Error('OZON_PERF_INVALID_NUMBER:' + label);
+  return n;
+}
+function sellmonitorGithubOzonPerfDigest_(value) {
+  var bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, JSON.stringify(value), Utilities.Charset.UTF_8);
+  return bytes.map(function(b) { return ('0' + ((b + 256) % 256).toString(16)).slice(-2); }).join('');
+}
+function sellmonitorGithubOzonPerfRange_(sheet, row, startCol, values) {
+  if (!values || !values.length) return;
+  if (sheet.getMaxColumns() < startCol + values.length - 1) {
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), startCol + values.length - 1 - sheet.getMaxColumns());
+  }
+  sheet.getRange(row, startCol, 1, values.length).setValues([values]);
+}
+function sellmonitorGithubOzonPerfParsePeriod_(kind, value, shown) {
+  if (value instanceof Date && isFinite(value.getTime())) {
+    var from = Utilities.formatDate(value, 'UTC', 'yyyy-MM-dd');
+    if (kind === 'month') {
+      var p = from.split('-');
+      return {from:p[0]+'-'+p[1]+'-01',to:Utilities.formatDate(new Date(Date.UTC(Number(p[0]),Number(p[1]),0)),'UTC','yyyy-MM-dd')};
+    }
+  }
+  var s = String(shown || value || '').trim();
+  if (kind === 'day') {
+    var d = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+    if (!d) return null;
+    return {from:d[3]+'-'+('0'+d[2]).slice(-2)+'-'+('0'+d[1]).slice(-2),to:d[3]+'-'+('0'+d[2]).slice(-2)+'-'+('0'+d[1]).slice(-2)};
+  }
+  if (kind === 'week') {
+    var w=s.match(/^(\d{1,2})\.(\d{1,2})\s*[–-]\s*(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+    if(!w)return null;
+    var y=Number(w[5]), y1=y-(Number(w[2])>Number(w[4])?1:0);
+    return {from:y1+'-'+('0'+w[2]).slice(-2)+'-'+('0'+w[1]).slice(-2),to:y+'-'+('0'+w[4]).slice(-2)+'-'+('0'+w[3]).slice(-2)};
+  }
+  if (kind === 'month') {
+    var m=s.toLowerCase().match(/^([а-яё]+)\s+(\d{4})$/);
+    if(!m)return null;
+    var map={января:1,февраля:2,марта:3,апреля:4,мая:5,июня:6,июля:7,августа:8,сентября:9,октября:10,ноября:11,декабря:12};
+    var month=map[m[1]];
+    if(!month)return null;
+    var yr=Number(m[2]), mo=('0'+month).slice(-2);
+    return {from:yr+'-'+mo+'-01',to:Utilities.formatDate(new Date(Date.UTC(yr,month,0)),'UTC','yyyy-MM-dd')};
+  }
+  return null;
+}
+function sellmonitorGithubPublishOzonPerformanceDaily_(body) {
+  body=body||{};
+  if(body.complete!==true)throw new Error('OZON_PERF_INCOMPLETE_PRESERVE');
+  var store=String(body.store||'').trim();
+  var cfg=store==='DOM'?{key:'DOM',name:'Дом',id:'1g57et2zqlVfbs0_BoRobb5G-4Z2MTXZd028V7u4Kd-Q'}:
+    store==='HOZYAIKA'?{key:'HOZYAIKA',name:'Хозяюшка',id:'1Rl-IVihrZ56wKwDsf76wspZ53a8ntN3hCVN1gd4Tguo'}:null;
+  if(!cfg)throw new Error('OZON_PERF_STORE_INVALID');
+  var coverageFrom=String(body.coverage_from||''),coverageTo=String(body.coverage_to||'');
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(coverageFrom)||!/^\d{4}-\d{2}-\d{2}$/.test(coverageTo)||coverageFrom>coverageTo)throw new Error('OZON_PERF_COVERAGE_INVALID');
+  var inputDaily=body.daily_rows||[],inputPeriods=body.period_rows||[];
+  if(!inputDaily.length||!inputPeriods.length)throw new Error('OZON_PERF_EMPTY_EXPORT_PRESERVE');
+
+  var dailyMap={},dailyByDate={},dailyKeys=[];
+  inputDaily.forEach(function(x,i){
+    var day=String(x.date||''),id=String(x.id||'').trim();
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(day)||day<coverageFrom||day>coverageTo||!id)throw new Error('OZON_PERF_DAILY_KEY_INVALID:'+String(i+1));
+    var key=day+'|'+cfg.key+'|'+id;
+    if(dailyMap[key])throw new Error('OZON_PERF_DAILY_DUPLICATE:'+key);
+    var views=sellmonitorGithubOzonPerfNumber_(x.views,'views'),clicks=sellmonitorGithubOzonPerfNumber_(x.clicks,'clicks');
+    var spend=sellmonitorGithubOzonPerfNumber_(x.moneySpent,'moneySpent'),orders=sellmonitorGithubOzonPerfNumber_(x.orders,'orders');
+    var orderMoney=sellmonitorGithubOzonPerfNumber_(x.ordersMoney,'ordersMoney');
+    var row=[cfg.key,day,cfg.name,id,String(x.title||''),'','','',views,clicks,spend,orders,orderMoney,
+      views!==''&&Number(views)>0?Number(clicks||0)/Number(views)*100:'',
+      clicks!==''&&Number(clicks)>0?Number(spend||0)/Number(clicks):'',
+      orders!==''&&Number(orders)>0?Number(spend||0)/Number(orders):'',
+      orderMoney!==''&&Number(orderMoney)>0?Number(spend||0)/Number(orderMoney)*100:'',
+      'Ozon Performance API / statistics/daily/json',
+      'День закрыт; данные по кампании, без SKU; возможен пересчёт API',
+      key];
+    dailyMap[key]=row;dailyKeys.push(key);
+    if(!dailyByDate[day])dailyByDate[day]={views:0,clicks:0,spend:0,orders:0,orderMoney:0};
+    dailyByDate[day].views+=Number(views||0);dailyByDate[day].clicks+=Number(clicks||0);
+    dailyByDate[day].spend+=Number(spend||0);dailyByDate[day].orders+=Number(orders||0);
+    dailyByDate[day].orderMoney+=Number(orderMoney||0);
+  });
+  var dailyDates=Object.keys(dailyByDate).sort();
+  var expectedDays=Math.round((new Date(coverageTo+'T00:00:00Z')-new Date(coverageFrom+'T00:00:00Z'))/86400000)+1;
+  if(dailyDates.length!==expectedDays||dailyDates[0]!==coverageFrom||dailyDates[dailyDates.length-1]!==coverageTo)
+    throw new Error('OZON_PERF_DAILY_DATE_COVERAGE_MISMATCH:'+dailyDates.length+':'+expectedDays);
+
+  var periodMap={},periodKeys=[];
+  inputPeriods.forEach(function(x,i){
+    var from=String(x.from||''),to=String(x.to||''),id=String(x.id||'').trim();
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(from)||!/^\d{4}-\d{2}-\d{2}$/.test(to)||from>to||!id)
+      throw new Error('OZON_PERF_PERIOD_KEY_INVALID:'+String(i+1));
+    var key=from+'|'+to+'|'+cfg.key+'|'+id;
+    if(periodMap[key])throw new Error('OZON_PERF_PERIOD_DUPLICATE:'+key);
+    var views=sellmonitorGithubOzonPerfNumber_(x.views,'period.views'),clicks=sellmonitorGithubOzonPerfNumber_(x.clicks,'period.clicks');
+    var spend=sellmonitorGithubOzonPerfNumber_(x.moneySpent,'period.moneySpent'),toCart=sellmonitorGithubOzonPerfNumber_(x.toCart,'period.toCart');
+    var orders=sellmonitorGithubOzonPerfNumber_(x.orders,'period.orders'),orderMoney=sellmonitorGithubOzonPerfNumber_(x.ordersMoney,'period.ordersMoney');
+    var ctr=sellmonitorGithubOzonPerfNumber_(x.ctr,'period.ctr'),cpc=sellmonitorGithubOzonPerfNumber_(x.clickPrice,'period.clickPrice');
+    var drr=sellmonitorGithubOzonPerfNumber_(x.drr,'period.drr'),budget=sellmonitorGithubOzonPerfNumber_(x.budget,'period.budget');
+    var weekly=sellmonitorGithubOzonPerfNumber_(x.weeklyBudget,'period.weeklyBudget');
+    var row=[cfg.key,from,to,cfg.name,id,String(x.title||''),String(x.status||''),String(x.placement||''),
+      String(x.objectType||''),views,clicks,spend,toCart,orders,orderMoney,ctr,cpc,drr,
+      clicks!==''&&Number(clicks)>0?Number(orders||0)/Number(clicks)*100:'',
+      clicks!==''&&Number(clicks)>0?Number(toCart||0)/Number(clicks)*100:'',
+      toCart!==''&&Number(toCart)>0?Number(orders||0)/Number(toCart)*100:'',
+      budget,weekly,'Ozon Performance API / statistics/campaign/product/json',
+      'Снимок кампании за период API; без SKU',key];
+    periodMap[key]=row;periodKeys.push(key);
+  });
+
+  var ss=SpreadsheetApp.openById(cfg.id);
+  var dailySheet=ss.getSheetByName('04_Реклама_Дни'),periodSheet=ss.getSheetByName('05_Реклама_Периоды');
+  if(!dailySheet||!periodSheet)throw new Error('OZON_PERF_TARGET_SHEETS_MISSING:'+cfg.name);
+  var dailyHeader=['Кабинет ERP','Дата','Кабинет','ID кампании','Название кампании','offer_id','SKU Ozon','ID товара Ozon','Показы','Переходы','Расход, ₽','Заказы, шт.','Продажи, ₽','CTR','CPC, ₽','Цена заказа, ₽','ДРР','Источник рекламного кабинета','Статус полноты','Ключ записи'];
+  var periodHeader=['Кабинет ERP','Начало периода','Конец периода','Кабинет','ID кампании','Название кампании','Статус','Место показа','Тип объекта','Показы','Клики','Расход, ₽','Добавления в корзину','Заказы, шт.','Заказы, ₽','CTR, %','CPC, ₽','ДРР, %','Конверсия клик→заказ, %','Конверсия клик→корзина, %','Конверсия корзина→заказ, %','Бюджет, ₽','Бюджет недели, ₽','Источник','Статус полноты','Ключ записи'];
+  if(JSON.stringify(dailySheet.getRange(2,1,1,20).getDisplayValues()[0])!==JSON.stringify(dailyHeader))throw new Error('OZON_PERF_DAILY_HEADER_MISMATCH');
+  if(JSON.stringify(periodSheet.getRange(2,1,1,26).getDisplayValues()[0])!==JSON.stringify(periodHeader))throw new Error('OZON_PERF_PERIOD_HEADER_MISMATCH');
+
+  function rowsByKey_(sheet,width,keyCol,startRow) {
+    var last=sheet.getLastRow(),map={},rows=[];
+    if(last>=startRow)sheet.getRange(startRow,1,last-startRow+1,width).getValues().forEach(function(r,i){
+      var key=String(r[keyCol-1]||'').trim();
+      if(key){if(map[key])throw new Error('OZON_PERF_EXISTING_DUPLICATE:'+sheet.getName()+':'+key);map[key]={row:startRow+i,values:r};rows.push({row:startRow+i,values:r,key:key});}
+    });
+    return {map:map,rows:rows,last:last};
+  }
+  var oldDaily=rowsByKey_(dailySheet,20,20,3),oldPeriods=rowsByKey_(periodSheet,26,26,3);
+  var dailyChanges=[],dailyAdds=[],periodChanges=[],periodAdds=[];
+  dailyKeys.sort().forEach(function(k){var old=oldDaily.map[k],row=dailyMap[k];if(!old)dailyAdds.push(row);else if(JSON.stringify(old.values)!==JSON.stringify(row))dailyChanges.push({row:old.row,old:old.values,next:row});});
+  periodKeys.sort().forEach(function(k){var old=oldPeriods.map[k],row=periodMap[k];if(!old)periodAdds.push(row);else if(JSON.stringify(old.values)!==JSON.stringify(row))periodChanges.push({row:old.row,old:old.values,next:row});});
+
+  var helperSpecs=[
+    {name:'06_Магазин_дни',kind:'day',firstMetricRow:8,lastMetricRow:17,note:'Источник рекламы: Ozon Performance API по кампаниям; покрытие '+coverageFrom+'–'+coverageTo+'. Текущий день не включён; незаполненный день не считается нулём.'},
+    {name:'07_Магазин_недели',kind:'week',firstMetricRow:8,lastMetricRow:17,note:'Реклама: Ozon Performance API по кампаниям; суммы только по датам источника. Незаполненные даты не являются нулём; неполная неделя отмечена.'},
+    {name:'08_Магазин_месяцы',kind:'month',firstMetricRow:8,lastMetricRow:17,note:'Реклама: Ozon Performance API по кампаниям; октябрь '+coverageTo+'; неполные месяцы отмечены.'}
+  ];
+  var helperWrites=[],chartSheet=ss.getSheetByName('10_Графики_магазина');
+  var helperArchive=[];
+  helperSpecs.forEach(function(spec){
+    var sh=ss.getSheetByName(spec.name);
+    if(!sh)throw new Error('OZON_PERF_HELPER_MISSING:'+spec.name);
+    var lastCol=sh.getLastColumn(), startCol=6, count=Math.max(0,lastCol-startCol+1);
+    var headers=sh.getRange(2,startCol,1,count).getValues()[0],shown=sh.getRange(2,startCol,1,count).getDisplayValues()[0];
+    var oldRows=[],newRows=[];
+    for(var r=spec.firstMetricRow;r<=spec.lastMetricRow;r++){
+      oldRows.push(sh.getRange(r,startCol,1,count).getValues()[0]);
+      newRows.push(oldRows[oldRows.length-1].slice());
+    }
+    var rowsChanged=false;
+    for(var col=0;col<count;col++){
+      var period=sellmonitorGithubOzonPerfParsePeriod_(spec.kind,headers[col],shown[col]);
+      if(!period)continue;
+      var intersect=period.to>=coverageFrom&&period.from<=coverageTo;
+      if(!intersect)continue;
+      var sums={views:0,clicks:0,spend:0,orders:0,orderMoney:0,days:0};
+      Object.keys(dailyByDate).forEach(function(day){
+        if(day>=period.from&&day<=period.to){var d=dailyByDate[day];sums.views+=d.views;sums.clicks+=d.clicks;sums.spend+=d.spend;sums.orders+=d.orders;sums.orderMoney+=d.orderMoney;sums.days++;}
+      });
+      if(!sums.days)continue;
+      var vals=[sums.views,sums.clicks,sums.spend,sums.orders,sums.orderMoney,
+        sums.views>0?sums.clicks/sums.views:'',
+        sums.clicks>0?sums.spend/sums.clicks:'',
+        sums.orders>0?sums.spend/sums.orders:'',
+        sums.orderMoney>0?sums.spend/sums.orderMoney:'',
+        sums.clicks>0?sums.orders/sums.clicks:''];
+      for(var j=0;j<vals.length;j++)newRows[j][col]=vals[j];
+    }
+    newRows.forEach(function(row,i){if(JSON.stringify(row)!==JSON.stringify(oldRows[i]))rowsChanged=true;});
+    var noteCell=spec.kind==='day'?'A1':'A1',oldNote=sh.getRange(noteCell).getValue();
+    if(rowsChanged){for(var j=0;j<oldRows.length;j++)helperArchive.push({sheet:spec.name,range:(spec.firstMetricRow+j)+':'+spec.lastMetricRow,values:oldRows[j]});}
+    if(String(oldNote||'')!==spec.note)helperArchive.push({sheet:spec.name,range:noteCell,values:[oldNote]});
+    helperWrites.push({spec:spec,sh:sh,startCol:startCol,oldRows:oldRows,newRows:newRows,note:spec.note,rowsChanged:rowsChanged});
+  });
+  if(chartSheet){
+    var oldChartNote=chartSheet.getRange('A2').getValue();
+    var newChartNote='Заказы, отправления и штуки — Ozon Seller API; текущий день предварительный. Реклама — Ozon Performance API по кампаниям, без SKU; полные дневные данные до '+coverageTo+'. Атрибутированная сумма рекламных заказов не является начисленной выручкой. Прибыль, маржа, выкуп, остатки и органическая воронка не получены.';
+    if(String(oldChartNote||'')!==newChartNote)helperArchive.push({sheet:'10_Графики_магазина',range:'A2',values:[oldChartNote]});
+    helperWrites.push({spec:{name:'10_Графики_магазина',kind:'note'},sh:chartSheet,note:newChartNote});
+  }
+  var dailySheetTitle='Ozon Performance API / statistics/daily/json · кампании; доступные дни '+coverageFrom+'–'+coverageTo; 
+  var oldDailyTitle=dailySheet.getRange('A1').getValue();
+  if(String(oldDailyTitle||'')!==dailySheetTitle)helperArchive.push({sheet:'04_Реклама_Дни',range:'A1',values:[oldDailyTitle]});
+  var periodSheetTitle='Ozon Performance API / statistics/campaign/product/json · периодные итоги кампаний; без SKU.';
+  var oldPeriodTitle=periodSheet.getRange('A1').getValue();
+  if(String(oldPeriodTitle||'')!==periodSheetTitle)helperArchive.push({sheet:'05_Реклама_Периоды',range:'A1',values:[oldPeriodTitle]});
+  var archiveTab=ss.getSheetByName('Архив_Реклама_API_до_20261031');
+  if(!archiveTab)archiveTab=ss.insertSheet('Архив_Реклама_API_до_20261031');
+  if(archiveTab.getLastRow()===0)archiveTab.getRange(1,1,1,7).setValues([['Время архива','Лист','Диапазон/строка','Ключ','Содержимое до замены','Действие','Покрытие API']]);
+  var archiveRows=[];
+  dailyChanges.forEach(function(x){archiveRows.push([new Date(),'04_Реклама_Дни',String(x.row),'',JSON.stringify(x.old),'замена строки',coverageFrom+'..'+coverageTo]);});
+  periodChanges.forEach(function(x){archiveRows.push([new Date(),'05_Реклама_Периоды',String(x.row),'',JSON.stringify(x.old),'замена строки',coverageFrom+'..'+coverageTo]);});
+  helperArchive.forEach(function(x){archiveRows.push([new Date(),x.sheet,x.range,'',JSON.stringify(x.values),'замена показателей/статуса',coverageFrom+'..'+coverageTo]);});
+  if(archiveRows.length){
+    var archiveStart=archiveTab.getLastRow()+1;
+    if(archiveTab.getMaxRows()<archiveStart+archiveRows.length-1)archiveTab.insertRowsAfter(archiveTab.getMaxRows(),archiveStart+archiveRows.length-1-archiveTab.getMaxRows());
+    for(var off=0;off<archiveRows.length;off+=500){
+      var part=archiveRows.slice(off,off+500),at=archiveStart+off;
+      archiveTab.getRange(at,1,part.length,7).setValues(part);
+      var check=archiveTab.getRange(at,1,part.length,7).getValues();
+      if(check.length!==part.length||check.some(function(r,i){return String(r[4])!==String(part[i][4]);}))throw new Error('OZON_PERF_ARCHIVE_READBACK_FAILED:'+at);
+    }
+  }
+  if(dailyChanges.length||periodChanges.length||helperArchive.length){
+    SpreadsheetApp.flush();
+    if(archiveRows.length===0)throw new Error('OZON_PERF_ARCHIVE_REQUIRED_BEFORE_WRITE');
+  }
+
+  dailyChanges.forEach(function(x){dailySheet.getRange(x.row,1,1,20).setValues([x.next]);});
+  periodChanges.forEach(function(x){periodSheet.getRange(x.row,1,1,26).setValues([x.next]);});
+  function appendRows_(sheet,last,rows,width){
+    if(!rows.length)return 0;
+    var start=Math.max(3,last+1);
+    if(sheet.getMaxRows()<start+rows.length-1)sheet.insertRowsAfter(sheet.getMaxRows(),start+rows.length-1-sheet.getMaxRows());
+    if(last>=3){sheet.getRange(last,1,1,width).copyTo(sheet.getRange(start,1,rows.length,width),SpreadsheetApp.CopyPasteType.PASTE_FORMAT,false);}
+    sheet.getRange(start,1,rows.length,width).setValues(rows);
+    return rows.length;
+  }
+  var dailyAdded=appendRows_(dailySheet,oldDaily.last,dailyAdds,20);
+  var periodsAdded=appendRows_(periodSheet,oldPeriods.last,periodAdds,26);
+  helperWrites.forEach(function(x){
+    if(x.rowsChanged){
+      x.newRows.forEach(function(row,i){x.sh.getRange(x.spec.firstMetricRow+i,x.startCol,1,row.length).setValues([row]);});
+    }
+    if(x.note!==undefined)x.sh.getRange('A1').setValue(x.note);
+  });
+  dailySheet.getRange('A1').setValue(dailySheetTitle);
+  periodSheet.getRange('A1').setValue(periodSheetTitle);
+  SpreadsheetApp.flush();
+
+  var dailyCheck=dailySheet.getLastRow()>=3?dailySheet.getRange(3,20,dailySheet.getLastRow()-2,1).getValues().map(function(r){return String(r[0]||'');}):[];
+  var periodCheck=periodSheet.getLastRow()>=3?periodSheet.getRange(3,26,periodSheet.getLastRow()-2,1).getValues().map(function(r){return String(r[0]||'');}):[];
+  var dailyOk=dailyKeys.every(function(k){return dailyCheck.indexOf(k)>=0;});
+  var periodOk=periodKeys.every(function(k){return periodCheck.indexOf(k)>=0;});
+  var aggregatesOk=helperWrites.every(function(x){
+    if(!x.rowsChanged)return true;
+    for(var i=0;i<x.newRows.length;i++){
+      var rb=x.sh.getRange(x.spec.firstMetricRow+i,x.startCol,1,x.newRows[i].length).getValues()[0];
+      if(JSON.stringify(rb)!==JSON.stringify(x.newRows[i]))return false;
+    }
+    return true;
+  });
+  if(!dailyOk||!periodOk||!aggregatesOk)throw new Error('OZON_PERF_READBACK_FAILED:'+cfg.name+':'+dailyOk+':'+periodOk+':'+aggregatesOk);
+  var charts=chartSheet?chartSheet.getCharts().length:0;
+  if(charts<1)throw new Error('OZON_PERF_CHARTS_MISSING:'+cfg.name);
+  return {ok:true,action:'publish_ozon_performance_daily',store:cfg.name,coverage_from:coverageFrom,coverage_to:coverageTo,
+    source_daily_rows:inputDaily.length,daily_added:dailyAdded,daily_changed:dailyChanges.length,daily_archived:dailyChanges.length,
+    source_period_rows:inputPeriods.length,period_added:periodsAdded,period_changed:periodChanges.length,period_archived:periodChanges.length,
+    archived_rows:archiveRows.length,archive_sheet:archiveTab.getName(),readback:true,daily_keys_readback:dailyKeys.length,
+    period_keys_readback:periodKeys.length,helper_readback:aggregatesOk,charts:charts,
+    daily_sha256:sellmonitorGithubOzonPerfDigest_(dailyKeys.map(function(k){return dailyMap[k];})),
+    period_sha256:sellmonitorGithubOzonPerfDigest_(periodKeys.map(function(k){return periodMap[k];}))};
+}
+
 const SMC_OZON_SUMMARY = Object.freeze({
   sourceId: '1VQwf-QPeSjexrEculDjWt_hpuCKu7PLzLZhMFjP2VZM',
   sourceSheet: 'Ozon Заказы',
@@ -6076,6 +6336,10 @@ function doPost(e) {
         called:true,
         result:{continuation_result:continuationResult}
       });
+    }
+
+    if (action === 'publish_ozon_performance_daily') {
+      return sellmonitorGithubWebJson_(sellmonitorGithubPublishOzonPerformanceDaily_(body));
     }
 
     if (action === 'publish_ozon_api_orders') {
