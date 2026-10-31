@@ -131,7 +131,9 @@ jobs:
                       "orderRowsChecked", "orderRowsMatched",
                       "orderSupplyIdsNotInCurrentApi", "sortedBackfilled",
                       "backfillComplete", "backfillRemainingRows",
-                      "backfillRowsCheckedTotal", "backfillRowsMatchedTotal",\n                      "supplyReadbackVerified", "timingReadbackVerified",\n                      "sortedReadbackVerified",
+                      "backfillRowsCheckedTotal", "backfillRowsMatchedTotal",
+                      "supplyReadbackVerified", "timingReadbackVerified",
+                      "sortedReadbackVerified",
                       "backfillSortedTotal", "backfillStartRow", "backfillEndRow"
                   )
               }, ensure_ascii=False, separators=(",", ":")), flush=True)
