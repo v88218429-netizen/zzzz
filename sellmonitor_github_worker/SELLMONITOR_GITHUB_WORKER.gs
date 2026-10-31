@@ -4,7 +4,7 @@
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.59',
+  VERSION: 'github-worker-1.3.60',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -6252,13 +6252,13 @@ function sellmonitorGithubPublishWbInnerPeriods_(onlyStore){
       var periodChanges=res.day.new_rows+res.day.changed_rows+res.week.new_rows+res.week.changed_rows+res.month.new_rows+res.month.changed_rows;
       var dashboardView=ss.getSheetByName('00_Динамика');var dashboardHasCharts=!!(dashboardView&&dashboardView.getCharts().length);res.dashboard=(shop==='sanych_wb'&&periodChanges===0&&dashboardHasCharts)?{ok:true,skipped:true,reason:'WB_INNER_NO_PERIOD_CHANGES'}:sellmonitorGithubWbBuildDashboard_(ss,cfg.name);
       results.push(res);
-      var log=sellmonitorGithubWbInnerEnsureSheet_(ss,SMC_WB_INNER_SUMMARY_V1.tabs.log,['Время запуска','Магазин','Источник частей','Строк фактов','Период с','Период по','Дней точных','Дней предварительных','Строк день/неделя/месяц','Новых','Изменённых','Архивировано','SHA-256']);
+      var log=sellmonitorGithubWbInnerEnsureSheet_(ss,SMC_WB_INNER_SUMMARY_V1.tabs.log,['Время запуска','Магазин','Источник частей','Строк фактов','Период с','Период по','Дней точных','Дней предварительных','Строк день/неделя/месяц','Новых','Изменённых','Архивировано','SHA-256','Проверка матриц РНП']);
       var counts=[res.day.rows,res.week.rows,res.month.rows],newCount=res.day.new_rows+res.week.new_rows+res.month.new_rows,changeCount=res.day.changed_rows+res.week.changed_rows+res.month.changed_rows,archCount=res.day.archived_rows+res.week.archived_rows+res.month.archived_rows;
-      var logRow=[new Date(),cfg.name,sourceIds.join(','),built.sourceRows,built.min,built.max,built.factualDays,built.partialDays,counts.join('/'),newCount,changeCount,archCount,[res.day.sha256,res.week.sha256,res.month.sha256].join('/')];
+      var logRow=[new Date(),cfg.name,sourceIds.join(','),built.sourceRows,built.min,built.max,built.factualDays,built.partialDays,counts.join('/'),newCount,changeCount,archCount,[res.day.sha256,res.week.sha256,res.month.sha256].join('/'),JSON.stringify({ok:res.rnp.ok,last_exact:res.rnp.last_exact,matrices:res.rnp.matrices,readback:res.rnp.readback,charts:res.rnp.rnp_charts})];
       var at=log.getLastRow()+1;if(at>log.getMaxRows())log.insertRowsAfter(log.getMaxRows(),100);
-      log.getRange(at,1,1,13).setValues([logRow]);
-      var check=log.getRange(at,1,1,13).getValues()[0];
-      if(String(check[12])!==String(logRow[12]))throw new Error('WB_INNER_STORE_LOG_READBACK_FAILED:'+cfg.name);
+      log.getRange(at,1,1,14).setValues([logRow]);
+      var check=log.getRange(at,1,1,14).getValues()[0];
+      if(String(check[12])!==String(logRow[12])||String(check[13])!==String(logRow[13]))throw new Error('WB_INNER_STORE_LOG_READBACK_FAILED:'+cfg.name);
       SpreadsheetApp.flush();
     }catch(e){results.push({store:cfg.name,ok:false,error:String(e&&e.message||e)});}
   });
@@ -6285,7 +6285,7 @@ function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId){
     return m?m[3]+'-'+('0'+m[2]).slice(-2)+'-'+('0'+m[1]).slice(-2):'';
   }
   function date_(s){var p=s.split('-').map(Number);return new Date(p[0],p[1]-1,p[2],12,0,0);}
-  function cellKey(v){if(v===''||v==null)return '';if(v instanceof Date)return Utilities.formatDate(v,ss.getSpreadsheetTimeZone(),'yyyy-MM-dd');return String(v);}
+  function cellKey(v){if(v===''||v==null)return '';if(v instanceof Date&&!isNaN(v.getTime()))return Utilities.formatDate(v,ss.getSpreadsheetTimeZone(),'yyyy-MM-dd');if(typeof v==='number'&&isFinite(v))return Utilities.formatDate(new Date(Date.UTC(1899,11,30)+Math.floor(v)*86400000),ss.getSpreadsheetTimeZone(),'yyyy-MM-dd');return String(v);}
   var archiveName='Архив_RNP_матрицы_до_обновления_20261031';
   var archive=ss.getSheetByName(archiveName);
   if(!archive){archive=ss.insertSheet(archiveName);archive.getRange(1,1,1,7).setValues([['Архивировано','Магазин','Лист','Период','Начальная строка','Старые значения JSON','Причина']]);archive.setFrozenRows(1);archive.setTabColor('#7F6000');}
