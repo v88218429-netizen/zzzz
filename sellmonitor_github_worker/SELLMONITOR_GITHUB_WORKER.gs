@@ -1,10 +1,10 @@
 /**
- * Sellmonitor GitHub Central Worker v1.3.61
+ * Sellmonitor GitHub Central Worker v1.3.62
  * GitHub is source-of-truth/scheduler. This Apps Script project is only
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.61',
+  VERSION: 'github-worker-1.3.62',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -6148,8 +6148,27 @@ function sellmonitorGithubWbInnerEnsureSheet_(ss,name,headers){
   if(!sh)sh=ss.insertSheet(name);
   if(sh.getLastRow()===0)sh.getRange(1,1,1,headers.length).setValues([headers]);
   else{
-    var existing=sh.getRange(1,1,1,headers.length).getDisplayValues()[0];
-    if(JSON.stringify(existing)!==JSON.stringify(headers))throw new Error('WB_INNER_TARGET_SCHEMA_MISMATCH:'+name);
+    var existing=sh.getRange(1,1,1,headers.length).getDisplayValues()[0],firstMismatch=-1;
+    for(var i=0;i<headers.length;i++){
+      if(String(existing[i]||'')!==String(headers[i])){
+        firstMismatch=i;break;
+      }
+    }
+    if(firstMismatch>=0){
+      // Safe additive migration: repair only missing trailing headers when all
+      // prior headers match and the affected trailing columns contain no data.
+      if(firstMismatch===0||existing.slice(0,firstMismatch).some(function(v,i){return String(v||'')!==String(headers[i]);}))
+        throw new Error('WB_INNER_TARGET_SCHEMA_MISMATCH:'+name);
+      if(existing.slice(firstMismatch).some(function(v){return String(v||'')!=='';}))
+        throw new Error('WB_INNER_TARGET_SCHEMA_MISMATCH:'+name);
+      var dataRows=Math.max(0,sh.getLastRow()-1),trailingWidth=headers.length-firstMismatch;
+      if(dataRows){
+        var trailingData=sh.getRange(2,firstMismatch+1,dataRows,trailingWidth).getDisplayValues();
+        if(trailingData.some(function(row){return row.some(function(v){return String(v||'')!=='';});}))
+          throw new Error('WB_INNER_TARGET_SCHEMA_MISMATCH:'+name);
+      }
+      sh.getRange(1,firstMismatch+1,1,trailingWidth).setValues([headers.slice(firstMismatch)]);
+    }
   }
   sh.setFrozenRows(1);
   sh.getRange(1,1,1,headers.length).setFontWeight('bold').setBackground('#234f6e').setFontColor('#ffffff');
