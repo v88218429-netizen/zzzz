@@ -20,8 +20,12 @@ jobs:
   discover:
     runs-on: ubuntu-latest
     outputs:
-      matrix: ${{ steps.failed.outputs.matrix }}
-      count: ${{ steps.failed.outputs.count }}
+      air_matrix: ${{ steps.failed.outputs.air_matrix }}
+      air_count: ${{ steps.failed.outputs.air_count }}
+      hozy_matrix: ${{ steps.failed.outputs.hozy_matrix }}
+      hozy_count: ${{ steps.failed.outputs.hozy_count }}
+      sanych_matrix: ${{ steps.failed.outputs.sanych_matrix }}
+      sanych_count: ${{ steps.failed.outputs.sanych_count }}
     steps:
       - name: Find only failed dated recovery windows
         id: failed
@@ -75,34 +79,37 @@ jobs:
               rows.append({"client": client, "start_date": start, "end_date": end,
                            "script": script, "batch_size": batch})
           rows.sort(key=lambda row: (row["start_date"], row["client"]))
-          output = {"include": rows}
+          groups = {
+              "air": [row for row in rows if row["client"] == "AIR"],
+              "hozy": [row for row in rows if row["client"] == "HOZYAYUSHKA"],
+              "sanych": [row for row in rows if row["client"] == "SANYCH"],
+          }
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as stream:
-              stream.write("matrix=" + json.dumps(output, separators=(",", ":")) + "\n")
-              stream.write("count=" + str(len(rows)) + "\n")
+              for name, items in groups.items():
+                  stream.write(name + "_matrix=" + json.dumps({"include": items}, separators=(",", ":")) + "\\n")
+                  stream.write(name + "_count=" + str(len(items)) + "\\n")
           print("FAILED_OR_CANCELLED_WINDOWS_REQUEUED=" + str(len(rows)), flush=True)
           print("MULTI_DAY_WINDOWS_SPLIT_TO_DAYS=" + str(split_count), flush=True)
           print("RETRY_LIMIT_REACHED=" + str(exhausted), flush=True)
           PY
 
-  retry:
+  retry_air:
     needs: discover
-    if: ${{ needs.discover.outputs.count != '0' }}
-    name: "retry ${{ matrix.client }} ${{ matrix.start_date }}–${{ matrix.end_date }} [batch=${{ matrix.batch_size }}]"
+    if: ${{ needs.discover.outputs.air_count != '0' }}
+    name: "retry AIR ${{ matrix.start_date }}–${{ matrix.end_date }} [batch=${{ matrix.batch_size }}]"
     strategy:
       fail-fast: false
       max-parallel: 1
-      matrix: ${{ fromJson(needs.discover.outputs.matrix) }}
+      matrix: ${{ fromJson(needs.discover.outputs.air_matrix) }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
-      FBS_CLIENT: ${{ matrix.client }}
+      FBS_CLIENT: AIR
       FBS_BATCH_SIZE: ${{ matrix.batch_size }}
       FBS_LOOKBACK_DAYS: "7"
       FBS_START_DATE: ${{ matrix.start_date }}
       FBS_END_DATE: ${{ matrix.end_date }}
-      WB_API_TOKEN_AP: ${{ secrets.WB_API_TOKEN_AP }}
-      WB_API_TOKEN_AA: ${{ secrets.WB_API_TOKEN_AA }}
-      WB_API_TOKEN_YV: ${{ secrets.WB_API_TOKEN_YV }}
+      WB_API_TOKEN_WB_API_TOKEN_AA: ${{ secrets.WB_API_TOKEN_AA }}
       GOOGLE_BRIDGE_KEY: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
       GOOGLE_BRIDGE_URL: https://script.google.com/macros/s/AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw/exec
     steps:
@@ -116,25 +123,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python -m py_compile "${{ matrix.script }}"
+          python -m py_compile wb_worker/github_fbs_recovery.py
           test -n "$GOOGLE_BRIDGE_KEY"
-          if [[ "$FBS_CLIENT" == "AIR" ]]; then
-            test -n "$WB_API_TOKEN_AA"
-          elif [[ "$FBS_CLIENT" == "HOZYAYUSHKA" ]]; then
-            test -n "$WB_API_TOKEN_YV"
-          elif [[ "$FBS_CLIENT" == "SANYCH" ]]; then
-            test -n "$WB_API_TOKEN_AP"
-          else
-            exit 2
-          fi
-      - name: Reconcile ${{ matrix.client }} from official WB source with bounded retries
+          test -n "$WB_API_TOKEN_AA"
+      - name: Reconcile AIR from official WB source with bounded retries
         shell: bash
         run: |
           set -uo pipefail
           for batch_size in 5 2 1; do
             echo "FBS_RETRY_ATTEMPT_START client=$FBS_CLIENT from=$FBS_START_DATE to=$FBS_END_DATE batch=$batch_size"
             set +e
-            FBS_BATCH_SIZE="$batch_size" timeout --signal=TERM --kill-after=30s 20m python "${{ matrix.script }}"
+            FBS_BATCH_SIZE="$batch_size" timeout --signal=TERM --kill-after=30s 20m python wb_worker/github_fbs_recovery.py
             result=$?
             set -e
             if [[ "$result" -eq 0 ]]; then
@@ -145,3 +144,108 @@ jobs:
             if [[ "$batch_size" -gt 1 ]]; then sleep 60; fi
           done
           exit 1
+
+  retry_hozy:
+    needs: discover
+    if: ${{ needs.discover.outputs.hozy_count != '0' }}
+    name: "retry HOZYAYUSHKA ${{ matrix.start_date }}–${{ matrix.end_date }} [batch=${{ matrix.batch_size }}]"
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix: ${{ fromJson(needs.discover.outputs.hozy_matrix) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      FBS_CLIENT: HOZYAYUSHKA
+      FBS_BATCH_SIZE: ${{ matrix.batch_size }}
+      FBS_LOOKBACK_DAYS: "7"
+      FBS_START_DATE: ${{ matrix.start_date }}
+      FBS_END_DATE: ${{ matrix.end_date }}
+      WB_API_TOKEN_WB_API_TOKEN_YV: ${{ secrets.WB_API_TOKEN_YV }}
+      GOOGLE_BRIDGE_KEY: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
+      GOOGLE_BRIDGE_URL: https://script.google.com/macros/s/AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw/exec
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: mainggg
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check source and credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile wb_worker/github_fbs_recovery.py
+          test -n "$GOOGLE_BRIDGE_KEY"
+          test -n "$WB_API_TOKEN_YV"
+      - name: Reconcile HOZYAYUSHKA from official WB source with bounded retries
+        shell: bash
+        run: |
+          set -uo pipefail
+          for batch_size in 5 2 1; do
+            echo "FBS_RETRY_ATTEMPT_START client=$FBS_CLIENT from=$FBS_START_DATE to=$FBS_END_DATE batch=$batch_size"
+            set +e
+            FBS_BATCH_SIZE="$batch_size" timeout --signal=TERM --kill-after=30s 20m python wb_worker/github_fbs_recovery.py
+            result=$?
+            set -e
+            if [[ "$result" -eq 0 ]]; then
+              echo "FBS_RETRY_WINDOW_VERIFIED=yes client=$FBS_CLIENT from=$FBS_START_DATE to=$FBS_END_DATE batch=$batch_size"
+              exit 0
+            fi
+            echo "FBS_RETRY_ATTEMPT_FAILED exit=$result batch=$batch_size"
+            if [[ "$batch_size" -gt 1 ]]; then sleep 60; fi
+          done
+          exit 1
+
+  retry_sanych:
+    needs: discover
+    if: ${{ needs.discover.outputs.sanych_count != '0' }}
+    name: "retry SANYCH ${{ matrix.start_date }}–${{ matrix.end_date }} [batch=${{ matrix.batch_size }}]"
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix: ${{ fromJson(needs.discover.outputs.sanych_matrix) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      FBS_CLIENT: SANYCH
+      FBS_BATCH_SIZE: ${{ matrix.batch_size }}
+      FBS_LOOKBACK_DAYS: "7"
+      FBS_START_DATE: ${{ matrix.start_date }}
+      FBS_END_DATE: ${{ matrix.end_date }}
+      WB_API_TOKEN_WB_API_TOKEN_AP: ${{ secrets.WB_API_TOKEN_AP }}
+      GOOGLE_BRIDGE_KEY: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
+      GOOGLE_BRIDGE_URL: https://script.google.com/macros/s/AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw/exec
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: mainggg
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check source and credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile wb_worker/sanych_fbs_recovery.py
+          test -n "$GOOGLE_BRIDGE_KEY"
+          test -n "$WB_API_TOKEN_AP"
+      - name: Reconcile SANYCH from official WB source with bounded retries
+        shell: bash
+        run: |
+          set -uo pipefail
+          for batch_size in 5 2 1; do
+            echo "FBS_RETRY_ATTEMPT_START client=$FBS_CLIENT from=$FBS_START_DATE to=$FBS_END_DATE batch=$batch_size"
+            set +e
+            FBS_BATCH_SIZE="$batch_size" timeout --signal=TERM --kill-after=30s 20m python wb_worker/sanych_fbs_recovery.py
+            result=$?
+            set -e
+            if [[ "$result" -eq 0 ]]; then
+              echo "FBS_RETRY_WINDOW_VERIFIED=yes client=$FBS_CLIENT from=$FBS_START_DATE to=$FBS_END_DATE batch=$batch_size"
+              exit 0
+            fi
+            echo "FBS_RETRY_ATTEMPT_FAILED exit=$result batch=$batch_size"
+            if [[ "$batch_size" -gt 1 ]]; then sleep 60; fi
+          done
+          exit 1
+
