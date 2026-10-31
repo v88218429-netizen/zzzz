@@ -141,7 +141,7 @@ class UpdateManager:
             file_path = '/'.join(parts[3:])
             api_url=(
                 f"https://api.github.com/repos/{owner}/{repo}/contents/"
-                f"{quote(file_path, safe='/')}?{urlencode({'ref': ref)}"
+                f"{quote(file_path, safe='/')}?{urlencode({'ref': ref})}"
             )
             req=urllib.request.Request(
                 api_url,
