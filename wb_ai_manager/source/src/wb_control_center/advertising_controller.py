@@ -683,11 +683,14 @@ class AdvertisingController:
         # A directional signal is not a numeric bid recommendation. Without
         # WB's exact current bid, even HOLD cannot truthfully mean "leave it as is".
         if current_bid is None:
-            decision = "NEEDS_DATA"
-            label = "Нет точной текущей ставки WB: числовая рекомендация заблокирована"
-            target_bid = None
             blockers.append("WB не вернул точную текущую ставку кампании; нельзя проверить или рассчитать числовое изменение.")
             reasons.append("ДРР, CPC, клики и заказы описывают результат рекламы, но не заменяют фактическую ставку WB.")
+            # Zero-order spend has its own manual campaign review path and does
+            # not claim a numeric bid. Preserve that safety alert separately.
+            if decision != "PAUSE_REVIEW":
+                decision = "NEEDS_DATA"
+                label = "Нет точной текущей ставки WB: числовая рекомендация заблокирована"
+                target_bid = None
 
         if current_bid is not None and target_bid is not None:
             target_bid = _clamp(target_bid, current_bid * (1-max_bid_step), current_bid * (1+max_bid_step))
