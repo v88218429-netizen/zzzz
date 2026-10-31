@@ -462,7 +462,7 @@
         {
           "path": "src/wb_control_center/updater.py",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/src/wb_control_center/updater.py",
-          "sha256": "b0ad9015980ece9f085cc08bfbc7279086a009766d40799f5b55a9336a75bd91"
+          "sha256": "41990a01a7636cece72f00e3c82299a010a51deb1db6531aafef9f9a5100e599"
         },
         {
           "path": "src/wb_control_center/wb_mcp_runner.py",
