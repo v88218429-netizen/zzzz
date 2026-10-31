@@ -74,7 +74,7 @@ jobs:
           with urllib.request.urlopen(runtime_request,timeout=480) as response:
               runtime=json.loads(response.read().decode("utf-8"))
           runtime_result=runtime.get("result") or {}
-          if runtime.get("ok") is not True or runtime_result.get("ok") is not True:
+          if runtime.get("ok") is not True or runtime_result.get("ok") is not True or runtime_result.get("trigger_ok") is not True:
               print("FBS_RUNTIME_HEALTH_FAILED "+json.dumps(runtime,ensure_ascii=False)[:6000],flush=True)
               raise SystemExit("FBS_RUNTIME_HEALTH_FAILED")
           print("FBS_RUNTIME_HEALTH="+json.dumps({k:runtime_result.get(k) for k in
