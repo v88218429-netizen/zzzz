@@ -18,10 +18,14 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install focused test dependencies
-        run: python -m pip install --upgrade pip pytest
+        run: python -m pip install --upgrade pip pytest httpx
       - name: Compile WB Control Center
         run: python -m compileall -q wb_ai_manager/source/src/wb_control_center
       - name: Run Query Manager tests
         env:
           PYTHONPATH: wb_ai_manager/source/src
         run: pytest -q wb_ai_manager/source/tests/test_query_manager.py
+      - name: Run traffic collection regression tests
+        env:
+          PYTHONPATH: wb_worker
+        run: pytest -q wb_worker/test_traffic_sync.py
