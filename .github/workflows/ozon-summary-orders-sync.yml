@@ -181,12 +181,12 @@ jobs:
                   except (TypeError, ValueError) as exc:
                       raise RuntimeError("OZON_" + flow + "_INVALID_POSTING_TIMESTAMP:" + label + ":" + str(exc)[:120])
 
-              offset = 0
-              previous_fbo_oldest = None
+              cursor = ""
+              seen_fbo_cursors = set()
               while True:
                   api_context.update({"store": label, "flow": "FBO", "page": store_pages + 1})
                   response = api_post("/v3/posting/fbo/list", {
-                      "dir": "DESC", "filter": dict(window), "limit": 100, "offset": offset,
+                      "dir": "DESC", "filter": dict(window), "limit": 100, "cursor": cursor,
                       "with": {"analytics_data": False, "financial_data": False},
                   }, headers)
                   page, postings, has_next = page_parts(response)
@@ -230,7 +230,11 @@ jobs:
                       break
                   if not postings:
                       raise RuntimeError("OZON_FBO_EMPTY_PAGE_WITH_NEXT:" + label)
-                  offset += len(postings)
+                  next_cursor = str(page.get("cursor") or page.get("next_cursor") or response.get("cursor") or response.get("next_cursor") or "").strip()
+                  if not next_cursor or next_cursor == cursor or next_cursor in seen_fbo_cursors:
+                      raise RuntimeError("OZON_FBO_CURSOR_MISSING_OR_REPEATED:" + label)
+                  seen_fbo_cursors.add(next_cursor)
+                  cursor = next_cursor
                   if store_pages >= 5000:
                       raise RuntimeError("OZON_FBO_PAGE_GUARD:" + label)
 
