@@ -6323,17 +6323,23 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
         }
         group.items.push(item);
       });
-      var query=groups.map(function(group){
-        return 'ranges='+encodeURIComponent(orderSheet+'!A'+group.start+':G'+group.end);
-      }).join('&');
+      // Use a POST body for the disjoint A1 ranges. The equivalent batchGet
+      // GET encoded every range into the URL and exceeded UrlFetch's URL limit
+      // on large books when a 100-order batch touched many separated rows.
+      var dataFilters=groups.map(function(group){
+        return {a1Range:orderSheet+'!A'+group.start+':G'+group.end};
+      });
       mark('STATE_BATCH_READ_START_'+rows.length+'_IDS_'+groups.length+'_RANGES');
-      var response=fetchSheetApi(apiBase+'/values:batchGet?majorDimension=ROWS&valueRenderOption=FORMATTED_VALUE&'+query,{method:'get'});
+      var response=fetchSheetApi(apiBase+'/values:batchGetByDataFilter',{
+        method:'post',contentType:'application/json',
+        payload:JSON.stringify({dataFilters:dataFilters,majorDimension:'ROWS',valueRenderOption:'FORMATTED_VALUE'})
+      });
       var code=response.getResponseCode();
       if(code<200||code>=300)throw new Error('FBS_STATE_BATCH_READ_HTTP_'+code+':'+sheetApiFailure(response));
       var payload;
       try{payload=JSON.parse(response.getContentText()||'{}');}
       catch(parseError){throw new Error('FBS_STATE_BATCH_READ_INVALID_JSON');}
-      var valueRanges=payload.valueRanges||[];
+      var valueRanges=(payload.valueRanges||[]).map(function(match){return match.valueRange||{};});
       if(valueRanges.length!==groups.length)throw new Error('FBS_STATE_BATCH_READ_RANGE_COUNT_MISMATCH');
       groups.forEach(function(group,groupIndex){
         var values=(valueRanges[groupIndex]||{}).values||[];
