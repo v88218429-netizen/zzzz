@@ -179,3 +179,15 @@ def test_raw_update_file_is_fetched_through_github_contents_api(monkeypatch, tmp
         30,
         "application/vnd.github+json",
     )]
+
+
+def test_raw_github_commit_sha_file_uses_immutable_raw_url():
+    url = "https://raw.githubusercontent.com/owner/repo/" + "a" * 40 + "/VERSION"
+    assert UpdateManager._github_contents_api_url(url) is None
+
+
+def test_raw_github_branch_file_uses_contents_api():
+    url = "https://raw.githubusercontent.com/owner/repo/main/VERSION"
+    assert UpdateManager._github_contents_api_url(url) == (
+        "https://api.github.com/repos/owner/repo/contents/VERSION?ref=main"
+    )
