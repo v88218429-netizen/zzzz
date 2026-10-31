@@ -4,7 +4,7 @@
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.58',
+  VERSION: 'github-worker-1.3.59',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -6278,6 +6278,7 @@ function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId){
   var metricIx={};built.metricHeaders.forEach(function(h,i){metricIx[String(h)]=10+i;});
   function key(v){
     if(v instanceof Date&&!isNaN(v.getTime()))return Utilities.formatDate(v,ss.getSpreadsheetTimeZone(),'yyyy-MM-dd');
+    if(typeof v==='number'&&isFinite(v))return Utilities.formatDate(new Date(Date.UTC(1899,11,30)+Math.floor(v)*86400000),ss.getSpreadsheetTimeZone(),'yyyy-MM-dd');
     var s=String(v==null?'':v).trim(),m=s.match(/^(\d{4})-(\d{2})-(\d{2})/);
     if(m)return m[1]+'-'+m[2]+'-'+m[3];
     m=s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/);
@@ -6288,12 +6289,9 @@ function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId){
   var archiveName='Архив_RNP_матрицы_до_обновления_20261031';
   var archive=ss.getSheetByName(archiveName);
   if(!archive){archive=ss.insertSheet(archiveName);archive.getRange(1,1,1,7).setValues([['Архивировано','Магазин','Лист','Период','Начальная строка','Старые значения JSON','Причина']]);archive.setFrozenRows(1);archive.setTabColor('#7F6000');}
-  function archiveSnapshot(sh,col,period,reason,last){
-    var before=archive.getLastRow()+1,records=[];
-    for(var st=1;st<=last;st+=250){
-      var n=Math.min(250,last-st+1),v=sh.getRange(st,col,n,1).getValues().map(function(r){return r[0];});
-      records.push([new Date(),storeName,sh.getName(),period,st,JSON.stringify(v),reason]);
-    }
+  function archiveSnapshot(sh,col,period,reason,last,provided){
+    var before=archive.getLastRow()+1,records=[],v=provided||sh.getRange(1,col,last,1).getValues().map(function(r){return r[0];});
+    for(var st=1;st<=last;st+=1000){var n=Math.min(1000,last-st+1);records.push([new Date(),storeName,sh.getName(),period,st,JSON.stringify(v.slice(st-1,st-1+n)),reason]);}
     for(var off=0;off<records.length;off+=200){
       var part=records.slice(off,off+200),at=archive.getLastRow()+1,need=at+part.length-1;
       if(need>archive.getMaxRows())archive.insertRowsAfter(archive.getMaxRows(),Math.max(100,need-archive.getMaxRows()));
@@ -6303,6 +6301,7 @@ function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId){
     }
     return archive.getLastRow()-before+1;
   }
+
   function val(r,code){
     if(!r)return '';
     function g(n){var i=metricIx[n];if(i==null)return null;var v=r[i];return v===''||v==null||typeof v==='boolean'||!isFinite(Number(v))?null:Number(v);}
@@ -6400,7 +6399,7 @@ function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId){
       var cols=positions[k],keep=cols[0];
       for(var di=cols.length-1;di>=1;di--){
         var drop=cols[di],last=sh.getLastRow();
-        archiveSnapshot(sh,drop,k,'Удаление повторного столбца даты',last);
+        archiveSnapshot(sh,drop,k,'Удаление повторного столбца даты',last,b);
         var a=sh.getRange(1,keep,last,1).getValues().map(function(r){return r[0];});
         var b=sh.getRange(1,drop,last,1).getValues().map(function(r){return r[0];});
         var changed=false;for(var rr=0;rr<last;rr++)if((a[rr]===''||a[rr]==null)&&(b[rr]!==''&&b[rr]!=null)){a[rr]=b[rr];changed=true;}
@@ -6416,6 +6415,7 @@ function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId){
       for(var ci=0;ci<heads.length;ci++){var k=key(heads[ci]);if(k&&periodMap[k]){if(!positions[k])positions[k]=[];positions[k].push(14+ci);}}
     }
     refreshHeads();
+    var existedBefore={};Object.keys(positions).forEach(function(k){if(positions[k]&&positions[k].length)existedBefore[k]=true;});
     targets.sort().reverse().forEach(function(period){
       if(positions[period]&&positions[period].length)return;
       var insertAt=lastCol+1;
@@ -6447,7 +6447,7 @@ function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId){
         if(v!==''&&v!=null)written++;
       }
       var changed=false;for(var q=0;q<last;q++)if(cellKey(current[q])!==cellKey(next[q])){changed=true;break;}
-      if(changed){archives+=archiveSnapshot(sh,col,period,'Значения заменены проверенными фактами Sellmonitor Inner',last);updates.push({col:col,values:next});periodCount++;}
+      if(changed){if(existedBefore[period])archives+=archiveSnapshot(sh,col,period,'Значения заменены проверенными фактами Sellmonitor Inner',last,current);updates.push({col:col,values:next});periodCount++;}
     });
     updates.sort(function(a,b){return a.col-b.col;});
     var ui=0;
