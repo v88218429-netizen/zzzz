@@ -113,6 +113,11 @@ PORTFOLIO_MAX_SNAPSHOT_AGE_HOURS = 24
 PORTFOLIO_REQUIRED_SOURCES = ("own_27", "weekly_summary", "sanych_sellmonitor")
 
 
+def _source_fact_date(value: Any) -> date | None:
+    parsed = normalize_traffic_day(value)
+    return date.fromisoformat(parsed) if parsed else None
+
+
 def _assess_snapshot_freshness(live: dict[str, Any], now: datetime | None = None) -> tuple[bool, str | None]:
     """Mark cached sheets facts stale when their source dates or snapshot age exceed policy."""
     now = now or datetime.now(timezone.utc)
@@ -128,7 +133,7 @@ def _assess_snapshot_freshness(live: dict[str, Any], now: datetime | None = None
         source_id = str(row.get("id") or "")
         if source_id:
             by_id[source_id] = row
-        fact_date = normalize_traffic_day(row.get("freshness"))
+        fact_date = _source_fact_date(row.get("freshness"))
         if fact_date is not None:
             age_days = (now.date() - fact_date).days
             row["age_days"] = age_days
@@ -140,7 +145,7 @@ def _assess_snapshot_freshness(live: dict[str, Any], now: datetime | None = None
         if row is None:
             issues.append(f"{source_id}: обязательный источник отсутствует")
             continue
-        fact_date = normalize_traffic_day(row.get("freshness"))
+        fact_date = _source_fact_date(row.get("freshness"))
         if fact_date is None:
             issues.append(f"{source_id}: дата факта источника не подтверждена")
             continue
