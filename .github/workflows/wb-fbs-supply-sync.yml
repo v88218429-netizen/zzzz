@@ -1,6 +1,11 @@
 name: WB FBS supply sync via GitHub
 
 on:
+  push:
+    branches: [mainggg]
+    paths:
+      - ".github/workflows/wb-fbs-supply-sync.yml"
+      - "wb_os/apps_script/WB_FBS_SUPPLY_DIRECT.gs"
   schedule:
     - cron: "57 */3 * * *"
   workflow_run:
