@@ -222,6 +222,43 @@ def main():
     secret = os.getenv("OZON_PERF_CLIENT_SECRET", "")
     last_date = dt.datetime.now(dt.timezone.utc).date()
     bundle = collect_store(store, client_id, secret, last_date)
+    for group_name in ("daily", "campaign_product"):
+        windows_data = bundle.get(group_name) or []
+        rows = [
+            row
+            for window in windows_data
+            for row in ((window.get("response") or {}).get("rows") or [])
+            if isinstance(row, dict)
+        ]
+        dates = [str(row.get("date")) for row in rows if row.get("date")]
+        keys = sorted({str(key) for row in rows[:3] for key in row.keys()})
+        print(
+            "OZON_PERF_SHAPE="
+            + json.dumps(
+                {
+                    "store": store,
+                    "group": group_name,
+                    "windows": len(windows_data),
+                    "rows": len(rows),
+                    "date_min": min(dates) if dates else None,
+                    "date_max": max(dates) if dates else None,
+                    "sample_field_names": keys,
+                    "errors": [
+                        {
+                            "stage": item.get("stage"),
+                            "status": item.get("status"),
+                            "from": item.get("from"),
+                            "to": item.get("to"),
+                        }
+                        for item in bundle.get("errors", [])
+                        if item.get("stage") == group_name
+                    ],
+                },
+                ensure_ascii=False,
+                separators=(",", ":"),
+            ),
+            flush=True,
+        )
     emit_encrypted(bundle)
     return 0 if not bundle["errors"] else 4
 
