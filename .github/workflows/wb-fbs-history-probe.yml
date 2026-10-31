@@ -27,7 +27,7 @@ jobs:
           ];
           const sleep = n => new Promise(r=>setTimeout(r,n));
           async function safeProbe(store, route, name) {
-            let status = 'NO_TOKEN', count = null, hasNext = false;
+            let status = 'NO_TOKEN', count = null, hasNext = false, fields = [];
             if (store.token && store.token.length>30) {
               try {
                 const r = await fetch('https://marketplace-api.wildberries.ru'+route,{
@@ -38,12 +38,12 @@ jobs:
                   const body=await r.json();
                   const list=Array.isArray(body.orders)?body.orders:
                      Array.isArray(body.data?.orders)?body.data.orders: [];
-                  count=list.length;
+                  count=list.length;\n                  fields=Object.keys(list[0]||{}).sort();
                   hasNext=Boolean(body.next && body.next!==0 && body.next!=='0');
                 }
               } catch(e) {status='FETCH_'+e.name;}
             }
-            console.log(JSON.stringify({store:store.label,endpoint:name,status,pageCount:count,hasNext}));
+            console.log(JSON.stringify({store:store.label,endpoint:name,status,pageCount:count,hasNext,fields}));
           }
           for(const store of stores) {
             await safeProbe(store,'/api/v3/orders?limit=1000&next=0&dateFrom='+start+'&dateTo='+end,'recent_7d');
