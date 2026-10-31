@@ -1,11 +1,16 @@
 name: WB FBS retry failed recovery windows
 
 on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "GitHub Actions run ID containing failed FBS windows"
+        required: true
+        type: string
   workflow_run:
     workflows:
       - WB FBS GitHub recovery
       - WB FBS Sanych targeted recovery
-      - WB FBS retry failed recovery windows
     types: [completed]
 
 permissions:
@@ -19,9 +24,10 @@ concurrency:
 jobs:
   discover:
     if: >-
-      ${{ contains(fromJson('["failure","cancelled"]'), github.event.workflow_run.conclusion)
+      ${{ github.event_name == 'workflow_dispatch' ||
+          (contains(fromJson('["failure","cancelled"]'), github.event.workflow_run.conclusion)
           && github.event.workflow_run.head_branch == 'mainggg'
-          && (github.event.workflow_run.event == 'push' || github.event.workflow_run.event == 'workflow_run') }}
+          && github.event.workflow_run.event == 'push') }}
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.failed.outputs.matrix }}
@@ -31,7 +37,7 @@ jobs:
         id: failed
         env:
           GH_TOKEN: ${{ github.token }}
-          RUN_ID: ${{ github.event.workflow_run.id }}
+          RUN_ID: ${{ inputs.run_id || github.event.workflow_run.id }}
           REPOSITORY: ${{ github.repository }}
         run: |
           python - <<'PY'
@@ -131,5 +137,21 @@ jobs:
           else
             exit 2
           fi
-      - name: Reconcile ${{ matrix.client }} from official WB source
-        run: python "${{ matrix.script }}"
+      - name: Reconcile ${{ matrix.client }} from official WB source with bounded retries
+        shell: bash
+        run: |
+          set -uo pipefail
+          for batch_size in 5 2 1; do
+            echo "FBS_RETRY_ATTEMPT_START client=$FBS_CLIENT from=$FBS_START_DATE to=$FBS_END_DATE batch=$batch_size"
+            set +e
+            FBS_BATCH_SIZE="$batch_size" timeout --signal=TERM --kill-after=30s 20m python "${{ matrix.script }}"
+            result=$?
+            set -e
+            if [[ "$result" -eq 0 ]]; then
+              echo "FBS_RETRY_WINDOW_VERIFIED=yes client=$FBS_CLIENT from=$FBS_START_DATE to=$FBS_END_DATE batch=$batch_size"
+              exit 0
+            fi
+            echo "FBS_RETRY_ATTEMPT_FAILED exit=$result batch=$batch_size"
+            if [[ "$batch_size" -gt 1 ]]; then sleep 60; fi
+          done
+          exit 1
