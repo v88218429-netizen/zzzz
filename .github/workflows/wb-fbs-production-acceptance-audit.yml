@@ -68,6 +68,15 @@ jobs:
           key=os.environ["BRIDGE_KEY"]
           if not key:
               raise SystemExit("FBS_AUDIT_BRIDGE_SECRET_MISSING")
+          health_payload=json.dumps({"token":key,"action":"fbs_targets_health"}).encode("utf-8")
+          health_request=urllib.request.Request(url,data=health_payload,
+                headers={"Content-Type":"application/json"},method="POST")
+          with urllib.request.urlopen(health_request,timeout=480) as response:
+              health=json.loads(response.read().decode("utf-8"))
+          if health.get("ok") is not True or (health.get("result") or {}).get("ok") is not True:
+              print("FBS_TARGET_HEALTH_FAILED "+json.dumps(health,ensure_ascii=False)[:6000],flush=True)
+              raise SystemExit("FBS_TARGET_HEALTH_FAILED")
+          print("FBS_TARGET_HEALTH="+json.dumps(health["result"],ensure_ascii=False,separators=(",",":")),flush=True)
           for client in ("SANYCH","AIR","HOZYAYUSHKA","ARCHIVES"):
               payload=json.dumps({"token":key,"action":"fbs_acceptance_audit","client":client},
                                  ensure_ascii=False).encode("utf-8")
