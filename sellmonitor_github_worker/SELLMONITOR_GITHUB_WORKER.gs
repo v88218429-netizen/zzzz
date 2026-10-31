@@ -6788,6 +6788,7 @@ function sellmonitorGithubFbsTargetHealthV1_() {
 
 /** Read only the requested current order states so GitHub can avoid rewriting unchanged rows. */
 function sellmonitorGithubFbsStatusReadV1_(body) {
+  var startedAt=Date.now();
   var stores={
     SANYCH:'1v0qt-thJDOw3tLFdZVGhdXJdBM8rDPRz9mHlcHmuuyM',
     AIR:'1qJvhEOIku7sOMydfrUz0PR5dkcU0sLjv433pa1MFBcM',
@@ -6814,6 +6815,8 @@ function sellmonitorGithubFbsStatusReadV1_(body) {
     throw new Error('FBS_COLUMN_SCHEMA_MISMATCH');
   var states={};
   var indexState=sellmonitorGithubFbsLoadIdIndex_(sheet,client,last,function(){},false);
+  var apiBase='https://sheets.googleapis.com/v4/spreadsheets/'+encodeURIComponent(spreadsheetId);
+  var authToken=ScriptApp.getOAuthToken();
   function readStates_(){
     states={};
     var matches=[];
@@ -6827,20 +6830,57 @@ function sellmonitorGithubFbsStatusReadV1_(body) {
       else group.end=item.row;
       group.items.push(item);
     });
+    var stale=false,groupsByA1={};
     groups.forEach(function(group){
-      var values=sheet.getRange(group.start,1,group.end-group.start+1,6).getDisplayValues();
-      group.items.forEach(function(item){
-        var rowValues=values[item.row-group.start]||[];
-        if(String(rowValues[0]||'')!==item.id)return;
-        states[item.id]={supplierStatus:String(rowValues[4]||''),wbStatus:String(rowValues[5]||'')};
-      });
+      group.a1Range="'📦 FBS Заказы'!A"+group.start+":F"+group.end;
+      groupsByA1[group.a1Range]=group;
     });
-    return Object.keys(states).length!==matches.length;
+    // Read up to 100 disjoint row ranges per request. This replaces a separate
+    // SpreadsheetApp call for every scattered order row on large AIR books.
+    for(var offset=0;offset<groups.length;offset+=100){
+      var chunk=groups.slice(offset,offset+100);
+      var dataFilters=chunk.map(function(group){return {a1Range:group.a1Range};});
+      var response=UrlFetchApp.fetch(apiBase+'/values:batchGetByDataFilter',{
+        method:'post',contentType:'application/json',
+        headers:{Authorization:'Bearer '+authToken},muteHttpExceptions:true,timeoutSeconds:30,
+        payload:JSON.stringify({dataFilters:dataFilters,majorDimension:'ROWS',valueRenderOption:'FORMATTED_VALUE'})
+      });
+      var code=response.getResponseCode();
+      if(code<200||code>=300)throw new Error('FBS_STATUS_BATCH_READ_HTTP_'+code);
+      var payload;
+      try{payload=JSON.parse(response.getContentText()||'{}');}
+      catch(parseError){throw new Error('FBS_STATUS_BATCH_READ_INVALID_JSON');}
+      var valueRanges=payload.valueRanges||{};
+      if(valueRanges.length!==chunk.length)throw new Error('FBS_STATUS_BATCH_READ_RANGE_COUNT_MISMATCH');
+      var matched={};
+      valueRanges.forEach(function(match){
+        var group=null;
+        (match.dataFilters||[]).some(function(filter){
+          group=groupsByA1[String(filter.a1Range||'')]||null;
+          return !!group;
+        });
+        if(!group)throw new Error('FBS_STATUS_BATCH_READ_RANGE_MAPPING_INVALID');
+        var groupKey=group.start+':'+group.end;
+        if(matched[groupKey])throw new Error('FBS_STATUS_BATCH_READ_RANGE_DUPLICATE');
+        matched[groupKey]=true;
+        var values=((match.valueRange||{}).values)||[];
+        group.items.forEach(function(item){
+          var rowValues=values[item.row-group.start]||[];
+          if(String(rowValues[0]||'')!==item.id){stale=true;return;}
+          states[item.id]={supplierStatus:String(rowValues[4]||''),wbStatus:String(rowValues[5]||'')};
+        });
+      });
+      if(Object.keys(matched).length!==chunk.length)throw new Error('FBS_STATUS_BATCH_READ_RANGE_MISSING');
+    }
+    return stale||Object.keys(states).length!==matches.length;
   }
   if(readStates_()){
     indexState=sellmonitorGithubFbsLoadIdIndex_(sheet,client,last,function(){},true);
     if(readStates_())throw new Error('FBS_ID_INDEX_STALE_AFTER_REBUILD');
   }
+  console.log('FBS_STATUS_READ_DONE client='+client+' requested='+ids.length+
+    ' found='+Object.keys(states).length+' ranges='+Object.keys(indexState.map).length+
+    ' ms='+(Date.now()-startedAt));
   return {ok:true,client:client,requested:ids.length,found:Object.keys(states).length,statuses:states};
 }
 
