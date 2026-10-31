@@ -371,9 +371,9 @@ async def run() -> int:
                 if key in deep_scan
             },
         }
-    dump("optimizer-state.json", optimizer_state)
-
     q = query_manager(portfolio_snapshot, cabinet_snapshots.get("sanych") or {})
+    optimizer_state["query_manager"] = q
+    dump("optimizer-state.json", optimizer_state)
     healthy_cabs = sum(1 for c in cabinets.values() if c.get("wb_connected"))
     clean_cabs = sum(1 for c in cabinets.values() if c.get("status") == "ok")
     health = "ok" if healthy_cabs == len(CABINETS) and clean_cabs == len(CABINETS) and not source_errors else "degraded"
