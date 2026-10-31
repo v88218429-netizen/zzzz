@@ -6,6 +6,7 @@ on:
     workflows: ["Sellmonitor GitHub worker deploy"]
     types: [completed]
   schedule:
+    # Publish fresh encrypted cabinet and query snapshots every ten minutes.
     - cron: "3,13,23,33,43,53 * * * *"
   push:
     branches:
