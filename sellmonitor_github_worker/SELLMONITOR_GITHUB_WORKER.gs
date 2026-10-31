@@ -5489,7 +5489,7 @@ function sellmonitorGithubPublishOzonSummaryOrders_(payload) {
       return periodRows.length>0&&periodRows.every(function(row){return row[1] instanceof Date&&row[2] instanceof Date;});
     }
     function toTypedOzonPeriodDates_(rows,columns){
-      return (rows||[]).map(function(row){var copy=row.slice();columns.forEach(function(column){if(/^\\d{4}-\\d{2}-\\d{2}$/.test(String(copy[column]||'')))copy[column]=Utilities.parseDate(String(copy[column]),SMC_OZON_SUMMARY.timezone,'yyyy-MM-dd');});return copy;});
+      return (rows||[]).map(function(row){var copy=row.slice();columns.forEach(function(column){if(/^\d{4}-\d{2}-\d{2}$/.test(String(copy[column]||'')))copy[column]=Utilities.parseDate(String(copy[column]),SMC_OZON_SUMMARY.timezone,'yyyy-MM-dd');});return copy;});
     }
     var dailyDatesTyped=hasTypedOzonPeriodDates_(oldDaily),skuDatesTyped=hasTypedOzonPeriodDates_(oldSku);
     var helperDatesTyped=oldHelper.length>0&&oldHelper.every(function(row){return row[0] instanceof Date;});
