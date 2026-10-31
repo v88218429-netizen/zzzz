@@ -329,6 +329,21 @@ class UpdateManager:
                 return False,(p.stdout+'\n'+p.stderr).strip()[-6000:]
         return True,'ok'
 
+    @staticmethod
+    def _github_contents_api_url(url: str) -> str | None:
+        parsed=urlsplit(url)
+        if parsed.hostname != 'raw.githubusercontent.com':
+            return None
+        parts=parsed.path.strip('/').split('/')
+        if len(parts) < 4:
+            raise ValueError('raw GitHub file URL must include owner, repository, ref, and file path')
+        owner, repo, ref = parts[:3]
+        file_path = '/'.join(parts[3:])
+        return (
+            f"https://api.github.com/repos/{owner}/{repo}/contents/"
+            f"{quote(file_path, safe='/')}?{urlencode({'ref': ref})}"
+        )
+
     def _apply_file_patch(self, files: list[dict[str, Any]], temp_dir: Path) -> None:
         for item in files:
             rel=Path(str(item.get('path') or ''))
@@ -346,9 +361,25 @@ class UpdateManager:
             expected=str(item.get('sha256') or '').lower()
             local=temp_dir/rel
             local.parent.mkdir(parents=True,exist_ok=True)
-            req=urllib.request.Request(url,headers={'User-Agent':'WB-AI-Manager-Updater/1.0','Cache-Control':'no-cache'})
-            with urllib.request.urlopen(req,timeout=30) as resp, local.open('wb') as f:
-                shutil.copyfileobj(resp,f)
+            api_url=self._github_contents_api_url(url)
+            if api_url:
+                req=urllib.request.Request(
+                    api_url,
+                    headers={
+                        'User-Agent':'WB-AI-Manager-Updater/1.0',
+                        'Accept':'application/vnd.github+json',
+                        'Cache-Control':'no-cache',
+                    },
+                )
+                with urllib.request.urlopen(req,timeout=30) as resp:
+                    api_payload=json.loads(resp.read().decode('utf-8'))
+                if api_payload.get('encoding') != 'base64' or not api_payload.get('content'):
+                    raise ValueError(f'GitHub contents API returned no base64 file for {rel}')
+                local.write_bytes(base64.b64decode(api_payload['content']))
+            else:
+                req=urllib.request.Request(url,headers={'User-Agent':'WB-AI-Manager-Updater/1.0','Cache-Control':'no-cache'})
+                with urllib.request.urlopen(req,timeout=30) as resp, local.open('wb') as f:
+                    shutil.copyfileobj(resp,f)
             got=self._sha256(local)
             if got != expected:
                 raise ValueError(f'checksum mismatch for {rel}: expected {expected}, got {got}')
