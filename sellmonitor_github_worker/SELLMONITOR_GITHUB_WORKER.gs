@@ -6813,75 +6813,38 @@ function sellmonitorGithubFbsStatusReadV1_(body) {
   var head=sheet.getRange(1,1,1,7).getDisplayValues()[0]||[];
   if(String(head[0]||'')!=='ID заказа'||String(head[4]||'')!=='Статус продавца'||String(head[5]||'')!=='Статус WB')
     throw new Error('FBS_COLUMN_SCHEMA_MISMATCH');
-  var states={},readRangeCount=0;
   var indexState=sellmonitorGithubFbsLoadIdIndex_(sheet,client,last,function(){},false);
-  var apiBase='https://sheets.googleapis.com/v4/spreadsheets/'+encodeURIComponent(spreadsheetId);
-  var authToken=ScriptApp.getOAuthToken();
+  var states={},rowReadMs=0,rowsRead=Math.max(0,last-1);
+  console.log('FBS_STATUS_READ_START client='+client+' requested='+ids.length+' last_row='+last);
   function readStates_(){
     states={};
     var matches=[];
     ids.forEach(function(id){var row=indexState.map[id];if(row)matches.push({id:id,row:Number(row)});});
-    matches.sort(function(a,b){return a.row-b.row;});
     if(!matches.length)return false;
-    var groups=[];
+    matches.sort(function(a,b){return a.row-b.row;});
+    // Read only the used ID and status columns in bounded whole-column calls.
+    // This avoids a slow request per scattered AIR order and avoids the REST
+    // batchGetByDataFilter path that repeatedly timed out in live recovery.
+    var readStarted=Date.now();
+    var idValues=rowsRead?sheet.getRange(2,1,rowsRead,1).getDisplayValues():[];
+    var statusValues=rowsRead?sheet.getRange(2,5,rowsRead,2).getDisplayValues():[];
+    rowReadMs+=Date.now()-readStarted;
+    var stale=false;
     matches.forEach(function(item){
-      var group=groups.length?groups[groups.length-1]:null;
-      if(!group||item.row!==group.end+1){group={start:item.row,end:item.row,items:[]};groups.push(group);}
-      else group.end=item.row;
-      group.items.push(item);
+      var offset=item.row-2, idRow=idValues[offset]||[], statusRow=statusValues[offset]||[];
+      if(String(idRow[0]||'')!==item.id){stale=true;return;}
+      states[item.id]={supplierStatus:String(statusRow[0]||''),wbStatus:String(statusRow[1]||'')};
     });
-    var stale=false,groupsByA1={};
-    readRangeCount=groups.length;
-    groups.forEach(function(group){
-      group.a1Range="'📦 FBS Заказы'!A"+group.start+":F"+group.end;
-      groupsByA1[group.a1Range]=group;
-    });
-    // Read up to 100 disjoint row ranges per request. This replaces a separate
-    // SpreadsheetApp call for every scattered order row on large AIR books.
-    for(var offset=0;offset<groups.length;offset+=100){
-      var chunk=groups.slice(offset,offset+100);
-      var dataFilters=chunk.map(function(group){return {a1Range:group.a1Range};});
-      var response=UrlFetchApp.fetch(apiBase+'/values:batchGetByDataFilter',{
-        method:'post',contentType:'application/json',
-        headers:{Authorization:'Bearer '+authToken},muteHttpExceptions:true,timeoutSeconds:30,
-        payload:JSON.stringify({dataFilters:dataFilters,majorDimension:'ROWS',valueRenderOption:'FORMATTED_VALUE'})
-      });
-      var code=response.getResponseCode();
-      if(code<200||code>=300)throw new Error('FBS_STATUS_BATCH_READ_HTTP_'+code);
-      var payload;
-      try{payload=JSON.parse(response.getContentText()||'{}');}
-      catch(parseError){throw new Error('FBS_STATUS_BATCH_READ_INVALID_JSON');}
-      var valueRanges=payload.valueRanges||{};
-      if(valueRanges.length!==chunk.length)throw new Error('FBS_STATUS_BATCH_READ_RANGE_COUNT_MISMATCH');
-      var matched={};
-      valueRanges.forEach(function(match){
-        var group=null;
-        (match.dataFilters||[]).some(function(filter){
-          group=groupsByA1[String(filter.a1Range||'')]||null;
-          return !!group;
-        });
-        if(!group)throw new Error('FBS_STATUS_BATCH_READ_RANGE_MAPPING_INVALID');
-        var groupKey=group.start+':'+group.end;
-        if(matched[groupKey])throw new Error('FBS_STATUS_BATCH_READ_RANGE_DUPLICATE');
-        matched[groupKey]=true;
-        var values=((match.valueRange||{}).values)||[];
-        group.items.forEach(function(item){
-          var rowValues=values[item.row-group.start]||[];
-          if(String(rowValues[0]||'')!==item.id){stale=true;return;}
-          states[item.id]={supplierStatus:String(rowValues[4]||''),wbStatus:String(rowValues[5]||'')};
-        });
-      });
-      if(Object.keys(matched).length!==chunk.length)throw new Error('FBS_STATUS_BATCH_READ_RANGE_MISSING');
-    }
     return stale||Object.keys(states).length!==matches.length;
   }
   if(readStates_()){
+    console.log('FBS_STATUS_INDEX_REBUILD client='+client+' requested='+ids.length);
     indexState=sellmonitorGithubFbsLoadIdIndex_(sheet,client,last,function(){},true);
     if(readStates_())throw new Error('FBS_ID_INDEX_STALE_AFTER_REBUILD');
   }
   console.log('FBS_STATUS_READ_DONE client='+client+' requested='+ids.length+
-    ' found='+Object.keys(states).length+' ranges='+readRangeCount+
-    ' ms='+(Date.now()-startedAt));
+    ' found='+Object.keys(states).length+' used_rows='+rowsRead+
+    ' sheet_read_ms='+rowReadMs+' total_ms='+(Date.now()-startedAt));
   return {ok:true,client:client,requested:ids.length,found:Object.keys(states).length,statuses:states};
 }
 
@@ -7102,70 +7065,21 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
     var stateByRow={},syncTimesByRow={};
     function readExistingStates_(){
       var rows=[];
-      parsed.forEach(function(r){var row=byId[r.id];if(row)rows.push({id:r.id,row:row});});
-      var stale=false;
+      parsed.forEach(function(r){var row=byId[r.id];if(row)rows.push({id:r.id,row:Number(row)});});
+      if(!rows.length){mark('STATE_READ_DONE_NATIVE_BLOCK_0_ROWS');return false;}
       rows.sort(function(a,b){return a.row-b.row;});
-      if(!rows.length){
-        mark('STATE_READ_DONE_NATIVE_BLOCK_0_ROWS');
-        return false;
-      }
-      // Ask Sheets for only the rows belonging to this idempotent batch.
-      // The previous native read fetched every row between the first and last
-      // matching ID, which could be tens of thousands of unrelated rows.
-      var groups=[];
+      mark('STATE_READ_START_NATIVE_'+rows.length+'_IDS_'+Math.max(0,last-1)+'_ROWS');
+      var usedRows=Math.max(0,last-1), idValues=usedRows?orderSheetNative.getRange(2,1,usedRows,1).getDisplayValues():[];
+      var statusValues=usedRows?orderSheetNative.getRange(2,5,usedRows,3).getDisplayValues():[];
+      var stale=false;
       rows.forEach(function(item){
-        var group=groups.length?groups[groups.length-1]:null;
-        if(!group||item.row!==group.end+1){
-          group={start:item.row,end:item.row,items:[]};
-          groups.push(group);
-        }else{
-          group.end=item.row;
-        }
-        group.items.push(item);
+        var offset=item.row-2, idRow=idValues[offset]||[], stateRow=statusValues[offset]||[];
+        if(String(idRow[0]||'')!==item.id){stale=true;return;}
+        stateByRow[item.row]=[stateRow[0]||'',stateRow[1]||'',stateRow[2]||''];
       });
-      // Use a POST body for the disjoint A1 ranges. The equivalent batchGet
-      // GET encoded every range into the URL and exceeded UrlFetch's URL limit
-      // on large books when a 100-order batch touched many separated rows.
-      var groupsByA1={};
-      var dataFilters=groups.map(function(group){
-        var a1Range=orderSheet+'!A'+group.start+':G'+group.end;
-        groupsByA1[a1Range]=group;
-        return {a1Range:a1Range};
-      });
-      mark('STATE_BATCH_READ_START_'+rows.length+'_IDS_'+groups.length+'_RANGES');
-      var response=fetchSheetApi(apiBase+'/values:batchGetByDataFilter',{
-        method:'post',contentType:'application/json',
-        payload:JSON.stringify({dataFilters:dataFilters,majorDimension:'ROWS',valueRenderOption:'FORMATTED_VALUE'})
-      });
-      var code=response.getResponseCode();
-      if(code<200||code>=300)throw new Error('FBS_STATE_BATCH_READ_HTTP_'+code+':'+sheetApiFailure(response));
-      var payload;
-      try{payload=JSON.parse(response.getContentText()||'{}');}
-      catch(parseError){throw new Error('FBS_STATE_BATCH_READ_INVALID_JSON');}
-      var valueRanges=payload.valueRanges||{};
-      if(valueRanges.length!==groups.length)throw new Error('FBS_STATE_BATCH_READ_RANGE_COUNT_MISMATCH');
-      var matchedGroups={};
-      valueRanges.forEach(function(match){
-        var group=null;
-        (match.dataFilters||[]).some(function(filter){
-          group=groupsByA1[String(filter.a1Range||'')]||null;
-          return !!group;
-        });
-        if(!group)throw new Error('FBS_STATE_BATCH_READ_RANGE_MAPPING_INVALID');
-        var groupKey=group.start+':'+group.end;
-        if(matchedGroups[groupKey])throw new Error('FBS_STATE_BATCH_READ_RANGE_DUPLICATE');
-        matchedGroups[groupKey]=true;
-        var values=((match.valueRange||{}).values)||[];
-        group.items.forEach(function(item){
-          var rowValues=values[item.row-group.start]||[];
-          if(String(rowValues[0]||'')!==item.id){stale=true;return;}
-          stateByRow[item.row]=[rowValues[4]||'',rowValues[5]||'',rowValues[6]||''];
-        });
-      });
-      if(Object.keys(matchedGroups).length!==groups.length)throw new Error('FBS_STATE_BATCH_READ_RANGE_MISSING');
-      mark('STATE_BATCH_READ_DONE_'+rows.length+'_IDS_'+groups.length+'_RANGES');
-      console.log('FBS_STAGE_STATE_BATCH_READ rows='+rows.length+' ranges='+groups.length+' ms='+(Date.now()-fbsStarted));
-      return stale;
+      mark('STATE_READ_DONE_NATIVE_'+rows.length+'_IDS_'+usedRows+'_ROWS');
+      console.log('FBS_STAGE_STATE_READ_NATIVE ids='+rows.length+' used_rows='+usedRows+' ms='+(Date.now()-fbsStarted));
+      return stale||rows.some(function(item){return !Object.prototype.hasOwnProperty.call(stateByRow,item.row);});
     }
     if(readExistingStates_()){
       mark('ID_INDEX_STALE_REBUILD');
