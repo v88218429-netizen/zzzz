@@ -323,12 +323,26 @@ jobs:
           body = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
           print(f"OZON_API_EXPORT_COMPLETE=true;records={len(records)};bytes={len(body)};coverage={COVERAGE_FROM}..{coverage_to}")
           url = "https://script.google.com/macros/s/" + os.environ["WEBAPP_DEPLOYMENT_ID"] + "/exec"
-          req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"}, method="POST")
-          try:
-              with urllib.request.urlopen(req, timeout=420) as response:
-                  result = json.loads(response.read().decode("utf-8"))
-          except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
-              raise RuntimeError("OZON_API_PUBLISH_REQUEST_FAILED:" + type(exc).__name__ + ":" + str(exc)[:300])
+          result = None
+          publish_error = None
+          for attempt in range(1, 6):
+              req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"}, method="POST")
+              try:
+                  with urllib.request.urlopen(req, timeout=420) as response:
+                      result = json.loads(response.read().decode("utf-8"))
+                  break
+              except urllib.error.HTTPError as exc:
+                  if exc.code not in {408, 425, 429, 500, 502, 503, 504}:
+                      raise RuntimeError("OZON_API_PUBLISH_HTTP_FAILED:" + str(exc.code))
+                  publish_error = "HTTPError:" + str(exc.code)
+              except (urllib.error.URLError, TimeoutError, http.client.HTTPException, ConnectionError, OSError, json.JSONDecodeError) as exc:
+                  publish_error = type(exc).__name__ + ":" + str(exc)[:240]
+              if attempt < 5:
+                  delay = min(15 * (2 ** (attempt - 1)), 120)
+                  print(f"OZON_API_PUBLISH_RETRY=attempt:{attempt+1}/5;after:{publish_error};wait:{delay}s", flush=True)
+                  time.sleep(delay)
+          if result is None:
+              raise RuntimeError("OZON_API_PUBLISH_REQUEST_FAILED_AFTER_5_ATTEMPTS:" + str(publish_error))
           accepted_actions = {"publish_ozon_api_orders", "publish_ozon_summary_orders"}
           if not isinstance(result, dict) or result.get("action") not in accepted_actions:
               print("OZON_API_PUBLISH_ROUTE_UNAVAILABLE=" + json.dumps(result, ensure_ascii=False)[:700])
