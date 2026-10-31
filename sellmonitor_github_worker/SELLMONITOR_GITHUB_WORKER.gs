@@ -6813,7 +6813,7 @@ function sellmonitorGithubFbsStatusReadV1_(body) {
   var head=sheet.getRange(1,1,1,7).getDisplayValues()[0]||[];
   if(String(head[0]||'')!=='ID заказа'||String(head[4]||'')!=='Статус продавца'||String(head[5]||'')!=='Статус WB')
     throw new Error('FBS_COLUMN_SCHEMA_MISMATCH');
-  var states={};
+  var states={},readRangeCount=0;
   var indexState=sellmonitorGithubFbsLoadIdIndex_(sheet,client,last,function(){},false);
   var apiBase='https://sheets.googleapis.com/v4/spreadsheets/'+encodeURIComponent(spreadsheetId);
   var authToken=ScriptApp.getOAuthToken();
@@ -6831,6 +6831,7 @@ function sellmonitorGithubFbsStatusReadV1_(body) {
       group.items.push(item);
     });
     var stale=false,groupsByA1={};
+    readRangeCount=groups.length;
     groups.forEach(function(group){
       group.a1Range="'📦 FBS Заказы'!A"+group.start+":F"+group.end;
       groupsByA1[group.a1Range]=group;
@@ -6879,7 +6880,7 @@ function sellmonitorGithubFbsStatusReadV1_(body) {
     if(readStates_())throw new Error('FBS_ID_INDEX_STALE_AFTER_REBUILD');
   }
   console.log('FBS_STATUS_READ_DONE client='+client+' requested='+ids.length+
-    ' found='+Object.keys(states).length+' ranges='+Object.keys(indexState.map).length+
+    ' found='+Object.keys(states).length+' ranges='+readRangeCount+
     ' ms='+(Date.now()-startedAt));
   return {ok:true,client:client,requested:ids.length,found:Object.keys(states).length,statuses:states};
 }
