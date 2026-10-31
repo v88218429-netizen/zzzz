@@ -2,6 +2,12 @@ name: WB FBS production acceptance audit
 
 on:
   workflow_dispatch:
+    inputs:
+      inspect_live_stage:
+        description: "Read the last active Apps Script FBS write stage"
+        required: false
+        default: false
+        type: boolean
   workflow_run:
     workflows:
       - WB FBS retry failed recovery windows
@@ -32,6 +38,7 @@ jobs:
       BRIDGE_URL: https://script.google.com/macros/s/AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw/exec
     steps:
       - name: Wait until production writers are idle
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.inspect_live_stage != true }}
         shell: bash
         run: |
           python3 - <<'PY'
@@ -59,7 +66,32 @@ jobs:
           else:
               raise SystemExit("FBS_PRODUCTION_WRITERS_DID_NOT_QUIESCE")
           PY
+      - name: Read active Apps Script stage only
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.inspect_live_stage == true }}
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.request
+          payload=json.dumps({"token":os.environ["BRIDGE_KEY"],"action":"health"}).encode("utf-8")
+          request=urllib.request.Request(os.environ["BRIDGE_URL"],data=payload,
+                headers={"Content-Type":"application/json"},method="POST")
+          with urllib.request.urlopen(request,timeout=480) as response:
+              body=json.loads(response.read().decode("utf-8"))
+          result=body.get("result") or {}
+          if body.get("ok") is not True or result.get("ok") is not True:
+              print("FBS_RUNTIME_HEALTH_FAILED "+json.dumps(body,ensure_ascii=False)[:6000],flush=True)
+              raise SystemExit("FBS_RUNTIME_HEALTH_FAILED")
+          print("FBS_LIVE_RUNTIME_STAGE="+json.dumps({
+              "version":result.get("version"),
+              "runtime":result.get("runtime"),
+              "trigger_ok":result.get("trigger_ok"),
+              "trigger_count":result.get("trigger_count"),
+              "inner_finance_trigger_count":result.get("inner_finance_trigger_count"),
+              "fbs_ingest_stages":result.get("fbs_ingest_stages")},
+              ensure_ascii=False,separators=(",",":")),flush=True)
+          PY
       - name: Read acceptance metrics from production books and archives
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.inspect_live_stage != true }}
         shell: bash
         run: |
           python3 - <<'PY'
