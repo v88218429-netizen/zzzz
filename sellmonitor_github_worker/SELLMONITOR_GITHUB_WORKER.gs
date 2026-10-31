@@ -5444,11 +5444,11 @@ function sellmonitorGithubPublishOzonPerformanceDaily_(body) {
       if(found>=0)return;
       if(partial>=0){
         headers[partial]=want.header;shown[partial]=String(want.header);
-        if(want.header instanceof Date)shown[partial]=Utilities.formatDate(want.header,ss.getSpreadsheetTimeZone(),'dd.MM.yyyy');
+        if(want.header instanceof Date)shown[partial]=Utilities.formatDate(want.header,'UTC','dd.MM.yyyy');
         axisChanged=true;return;
       }
       headers.push(want.header);
-      shown.push(want.header instanceof Date?Utilities.formatDate(want.header,ss.getSpreadsheetTimeZone(),'dd.MM.yyyy'):String(want.header));
+      shown.push(want.header instanceof Date?Utilities.formatDate(want.header,'UTC','dd.MM.yyyy'):String(want.header));
       axisChanged=true;
     });
     var count=headers.length,oldCount=oldHeaders.length,newLastCol=startCol+count-1;
