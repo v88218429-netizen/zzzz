@@ -50,8 +50,8 @@
         },
         {
           "path": "plugin.json",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/f6ff9560e6040b5664b4a7e591ec65b1f5a528d4/wb_ai_manager/source/plugin.json",
-          "sha256": "2d6fa51e8b3259e257843db844e21f03c6389d43b08dfc45e64e9e26afee4dc1"
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/fb312e619706cdd8d9f56bce30379131b576fc7a/wb_ai_manager/source/plugin.json",
+          "sha256": "19ade7dd8891f44bd011f22e96396796a0a2d7507fa3eeef55501c06113a8940"
         },
         {
           "path": "pyproject.toml",
