@@ -4,6 +4,7 @@ import pytest
 from wb_control_center.wb_mcp_runtime_patch import (
     _advert_clusters_list,
     _advert_clusters_stats,
+    _advert_cluster_bids_get,
     apply_wb_mcp_hotfixes,
     apply_wb_mcp_server_hotfixes,
 )
@@ -48,6 +49,25 @@ async def test_cluster_stats_uses_current_wb_v1_schema_and_dates():
             "to": "2026-10-14",
             "items": [{"advertId": 123, "nmId": 456}],
         },
+    )]
+
+
+@pytest.mark.asyncio
+async def test_get_cluster_bids_reads_exact_campaign_sku_pairs():
+    calls = []
+
+    async def post(base, path, body):
+        calls.append((base, path, body))
+        return {"bids": [{"advert_id": 123, "nm_id": 456, "norm_query": "фраза", "bid_kopecks": 12345}]}
+
+    client = SimpleNamespace(_advert="promotion", _post=post)
+    result = await _advert_cluster_bids_get(client, 123, [456, 789, 456])
+
+    assert result["bids"][0]["bid_kopecks"] == 12345
+    assert calls == [(
+        "promotion",
+        "/adv/v0/normquery/get-bids",
+        {"items": [{"advert_id": 123, "nm_id": 456}, {"advert_id": 123, "nm_id": 789}]},
     )]
 
 
@@ -106,6 +126,30 @@ async def test_server_schema_and_dispatch_include_exact_nm_ids():
 
     await server.CLIENT_DISPATCH["wb_advert_clusters"](Client(), {"advert_id": 123, "nm_ids": [456]})
     assert calls == [(123, [456])]
+
+@pytest.mark.asyncio
+async def test_server_exposes_read_only_cluster_bid_tool():
+    cluster_tool = SimpleNamespace(
+        name="wb_advert_clusters",
+        inputSchema={"type": "object", "properties": {"advert_id": {"type": "integer"}}, "required": ["advert_id"]},
+    )
+    server = SimpleNamespace(TOOLS=[cluster_tool], CLIENT_DISPATCH={})
+    apply_wb_mcp_server_hotfixes(server)
+
+    tool = next(item for item in server.TOOLS if item.name == "wb_advert_cluster_bids_get")
+    assert tool.inputSchema["required"] == ["advert_id", "nm_ids"]
+    assert "Read-only" in tool.description
+
+    calls = []
+
+    class Client:
+        async def advert_cluster_bids_get(self, advert_id, nm_ids):
+            calls.append((advert_id, nm_ids))
+            return {"bids": []}
+
+    await server.CLIENT_DISPATCH[tool.name](Client(), {"advert_id": 321, "nm_ids": [654]})
+    assert calls == [(321, [654])]
+
 
 @pytest.mark.asyncio
 async def test_runtime_patch_updates_wb_mcp_request_contracts():
