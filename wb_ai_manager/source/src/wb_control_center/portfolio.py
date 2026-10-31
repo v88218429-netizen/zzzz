@@ -186,6 +186,14 @@ class PortfolioService:
         self.seed_path = self.root / "data" / "portfolio_seed.json"
         self.registry_path = self.root / "config" / "store_registry.yaml"
         self.live_path = settings.data_path / "portfolio_live.json"
+        self._github_snapshot: dict[str, Any] | None = None
+
+    def set_github_snapshot(self, snapshot: dict[str, Any]) -> bool:
+        """Use a freshly decrypted GitHub portfolio snapshot without bypassing freshness gates."""
+        if not isinstance(snapshot, dict) or not isinstance(snapshot.get("source_health"), list):
+            return False
+        self._github_snapshot = deepcopy(snapshot)
+        return True
 
     def registry(self) -> dict[str, Any]:
         if not self.registry_path.exists():
@@ -200,10 +208,13 @@ class PortfolioService:
             return None
 
     def snapshot(self) -> dict[str, Any]:
-        live = self._read_json(self.live_path) if self.live_path.exists() else None
+        live = deepcopy(self._github_snapshot) if self._github_snapshot is not None else (self._read_json(self.live_path) if self.live_path.exists() else None)
         if live:
             current_data, stale_reason = _assess_snapshot_freshness(live)
-            live["data_origin"] = "saved_sheets_snapshot" if str(live.get("mode") or "").startswith("live") else (live.get("mode") or "saved_sheets_snapshot")
+            if self._github_snapshot is not None:
+                live["data_origin"] = "github_encrypted_runtime"
+            else:
+                live["data_origin"] = "saved_sheets_snapshot" if str(live.get("mode") or "").startswith("live") else (live.get("mode") or "saved_sheets_snapshot")
             live["last_live_snapshot_at"] = live.get("generated_at")
             live["current_data"] = current_data
             live["data_status"] = "current" if current_data else "stale_source_snapshot"

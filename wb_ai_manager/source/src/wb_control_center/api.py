@@ -941,6 +941,22 @@ async def dashboard_data(days: int = 7, from_date: str | None = None, to_date: s
     period = _dashboard_period(days, from_date, to_date)
     period_ctx = PeriodContext.from_strings(period["from"], period["to"])
     audit = center.period_audit_status(period_ctx)
+    optimizer_bundle: dict[str, Any] = {}
+    optimizer_read_error: Exception | None = None
+    optimizer_read_at: datetime | None = None
+    if center.worker.traffic_configured:
+        try:
+            async with _traffic_bundle_lock:
+                now_utc = datetime.now(timezone.utc)
+                optimizer_bundle, _optimizer_bundle_cached_at, optimizer_read_error = await _refresh_bundle_cache(
+                    _optimizer_bundle_cache, _optimizer_bundle_cached_at, center.worker.optimizer_bundle, now_utc,
+                )
+                optimizer_read_at = _optimizer_bundle_cached_at
+            encrypted_portfolio = optimizer_bundle.get("portfolio") if isinstance(optimizer_bundle, dict) else None
+            if optimizer_read_error is None and isinstance(encrypted_portfolio, dict):
+                portfolio.set_github_snapshot(encrypted_portfolio)
+        except Exception as exc:
+            optimizer_read_error = exc
     portfolio_snapshot = portfolio.snapshot()
     audit_finished = _iso_dt(audit.get("finished_at"))
     portfolio_generated = _iso_dt(portfolio_snapshot.get("generated_at"))
@@ -988,11 +1004,8 @@ async def dashboard_data(days: int = 7, from_date: str | None = None, to_date: s
     research_agenda["discovery_count"] = len(research_agenda["discoveries"])
     query_layer = _query_manager_payload(portfolio_snapshot, snapshots)
     traffic = {"source": "github-traffic-state", "health": {"status": "UNAVAILABLE"}, "shops": [], "ads": [], "funnel": [], "organic": [], "error": "Зашифрованный архив GitHub или локальный ключ не настроен."}
-    optimizer_bundle: dict[str, Any] = {}
     traffic_read_error: Exception | None = None
-    optimizer_read_error: Exception | None = None
     traffic_read_at: datetime | None = None
-    optimizer_read_at: datetime | None = None
     if center.worker.traffic_configured:
         try:
             async with _traffic_bundle_lock:
@@ -1012,18 +1025,8 @@ async def dashboard_data(days: int = 7, from_date: str | None = None, to_date: s
             elif traffic_bundle:
                 traffic["cache_mode"] = "current_github_snapshot"
                 traffic["last_successful_read_at"] = traffic_read_at.isoformat() if traffic_read_at else None
-            try:
-                async with _traffic_bundle_lock:
-                    now_utc = datetime.now(timezone.utc)
-                    optimizer_bundle, _optimizer_bundle_cached_at, optimizer_read_error = await _refresh_bundle_cache(
-                        _optimizer_bundle_cache, _optimizer_bundle_cached_at, center.worker.optimizer_bundle, now_utc,
-                    )
-                    optimizer_read_at = _optimizer_bundle_cached_at
-                if optimizer_read_error:
-                    traffic["optimizer_error"] = "GitHub не обновил снимок оптимизатора; последний снимок не используется для числовых советов."
-            except Exception as exc:
-                optimizer_read_error = exc
-                traffic["optimizer_error"] = "Не удалось прочитать снимок оптимизатора GitHub."
+            if optimizer_read_error:
+                traffic["optimizer_error"] = "GitHub не обновил снимок оптимизатора; последний снимок не используется для числовых советов."
         except Exception as exc:
             traffic["error"] = "Не удалось прочитать архив рекламы GitHub."
             traffic["refresh_error_type"] = type(exc).__name__

@@ -245,6 +245,7 @@ class WorkerSource:
             "shops": {key: value for key, value in shops.items()
                       if key in {"ap", "aa", "yv"} and isinstance(value, dict)},
             "query_manager": payload.get("query_manager") if isinstance(payload.get("query_manager"), dict) else {},
+            "portfolio": payload.get("portfolio") if isinstance(payload.get("portfolio"), dict) else {},
         }
 
     async def traffic_bundle(self) -> dict[str, Any]:

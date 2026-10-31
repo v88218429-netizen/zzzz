@@ -337,6 +337,9 @@ async def run() -> int:
         "schema_version": 1,
         "generated_at": generated_at,
         "shops": {},
+        # This archive is encrypted to the local panel's public key.
+        # Preserve source timestamps; the panel re-applies its normal freshness gate.
+        "portfolio": copy.deepcopy(portfolio_snapshot) if isinstance(portfolio_snapshot, dict) else {},
     }
     for slug, code in shop_codes.items():
         cabinet = cabinets.get(slug) or {}
