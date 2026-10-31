@@ -108,6 +108,66 @@ def normalize_traffic_day(value: Any) -> str | None:
         return None
 
 
+PORTFOLIO_MAX_SOURCE_AGE_DAYS = 7
+PORTFOLIO_MAX_SNAPSHOT_AGE_HOURS = 24
+PORTFOLIO_REQUIRED_SOURCES = ("own_27", "weekly_summary", "sanych_sellmonitor")
+
+
+def _assess_snapshot_freshness(live: dict[str, Any], now: datetime | None = None) -> tuple[bool, str | None]:
+    """Mark cached sheets facts stale when their source dates or snapshot age exceed policy."""
+    now = now or datetime.now(timezone.utc)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
+
+    source_rows = live.get("source_health") if isinstance(live.get("source_health"), list) else []
+    by_id: dict[str, dict[str, Any]] = {}
+    issues: list[str] = []
+    for row in source_rows:
+        if not isinstance(row, dict):
+            continue
+        source_id = str(row.get("id") or "")
+        if source_id:
+            by_id[source_id] = row
+        fact_date = _parse_date(row.get("freshness"))
+        if fact_date is not None:
+            age_days = (now.date() - fact_date).days
+            row["age_days"] = age_days
+            if age_days > PORTFOLIO_MAX_SOURCE_AGE_DAYS and str(row.get("status") or "").lower() in {"fresh", "current", "ok"}:
+                row["status"] = "stale"
+
+    for source_id in PORTFOLIO_REQUIRED_SOURCES:
+        row = by_id.get(source_id)
+        if row is None:
+            issues.append(f"{source_id}: обязательный источник отсутствует")
+            continue
+        fact_date = _parse_date(row.get("freshness"))
+        if fact_date is None:
+            issues.append(f"{source_id}: дата факта источника не подтверждена")
+            continue
+        age_days = (now.date() - fact_date).days
+        if age_days > PORTFOLIO_MAX_SOURCE_AGE_DAYS:
+            issues.append(f"{row.get('name') or source_id}: {fact_date:%d.%m.%Y}, {age_days} дн. назад")
+        elif str(row.get("status") or "").lower() not in {"fresh", "current", "ok"}:
+            issues.append(f"{row.get('name') or source_id}: источник помечен как {row.get('status') or 'неизвестный'}")
+
+    generated = str(live.get("generated_at") or "").strip()
+    try:
+        snapshot_at = datetime.fromisoformat(generated.replace("Z", "+00:00"))
+        if snapshot_at.tzinfo is None:
+            snapshot_at = snapshot_at.replace(tzinfo=timezone.utc)
+        age_hours = (now - snapshot_at.astimezone(timezone.utc)).total_seconds() / 3600
+        if age_hours > PORTFOLIO_MAX_SNAPSHOT_AGE_HOURS:
+            issues.append(f"снимок получен {age_hours:.1f} ч назад")
+        elif age_hours < -1:
+            issues.append("время получения снимка находится в будущем")
+    except (TypeError, ValueError):
+        issues.append("время получения снимка не подтверждено")
+
+    if not issues:
+        return True, None
+    return False, "Ключевые данные портфеля устарели: " + "; ".join(issues) + ". Текущие решения по рекламе, остаткам и экономике заблокированы до обновления источников."
+
+
 class PortfolioService:
     """Read-only portfolio facts from trusted Sheets snapshots.
 
@@ -137,10 +197,13 @@ class PortfolioService:
     def snapshot(self) -> dict[str, Any]:
         live = self._read_json(self.live_path) if self.live_path.exists() else None
         if live:
-            live["data_origin"] = live.get("mode") or "live_sheets"
-            live["current_data"] = True
-            live["data_status"] = "current"
-            live["historical_only"] = False
+            current_data, stale_reason = _assess_snapshot_freshness(live)
+            live["data_origin"] = "saved_sheets_snapshot" if str(live.get("mode") or "").startswith("live") else (live.get("mode") or "saved_sheets_snapshot")
+            live["last_live_snapshot_at"] = live.get("generated_at")
+            live["current_data"] = current_data
+            live["data_status"] = "current" if current_data else "stale_source_snapshot"
+            live["historical_only"] = not current_data
+            live["stale_reason"] = stale_reason
             return live
         seed = self._read_json(self.seed_path) or {}
         seed = deepcopy(seed)
