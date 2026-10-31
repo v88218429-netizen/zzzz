@@ -6488,31 +6488,45 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
       // the same API and retry boundedly before classifying a successful insert
       // as failed. This also makes the verified IDs match the API's persisted view.
       SpreadsheetApp.flush();
-      var insertIds=[],insertReadbackMatched=false,insertReadbackAttempts=0;
+      var insertIds=[],insertReadbackMatched=false,insertReadbackAttempts=0,insertReadbackApiError='';
       for(var insertAttempt=0;insertAttempt<4;insertAttempt++){
         insertReadbackAttempts=insertAttempt+1;
-        var insertVerifyResponse=fetchSheetApi(apiBase+'/values/'+
-          encodeURIComponent(orderSheet+'!A'+insertStart+':A'+insertEnd)+
-          '?valueRenderOption=FORMATTED_VALUE',{method:'get'});
-        var insertVerifyCode=insertVerifyResponse.getResponseCode();
-        if(insertVerifyCode<200||insertVerifyCode>=300)
-          throw new Error('FBS_INSERT_READBACK_HTTP_'+insertVerifyCode+':'+sheetApiFailure(insertVerifyResponse));
-        var insertVerifyPayload;
-        try{insertVerifyPayload=JSON.parse(insertVerifyResponse.getContentText()||'{}');}
-        catch(insertVerifyParseError){throw new Error('FBS_INSERT_READBACK_INVALID_JSON');}
-        insertIds=((insertVerifyPayload.values)||[]).map(function(v){return String((v||[])[0]||'');});
-        insertReadbackMatched=insertIds.length===insert.length;
-        if(insertReadbackMatched){
-          for(var verifyInsertIndex=0;verifyInsertIndex<insert.length;verifyInsertIndex++){
-            if(insertIds[verifyInsertIndex]!==String(insert[verifyInsertIndex][0])){
-              insertReadbackMatched=false;break;
+        try{
+          var insertVerifyResponse=fetchSheetApi(apiBase+'/values/'+
+            encodeURIComponent(orderSheet+'!A'+insertStart+':A'+insertEnd)+
+            '?valueRenderOption=FORMATTED_VALUE',{method:'get'});
+          var insertVerifyCode=insertVerifyResponse.getResponseCode();
+          if(insertVerifyCode<200||insertVerifyCode>=300){
+            if(insertVerifyCode!==429&&insertVerifyCode<500)
+              throw new Error('FBS_INSERT_READBACK_HTTP_'+insertVerifyCode+':'+sheetApiFailure(insertVerifyResponse));
+            insertReadbackApiError='API_HTTP_'+insertVerifyCode;
+          }else{
+            var insertVerifyPayload;
+            try{insertVerifyPayload=JSON.parse(insertVerifyResponse.getContentText()||'{}');}
+            catch(insertVerifyParseError){throw new Error('FBS_INSERT_READBACK_INVALID_JSON');}
+            insertIds=((insertVerifyPayload.values)||[]).map(function(v){return String((v||[])[0]||'');});
+            insertReadbackMatched=insertIds.length===insert.length;
+            if(insertReadbackMatched){
+              for(var verifyInsertIndex=0;verifyInsertIndex<insert.length;verifyInsertIndex++){
+                if(insertIds[verifyInsertIndex]!==String(insert[verifyInsertIndex][0])){
+                  insertReadbackMatched=false;break;
+                }
+              }
             }
+            if(insertReadbackMatched)break;
+            insertReadbackApiError='';
           }
+        }catch(insertReadbackError){
+          if(String(insertReadbackError).indexOf('FBS_INSERT_READBACK_HTTP_')===0||
+             String(insertReadbackError).indexOf('FBS_INSERT_READBACK_INVALID_JSON')===0)throw insertReadbackError;
+          insertReadbackApiError=/timeout|timed out/i.test(String(insertReadbackError))?'API_TIMEOUT':'API_EXCEPTION';
         }
-        if(insertReadbackMatched)break;
-        if(insertAttempt<3)Utilities.sleep([300,900,1800][insertAttempt]);
+        if(insertAttempt<3)Utilities.sleep([500,1500,3000][insertAttempt]);
       }
-      mark('INSERT_READBACK_ATTEMPTS_'+insertReadbackAttempts+'_MATCH_'+insertReadbackMatched);
+      mark('INSERT_READBACK_ATTEMPTS_'+insertReadbackAttempts+'_MATCH_'+insertReadbackMatched+
+        (insertReadbackApiError?'_ERROR_'+insertReadbackApiError:''));
+      if(!insertReadbackMatched&&insertReadbackApiError==='API_TIMEOUT')
+        throw new Error('FBS_INSERT_READBACK_API_TIMEOUT');
       if(insertIds.length!==insert.length)throw new Error('FBS_INSERT_READBACK_COUNT_MISMATCH');
       for(var ii=0;ii<insert.length;ii++){
         if(insertIds[ii]!==String(insert[ii][0]))throw new Error('FBS_INSERT_READBACK_FAILED');
