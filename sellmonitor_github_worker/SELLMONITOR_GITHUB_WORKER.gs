@@ -5537,7 +5537,8 @@ function sellmonitorGithubPublishOzonSummaryOrders_(payload) {
       var helpNeed=1+helper.length;sellmonitorGithubOzonEnsureRows_(daily,helpNeed);
       var helpClear=Math.max(oldHelper.length,helper.length-1);
       if(helpClear)daily.getRange(2,12,helpClear,4).clearContent();
-      daily.getRange(1,12,1,4).setValues([helper[0]]);\n      if(helperRowsForWrite.length)daily.getRange(2,12,helperRowsForWrite.length,4).setValues(helperRowsForWrite);
+      daily.getRange(1,12,1,4).setValues([helper[0]]);
+      if(helperRowsForWrite.length)daily.getRange(2,12,helperRowsForWrite.length,4).setValues(helperRowsForWrite);
     }
     var newDaily=sellmonitorGithubOzonRows_(daily,dailyStart,1,10),newSku=sellmonitorGithubOzonRows_(skuSheet,5,1,12),newHelper=sellmonitorGithubOzonRows_(daily,1,12,4);
     if(JSON.stringify(sellmonitorGithubOzonNormalizeRows_(newDaily))!==JSON.stringify(sellmonitorGithubOzonNormalizeRows_(dailyRows)))throw new Error('OZON_DAILY_READBACK_MISMATCH:'+cfg.name);
