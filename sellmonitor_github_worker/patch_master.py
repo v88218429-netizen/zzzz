@@ -158,7 +158,7 @@ function sellmonitorGithubFbsAcceptanceAuditV1_(body) {
     {name:'HOZY_ARCHIVE_MASTER',id:'1EpL2t3y9xU0v_oowhAxkYM2YPUUd01hN_Q6bvHJOKSg',owner:'14-_i5xGBA9NiGRHxBOx9rfCe5tjuMoCeBARB60wnVj0'}
   ];
   var requested=String(body&&body.client||'ALL').trim().toUpperCase();
-  var allowed=['ALL','SANYCH','AIR','HOZYAYUSHKA'];
+  var allowed=['ALL','ARCHIVES','SANYCH','AIR','HOZYAYUSHKA'];
   if(allowed.indexOf(requested)<0)throw new Error('FBS_AUDIT_CLIENT_NOT_ALLOWED');
   var orderTab='📦 FBS Заказы';
   function dateMs_(v) {
@@ -171,7 +171,7 @@ function sellmonitorGithubFbsAcceptanceAuditV1_(body) {
     var sh=ss.getSheetByName(tabName||orderTab);
     if(!sh)return {exists:false};
     var last=sh.getLastRow();
-    if(last<1||last>110000)throw new Error('FBS_AUDIT_ROW_COUNT_UNEXPECTED');
+    if(last<1||last>300000)throw new Error('FBS_AUDIT_ROW_COUNT_UNEXPECTED');
     var result={exists:true,lastRow:last,rowsWithId:0,uniqueIds:0,duplicateRows:0,
       invalidIds:0,missingSupplierStatus:0,missingWbStatus:0,missingBothStatuses:0,
       minOrderAt:'',maxOrderAt:'',duplicateRowExamples:[],idSet:Object.create(null)};
@@ -242,7 +242,7 @@ function sellmonitorGithubFbsAcceptanceAuditV1_(body) {
   function auditSupplies_(ss) {
     var sh=ss.getSheetByName('🚚 Поставки FBS');if(!sh)return {exists:false};
     var last=sh.getLastRow(),rows=0,scanned=0,done=0;
-    if(last>110000)throw new Error('FBS_AUDIT_SUPPLY_ROW_COUNT_UNEXPECTED');
+    if(last>200000)throw new Error('FBS_AUDIT_SUPPLY_ROW_COUNT_UNEXPECTED');
     for(var start=2;start<=last;start+=4000){
       var n=Math.min(4000,last-start+1),v=sh.getRange(start,1,n,5).getValues();
       for(var i=0;i<n;i++){
@@ -284,7 +284,7 @@ function sellmonitorGithubFbsAcceptanceAuditV1_(body) {
         onlyInMain:onlyMain,onlyInAlternate:onlyAlt};
     }catch(e){if(result.clients.SANYCH)result.clients.SANYCH.alternate={accessible:false,errorType:String(e&&e.name||'Error'),reason:String(e&&e.message||e).slice(0,160)};}
   }
-  if(requested==='ALL'){
+  if(requested==='ALL'||requested==='ARCHIVES'){
     archiveTargets.forEach(function(a){
       var item={name:a.name,spreadsheetId:a.id,expectedOwnerTarget:a.owner,accessible:false};
       try{
