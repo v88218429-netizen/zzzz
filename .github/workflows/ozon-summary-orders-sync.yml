@@ -8,11 +8,6 @@ on:
       - ".github/workflows/ozon-summary-orders-sync.yml"
   schedule:
     - cron: "17 * * * *"
-  workflow_run:
-    workflows:
-      - Sellmonitor GitHub worker deploy
-    types: [completed]
-    branches: [mainggg]
 
 permissions:
   contents: read
