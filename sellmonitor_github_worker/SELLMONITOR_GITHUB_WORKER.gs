@@ -6323,7 +6323,7 @@ function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId){
 
   function restoreBase_(spec,sh){
     var oldFormula=sh.getRange(1,1).getFormula();
-    if(String(oldFormula||'').indexOf('=ARRAYFORMULA(')!==0)return {rows:0,columns:spec.baseCols,shiftedDayAxis:false,alreadyRestored:true};
+    if(sh.getRange(1,1).getNote()==='WB_RNP_BASE_V1')return {rows:0,columns:spec.baseCols,shiftedDayAxis:false,alreadyRestored:true};
     var src=ss.getSheetByName(spec.source);
     if(!src)throw new Error('WB_RNP_BASE_SOURCE_MISSING:'+spec.source);
     var n=src.getLastRow();
@@ -6374,6 +6374,8 @@ function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId){
     if(verify.length!==n||verify[0].length!==spec.baseCols)throw new Error('WB_RNP_BASE_READBACK_SIZE:'+spec.name);
     var sampleRows=[0,Math.floor(n/2),n-1];
     sampleRows.forEach(function(i){for(var j=0;j<spec.baseCols;j++)if(String(verify[i][j]||'')!==String(base[i][j]||''))throw new Error('WB_RNP_BASE_READBACK_MISMATCH:'+spec.name+':'+(i+1)+':'+(j+1));});
+    sh.getRange(1,1).setNote('WB_RNP_BASE_V1');
+    if(sh.getRange(1,1).getNote()!=='WB_RNP_BASE_V1')throw new Error('WB_RNP_BASE_MARKER_READBACK_FAILED:'+spec.name);
     return {rows:n,columns:spec.baseCols,shiftedDayAxis:spec.grain==='day'&&n1Status&&!!nHeader};
   }
   function val(r,code){
