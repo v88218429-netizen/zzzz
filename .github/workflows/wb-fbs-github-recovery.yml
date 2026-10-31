@@ -35,7 +35,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: wb-fbs-recovery-global
+  group: wb-fbs-data-mutations
   cancel-in-progress: false
 
 jobs:

@@ -20,7 +20,7 @@ var WB_FBS_DIRECT_SUPPLY_BASE_CFG = {
   workerSheet: '🛰 Worker Control',
   apiUrl: 'https://marketplace-api.wildberries.ru/api/v3/supplies',
   syncEveryMinutes: 30,
-  orderTailRows: 20000,
+  orderTailRows: 2500,
   historyTailRows: 50000,
   maxPages: 30,
   pageLimit: 1000
@@ -265,13 +265,15 @@ function wbFbsSupplySortedMap_(ss) {
   return map;
 }
 
-function wbFbsSupplyBackfillOrders_(ss, suppliesById) {
+function wbFbsSupplyBackfillOrders_(ss, suppliesById, options) {
   var sh = ss.getSheetByName(WB_FBS_DIRECT_SUPPLY_CFG.ordersSheet);
-  if (!sh || sh.getLastRow() < 2) return {checked: 0, matched: 0, sorted: 0};
+  if (!sh || sh.getLastRow() < 2) return {checked: 0, matched: 0, sorted: 0, startRow: 2, endRow: 1, complete: true};
 
   var last = sh.getLastRow();
-  var start = Math.max(2, last - WB_FBS_DIRECT_SUPPLY_CFG.orderTailRows + 1);
-  var n = last - start + 1;
+  var requestedEnd = options && Number(options.endRow);
+  var end = isFinite(requestedEnd) && requestedEnd >= 2 ? Math.min(last, Math.floor(requestedEnd)) : last;
+  var n = Math.min(WB_FBS_DIRECT_SUPPLY_CFG.orderTailRows, end - 1);
+  var start = end - n + 1;
 
   var aToB = sh.getRange(start, 1, n, 2).getValues(); // A:B
   var wbStatuses = sh.getRange(start, 6, n, 1).getDisplayValues(); // F
@@ -355,7 +357,8 @@ function wbFbsSupplyBackfillOrders_(ss, suppliesById) {
     sh.getRange(start, 59, n, 1).setNumberFormat('0.00');
   }
 
-  return {checked: n, matched: matched, sorted: sortedFilled};
+  return {checked: n, matched: matched, sorted: sortedFilled,
+    startRow: start, endRow: end, complete: start <= 2};
 }
 
 function wbFbsSupplyWriteHealth_(ss, state, detail) {
@@ -372,15 +375,18 @@ function wbFbsSupplyWriteHealth_(ss, state, detail) {
   sh.getRange(15, 2).setNumberFormat('dd.MM.yyyy HH:mm:ss');
 }
 
-function wbFbsSupplySyncCore_() {
+function wbFbsSupplySyncCore_(progress) {
   var cfg=WB_FBS_DIRECT_SUPPLY_CFG,ss=wbFbsSupplySpreadsheet_(),token=wbFbsSupplyToken_(),checkedAt=new Date();
+  progress=progress||null;
+  var continuing=!!(progress&&progress.client===cfg.client&&Number(progress.nextEndRow)>=2);
   var fetched=wbFbsSupplyFetchAll_(token);
   var orders=ss.getSheetByName(cfg.ordersSheet);
   if(!orders)throw new Error('WB_FBS_DIRECT: missing '+cfg.ordersSheet);
-  var counts=wbFbsSupplyCountOrders_(orders);
-  var written=wbFbsSupplyWriteSupplySheet_(ss,fetched.rows,counts,checkedAt);
-  var backfill=wbFbsSupplyBackfillOrders_(ss,fetched.byId);
-  var unmatchedOrderSupplyIds=Object.keys(counts).filter(function(id){
+  var counts=continuing?null:wbFbsSupplyCountOrders_(orders);
+  var written=continuing?{totalRows:null,preservedNotReturned:null,preservedDuplicateRows:null}:
+    wbFbsSupplyWriteSupplySheet_(ss,fetched.rows,counts,checkedAt);
+  var backfill=wbFbsSupplyBackfillOrders_(ss,fetched.byId,continuing?{endRow:progress.nextEndRow}:null);
+  var unmatchedOrderSupplyIds=continuing?null:Object.keys(counts).filter(function(id){
     return !Object.prototype.hasOwnProperty.call(fetched.byId,id);
   }).length;
   SpreadsheetApp.flush();
@@ -390,15 +396,18 @@ function wbFbsSupplySyncCore_() {
     suppliesWritten:written.totalRows,preservedNotReturned:written.preservedNotReturned,
     preservedDuplicateRows:written.preservedDuplicateRows,orderRowsChecked:backfill.checked,
     orderRowsMatched:backfill.matched,orderSupplyIdsNotInCurrentApi:unmatchedOrderSupplyIds,
-    sortedBackfilled:backfill.sorted
+    sortedBackfilled:backfill.sorted,backfillStartRow:backfill.startRow,
+    backfillEndRow:backfill.endRow,backfillComplete:backfill.complete,
+    backfillRemainingRows:Math.max(0,backfill.startRow-2)
   };
-  sellmonitorClientProperties_(cfg.propertiesSpreadsheetId).setProperties({
-    WB_FBS_DIRECT_LAST_SUCCESS_AT:checkedAt.toISOString(),
-    WB_FBS_DIRECT_LAST_STATUS:'OK',
+  var clientProps=sellmonitorClientProperties_(cfg.propertiesSpreadsheetId);
+  clientProps.setProperties({
+    WB_FBS_DIRECT_LAST_STATUS:backfill.complete?'OK':'BACKFILLING',
     WB_FBS_DIRECT_LAST_RESULT:JSON.stringify(result)
   });
-  wbFbsSupplyWriteHealth_(ss,'OK',JSON.stringify(result));
-  Logger.log('WB_FBS_DIRECT_OK '+JSON.stringify(result));
+  if(backfill.complete)clientProps.setProperty('WB_FBS_DIRECT_LAST_SUCCESS_AT',checkedAt.toISOString());
+  wbFbsSupplyWriteHealth_(ss,backfill.complete?'OK':'RUNNING',JSON.stringify(result));
+  Logger.log('WB_FBS_DIRECT_'+(backfill.complete?'OK ':'BACKFILLING ')+JSON.stringify(result));
   return result;
 }
 
@@ -414,6 +423,7 @@ function wbFbsSupplySyncAllStores_() {
   if (!lock.tryLock(10000)) throw new Error('WB_FBS_DIRECT: credential store is busy');
 
   var index = 0;
+  var progressKey = 'WB_FBS_DIRECT_BACKFILL_PROGRESS';
   try {
     var active = null;
     try { active = JSON.parse(scriptProps.getProperty(leaseKey) || 'null'); } catch (ignored) {}
@@ -435,15 +445,40 @@ function wbFbsSupplySyncAllStores_() {
   WB_FBS_DIRECT_SUPPLY_CFG = cfg;
   try {
     try {
-      var result = wbFbsSupplySyncCore_();
+      var progress = null;
+      try { progress = JSON.parse(scriptProps.getProperty(progressKey) || 'null'); } catch (ignored) {}
+      if (!progress || progress.client !== cfg.client) progress = null;
+      var result = wbFbsSupplySyncCore_(progress);
       if (!result || result.ok !== true) {
         throw new Error('WB_FBS_DIRECT: client sync did not return ok=true');
       }
-      scriptProps.setProperty(cursorKey, String((index + 1) % storeNames.length));
+      var totals = {
+        checked: Number(progress && progress.totalChecked || 0) + Number(result.orderRowsChecked || 0),
+        matched: Number(progress && progress.totalMatched || 0) + Number(result.orderRowsMatched || 0),
+        sorted: Number(progress && progress.totalSorted || 0) + Number(result.sortedBackfilled || 0)
+      };
+      result.backfillRowsCheckedTotal = totals.checked;
+      result.backfillRowsMatchedTotal = totals.matched;
+      result.backfillSortedTotal = totals.sorted;
+      var complete = result.backfillComplete === true;
+      if (complete) {
+        scriptProps.deleteProperty(progressKey);
+        scriptProps.setProperty(cursorKey, String((index + 1) % storeNames.length));
+      } else {
+        scriptProps.setProperty(progressKey, JSON.stringify({
+          client: cfg.client,
+          nextEndRow: result.backfillStartRow - 1,
+          totalChecked: totals.checked,
+          totalMatched: totals.matched,
+          totalSorted: totals.sorted
+        }));
+        scriptProps.setProperty(cursorKey, String(index));
+      }
       return {
         ok: true,
         stores: [result],
-        nextClient: storeNames[(index + 1) % storeNames.length]
+        backfillComplete: complete,
+        nextClient: complete ? storeNames[(index + 1) % storeNames.length] : cfg.client
       };
     } catch (e) {
       var message = String(e && e.message ? e.message : e).slice(0, 1000);

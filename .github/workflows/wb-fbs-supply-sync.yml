@@ -4,7 +4,6 @@ on:
   push:
     branches: [mainggg]
     paths:
-      - ".github/workflows/wb-fbs-supply-sync.yml"
       - "wb_os/apps_script/WB_FBS_SUPPLY_DIRECT.gs"
   schedule:
     - cron: "57 */3 * * *"
@@ -15,20 +14,20 @@ permissions:
   contents: read
 
 concurrency:
-  group: wb-fbs-supply-sync
+  group: wb-fbs-data-mutations
   cancel-in-progress: false
 
 jobs:
   sync:
     if: ${{ github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') }}
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 180
     env:
       GOOGLE_BRIDGE_KEY: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
       GOOGLE_BRIDGE_URL: https://script.google.com/macros/s/AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw/exec
     steps:
       - name: Wait for the matching Apps Script deployment
-        if: ${{ github.event_name == 'push' && contains(github.event.head_commit.modified, 'wb_os/apps_script/WB_FBS_SUPPLY_DIRECT.gs') }}
+        if: ${{ github.event_name == 'push' }}
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
@@ -75,7 +74,7 @@ jobs:
           expected = {"SANYCH", "AIR", "HOZYAYUSHKA"}
           seen = {}
           failures = []
-          for attempt in range(1, 8):
+          for attempt in range(1, 61):
               request = urllib.request.Request(
                   os.environ["GOOGLE_BRIDGE_URL"],
                   data=payload,
@@ -88,7 +87,7 @@ jobs:
               except Exception as error:
                   print("FBS_SUPPLY_SYNC_RETRY attempt=" + str(attempt) +
                         " type=" + type(error).__name__, flush=True)
-                  if attempt < 7:
+                  if attempt < 60:
                       time.sleep(60)
                       continue
                   failures.append("NO_VALID_RESPONSE")
@@ -97,7 +96,7 @@ jobs:
                   details = json.dumps(result, ensure_ascii=False, separators=(",", ":"))
                   print("FBS_SUPPLY_SYNC_RESPONSE_ERROR " + details, flush=True)
                   if "already running" in details.lower() or "credential store is busy" in details.lower():
-                      if attempt < 7:
+                      if attempt < 60:
                           time.sleep(75)
                           continue
                   failures.append("BRIDGE_REJECTED")
@@ -119,7 +118,9 @@ jobs:
                         json.dumps(summary, ensure_ascii=False, separators=(",", ":")), flush=True)
                   failures.append(client)
                   break
-              seen[client] = True
+              complete = store.get("backfillComplete") is True
+              if complete:
+                  seen[client] = True
               print("FBS_SUPPLY_SYNC_STORE " + json.dumps({
                   key: store.get(key) for key in (
                       "client", "apiPages", "apiSupplies", "suppliesWritten",
@@ -128,6 +129,12 @@ jobs:
                       "orderSupplyIdsNotInCurrentApi", "sortedBackfilled"
                   )
               }, ensure_ascii=False, separators=(",", ":")), flush=True)
+              if complete:
+                  print("FBS_SUPPLY_BACKFILL_COMPLETE client=" + client, flush=True)
+              else:
+                  print("FBS_SUPPLY_BACKFILL_CONTINUE client=" + client +
+                        " next_row=" + str(store.get("backfillStartRow")) +
+                        " processed=" + str(store.get("orderRowsChecked")), flush=True)
               if set(seen) == expected:
                   break
           missing = sorted(expected - set(seen))
