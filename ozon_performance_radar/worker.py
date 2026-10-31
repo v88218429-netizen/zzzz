@@ -242,6 +242,7 @@ def main():
                     "rows": len(rows),
                     "date_min": min(dates) if dates else None,
                     "date_max": max(dates) if dates else None,
+                    "distinct_days": len(set(dates)),
                     "sample_field_names": keys,
                     "errors": [
                         {
