@@ -342,8 +342,10 @@ def read_current_states(client: str, orders: list[dict]) -> dict[str, dict[str, 
     for offset in range(0, len(ids), 1000):
         batch_ids = ids[offset:offset + 1000]
         last_detail = "FBS_STATUS_READ_INVALID_RESPONSE"
+        print("FBS_STATUS_READ_START="+json.dumps({"store":client,"chunk":offset//1000+1,"requested":len(batch_ids)}),flush=True)
         for attempt in range(1, 5):
             try:
+                read_started=time.monotonic()
                 reply = request(
                     BRIDGE_URL,
                     body={"token": BRIDGE_KEY, "action": "fbs_status_read",
@@ -393,6 +395,9 @@ def read_current_states(client: str, orders: list[dict]) -> dict[str, dict[str, 
                         "supplierStatus": pair["supplierStatus"],
                         "wbStatus": pair["wbStatus"],
                     }
+                print("FBS_STATUS_READ_DONE="+json.dumps({"store":client,"chunk":offset//1000+1,
+                      "requested":len(batch_ids),"found":len(batch_states),
+                      "elapsed_sec":round(time.monotonic()-read_started,2)}),flush=True)
                 break
             else:
                 last_detail = str(reply.get("error") or result.get("error") or (
@@ -420,6 +425,7 @@ def read_current_states(client: str, orders: list[dict]) -> dict[str, dict[str, 
     return states
 
 def select_changed_orders(client: str, orders: list[dict]) -> tuple[list[dict], int]:
+    filter_started=time.monotonic()
     states = read_current_states(client, orders)
     changed = []
     for order in orders:
@@ -429,7 +435,11 @@ def select_changed_orders(client: str, orders: list[dict]) -> tuple[list[dict], 
                 or current["supplierStatus"] != str(order.get("supplierStatus") or "").strip()
                 or current["wbStatus"] != str(order.get("wbStatus") or "").strip()):
             changed.append(order)
-    return changed, len(orders) - len(changed)
+    unchanged=len(orders)-len(changed)
+    print("FBS_CHANGE_FILTER_DONE="+json.dumps({"store":client,"orders":len(orders),
+          "changed":len(changed),"unchanged":unchanged,
+          "elapsed_sec":round(time.monotonic()-filter_started,2)}),flush=True)
+    return changed, unchanged
 
 
 def main() -> None:
