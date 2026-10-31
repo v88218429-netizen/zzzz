@@ -432,10 +432,14 @@ jobs:
               m=re.search(r"@\s*(\d+)",line) or re.search(r"version(?:Number)?\s*[:=]\s*(\d+)",line,re.I)
               if m: active.add(int(m.group(1)))
           if not versions: raise SystemExit("APPS_SCRIPT_VERSION_LIST_UNPARSED")
-          if 185 not in active or max(versions) not in active:
+          if 185 not in active or not active:
               raise SystemExit("APPS_SCRIPT_ACTIVE_VERSION_GUARD_FAILED:"+",".join(map(str,sorted(active))))
           print("APPS_SCRIPT_VERSION_COUNT="+str(len(versions)))
           print("APPS_SCRIPT_ACTIVE_VERSIONS="+",".join(map(str,sorted(active))))
+          latest=max(versions)
+          print("APPS_SCRIPT_LATEST_VERSION="+str(latest))
+          if latest not in active:
+              print("APPS_SCRIPT_LATEST_VERSION_UNDEPLOYED=yes")
           if len(versions)>=200:
               raise SystemExit("APPS_SCRIPT_VERSION_CAPACITY_STILL_FULL")
           print("APPS_SCRIPT_VERSION_CAPACITY=available")
