@@ -73,7 +73,7 @@ jobs:
     timeout-minutes: 90
     env:
       FBS_CLIENT: ${{ matrix.client }}
-      FBS_BATCH_SIZE: "100"
+      FBS_BATCH_SIZE: "10"
       FBS_LOOKBACK_DAYS: "7"
       FBS_START_DATE: ${{ matrix.start_date }}
       FBS_END_DATE: ${{ matrix.end_date }}
