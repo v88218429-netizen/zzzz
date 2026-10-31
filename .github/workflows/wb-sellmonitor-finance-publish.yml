@@ -1,4 +1,4 @@
-# Trigger verified date normalization deployment
+# RNP matrices refreshed from verified summary facts; deployment-safe single-store check
 name: WB Sellmonitor finance summaries
 
 on:
