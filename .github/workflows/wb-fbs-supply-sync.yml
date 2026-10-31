@@ -97,7 +97,9 @@ jobs:
                   print("FBS_SUPPLY_SYNC_RESPONSE_ERROR " + details, flush=True)
                   if "already running" in details.lower() or "credential store is busy" in details.lower():
                       if attempt < 60:
-                          time.sleep(75)
+                          busy_wait = 300 if "already running" in details.lower() else 75
+                          print("FBS_SUPPLY_SYNC_BUSY_WAIT_SECONDS=" + str(busy_wait), flush=True)
+                          time.sleep(busy_wait)
                           continue
                   failures.append("BRIDGE_REJECTED")
                   break
