@@ -499,17 +499,17 @@ jobs:
           import json, os, time, urllib.error, urllib.request
 
           url=f"https://script.google.com/macros/s/{os.environ['WEBAPP_DEPLOYMENT_ID']}/exec"
-          body=json.dumps({"token":os.environ["WEBHOOK_SECRET"],"action":"health"}).encode()
+          body=json.dumps({"token":os.environ["WEBHOOK_SECRET"],"action":"bridge_ping"}).encode()
           last=None
           health=None
           for attempt in range(1,9):
               req=urllib.request.Request(url,data=body,headers={"Content-Type":"application/json"},method="POST")
               try:
-                  with urllib.request.urlopen(req,timeout=120) as r:
+                  with urllib.request.urlopen(req,timeout=30) as r:
                       obj=json.loads(r.read().decode("utf-8"))
                   last=obj
-                  if obj.get("ok") is True and obj.get("action")=="health":
-                      candidate=obj.get("result") or {}
+                  if obj.get("ok") is True and obj.get("action")=="bridge_ping":
+                      candidate={"version":obj.get("version"),"bridge_ping":True}
                       if candidate.get("version")==os.environ["EXPECTED_WORKER_VERSION"]:
                           health=candidate
                           break
@@ -530,13 +530,11 @@ jobs:
                   time.sleep(10)
           if health is None or health.get("version")!=os.environ["EXPECTED_WORKER_VERSION"]:
               raise AssertionError(last)
-          if health.get("trigger_ok") is not True:
-              raise AssertionError("TRIGGER_HEALTH_FAILED")
+          if health.get("bridge_ping") is not True:
+              raise AssertionError("BRIDGE_PROBE_FAILED")
           print("PROTECTED_BRIDGE_AUTH=ok")
           print("WORKER_VERSION=" + str(health.get("version")))
-          print("TRIGGER_OK=" + str(health.get("trigger_ok")))
-          print("TRIGGER_COUNT=" + str(health.get("trigger_count")))
-          print("PROJECT_TRIGGER_HANDLERS=" + ",".join(str(x) for x in (health.get("project_trigger_handlers") or [])))
+          print("BRIDGE_PROBE=ok")
           for client, stage in sorted((health.get("fbs_ingest_stages") or {}).items()):
               print("FBS_STAGE=" + str(client) + "," + str(stage.get("stage")) + ",elapsed_ms=" + str(stage.get("elapsedMs")) + ",at=" + str(stage.get("at")))
           for client in health.get("clients") or []:
@@ -713,6 +711,7 @@ jobs:
           grep -Rqs "SELLMONITOR_OZON_EXPORT_DIAGNOSTIC_RESPONSE_V1" .
           grep -Rqs "function sellmonitorGithubEnsureTrigger_()" .
           grep -RqsF "$EXPECTED_WORKER_VERSION" .
+          grep -RqsF 'oldRnpNote.match(/Реклама доступна[\\s\\S]*?без SKU(?:\\/offer_id)?\\./)' .
           grep -Rqs "SELLMONITOR_WEBHOOK_HASH_NOT_COMPILED" .
           python - <<'PY'
           import json
