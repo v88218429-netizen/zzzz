@@ -6468,7 +6468,7 @@ function sellmonitorGithubFbsStatusReadV1_(body) {
   var ids=[],seen={};
   requested.forEach(function(value){
     var id=String(value==null?'':value).trim();
-    if(!/^\\d{6,20}$/.test(id))throw new Error('FBS_ID_INVALID');
+    if(!/^\d{6,20}$/.test(id))throw new Error('FBS_ID_INVALID');
     if(seen[id])throw new Error('FBS_DUPLICATE_WITHIN_BATCH');
     seen[id]=true;ids.push(id);
   });
