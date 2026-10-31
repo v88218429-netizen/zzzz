@@ -6,6 +6,8 @@ on:
       - "ozon_performance_radar/**"
       - ".github/workflows/ozon-performance-probe.yml"
   workflow_dispatch:
+  schedule:
+    - cron: "17 */4 * * *"
 permissions:
   contents: read
 jobs:
@@ -26,6 +28,8 @@ jobs:
       OZON_STORE: ${{ matrix.store }}
       OZON_PERF_CLIENT_ID: ${{ matrix.client_id }}
       OZON_PERF_CLIENT_SECRET: ${{ matrix.secret_name == 'OZON_PERF_DOM_SECRET' && secrets.OZON_PERF_DOM_SECRET || secrets.OZON_PERF_HOZYAIKA_SECRET }}
+      OZON_PUBLISH_WEBHOOK_SECRET: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
+      WEBAPP_DEPLOYMENT_ID: AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
