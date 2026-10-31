@@ -247,12 +247,15 @@ function wbFbsSupplySortedMap_(ss) {
 
   var last = sh.getLastRow();
   var start = Math.max(2, last - WB_FBS_DIRECT_SUPPLY_CFG.historyTailRows + 1);
-  var values = sh.getRange(start, 1, last - start + 1, 8).getValues();
+  var count = last - start + 1;
+  var fixedAtValues = sh.getRange(start, 1, count, 1).getValues();
+  var orderIdValues = sh.getRange(start, 2, count, 1).getDisplayValues();
+  var newWbValues = sh.getRange(start, 8, count, 1).getDisplayValues();
 
-  for (var i = 0; i < values.length; i++) {
-    var fixedAt = values[i][0];
-    var orderId = String(values[i][1] || '').trim();
-    var newWb = String(values[i][7] || '').trim().toLowerCase();
+  for (var i = 0; i < count; i++) {
+    var fixedAt = fixedAtValues[i][0];
+    var orderId = String(orderIdValues[i][0] || '').trim();
+    var newWb = String(newWbValues[i][0] || '').trim().toLowerCase();
     if (!orderId || newWb !== 'sorted') continue;
 
     var d = wbFbsSupplyDate_(fixedAt);
@@ -270,21 +273,24 @@ function wbFbsSupplyBackfillOrders_(ss, suppliesById) {
   var start = Math.max(2, last - WB_FBS_DIRECT_SUPPLY_CFG.orderTailRows + 1);
   var n = last - start + 1;
 
-  var orderIds = sh.getRange(start, 1, n, 1).getDisplayValues(); // A
-  var bToK = sh.getRange(start, 2, n, 10).getValues(); // B:K
+  var aToB = sh.getRange(start, 1, n, 2).getValues(); // A:B
+  var wbStatuses = sh.getRange(start, 6, n, 1).getDisplayValues(); // F
+  var supplyIds = sh.getRange(start, 11, n, 1).getDisplayValues(); // K
   var complete = sh.getRange(start, 20, n, 1).getValues(); // T
   var lastChange = sh.getRange(start, 22, n, 1).getValues(); // V
   var timings = sh.getRange(start, 46, n, 6).getValues(); // AT:AY
   var sortedCols = sh.getRange(start, 58, n, 2).getValues(); // BF:BG
+  var timingsBefore = timings.map(function(row) { return row.slice(); });
+  var sortedBefore = sortedCols.map(function(row) { return row.slice(); });
   var sortedMap = wbFbsSupplySortedMap_(ss);
 
   var matched = 0;
   var sortedFilled = 0;
 
   for (var i = 0; i < n; i++) {
-    var orderDate = bToK[i][0];       // B
-    var wbStatus = String(bToK[i][4] || '').toLowerCase(); // F
-    var supplyId = String(bToK[i][9] || '').trim();        // K
+    var orderDate = aToB[i][1];       // B
+    var wbStatus = String(wbStatuses[i][0] || '').toLowerCase(); // F
+    var supplyId = String(supplyIds[i][0] || '').trim();   // K
     var completedAt = complete[i][0]; // T
     var supply = supplyId ? suppliesById[supplyId] : null;
 
@@ -302,7 +308,7 @@ function wbFbsSupplyBackfillOrders_(ss, suppliesById) {
       if (scan && orderDate) timings[i][5] = wbFbsSupplyHours_(orderDate, scan);          // AY
     }
 
-    var orderId = String(orderIds[i][0] || '').trim();
+    var orderId = String(aToB[i][0] || '').trim();
     var firstSorted = sortedCols[i][0];
 
     if (!firstSorted && orderId && sortedMap[orderId]) {
@@ -325,13 +331,29 @@ function wbFbsSupplyBackfillOrders_(ss, suppliesById) {
     }
   }
 
-  sh.getRange(start, 46, n, 6).setValues(timings);
-  sh.getRange(start, 58, n, 2).setValues(sortedCols);
-
-  sh.getRange(start, 46, n, 2).setNumberFormat('dd.MM.yyyy HH:mm:ss');
-  sh.getRange(start, 48, n, 4).setNumberFormat('0.00');
-  sh.getRange(start, 58, n, 1).setNumberFormat('dd.MM.yyyy HH:mm:ss');
-  sh.getRange(start, 59, n, 1).setNumberFormat('0.00');
+  function differs_(before, after) {
+    if (before.length !== after.length) return true;
+    for (var r = 0; r < before.length; r++) {
+      if (before[r].length !== after[r].length) return true;
+      for (var c = 0; c < before[r].length; c++) {
+        var a = before[r][c], b = after[r][c];
+        if (a instanceof Date && b instanceof Date) {
+          if (a.getTime() !== b.getTime()) return true;
+        } else if (a !== b) return true;
+      }
+    }
+    return false;
+  }
+  if (differs_(timingsBefore, timings)) {
+    sh.getRange(start, 46, n, 6).setValues(timings);
+    sh.getRange(start, 46, n, 2).setNumberFormat('dd.MM.yyyy HH:mm:ss');
+    sh.getRange(start, 48, n, 4).setNumberFormat('0.00');
+  }
+  if (differs_(sortedBefore, sortedCols)) {
+    sh.getRange(start, 58, n, 2).setValues(sortedCols);
+    sh.getRange(start, 58, n, 1).setNumberFormat('dd.MM.yyyy HH:mm:ss');
+    sh.getRange(start, 59, n, 1).setNumberFormat('0.00');
+  }
 
   return {checked: n, matched: matched, sorted: sortedFilled};
 }
