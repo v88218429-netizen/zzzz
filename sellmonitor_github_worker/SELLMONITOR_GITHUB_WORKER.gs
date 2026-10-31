@@ -5240,8 +5240,14 @@ function sellmonitorGithubOzonPerfDate_(value) {
   return Utilities.formatDate(d, 'UTC', 'yyyy-MM-dd');
 }
 function sellmonitorGithubOzonPerfNumber_(value, label, allowNegative) {
-  if (value == null || value === '') return '';
-  var n = Number(value);
+  if (value == null) return '';
+  var raw=typeof value==='string'?value.trim():value;
+  if (raw==='') return '';
+  if(typeof raw==='string'&&/^(?:-|—|–|n\/a|na)$/i.test(raw))return '';
+  if(typeof raw==='string'){
+    raw=raw.replace(/[\s\u00a0\u202f]/g,'').replace(/[₽]/g,'').replace(/руб\.?$/i,'').replace(/,/g,'.');
+  }
+  var n=Number(raw);
   if (!isFinite(n) || (!allowNegative && n < 0)) throw new Error('OZON_PERF_INVALID_NUMBER:' + label + ':' + (!isFinite(n) ? 'nonnumeric' : 'negative'));
   return n;
 }
@@ -5309,18 +5315,20 @@ function sellmonitorGithubPublishOzonPerformanceDaily_(body) {
     var spend=sellmonitorGithubOzonPerfNumber_(x.moneySpent,'moneySpent',true),orders=sellmonitorGithubOzonPerfNumber_(x.orders,'orders');
     var orderMoney=sellmonitorGithubOzonPerfNumber_(x.ordersMoney,'ordersMoney',true);
     var row=[cfg.key,day,cfg.name,id,String(x.title||''),'','','',views,clicks,spend,orders,orderMoney,
-      views!==''&&Number(views)>0?Number(clicks||0)/Number(views)*100:'',
-      clicks!==''&&Number(clicks)>0?Number(spend||0)/Number(clicks):'',
-      orders!==''&&Number(orders)>0?Number(spend||0)/Number(orders):'',
-      orderMoney!==''&&Number(orderMoney)>0?Number(spend||0)/Number(orderMoney)*100:'',
+      views!==''&&clicks!==''&&Number(views)>0?Number(clicks)/Number(views)*100:'',
+      clicks!==''&&spend!==''&&Number(clicks)>0?Number(spend)/Number(clicks):'',
+      orders!==''&&spend!==''&&Number(orders)>0?Number(spend)/Number(orders):'',
+      orderMoney!==''&&spend!==''&&Number(orderMoney)>0?Number(spend)/Number(orderMoney)*100:'',
       'Ozon Performance API / statistics/daily/json',
-      'День закрыт; данные по кампании, без SKU; возможен пересчёт API',
+      [views,clicks,spend,orders,orderMoney].some(function(v){return v===''})?'Неполные поля источника; пустое значение не заменено нулём; без SKU':'День закрыт; данные по кампании, без SKU; возможен пересчёт API',
       key];
     dailyMap[key]=row;dailyKeys.push(key);
-    if(!dailyByDate[day])dailyByDate[day]={views:0,clicks:0,spend:0,orders:0,orderMoney:0};
-    dailyByDate[day].views+=Number(views||0);dailyByDate[day].clicks+=Number(clicks||0);
-    dailyByDate[day].spend+=Number(spend||0);dailyByDate[day].orders+=Number(orders||0);
-    dailyByDate[day].orderMoney+=Number(orderMoney||0);
+    if(!dailyByDate[day])dailyByDate[day]={views:0,clicks:0,spend:0,orders:0,orderMoney:0,unknown:{}};
+    var d=dailyByDate[day];
+    [['views',views],['clicks',clicks],['spend',spend],['orders',orders],['orderMoney',orderMoney]].forEach(function(pair){
+      if(pair[1]==='')d.unknown[pair[0]]=true;
+      else d[pair[0]]+=Number(pair[1]);
+    });
   });
   var dailyDates=Object.keys(dailyByDate).sort();
   var expectedDays=Math.round((new Date(coverageTo+'T00:00:00Z')-new Date(coverageFrom+'T00:00:00Z'))/86400000)+1;
@@ -5394,17 +5402,21 @@ function sellmonitorGithubPublishOzonPerformanceDaily_(body) {
       if(!period)continue;
       var intersect=period.to>=coverageFrom&&period.from<=coverageTo;
       if(!intersect)continue;
-      var sums={views:0,clicks:0,spend:0,orders:0,orderMoney:0,days:0};
+      var sums={views:0,clicks:0,spend:0,orders:0,orderMoney:0,days:0,unknown:{}};
       Object.keys(dailyByDate).forEach(function(day){
-        if(day>=period.from&&day<=period.to){var d=dailyByDate[day];sums.views+=d.views;sums.clicks+=d.clicks;sums.spend+=d.spend;sums.orders+=d.orders;sums.orderMoney+=d.orderMoney;sums.days++;}
+        if(day>=period.from&&day<=period.to){var d=dailyByDate[day];['views','clicks','spend','orders','orderMoney'].forEach(function(k){if(d.unknown[k])sums.unknown[k]=true;sums[k]+=d[k];});sums.days++;}
       });
       if(!sums.days)continue;
-      var vals=[sums.views,sums.clicks,sums.spend,sums.orders,sums.orderMoney,
-        sums.views>0?sums.clicks/sums.views:'',
-        sums.clicks>0?sums.spend/sums.clicks:'',
-        sums.orders>0?sums.spend/sums.orders:'',
-        sums.orderMoney>0?sums.spend/sums.orderMoney:'',
-        sums.clicks>0?sums.orders/sums.clicks:''];
+      var vals=[
+        sums.unknown.views?'':sums.views,sums.unknown.clicks?'':sums.clicks,
+        sums.unknown.spend?'':sums.spend,sums.unknown.orders?'':sums.orders,
+        sums.unknown.orderMoney?'':sums.orderMoney,
+        sums.unknown.views||sums.unknown.clicks?'':(sums.views>0?sums.clicks/sums.views:''),
+        sums.unknown.spend||sums.unknown.clicks?'':(sums.clicks>0?sums.spend/sums.clicks:''),
+        sums.unknown.spend||sums.unknown.orders?'':(sums.orders>0?sums.spend/sums.orders:''),
+        sums.unknown.spend||sums.unknown.orderMoney?'':(sums.orderMoney>0?sums.spend/sums.orderMoney:''),
+        sums.unknown.orders||sums.unknown.clicks?'':(sums.clicks>0?sums.orders/sums.clicks:'')
+      ];
       for(var j=0;j<vals.length;j++)newRows[j][col]=vals[j];
     }
     newRows.forEach(function(row,i){if(JSON.stringify(row)!==JSON.stringify(oldRows[i]))rowsChanged=true;});
