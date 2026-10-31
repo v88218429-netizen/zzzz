@@ -321,6 +321,13 @@ def main() -> None:
     if selected and selected not in clients:
         raise RuntimeError("FBS_CLIENT_NOT_ALLOWED")
     targets = [(selected, clients[selected])] if selected else list(clients.items())
+    print("FBS_RECOVERY_PLAN=" + json.dumps({
+        "client": selected or "AIR+HOZYAYUSHKA",
+        "batch_size": BATCH_SIZE,
+        "lookback_days": LOOKBACK_DAYS,
+        "start_date": os.environ.get("FBS_START_DATE", ""),
+        "end_date": os.environ.get("FBS_END_DATE", ""),
+    }, sort_keys=True), flush=True)
     wait_bridge()
     summary = {}
     for client, key in targets:
