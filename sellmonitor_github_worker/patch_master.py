@@ -138,6 +138,188 @@ if worker.exists():
         "var onceKey3 = 'SMC_TICK_ONCE_V4_USED';",
     )
 
+
+    # Read-only FBS production acceptance audit. Exposes counts and metadata only.
+    audit_marker = "SELLMONITOR_GITHUB_FBS_ACCEPTANCE_AUDIT_V1"
+    audit_anchor = "function sellmonitorGithubFbsTargetHealthV1_()"
+    if audit_marker not in worker_text:
+        audit_code = """/* SELLMONITOR_GITHUB_FBS_ACCEPTANCE_AUDIT_V1 */
+function sellmonitorGithubFbsAcceptanceAuditV1_(body) {
+  var targets=[
+    {client:'SANYCH',id:'1v0qt-thJDOw3tLFdZVGhdXJdBM8rDPRz9mHlcHmuuyM'},
+    {client:'AIR',id:'1qJvhEOIku7sOMydfrUz0PR5dkcU0sLjv433pa1MFBcM'},
+    {client:'HOZYAYUSHKA',id:'1f9dxXeZxkDth8h2C9GA7L7WqAr1-Ok-Oi5YtufLYOOk'}
+  ];
+  var archiveTargets=[
+    {name:'SANYCH_ARCHIVE_LEGACY',id:'1y70iV3KdiN7K_hsQpzv7HCv-lLNgX2hFY6mS-sYAGwI',owner:'1_rMW6w4a7ZKhsWAyVo4B4Hn2x1cXwJWVW7K4JAHpjI8'},
+    {name:'AIR_ARCHIVE_OLD',id:'15xXOXkk31QShCzbVGjbtUEkjq0t6Mi1Q1jCuxjGlV4Y',owner:'17G_xCr'},
+    {name:'AIR_ARCHIVE_CURRENT',id:'1huZN_N9cx26NX1rB4zacRp2jVlZbwg-5S7CaW8INxfY',owner:'1qJvhEOIku7sOMydfrUz0PR5dkcU0sLjv433pa1MFBcM'},
+    {name:'HOZY_ARCHIVE_CURRENT',id:'1ujOWZNzAVny7agS0qJfK-VBLexEgtxbMiA-TsUDN_bE',owner:'1f9dxXeZxkDth8h2C9GA7L7WqAr1-Ok-Oi5YtufLYOOk'},
+    {name:'HOZY_ARCHIVE_MASTER',id:'1EpL2t3y9xU0v_oowhAxkYM2YPUUd01hN_Q6bvHJOKSg',owner:'14-_i5xGBA9NiGRHxBOx9rfCe5tjuMoCeBARB60wnVj0'}
+  ];
+  var requested=String(body&&body.client||'ALL').trim().toUpperCase();
+  var allowed=['ALL','SANYCH','AIR','HOZYAYUSHKA'];
+  if(allowed.indexOf(requested)<0)throw new Error('FBS_AUDIT_CLIENT_NOT_ALLOWED');
+  var orderTab='📦 FBS Заказы';
+  function dateMs_(v) {
+    if(v instanceof Date)return v.getTime();
+    if(typeof v==='number')return (v-25569)*86400000;
+    if(v){var d=new Date(v);if(!isNaN(d.getTime()))return d.getTime();}
+    return NaN;
+  }
+  function scanOrders_(ss,tabName,withStatuses) {
+    var sh=ss.getSheetByName(tabName||orderTab);
+    if(!sh)return {exists:false};
+    var last=sh.getLastRow();
+    if(last<1||last>110000)throw new Error('FBS_AUDIT_ROW_COUNT_UNEXPECTED');
+    var result={exists:true,lastRow:last,rowsWithId:0,uniqueIds:0,duplicateRows:0,
+      invalidIds:0,missingSupplierStatus:0,missingWbStatus:0,missingBothStatuses:0,
+      minOrderAt:'',maxOrderAt:'',duplicateRowExamples:[],idSet:Object.create(null)};
+    var min=Infinity,max=-Infinity,chunk=4000;
+    for(var start=2;start<=last;start+=chunk){
+      var n=Math.min(chunk,last-start+1);
+      var idDate=sh.getRange(start,1,n,2).getValues();
+      var status=withStatuses?sh.getRange(start,5,n,2).getDisplayValues():null;
+      for(var i=0;i<n;i++){
+        var id=String((idDate[i]||[])[0]||'').trim();
+        if(!id)continue;
+        if(!/^[0-9]{6,20}$/.test(id)){result.invalidIds++;continue;}
+        result.rowsWithId++;
+        if(Object.prototype.hasOwnProperty.call(result.idSet,id)){
+          result.duplicateRows++;
+          if(result.duplicateRowExamples.length<20)result.duplicateRowExamples.push([result.idSet[id],start+i]);
+        }else{
+          result.idSet[id]=start+i;result.uniqueIds++;
+        }
+        if(withStatuses){
+          var pair=status[i]||[],seller=String(pair[0]||'').trim(),wb=String(pair[1]||'').trim();
+          if(!seller)result.missingSupplierStatus++;
+          if(!wb)result.missingWbStatus++;
+          if(!seller&&!wb)result.missingBothStatuses++;
+        }
+        var stamp=dateMs_((idDate[i]||[])[1]);
+        if(isFinite(stamp)){if(stamp<min)min=stamp;if(stamp>max)max=stamp;}
+      }
+    }
+    if(isFinite(min))result.minOrderAt=Utilities.formatDate(new Date(min),'Europe/Moscow','yyyy-MM-dd HH:mm:ss');
+    if(isFinite(max))result.maxOrderAt=Utilities.formatDate(new Date(max),'Europe/Moscow','yyyy-MM-dd HH:mm:ss');
+    return result;
+  }
+  function auditAnalytics_(ss) {
+    var names=['📊 Дашборд','💼 Собственник','📋 Отчёт FBS','📋 FBS Report',
+      '📈 Аналитика','📈 Аналитика 360','🧩 Товарный портфель','💰 Скорость = деньги',
+      '🧠 Центр решений','🧮 Хронология','🛠 Charts Data'];
+    var out=[];
+    names.forEach(function(name){
+      var sh=ss.getSheetByName(name);if(!sh)return;
+      var last=sh.getLastRow(),cols=sh.getLastColumn(),scanRows=Math.min(last,3000),scanCols=Math.min(cols,80);
+      var formulas=0,errors=0,examples=[];
+      for(var start=1;start<=scanRows;start+=300){
+        var n=Math.min(300,scanRows-start+1);
+        var fs=sh.getRange(start,1,n,Math.max(1,scanCols)).getFormulas();
+        var values=sh.getRange(start,1,n,Math.max(1,scanCols)).getDisplayValues();
+        for(var r=0;r<n;r++)for(var c=0;c<scanCols;c++){
+          if(fs[r][c])formulas++;
+          var v=String(values[r][c]||'');
+          if(/^#(?:REF!|N\/A|VALUE!|DIV\/0!|NAME\?|ERROR!|NUM!|NULL!)/i.test(v)){
+            errors++;if(examples.length<12)examples.push(sh.getName()+'!'+sh.getRange(start+r,c+1).getA1Notation()+':'+v);
+          }
+        }
+      }
+      var charts=sh.getCharts(),chartRows=[];
+      charts.forEach(function(ch){
+        var title='',ranges=[];
+        try{title=String(ch.getOptions().get('title')||'');}catch(ignoreTitle){}
+        try{ranges=ch.getRanges().map(function(r){return r.getA1Notation();});}catch(ignoreRanges){}
+        chartRows.push({title:title,type:String(ch.getChartType()),ranges:ranges});
+      });
+      out.push({sheet:name,lastRow:last,lastColumn:cols,formulaCellsScanned:formulas,
+        scanRows:scanRows,scanColumns:scanCols,scanTruncated:last>scanRows||cols>scanCols,
+        formulaErrorCount:errors,formulaErrorExamples:examples,chartCount:charts.length,charts:chartRows});
+    });
+    return out;
+  }
+  function auditSupplies_(ss) {
+    var sh=ss.getSheetByName('🚚 Поставки FBS');if(!sh)return {exists:false};
+    var last=sh.getLastRow(),rows=0,scanned=0,done=0;
+    if(last>110000)throw new Error('FBS_AUDIT_SUPPLY_ROW_COUNT_UNEXPECTED');
+    for(var start=2;start<=last;start+=4000){
+      var n=Math.min(4000,last-start+1),v=sh.getRange(start,1,n,5).getValues();
+      for(var i=0;i<n;i++){
+        var id=String(v[i][0]||'').trim();if(!id)continue;
+        rows++;if(v[i][3])scanned++;if(v[i][4]===true||String(v[i][4]).toLowerCase()==='true')done++;
+      }
+    }
+    return {exists:true,lastRow:last,supplyRows:rows,scanDtPresent:scanned,scanDtMissing:Math.max(0,rows-scanned),done:done};
+  }
+  function auditCharts_(ss) {
+    var out={total:0,sheets:{}};
+    ss.getSheets().forEach(function(sh){var charts=sh.getCharts();if(charts.length){out.total+=charts.length;out.sheets[sh.getName()]=charts.length;}});
+    return out;
+  }
+  var result={ok:true,checkedAt:new Date().toISOString(),timezone:'Europe/Moscow',clients:{},archives:[]};
+  var mainByClient={};
+  targets.forEach(function(t){
+    if(requested!=='ALL'&&requested!==t.client)return;
+    try{
+      var ss=SpreadsheetApp.openById(t.id),orders=scanOrders_(ss,orderTab,true);
+      mainByClient[t.client]=orders.idSet||{};
+      result.clients[t.client]={spreadsheetId:t.id,accessible:true,orders:orders,
+        supply:auditSupplies_(ss),analytics:auditAnalytics_(ss),charts:auditCharts_(ss)};
+      delete result.clients[t.client].orders.idSet;
+    }catch(e){result.ok=false;result.clients[t.client]={spreadsheetId:t.id,accessible:false,errorType:String(e&&e.name||'Error'),reason:String(e&&e.message||e).slice(0,180)};}
+  });
+  if(requested==='ALL'||requested==='SANYCH'){
+    try{
+      var alt=SpreadsheetApp.openById('1_rMW6w4a7ZKhsWAyVo4B4Hn2x1cXwJWVW7K4JAHpjI8');
+      var altOrders=scanOrders_(alt,orderTab,true),main=mainByClient.SANYCH||{};
+      var onlyMain=0,onlyAlt=0;
+      Object.keys(main).forEach(function(id){if(!Object.prototype.hasOwnProperty.call(altOrders.idSet,id))onlyMain++;});
+      Object.keys(altOrders.idSet).forEach(function(id){if(!Object.prototype.hasOwnProperty.call(main,id))onlyAlt++;});
+      result.clients.SANYCH.alternate={spreadsheetId:'1_rMW6w4a7ZKhsWAyVo4B4Hn2x1cXwJWVW7K4JAHpjI8',
+        accessible:true,orders:{rowsWithId:altOrders.rowsWithId,uniqueIds:altOrders.uniqueIds,
+          duplicateRows:altOrders.duplicateRows,invalidIds:altOrders.invalidIds,
+          missingSupplierStatus:altOrders.missingSupplierStatus,missingWbStatus:altOrders.missingWbStatus,
+          missingBothStatuses:altOrders.missingBothStatuses,minOrderAt:altOrders.minOrderAt,maxOrderAt:altOrders.maxOrderAt},
+        onlyInMain:onlyMain,onlyInAlternate:onlyAlt};
+    }catch(e){if(result.clients.SANYCH)result.clients.SANYCH.alternate={accessible:false,errorType:String(e&&e.name||'Error'),reason:String(e&&e.message||e).slice(0,160)};}
+  }
+  if(requested==='ALL'){
+    archiveTargets.forEach(function(a){
+      var item={name:a.name,spreadsheetId:a.id,expectedOwnerTarget:a.owner,accessible:false};
+      try{
+        var ss=SpreadsheetApp.openById(a.id),meta=ss.getSheetByName('SYS_ARCHIVE_META'),metaRows=meta?meta.getDataRange().getDisplayValues():[];
+        var owner='';
+        metaRows.forEach(function(row){if(String(row[0]||'').trim()==='OWNER_TARGET_ID')owner=String(row[1]||'').trim();});
+        var orders=scanOrders_(ss,'📦 Архив заказов',false),history=ss.getSheetByName('🕘 Архив истории статусов');
+        item.accessible=true;item.ownerTargetId=owner;item.ownerTargetMatches=owner.indexOf(a.owner)===0;
+        item.archiveOrders={rowsWithId:orders.rowsWithId,uniqueIds:orders.uniqueIds,duplicateRows:orders.duplicateRows};
+        item.historyRows=history?Math.max(0,history.getLastRow()-1):0;
+      }catch(e){item.errorType=String(e&&e.name||'Error');item.reason=String(e&&e.message||e).slice(0,150);}
+      result.archives.push(item);
+    });
+  }
+  return result;
+}
+"""
+        if audit_anchor not in worker_text:
+            raise SystemExit("FBS audit insertion anchor missing")
+        worker_text = worker_text.replace(audit_anchor, audit_code + "\n" + audit_anchor, 1)
+        print("FBS_ACCEPTANCE_AUDIT_FUNCTION=patched")
+    audit_route_marker = "FBS_ACCEPTANCE_AUDIT_ROUTE_V1"
+    post_anchor = "    sellmonitorGithubWebAuth_(body.token || body.key);"
+    if audit_route_marker not in worker_text:
+        route = """    /* FBS_ACCEPTANCE_AUDIT_ROUTE_V1 */
+    if (action === 'fbs_acceptance_audit') {
+      var auditResult = sellmonitorGithubFbsAcceptanceAuditV1_(body);
+      return sellmonitorGithubWebJson_({ok:auditResult.ok===true,action:action,result:auditResult});
+    }
+"""
+        if post_anchor not in worker_text:
+            raise SystemExit("FBS audit auth route anchor missing")
+        worker_text = worker_text.replace(post_anchor, post_anchor + "\n" + route, 1)
+        print("FBS_ACCEPTANCE_AUDIT_ROUTE=patched")
+
     # One-shot secret seeding endpoint. No JWT is stored in GitHub or Sheets.
     post_anchor = "    sellmonitorGithubWebAuth_(body.token || body.key);"
     if post_anchor in worker_text and "seed_wb_tokens_once_v1" not in worker_text:
