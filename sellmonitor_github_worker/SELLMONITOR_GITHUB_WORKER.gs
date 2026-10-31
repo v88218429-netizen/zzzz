@@ -5504,7 +5504,7 @@ function sellmonitorGithubPublishOzonPerformanceDaily_(body) {
   var rnpSheet=ss.getSheetByName('00_РНП_магазин');
   if(!rnpSheet)throw new Error('OZON_PERF_RNP_NOTE_SHEET_MISSING:'+cfg.name);
   var oldRnpNote=String(rnpSheet.getRange('A2').getValue()||'');
-  var rnpNoteMatch=oldRnpNote.match(/Реклама доступна[^;]*; без SKU(?:\/offer_id)?\./);
+  var rnpNoteMatch=oldRnpNote.match(/Реклама доступна[\s\S]*?без SKU(?:\/offer_id)?\./);
   if(!rnpNoteMatch)throw new Error('OZON_PERF_RNP_AD_NOTE_NOT_FOUND:'+cfg.name);
   var newRnpNote=oldRnpNote.replace(rnpNoteMatch[0],
     'Реклама доступна только по кампаниям; дневные данные '+coverageFrom+'–'+coverageTo+', без SKU/offer_id.');
