@@ -129,7 +129,10 @@ jobs:
                       "client", "apiPages", "apiSupplies", "suppliesWritten",
                       "preservedNotReturned", "preservedDuplicateRows",
                       "orderRowsChecked", "orderRowsMatched",
-                      "orderSupplyIdsNotInCurrentApi", "sortedBackfilled"
+                      "orderSupplyIdsNotInCurrentApi", "sortedBackfilled",
+                      "backfillComplete", "backfillRemainingRows",
+                      "backfillRowsCheckedTotal", "backfillRowsMatchedTotal",
+                      "backfillSortedTotal", "backfillStartRow", "backfillEndRow"
                   )
               }, ensure_ascii=False, separators=(",", ":")), flush=True)
               if complete:
