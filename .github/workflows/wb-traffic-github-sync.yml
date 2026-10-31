@@ -16,7 +16,7 @@ permissions:
   actions: read
 
 concurrency:
-  group: sellmonitor-summary-publish-serial
+  group: sellmonitor-wb-traffic-summary-publish
   cancel-in-progress: false
 
 jobs:
