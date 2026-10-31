@@ -69,11 +69,14 @@ jobs:
                   for offset in range(span + 1):
                       day = (first + dt.timedelta(days=offset)).isoformat()
                       rows.append({"client": client, "start_date": day, "end_date": day,
-                                   "script": script, "batch_size": 5})
+                                   "script": script, "batch_size": (5 if client == "AIR" else 10)})
                   split_count += span + 1
                   continue
-              batch = int(prior_batch or 10)
-              if batch > 5:
+              default_batch = 5 if client == "AIR" else 10
+              batch = int(prior_batch or default_batch)
+              if job.get("conclusion") == "cancelled":
+                  batch = default_batch
+              elif batch > 5:
                   batch = 5
               elif batch > 2:
                   batch = 2
@@ -137,7 +140,11 @@ jobs:
         shell: bash
         run: |
           set -uo pipefail
-          for batch_size in 5 2 1; do
+          batch_candidates=("$FBS_BATCH_SIZE")
+          for fallback in 5 2 1; do
+            if [[ "$fallback" -lt "$FBS_BATCH_SIZE" ]]; then batch_candidates+=("$fallback"); fi
+          done
+          for batch_size in "${batch_candidates[@]}"; do
             echo "FBS_RETRY_ATTEMPT_START client=$FBS_CLIENT from=$FBS_START_DATE to=$FBS_END_DATE batch=$batch_size"
             set +e
             FBS_BATCH_SIZE="$batch_size" timeout --signal=TERM --kill-after=30s 20m python wb_worker/github_fbs_recovery.py
@@ -189,7 +196,11 @@ jobs:
         shell: bash
         run: |
           set -uo pipefail
-          for batch_size in 5 2 1; do
+          batch_candidates=("$FBS_BATCH_SIZE")
+          for fallback in 5 2 1; do
+            if [[ "$fallback" -lt "$FBS_BATCH_SIZE" ]]; then batch_candidates+=("$fallback"); fi
+          done
+          for batch_size in "${batch_candidates[@]}"; do
             echo "FBS_RETRY_ATTEMPT_START client=$FBS_CLIENT from=$FBS_START_DATE to=$FBS_END_DATE batch=$batch_size"
             set +e
             FBS_BATCH_SIZE="$batch_size" timeout --signal=TERM --kill-after=30s 20m python wb_worker/github_fbs_recovery.py
@@ -241,7 +252,11 @@ jobs:
         shell: bash
         run: |
           set -uo pipefail
-          for batch_size in 5 2 1; do
+          batch_candidates=("$FBS_BATCH_SIZE")
+          for fallback in 5 2 1; do
+            if [[ "$fallback" -lt "$FBS_BATCH_SIZE" ]]; then batch_candidates+=("$fallback"); fi
+          done
+          for batch_size in "${batch_candidates[@]}"; do
             echo "FBS_RETRY_ATTEMPT_START client=$FBS_CLIENT from=$FBS_START_DATE to=$FBS_END_DATE batch=$batch_size"
             set +e
             FBS_BATCH_SIZE="$batch_size" timeout --signal=TERM --kill-after=30s 20m python wb_worker/sanych_fbs_recovery.py
