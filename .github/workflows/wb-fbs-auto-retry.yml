@@ -5,6 +5,7 @@ on:
     workflows:
       - WB FBS GitHub recovery
       - WB FBS Sanych targeted recovery
+      - WB FBS retry failed recovery windows
     types: [completed]
 
 permissions:
@@ -20,7 +21,7 @@ jobs:
     if: >-
       ${{ contains(fromJson('["failure","cancelled"]'), github.event.workflow_run.conclusion)
           && github.event.workflow_run.head_branch == 'mainggg'
-          && github.event.workflow_run.event == 'push' }}
+          && (github.event.workflow_run.event == 'push' || github.event.workflow_run.event == 'workflow_run') }}
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.failed.outputs.matrix }}
@@ -34,7 +35,7 @@ jobs:
           REPOSITORY: ${{ github.repository }}
         run: |
           python - <<'PY'
-          import json, os, re, urllib.request
+          import datetime as dt, json, os, re, urllib.request
           url = f"https://api.github.com/repos/{os.environ['REPOSITORY']}/actions/runs/{os.environ['RUN_ID']}/jobs?per_page=100"
           req = urllib.request.Request(url, headers={
               "Accept": "application/vnd.github+json",
@@ -43,28 +44,53 @@ jobs:
           })
           with urllib.request.urlopen(req, timeout=30) as response:
               jobs = json.load(response).get("jobs", [])
-          rows = []
-          pattern = re.compile(r"^recover (AIR|HOZYAYUSHKA|SANYCH) (\d{4}-\d{2}-\d{2}).*(\d{4}-\d{2}-\d{2})$")
+          rows, split_count, exhausted = [], 0, 0
+          pattern = re.compile(r"^(?:recover|retry) (AIR|HOZYAYUSHKA|SANYCH) (\d{4}-\d{2}-\d{2}).*?(\d{4}-\d{2}-\d{2})(?: \[batch=(\d+)\])?$")
           for job in jobs:
-              if job.get("conclusion") not in ("failure", "cancelled"):
+              if job.get("conclusion") not in ("failure", "cancelled", "timed_out"):
                   continue
               match = pattern.match(str(job.get("name") or ""))
               if not match:
                   continue
-              client, start, end = match.groups()
+              client, start, end, prior_batch = match.groups()
+              first, last = dt.date.fromisoformat(start), dt.date.fromisoformat(end)
+              span = (last - first).days
+              if span < 0:
+                  continue
               script = "wb_worker/sanych_fbs_recovery.py" if client == "SANYCH" else "wb_worker/github_fbs_recovery.py"
-              rows.append({"client": client, "start_date": start, "end_date": end, "script": script})
+              if span > 0:
+                  for offset in range(span + 1):
+                      day = (first + dt.timedelta(days=offset)).isoformat()
+                      rows.append({"client": client, "start_date": day, "end_date": day,
+                                   "script": script, "batch_size": 5})
+                  split_count += span + 1
+                  continue
+              batch = int(prior_batch or 10)
+              if batch > 5:
+                  batch = 5
+              elif batch > 2:
+                  batch = 2
+              elif batch > 1:
+                  batch = 1
+              else:
+                  exhausted += 1
+                  print("FBS_RETRY_LIMIT_REACHED client=" + client + " date=" + start, flush=True)
+                  continue
+              rows.append({"client": client, "start_date": start, "end_date": end,
+                           "script": script, "batch_size": batch})
           output = {"include": rows}
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as stream:
               stream.write("matrix=" + json.dumps(output, separators=(",", ":")) + "\n")
               stream.write("count=" + str(len(rows)) + "\n")
-          print("FAILED_RECOVERY_WINDOWS=" + str(len(rows)))
+          print("FAILED_OR_CANCELLED_WINDOWS_REQUEUED=" + str(len(rows)), flush=True)
+          print("MULTI_DAY_WINDOWS_SPLIT_TO_DAYS=" + str(split_count), flush=True)
+          print("RETRY_LIMIT_REACHED=" + str(exhausted), flush=True)
           PY
 
   retry:
     needs: discover
     if: ${{ needs.discover.outputs.count != '0' }}
-    name: "retry ${{ matrix.client }} ${{ matrix.start_date }}–${{ matrix.end_date }}"
+    name: "retry ${{ matrix.client }} ${{ matrix.start_date }}–${{ matrix.end_date }} [batch=${{ matrix.batch_size }}]"
     strategy:
       fail-fast: false
       max-parallel: 1
@@ -73,7 +99,7 @@ jobs:
     timeout-minutes: 90
     env:
       FBS_CLIENT: ${{ matrix.client }}
-      FBS_BATCH_SIZE: "10"
+      FBS_BATCH_SIZE: ${{ matrix.batch_size }}
       FBS_LOOKBACK_DAYS: "7"
       FBS_START_DATE: ${{ matrix.start_date }}
       FBS_END_DATE: ${{ matrix.end_date }}
