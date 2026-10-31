@@ -339,6 +339,10 @@ class UpdateManager:
             raise ValueError('raw GitHub file URL must include owner, repository, ref, and file path')
         owner, repo, ref = parts[:3]
         file_path = '/'.join(parts[3:])
+        # Immutable commit URLs bypass GitHub's unauthenticated Contents API
+        # rate limit and cannot be served stale for a moving branch ref.
+        if len(ref) == 40 and all(ch in '0123456789abcdefABCDEF' for ch in ref):
+            return None
         return (
             f"https://api.github.com/repos/{owner}/{repo}/contents/"
             f"{quote(file_path, safe='/')}?{urlencode({'ref': ref})}"
