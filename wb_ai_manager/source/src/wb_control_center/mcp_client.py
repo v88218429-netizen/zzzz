@@ -76,8 +76,12 @@ class WBMCPClient:
         try:
             from mcp import ClientSession, StdioServerParameters
             from mcp.client.stdio import stdio_client
-            import os
+        except ImportError as exc:
+            raise WBMCPError(
+                "MCP package is not installed. Run START_WB_AI_MANAGER.command first."
+            ) from exc
 
+        try:
             env = {
                 "WB_API_TOKEN": self.token,
                 "DATA_DIR": self.data_dir,
