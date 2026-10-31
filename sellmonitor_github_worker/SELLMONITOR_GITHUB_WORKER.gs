@@ -5620,6 +5620,23 @@ function sellmonitorGithubPublishOzonSummaryOrders_(payload) {
         if(viewGroupRanges.length)view.getRangeList(viewGroupRanges).setBackground('#D9EAF7').setFontColor('#17365D').setFontWeight('bold');
         view.getRange(4,1,viewRows.length+1,12).createFilter();
       }
+      for(var metaRow=1;metaRow<=3;metaRow++){
+        var metaRange=view.getRange(metaRow,1,1,12),metaMerges=metaRange.getMergedRanges();
+        var exactMerge=metaMerges.some(function(m){return m.getRow()===metaRow&&m.getColumn()===1&&m.getNumRows()===1&&m.getNumColumns()===12;});
+        if(!exactMerge){
+          if(metaMerges.length)throw new Error('OZON_ARTICLE_META_MERGE_CONFLICT:'+cfg.name+':'+target.name+':'+metaRow);
+          var extraMetaValues=view.getRange(metaRow,2,1,11).getValues()[0];
+          if(extraMetaValues.some(function(v){return v!==''&&v!==null;}))throw new Error('OZON_ARTICLE_META_MERGE_WOULD_OVERWRITE:'+cfg.name+':'+target.name+':'+metaRow);
+          metaRange.merge();
+        }
+      }
+      view.setColumnWidth(1,175);view.setColumnWidth(2,112);view.setColumnWidth(3,112);view.setColumnWidth(4,150);
+      view.setColumnWidth(5,115);view.setColumnWidth(6,330);view.setColumnWidth(7,132);view.setColumnWidth(8,148);
+      view.setColumnWidth(9,86);view.setColumnWidth(10,104);view.setColumnWidth(11,285);view.setColumnWidth(12,215);
+      view.setRowHeight(1,32);view.setRowHeight(2,38);view.setRowHeight(3,34);view.setRowHeight(4,44);
+      view.getRange(1,1,1,12).setBackground('#D9EAF7').setFontColor('#17365D').setFontWeight('bold').setFontSize(14).setVerticalAlignment('middle');
+      view.getRange(2,1,1,12).setBackground('#EEF3F8').setFontColor('#44546A').setFontSize(9).setWrap(true).setVerticalAlignment('middle');
+      view.getRange(3,1,1,12).setBackground('#FFF2CC').setFontColor('#7F6000').setFontSize(9).setWrap(true).setVerticalAlignment('middle');
       var checkedView=sellmonitorGithubOzonRows_(view,5,1,12);
       if(JSON.stringify(sellmonitorGithubOzonNormalizeRows_(checkedView,true))!==JSON.stringify(sellmonitorGithubOzonNormalizeRows_(viewRows,true)))throw new Error('OZON_ARTICLE_READBACK_MISMATCH:'+cfg.name+':'+target.name);
       articleViews.push({sheet:target.name,rows:checkedView.length,sha256:sellmonitorGithubOzonHash_(checkedView),readback:true});
