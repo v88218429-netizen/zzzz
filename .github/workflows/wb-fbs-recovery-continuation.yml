@@ -35,7 +35,7 @@ jobs:
           repository = os.environ["REPOSITORY"]
           source_run_id = int(os.environ["SOURCE_RUN_ID"])
           source_title = os.environ.get("SOURCE_TITLE", "")
-          match = re.search(r"\\bpass\\s+(\\d+)\\b", source_title, re.IGNORECASE)
+          match = re.search(r"pass +([0-9]+)", source_title, re.IGNORECASE)
           current_pass = int(match.group(1)) if match else 1
 
           if current_pass >= 3:
