@@ -2,7 +2,7 @@ name: WB FBS GitHub recovery
 
 on:
   schedule:
-    - cron: "37 */3 * * *"
+    - cron: "7,37 * * * *"
   workflow_dispatch:
     inputs:
       lookback_days:
