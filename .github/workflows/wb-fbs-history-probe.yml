@@ -38,7 +38,8 @@ jobs:
                   const body=await r.json();
                   const list=Array.isArray(body.orders)?body.orders:
                      Array.isArray(body.data?.orders)?body.data.orders: [];
-                  count=list.length;\n                  fields=Object.keys(list[0]||{}).sort();
+                  count=list.length;
+                  fields=Object.keys(list[0]||{}).sort();
                   hasNext=Boolean(body.next && body.next!==0 && body.next!=='0');
                 }
               } catch(e) {status='FETCH_'+e.name;}
