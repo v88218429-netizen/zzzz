@@ -261,6 +261,8 @@ def post_publish(payload):
                 and result.get("action") == "publish_ozon_performance_daily"
                 and result.get("readback") is True
                 and result.get("helper_readback") is True
+                and result.get("axes_readback") is True
+                and result.get("chart_ranges_readback") is True
             ):
                 return result
             safe_result = {
@@ -394,6 +396,9 @@ def main():
         + ";archived=" + str(result.get("archived_rows"))
         + ";readback=" + str(result.get("readback"))
         + ";helpers=" + str(result.get("helper_readback"))
+        + ";axes=" + str(result.get("axes_readback"))
+        + ";chart_ranges_updated=" + str(result.get("chart_ranges_updated"))
+        + ";chart_ranges_readback=" + str(result.get("chart_ranges_readback"))
         + ";charts=" + str(result.get("charts"))
         + ";daily_sha256=" + str(result.get("daily_sha256"))
         + ";period_sha256=" + str(result.get("period_sha256")),
