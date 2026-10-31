@@ -1,10 +1,10 @@
 /**
- * Sellmonitor GitHub Central Worker v1.3.55
+ * Sellmonitor GitHub Central Worker v1.3.56
  * GitHub is source-of-truth/scheduler. This Apps Script project is only
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.55',
+  VERSION: 'github-worker-1.3.56',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -5938,6 +5938,11 @@ function doPost(e) {
     if (action === 'fbs_ingest_batch') {
       var fbsResult = sellmonitorGithubFbsIngestBatchV1_(body);
       return sellmonitorGithubWebJson_({ok:fbsResult.ok===true,action:action,result:fbsResult});
+    }
+
+    if (action === 'fbs_supply_sync') {
+      var supplyResult = wbFbsSupplySyncAllStores_();
+      return sellmonitorGithubWebJson_({ok:supplyResult.ok===true,action:action,result:supplyResult});
     }
 
     if (action === 'fbs_targets_health') {

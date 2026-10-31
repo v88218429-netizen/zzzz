@@ -13,8 +13,7 @@
  */
 
 // Canonical Sanych production workbook; the former ID was an alternate copy.
-var WB_FBS_DIRECT_SUPPLY_CFG = {
-  spreadsheetId: '1v0qt-thJDOw3tLFdZVGhdXJdBM8rDPRz9mHlcHmuuyM',
+var WB_FBS_DIRECT_SUPPLY_BASE_CFG = {
   ordersSheet: '📦 FBS Заказы',
   suppliesSheet: '🚚 Поставки FBS',
   historySheet: '🕘 История статусов',
@@ -26,54 +25,42 @@ var WB_FBS_DIRECT_SUPPLY_CFG = {
   maxPages: 30,
   pageLimit: 1000
 };
+var WB_FBS_DIRECT_SUPPLY_STORES = {
+  SANYCH: Object.assign({}, WB_FBS_DIRECT_SUPPLY_BASE_CFG, {
+    client: 'SANYCH',
+    propertiesSpreadsheetId: '1-aBDZ7c5xfmVwwiNmUi9-DyfIANXmfiM5-Ti2_zg4zI',
+    tokenKey: 'FBS_CLIENT__SANYCH__WB_API_TOKEN',
+    spreadsheetId: '1v0qt-thJDOw3tLFdZVGhdXJdBM8rDPRz9mHlcHmuuyM'
+  }),
+  AIR: Object.assign({}, WB_FBS_DIRECT_SUPPLY_BASE_CFG, {
+    client: 'AIR',
+    propertiesSpreadsheetId: '1SmsoG8zKx3hbTtTzS-zLekTFiWEQN8eIwHOxXq-5RHo',
+    tokenKey: 'FBS_CLIENT__AIR__WB_API_TOKEN',
+    spreadsheetId: '1qJvhEOIku7sOMydfrUz0PR5dkcU0sLjv433pa1MFBcM'
+  }),
+  HOZYAYUSHKA: Object.assign({}, WB_FBS_DIRECT_SUPPLY_BASE_CFG, {
+    client: 'HOZYAYUSHKA',
+    propertiesSpreadsheetId: '1cVT_H_e8a519k_Gtph6fALWnBbtBrAQ2Jb_gFO3bM64',
+    tokenKey: 'FBS_CLIENT__FBS_14I5XGBA9NIG__WB_API_TOKEN',
+    spreadsheetId: '1f9dxXeZxkDth8h2C9GA7L7WqAr1-Ok-Oi5YtufLYOOk'
+  })
+};
+var WB_FBS_DIRECT_SUPPLY_CFG = WB_FBS_DIRECT_SUPPLY_STORES.SANYCH;
 
 function wbFbsSupplySpreadsheet_() {
   return SpreadsheetApp.openById(WB_FBS_DIRECT_SUPPLY_CFG.spreadsheetId);
 }
 
 function wbFbsSupplyToken_() {
-  var stores = [
-    PropertiesService.getScriptProperties(),
-    PropertiesService.getDocumentProperties(),
-    PropertiesService.getUserProperties()
-  ];
-  var keys = [
-    'WB_API_TOKEN_AP',
-    'WB_API_TOKEN',
-    'WB_TOKEN',
-    'WB_API_KEY',
-    'WILDBERRIES_API_TOKEN'
-  ];
-  for (var s = 0; s < stores.length; s++) {
-    var props = stores[s];
-    if (!props) continue;
-    for (var i = 0; i < keys.length; i++) {
-      var token = String(props.getProperty(keys[i]) || '').trim();
-      if (token) return token;
-    }
+  var cfg = WB_FBS_DIRECT_SUPPLY_CFG;
+  if (typeof sellmonitorClientProperties_ !== 'function') {
+    throw new Error('WB_FBS_DIRECT: client credential store is unavailable');
   }
-
-  // Compatibility with older FBS builds if one of these helpers exists.
-  var helpers = [
-    'getWbApiToken_',
-    'getWbToken_',
-    'wbGetApiToken_',
-    'getWBApiToken_'
-  ];
-  for (var h = 0; h < helpers.length; h++) {
-    try {
-      var fn = this[helpers[h]];
-      if (typeof fn === 'function') {
-        var t = String(fn() || '').trim();
-        if (t) return t;
-      }
-    } catch (ignored) {}
-  }
-
-  throw new Error(
-    'WB_FBS_DIRECT: WB API token not found in Script Properties ' +
-    '(expected WB_API_TOKEN_AP or WB_API_TOKEN).'
-  );
+  var token = String(
+    sellmonitorClientProperties_(cfg.propertiesSpreadsheetId).getProperty(cfg.tokenKey) || ''
+  ).trim();
+  if (token.length < 20) throw new Error('WB_FBS_DIRECT: WB API token missing for ' + cfg.client);
+  return token;
 }
 
 function wbFbsSupplyFetchPage_(token, cursor) {
@@ -118,40 +105,35 @@ function wbFbsSupplyFetchPage_(token, cursor) {
 }
 
 function wbFbsSupplyFetchAll_(token) {
-  var cursor = 0;
-  var seen = {};
-  var byId = {};
-  var ordered = [];
-
+  var cursor = 0, seen = {}, byId = {}, ordered = [], scanned = 0, pages = 0, complete = false;
   for (var page = 0; page < WB_FBS_DIRECT_SUPPLY_CFG.maxPages; page++) {
-    if (seen[String(cursor)]) break;
-    seen[String(cursor)] = true;
-
+    var cursorKey = String(cursor);
+    if (seen[cursorKey]) throw new Error('WB_FBS_DIRECT: repeated supplies cursor');
+    seen[cursorKey] = true;
     var payload = wbFbsSupplyFetchPage_(token, cursor);
     var supplies = payload.supplies || [];
-
+    pages++;
+    scanned += supplies.length;
     for (var i = 0; i < supplies.length; i++) {
-      var s = supplies[i] || {};
-      var id = String(s.id || '').trim();
-      if (!id || byId[id]) continue;
-      byId[id] = s;
-      ordered.push(s);
+      var supply = supplies[i] || {};
+      var id = String(supply.id || '').trim();
+      if (!id) throw new Error('WB_FBS_DIRECT: supply without id');
+      if (byId[id]) continue;
+      byId[id] = supply;
+      ordered.push(supply);
     }
-
-    if (!supplies.length) break;
+    if (!supplies.length) { complete = true; break; }
     var next = Number(payload.next || 0);
-    if (!next || next === cursor) break;
+    if (!next || next === cursor) { complete = true; break; }
     cursor = next;
   }
-
+  if (!complete) throw new Error('WB_FBS_DIRECT: supplies page limit exceeded; refusing partial write');
   ordered.sort(function(a, b) {
-    var at = wbFbsSupplyDateMs_(a.createdAt);
-    var bt = wbFbsSupplyDateMs_(b.createdAt);
+    var at = wbFbsSupplyDateMs_(a.createdAt), bt = wbFbsSupplyDateMs_(b.createdAt);
     if (at !== bt) return at - bt;
     return String(a.id || '').localeCompare(String(b.id || ''));
   });
-
-  return {rows: ordered, byId: byId};
+  return {rows: ordered, byId: byId, scannedCount: scanned, pageCount: pages};
 }
 
 function wbFbsSupplyDate_(value) {
@@ -195,63 +177,67 @@ function wbFbsSupplyEnsureRows_(sheet, neededRows) {
 function wbFbsSupplyWriteSupplySheet_(ss, supplyRows, orderCounts, checkedAt) {
   var sh = ss.getSheetByName(WB_FBS_DIRECT_SUPPLY_CFG.suppliesSheet);
   if (!sh) sh = ss.insertSheet(WB_FBS_DIRECT_SUPPLY_CFG.suppliesSheet);
-
-  var header = [
-    'ID поставки',
-    'createdAt',
-    'closedAt',
-    'scanDt',
-    'done',
-    'Последняя проверка',
-    'Заказов в поставке',
-    'closed → scan, мин',
-    'Статус контроля'
-  ];
-
-  wbFbsSupplyEnsureRows_(sh, Math.max(2, supplyRows.length + 1));
-  sh.getRange(1, 1, 1, header.length).setValues([header]);
-
-  var out = [];
-  for (var i = 0; i < supplyRows.length; i++) {
-    var s = supplyRows[i] || {};
-    var id = String(s.id || '').trim();
-    var created = wbFbsSupplyDate_(s.createdAt);
-    var closed = wbFbsSupplyDate_(s.closedAt);
-    var scan = wbFbsSupplyDate_(s.scanDt);
-    var mins = '';
-    if (closed && scan) {
-      mins = Math.round((scan.getTime() - closed.getTime()) / 60000);
-    }
-
-    var status = 'ОТКРЫТА';
-    if (scan) status = '✅ SCAN WB';
-    else if (closed) status = '⏳ ЗАКРЫТА · ЖДЁМ SCAN';
-    else if (s.done === true || String(s.done).toLowerCase() === 'true') status = '⚠ DONE БЕЗ ДАТ';
-
-    out.push([
-      id,
-      created || '',
-      closed || '',
-      scan || '',
-      s.done === true || String(s.done).toLowerCase() === 'true',
-      checkedAt,
-      Number(orderCounts[id] || 0),
-      mins,
-      status
-    ]);
-  }
-
+  var header = ['ID поставки','createdAt','closedAt','scanDt','done','Последняя проверка',
+    'Заказов в поставке','closed → scan, мин','Статус контроля'];
   var oldLast = sh.getLastRow();
-  if (oldLast > 1) sh.getRange(2, 1, oldLast - 1, header.length).clearContent();
-  if (out.length) sh.getRange(2, 1, out.length, header.length).setValues(out);
-
-  if (out.length) {
-    sh.getRange(2, 2, out.length, 3).setNumberFormat('dd.MM.yyyy HH:mm:ss');
-    sh.getRange(2, 6, out.length, 1).setNumberFormat('dd.MM.yyyy HH:mm:ss');
-    sh.getRange(2, 7, out.length, 2).setNumberFormat('0');
+  var oldRows = oldLast > 1 ? sh.getRange(2,1,oldLast-1,header.length).getValues() : [];
+  if (!supplyRows.length && oldRows.some(function(r){return String(r[0]||'').trim();})) {
+    throw new Error('WB_FBS_DIRECT: WB returned no supplies while the sheet contains existing rows; refusing empty refresh');
+  }
+  var current = Object.create(null), used = Object.create(null), out = [];
+  for (var i=0;i<supplyRows.length;i++) {
+    var item=supplyRows[i]||{}, id=String(item.id||'').trim();
+    if (!id) continue;
+    current[id]=item;
+  }
+  function makeCurrentRow_(item) {
+    var id=String(item.id||'').trim();
+    var created=wbFbsSupplyDate_(item.createdAt), closed=wbFbsSupplyDate_(item.closedAt), scan=wbFbsSupplyDate_(item.scanDt);
+    var mins=(closed&&scan)?Math.round((scan.getTime()-closed.getTime())/60000):'';
+    var status='ОТКРЫТА';
+    if(scan)status='✅ SCAN WB';
+    else if(closed)status='⏳ ЗАКРЫТА · ЖДЁМ SCAN';
+    else if(item.done===true||String(item.done).toLowerCase()==='true')status='⚠ DONE БЕЗ ДАТ';
+    return [id,created||'',closed||'',scan||'',item.done===true||String(item.done).toLowerCase()==='true',
+      checkedAt,Number(orderCounts[id]||0),mins,status];
+  }
+  var preservedNotReturned=0,preservedDuplicateRows=0;
+  for (var j=0;j<oldRows.length;j++) {
+    var old=oldRows[j].slice(0,header.length),oldId=String(old[0]||'').trim();
+    if(!oldId){out.push(old);continue;}
+    if(current[oldId]&&!used[oldId]){
+      out.push(makeCurrentRow_(current[oldId]));used[oldId]=true;continue;
+    }
+    old[6]=Number(orderCounts[oldId]||0);
+    if(current[oldId]){
+      old[8]='ДУБЛЬ ID · СТАРАЯ СТРОКА СОХРАНЕНА';preservedDuplicateRows++;
+    }else{
+      old[8]='НЕ ПОДТВЕРЖДЕНА В ТЕКУЩЕМ ОТВЕТЕ WB';preservedNotReturned++;
+    }
+    out.push(old);
+  }
+  for(var id in current){
+    if(Object.prototype.hasOwnProperty.call(current,id)&&!used[id]){
+      out.push(makeCurrentRow_(current[id]));used[id]=true;
+    }
+  }
+  out.sort(function(a,b){
+    var at=wbFbsSupplyDateMs_(a[1]),bt=wbFbsSupplyDateMs_(b[1]);
+    if(at!==bt)return at-bt;
+    return String(a[0]||'').localeCompare(String(b[0]||''));
+  });
+  wbFbsSupplyEnsureRows_(sh,Math.max(2,out.length+1));
+  sh.getRange(1,1,1,header.length).setValues([header]);
+  if(oldLast>1)sh.getRange(2,1,oldLast-1,header.length).clearContent();
+  if(out.length)sh.getRange(2,1,out.length,header.length).setValues(out);
+  if(out.length){
+    sh.getRange(2,2,out.length,3).setNumberFormat('dd.MM.yyyy HH:mm:ss');
+    sh.getRange(2,6,out.length,1).setNumberFormat('dd.MM.yyyy HH:mm:ss');
+    sh.getRange(2,7,out.length,2).setNumberFormat('0');
   }
   sh.setFrozenRows(1);
-  return out.length;
+  return {totalRows:out.length,apiRows:supplyRows.length,
+    preservedNotReturned:preservedNotReturned,preservedDuplicateRows:preservedDuplicateRows};
 }
 
 function wbFbsSupplySortedMap_(ss) {
@@ -365,42 +351,73 @@ function wbFbsSupplyWriteHealth_(ss, state, detail) {
 }
 
 function wbFbsSupplySyncCore_() {
-  var ss = wbFbsSupplySpreadsheet_();
-  var token = wbFbsSupplyToken_();
-  var checkedAt = new Date();
-
-  var fetched = wbFbsSupplyFetchAll_(token);
-  var orders = ss.getSheetByName(WB_FBS_DIRECT_SUPPLY_CFG.ordersSheet);
-  if (!orders) throw new Error('WB_FBS_DIRECT: missing ' + WB_FBS_DIRECT_SUPPLY_CFG.ordersSheet);
-
-  var counts = wbFbsSupplyCountOrders_(orders);
-  var supplyCount = wbFbsSupplyWriteSupplySheet_(ss, fetched.rows, counts, checkedAt);
-  var backfill = wbFbsSupplyBackfillOrders_(ss, fetched.byId);
-
+  var cfg=WB_FBS_DIRECT_SUPPLY_CFG,ss=wbFbsSupplySpreadsheet_(),token=wbFbsSupplyToken_(),checkedAt=new Date();
+  var fetched=wbFbsSupplyFetchAll_(token);
+  var orders=ss.getSheetByName(cfg.ordersSheet);
+  if(!orders)throw new Error('WB_FBS_DIRECT: missing '+cfg.ordersSheet);
+  var counts=wbFbsSupplyCountOrders_(orders);
+  var written=wbFbsSupplyWriteSupplySheet_(ss,fetched.rows,counts,checkedAt);
+  var backfill=wbFbsSupplyBackfillOrders_(ss,fetched.byId);
+  var unmatchedOrderSupplyIds=Object.keys(counts).filter(function(id){
+    return !Object.prototype.hasOwnProperty.call(fetched.byId,id);
+  }).length;
   SpreadsheetApp.flush();
-
-  var result = {
-    ok: true,
-    at: checkedAt.toISOString(),
-    supplies: supplyCount,
-    orderRowsChecked: backfill.checked,
-    orderRowsMatched: backfill.matched,
-    sortedBackfilled: backfill.sorted
+  var result={
+    ok:true,client:cfg.client,checkedAt:checkedAt.toISOString(),apiPages:fetched.pageCount,
+    apiSupplies:fetched.rows.length,apiSuppliesScanned:fetched.scannedCount,
+    suppliesWritten:written.totalRows,preservedNotReturned:written.preservedNotReturned,
+    preservedDuplicateRows:written.preservedDuplicateRows,orderRowsChecked:backfill.checked,
+    orderRowsMatched:backfill.matched,orderSupplyIdsNotInCurrentApi:unmatchedOrderSupplyIds,
+    sortedBackfilled:backfill.sorted
   };
-
-  PropertiesService.getScriptProperties().setProperties({
-    WB_FBS_DIRECT_LAST_SUCCESS_AT: checkedAt.toISOString(),
-    WB_FBS_DIRECT_LAST_STATUS: 'OK',
-    WB_FBS_DIRECT_LAST_RESULT: JSON.stringify(result)
+  sellmonitorClientProperties_(cfg.propertiesSpreadsheetId).setProperties({
+    WB_FBS_DIRECT_LAST_SUCCESS_AT:checkedAt.toISOString(),
+    WB_FBS_DIRECT_LAST_STATUS:'OK',
+    WB_FBS_DIRECT_LAST_RESULT:JSON.stringify(result)
   });
-
-  wbFbsSupplyWriteHealth_(ss, 'OK', JSON.stringify(result));
-  Logger.log('WB_FBS_DIRECT_OK ' + JSON.stringify(result));
+  wbFbsSupplyWriteHealth_(ss,'OK',JSON.stringify(result));
+  Logger.log('WB_FBS_DIRECT_OK '+JSON.stringify(result));
   return result;
 }
 
+function wbFbsSupplySyncAllStores_() {
+  var scriptProps=PropertiesService.getScriptProperties(),leaseKey='WB_FBS_DIRECT_ALL_STORES_LEASE';
+  var leaseToken=Utilities.getUuid(),lock=LockService.getUserLock();
+  if(!lock.tryLock(10000))throw new Error('WB_FBS_DIRECT: credential store is busy');
+  try{
+    var active=null;try{active=JSON.parse(scriptProps.getProperty(leaseKey)||'null');}catch(ignored){}
+    if(active&&Number(active.expiresAt)>Date.now())throw new Error('WB_FBS_DIRECT: supply sync already running');
+    scriptProps.setProperty(leaseKey,JSON.stringify({token:leaseToken,expiresAt:Date.now()+8*60*1000}));
+  }finally{lock.releaseLock();}
+  var original=WB_FBS_DIRECT_SUPPLY_CFG,results=[];
+  try{
+    ['SANYCH','AIR','HOZYAYUSHKA'].forEach(function(name){
+      var cfg=WB_FBS_DIRECT_SUPPLY_STORES[name];WB_FBS_DIRECT_SUPPLY_CFG=cfg;
+      try{results.push(wbFbsSupplySyncCore_());}
+      catch(e){
+        var message=String(e&&e.message?e.message:e).slice(0,1000);
+        try{sellmonitorClientProperties_(cfg.propertiesSpreadsheetId).setProperties({
+          WB_FBS_DIRECT_LAST_ERROR_AT:new Date().toISOString(),WB_FBS_DIRECT_LAST_STATUS:'ERROR',WB_FBS_DIRECT_LAST_ERROR:message
+        });}catch(ignoredProps){}
+        try{wbFbsSupplyWriteHealth_(wbFbsSupplySpreadsheet_(),'ERROR',message);}catch(ignoredHealth){}
+        Logger.log('WB_FBS_DIRECT_ERROR client='+cfg.client+' '+message);
+        results.push({ok:false,client:cfg.client,error:message});
+      }
+    });
+    return {ok:results.every(function(x){return x.ok===true;}),stores:results};
+  }finally{
+    WB_FBS_DIRECT_SUPPLY_CFG=original;
+    if(lock.tryLock(10000)){
+      try{
+        var active=null;try{active=JSON.parse(scriptProps.getProperty(leaseKey)||'null');}catch(ignored){}
+        if(active&&active.token===leaseToken)scriptProps.deleteProperty(leaseKey);
+      }finally{lock.releaseLock();}
+    }
+  }
+}
+
 function wbFbsSupplyMaybeSync_() {
-  var props = PropertiesService.getScriptProperties();
+  var props = sellmonitorClientProperties_(WB_FBS_DIRECT_SUPPLY_CFG.propertiesSpreadsheetId);
   var last = Date.parse(String(props.getProperty('WB_FBS_DIRECT_LAST_SUCCESS_AT') || ''));
   if (isFinite(last) &&
       (Date.now() - last) < WB_FBS_DIRECT_SUPPLY_CFG.syncEveryMinutes * 60000) {
