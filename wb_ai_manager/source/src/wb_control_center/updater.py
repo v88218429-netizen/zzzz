@@ -109,6 +109,7 @@ class UpdateManager:
         self.manifest_url=(manifest_url or '').strip()
         self.channel=channel or 'stable'
         self.state_dir=self.root / '.updates'
+        self._manifest_cache: tuple[float, UpdateManifest] | None = None
         self.state_dir.mkdir(parents=True, exist_ok=True)
         self.status_path=self.state_dir / 'status.json'
 
@@ -130,6 +131,9 @@ class UpdateManager:
     def fetch_manifest(self) -> UpdateManifest:
         if not self.manifest_url:
             raise RuntimeError('manifest URL is empty')
+        cached=self._manifest_cache
+        if cached and time.monotonic() - cached[0] < 300:
+            return cached[1]
         sep='&' if '?' in self.manifest_url else '?'
         url=f"{self.manifest_url}{sep}t={int(time.time())}"
         parsed=urlsplit(url)
@@ -172,6 +176,7 @@ class UpdateManager:
         # An empty patch list is valid for the currently published baseline version.
         if not m.version or not (archive_ok or files_ok):
             raise ValueError('update manifest is incomplete')
+        self._manifest_cache=(time.monotonic(),m)
         return m
 
     def check(self) -> dict[str, Any]:
