@@ -1,10 +1,10 @@
 /**
- * Sellmonitor GitHub Central Worker v1.3.62
+ * Sellmonitor GitHub Central Worker v1.3.67
  * GitHub is source-of-truth/scheduler. This Apps Script project is only
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.66',
+  VERSION: 'github-worker-1.3.67',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -6893,7 +6893,7 @@ function sellmonitorGithubFbsStatusReadV1_(body) {
   if(String(head[0]||'')!=='ID заказа'||String(head[4]||'')!=='Статус продавца'||String(head[5]||'')!=='Статус WB')
     throw new Error('FBS_COLUMN_SCHEMA_MISMATCH');
   var indexState=sellmonitorGithubFbsLoadIdIndex_(sheet,client,last,function(){},false);
-  var states={},rowReadMs=0,rowsRead=Math.max(0,last-1);
+  var states={},rowReadMs=0,rowsRead=0,rowReadGroups=0;
   console.log('FBS_STATUS_READ_START client='+client+' requested='+ids.length+' last_row='+last);
   function readStates_(){
     states={};
@@ -6901,19 +6901,31 @@ function sellmonitorGithubFbsStatusReadV1_(body) {
     ids.forEach(function(id){var row=indexState.map[id];if(row)matches.push({id:id,row:Number(row)});});
     if(!matches.length)return false;
     matches.sort(function(a,b){return a.row-b.row;});
-    // Read only the used ID and status columns in bounded whole-column calls.
-    // This avoids a slow request per scattered AIR order and avoids the REST
-    // batchGetByDataFilter path that repeatedly timed out in live recovery.
-    var readStarted=Date.now();
-    var idValues=rowsRead?sheet.getRange(2,1,rowsRead,1).getDisplayValues():[];
-    var statusValues=rowsRead?sheet.getRange(2,5,rowsRead,2).getDisplayValues():[];
-    rowReadMs+=Date.now()-readStarted;
-    var stale=false;
+    // Read bounded row groups containing requested orders only. This avoids
+    // scanning every used row for each small date window during backfill.
+    var blocks=[];
     matches.forEach(function(item){
-      var offset=item.row-2, idRow=idValues[offset]||[], statusRow=statusValues[offset]||[];
-      if(String(idRow[0]||'')!==item.id){stale=true;return;}
-      states[item.id]={supplierStatus:String(statusRow[0]||''),wbStatus:String(statusRow[1]||'')};
+      var block=blocks.length?blocks[blocks.length-1]:null;
+      if(!block||item.row-block.end>3||item.row-block.start+1>250){
+        block={start:item.row,end:item.row,matches:[item]};
+        blocks.push(block);
+      } else {
+        block.end=item.row;
+        block.matches.push(item);
+      }
     });
+    var readStarted=Date.now(),stale=false;
+    blocks.forEach(function(block){
+      var values=sheet.getRange(block.start,1,block.end-block.start+1,6).getDisplayValues();
+      rowsRead+=block.end-block.start+1;
+      rowReadGroups++;
+      block.matches.forEach(function(item){
+        var row=values[item.row-block.start]||[];
+        if(String(row[0]||'')!==item.id){stale=true;return;}
+        states[item.id]={supplierStatus:String(row[4]||''),wbStatus:String(row[5]||'')};
+      });
+    });
+    rowReadMs+=Date.now()-readStarted;
     return stale||Object.keys(states).length!==matches.length;
   }
   if(readStates_()){
@@ -6922,7 +6934,7 @@ function sellmonitorGithubFbsStatusReadV1_(body) {
     if(readStates_())throw new Error('FBS_ID_INDEX_STALE_AFTER_REBUILD');
   }
   console.log('FBS_STATUS_READ_DONE client='+client+' requested='+ids.length+
-    ' found='+Object.keys(states).length+' used_rows='+rowsRead+
+    ' found='+Object.keys(states).length+' matched_rows_read='+rowsRead+' read_groups='+rowReadGroups+
     ' sheet_read_ms='+rowReadMs+' total_ms='+(Date.now()-startedAt));
   return {ok:true,client:client,requested:ids.length,found:Object.keys(states).length,statuses:states};
 }
