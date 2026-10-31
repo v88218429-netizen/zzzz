@@ -111,7 +111,7 @@ async def test_tool_timeout_resets_transport_without_cross_task_context_exit(mon
             await asyncio.Event().wait()
 
     # Replace only the session class; the fake stdio context still records owner task identity.
-    monkeypatch.setitem(sys.modules["mcp"], "ClientSession", SlowSession)
+    monkeypatch.setattr(sys.modules["mcp"], "ClientSession", SlowSession)
     client = WBMCPClient("seller-token", "/tmp/wb-mcp", start_timeout=1, call_timeout=0.02)
 
     with pytest.raises(WBMCPError, match="timed out"):
