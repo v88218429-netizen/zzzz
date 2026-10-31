@@ -128,7 +128,7 @@ def _assess_snapshot_freshness(live: dict[str, Any], now: datetime | None = None
         source_id = str(row.get("id") or "")
         if source_id:
             by_id[source_id] = row
-        fact_date = _parse_date(row.get("freshness"))
+        fact_date = normalize_traffic_day(row.get("freshness"))
         if fact_date is not None:
             age_days = (now.date() - fact_date).days
             row["age_days"] = age_days
@@ -140,7 +140,7 @@ def _assess_snapshot_freshness(live: dict[str, Any], now: datetime | None = None
         if row is None:
             issues.append(f"{source_id}: обязательный источник отсутствует")
             continue
-        fact_date = _parse_date(row.get("freshness"))
+        fact_date = normalize_traffic_day(row.get("freshness"))
         if fact_date is None:
             issues.append(f"{source_id}: дата факта источника не подтверждена")
             continue
