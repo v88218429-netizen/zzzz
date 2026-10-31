@@ -1,5 +1,7 @@
 from wb_control_center.config import Settings
-from wb_control_center.portfolio import PortfolioService
+from datetime import datetime, timezone
+
+from wb_control_center.portfolio import PortfolioService, _assess_snapshot_freshness
 
 
 def test_seed_has_real_portfolio_facts(tmp_path):
@@ -129,3 +131,58 @@ def test_svodnaya_duplicate_orders_per_day_keeps_wb_velocity(tmp_path):
     product = out["own_27"]["products"][0]
     assert product["orders_per_day"] == 153
     assert product["ozon_orders_per_day"] == 7
+
+
+def _portfolio_snapshot(source_dates, generated_at="2026-10-31T11:30:00Z"):
+    return {
+        "mode": "live_google_sheets",
+        "generated_at": generated_at,
+        "source_health": [
+            {"id": source_id, "name": source_id, "status": "fresh", "freshness": source_dates[source_id]}
+            for source_id in ("own_27", "weekly_summary", "sanych_sellmonitor")
+        ] + [
+            {"id": "air_fbs", "name": "air_fbs", "status": "stale", "freshness": "21.08.2026"}
+        ],
+    }
+
+
+def test_cached_portfolio_is_not_current_when_required_source_dates_are_old():
+    live = _portfolio_snapshot({
+        "own_27": "18.09.2026",
+        "weekly_summary": "16.09.2026",
+        "sanych_sellmonitor": "16.09.2026",
+    })
+
+    current, reason = _assess_snapshot_freshness(live, datetime(2026, 10, 31, 12, tzinfo=timezone.utc))
+
+    assert current is False
+    assert live["source_health"][0]["status"] == "stale"
+    assert "18.09.2026" in reason
+    assert "Текущие решения" in reason
+
+
+def test_recent_core_sources_keep_snapshot_current_even_if_optional_source_is_stale():
+    live = _portfolio_snapshot({
+        "own_27": "30.10.2026",
+        "weekly_summary": "30.10.2026",
+        "sanych_sellmonitor": "30.10.2026",
+    })
+
+    current, reason = _assess_snapshot_freshness(live, datetime(2026, 10, 31, 12, tzinfo=timezone.utc))
+
+    assert current is True
+    assert reason is None
+    assert live["source_health"][3]["status"] == "stale"
+
+
+def test_recent_source_facts_do_not_hide_old_saved_snapshot():
+    live = _portfolio_snapshot({
+        "own_27": "30.10.2026",
+        "weekly_summary": "30.10.2026",
+        "sanych_sellmonitor": "30.10.2026",
+    }, generated_at="2026-10-29T00:00:00Z")
+
+    current, reason = _assess_snapshot_freshness(live, datetime(2026, 10, 31, 12, tzinfo=timezone.utc))
+
+    assert current is False
+    assert "снимок получен" in reason
