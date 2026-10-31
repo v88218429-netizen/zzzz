@@ -269,45 +269,89 @@ def ingest(client: str, orders: list[dict]) -> dict:
 def read_current_states(client: str, orders: list[dict]) -> dict[str, dict[str, str]]:
     states: dict[str, dict[str, str]] = {}
     ids = [str(order.get("id") or "") for order in orders]
+    transient_markers = (
+        "NETWORK_RETRY_EXHAUSTED", "INVALID_JSON_RESPONSE_RETRY_EXHAUSTED",
+        "HTTP_408", "HTTP_425", "HTTP_429", "HTTP_500", "HTTP_502",
+        "HTTP_503", "HTTP_504", "Timeout:", "timed out", "backendError",
+        "Internal error", "Service unavailable",
+    )
     for offset in range(0, len(ids), 1000):
         batch_ids = ids[offset:offset + 1000]
-        reply = request(
-            BRIDGE_URL,
-            body={"token": BRIDGE_KEY, "action": "fbs_status_read",
-                  "client": client, "orderIds": batch_ids},
-            timeout=120,
-        )
-        result = reply.get("result") or {}
-        if (reply.get("ok") is not True or reply.get("action") != "fbs_status_read"
-                or result.get("ok") is not True
-                or int(result.get("requested", -1)) != len(batch_ids)):
-            detail = str(reply.get("error") or result.get("error") or (
+        last_detail = "FBS_STATUS_READ_INVALID_RESPONSE"
+        for attempt in range(1, 5):
+            try:
+                reply = request(
+                    BRIDGE_URL,
+                    body={"token": BRIDGE_KEY, "action": "fbs_status_read",
+                          "client": client, "orderIds": batch_ids},
+                    timeout=120,
+                    retries=1,
+                )
+            except RuntimeError as ex:
+                last_detail = str(ex)
+                transient = any(marker.lower() in last_detail.lower() for marker in transient_markers)
+                if not transient or attempt == 4:
+                    detail = last_detail.replace(BRIDGE_KEY, "[redacted]").replace(
+                        os.environ.get("WB_API_TOKEN_AP", ""), "[redacted]"
+                    )
+                    detail = re.sub(r"\\b\\d{6,20}\\b", "[order-id]", detail)
+                    print(client + "_FBS_STATUS_READ_REJECT=" + re.sub(r"\\s+", " ", detail)[:240], flush=True)
+                    raise RuntimeError(client + ":FBS_STATUS_READ_REJECTED") from None
+                wait_seconds = min(30, 10 * attempt)
+                print(client + "_FBS_STATUS_READ_RETRY=" + str(attempt) +
+                      ":SAME_READ_ONLY_REQUEST:WAIT_SECONDS=" + str(wait_seconds), flush=True)
+                time.sleep(wait_seconds)
+                continue
+
+            result = reply.get("result") or {}
+            if (reply.get("ok") is True and reply.get("action") == "fbs_status_read"
+                    and result.get("ok") is True
+                    and int(result.get("requested", -1)) == len(batch_ids)):
+                batch_states = result.get("statuses")
+                if not isinstance(batch_states, dict):
+                    raise RuntimeError(client + ":FBS_STATUS_READ_INVALID")
+                allowed = set(batch_ids)
+                valid = True
+                for oid, pair in batch_states.items():
+                    if oid not in allowed or not isinstance(pair, dict):
+                        valid = False
+                        break
+                    seller = pair.get("supplierStatus")
+                    wb = pair.get("wbStatus")
+                    if not isinstance(seller, str) or not isinstance(wb, str):
+                        valid = False
+                        break
+                if not valid:
+                    raise RuntimeError(client + ":FBS_STATUS_READ_INVALID")
+                for oid, pair in batch_states.items():
+                    states[oid] = {
+                        "supplierStatus": pair["supplierStatus"],
+                        "wbStatus": pair["wbStatus"],
+                    }
+                break
+
+            last_detail = str(reply.get("error") or result.get("error") or (
                 "shape: outer_ok=" + str(reply.get("ok")) +
                 " action=" + str(reply.get("action")) +
                 " result_ok=" + str(result.get("ok")) +
                 " requested=" + str(result.get("requested")) +
                 " expected=" + str(len(batch_ids))
             ))
-            detail = detail.replace(BRIDGE_KEY, "[redacted]").replace(
-                os.environ.get("WB_API_TOKEN_AP", ""), "[redacted]"
+            transient = bool(result.get("retryable")) or any(
+                marker.lower() in last_detail.lower() for marker in transient_markers
             )
-            detail = re.sub(r"\b\d{6,20}\b", "[order-id]", detail)
-            print(client + "_FBS_STATUS_READ_REJECT=" + re.sub(r"\s+", " ", detail)[:240], flush=True)
-            raise RuntimeError(client + ":FBS_STATUS_READ_REJECTED")
-        batch_states = result.get("statuses")
-        if not isinstance(batch_states, dict):
-            raise RuntimeError(client + ":FBS_STATUS_READ_INVALID")
-        allowed = set(batch_ids)
-        for oid, pair in batch_states.items():
-            if oid not in allowed or not isinstance(pair, dict):
-                raise RuntimeError(client + ":FBS_STATUS_READ_INVALID")
-            seller = pair.get("supplierStatus")
-            wb = pair.get("wbStatus")
-            if not isinstance(seller, str) or not isinstance(wb, str):
-                raise RuntimeError(client + ":FBS_STATUS_READ_INVALID")
-            states[oid] = {"supplierStatus": seller, "wbStatus": wb}
+            if not transient or attempt == 4:
+                detail = last_detail.replace(BRIDGE_KEY, "[redacted]").replace(
+                    os.environ.get("WB_API_TOKEN_AP", ""), "[redacted]"
+                )
+                detail = re.sub(r"\\b\\d{6,20}\\b", "[order-id]", detail)
+                print(client + "_FBS_STATUS_READ_REJECT=" + re.sub(r"\\s+", " ", detail)[:240], flush=True)
+                raise RuntimeError(client + ":FBS_STATUS_READ_REJECTED") from None
+            wait_seconds = min(30, 10 * attempt)
+            print(client + "_FBS_STATUS_READ_RETRY=" + str(attempt) +
+                  ":SAME_READ_ONLY_REQUEST:WAIT_SECONDS=" + str(wait_seconds), flush=True)
+            time.sleep(wait_seconds)
     return states
-
 
 def select_changed_orders(client: str, orders: list[dict]) -> tuple[list[dict], int]:
     states = read_current_states(client, orders)
