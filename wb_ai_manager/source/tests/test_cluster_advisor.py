@@ -258,3 +258,55 @@ def test_future_dated_economics_bid_and_campaign_snapshots_are_blocked():
         economics_observed_at="2026-10-29T11:00:00+03:00",
     )
     assert result["rows"][0]["wb_bid_guidance"] is None
+
+
+def test_exact_live_cluster_bid_endpoint_fills_missing_stats_bid_and_joins_by_store_campaign_sku_query():
+    campaigns = [{
+        "shop": "yv",
+        "campaign_id": 15,
+        "cluster_bids_observed_at": "2026-10-29T11:30:00+03:00",
+        "cluster_bids": {"bids": [{
+            "advert_id": 15, "nm_id": 123, "norm_query": "ТАЗ   СТРОИТЕЛЬНЫЙ",
+            "bid": 9999, "bid_kopecks": 12345, "currency": "RUB",
+        }]},
+    }]
+    result = analyze_cluster_rows(
+        [source_row(cluster_bid_kopecks="", bid_observed_at="")],
+        settings(), decisions(), now=NOW, bid_recommendations=campaigns,
+        economics_observed_at="2026-10-29T11:00:00+03:00",
+        cluster_data_observed_at="2026-10-29T11:00:00+03:00",
+    )
+    row = result["rows"][0]
+    assert row["current_bid_rub"] == 123.45
+    assert row["bid_observed_at"] == "2026-10-29T08:30:00+00:00"
+    assert row["current_bid_source_detail"] == "WB /adv/v0/normquery/get-bids"
+    assert row["wb_bid_guidance"]["current_bid_rub"] == 123.45
+    assert row["target_bid_rub"] == 104.93
+
+
+def test_exact_live_cluster_bid_requires_matching_rub_currency_and_fresh_timestamp():
+    campaigns = [{
+        "shop": "yv", "campaign_id": 15,
+        "cluster_bids_observed_at": "2026-10-29T06:00:00+03:00",
+        "cluster_bids": {"bids": [{
+            "advert_id": 15, "nm_id": 123, "norm_query": "таз строительный",
+            "bid_kopecks": 12345, "currency": "RUB",
+        }]},
+    }]
+    result = analyze_cluster_rows(
+        [source_row(cluster_bid_kopecks="", bid_observed_at="")],
+        settings(), [], now=NOW, bid_recommendations=campaigns,
+        economics_observed_at="2026-10-29T11:00:00+03:00",
+    )
+    assert result["rows"][0]["current_bid_rub"] is None
+
+    campaigns[0]["cluster_bids_observed_at"] = "2026-10-29T11:30:00+03:00"
+    campaigns[0]["cluster_bids"]["bids"][0]["currency"] = "KZT"
+    result = analyze_cluster_rows(
+        [source_row(cluster_bid_kopecks="", bid_observed_at="")],
+        settings(), [], now=NOW, bid_recommendations=campaigns,
+        economics_observed_at="2026-10-29T11:00:00+03:00",
+    )
+    assert result["rows"][0]["current_bid_rub"] is None
+
+
