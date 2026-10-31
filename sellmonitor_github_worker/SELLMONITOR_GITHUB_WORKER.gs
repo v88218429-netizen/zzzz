@@ -5453,7 +5453,7 @@ function sellmonitorGithubPublishOzonSummaryOrders_(payload) {
   if(!records.length)throw new Error('OZON_SOURCE_NO_VALID_ROWS_PRESERVE');
 
   }
-  var today=Utilities.formatDate(new Date(),businessTimezone,'yyyy-MM-dd'), results=[];
+  var today=Utilities.formatDate(new Date(),String(SMC_OZON_SUMMARY.timezone),'yyyy-MM-dd'), results=[];
   Object.keys(SMC_OZON_SUMMARY.stores).forEach(function(cabinet){
     var cfg=SMC_OZON_SUMMARY.stores[cabinet];
     try {
