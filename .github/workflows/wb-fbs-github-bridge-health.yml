@@ -13,6 +13,7 @@ on:
       - WB FBS GitHub recovery
       - WB FBS Sanych targeted recovery
       - WB FBS retry failed recovery windows
+      - WB FBS supply sync via GitHub
     types: [completed]
 
 permissions:
