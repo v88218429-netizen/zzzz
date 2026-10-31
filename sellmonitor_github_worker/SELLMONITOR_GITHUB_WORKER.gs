@@ -5463,7 +5463,7 @@ function sellmonitorGithubPublishOzonPerformanceDaily_(body) {
     if(x.rowsChanged){
       x.newRows.forEach(function(row,i){x.sh.getRange(x.spec.firstMetricRow+i,x.startCol,1,row.length).setValues([row]);});
     }
-    if(x.note!==undefined)x.sh.getRange('A1').setValue(x.note);
+    if(x.note!==undefined)x.sh.getRange(x.spec.kind==='note'?'A2':'A1').setValue(x.note);
   });
   dailySheet.getRange('A1').setValue(dailySheetTitle);
   periodSheet.getRange('A1').setValue(periodSheetTitle);
