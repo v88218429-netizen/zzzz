@@ -6273,7 +6273,7 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
       if(value instanceof Date)return value.getTime()/86400000+25569;
       return value==null?'':value;
     }
-    function sheetRows(rows){return rows.map(function(row){return row.map(asSheetValue);});}
+    function sheetRows(rows){return rows.map(function(row){return row.map(fbsLocalSerial_);});}
     mark('SHEET_READ_START');
     // Read the used-row boundary and ID column with SpreadsheetApp. The previous
     // REST request used A2:A (the entire grid); on large books Sheets batchGet
