@@ -6326,8 +6326,11 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
       // Use a POST body for the disjoint A1 ranges. The equivalent batchGet
       // GET encoded every range into the URL and exceeded UrlFetch's URL limit
       // on large books when a 100-order batch touched many separated rows.
+      var groupsByA1={};
       var dataFilters=groups.map(function(group){
-        return {a1Range:orderSheet+'!A'+group.start+':G'+group.end};
+        var a1Range=orderSheet+'!A'+group.start+':G'+group.end;
+        groupsByA1[a1Range]=group;
+        return {a1Range:a1Range};
       });
       mark('STATE_BATCH_READ_START_'+rows.length+'_IDS_'+groups.length+'_RANGES');
       var response=fetchSheetApi(apiBase+'/values:batchGetByDataFilter',{
@@ -6339,16 +6342,27 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
       var payload;
       try{payload=JSON.parse(response.getContentText()||'{}');}
       catch(parseError){throw new Error('FBS_STATE_BATCH_READ_INVALID_JSON');}
-      var valueRanges=(payload.valueRanges||[]).map(function(match){return match.valueRange||{};});
+      var valueRanges=payload.valueRanges||{};
       if(valueRanges.length!==groups.length)throw new Error('FBS_STATE_BATCH_READ_RANGE_COUNT_MISMATCH');
-      groups.forEach(function(group,groupIndex){
-        var values=(valueRanges[groupIndex]||{}).values||[];
+      var matchedGroups={};
+      valueRanges.forEach(function(match){
+        var group=null;
+        (match.dataFilters||[]).some(function(filter){
+          group=groupsByA1[String(filter.a1Range||'')]||null;
+          return !!group;
+        });
+        if(!group)throw new Error('FBS_STATE_BATCH_READ_RANGE_MAPPING_INVALID');
+        var groupKey=group.start+':'+group.end;
+        if(matchedGroups[groupKey])throw new Error('FBS_STATE_BATCH_READ_RANGE_DUPLICATE');
+        matchedGroups[groupKey]=true;
+        var values=((match.valueRange||{}).values)||[];
         group.items.forEach(function(item){
           var rowValues=values[item.row-group.start]||[];
           if(String(rowValues[0]||'')!==item.id){stale=true;return;}
           stateByRow[item.row]=[rowValues[4]||'',rowValues[5]||'',rowValues[6]||''];
         });
       });
+      if(Object.keys(matchedGroups).length!==groups.length)throw new Error('FBS_STATE_BATCH_READ_RANGE_MISSING');
       mark('STATE_BATCH_READ_DONE_'+rows.length+'_IDS_'+groups.length+'_RANGES');
       console.log('FBS_STAGE_STATE_BATCH_READ rows='+rows.length+' ranges='+groups.length+' ms='+(Date.now()-fbsStarted));
       return stale;
