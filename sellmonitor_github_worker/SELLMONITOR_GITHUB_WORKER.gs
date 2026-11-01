@@ -6310,13 +6310,27 @@ function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId){
   if(!archive){archive=ss.insertSheet(archiveName);archive.getRange(1,1,1,7).setValues([['Архивировано','Магазин','Лист','Период','Начальная строка','Старые значения JSON','Причина']]);archive.setFrozenRows(1);archive.setTabColor('#7F6000');}
   function archiveSnapshot(sh,col,period,reason,last,provided){
     var before=archive.getLastRow()+1,records=[],v=provided||sh.getRange(1,col,last,1).getValues().map(function(r){return r[0];});
-    for(var st=1;st<=last;st+=1000){var n=Math.min(1000,last-st+1);records.push([new Date(),storeName,sh.getName(),period,st,JSON.stringify(v.slice(st-1,st-1+n)),reason]);}
+    var maxCellChars=40000,segment=[],segmentStart=1;
+    function flushSegment_(){
+      if(!segment.length)return;
+      var encoded=JSON.stringify(segment);
+      if(encoded.length>maxCellChars)throw new Error('WB_RNP_ARCHIVE_SINGLE_CELL_TOO_LARGE:'+sh.getName()+':'+period+':'+segmentStart);
+      records.push([new Date(),storeName,sh.getName(),period,segmentStart,encoded,reason]);
+      segmentStart+=segment.length;segment=[];
+    }
+    for(var vi=0;vi<v.length;vi++){
+      var candidate=segment.concat([v[vi]]),encodedCandidate=JSON.stringify(candidate);
+      if(encodedCandidate.length>maxCellChars&&segment.length){flushSegment_();candidate=[v[vi]];encodedCandidate=JSON.stringify(candidate);}
+      if(encodedCandidate.length>maxCellChars)throw new Error('WB_RNP_ARCHIVE_SINGLE_VALUE_TOO_LARGE:'+sh.getName()+':'+period+':'+(vi+1));
+      segment=candidate;
+    }
+    flushSegment_();
     for(var off=0;off<records.length;off+=200){
       var part=records.slice(off,off+200),at=archive.getLastRow()+1,need=at+part.length-1;
       if(need>archive.getMaxRows())archive.insertRowsAfter(archive.getMaxRows(),Math.max(100,need-archive.getMaxRows()));
       archive.getRange(at,1,part.length,7).setValues(part);
       var rb=archive.getRange(at,1,part.length,7).getValues();
-      for(var j=0;j<part.length;j++)if(String(rb[j][5])!==String(part[j][5]))throw new Error('WB_RNP_ARCHIVE_READBACK_FAILED:'+sh.getName()+':'+period);
+      for(var j=0;j<part.length;j++)if(String(rb[j][5])!==String(part[j][5]))throw new Error('WB_RNP_ARCHIVE_READBACK_FAILED:'+sh.getName()+':'+period+':'+part[j][4]);
     }
     return archive.getLastRow()-before+1;
   }
