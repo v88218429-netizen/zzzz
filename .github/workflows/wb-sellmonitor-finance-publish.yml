@@ -39,7 +39,7 @@ jobs:
           test -n "$WEBHOOK_SECRET"
           echo "::add-mask::$WEBHOOK_SECRET"
 
-      - name: Publish and verify all WB finance summaries
+      - name: Publish and verify all WB finance summaries in bounded phases
         shell: bash
         run: |
           set -euo pipefail
@@ -49,105 +49,104 @@ jobs:
           url = "https://script.google.com/macros/s/" + os.environ["WEBAPP_DEPLOYMENT_ID"] + "/exec"
           selected_store = os.environ.get("PUBLISH_ONLY_STORE", "").strip()
           expected = (selected_store,) if selected_store in ("air_wb", "hozyayushka_wb", "sanych_wb") else ("air_wb", "hozyayushka_wb", "sanych_wb")
-          print("PUBLISH_SCOPE=" + (selected_store or "all_stores"))
+          phases = ("summary", "rnp_day", "rnp_week", "rnp_month", "dashboard")
+          print("PUBLISH_SCOPE=" + (selected_store or "all_stores"), flush=True)
           verified = []
           errors = []
           for store_id in expected:
-              body = json.dumps({
-                  "token": os.environ["WEBHOOK_SECRET"],
-                  "action": "publish_wb_inner_periods",
-                  "store": store_id,
-              }).encode("utf-8")
-              result = None
-              last = None
-              for attempt in range(1, 4):
-                  req = urllib.request.Request(
-                      url, data=body,
-                      headers={"Content-Type": "application/json"},
-                      method="POST",
-                  )
-                  last_exception_type = None
-                  try:
-                      with urllib.request.urlopen(req, timeout=420) as response:
-                          result = json.loads(response.read().decode("utf-8"))
-                  except (urllib.error.URLError, http.client.HTTPException, OSError, json.JSONDecodeError) as exc:
-                      last = type(exc).__name__ + ": " + str(exc)[:240]
-                      last_exception_type = type(exc).__name__
-                  else:
-                      if isinstance(result, dict) and result.get("ok") is True:
-                          break
-                      last = json.dumps({
-                          "action": result.get("action") if isinstance(result, dict) else None,
-                          "store": store_id,
-                          "stores": [
-                              {"store": x.get("store"), "error": x.get("error"), "ok": x.get("ok")}
-                              for x in (result.get("stores") or [])
-                          ] if isinstance(result, dict) else [],
-                      }, ensure_ascii=False)[:1200]
-                      if isinstance(result, dict) and result.get("ok") is False:
-                          store_errors = result.get("stores") or []
-                          retryable = any(
-                              any(marker in str(item.get("error", "")).lower() for marker in (
-                                  "service spreadsheets failed while accessing document",
-                                  "service spreadsheets timed out while accessing document",
-                              ))
-                              for item in store_errors if isinstance(item, dict)
-                          )
-                          if not retryable:
-                              break
-                          if attempt < 3:
-                              delay = 15 * attempt
-                              print("WB_FINANCE_RETRY=store:" + store_id + ";attempt:" + str(attempt + 1) + "/3;wait:" + str(delay) + "s;reason:spreadsheet_access_timeout", flush=True)
-                              time.sleep(delay)
+              store_result = {"store_id": store_id}
+              for phase in phases:
+                  body = json.dumps({
+                      "token": os.environ["WEBHOOK_SECRET"],
+                      "action": "publish_wb_inner_periods",
+                      "store": store_id,
+                      "phase": phase,
+                  }).encode("utf-8")
+                  result = None
+                  last = None
+                  for attempt in range(1, 3):
+                      req = urllib.request.Request(
+                          url, data=body,
+                          headers={"Content-Type": "application/json"},
+                          method="POST",
+                      )
+                      try:
+                          with urllib.request.urlopen(req, timeout=420) as response:
+                              result = json.loads(response.read().decode("utf-8"))
+                      except (urllib.error.URLError, http.client.HTTPException, OSError, json.JSONDecodeError) as exc:
+                          last = type(exc).__name__ + ": " + str(exc)[:240]
+                          if attempt < 2:
+                              print("WB_FINANCE_PHASE_RETRY=store:" + store_id + ";phase:" + phase + ";attempt:2/2;wait:30s;reason:" + type(exc).__name__, flush=True)
+                              time.sleep(30)
                               continue
-                  if last_exception_type and attempt < 3:
-                      delay = 15 * attempt
-                      print("WB_FINANCE_RETRY=store:" + store_id + ";attempt:" + str(attempt + 1) + "/3;wait:" + str(delay) + "s;reason:" + last_exception_type, flush=True)
-                      time.sleep(delay)
-                      continue
-              if not isinstance(result, dict) or result.get("ok") is not True:
-                  message = "WB finance publication failed for " + store_id + ": " + str(last)
-                  errors.append(message)
-                  print("STORE=" + store_id + " OK=no ERROR=" + str(last))
-                  continue
-              stores = result.get("stores") or []
-              if len(stores) != 1 or not isinstance(stores[0], dict):
-                  message = "WB store result count mismatch for " + store_id
-                  errors.append(message)
-                  print("STORE=" + store_id + " OK=no ERROR=" + message)
-                  continue
-              item = stores[0]
-              if item.get("ok") is not True:
-                  message = "WB store failed for " + store_id + ": " + json.dumps(item, ensure_ascii=False)
-                  errors.append(message)
-                  print("STORE=" + store_id + " OK=no ERROR=" + message)
-                  continue
-              if not all(
-                  isinstance(item.get(period), dict)
-                  and int(item[period].get("verified", -1)) == int(item[period].get("rows", -2))
-                  and bool(item[period].get("sha256"))
-                  for period in ("day", "week", "month")
-              ):
-                  message = "WB summary readback mismatch for " + store_id + ": " + json.dumps(item, ensure_ascii=False)
-                  errors.append(message)
-                  print("STORE=" + store_id + " OK=no ERROR=" + message)
-                  continue
-              verified.append(item)
-              print(
-                  "STORE=" + str(item.get("store"))
-                  + " OK=yes SOURCE_ROWS=" + str(item.get("source_rows"))
-                  + " SOURCE_PERIOD=" + str(item.get("source_min")) + ".." + str(item.get("source_max"))
-                  + " DAY=" + str(item["day"]["rows"]) + "/" + str(item["day"]["verified"])
-                  + " WEEK=" + str(item["week"]["rows"]) + "/" + str(item["week"]["verified"])
-                  + " MONTH=" + str(item["month"]["rows"]) + "/" + str(item["month"]["verified"])
-                  + " ARCHIVED=" + str(sum(item.get(p, {}).get("archived_rows", 0) for p in ("day", "week", "month")))
-                  + " SHA256=" + str("/".join(item[p]["sha256"] for p in ("day", "week", "month")))
-              )
-              time.sleep(5)
-          actual = {item.get("store") for item in verified}
-          expected_names = {{"air_wb":"AIR","hozyayushka_wb":"Хозяюшка","sanych_wb":"Саныч"}[selected_store]} if selected_store in ("air_wb","hozyayushka_wb","sanych_wb") else {"AIR", "Хозяюшка", "Саныч"}
-          if actual != expected_names:
-              errors.append("WB summary stores readback acceptance failed: " + repr(actual))
-          if errors:
-              raise SystemExit("; ".join(errors))
+                          break
+                      if isinstance(result, dict) and result.get("ok") is True:
+                          stores = result.get("stores") or []
+                          if len(stores) != 1 or not isinstance(stores[0], dict):
+                              last = "WB store result count mismatch"
+                              break
+                          item = stores[0]
+                          if item.get("ok") is not True:
+                              last = json.dumps(item, ensure_ascii=False)[:1200]
+                              break
+                          last = None
+                          break
+                      last = json.dumps(result if isinstance(result, dict) else {"result": str(result)}, ensure_ascii=False)[:1200]
+                      details = json.dumps(result, ensure_ascii=False).lower()
+                      retryable = any(marker in details for marker in (
+                          "timed out", "timeout", "remote end closed", "connection reset",
+                          "connection refused", "temporarily unavailable", "service spreadsheets",
+                      ))
+                      if retryable and attempt < 2:
+                          print("WB_FINANCE_PHASE_RETRY=store:" + store_id + ";phase:" + phase + ";attempt:2/2;wait:30s;reason:bridge_or_spreadsheet_transient", flush=True)
+                          time.sleep(30)
+                          continue
+                      break
+                  if last:
+                      errors.append("WB finance phase failed for " + store_id + "/" + phase + ": " + last)
+                      print("STORE=" + store_id + " PHASE=" + phase + " OK=no ERROR=" + last, flush=True)
+                      break
+                  item = result["stores"][0]
+                  if phase == "summary":
+                      for period in ("day", "week", "month"):
+                          data = item.get(period)
+                          if not isinstance(data, dict) or int(data.get("verified", -1)) != int(data.get("rows", -2)) or not data.get("sha256"):
+                              last = "WB summary readback mismatch in " + period + ": " + json.dumps(item, ensure_ascii=False)[:1200]
+                              break
+                      if last:
+                          errors.append("WB finance summary readback failed for " + store_id + ": " + last)
+                          print("STORE=" + store_id + " PHASE=summary OK=no ERROR=" + last, flush=True)
+                          break
+                      store_result.update({
+                          "source_rows": item.get("source_rows"),
+                          "source_min": item.get("source_min"),
+                          "source_max": item.get("source_max"),
+                          "summary": {p: {"rows": item[p]["rows"], "verified": item[p]["verified"], "sha256": item[p]["sha256"]} for p in ("day", "week", "month")},
+                      })
+                  elif phase.startswith("rnp_"):
+                      rnp = item.get("rnp") or {}
+                      grain = phase[4:]
+                      matrices = rnp.get("matrices") or []
+                      if rnp.get("ok") is not True or rnp.get("readback") is not True or len(matrices) != 1 or matrices[0].get("sheet") != {"day":"01_Дни","week":"02_Недели","month":"03_Месяцы"}[grain]:
+                          last = "RNP matrix readback mismatch: " + json.dumps(rnp, ensure_ascii=False)[:1200]
+                          errors.append("WB finance RNP readback failed for " + store_id + "/" + grain + ": " + last)
+                          print("STORE=" + store_id + " PHASE=" + phase + " OK=no ERROR=" + last, flush=True)
+                          break
+                      store_result.setdefault("rnp", {})[grain] = matrices[0]
+                  else:
+                      dashboard = item.get("dashboard") or {}
+                      if dashboard.get("ok") is not True:
+                          last = "dashboard readback failed: " + json.dumps(dashboard, ensure_ascii=False)[:1200]
+                          errors.append("WB finance dashboard failed for " + store_id + ": " + last)
+                          print("STORE=" + store_id + " PHASE=dashboard OK=no ERROR=" + last, flush=True)
+                          break
+                      store_result["dashboard"] = dashboard
+                  print("STORE=" + store_id + " PHASE=" + phase + " OK=yes", flush=True)
+              if store_id in expected and not any(e.startswith("WB finance phase failed for " + store_id) or e.startswith("WB finance summary readback failed for " + store_id) or e.startswith("WB finance RNP readback failed for " + store_id) or e.startswith("WB finance dashboard failed for " + store_id) for e in errors):
+                  if all(k in store_result for k in ("summary", "rnp", "dashboard")) and all(k in store_result["rnp"] for k in ("day", "week", "month")):
+                      verified.append(store_result)
+                      print("STORE=" + store_id + " OK=yes SOURCE_ROWS=" + str(store_result["source_rows"]) + " SOURCE_PERIOD=" + str(store_result["source_min"]) + ".." + str(store_result["source_max"]) + " DASHBOARD_OK=yes", flush=True)
+          if errors or len(verified) != len(expected):
+              raise SystemExit("WB finance phased publication incomplete: " + json.dumps({"verified": len(verified), "expected": len(expected), "errors": errors}, ensure_ascii=False))
+          print("WB_FINANCE_PHASED_PUBLICATION_OK stores=" + str(len(verified)), flush=True)
           PY
