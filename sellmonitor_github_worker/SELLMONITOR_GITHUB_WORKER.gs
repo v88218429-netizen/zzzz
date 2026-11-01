@@ -7251,9 +7251,16 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
     // Read the used-row boundary and ID column with SpreadsheetApp. The previous
     // REST request used A2:A (the entire grid); on large books Sheets batchGet
     // timed out before the recovery could reach its bounded status reads.
-    var orderSheetNative=SpreadsheetApp.openById(spreadsheetId).getSheetByName('📦 FBS Заказы');
+    mark('SPREADSHEET_OPEN_START');
+    var orderParent=SpreadsheetApp.openById(spreadsheetId);
+    mark('SPREADSHEET_OPEN_DONE');
+    mark('SHEET_LOOKUP_START');
+    var orderSheetNative=orderParent.getSheetByName('📦 FBS Заказы');
+    mark('SHEET_LOOKUP_DONE');
     if(!orderSheetNative)throw new Error('FBS_ORDER_SHEET_NOT_FOUND');
-    var sheetTimeZone=orderSheetNative.getParent().getSpreadsheetTimeZone();
+    mark('TIMEZONE_READ_START');
+    var sheetTimeZone=orderParent.getSpreadsheetTimeZone();
+    mark('TIMEZONE_READ_DONE');
     function fbsLocalSerial_(value){
       if(value instanceof Date){
         var local=Utilities.formatDate(value,sheetTimeZone,'yyyy-MM-dd HH:mm:ss').match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/);
@@ -7262,9 +7269,13 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
       }
       return value==null?'':value;
     }
+    mark('LAST_ROW_READ_START');
     var last=orderSheetNative.getLastRow();
+    mark('LAST_ROW_READ_DONE_'+last);
     if(last<1||last>100000)throw new Error('FBS_ROW_COUNT_UNEXPECTED');
+    mark('HEADER_READ_START');
     var head=orderSheetNative.getRange(1,1,1,7).getDisplayValues()[0]||[];
+    mark('HEADER_READ_DONE');
     mark('SHEET_READ_DONE_NATIVE');
     if(String(head[0]||'')!=='ID заказа'||String(head[4]||'')!=='Статус продавца'||String(head[5]||'')!=='Статус WB')
       throw new Error('FBS_COLUMN_SCHEMA_MISMATCH');
