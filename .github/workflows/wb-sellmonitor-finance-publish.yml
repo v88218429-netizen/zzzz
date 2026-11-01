@@ -14,8 +14,9 @@ permissions:
   contents: read
 
 concurrency:
-  group: sellmonitor-summary-publish-serial
+  group: wb-fbs-data-mutations
   cancel-in-progress: false
+  queue: max
 
 jobs:
   publish:
