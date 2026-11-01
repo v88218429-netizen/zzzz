@@ -62,3 +62,83 @@ def test_optimizer_sweep_progress_contains_aggregate_counts_only():
         "aa": {"sweep_id": 1, "campaigns_seen": 10, "campaigns_total": 10,
                "products_seen": 10, "products_total": 10, "complete": True},
     }
+
+
+def test_github_state_root_pins_and_caches_verified_commit(monkeypatch, tmp_path):
+    import asyncio
+    import wb_control_center.worker_source as worker_source_module
+
+    calls = []
+
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"commit": {"sha": "a" * 40}}
+
+    class Client:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def get(self, url, **kwargs):
+            calls.append(url)
+            return Response()
+
+    monkeypatch.setattr(worker_source_module.httpx, "AsyncClient", Client)
+    source = WorkerSource(
+        traffic_github_repo="v88218429-netizen/zzzz",
+        traffic_private_key_path=str(tmp_path / "private.pem"),
+    )
+
+    async def run():
+        optimizer = await source._github_state_root("optimizer-state")
+        optimizer_again = await source._github_state_root("optimizer-state")
+        traffic = await source._github_state_root("traffic-state")
+        return optimizer, optimizer_again, traffic
+
+    optimizer, optimizer_again, traffic = asyncio.run(run())
+    expected = "https://raw.githubusercontent.com/v88218429-netizen/zzzz/" + "a" * 40 + "/state"
+    assert optimizer == expected
+    assert optimizer_again == expected
+    assert traffic == expected
+    assert len(calls) == 2
+    assert calls[0].endswith("/branches/optimizer-state")
+    assert calls[1].endswith("/branches/traffic-state")
+
+
+def test_github_state_root_fails_closed_when_branch_cannot_be_verified(monkeypatch, tmp_path):
+    import asyncio
+    import wb_control_center.worker_source as worker_source_module
+    from wb_control_center.worker_source import WorkerSourceError
+
+    class Client:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def get(self, url, **kwargs):
+            raise OSError("network unavailable")
+
+    monkeypatch.setattr(worker_source_module.httpx, "AsyncClient", Client)
+    source = WorkerSource(
+        traffic_github_repo="v88218429-netizen/zzzz",
+        traffic_private_key_path=str(tmp_path / "private.pem"),
+    )
+    try:
+        asyncio.run(source._github_state_root("optimizer-state"))
+    except WorkerSourceError as exc:
+        assert "could not be verified" in str(exc)
+    else:
+        raise AssertionError("unverified GitHub state must never fall back to a mutable raw URL")
