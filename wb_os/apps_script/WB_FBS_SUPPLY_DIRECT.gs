@@ -122,7 +122,7 @@ function wbFbsSupplyFetchPage_(token, cursor) {
 
 function wbFbsSupplyFetchAll_(token) {
   var cursor = 0, seen = {}, byId = {}, ordered = [], scanned = 0, pages = 0, complete = false;
-  var startedAt = Date.now(), maxDurationMs = 240000, maxPageRequestMs = 75000;
+  var startedAt = Date.now(), maxDurationMs = 180000, maxPageRequestMs = 75000;
   for (var page = 0; page < WB_FBS_DIRECT_SUPPLY_CFG.maxPages; page++) {
     if (Date.now() - startedAt + maxPageRequestMs > maxDurationMs) {
       throw new Error('WB_FBS_DIRECT: supplies pagination TIMEOUT budget exceeded');
