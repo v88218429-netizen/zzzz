@@ -5,6 +5,7 @@ on:
     branches: [mainggg]
     paths:
       - "wb_os/apps_script/WB_FBS_SUPPLY_DIRECT.gs"
+      - ".github/workflows/wb-fbs-supply-sync.yml"
   schedule:
     - cron: "57 */3 * * *"
   workflow_dispatch:
@@ -114,7 +115,7 @@ jobs:
           expected = {"SANYCH", "AIR", "HOZYAYUSHKA"}
           seen = {}
           failures = []
-          for attempt in range(1, 19):
+          for attempt in range(1, 46):
               request = urllib.request.Request(
                   os.environ["GOOGLE_BRIDGE_URL"],
                   data=payload,
@@ -127,7 +128,7 @@ jobs:
               except Exception as error:
                   print("FBS_SUPPLY_SYNC_RETRY attempt=" + str(attempt) +
                         " type=" + type(error).__name__, flush=True)
-                  if attempt < 60:
+                  if attempt < 45:
                       time.sleep(60)
                       continue
                   failures.append("NO_VALID_RESPONSE")
@@ -143,7 +144,7 @@ jobs:
                       "temporarily unavailable", "connection reset", "connection refused",
                       "temporary failure", "network error",
                   ))
-                  if retryable and attempt < 18:
+                  if retryable and attempt < 45:
                       wait_seconds = (300 if "already running" in lower_details else
                                       75 if "credential store is busy" in lower_details else 60)
                       label = "busy" if busy else "transient_wb_or_bridge_error"
