@@ -1,10 +1,10 @@
 /**
- * Sellmonitor GitHub Central Worker v1.3.72
+ * Sellmonitor GitHub Central Worker v1.3.74
  * GitHub is source-of-truth/scheduler. This Apps Script project is only
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.73',
+  VERSION: 'github-worker-1.3.74',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -6218,7 +6218,9 @@ function sellmonitorGithubWbInnerUpsert_(ss,sh,headers,rows,storeName){
   return {sheet:sh.getName(),rows:final.length,new_rows:newRows.length,changed_rows:changedRows.length,archived_rows:archived,skipped_incomplete_rows:skippedIncomplete,min:min,max:max,verified:verified,sha256:digest};
 }
 
-function sellmonitorGithubPublishWbInnerPeriods_(onlyStore){
+function sellmonitorGithubPublishWbInnerPeriods_(onlyStore,requestedPhase){
+  var phase=String(requestedPhase||'all').trim()||'all';
+  if(['all','summary','rnp_day','rnp_week','rnp_month','dashboard'].indexOf(phase)<0)throw new Error('WB_INNER_UNKNOWN_PHASE:'+phase);
   var reg=SpreadsheetApp.openById(SMC_WB_INNER_SUMMARY_V1.registryId).getSheetByName(SMC_WB_INNER_SUMMARY_V1.registrySheet);
   if(!reg)throw new Error('WB_INNER_REGISTRY_MISSING');
   var regLast=reg.getLastRow(),registry=regLast>1?reg.getRange(2,1,regLast-1,27).getValues():[];
@@ -6234,6 +6236,12 @@ function sellmonitorGithubPublishWbInnerPeriods_(onlyStore){
   storeKeys.filter(function(shop){return !onlyStore||shop===onlyStore;}).forEach(function(shop){
     var cfg=SMC_WB_INNER_SUMMARY_V1.stores[shop];
     try{
+      if(phase==='dashboard'){
+        var dashboardSs=SpreadsheetApp.openById(cfg.id);
+        var dashboardOnly=sellmonitorGithubWbBuildDashboard_(dashboardSs,cfg.name);
+        results.push({store:cfg.name,ok:dashboardOnly&&dashboardOnly.ok===true,dashboard:dashboardOnly,phase:phase});
+        return;
+      }
       var chosen=Object.keys(parts).map(function(k){return parts[k];}).filter(function(p){return p.shop===shop;}).sort(function(a,b){return a.period<b.period?-1:1;});
       if(!chosen.length)throw new Error('WB_INNER_NO_TRUSTED_PARTS:'+shop);
       var headers=null,allRows=[],sourceIds=[],sourceChecks=[];
@@ -6260,40 +6268,52 @@ function sellmonitorGithubPublishWbInnerPeriods_(onlyStore){
       var week=sellmonitorGithubWbInnerEnsureSheet_(ss,SMC_WB_INNER_SUMMARY_V1.tabs.week,head);
       var month=sellmonitorGithubWbInnerEnsureSheet_(ss,SMC_WB_INNER_SUMMARY_V1.tabs.month,head);
       var res={
-        store:cfg.name,ok:true,source_parts:sourceIds.length,source_ids:sourceIds,
+        store:cfg.name,ok:true,phase:phase,source_parts:sourceIds.length,source_ids:sourceIds,
         source_rows:built.sourceRows,source_min:built.min,source_max:built.max,
-        factual_days:built.factualDays,partial_days:built.partialDays,
-        day:sellmonitorGithubWbInnerUpsert_(ss,day,head,built.day,cfg.name),
-        week:sellmonitorGithubWbInnerUpsert_(ss,week,head,built.week,cfg.name),
-        month:sellmonitorGithubWbInnerUpsert_(ss,month,head,built.month,cfg.name)
+        factual_days:built.factualDays,partial_days:built.partialDays
       };
-      res.rnp=sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,cfg.name,shop);
-      var periodChanges=res.day.new_rows+res.day.changed_rows+res.week.new_rows+res.week.changed_rows+res.month.new_rows+res.month.changed_rows;
-      var dashboardView=ss.getSheetByName('00_Динамика');var dashboardHasCharts=!!(dashboardView&&dashboardView.getCharts().length);res.dashboard=(shop==='sanych_wb'&&periodChanges===0&&dashboardHasCharts)?{ok:true,skipped:true,reason:'WB_INNER_NO_PERIOD_CHANGES'}:sellmonitorGithubWbBuildDashboard_(ss,cfg.name);
+      if(phase==='all'||phase==='summary'){
+        res.day=sellmonitorGithubWbInnerUpsert_(ss,day,head,built.day,cfg.name);
+        res.week=sellmonitorGithubWbInnerUpsert_(ss,week,head,built.week,cfg.name);
+        res.month=sellmonitorGithubWbInnerUpsert_(ss,month,head,built.month,cfg.name);
+      }
+      if(phase==='all'||phase.indexOf('rnp_')===0){
+        var onlyGrain=phase==='all'?'':phase.slice(4);
+        res.rnp=sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,cfg.name,shop,onlyGrain);
+      }
+      if(phase==='all'||phase==='dashboard'){
+        var periodChanges=phase==='all'?(res.day.new_rows+res.day.changed_rows+res.week.new_rows+res.week.changed_rows+res.month.new_rows+res.month.changed_rows):0;
+        var dashboardView=ss.getSheetByName('00_Динамика'),dashboardHasCharts=!!(dashboardView&&dashboardView.getCharts().length);
+        res.dashboard=(shop==='sanych_wb'&&periodChanges===0&&dashboardHasCharts)?{ok:true,skipped:true,reason:'WB_INNER_NO_PERIOD_CHANGES'}:sellmonitorGithubWbBuildDashboard_(ss,cfg.name);
+      }else res.dashboard={ok:true,skipped:true,reason:'PHASE_'+phase};
+      if(phase==='all'||phase==='summary'){
+        var log=sellmonitorGithubWbInnerEnsureSheet_(ss,SMC_WB_INNER_SUMMARY_V1.tabs.log,['Время запуска','Магазин','Источник частей','Строк фактов','Период с','Период по','Дней точных','Дней предварительных','Строк день/неделя/месяц','Новых','Изменённых','Архивировано','SHA-256']);
+        var counts=[res.day.rows,res.week.rows,res.month.rows],newCount=res.day.new_rows+res.week.new_rows+res.month.new_rows,changeCount=res.day.changed_rows+res.week.changed_rows+res.month.changed_rows,archCount=res.day.archived_rows+res.week.archived_rows+res.month.archived_rows;
+        var logRow=[new Date(),cfg.name,sourceIds.join(','),built.sourceRows,built.min,built.max,built.factualDays,built.partialDays,counts.join('/'),newCount,changeCount,archCount,[res.day.sha256,res.week.sha256,res.month.sha256].join('/')];
+        var at=log.getLastRow()+1;if(at>log.getMaxRows())log.insertRowsAfter(log.getMaxRows(),100);
+        log.getRange(at,1,1,13).setValues([logRow]);
+        var check=log.getRange(at,1,1,13).getValues()[0];
+        if(String(check[12])!==String(logRow[12]))throw new Error('WB_INNER_STORE_LOG_READBACK_FAILED:'+cfg.name);
+        SpreadsheetApp.flush();
+      }
       results.push(res);
-      var log=sellmonitorGithubWbInnerEnsureSheet_(ss,SMC_WB_INNER_SUMMARY_V1.tabs.log,['Время запуска','Магазин','Источник частей','Строк фактов','Период с','Период по','Дней точных','Дней предварительных','Строк день/неделя/месяц','Новых','Изменённых','Архивировано','SHA-256']);
-      var counts=[res.day.rows,res.week.rows,res.month.rows],newCount=res.day.new_rows+res.week.new_rows+res.month.new_rows,changeCount=res.day.changed_rows+res.week.changed_rows+res.month.changed_rows,archCount=res.day.archived_rows+res.week.archived_rows+res.month.archived_rows;
-      var logRow=[new Date(),cfg.name,sourceIds.join(','),built.sourceRows,built.min,built.max,built.factualDays,built.partialDays,counts.join('/'),newCount,changeCount,archCount,[res.day.sha256,res.week.sha256,res.month.sha256].join('/')];
-      var at=log.getLastRow()+1;if(at>log.getMaxRows())log.insertRowsAfter(log.getMaxRows(),100);
-      log.getRange(at,1,1,13).setValues([logRow]);
-      var check=log.getRange(at,1,1,13).getValues()[0];
-      if(String(check[12])!==String(logRow[12]))throw new Error('WB_INNER_STORE_LOG_READBACK_FAILED:'+cfg.name);
-      SpreadsheetApp.flush();
     }catch(e){results.push({store:cfg.name,ok:false,error:String(e&&e.message||e)});}
   });
   var expectedCount=onlyStore?1:3;
   var ok=results.length===expectedCount&&results.every(function(x){return x.ok===true;});
-  return {ok:ok,action:'publish_wb_inner_periods',stores:results};
+  return {ok:ok,action:'publish_wb_inner_periods',phase:phase,stores:results};
 }
 
 
 
-function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId){
+function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId,onlyGrain){
   var specs=[
     {name:'01_Дни',grain:'day',rows:built.day,min:'2026-09-01',format:'dd.mm.yyyy',startCol:15,baseCols:14,source:'Источник_дни'},
     {name:'02_Недели',grain:'week',rows:built.week,min:'2026-09-07',format:'dd.mm.yyyy',startCol:15,baseCols:14,source:'Источник_недели'},
     {name:'03_Месяцы',grain:'month',rows:built.month,min:'2026-09-01',format:'mmm yyyy',startCol:14,baseCols:13,source:'Источник_месяцы'}
   ];
+  if(onlyGrain)specs=specs.filter(function(spec){return spec.grain===onlyGrain;});
+  if(onlyGrain&&!specs.length)throw new Error('WB_RNP_UNKNOWN_GRAIN:'+onlyGrain);
   var metricIx={};built.metricHeaders.forEach(function(h,i){metricIx[String(h)]=10+i;});
   function key(v){
     if(v instanceof Date&&!isNaN(v.getTime()))return Utilities.formatDate(v,ss.getSpreadsheetTimeZone(),'yyyy-MM-dd');
@@ -6824,7 +6844,8 @@ function doPost(e) {
 
     if (action === 'publish_wb_inner_periods') {
       var requestedStore = String(body.store || '').trim();
-      return sellmonitorGithubWebJson_(sellmonitorGithubPublishWbInnerPeriods_(requestedStore || null));
+      var requestedPhase = String(body.phase || 'all').trim();
+      return sellmonitorGithubWebJson_(sellmonitorGithubPublishWbInnerPeriods_(requestedStore || null, requestedPhase));
     }
 
     if (action === 'publish_wb_traffic') {
