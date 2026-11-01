@@ -20,13 +20,13 @@ permissions:
   contents: read
 
 concurrency:
-  group: wb-finance-summary-mutations
+  group: wb-bridge-production-mutations
   cancel-in-progress: false
   queue: max
 
 jobs:
   publish:
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    if: ${{ (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success') && !(github.event_name == 'push' && contains(github.event.head_commit.message, '[skip-finance-publish]')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 50
     env:
@@ -65,10 +65,9 @@ jobs:
               next_year = year + 1 if month == 12 else year
               next_month = 1 if month == 12 else month + 1
               month_days = (date(next_year, next_month, 1) - date(year, month, 1)).days
-              for start_day in (1, 15):
-                  if start_day <= month_days:
-                      end_day = min(start_day + 13, month_days)
-                      sanych_chunks.append(f"rnp_day_{year}_{month:02d}_{start_day:02d}_{end_day:02d}")
+              for start_day in range(1, month_days + 1, 7):
+                  end_day = min(start_day + 6, month_days)
+                  sanych_chunks.append(f"rnp_day_{year}_{month:02d}_{start_day:02d}_{end_day:02d}")
               month += 1
               if month == 13:
                   year, month = year + 1, 1
