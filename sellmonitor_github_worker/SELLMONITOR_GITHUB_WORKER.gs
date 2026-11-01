@@ -4,7 +4,7 @@
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.75',
+  VERSION: 'github-worker-1.3.76',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -6265,7 +6265,11 @@ function sellmonitorGithubPublishWbInnerPeriods_(onlyStore,requestedPhase){
         results.push({store:cfg.name,ok:dashboardOnly&&dashboardOnly.ok===true,dashboard:dashboardOnly,phase:phase});
         return;
       }
-      var chosen=Object.keys(parts).map(function(k){return parts[k];}).filter(function(p){return p.shop===shop;}).sort(function(a,b){return a.period<b.period?-1:1;});
+      var chosen=Object.keys(parts).map(function(k){return parts[k];}).filter(function(p){return p.shop===shop&&(!dayMonthMatch||String(p.period||'').indexOf(dayMonthPrefix)===0);}).sort(function(a,b){return a.period<b.period?-1:1;});
+      if(!chosen.length&&dayMonthMatch){
+        results.push({store:cfg.name,ok:true,phase:phase,source_parts:0,source_rows:0,no_source_data:true,rnp:{ok:true,readback:true,no_source_data:true,matrices:[{sheet:'01_Дни',rows:0,verified:0,sha256:'',no_source_data:true}]}});
+        return;
+      }
       if(!chosen.length)throw new Error('WB_INNER_NO_TRUSTED_PARTS:'+shop);
       var headers=null,allRows=[],sourceIds=[],sourceChecks=[];
       chosen.forEach(function(p){
@@ -6578,13 +6582,22 @@ function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId,onl
     }
     refreshHeads();
     var existedBefore={};Object.keys(positions).forEach(function(k){if(positions[k]&&positions[k].length)existedBefore[k]=true;});
-    targets.sort().reverse().forEach(function(period){
+    var missingByAnchor={};
+    targets.forEach(function(period){
       if(positions[period]&&positions[period].length)return;
       var insertAt=lastCol+1;
       for(var ci=0;ci<heads.length;ci++){var old=key(heads[ci]);if(old&&old<period){insertAt=startCol+ci;break;}}
-      if(insertAt<=lastCol)sh.insertColumnBefore(insertAt);else sh.insertColumnAfter(Math.max(startCol-1,lastCol));
-      if(insertAt>startCol&&insertAt-1<=sh.getMaxColumns())sh.getRange(1,insertAt-1,sh.getMaxRows(),1).copyTo(sh.getRange(1,insertAt,sh.getMaxRows(),1),SpreadsheetApp.CopyPasteType.PASTE_FORMAT,false);
-      sh.getRange(2,insertAt).setValue(date_(period)).setNumberFormat(spec.format);
+      if(!missingByAnchor[insertAt])missingByAnchor[insertAt]=[];
+      missingByAnchor[insertAt].push(period);
+    });
+    Object.keys(missingByAnchor).map(Number).sort(function(a,b){return b-a;}).forEach(function(insertAt){
+      var added=missingByAnchor[insertAt].sort().reverse(),count=added.length;
+      if(insertAt<=lastCol)sh.insertColumnsBefore(insertAt,count);else sh.insertColumnsAfter(Math.max(startCol-1,lastCol),count);
+      var styleSource=insertAt>startCol?insertAt-1:(lastCol>=startCol?insertAt+count:0);
+      if(styleSource)for(var ni=0;ni<count;ni++)sh.getRange(1,styleSource,sh.getMaxRows(),1).copyTo(sh.getRange(1,insertAt+ni,sh.getMaxRows(),1),SpreadsheetApp.CopyPasteType.PASTE_FORMAT,false);
+      var newHeaders=sh.getRange(2,insertAt,1,count);
+      newHeaders.setValues([added.map(function(period){return date_(period);})]);
+      newHeaders.setNumberFormat(spec.format);
       SpreadsheetApp.flush();
       refreshHeads();
     });
@@ -6633,7 +6646,7 @@ function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId,onl
       queuedArchiveRecords=[];
     }
     updates.sort(function(a,b){return a.col-b.col;});
-    var ui=0,rowChunk=500;
+    var ui=0,rowChunk=1000;
     while(ui<updates.length){
       var uj=ui+1;while(uj<updates.length&&updates[uj].col===updates[uj-1].col+1)uj++;
       var block=updates.slice(ui,uj),last=sh.getLastRow();
