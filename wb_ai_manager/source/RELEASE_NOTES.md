@@ -1,3 +1,6 @@
+## 1.1.40
+- Agent runtime limits now close timed-out runs without waiting for cancellation-resistant tasks. A lingering task blocks duplicate runs for that agent until it exits.
+
 ## 1.1.39
 - Прерванные или оставшиеся после остановки процесса запуски больше не отображаются как работающие.
 - Отмена агента сразу записывается как «Прервано»; при старте панели закрываются устаревшие незавершённые записи.

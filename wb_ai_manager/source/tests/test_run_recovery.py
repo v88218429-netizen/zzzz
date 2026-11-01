@@ -53,3 +53,49 @@ async def test_cancelled_agent_run_is_recorded_as_interrupted(tmp_path):
     assert row["status"] == "interrupted"
     assert row["finished_at"]
     assert "cancelled" in row["error"].lower()
+
+
+@pytest.mark.asyncio
+async def test_agent_timeout_closes_run_even_when_agent_suppresses_cancellation(tmp_path):
+    class CancellationResistantAgent:
+        def __init__(self):
+            self.started = asyncio.Event()
+            self.cancelled = asyncio.Event()
+            self.release = asyncio.Event()
+
+        async def run(self):
+            self.started.set()
+            try:
+                await asyncio.Future()
+            except asyncio.CancelledError:
+                self.cancelled.set()
+                await self.release.wait()
+                return SimpleNamespace(snapshots=[], events=[], actions=[])
+
+    agent = CancellationResistantAgent()
+    center = object.__new__(ControlCenter)
+    center.db = Database(tmp_path / "timeout.sqlite3")
+    center.agents = {"probe": agent}
+    center._agent_locks = {"probe": asyncio.Lock()}
+    center.settings = SimpleNamespace(agent_run_timeout_seconds=1)
+
+    result = await asyncio.wait_for(center.run_agent("probe"), timeout=2)
+    assert result["status"] == "error"
+    assert "exceeded 1s runtime limit" in result["error"]
+    await asyncio.wait_for(agent.cancelled.wait(), timeout=0.2)
+
+    row = center.db.recent_runs(hours=24, limit=1)[0]
+    assert row["status"] == "error"
+    assert "exceeded 1s runtime limit" in row["error"]
+
+    skipped = await center.run_agent("probe")
+    assert skipped["status"] == "skipped"
+    assert "still stopping" in skipped["reason"]
+    assert len(center.db.recent_runs(hours=24, limit=10)) == 1
+
+    agent.release.set()
+    orphan = center._orphaned_agent_tasks["probe"]
+    await asyncio.wait_for(orphan, timeout=0.2)
+    await asyncio.sleep(0)
+    assert "probe" not in center._orphaned_agent_tasks
+    assert center.db.recent_runs(hours=24, limit=1)[0]["status"] == "error"

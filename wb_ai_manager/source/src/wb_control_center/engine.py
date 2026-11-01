@@ -60,6 +60,7 @@ class ControlCenter:
         self._startup_audit_task: asyncio.Task | None = None
         self._started = False
         self._agent_locks = {name: asyncio.Lock() for name in self.agents}
+        self._orphaned_agent_tasks: dict[str, asyncio.Task] = {}
         self._run_all_lock = asyncio.Lock()
         self._action_locks: dict[int, asyncio.Lock] = {}
         self._period_audit_locks: dict[str, asyncio.Lock] = {}
@@ -145,16 +146,40 @@ class ControlCenter:
         if name not in self.agents:
             raise KeyError(name)
         lock = self._agent_locks[name]
+        orphaned = getattr(self, "_orphaned_agent_tasks", None)
+        if orphaned is None:
+            orphaned = self._orphaned_agent_tasks = {}
+        previous = orphaned.get(name)
+        if previous is not None and not previous.done():
+            return {"agent": name, "status": "skipped", "reason": "previous timed-out run is still stopping"}
+        if previous is not None:
+            orphaned.pop(name, None)
         if lock.locked():
             return {"agent": name, "status": "skipped", "reason": "already running"}
         async with lock:
+            # Recheck after acquiring the lock so a timed-out task cannot be
+            # restarted in the narrow window before its completion callback runs.
+            previous = orphaned.get(name)
+            if previous is not None and not previous.done():
+                return {"agent": name, "status": "skipped", "reason": "previous timed-out run is still stopping"}
+            if previous is not None:
+                orphaned.pop(name, None)
             started = datetime.now(timezone.utc).isoformat()
             run_id = self.db.start_run(name, started)
+            agent_task: asyncio.Task | None = None
             try:
-                try:
-                    result = await asyncio.wait_for(self.agents[name].run(), timeout=max(1.0, float(self.settings.agent_run_timeout_seconds)))
-                except asyncio.TimeoutError as exc:
-                    raise TimeoutError(f"agent {name} exceeded {self.settings.agent_run_timeout_seconds:g}s runtime limit") from exc
+                agent_task = asyncio.create_task(self.agents[name].run(), name=f"agent:{name}:{run_id}")
+                done, _ = await asyncio.wait(
+                    {agent_task},
+                    timeout=max(1.0, float(self.settings.agent_run_timeout_seconds)),
+                )
+                if not done:
+                    agent_task.cancel()
+                    self._track_orphaned_agent_task(name, agent_task)
+                    raise TimeoutError(
+                        f"agent {name} exceeded {self.settings.agent_run_timeout_seconds:g}s runtime limit"
+                    )
+                result = agent_task.result()
                 # Save snapshots before events so later agents can compare immediately.
                 for key, data in result.snapshots:
                     self.db.save_snapshot(name, key, data, datetime.now(timezone.utc).isoformat())
@@ -198,6 +223,9 @@ class ControlCenter:
                     log.warning("decision refresh after %s failed: %s", name, exc)
                 return {"agent": name, "status": "ok", "events": event_ids, "actions": action_ids, "snapshots": len(result.snapshots)}
             except asyncio.CancelledError:
+                if agent_task is not None and not agent_task.done():
+                    agent_task.cancel()
+                    self._track_orphaned_agent_task(name, agent_task)
                 try:
                     self.db.finish_run(
                         run_id,
@@ -225,6 +253,23 @@ class ControlCenter:
                 except Exception:
                     pass
                 return {"agent": name, "status": "error", "error": str(e)}
+
+    def _track_orphaned_agent_task(self, name: str, task: asyncio.Task) -> None:
+        """Retain a cancelled task that may suppress cancellation until it exits."""
+        orphaned = getattr(self, "_orphaned_agent_tasks", None)
+        if orphaned is None:
+            orphaned = self._orphaned_agent_tasks = {}
+        orphaned[name] = task
+
+        def clear_when_done(completed: asyncio.Task) -> None:
+            if orphaned.get(name) is completed:
+                orphaned.pop(name, None)
+            try:
+                completed.exception()
+            except BaseException:
+                pass
+
+        task.add_done_callback(clear_when_done)
 
     async def run_all_once(self) -> list[dict[str, Any]]:
         if self._run_all_lock.locked():
