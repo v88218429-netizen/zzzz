@@ -28,9 +28,9 @@ CLIENT_HINT = os.environ.get("FBS_CLIENT", "").strip().upper()
 BATCH_SIZE = int(os.environ.get("FBS_BATCH_SIZE", "10"))
 if not 1 <= BATCH_SIZE <= 1000:
     raise RuntimeError("FBS_BATCH_SIZE_INVALID")
-INGEST_ATTEMPTS = 10  # Retry window exceeds the seven-minute per-client lease before abandoning an idempotent batch
-NETWORK_FAILURE_LIMIT = INGEST_ATTEMPTS  # Keep retrying the exact idempotent batch after a lost response
-BRIDGE_INGEST_TIMEOUT = 330  # Return before Apps Script six-minute ceiling; retry only after bounded delay
+INGEST_ATTEMPTS = 8  # Fast lock-busy responses get a bounded retry window
+NETWORK_FAILURE_LIMIT = 2  # Retry one ambiguous response only after the seven-minute lease can expire
+BRIDGE_INGEST_TIMEOUT = 355  # Leave a small margin below the Apps Script six-minute ceiling
 TIMEOUT = 120
 
 
@@ -303,11 +303,11 @@ def ingest(client: str, orders: list[dict]) -> dict:
                     # Ingest is an upsert keyed by WB order ID. Repeating this exact
                     # batch after a lost response is idempotent and recovers lost replies.
                     network_failures += 1
-                    if attempt == INGEST_ATTEMPTS:
+                    if attempt == INGEST_ATTEMPTS or network_failures >= NETWORK_FAILURE_LIMIT:
                         raise RuntimeError("FBS_INGEST_OUTCOME_UNCERTAIN_AFTER_IDEMPOTENT_RETRIES") from None
                     failure_match = re.match(r"HTTP_(\d{3})", reason)
                     failure_class = ("HTTP_" + failure_match.group(1)) if failure_match else reason
-                    retry_wait_seconds = min(180, 90 * network_failures)
+                    retry_wait_seconds = 430
                     print("FBS_INGEST_RETRY=" + str(attempt) + ":" + failure_class +
                           ":SAME_IDEMPOTENT_BATCH:WAIT_SECONDS=" + str(retry_wait_seconds), flush=True)
                     time.sleep(retry_wait_seconds)
