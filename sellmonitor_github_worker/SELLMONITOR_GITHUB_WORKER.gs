@@ -6325,14 +6325,21 @@ function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId){
     var oldFormula=sh.getRange(1,1).getFormula();
     if(sh.getRange(1,1).getNote()==='WB_RNP_BASE_V1')return {rows:0,columns:spec.baseCols,shiftedDayAxis:false,alreadyRestored:true};
     if(!oldFormula&&String(sh.getRange(2,1).getDisplayValue()||'')==='Уровень'){
-      var haveRows=sh.getLastRow(),midRow=Math.max(3,Math.floor(haveRows/2));
-      var headCheck=sh.getRange(3,1,1,Math.min(spec.baseCols,13)).getValues()[0];
-      var midCheck=sh.getRange(midRow,1,1,Math.min(spec.baseCols,13)).getValues()[0];
-      var tailCheck=sh.getRange(Math.max(3,haveRows),1,1,Math.min(spec.baseCols,13)).getValues()[0];
-      if(haveRows>3&&String(headCheck[0]||'')==='МАГАЗИН'&&String(headCheck[8]||'').trim()&&String(midCheck[8]||'').trim()&&String(tailCheck[8]||'').trim()){
-        sh.getRange(1,1).setNote('WB_RNP_BASE_V1');
-        if(sh.getRange(1,1).getNote()!=='WB_RNP_BASE_V1')throw new Error('WB_RNP_BASE_MARKER_READBACK_FAILED:'+spec.name);
-        return {rows:haveRows,columns:spec.baseCols,shiftedDayAxis:false,alreadyRestored:true,validatedExisting:true};
+      var haveRows=sh.getLastRow(),baseLastRow=2;
+      if(haveRows>2){
+        var metricCells=sh.getRange(3,9,haveRows-2,1).getDisplayValues();
+        for(var mi=metricCells.length-1;mi>=0;mi--)if(String(metricCells[mi][0]||'').trim()){baseLastRow=mi+3;break;}
+      }
+      if(baseLastRow>3){
+        var midRow=Math.floor((3+baseLastRow)/2);
+        var headCheck=sh.getRange(3,1,1,Math.min(spec.baseCols,13)).getValues()[0];
+        var midCheck=sh.getRange(midRow,1,1,Math.min(spec.baseCols,13)).getValues()[0];
+        var tailCheck=sh.getRange(baseLastRow,1,1,Math.min(spec.baseCols,13)).getValues()[0];
+        if(String(headCheck[0]||'')==='МАГАЗИН'&&String(headCheck[8]||'').trim()&&String(midCheck[8]||'').trim()&&String(tailCheck[8]||'').trim()){
+          sh.getRange(1,1).setNote('WB_RNP_BASE_V1');
+          if(sh.getRange(1,1).getNote()!=='WB_RNP_BASE_V1')throw new Error('WB_RNP_BASE_MARKER_READBACK_FAILED:'+spec.name);
+          return {rows:baseLastRow,columns:spec.baseCols,shiftedDayAxis:false,alreadyRestored:true,validatedExisting:true};
+        }
       }
     }
     var src=ss.getSheetByName(spec.source),externalMode=false;
