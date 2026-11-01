@@ -2,9 +2,9 @@
   "schema": 1,
   "channels": {
     "stable": {
-      "version": "1.1.37",
+      "version": "1.1.38",
       "channel": "stable",
-      "notes": "Исправлено чтение манифеста напрямую из GitHub Raw; контроль целостности файлов по SHA-256 сохранён.",
+      "notes": "Исправлена загрузка актуальных зашифрованных архивов GitHub по проверенному неизменяемому коммиту; отказ при непроверенном снимке.",
       "minimum_current_version": "1.0.0",
       "files": [
         {
@@ -19,8 +19,8 @@
         },
         {
           "path": "RELEASE_NOTES.md",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/9e57ff106b5a1934f71f9ee635b1dd946af6c843/wb_ai_manager/source/RELEASE_NOTES.md",
-          "sha256": "1a4e5fd539265a6c95836295b27f61c8d7e1c1526db6f36f386a5b5a66392056"
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/3a7b278bde69642c2193ce9044d48c5120104977/wb_ai_manager/source/RELEASE_NOTES.md",
+          "sha256": "a2191bab2273410468728120debb1a96882c00d8dd784c9d0a1d7856241aee80"
         },
         {
           "path": "START_WB_AI_MANAGER.command",
@@ -30,8 +30,8 @@
         },
         {
           "path": "VERSION",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/9e57ff106b5a1934f71f9ee635b1dd946af6c843/wb_ai_manager/source/VERSION",
-          "sha256": "51fa819e127a14961ff10d59cdddd651d436b52b3103002b7a88121b321bd4da"
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/3a7b278bde69642c2193ce9044d48c5120104977/wb_ai_manager/source/VERSION",
+          "sha256": "ed2fa6a3c02311fdd6e6843368e137f4a7cb62d9fd500af6fef41c2b3c014b38"
         },
         {
           "path": "docs/AUTO_UPDATE.md",
@@ -50,13 +50,13 @@
         },
         {
           "path": "plugin.json",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/9e57ff106b5a1934f71f9ee635b1dd946af6c843/wb_ai_manager/source/plugin.json",
-          "sha256": "e707cf27773a5519ba8f9237a87def6a3859c36582b48fc7469acf5f1c06d80f"
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/3a7b278bde69642c2193ce9044d48c5120104977/wb_ai_manager/source/plugin.json",
+          "sha256": "57f7c8ed968307295ba34ec7277ddfd077287d92e3c39a40b70224e928416903"
         },
         {
           "path": "pyproject.toml",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/9e57ff106b5a1934f71f9ee635b1dd946af6c843/wb_ai_manager/source/pyproject.toml",
-          "sha256": "679385409ad4c29a64a5339008d99e5990a2dc65abfa0a37c52f36cbe9564380"
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/3a7b278bde69642c2193ce9044d48c5120104977/wb_ai_manager/source/pyproject.toml",
+          "sha256": "656318da2e2987a02fd58a9fb38660baf4c311f8b4b1bce47684e4fc134a7a09"
         },
         {
           "path": "scripts/auto_refresh_sheets.py",
@@ -141,8 +141,8 @@
         },
         {
           "path": "src/wb_control_center/__init__.py",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/9e57ff106b5a1934f71f9ee635b1dd946af6c843/wb_ai_manager/source/src/wb_control_center/__init__.py",
-          "sha256": "1e244ebaf5a102429376b1f03aca5fbf80c13f5b1c3f1999c474d03403192c26"
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/3a7b278bde69642c2193ce9044d48c5120104977/wb_ai_manager/source/src/wb_control_center/__init__.py",
+          "sha256": "7e3df7008b636df4ce35602386c31ff4888bb284e561f7611f5c6067688b8e1d"
         },
         {
           "path": "src/wb_control_center/__main__.py",
@@ -476,8 +476,8 @@
         },
         {
           "path": "src/wb_control_center/worker_source.py",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/f1b3c14891576c5f92acdd31155590be2183ba9c/wb_ai_manager/source/src/wb_control_center/worker_source.py",
-          "sha256": "1456c9b4e15ca7af900b038d263cc28a480c01f0c2c1f4dad2cea572ce947200"
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/3a7b278bde69642c2193ce9044d48c5120104977/wb_ai_manager/source/src/wb_control_center/worker_source.py",
+          "sha256": "20bd805271c657c0dc096ffda63a461c441805ad53896bfec73dc8828db3754a"
         },
         {
           "path": "src/wb_control_center/cluster_advisor.py",
