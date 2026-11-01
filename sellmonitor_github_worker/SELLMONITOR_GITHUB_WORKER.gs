@@ -6546,11 +6546,15 @@ function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId){
       refreshHeads();
     });
     var rowCount=Math.max(0,sh.getLastRow()-2),meta=rowCount?sh.getRange(3,1,rowCount,13).getValues():[];
-    var matrixLast=sh.getLastRow(),matrixWidth=Math.max(0,lastCol-startCol+1),currentMatrix=matrixWidth?sh.getRange(1,startCol,matrixLast,matrixWidth).getValues():[];
+    var matrixLast=sh.getLastRow(),targetCols=[];
+    targets.forEach(function(p){var ps=positions[p]||[];if(ps.length)targetCols.push(ps[0]);});
+    var matrixStartCol=targetCols.length?Math.min.apply(null,targetCols):startCol;
+    var matrixEndCol=targetCols.length?Math.max.apply(null,targetCols):startCol-1;
+    var currentMatrix=matrixEndCol>=matrixStartCol?sh.getRange(1,matrixStartCol,matrixLast,matrixEndCol-matrixStartCol+1).getValues():[];
     var updates=[],written=0,archives=0,periodCount=0;
     targets.sort().forEach(function(period){
       var col=(positions[period]||[])[0];if(!col)throw new Error('WB_RNP_DATE_AXIS_MISSING:'+spec.name+':'+period);
-      var last=matrixLast,current=currentMatrix.map(function(r){return r[col-startCol];}),next=current.slice();
+      var last=matrixLast,current=currentMatrix.map(function(r){return r[col-matrixStartCol];}),next=current.slice();
       var pstat=periodStatus[period]||{partial:false,exact:0,other:0};
       next[0]=pstat.partial?'🟡 ПРЕДВ.':(pstat.other?'🟠 НЕПОЛНЫЙ':'🟢 ФАКТ');
       next[1]=date_(period);
