@@ -1,4 +1,4 @@
-# RNP matrices refreshed from verified summary facts; deployment-safe single-store repair check v4
+# Split finance summary, RNP matrices, and dashboard into readback-verified phases; deployment-safe single-store check v5
 # Queue a focused Hoz metadata-boundary verification after the worker fix.
 # Queue Sanych 2026-only chunked-source revalidation after the worker fix.
 # Queue AIR readback revalidation after the transient bridge disconnect.
