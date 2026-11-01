@@ -71,19 +71,20 @@ function wbFbsSupplyFetchPage_(token, cursor) {
     '&next=' + encodeURIComponent(cursor || 0);
 
   var attempts = 0;
-  while (attempts < 5) {
+  while (attempts < 2) {
     attempts++;
     var res = null;
     try {
       res = UrlFetchApp.fetch(url, {
         method: 'get',
         headers: {Authorization: token},
-        muteHttpExceptions: true
+        muteHttpExceptions: true,
+        timeoutSeconds: 30
       });
     } catch (fetchError) {
       var transportMessage = String(fetchError && fetchError.message ? fetchError.message : fetchError);
-      if (attempts >= 5) {
-        throw new Error('WB_FBS_DIRECT: supplies transport failure after 5 attempts: ' + transportMessage.slice(0, 240));
+      if (attempts >= 2) {
+        throw new Error('WB_FBS_DIRECT: supplies transport failure after 2 attempts: ' + transportMessage.slice(0, 240));
       }
       var transportWait = Math.min(15000, 1000 * Math.pow(2, attempts - 1));
       Logger.log('WB_FBS_DIRECT_SUPPLY_RETRY type=transport attempt=' + attempts + ' wait_ms=' + transportWait);
@@ -92,7 +93,7 @@ function wbFbsSupplyFetchPage_(token, cursor) {
     }
     var code = res.getResponseCode();
 
-    if ((code === 408 || code === 429 || code >= 500) && attempts < 5) {
+    if ((code === 408 || code === 429 || code >= 500) && attempts < 2) {
       var headers = res.getHeaders ? res.getHeaders() : {};
       var retry = Number(headers['Retry-After'] || headers['retry-after'] || Math.pow(2, attempts - 1));
       var retryWait = Math.max(1000, Math.min(15000, (isFinite(retry) ? retry : 2) * 1000));
@@ -121,11 +122,17 @@ function wbFbsSupplyFetchPage_(token, cursor) {
 
 function wbFbsSupplyFetchAll_(token) {
   var cursor = 0, seen = {}, byId = {}, ordered = [], scanned = 0, pages = 0, complete = false;
+  var startedAt = Date.now(), maxDurationMs = 240000, maxPageRequestMs = 75000;
   for (var page = 0; page < WB_FBS_DIRECT_SUPPLY_CFG.maxPages; page++) {
+    if (Date.now() - startedAt + maxPageRequestMs > maxDurationMs) {
+      throw new Error('WB_FBS_DIRECT: supplies pagination TIMEOUT budget exceeded');
+    }
     var cursorKey = String(cursor);
     if (seen[cursorKey]) throw new Error('WB_FBS_DIRECT: repeated supplies cursor');
     seen[cursorKey] = true;
+    var pageStartedAt = Date.now();
     var payload = wbFbsSupplyFetchPage_(token, cursor);
+    Logger.log('WB_FBS_DIRECT_SUPPLY_PAGE page=' + (page + 1) + ' supplies=' + ((payload.supplies || []).length) + ' elapsed_ms=' + (Date.now() - pageStartedAt));
     var supplies = payload.supplies || [];
     pages++;
     scanned += supplies.length;
