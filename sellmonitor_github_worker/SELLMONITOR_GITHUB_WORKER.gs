@@ -6098,23 +6098,21 @@ function sellmonitorGithubWbInnerRowKey_(grain,period,storeId,nmId){
   return grain+'|'+period+'|'+storeId+'|'+String(nmId||'');
 }
 
-function sellmonitorGithubWbInnerBuildRows_(sourceRows,headers,storeId,tz){
-  var metricHeaders=headers.slice(8,38), items={}, datesByProduct={}, dateSeen={};
+function sellmonitorGithubWbInnerBuildRows_(sourceRows,headers,storeId,tz,dailyOnly){
+  var metricHeaders=headers.slice(8,38), items={};
   var sourceMin='',sourceMax='',factualDays={},partialDays={},sourceRowsCount=0;
   var idIx=headers.indexOf('nmId'), articleIx=headers.indexOf('seller_article'), dayIx=headers.indexOf('period_from');
   var trustIx=headers.indexOf('trust_status'), sourceIx=headers.indexOf('source'), loadedIx=headers.indexOf('loaded_at');
-  if(idIx<0||articleIx<0||dayIx<0||trustIx<0||sourceIx<0||loadedIx<0)throw new Error('WB_INNER_FACTS_SCHEMA_MISMATCH');
+  var recordIx=headers.indexOf('record_key'),groupIx=headers.indexOf('product_group'),subgroupIx=headers.indexOf('product_subgroup');
+  if(idIx<0||articleIx<0||dayIx<0||trustIx<0||sourceIx<0||loadedIx<0||recordIx<0||groupIx<0||subgroupIx<0)throw new Error('WB_INNER_FACTS_SCHEMA_MISMATCH');
   sourceRows.forEach(function(r){
     var day=sellmonitorGithubWbInnerDateKey_(r[dayIx],tz),nm=String(r[idIx]||'').trim(),shop=String(r[0]||'').trim();
     if(!day||!nm||shop!==storeId)return;
-    var trust=String(r[trustIx]||'').trim(), recordKey=String(r[headers.indexOf('record_key')]||'').trim();
+    var trust=String(r[trustIx]||'').trim(), recordKey=String(r[recordIx]||'').trim();
     if(!recordKey)throw new Error('WB_INNER_RECORD_KEY_MISSING');
     if(!items[recordKey]){
       var m=r.slice(8,38).map(function(v){return v===''||v==null?'':(typeof v==='number'?v:(isFinite(Number(v))?Number(v):''));});
-      items[recordKey]={day:day,nm:nm,article:String(r[articleIx]||''),productGroup:String(r[headers.indexOf('product_group')]||''),productSubgroup:String(r[headers.indexOf('product_subgroup')]||''),metrics:m,trust:trust,source:String(r[sourceIx]||''),loaded:r[loadedIx]||'',recordKey:recordKey};
-      var dkey=day+'|'+nm;
-      if(!datesByProduct[dkey])datesByProduct[dkey]=[];
-      datesByProduct[dkey].push(items[recordKey]);
+      items[recordKey]={day:day,nm:nm,article:String(r[articleIx]||''),productGroup:String(r[groupIx]||''),productSubgroup:String(r[subgroupIx]||''),metrics:m,trust:trust,source:String(r[sourceIx]||''),loaded:r[loadedIx]||'',recordKey:recordKey};
       sourceRowsCount++;
       if(!sourceMin||day<sourceMin)sourceMin=day;
       if(!sourceMax||day>sourceMax)sourceMax=day;
@@ -6127,6 +6125,7 @@ function sellmonitorGithubWbInnerBuildRows_(sourceRows,headers,storeId,tz){
   Object.keys(items).forEach(function(k){
     var x=items[k],periodEnd=sellmonitorGithubWbInnerAddDays_(x.day,0);
     dayRows.push(['ДЕНЬ',x.day,periodEnd,1,1,storeId,x.nm,x.article,x.productGroup,x.productSubgroup].concat(x.metrics,[x.trust,x.source,x.loaded,sellmonitorGithubWbInnerRowKey_('D',x.day,storeId,x.nm)]));
+    if(dailyOnly)return;
     var ws=sellmonitorGithubWbInnerWeekStart_(x.day),ms=sellmonitorGithubWbInnerMonthStart_(x.day),wk=ws+'|'+x.nm,mk=ms+'|'+x.nm;
     if(!weekGroups[wk])weekGroups[wk]={grain:'НЕДЕЛЯ',start:ws,end:sellmonitorGithubWbInnerAddDays_(ws,6),store:storeId,nm:x.nm,article:x.article,group:x.productGroup,subgroup:x.productSubgroup,items:[],dates:{}};
     if(!monthGroups[mk])monthGroups[mk]={grain:'МЕСЯЦ',start:ms,end:Utilities.formatDate(new Date(Date.UTC(Number(ms.slice(0,4)),Number(ms.slice(5,7)),0)),'UTC','yyyy-MM-dd'),store:storeId,nm:x.nm,article:x.article,group:x.productGroup,subgroup:x.productSubgroup,items:[],dates:{}};
@@ -6156,8 +6155,8 @@ function sellmonitorGithubWbInnerBuildRows_(sourceRows,headers,storeId,tz){
     var status=allExact&&days===expectedDays?'FACTUAL_COMPLETE':(anyPartial?'PRELIMINARY':'PARTIAL_COVERAGE');
     return [grain,g.start,g.end,days,expectedDays,g.store,g.nm,g.article,g.group,g.subgroup].concat(vals,[status,source,loaded,sellmonitorGithubWbInnerRowKey_(grain==='НЕДЕЛЯ'?'W':'M',g.start,g.store,g.nm)]);
   }
-  var weekRows=Object.keys(weekGroups).map(function(k){return rollup_(weekGroups[k],'НЕДЕЛЯ');});
-  var monthRows=Object.keys(monthGroups).map(function(k){return rollup_(monthGroups[k],'МЕСЯЦ');});
+  var weekRows=dailyOnly?[]:Object.keys(weekGroups).map(function(k){return rollup_(weekGroups[k],'НЕДЕЛЯ');});
+  var monthRows=dailyOnly?[]:Object.keys(monthGroups).map(function(k){return rollup_(monthGroups[k],'МЕСЯЦ');});
   dayRows.sort(function(a,b){return String(a[1])===String(b[1])?String(a[6]).localeCompare(String(b[6])):String(a[1]).localeCompare(String(b[1]));});
   weekRows.sort(function(a,b){return String(a[1])===String(b[1])?String(a[6]).localeCompare(String(b[6])):String(a[1]).localeCompare(String(b[1]));});
   monthRows.sort(function(a,b){return String(a[1])===String(b[1])?String(a[6]).localeCompare(String(b[6])):String(a[1]).localeCompare(String(b[1]));});
@@ -6288,7 +6287,7 @@ function sellmonitorGithubPublishWbInnerPeriods_(onlyStore,requestedPhase){
         sourceIds.push(p.fileId);sourceChecks.push({part_id:p.partId,rows:partRows,distinct:Object.keys(partKeys).length,checksum:p.checksum});
       });
       if(!headers||!allRows.length)throw new Error('WB_INNER_SOURCE_FACTS_EMPTY:'+shop);
-      var built=sellmonitorGithubWbInnerBuildRows_(allRows,headers,shop,Session.getScriptTimeZone());
+      var built=sellmonitorGithubWbInnerBuildRows_(allRows,headers,shop,Session.getScriptTimeZone(),!!dayMonthMatch);
       var metricHeaders=built.metricHeaders,head=['Период','Начало','Конец','Дней с данными','Ожидаемо дней','Магазин ID','nmId','Артикул продавца','Группа','Подгруппа'].concat(metricHeaders,['Статус источника','Источник','Загружено','Ключ']);
       var ss=SpreadsheetApp.openById(cfg.id);
       var day=sellmonitorGithubWbInnerEnsureSheet_(ss,SMC_WB_INNER_SUMMARY_V1.tabs.day,head);
@@ -6498,7 +6497,8 @@ function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId,onl
     if(code==='cr_sale_order')return ratio('paid_order_qty','orders_qty');
     return null;
   }
-  function supported(code){return val({length:built.metricHeaders.length+10},code)!==null;}
+  var supportedCache=Object.create(null);
+  function supported(code){var k=String(code||'');if(!Object.prototype.hasOwnProperty.call(supportedCache,k))supportedCache[k]=val({length:built.metricHeaders.length+10},k)!==null;return supportedCache[k];}
   function aggregate(list,code){
     if(!list||!list.length)return null;
     var directFields={
