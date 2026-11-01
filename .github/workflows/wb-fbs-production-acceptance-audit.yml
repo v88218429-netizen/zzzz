@@ -48,7 +48,8 @@ jobs:
                    "Accept":"application/vnd.github+json",
                    "X-GitHub-Api-Version":"2022-11-28"}
           names={"WB FBS recovery pass 1","WB FBS recovery pass 2","WB FBS recovery pass 3",
-                 "WB FBS GitHub recovery","WB FBS Sanych targeted recovery",
+                 "WB FBS GitHub recovery","WB FBS automatic freshness repair",
+                 "WB FBS Sanych targeted recovery",
                  "WB FBS retry failed recovery windows","WB FBS supply sync via GitHub",
                  "WB Sellmonitor finance summaries"}
           url="https://api.github.com/repos/"+repo+"/actions/runs?per_page=100"
