@@ -157,6 +157,33 @@ jobs:
           print("LIVE_PROJECT_BASELINE_FILES=" + str(len(baseline)))
           PY
 
+      - name: Inspect FBS audit source via GitHub
+        if: github.event_name == 'push' && github.event.head_commit.message == 'Inspect FBS audit source via GitHub'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import pathlib, re
+          root=pathlib.Path("/tmp/sellmonitor-gh-worker")
+          files=[p for p in root.rglob("*") if p.is_file() and p.suffix in (".gs",".js",".ts")]
+          print("LIVE_SCRIPT_FILES="+",".join(sorted(str(p.relative_to(root)) for p in files)))
+          pattern=re.compile(r"getChartType|fbs_acceptance_audit|AcceptanceAudit|acceptanceAudit",re.I)
+          hits=0
+          for path in files:
+              lines=path.read_text(encoding="utf-8",errors="replace").splitlines()
+              indexes=[i for i,line in enumerate(lines) if pattern.search(line)]
+              if not indexes: continue
+              print("FBS_AUDIT_SOURCE_FILE="+str(path.relative_to(root)))
+              for i in indexes:
+                  hits+=1
+                  start=max(0,i-5); end=min(len(lines),i+9)
+                  print("SOURCE_CONTEXT line="+str(i+1))
+                  for n in range(start,end):
+                      print(str(n+1)+":"+lines[n][:400])
+          print("FBS_AUDIT_SOURCE_HITS="+str(hits))
+          if hits==0: raise SystemExit("FBS_AUDIT_SOURCE_NOT_FOUND")
+          PY
+
       - name: Install worker and master hook
         shell: bash
         run: |
@@ -413,7 +440,7 @@ jobs:
           PY
 
       - name: Verify Apps Script version capacity and active deployments
-        if: github.event_name != 'push' || github.event.head_commit.message != 'Run Ozon export continuation via GitHub' && !contains(fromJSON('["Diagnose Ozon export status via GitHub","Repair and resume Ozon export via GitHub"]'), github.event.head_commit.message)
+        if: github.event_name != 'push' || github.event.head_commit.message != 'Run Ozon export continuation via GitHub' && !contains(fromJSON('["Diagnose Ozon export status via GitHub","Repair and resume Ozon export via GitHub","Inspect FBS audit source via GitHub"]'), github.event.head_commit.message)
         shell: bash
         run: |
           set -euo pipefail
@@ -446,7 +473,7 @@ jobs:
           PY
 
       - name: Push and redeploy stable adapter
-        if: github.event_name != 'push' || github.event.head_commit.message == 'Run Ozon export continuation via GitHub' || !contains(fromJSON('["Run Ozon export continuation via GitHub","Diagnose Ozon export status via GitHub","Repair and resume Ozon export via GitHub"]'), github.event.head_commit.message)
+        if: github.event_name != 'push' || github.event.head_commit.message == 'Run Ozon export continuation via GitHub' || !contains(fromJSON('["Run Ozon export continuation via GitHub","Diagnose Ozon export status via GitHub","Repair and resume Ozon export via GitHub","Inspect FBS audit source via GitHub"]'), github.event.head_commit.message)
         shell: bash
         run: |
           set -euo pipefail
@@ -491,7 +518,7 @@ jobs:
           PY
 
       - name: Verify protected bridge auth
-        if: github.event_name != 'push' || !contains(fromJSON('["Run Ozon export continuation via GitHub","Diagnose Ozon export status via GitHub","Repair and resume Ozon export via GitHub"]'), github.event.head_commit.message)
+        if: github.event_name != 'push' || !contains(fromJSON('["Run Ozon export continuation via GitHub","Diagnose Ozon export status via GitHub","Repair and resume Ozon export via GitHub","Inspect FBS audit source via GitHub"]'), github.event.head_commit.message)
         shell: bash
         run: |
           set -euo pipefail
@@ -542,7 +569,7 @@ jobs:
           PY
 
       - name: Seed client WB tokens from GitHub Secrets
-        if: github.event_name != 'push' || !contains(fromJSON('["Run Ozon export continuation via GitHub","Diagnose Ozon export status via GitHub","Repair and resume Ozon export via GitHub"]'), github.event.head_commit.message)
+        if: github.event_name != 'push' || !contains(fromJSON('["Run Ozon export continuation via GitHub","Diagnose Ozon export status via GitHub","Repair and resume Ozon export via GitHub","Inspect FBS audit source via GitHub"]'), github.event.head_commit.message)
         shell: bash
         run: |
           set -euo pipefail
@@ -696,7 +723,7 @@ jobs:
           PY
 
       - name: Pull back and verify live code
-        if: github.event_name != 'push' || !contains(fromJSON('["Run Ozon export continuation via GitHub","Diagnose Ozon export status via GitHub","Repair and resume Ozon export via GitHub"]'), github.event.head_commit.message)
+        if: github.event_name != 'push' || !contains(fromJSON('["Run Ozon export continuation via GitHub","Diagnose Ozon export status via GitHub","Repair and resume Ozon export via GitHub","Inspect FBS audit source via GitHub"]'), github.event.head_commit.message)
         shell: bash
         run: |
           set -euo pipefail
