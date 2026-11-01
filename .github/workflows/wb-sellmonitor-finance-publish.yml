@@ -45,11 +45,23 @@ jobs:
           set -euo pipefail
           python - <<'PY'
           import http.client, json, os, time, urllib.error, urllib.request
+          from datetime import date
 
           url = "https://script.google.com/macros/s/" + os.environ["WEBAPP_DEPLOYMENT_ID"] + "/exec"
           selected_store = os.environ.get("PUBLISH_ONLY_STORE", "").strip()
           expected = (selected_store,) if selected_store in ("air_wb", "hozyayushka_wb", "sanych_wb") else ("air_wb", "hozyayushka_wb", "sanych_wb")
-          phases = ("summary", "rnp_day", "rnp_week", "rnp_month", "dashboard")
+          today = date.today()
+          end_year, end_month = today.year, today.month + 1
+          if end_month == 13:
+              end_year, end_month = end_year + 1, 1
+          months = []
+          year, month = 2026, 9
+          while (year, month) <= (end_year, end_month):
+              months.append(f"rnp_day_{year}_{month:02d}")
+              month += 1
+              if month == 13:
+                  year, month = year + 1, 1
+          phases = ("summary",) + tuple(months) + ("rnp_week", "rnp_month", "dashboard")
           print("PUBLISH_SCOPE=" + (selected_store or "all_stores"), flush=True)
           verified = []
           errors = []
@@ -125,14 +137,14 @@ jobs:
                       })
                   elif phase.startswith("rnp_"):
                       rnp = item.get("rnp") or {}
-                      grain = phase[4:]
+                      grain = "day" if phase.startswith("rnp_day_") else phase[4:]
                       matrices = rnp.get("matrices") or []
                       if rnp.get("ok") is not True or rnp.get("readback") is not True or len(matrices) != 1 or matrices[0].get("sheet") != {"day":"01_Дни","week":"02_Недели","month":"03_Месяцы"}[grain]:
                           last = "RNP matrix readback mismatch: " + json.dumps(rnp, ensure_ascii=False)[:1200]
                           errors.append("WB finance RNP readback failed for " + store_id + "/" + grain + ": " + last)
                           print("STORE=" + store_id + " PHASE=" + phase + " OK=no ERROR=" + last, flush=True)
                           break
-                      store_result.setdefault("rnp", {})[grain] = matrices[0]
+                      store_result.setdefault("rnp", {}).setdefault(grain, []).append(matrices[0])
                   else:
                       dashboard = item.get("dashboard") or {}
                       if dashboard.get("ok") is not True:
