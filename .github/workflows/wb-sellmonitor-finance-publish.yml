@@ -1,4 +1,5 @@
 # RNP matrices refreshed from verified summary facts; deployment-safe single-store repair check v4
+# Queue a focused Hoz metadata-boundary verification after the worker fix.
 name: WB Sellmonitor finance summaries
 
 on:
