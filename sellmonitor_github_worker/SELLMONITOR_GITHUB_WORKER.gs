@@ -4,7 +4,7 @@
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.76',
+  VERSION: 'github-worker-1.3.77',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -6594,9 +6594,11 @@ function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId,onl
       var added=missingByAnchor[insertAt].sort().reverse(),count=added.length;
       if(insertAt<=lastCol)sh.insertColumnsBefore(insertAt,count);else sh.insertColumnsAfter(Math.max(startCol-1,lastCol),count);
       var styleSource=insertAt>startCol?insertAt-1:(lastCol>=startCol?insertAt+count:0);
-      if(styleSource)for(var ni=0;ni<count;ni++)sh.getRange(1,styleSource,sh.getMaxRows(),1).copyTo(sh.getRange(1,insertAt+ni,sh.getMaxRows(),1),SpreadsheetApp.CopyPasteType.PASTE_FORMAT,false);
       var newHeaders=sh.getRange(2,insertAt,1,count);
       newHeaders.setValues([added.map(function(period){return date_(period);})]);
+      newHeaders.setNumberFormat(spec.format);
+      SpreadsheetApp.flush();
+      if(styleSource)sh.getRange(1,styleSource,sh.getMaxRows(),1).copyFormatToRange(sh.getSheetId(),insertAt,insertAt+count-1,1,sh.getMaxRows());
       newHeaders.setNumberFormat(spec.format);
       SpreadsheetApp.flush();
       refreshHeads();
