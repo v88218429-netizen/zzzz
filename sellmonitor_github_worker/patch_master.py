@@ -320,6 +320,29 @@ function sellmonitorGithubFbsAcceptanceAuditV1_(body) {
             raise SystemExit("FBS audit insertion anchor missing")
         worker_text = worker_text.replace(audit_anchor, audit_code + "\n" + audit_anchor, 1)
         print("FBS_ACCEPTANCE_AUDIT_FUNCTION=patched")
+    old_chart_audit = "        chartRows.push({title:title,type:String(ch.getChartType()),ranges:ranges});"
+    if old_chart_audit in worker_text:
+        chart_audit_patch = """        var chartType='UNKNOWN';
+        try{
+          if(ch&&typeof ch.getChartType==='function')chartType=String(ch.getChartType());
+        }catch(chartTypeError){
+          chartType='ERROR:'+String(chartTypeError&&chartTypeError.message||chartTypeError).slice(0,120);
+        }
+        if(chartType==='UNKNOWN'){
+          try{
+            var chartBuilder=ch&&typeof ch.modify==='function'?ch.modify():null;
+            if(chartBuilder&&typeof chartBuilder.getChartType==='function')chartType=String(chartBuilder.getChartType());
+          }catch(chartBuilderError){
+            chartType='ERROR:'+String(chartBuilderError&&chartBuilderError.message||chartBuilderError).slice(0,120);
+          }
+        }
+        chartRows.push({title:title,type:chartType,ranges:ranges});"""
+        worker_text = worker_text.replace(old_chart_audit, chart_audit_patch, 1)
+        print("FBS_CHART_AUDIT_FALLBACK=patched")
+    elif "chartRows.push({title:title,type:chartType,ranges:ranges});" in worker_text:
+        print("FBS_CHART_AUDIT_FALLBACK=already_present")
+    else:
+        raise SystemExit("FBS chart audit patch anchor missing")
     audit_route_marker = "FBS_ACCEPTANCE_AUDIT_ROUTE_V1"
     post_anchor = "    sellmonitorGithubWebAuth_(body.token || body.key);"
     if audit_route_marker not in worker_text:
