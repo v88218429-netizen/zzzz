@@ -426,10 +426,17 @@ function wbFbsSupplySyncCore_(progress) {
   var orders=ss.getSheetByName(cfg.ordersSheet);
   if(!orders)throw new Error('WB_FBS_DIRECT: missing '+cfg.ordersSheet);
   var counts=continuing?null:wbFbsSupplyCountOrders_(orders);
-  var written=continuing?{totalRows:null,preservedNotReturned:null,preservedDuplicateRows:null}:
+  var written=continuing?{totalRows:null,preservedNotReturned:null,preservedDuplicateRows:null,readbackVerified:false}:
     wbFbsSupplyWriteSupplySheet_(ss,fetched.rows,counts,checkedAt);
   var backfill=wbFbsSupplyBackfillOrders_(ss,fetched.byId,continuing?{endRow:progress.nextEndRow}:null);
-  var unmatchedOrderSupplyIds=continuing?null:Object.keys(counts).filter(function(id){
+  // A resumed historical backfill may have been left by an older run that
+  // skipped the supply-sheet write. Refresh and read it back at the final
+  // chunk so a completed cabinet always has a verified current supply list.
+  if(continuing&&backfill.complete){
+    counts=wbFbsSupplyCountOrders_(orders);
+    written=wbFbsSupplyWriteSupplySheet_(ss,fetched.rows,counts,checkedAt);
+  }
+  var unmatchedOrderSupplyIds=continuing&&!backfill.complete?null:Object.keys(counts).filter(function(id){
     return !Object.prototype.hasOwnProperty.call(fetched.byId,id);
   }).length;
   SpreadsheetApp.flush();
