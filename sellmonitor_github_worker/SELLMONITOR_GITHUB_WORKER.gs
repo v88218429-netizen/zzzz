@@ -5504,10 +5504,10 @@ function sellmonitorGithubPublishOzonPerformanceDaily_(body) {
   var rnpSheet=ss.getSheetByName('00_РНП_магазин');
   if(!rnpSheet)throw new Error('OZON_PERF_RNP_NOTE_SHEET_MISSING:'+cfg.name);
   var oldRnpNote=String(rnpSheet.getRange('A2').getValue()||'');
-  var rnpNoteMatch=oldRnpNote.match(/Реклама доступна[\s\S]*?без SKU(?:\/offer_id)?\./);
-  if(!rnpNoteMatch)throw new Error('OZON_PERF_RNP_AD_NOTE_NOT_FOUND:'+cfg.name);
-  var newRnpNote=oldRnpNote.replace(rnpNoteMatch[0],
-    'Реклама доступна только по кампаниям; дневные данные '+coverageFrom+'–'+coverageTo+', без SKU/offer_id.');
+  var rnpNoteMatch=oldRnpNote.match(/Реклама доступна[^.]*\./);
+  var newAdNote='Реклама доступна только по кампаниям, без SKU/offer_id; дневные данные '+coverageFrom+'–'+coverageTo+'.';
+  var newRnpNote=rnpNoteMatch?oldRnpNote.replace(rnpNoteMatch[0],newAdNote):
+    (oldRnpNote?oldRnpNote+' '+newAdNote:newAdNote);
   if(oldRnpNote!==newRnpNote)helperArchive.push({sheet:'00_РНП_магазин',range:'A2',values:[oldRnpNote]});
   helperWrites.push({spec:{name:'00_РНП_магазин',kind:'rnpnote'},sh:rnpSheet,note:newRnpNote});
   var dailySheetTitle='Ozon Performance API / statistics/daily/json · кампании; доступные дни '+coverageFrom+'–'+coverageTo; 
