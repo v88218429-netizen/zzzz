@@ -1,4 +1,4 @@
-# Split finance phases; queue AIR single-store readback verification v6
+# Split finance phases; queue Hozyayushka single-store readback verification v7
 # Queue a focused Hoz metadata-boundary verification after the worker fix.
 # Queue Sanych 2026-only chunked-source revalidation after the worker fix.
 # Queue AIR readback revalidation after the transient bridge disconnect.
