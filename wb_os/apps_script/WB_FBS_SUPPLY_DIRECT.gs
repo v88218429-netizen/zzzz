@@ -64,6 +64,17 @@ function wbFbsSupplyToken_() {
   return token;
 }
 
+function wbFbsSupplySetStage_(stage, detail) {
+  try {
+    PropertiesService.getScriptProperties().setProperty('WB_FBS_DIRECT_STAGE', JSON.stringify({
+      client: String(WB_FBS_DIRECT_SUPPLY_CFG.client || ''),
+      stage: String(stage || ''),
+      at: new Date().toISOString(),
+      detail: String(detail || '').slice(0, 240)
+    }));
+  } catch (ignored) {}
+}
+
 function wbFbsSupplyFetchPage_(token, cursor) {
   var url =
     WB_FBS_DIRECT_SUPPLY_CFG.apiUrl +
@@ -131,7 +142,9 @@ function wbFbsSupplyFetchAll_(token) {
     if (seen[cursorKey]) throw new Error('WB_FBS_DIRECT: repeated supplies cursor');
     seen[cursorKey] = true;
     var pageStartedAt = Date.now();
+    wbFbsSupplySetStage_('WB_PAGE_REQUEST', 'page=' + (page + 1) + ' cursor=' + String(cursor));
     var payload = wbFbsSupplyFetchPage_(token, cursor);
+    wbFbsSupplySetStage_('WB_PAGE_RESPONSE', 'page=' + (page + 1) + ' supplies=' + ((payload.supplies || []).length) + ' elapsed_ms=' + (Date.now() - pageStartedAt));
     Logger.log('WB_FBS_DIRECT_SUPPLY_PAGE page=' + (page + 1) + ' supplies=' + ((payload.supplies || []).length) + ' elapsed_ms=' + (Date.now() - pageStartedAt));
     var supplies = payload.supplies || [];
     pages++;
@@ -427,14 +440,22 @@ function wbFbsSupplyWriteHealth_(ss, state, detail) {
 
 function wbFbsSupplySyncCore_(progress) {
   var cfg=WB_FBS_DIRECT_SUPPLY_CFG,ss=wbFbsSupplySpreadsheet_(),token=wbFbsSupplyToken_(),checkedAt=new Date();
+  wbFbsSupplySetStage_('CORE_START', 'continuing=' + Boolean(progress));
   progress=progress||null;
   var continuing=!!(progress&&progress.client===cfg.client&&Number(progress.nextEndRow)>=2);
+  wbFbsSupplySetStage_('FETCH_START', 'max_pages=' + WB_FBS_DIRECT_SUPPLY_CFG.maxPages);
   var fetched=wbFbsSupplyFetchAll_(token);
+  wbFbsSupplySetStage_('FETCH_DONE', 'pages=' + fetched.pageCount + ' supplies=' + fetched.rows.length);
   var orders=ss.getSheetByName(cfg.ordersSheet);
   if(!orders)throw new Error('WB_FBS_DIRECT: missing '+cfg.ordersSheet);
+  wbFbsSupplySetStage_('COUNT_ORDERS_START', 'continuing=' + continuing);
   var counts=continuing?null:wbFbsSupplyCountOrders_(orders);
+  wbFbsSupplySetStage_('COUNT_ORDERS_DONE', 'rows=' + (counts ? Object.keys(counts).length : 0));
+  wbFbsSupplySetStage_('SUPPLY_SHEET_WRITE_START', 'api_supplies=' + fetched.rows.length);
   var written=continuing?{totalRows:null,preservedNotReturned:null,preservedDuplicateRows:null,readbackVerified:false}:
     wbFbsSupplyWriteSupplySheet_(ss,fetched.rows,counts,checkedAt);
+  wbFbsSupplySetStage_('SUPPLY_SHEET_WRITE_DONE', 'readback=' + Boolean(written.readbackVerified));
+  wbFbsSupplySetStage_('ORDER_BACKFILL_START', 'continuing=' + continuing);
   var backfill=wbFbsSupplyBackfillOrders_(ss,fetched.byId,continuing?{endRow:progress.nextEndRow}:null);
   // A resumed historical backfill may have been left by an older run that
   // skipped the supply-sheet write. Refresh and read it back at the final
@@ -443,6 +464,7 @@ function wbFbsSupplySyncCore_(progress) {
     counts=wbFbsSupplyCountOrders_(orders);
     written=wbFbsSupplyWriteSupplySheet_(ss,fetched.rows,counts,checkedAt);
   }
+  wbFbsSupplySetStage_('ORDER_BACKFILL_DONE', 'checked=' + backfill.checked + ' matched=' + backfill.matched + ' complete=' + backfill.complete);
   var unmatchedOrderSupplyIds=continuing&&!backfill.complete?null:Object.keys(counts).filter(function(id){
     return !Object.prototype.hasOwnProperty.call(fetched.byId,id);
   }).length;
@@ -485,6 +507,7 @@ function wbFbsSupplySyncAllStores_() {
 
   var index = 0;
   var progressKey = 'WB_FBS_DIRECT_BACKFILL_PROGRESS';
+  wbFbsSupplySetStage_('LEASE_ACQUIRE_START', '');
   try {
     var active = null;
     try { active = JSON.parse(scriptProps.getProperty(leaseKey) || 'null'); } catch (ignored) {}
@@ -497,6 +520,7 @@ function wbFbsSupplySyncAllStores_() {
       token: leaseToken,
       expiresAt: Date.now() + 8 * 60 * 1000
     }));
+    wbFbsSupplySetStage_('LEASE_ACQUIRED', 'store_index=' + index);
   } finally {
     lock.releaseLock();
   }
@@ -509,7 +533,9 @@ function wbFbsSupplySyncAllStores_() {
       var progress = null;
       try { progress = JSON.parse(scriptProps.getProperty(progressKey) || 'null'); } catch (ignored) {}
       if (!progress || progress.client !== cfg.client) progress = null;
+      wbFbsSupplySetStage_('CORE_CALL_START', 'store_index=' + index + ' client=' + cfg.client);
       var result = wbFbsSupplySyncCore_(progress);
+      wbFbsSupplySetStage_('CORE_CALL_DONE', 'store_index=' + index + ' ok=' + Boolean(result && result.ok));
       if (!result || result.ok !== true) {
         throw new Error('WB_FBS_DIRECT: client sync did not return ok=true');
       }
@@ -553,6 +579,7 @@ function wbFbsSupplySyncAllStores_() {
       try {
         wbFbsSupplyWriteHealth_(wbFbsSupplySpreadsheet_(), 'ERROR', message);
       } catch (ignoredHealth) {}
+      wbFbsSupplySetStage_('ERROR', message);
       Logger.log('WB_FBS_DIRECT_ERROR client=' + cfg.client + ' ' + message);
       return {ok: false, stores: [{ok: false, client: cfg.client, error: message}]};
     }
@@ -563,6 +590,7 @@ function wbFbsSupplySyncAllStores_() {
         var held = null;
         try { held = JSON.parse(scriptProps.getProperty(leaseKey) || 'null'); } catch (ignored) {}
         if (held && held.token === leaseToken) scriptProps.deleteProperty(leaseKey);
+        wbFbsSupplySetStage_('LEASE_RELEASED', 'store_index=' + index);
       } finally {
         lock.releaseLock();
       }
