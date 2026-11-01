@@ -4,7 +4,7 @@
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.70',
+  VERSION: 'github-worker-1.3.71',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -6367,9 +6367,11 @@ function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId){
       SpreadsheetApp.flush();
     }
     if(spec.baseCols>=11)sh.getRange(1,11).clearDataValidations();
-    for(var off=0;off<n;off+=500){
-      var count=Math.min(500,n-off),block=base.slice(off,off+count);
-      sh.getRange(off+1,1,count,spec.baseCols).setValues(block);
+    for(var off=0;off<n;off+=2500){
+      var count=Math.min(2500,n-off),block=base.slice(off,off+count),writeRange=sh.getRange(off+1,1,count,spec.baseCols);
+      writeRange.setValues(block);
+      var chunkReadback=writeRange.getValues();
+      for(var cr=0;cr<count;cr++)for(var cc2=0;cc2<spec.baseCols;cc2++)if(String(chunkReadback[cr][cc2]||'')!==String(block[cr][cc2]||''))throw new Error('WB_RNP_BASE_CHUNK_READBACK_MISMATCH:'+spec.name+':'+(off+cr+1)+':'+(cc2+1));
     }
     SpreadsheetApp.flush();
     var verify=sh.getRange(1,1,n,spec.baseCols).getValues();
