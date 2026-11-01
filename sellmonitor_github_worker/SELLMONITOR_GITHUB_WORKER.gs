@@ -96,6 +96,26 @@ function sellmonitorGithubBootstrap() {
   };
 }
 
+function sellmonitorGithubFbsSupplyStageSnapshot_() {
+  var props = PropertiesService.getScriptProperties();
+  function parse_(key) {
+    try { return JSON.parse(props.getProperty(key) || 'null'); } catch (ignored) { return null; }
+  }
+  var lease = parse_('WB_FBS_DIRECT_ALL_STORES_LEASE');
+  var progress = parse_('WB_FBS_DIRECT_BACKFILL_PROGRESS');
+  var stage = parse_('WB_FBS_DIRECT_STAGE');
+  var now = Date.now();
+  return {
+    leaseActive: Boolean(lease && Number(lease.expiresAt) > now),
+    leaseRemainingMs: lease && Number(lease.expiresAt) > now ? Number(lease.expiresAt) - now : 0,
+    currentClient: String((stage && stage.client) || (progress && progress.client) || ''),
+    backfillRowsRemaining: progress && Number(progress.nextEndRow) > 1 ? Number(progress.nextEndRow) - 1 : 0,
+    stage: stage ? String(stage.stage || '') : '',
+    stageAt: stage ? String(stage.at || '') : '',
+    detail: stage ? String(stage.detail || '').slice(0, 240) : ''
+  };
+}
+
 function sellmonitorGithubHealth() {
   var triggerState = sellmonitorGithubEnsureTrigger_();
   var triggers = ScriptApp.getProjectTriggers();
@@ -190,6 +210,7 @@ function sellmonitorGithubHealth() {
     inner_finance_trigger_count:innerFinanceTriggerCount,
     project_trigger_handlers:projectTriggerHandlers,
     fbs_ingest_stages: sellmonitorGithubFbsStageSnapshot_(),
+    fbs_supply_stage: sellmonitorGithubFbsSupplyStageSnapshot_(),
     trigger_ok: triggerCount === 1 && innerFinanceTriggerCount === 1
   };
 }
