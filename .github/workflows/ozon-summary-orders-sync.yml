@@ -6,6 +6,7 @@ on:
     branches: [mainggg]
     paths:
       - ".github/workflows/ozon-summary-orders-sync.yml"
+  # Часовое обновление Seller API; изменение этого файла запускает штатную проверку публикации.
   schedule:
     - cron: "17 * * * *"
 
