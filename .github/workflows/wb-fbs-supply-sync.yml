@@ -114,7 +114,7 @@ jobs:
           expected = {"SANYCH", "AIR", "HOZYAYUSHKA"}
           seen = {}
           failures = []
-          for attempt in range(1, 61):
+          for attempt in range(1, 19):
               request = urllib.request.Request(
                   os.environ["GOOGLE_BRIDGE_URL"],
                   data=payload,
@@ -135,12 +135,22 @@ jobs:
               if result.get("ok") is not True:
                   details = json.dumps(result, ensure_ascii=False, separators=(",", ":"))
                   print("FBS_SUPPLY_SYNC_RESPONSE_ERROR " + details, flush=True)
-                  if "already running" in details.lower() or "credential store is busy" in details.lower():
-                      if attempt < 60:
-                          busy_wait = 300 if "already running" in details.lower() else 75
-                          print("FBS_SUPPLY_SYNC_BUSY_WAIT_SECONDS=" + str(busy_wait), flush=True)
-                          time.sleep(busy_wait)
-                          continue
+                  lower_details = details.lower()
+                  busy = "already running" in lower_details or "credential store is busy" in lower_details
+                  retryable = busy or any(marker in lower_details for marker in (
+                      "address unavailable", "supplies http 429", "supplies http 5",
+                      "timed out", "timeout", "urlfetch", "remote end closed",
+                      "temporarily unavailable", "connection reset", "connection refused",
+                      "temporary failure", "network error",
+                  ))
+                  if retryable and attempt < 18:
+                      wait_seconds = (300 if "already running" in lower_details else
+                                      75 if "credential store is busy" in lower_details else 60)
+                      label = "busy" if busy else "transient_wb_or_bridge_error"
+                      print("FBS_SUPPLY_SYNC_RETRYABLE attempt=" + str(attempt) +
+                            " wait_seconds=" + str(wait_seconds) + " reason=" + label, flush=True)
+                      time.sleep(wait_seconds)
+                      continue
                   failures.append("BRIDGE_REJECTED")
                   break
               stores = (result.get("result") or {}).get("stores") or []
