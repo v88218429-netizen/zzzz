@@ -73,17 +73,31 @@ function wbFbsSupplyFetchPage_(token, cursor) {
   var attempts = 0;
   while (attempts < 5) {
     attempts++;
-    var res = UrlFetchApp.fetch(url, {
-      method: 'get',
-      headers: {Authorization: token},
-      muteHttpExceptions: true
-    });
+    var res = null;
+    try {
+      res = UrlFetchApp.fetch(url, {
+        method: 'get',
+        headers: {Authorization: token},
+        muteHttpExceptions: true
+      });
+    } catch (fetchError) {
+      var transportMessage = String(fetchError && fetchError.message ? fetchError.message : fetchError);
+      if (attempts >= 5) {
+        throw new Error('WB_FBS_DIRECT: supplies transport failure after 5 attempts: ' + transportMessage.slice(0, 240));
+      }
+      var transportWait = Math.min(15000, 1000 * Math.pow(2, attempts - 1));
+      Logger.log('WB_FBS_DIRECT_SUPPLY_RETRY type=transport attempt=' + attempts + ' wait_ms=' + transportWait);
+      Utilities.sleep(transportWait);
+      continue;
+    }
     var code = res.getResponseCode();
 
-    if (code === 429 && attempts < 5) {
+    if ((code === 408 || code === 429 || code >= 500) && attempts < 5) {
       var headers = res.getHeaders ? res.getHeaders() : {};
-      var retry = Number(headers['Retry-After'] || headers['retry-after'] || 2);
-      Utilities.sleep(Math.max(1000, Math.min(15000, (isFinite(retry) ? retry : 2) * 1000)));
+      var retry = Number(headers['Retry-After'] || headers['retry-after'] || Math.pow(2, attempts - 1));
+      var retryWait = Math.max(1000, Math.min(15000, (isFinite(retry) ? retry : 2) * 1000));
+      Logger.log('WB_FBS_DIRECT_SUPPLY_RETRY http=' + code + ' attempt=' + attempts + ' wait_ms=' + retryWait);
+      Utilities.sleep(retryWait);
       continue;
     }
 
@@ -102,7 +116,7 @@ function wbFbsSupplyFetchPage_(token, cursor) {
     }
     return payload || {};
   }
-  throw new Error('WB_FBS_DIRECT: supplies rate-limit retries exhausted.');
+  throw new Error('WB_FBS_DIRECT: supplies transport/HTTP retries exhausted.');
 }
 
 function wbFbsSupplyFetchAll_(token) {
