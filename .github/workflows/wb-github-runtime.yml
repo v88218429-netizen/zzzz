@@ -2,9 +2,6 @@ name: WB GitHub Runtime
 
 on:
   workflow_dispatch:
-  workflow_run:
-    workflows: ["Sellmonitor GitHub worker deploy"]
-    types: [completed]
   schedule:
     # Publish fresh encrypted cabinet and query snapshots every ten minutes.
     - cron: "3,13,23,33,43,53 * * * *"
@@ -21,12 +18,11 @@ permissions:
   actions: read
 
 concurrency:
-  group: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.conclusion != 'success' && format('wb-github-runtime-skip-{0}', github.run_id) || 'wb-github-runtime' }}
+  group: wb-github-runtime-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
   run:
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 14
     steps:
