@@ -162,6 +162,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          echo "AUDIT_SOURCE_DIAGNOSTIC_MODE=read_only"
           python3 - <<'PY'
           import pathlib, re
           root=pathlib.Path("/tmp/sellmonitor-gh-worker")
