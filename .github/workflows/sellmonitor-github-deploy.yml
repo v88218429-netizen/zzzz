@@ -9,6 +9,7 @@ on:
       - "wb_os/apps_script/WB_FBS_SUPPLY_DIRECT.gs"
       - ".github/workflows/sellmonitor-github-deploy.yml"
       - ".github/workflows/wb-sellmonitor-finance-publish.yml"
+      - ".github/workflows/wb-fbs-supply-sync.yml"
   workflow_dispatch:
 
 permissions:
