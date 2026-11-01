@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import asdict
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from .agents import AGENT_CLASSES
@@ -68,6 +68,16 @@ class ControlCenter:
     async def start(self) -> None:
         if self._started:
             return
+        now = datetime.now(timezone.utc)
+        stale_after_seconds = max(300, 2 * float(self.settings.agent_run_timeout_seconds))
+        older_than = (now - timedelta(seconds=stale_after_seconds)).isoformat()
+        interrupted = self.db.interrupt_unfinished_runs(
+            older_than=older_than,
+            finished_at=now.isoformat(),
+            reason="Application restarted after the run stopped reporting progress",
+        )
+        if interrupted:
+            log.warning("marked %s stale agent runs as interrupted during startup", interrupted)
         try:
             await self.wb.start()
         except Exception as exc:
@@ -187,6 +197,17 @@ class ControlCenter:
                 except Exception as exc:
                     log.warning("decision refresh after %s failed: %s", name, exc)
                 return {"agent": name, "status": "ok", "events": event_ids, "actions": action_ids, "snapshots": len(result.snapshots)}
+            except asyncio.CancelledError:
+                try:
+                    self.db.finish_run(
+                        run_id,
+                        "interrupted",
+                        datetime.now(timezone.utc).isoformat(),
+                        "Agent task was cancelled before completion",
+                    )
+                except Exception:
+                    log.exception("failed to close cancelled agent run %s", run_id)
+                raise
             except Exception as e:
                 log.exception("agent %s failed", name)
                 self.db.finish_run(run_id, "error", datetime.now(timezone.utc).isoformat(), str(e))
