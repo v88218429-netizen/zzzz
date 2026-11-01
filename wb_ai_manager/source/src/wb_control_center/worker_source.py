@@ -5,9 +5,11 @@ import csv
 import io
 import json
 import os
+import re
 import subprocess
 import tarfile
 import tempfile
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -35,6 +37,8 @@ class WorkerSource:
         self.traffic_github_repo = (traffic_github_repo or "").strip()
         self.traffic_github_ref = (traffic_github_ref or "traffic-state").strip()
         self.traffic_private_key_path = Path(traffic_private_key_path).expanduser() if traffic_private_key_path else None
+        self._github_ref_cache: dict[str, tuple[float, str]] = {}
+        self._github_ref_lock = asyncio.Lock()
 
     @property
     def configured(self) -> bool:
@@ -169,6 +173,51 @@ class WorkerSource:
         return bool(self.traffic_github_repo and self.traffic_private_key_path
                     and self.traffic_private_key_path.is_file())
 
+    async def _github_state_root(self, branch: str) -> str:
+        """Return an immutable raw URL for the latest verified state-branch commit.
+
+        GitHub's raw branch URLs are CDN-cached and may lag behind the branch ref.
+        Resolve the branch through the GitHub API, then fetch both encrypted objects
+        by the returned commit SHA so each archive/key pair comes from one snapshot.
+        """
+        branch = str(branch or "").strip()
+        repo = self.traffic_github_repo
+        if not repo or not branch:
+            raise WorkerSourceError("GitHub state repository or branch is not configured")
+
+        now = time.monotonic()
+        cached = self._github_ref_cache.get(branch)
+        if cached and now - cached[0] < 300:
+            commit_sha = cached[1]
+        else:
+            async with self._github_ref_lock:
+                now = time.monotonic()
+                cached = self._github_ref_cache.get(branch)
+                if cached and now - cached[0] < 300:
+                    commit_sha = cached[1]
+                else:
+                    from urllib.parse import quote
+                    api_url = f"https://api.github.com/repos/{repo}/branches/{quote(branch, safe='')}"
+                    headers = {
+                        "Accept": "application/vnd.github+json",
+                        "X-GitHub-Api-Version": "2022-11-28",
+                    }
+                    try:
+                        async with httpx.AsyncClient(timeout=self.timeout_seconds, follow_redirects=True) as client:
+                            response = await client.get(api_url, headers=headers)
+                            response.raise_for_status()
+                            branch_data = response.json()
+                    except Exception as exc:
+                        raise WorkerSourceError(
+                            f"GitHub state branch could not be verified ({type(exc).__name__})"
+                        ) from exc
+                    commit_sha = str((branch_data.get("commit") or {}).get("sha") or "").lower()
+                    if not re.fullmatch(r"[0-9a-f]{40}", commit_sha):
+                        raise WorkerSourceError("GitHub state branch returned an invalid commit reference")
+                    self._github_ref_cache[branch] = (time.monotonic(), commit_sha)
+
+        return f"https://raw.githubusercontent.com/{repo}/{commit_sha}/state"
+
     @staticmethod
     def _csv_from_archive(archive: tarfile.TarFile, suffix: str) -> list[dict[str, str]]:
         member = next((item for item in archive.getmembers()
@@ -197,7 +246,7 @@ class WorkerSource:
         """Read the cabinet-scoped optimizer payload from encrypted GitHub state."""
         if not self.traffic_configured:
             raise WorkerSourceError("GitHub optimizer archive or local private key is not configured")
-        root = f"https://raw.githubusercontent.com/{self.traffic_github_repo}/optimizer-state/state"
+        root = await self._github_state_root("optimizer-state")
         async with httpx.AsyncClient(timeout=self.timeout_seconds, follow_redirects=True) as client:
             archive_response, key_response = await asyncio.gather(
                 client.get(root + "/optimizer-dashboard.tar.gz.enc"),
@@ -252,7 +301,7 @@ class WorkerSource:
         """Read private, encrypted WB traffic facts stored only in GitHub."""
         if not self.traffic_configured:
             raise WorkerSourceError("GitHub traffic archive or local private key is not configured")
-        root = f"https://raw.githubusercontent.com/{self.traffic_github_repo}/{self.traffic_github_ref}/state"
+        root = await self._github_state_root(self.traffic_github_ref)
         async with httpx.AsyncClient(timeout=self.timeout_seconds, follow_redirects=True) as client:
             archive_response, key_response = await asyncio.gather(
                 client.get(root + "/traffic-dashboard.tar.gz.enc"),
