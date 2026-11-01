@@ -6048,7 +6048,7 @@ var SMC_WB_INNER_SUMMARY_V1 = Object.freeze({
     sanych_wb:{name:'Саныч',id:'1kdeQ-N80Ul0WvekuPxM1QS8FRz0I3g5eOpsgcK0g9Ls'}
   },
   tabs:{day:'90_SM_Факт_Дни',week:'91_SM_Факт_Недели',month:'92_SM_Факт_Месяцы',archive:'93_SM_Факт_Архив',log:'94_SM_Факт_Журнал'},
-  chunk:400
+  chunk:2000
 });
 
 function sellmonitorGithubWbInnerDateKey_(v,tz){
