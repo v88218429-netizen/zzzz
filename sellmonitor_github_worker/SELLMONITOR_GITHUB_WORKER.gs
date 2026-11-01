@@ -1,10 +1,10 @@
 /**
- * Sellmonitor GitHub Central Worker v1.3.70
+ * Sellmonitor GitHub Central Worker v1.3.72
  * GitHub is source-of-truth/scheduler. This Apps Script project is only
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.71',
+  VERSION: 'github-worker-1.3.72',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -7285,69 +7285,67 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
         throw new Error('FBS_PATCH_BATCH_HTTP_'+writeCode+':'+writeDiagnostic);
       }
       mark('STATE_VERIFY_START_BOUNDED');
-      // Force pending Sheets writes to become visible before readback verification.
       SpreadsheetApp.flush();
       Utilities.sleep(500);
-      // Verify all disjoint changed ranges with one bounded Sheets API request.
-      // Calling SpreadsheetApp.getRange twice per sparse segment caused dozens
-      // of slow service round trips for small status batches.
-      var verifyByA1={},verifyFilters=[];
+      // Read verification ranges in bounded Sheets API batches. A large sparse
+      // byDataFilter POST timed out while verifying many changed order rows.
+      var verifyByA1={},verifySpecs=[];
       segments.forEach(function(seg){
         var stateA1=orderSheet+'!A'+seg[0]+':G'+seg[1];
         var timesA1=orderSheet+'!V'+seg[0]+':W'+seg[1];
         verifyByA1[stateA1]={segment:seg,kind:'state'};
         verifyByA1[timesA1]={segment:seg,kind:'times'};
-        verifyFilters.push({a1Range:stateA1},{a1Range:timesA1});
+        verifySpecs.push({a1:stateA1,segment:seg,kind:'state'});
+        verifySpecs.push({a1:timesA1,segment:seg,kind:'times'});
       });
-      mark('STATE_VERIFY_START_BATCHED_'+segments.length+'_SEGMENTS');
-      var verifyResponse=fetchSheetApi(apiBase+'/values:batchGetByDataFilter',{
-        method:'post',contentType:'application/json',
-        payload:JSON.stringify({dataFilters:verifyFilters,majorDimension:'ROWS',valueRenderOption:'FORMATTED_VALUE'})
-      });
-      var verifyCode=verifyResponse.getResponseCode();
-      if(verifyCode<200||verifyCode>=300)
-        throw new Error('FBS_PATCH_READBACK_HTTP_'+verifyCode+':'+sheetApiFailure(verifyResponse));
-      var verifyPayload;
-      try{verifyPayload=JSON.parse(verifyResponse.getContentText()||'{}');}
-      catch(verifyParseError){throw new Error('FBS_PATCH_READBACK_INVALID_JSON');}
-      var verifyRanges=verifyPayload.valueRanges||[];
-      if(verifyRanges.length!==verifyFilters.length)
-        throw new Error('FBS_PATCH_READBACK_RANGE_COUNT_MISMATCH');
+      mark('STATE_VERIFY_START_BATCHED_'+segments.length+'_SEGMENTS_'+verifySpecs.length+'_RANGES');
       var verifiedA1={};
-      verifyRanges.forEach(function(match){
-        var spec=null;
-        (match.dataFilters||[]).some(function(filter){
-          spec=verifyByA1[String(filter.a1Range||'')]||null;
-          return !!spec;
-        });
-        if(!spec)throw new Error('FBS_PATCH_READBACK_RANGE_MAPPING_INVALID');
-        var a1=String(((match.dataFilters||[]).filter(function(filter){
-          return verifyByA1[String(filter.a1Range||'')];
-        })[0]||{}).a1Range||'');
-        if(verifiedA1[a1])throw new Error('FBS_PATCH_READBACK_RANGE_DUPLICATE');
-        verifiedA1[a1]=true;
-        var seg=spec.segment,values=((match.valueRange||{}).values)||[];
-        for(var rowNumber=seg[0];rowNumber<=seg[1];rowNumber++){
-          var rowOffset=rowNumber-seg[0],rowValues=values[rowOffset]||[];
-          var expectedState=stateByRow[rowNumber]||[],expectedTimes=syncTimesByRow[rowNumber]||[];
-          if(spec.kind==='state'){
-            if(String(rowValues[0]||'')!==String(idByRow[rowNumber]||'')||
-               String(rowValues[4]||'')!==String(expectedState[0]||'')||
-               String(rowValues[5]||'')!==String(expectedState[1]||'')||
-               String(rowValues[6]||'')!==String(expectedState[2]||''))
-              throw new Error('FBS_PATCH_READBACK_FAILED');
-          }else{
-            for(var t=0;t<2;t++){
-              var expectedDisplay=expectedTimes[t] instanceof Date?
-                Utilities.formatDate(expectedTimes[t],sheetTimeZone,'dd.MM.yyyy HH:mm:ss'):String(expectedTimes[t]||'');
-              var actualDisplay=String(rowValues[t]||'');
-              if(!expectedDisplay||actualDisplay!==expectedDisplay)
-                throw new Error('FBS_PATCH_TIME_READBACK_FAILED:row='+rowNumber+':column='+(22+t)+':expected='+expectedDisplay+':actual='+actualDisplay);
+      for(var verifyOffset=0;verifyOffset<verifySpecs.length;verifyOffset+=50){
+        var verifyPart=verifySpecs.slice(verifyOffset,verifyOffset+50);
+        var verifyQuery=verifyPart.map(function(spec){
+          return 'ranges='+encodeURIComponent(spec.a1);
+        }).join('&');
+        var verifyResponse=fetchSheetApi(apiBase+'/values:batchGet?'+verifyQuery+
+          '&majorDimension=ROWS&valueRenderOption=FORMATTED_VALUE',{method:'get'});
+        var verifyCode=verifyResponse.getResponseCode();
+        if(verifyCode<200||verifyCode>=300)
+          throw new Error('FBS_PATCH_READBACK_HTTP_'+verifyCode+':'+sheetApiFailure(verifyResponse));
+        var verifyPayload;
+        try{verifyPayload=JSON.parse(verifyResponse.getContentText()||'{}');}
+        catch(verifyParseError){throw new Error('FBS_PATCH_READBACK_INVALID_JSON');}
+        var verifyRanges=verifyPayload.valueRanges||[];
+        if(verifyRanges.length!==verifyPart.length)
+          throw new Error('FBS_PATCH_READBACK_RANGE_COUNT_MISMATCH');
+        verifyPart.forEach(function(requested,partIndex){
+          var a1=requested.a1,spec=verifyByA1[a1];
+          if(!spec)throw new Error('FBS_PATCH_READBACK_RANGE_MAPPING_INVALID');
+          if(verifiedA1[a1])throw new Error('FBS_PATCH_READBACK_RANGE_DUPLICATE');
+          verifiedA1[a1]=true;
+          var values=(verifyRanges[partIndex]||{}).values||[];
+          var seg=spec.segment;
+          for(var rowNumber=seg[0];rowNumber<=seg[1];rowNumber++){
+            var rowOffset=rowNumber-seg[0],rowValues=values[rowOffset]||[];
+            var expectedState=stateByRow[rowNumber]||[],expectedTimes=syncTimesByRow[rowNumber]||[];
+            if(spec.kind==='state'){
+              if(String(rowValues[0]||'')!==String(idByRow[rowNumber]||'')||
+                 String(rowValues[4]||'')!==String(expectedState[0]||'')||
+                 String(rowValues[5]||'')!==String(expectedState[1]||'')||
+                 String(rowValues[6]||'')!==String(expectedState[2]||''))
+                throw new Error('FBS_PATCH_READBACK_FAILED');
+            }else{
+              for(var t=0;t<2;t++){
+                var expectedDisplay=expectedTimes[t] instanceof Date?
+                  Utilities.formatDate(expectedTimes[t],sheetTimeZone,'dd.MM.yyyy HH:mm:ss'):String(expectedTimes[t]||'');
+                var actualDisplay=String(rowValues[t]||'');
+                if(!expectedDisplay||actualDisplay!==expectedDisplay)
+                  throw new Error('FBS_PATCH_TIME_READBACK_FAILED:row='+rowNumber+':column='+(22+t)+':expected='+expectedDisplay+':actual='+actualDisplay);
+              }
             }
           }
-        }
-      });
-      if(Object.keys(verifiedA1).length!==verifyFilters.length)
+        });
+        console.log('FBS_STAGE_STATE_VERIFY_BATCH='+Math.floor(verifyOffset/50+1)+' ranges='+verifyPart.length+' elapsed_ms='+(Date.now()-fbsStarted));
+      }
+      if(Object.keys(verifiedA1).length!==verifySpecs.length)
         throw new Error('FBS_PATCH_READBACK_RANGE_MISSING');
       mark('STATE_VERIFY_DONE_BOUNDED');
     }
