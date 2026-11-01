@@ -233,8 +233,10 @@ function wbFbsSupplyWriteSupplySheet_(ss, supplyRows, orderCounts, checkedAt) {
   if (!sh) sh = ss.insertSheet(WB_FBS_DIRECT_SUPPLY_CFG.suppliesSheet);
   var header = ['ID поставки','createdAt','closedAt','scanDt','done','Последняя проверка',
     'Заказов в поставке','closed → scan, мин','Статус контроля'];
+  wbFbsSupplySetStage_('SUPPLY_READ_EXISTING_START', '');
   var oldLast = sh.getLastRow();
   var oldRows = oldLast > 1 ? sh.getRange(2,1,oldLast-1,header.length).getValues() : [];
+  wbFbsSupplySetStage_('SUPPLY_READ_EXISTING_DONE', 'rows=' + oldRows.length);
   if (!supplyRows.length && oldRows.some(function(r){return String(r[0]||'').trim();})) {
     throw new Error('WB_FBS_DIRECT: WB returned no supplies while the sheet contains existing rows; refusing empty refresh');
   }
@@ -280,29 +282,53 @@ function wbFbsSupplyWriteSupplySheet_(ss, supplyRows, orderCounts, checkedAt) {
     if(at!==bt)return at-bt;
     return String(a[0]||'').localeCompare(String(b[0]||''));
   });
+  wbFbsSupplySetStage_('SUPPLY_ENSURE_ROWS_START', 'rows=' + out.length);
   wbFbsSupplyEnsureRows_(sh,Math.max(2,out.length+1));
+  wbFbsSupplySetStage_('SUPPLY_ENSURE_ROWS_DONE', '');
+  wbFbsSupplySetStage_('SUPPLY_WRITE_HEADER_START', '');
   sh.getRange(1,1,1,header.length).setValues([header]);
-  if(oldLast>1)sh.getRange(2,1,oldLast-1,header.length).clearContent();
-  if(out.length)sh.getRange(2,1,out.length,header.length).setValues(out);
+  wbFbsSupplySetStage_('SUPPLY_WRITE_HEADER_DONE', '');
+  if(oldLast>1){
+    wbFbsSupplySetStage_('SUPPLY_CLEAR_OLD_START', 'rows=' + (oldLast-1));
+    sh.getRange(2,1,oldLast-1,header.length).clearContent();
+    wbFbsSupplySetStage_('SUPPLY_CLEAR_OLD_DONE', '');
+  }
   if(out.length){
+    wbFbsSupplySetStage_('SUPPLY_WRITE_ROWS_START', 'rows=' + out.length);
+    sh.getRange(2,1,out.length,header.length).setValues(out);
+    wbFbsSupplySetStage_('SUPPLY_WRITE_ROWS_DONE', 'rows=' + out.length);
+  }
+  if(out.length){
+    wbFbsSupplySetStage_('SUPPLY_FORMAT_START', 'rows=' + out.length);
     sh.getRange(2,2,out.length,3).setNumberFormat('dd.MM.yyyy HH:mm:ss');
     sh.getRange(2,6,out.length,1).setNumberFormat('dd.MM.yyyy HH:mm:ss');
     sh.getRange(2,7,out.length,2).setNumberFormat('0');
+    wbFbsSupplySetStage_('SUPPLY_FORMAT_DONE', '');
   }
+  wbFbsSupplySetStage_('SUPPLY_FLUSH_START', '');
   SpreadsheetApp.flush();
+  wbFbsSupplySetStage_('SUPPLY_FLUSH_DONE', '');
+  wbFbsSupplySetStage_('SUPPLY_HEADER_READBACK_START', '');
   var headerReadback=sh.getRange(1,1,1,header.length).getDisplayValues();
+  wbFbsSupplySetStage_('SUPPLY_HEADER_READBACK_DONE', '');
   if(!wbFbsSupplyMatricesEqual_([header],[headerReadback[0]||[]]))
     throw new Error('WB_FBS_DIRECT: supply header readback mismatch');
+  wbFbsSupplySetStage_('SUPPLY_ROWS_READBACK_START', 'rows=' + out.length);
   var rowsReadback=out.length?sh.getRange(2,1,out.length,header.length).getValues():[];
+  wbFbsSupplySetStage_('SUPPLY_ROWS_READBACK_DONE', 'rows=' + rowsReadback.length);
   if(!wbFbsSupplyMatricesEqual_(out,rowsReadback))
     throw new Error('WB_FBS_DIRECT: supply rows readback mismatch');
   var staleCount=Math.max(0,(oldLast-1)-out.length);
   if(staleCount){
+    wbFbsSupplySetStage_('SUPPLY_STALE_READBACK_START', 'rows=' + staleCount);
     var staleIds=sh.getRange(out.length+2,1,staleCount,1).getDisplayValues();
+    wbFbsSupplySetStage_('SUPPLY_STALE_READBACK_DONE', '');
     if(staleIds.some(function(row){return String((row||[])[0]||'').trim()!=='';}))
       throw new Error('WB_FBS_DIRECT: stale supply rows remain after refresh');
   }
+  wbFbsSupplySetStage_('SUPPLY_FREEZE_HEADER_START', '');
   sh.setFrozenRows(1);
+  wbFbsSupplySetStage_('SUPPLY_WRITE_COMPLETE', 'rows=' + out.length);
   return {totalRows:out.length,apiRows:supplyRows.length,
     preservedNotReturned:preservedNotReturned,preservedDuplicateRows:preservedDuplicateRows,
     readbackVerified:true};
