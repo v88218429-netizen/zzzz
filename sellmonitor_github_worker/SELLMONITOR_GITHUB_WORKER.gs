@@ -5729,7 +5729,7 @@ function sellmonitorGithubOzonAgg_(records, storeId, today) {
   function values(x) {
     return [x.type==='day'?'День':x.type==='week'?'Неделя':'Месяц',x.start,x.end,
       Object.keys(x.orders).length,Object.keys(x.posts).length,x.units,
-      x.type==='day'?Object.keys(x.offers).length:'',x.lines,Object.keys(x.days).length,status(x)];
+      Object.keys(x.offers).length,x.lines,Object.keys(x.days).length,status(x)];
   }
   var daily=Object.keys(per.day).map(function(k){return per.day[k];}).sort(function(a,b){return a.start.localeCompare(b.start);});
   var weekly=Object.keys(per.week).map(function(k){return per.week[k];}).sort(function(a,b){return a.start.localeCompare(b.start);});
