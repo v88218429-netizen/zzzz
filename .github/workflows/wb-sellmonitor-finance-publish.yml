@@ -1,6 +1,7 @@
 # RNP matrices refreshed from verified summary facts; deployment-safe single-store repair check v4
 # Queue a focused Hoz metadata-boundary verification after the worker fix.
 # Queue Sanych 2026-only chunked-source revalidation after the worker fix.
+# Queue AIR readback revalidation after the transient bridge disconnect.
 name: WB Sellmonitor finance summaries
 
 on:
