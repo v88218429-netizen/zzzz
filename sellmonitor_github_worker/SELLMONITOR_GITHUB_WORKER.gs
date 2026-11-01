@@ -4,7 +4,7 @@
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.78',
+  VERSION: 'github-worker-1.3.79',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -6296,7 +6296,7 @@ function sellmonitorGithubPublishWbInnerPeriods_(onlyStore,requestedPhase){
         sourceIds.push(p.fileId);sourceChecks.push({part_id:p.partId,rows:partRows,distinct:Object.keys(partKeys).length,checksum:p.checksum});
       });
       if(!headers||!allRows.length)throw new Error('WB_INNER_SOURCE_FACTS_EMPTY:'+shop);
-      var built=sellmonitorGithubWbInnerBuildRows_(allRows,headers,shop,Session.getScriptTimeZone(),!!dayMonthMatch);
+      var built=sellmonitorGithubWbInnerBuildRows_(allRows,headers,shop,Session.getScriptTimeZone(),!!(dayMonthMatch||dayRangeMatch));
       var metricHeaders=built.metricHeaders,head=['Период','Начало','Конец','Дней с данными','Ожидаемо дней','Магазин ID','nmId','Артикул продавца','Группа','Подгруппа'].concat(metricHeaders,['Статус источника','Источник','Загружено','Ключ']);
       var ss=SpreadsheetApp.openById(cfg.id);
       var day=sellmonitorGithubWbInnerEnsureSheet_(ss,SMC_WB_INNER_SUMMARY_V1.tabs.day,head);
