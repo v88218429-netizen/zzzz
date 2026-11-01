@@ -1,3 +1,5 @@
+name: WB FBS supply sync via GitHub
+
 # Strict production supply and timing readback revalidation after matching worker deploy
 
 on:
