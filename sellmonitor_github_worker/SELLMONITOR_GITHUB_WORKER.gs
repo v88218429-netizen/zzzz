@@ -4,7 +4,7 @@
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.77',
+  VERSION: 'github-worker-1.3.78',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -6241,8 +6241,11 @@ function sellmonitorGithubWbInnerUpsert_(ss,sh,headers,rows,storeName){
 function sellmonitorGithubPublishWbInnerPeriods_(onlyStore,requestedPhase){
   var phase=String(requestedPhase||'all').trim()||'all';
   var dayMonthMatch=phase.match(/^rnp_day_(\d{4}_\d{2})$/);
-  if(['all','summary','rnp_day','rnp_week','rnp_month','dashboard'].indexOf(phase)<0&&!dayMonthMatch)throw new Error('WB_INNER_UNKNOWN_PHASE:'+phase);
+  var dayRangeMatch=phase.match(/^rnp_day_(\d{4})_(\d{2})_(\d{2})_(\d{2})$/);
+  if(['all','summary','rnp_day','rnp_week','rnp_month','dashboard'].indexOf(phase)<0&&!dayMonthMatch&&!dayRangeMatch)throw new Error('WB_INNER_UNKNOWN_PHASE:'+phase);
   var dayMonthPrefix=dayMonthMatch?dayMonthMatch[1].replace('_','-'):'';
+  var dayRangeStart=dayRangeMatch?dayRangeMatch[1]+'-'+dayRangeMatch[2]+'-'+dayRangeMatch[3]:'';
+  var dayRangeEnd=dayRangeMatch?dayRangeMatch[1]+'-'+dayRangeMatch[2]+'-'+dayRangeMatch[4]:'';
   var reg=SpreadsheetApp.openById(SMC_WB_INNER_SUMMARY_V1.registryId).getSheetByName(SMC_WB_INNER_SUMMARY_V1.registrySheet);
   if(!reg)throw new Error('WB_INNER_REGISTRY_MISSING');
   var regLast=reg.getLastRow(),registry=regLast>1?reg.getRange(2,1,regLast-1,27).getValues():[];
@@ -6264,8 +6267,14 @@ function sellmonitorGithubPublishWbInnerPeriods_(onlyStore,requestedPhase){
         results.push({store:cfg.name,ok:dashboardOnly&&dashboardOnly.ok===true,dashboard:dashboardOnly,phase:phase});
         return;
       }
-      var chosen=Object.keys(parts).map(function(k){return parts[k];}).filter(function(p){return p.shop===shop&&(!dayMonthMatch||String(p.period||'').indexOf(dayMonthPrefix)===0);}).sort(function(a,b){return a.period<b.period?-1:1;});
-      if(!chosen.length&&dayMonthMatch){
+      var chosen=Object.keys(parts).map(function(k){return parts[k];}).filter(function(p){
+        if(p.shop!==shop)return false;
+        var period=String(p.period||'');
+        if(dayMonthMatch)return period.indexOf(dayMonthPrefix)===0;
+        if(dayRangeMatch)return period>=dayRangeStart&&period<=dayRangeEnd;
+        return true;
+      }).sort(function(a,b){return a.period<b.period?-1:1;});
+      if(!chosen.length&&(dayMonthMatch||dayRangeMatch)){
         results.push({store:cfg.name,ok:true,phase:phase,source_parts:0,source_rows:0,no_source_data:true,rnp:{ok:true,readback:true,no_source_data:true,matrices:[{sheet:'01_Дни',rows:0,verified:0,sha256:'',no_source_data:true}]}});
         return;
       }
@@ -6304,8 +6313,8 @@ function sellmonitorGithubPublishWbInnerPeriods_(onlyStore,requestedPhase){
         res.month=sellmonitorGithubWbInnerUpsert_(ss,month,head,built.month,cfg.name);
       }
       if(phase==='all'||phase.indexOf('rnp_')===0){
-        var onlyGrain=phase==='all'?'':(dayMonthMatch?'day':phase.slice(4));
-        res.rnp=sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,cfg.name,shop,onlyGrain,dayMonthPrefix);
+        var onlyGrain=phase==='all'?'':((dayMonthMatch||dayRangeMatch)?'day':phase.slice(4));
+        res.rnp=sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,cfg.name,shop,onlyGrain,dayMonthPrefix,dayRangeStart,dayRangeEnd);
       }
       if(phase==='all'||phase==='dashboard'){
         var periodChanges=phase==='all'?(res.day.new_rows+res.day.changed_rows+res.week.new_rows+res.week.changed_rows+res.month.new_rows+res.month.changed_rows):0;
@@ -6332,7 +6341,7 @@ function sellmonitorGithubPublishWbInnerPeriods_(onlyStore,requestedPhase){
 
 
 
-function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId,onlyGrain,onlyPeriodPrefix){
+function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId,onlyGrain,onlyPeriodPrefix,onlyPeriodStart,onlyPeriodEnd){
   var specs=[
     {name:'01_Дни',grain:'day',rows:built.day,min:'2026-09-01',format:'dd.mm.yyyy',startCol:15,baseCols:14,source:'Источник_дни'},
     {name:'02_Недели',grain:'week',rows:built.week,min:'2026-09-07',format:'dd.mm.yyyy',startCol:15,baseCols:14,source:'Источник_недели'},
@@ -6544,7 +6553,7 @@ function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId,onl
     var baseStatus=restoreBase_(spec,sh);
     spec.rows.forEach(function(r){
       var period=String(r[1]||''),nm=String(r[6]||''),status=String(r[10+built.metricHeaders.length]||'');
-      if(period<spec.min||(spec.grain==='day'&&onlyPeriodPrefix&&period.indexOf(onlyPeriodPrefix)!==0))return;
+      if(period<spec.min||(spec.grain==='day'&&onlyPeriodPrefix&&period.indexOf(onlyPeriodPrefix)!==0)||(spec.grain==='day'&&onlyPeriodStart&&(period<onlyPeriodStart||period>onlyPeriodEnd)))return;
       var g=periodMap[period]||(periodMap[period]={}),arr=g[nm]||(g[nm]=[]);
       arr.push(r);
       var ss0=periodStatus[period]||(periodStatus[period]={partial:false,exact:0,other:0});
