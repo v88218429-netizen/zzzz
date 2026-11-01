@@ -171,7 +171,7 @@ function sellmonitorGithubFbsAcceptanceAuditV1_(body) {
     var sh=ss.getSheetByName(tabName||orderTab);
     if(!sh)return {exists:false};
     var last=sh.getLastRow();
-    if(last<1||last>300000)throw new Error('FBS_AUDIT_ROW_COUNT_UNEXPECTED');
+    if(last>300000||(withStatuses&&last<1))throw new Error('FBS_AUDIT_ROW_COUNT_UNEXPECTED');
     var result={exists:true,lastRow:last,rowsWithId:0,uniqueIds:0,duplicateRows:0,
       invalidIds:0,missingSupplierStatus:0,missingWbStatus:0,missingBothStatuses:0,
       minOrderAt:'',maxOrderAt:'',duplicateRowExamples:[],idSet:Object.create(null)};
