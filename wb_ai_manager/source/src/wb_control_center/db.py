@@ -139,6 +139,17 @@ class Database:
         with self.connect() as con:
             con.execute("UPDATE runs SET finished_at=?,status=?,error=? WHERE id=?", (finished_at, status, error, run_id))
 
+    def interrupt_unfinished_runs(self, older_than: str, finished_at: str,
+                                  reason: str = "Application restarted before run completion") -> int:
+        """Close stale runs left behind by process shutdown or task cancellation."""
+        with self.connect() as con:
+            cur = con.execute(
+                "UPDATE runs SET finished_at=?,status='interrupted',error=? "
+                "WHERE status='running' AND started_at<?",
+                (finished_at, reason, older_than),
+            )
+            return int(cur.rowcount)
+
     def save_event(self, event: Event) -> int:
         with self.connect() as con:
             cur = con.execute(

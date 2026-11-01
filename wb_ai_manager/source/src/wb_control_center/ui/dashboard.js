@@ -1209,7 +1209,7 @@ function renderKnowledge(){
 
 function renderAgents(){
   const agents=state.data.agents||{}, runs=state.data.runs||{}; const ordered=Object.keys(agents);
-  const status=(r)=>!r?['neutral','ПО РАСПИСАНИЮ']:r.status==='ok'?['ok','РАБОТАЕТ']:r.status==='error'?['bad','ОШИБКА']:['warn','СЧИТАЕТ'];
+  const status=(r)=>!r?['neutral','ПО РАСПИСАНИЮ']:r.status==='ok'?['ok','РАБОТАЕТ']:r.status==='error'?['bad','ОШИБКА']:r.status==='interrupted'?['neutral','ПРЕРВАНО']:r.status==='running'?['warn','СЧИТАЕТ']:['neutral','НЕИЗВЕСТНЫЙ СТАТУС'];
   $('agents-grid').innerHTML=ordered.map((name,i)=>{const r=runs[name], st=status(r),interval=agents[name].interval_minutes; return `<div class="agent-card"><div class="agent-card-top"><div class="agent-symbol">${String(i+1).padStart(2,'0')}</div><span class="status-tag ${st[0]}">${st[1]}</span></div><strong>${esc(agentNames[name]||name)}</strong><p>${esc(agentDescriptions[name]||'Специализированный модуль WB AI Manager.')}</p><small>${r?.finished_at?`последний запуск ${ago(r.finished_at)}`:`каждые ${interval||'—'} мин`}</small></div>`;}).join('');
   $('agents-table').innerHTML=ordered.map(name=>{const r=runs[name], int=agents[name].interval_minutes, st=status(r); return `<tr><td><strong>${esc(agentNames[name]||name)}</strong></td><td><span class="status-tag ${st[0]}">${st[1].toLowerCase()}</span></td><td>${r?.finished_at?time(r.finished_at):'ещё не завершался'}</td><td>${int?`${int} мин`:'ручной'}</td></tr>`;}).join('');
 }
