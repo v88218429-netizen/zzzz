@@ -58,17 +58,26 @@ jobs:
           if end_month == 13:
               end_year, end_month = end_year + 1, 1
           months = []
+          sanych_chunks = []
           year, month = 2026, 9
           while (year, month) <= (end_year, end_month):
               months.append(f"rnp_day_{year}_{month:02d}")
+              next_year = year + 1 if month == 12 else year
+              next_month = 1 if month == 12 else month + 1
+              month_days = (date(next_year, next_month, 1) - date(year, month, 1)).days
+              for start_day in (1, 15):
+                  if start_day <= month_days:
+                      end_day = min(start_day + 13, month_days)
+                      sanych_chunks.append(f"rnp_day_{year}_{month:02d}_{start_day:02d}_{end_day:02d}")
               month += 1
               if month == 13:
                   year, month = year + 1, 1
-          phases = ("summary",) + tuple(months) + ("rnp_week", "rnp_month", "dashboard")
           print("PUBLISH_SCOPE=" + (selected_store or "all_stores"), flush=True)
           verified = []
           errors = []
           for store_id in expected:
+              daily_phases = sanych_chunks if store_id == "sanych_wb" else months
+              phases = ("summary",) + tuple(daily_phases) + ("rnp_week", "rnp_month", "dashboard")
               store_result = {"store_id": store_id}
               for phase in phases:
                   body = json.dumps({
@@ -156,7 +165,11 @@ jobs:
                           print("STORE=" + store_id + " PHASE=dashboard OK=no ERROR=" + last, flush=True)
                           break
                       store_result["dashboard"] = dashboard
-                  print("STORE=" + store_id + " PHASE=" + phase + " OK=yes", flush=True)
+                  phase_item = (result.get("stores") or [{}])[0] if isinstance(result, dict) else {}
+                  if phase_item.get("no_source_data"):
+                      print("STORE=" + store_id + " PHASE=" + phase + " STATUS=NO_SOURCE_DATA", flush=True)
+                  else:
+                      print("STORE=" + store_id + " PHASE=" + phase + " OK=yes", flush=True)
               if store_id in expected and not any(e.startswith("WB finance phase failed for " + store_id) or e.startswith("WB finance summary readback failed for " + store_id) or e.startswith("WB finance RNP readback failed for " + store_id) or e.startswith("WB finance dashboard failed for " + store_id) for e in errors):
                   if all(k in store_result for k in ("summary", "rnp", "dashboard")) and all(k in store_result["rnp"] for k in ("day", "week", "month")):
                       verified.append(store_result)
