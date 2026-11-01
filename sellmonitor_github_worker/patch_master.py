@@ -231,7 +231,21 @@ function sellmonitorGithubFbsAcceptanceAuditV1_(body) {
         var title='',ranges=[];
         try{title=String(ch.getOptions().get('title')||'');}catch(ignoreTitle){}
         try{ranges=ch.getRanges().map(function(r){return r.getA1Notation();});}catch(ignoreRanges){}
-        chartRows.push({title:title,type:String(ch.getChartType()),ranges:ranges});
+        var chartType='UNKNOWN';
+        try{
+          if(ch&&typeof ch.getChartType==='function')chartType=String(ch.getChartType());
+        }catch(chartTypeError){
+          chartType='ERROR:'+String(chartTypeError&&chartTypeError.message||chartTypeError).slice(0,120);
+        }
+        if(chartType==='UNKNOWN'){
+          try{
+            var chartBuilder=ch&&typeof ch.modify==='function'?ch.modify():null;
+            if(chartBuilder&&typeof chartBuilder.getChartType==='function')chartType=String(chartBuilder.getChartType());
+          }catch(chartBuilderError){
+            chartType='ERROR:'+String(chartBuilderError&&chartBuilderError.message||chartBuilderError).slice(0,120);
+          }
+        }
+        chartRows.push({title:title,type:chartType,ranges:ranges});
       });
       out.push({sheet:name,lastRow:last,lastColumn:cols,formulaCellsScanned:formulas,
         scanRows:scanRows,scanColumns:scanCols,scanTruncated:last>scanRows||cols>scanCols,
