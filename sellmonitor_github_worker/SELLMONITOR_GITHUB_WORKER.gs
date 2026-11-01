@@ -6601,15 +6601,21 @@ function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId,onl
       var pstat=periodStatus[period]||{partial:false,exact:0,other:0};
       next[0]=pstat.partial?'🟡 ПРЕДВ.':(pstat.other?'🟠 НЕПОЛНЫЙ':'🟢 ФАКТ');
       next[1]=date_(period);
-      var productMap=periodMap[period],list=Object.keys(productMap).filter(function(n){return n!=='';}).map(function(n){return productMap[n][0];});
+      var productMap=periodMap[period],productKeys=Object.keys(productMap).filter(function(n){return n!=='';});
+      var all=productKeys.map(function(n){return productMap[n][0];});
+      var storeValueCache=Object.create(null),productValueCache=Object.create(null);
       for(var ri=0;ri<meta.length;ri++){
         var level=String(meta[ri][0]||''),nm=String(meta[ri][5]||''),code=String(meta[ri][8]||'');
         if(!supported(code))continue;
         var v='';
         if(level==='МАГАЗИН'){
-          var all=Object.keys(productMap).filter(function(n){return n!=='';}).map(function(n){return productMap[n][0];});
-          v=rnpValue(all,code);
-        }else if(nm&&productMap[nm])v=rnpValue(productMap[nm],code);
+          if(!Object.prototype.hasOwnProperty.call(storeValueCache,code))storeValueCache[code]=rnpValue(all,code);
+          v=storeValueCache[code];
+        }else if(nm&&productMap[nm]){
+          var productCacheKey=nm+'::'+code;
+          if(!Object.prototype.hasOwnProperty.call(productValueCache,productCacheKey))productValueCache[productCacheKey]=rnpValue(productMap[nm],code);
+          v=productValueCache[productCacheKey];
+        }
         next[ri+2]=v;
         if(v!==''&&v!=null)written++;
       }
@@ -6627,14 +6633,17 @@ function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId,onl
       queuedArchiveRecords=[];
     }
     updates.sort(function(a,b){return a.col-b.col;});
-    var ui=0;
+    var ui=0,rowChunk=500;
     while(ui<updates.length){
       var uj=ui+1;while(uj<updates.length&&updates[uj].col===updates[uj-1].col+1)uj++;
-      var block=updates.slice(ui,uj),last=sh.getLastRow(),matrix=[];
-      for(var rr=0;rr<last;rr++){var line=[];for(var bj=0;bj<block.length;bj++)line.push(block[bj].values[rr]);matrix.push(line);}
-      sh.getRange(1,block[0].col,last,block.length).setValues(matrix);
-      var rb=sh.getRange(1,block[0].col,last,block.length).getValues();
-      for(var rr=0;rr<last;rr++)for(var bj=0;bj<block.length;bj++)if(cellKey(rb[rr][bj])!==cellKey(block[bj].values[rr]))throw new Error('WB_RNP_MATRIX_READBACK_MISMATCH:'+spec.name+':'+block[bj].col+':'+(rr+1));
+      var block=updates.slice(ui,uj),last=sh.getLastRow();
+      for(var rowStart=0;rowStart<last;rowStart+=rowChunk){
+        var rowCount=Math.min(rowChunk,last-rowStart),matrix=[];
+        for(var rr=rowStart;rr<rowStart+rowCount;rr++){var line=[];for(var bj=0;bj<block.length;bj++)line.push(block[bj].values[rr]);matrix.push(line);}
+        sh.getRange(rowStart+1,block[0].col,rowCount,block.length).setValues(matrix);
+        var rb=sh.getRange(rowStart+1,block[0].col,rowCount,block.length).getValues();
+        for(var rr=0;rr<rowCount;rr++)for(var bj=0;bj<block.length;bj++)if(cellKey(rb[rr][bj])!==cellKey(block[bj].values[rowStart+rr]))throw new Error('WB_RNP_MATRIX_READBACK_MISMATCH:'+spec.name+':'+block[bj].col+':'+(rowStart+rr+1));
+      }
       ui=uj;
     }
     if(spec.name==='01_Дни'&&exactMax){
