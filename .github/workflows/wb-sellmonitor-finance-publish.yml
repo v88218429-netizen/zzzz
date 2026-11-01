@@ -1,4 +1,4 @@
-# Split finance summary, RNP matrices, and dashboard into readback-verified phases; deployment-safe single-store check v5
+# Split finance phases; queue AIR single-store readback verification v6
 # Queue a focused Hoz metadata-boundary verification after the worker fix.
 # Queue Sanych 2026-only chunked-source revalidation after the worker fix.
 # Queue AIR readback revalidation after the transient bridge disconnect.
