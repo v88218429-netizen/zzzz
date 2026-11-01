@@ -4,7 +4,7 @@
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.72',
+  VERSION: 'github-worker-1.3.73',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -6324,14 +6324,29 @@ function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId){
   function restoreBase_(spec,sh){
     var oldFormula=sh.getRange(1,1).getFormula();
     if(sh.getRange(1,1).getNote()==='WB_RNP_BASE_V1')return {rows:0,columns:spec.baseCols,shiftedDayAxis:false,alreadyRestored:true};
-    var src=ss.getSheetByName(spec.source);
+    if(!oldFormula&&String(sh.getRange(2,1).getDisplayValue()||'')==='Уровень'){
+      var haveRows=sh.getLastRow(),midRow=Math.max(3,Math.floor(haveRows/2));
+      var headCheck=sh.getRange(3,1,1,Math.min(spec.baseCols,13)).getValues()[0];
+      var midCheck=sh.getRange(midRow,1,1,Math.min(spec.baseCols,13)).getValues()[0];
+      var tailCheck=sh.getRange(Math.max(3,haveRows),1,1,Math.min(spec.baseCols,13)).getValues()[0];
+      if(haveRows>3&&String(headCheck[0]||'')==='МАГАЗИН'&&String(headCheck[8]||'').trim()&&String(midCheck[8]||'').trim()&&String(tailCheck[8]||'').trim()){
+        sh.getRange(1,1).setNote('WB_RNP_BASE_V1');
+        if(sh.getRange(1,1).getNote()!=='WB_RNP_BASE_V1')throw new Error('WB_RNP_BASE_MARKER_READBACK_FAILED:'+spec.name);
+        return {rows:haveRows,columns:spec.baseCols,shiftedDayAxis:false,alreadyRestored:true,validatedExisting:true};
+      }
+    }
+    var src=ss.getSheetByName(spec.source),externalMode=false;
+    if(!src&&storeId==='sanych_wb'){
+      var rawSource=SpreadsheetApp.openById('1-aBDZ7c5xfmVwwiNmUi9-DyfIANXmfiM5-Ti2_zg4zI');
+      src=rawSource.getSheetByName(spec.name);externalMode=true;
+    }
     if(!src)throw new Error('WB_RNP_BASE_SOURCE_MISSING:'+spec.source);
     var n=src.getLastRow();
     if(!n||n>10000)throw new Error('WB_RNP_BASE_ROW_COUNT_INVALID:'+spec.source+':'+n);
-    var sourceWidth=spec.grain==='day'?12:spec.baseCols;
+    var sourceWidth=externalMode?spec.baseCols:(spec.grain==='day'?12:spec.baseCols);
     var left=src.getRange(1,1,n,sourceWidth).getValues();
     var base=left;
-    if(spec.grain==='day'){
+    if(spec.grain==='day'&&!externalMode){
       var snap=ss.getSheetByName('Матрица_15_16');
       if(!snap||snap.getLastRow()<n)throw new Error('WB_RNP_DAY_SNAPSHOT_SOURCE_MISSING');
       var pair=snap.getRange(1,1,n,2).getValues();
