@@ -171,7 +171,14 @@ jobs:
                         json.dumps(summary, ensure_ascii=False, separators=(",", ":")), flush=True)
                   failures.append(client)
                   break
-              complete = store.get("backfillComplete") is True
+              backfill_complete = store.get("backfillComplete") is True
+              readback_complete = (
+                  store.get("supplyReadbackVerified") is True and
+                  store.get("timingReadbackVerified") is True and
+                  store.get("sortedReadbackVerified") is True and
+                  isinstance(store.get("suppliesWritten"), (int, float))
+              )
+              complete = backfill_complete and readback_complete
               if complete:
                   seen[client] = True
               print("FBS_SUPPLY_SYNC_STORE " + json.dumps({
