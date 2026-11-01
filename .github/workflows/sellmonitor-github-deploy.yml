@@ -8,6 +8,7 @@ on:
       - "sellmonitor_github_worker/patch_master.py"
       - "wb_os/apps_script/WB_FBS_SUPPLY_DIRECT.gs"
       - ".github/workflows/sellmonitor-github-deploy.yml"
+      - ".github/workflows/wb-sellmonitor-finance-publish.yml"
   workflow_dispatch:
 
 permissions:
