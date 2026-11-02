@@ -307,6 +307,43 @@ jobs:
                "offer": key[4], "sku": key[5], "title": key[6], "qty": qty}
               for key, qty in sorted(records_by_key.items())
           ]
+          # Read-only check for the currently supported Ozon accrual endpoint; keep order publication independent.
+          finance_probe_day = "2026-10-31"
+          for cabinet, label, client_var, key_var in stores:
+              api_context = {"store": label, "flow": "FINANCE_PROBE", "page": 1}
+              finance_headers = {
+                  "Client-Id": os.environ[client_var],
+                  "Api-Key": os.environ[key_var],
+                  "Content-Type": "application/json",
+              }
+              try:
+                  probe_response = api_post(
+                      "/v1/finance/accrual/by-day",
+                      {"last_id": "", "date": finance_probe_day},
+                      finance_headers,
+                  )
+                  probe_result = probe_response.get("result", probe_response)
+                  probe_rows = probe_result.get("accruals") if isinstance(probe_result, dict) else None
+                  probe_rows = probe_rows if isinstance(probe_rows, list) else []
+                  probe_cursor = probe_result.get("last_id") if isinstance(probe_result, dict) else None
+                  print(
+                      "OZON_FINANCE_PROBE=store=" + label
+                      + ";day=" + finance_probe_day
+                      + ";status=AVAILABLE"
+                      + ";rows=" + str(len(probe_rows))
+                      + ";next_page=" + str(bool(probe_cursor))
+                      + ";response_keys=" + ",".join(sorted(probe_result.keys()))[:500],
+                      flush=True,
+                  )
+              except Exception as exc:
+                  print(
+                      "OZON_FINANCE_PROBE=store=" + label
+                      + ";day=" + finance_probe_day
+                      + ";status=UNAVAILABLE"
+                      + ";error_class=" + type(exc).__name__,
+                      flush=True,
+                  )
+
           url = "https://script.google.com/macros/s/" + os.environ["WEBAPP_DEPLOYMENT_ID"] + "/exec"
           exported_at = now.isoformat().replace("+00:00", "Z")
           accepted_actions = {"publish_ozon_api_orders", "publish_ozon_summary_orders"}
