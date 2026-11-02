@@ -54,9 +54,13 @@ jobs:
           age=(dt.datetime.now(dt.timezone.utc)-created).total_seconds()
           names={"WB FBS GitHub recovery","WB FBS Sanych targeted recovery",
                  "WB FBS retry failed recovery windows","WB FBS supply sync via GitHub"}
+          writer_paths={".github/workflows/wb-fbs-github-recovery.yml",
+                        ".github/workflows/wb-fbs-sanych-targeted-recovery.yml",
+                        ".github/workflows/wb-fbs-auto-retry.yml",
+                        ".github/workflows/wb-fbs-supply-sync.yml"}
           runs=get("https://api.github.com/repos/"+repo+"/actions/runs?per_page=100").get("workflow_runs",[])
           older=[run for run in runs if str(run.get("id"))!=os.environ["CURRENT_RUN_ID"]
-                 and run.get("name") in names
+                 and (run.get("name") in names or run.get("path") in writer_paths)
                  and run.get("status") in {"queued","in_progress","pending","waiting","requested"}
                  and run.get("created_at","") < own["created_at"]]
           stale=age>int(os.environ["MAX_AGE_SECONDS"])
