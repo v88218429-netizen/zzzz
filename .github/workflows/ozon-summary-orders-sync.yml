@@ -123,7 +123,7 @@ jobs:
                   if not checkpoint_header_written:
                       f.write("### Контроль публикации Ozon\n\n| Кабинет | Период | Фаза | Версия источника | Состояние | Проверка чтением | Следующее действие |\n|---|---|---|---|---|---|---|\n")
                       checkpoint_header_written = True
-                  f.write("| " + store + " | " + COVERAGE_FROM + "–" + coverage_to + " | " + phase + " | " + source_version + " | " + state + " | " + readback + " | " + next_action + " |\\n")
+                  f.write("| " + store + " | " + COVERAGE_FROM + "–" + coverage_to + " | " + phase + " | " + source_version + " | " + state + " | " + readback + " | " + next_action + " |\n")
               print("OZON_CHECKPOINT=store=" + store + ";period=" + COVERAGE_FROM + ".." + coverage_to + ";phase=" + phase + ";source=" + source_version + ";state=" + state + ";readback=" + readback + ";next=" + next_action, flush=True)
           if resume_phase not in {"source", "orders", "finance"}:
               raise SystemExit("INVALID_RESUME_PHASE:" + resume_phase)
