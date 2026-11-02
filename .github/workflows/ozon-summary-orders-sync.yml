@@ -534,7 +534,15 @@ jobs:
                           for accrual in accruals:
                               if not isinstance(accrual, dict):
                                   raise RuntimeError("OZON_FINANCE_INVALID_ROW:" + label + ":" + day_key)
-                              amount = finance_amount(accrual.get("total_amount"), label, day_key)
+                              if accrual.get("total_amount") is None or accrual.get("total_amount") == "":
+                                  nested = {}
+                                  for field in ("posting", "item_fees", "non_item_fee"):
+                                      item = accrual.get(field)
+                                      nested[field] = sorted(item.keys()) if isinstance(item, dict) else type(item).__name__
+                                  print("OZON_FINANCE_MISSING_AMOUNT_DIAGNOSTIC=store="+label+";day="+day_key+";category="+str(accrual.get("accrued_category") or "<empty>")+";top_keys="+json.dumps(sorted(accrual.keys()),ensure_ascii=True)+";nested_keys="+json.dumps(nested,ensure_ascii=True,sort_keys=True),flush=True)
+                                  amount = finance_amount(accrual.get("total_amount"), label, day_key)
+                              else:
+                                  amount = finance_amount(accrual.get("total_amount"), label, day_key)
                               raw_category = str(accrual.get("accrued_category") or "").strip().upper()
                               category = raw_category if raw_category in ("ITEM", "POSTING", "NON_ITEM") else "OTHER"
                               day_totals[category] += amount
