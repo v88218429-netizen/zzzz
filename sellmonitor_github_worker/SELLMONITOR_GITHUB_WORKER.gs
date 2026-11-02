@@ -7574,8 +7574,8 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
       });
       mark('STATE_VERIFY_START_BATCHED_'+segments.length+'_SEGMENTS_'+verifySpecs.length+'_RANGES');
       var verifiedA1={};
-      for(var verifyOffset=0;verifyOffset<verifySpecs.length;verifyOffset+=50){
-        var verifyPart=verifySpecs.slice(verifyOffset,verifyOffset+50);
+      for(var verifyOffset=0;verifyOffset<verifySpecs.length;verifyOffset+=5){
+        var verifyPart=verifySpecs.slice(verifyOffset,verifyOffset+5);
         var verifyQuery=verifyPart.map(function(spec){
           return 'ranges='+encodeURIComponent(spec.a1);
         }).join('&');
