@@ -130,8 +130,8 @@
         },
         {
           "path": "scripts/runtime_supervisor.py",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/a70db23e37b51d8f870bb1fabed48ac312e2877d/wb_ai_manager/source/scripts/runtime_supervisor.py",
-          "sha256": "92238513c9e9e3555b59b2af5a5c374576aa052c37ddc845a691fe5a0e726103",
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/31b0ebd9d5bfcd9b9037e19c5977bb5de509318b/wb_ai_manager/source/scripts/runtime_supervisor.py",
+          "sha256": "d8f481db0f91ea6c1dacb68c03f69064cc8b869511ff7ef27b2b4565a4fc226f",
           "executable": true
         },
         {
@@ -161,8 +161,8 @@
         },
         {
           "path": "src/wb_control_center/agents/advertising.py",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/f6ff9560e6040b5664b4a7e591ec65b1f5a528d4/wb_ai_manager/source/src/wb_control_center/agents/advertising.py",
-          "sha256": "4dd1c71fb0c6ac20a8dbb55de1d1c77a010ec627a933ca47f962ccb44e1a2bc0"
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/31b0ebd9d5bfcd9b9037e19c5977bb5de509318b/wb_ai_manager/source/src/wb_control_center/agents/advertising.py",
+          "sha256": "13fc1303cbbae7cea83ec07c9b8afa5dd82e5affbae81f82b17f3d4a9cd30d2a"
         },
         {
           "path": "src/wb_control_center/agents/api_health.py",
