@@ -223,7 +223,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RECOVERY_STORE: ${{ env.PUBLISH_ONLY_STORE || 'all' }}
+          RECOVERY_STORE: ${{ github.event_name == 'workflow_dispatch' && inputs.store != 'all' && inputs.store || github.event_name == 'push' && contains(github.event.head_commit.message, '[air-only]') && 'air_wb' || github.event_name == 'push' && contains(github.event.head_commit.message, '[hozyayushka-only]') && 'hozyayushka_wb' || github.event_name == 'push' && contains(github.event.head_commit.message, '[sanych-only]') && 'sanych_wb' || 'all' }}
           RECOVERY_REF: ${{ github.ref_name }}
         run: |
           set -euo pipefail
