@@ -24,7 +24,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: wb-bridge-production-mutations
+  group: wb-fbs-production-mutations
   cancel-in-progress: false
   queue: max
 
