@@ -21,10 +21,6 @@ permissions:
   contents: read
 
 concurrency:
-  group: wb-fbs-health-read-only
-  cancel-in-progress: false
-
-concurrency:
   group: wb-fbs-production-mutations
   cancel-in-progress: false
   queue: max
