@@ -209,6 +209,17 @@ function wbFbsSupplyEnsureRows_(sheet, neededRows) {
   }
 }
 
+function wbFbsSupplyDateSerial_(value) {
+  var local = Utilities.formatDate(value, Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss.SSS');
+  var parts = local.match(/^(\\d{4})-(\\d{2})-(\\d{2}) (\\d{2}):(\\d{2}):(\\d{2})\\.(\\d{3})$/);
+  if (!parts) throw new Error('WB_FBS_DIRECT: invalid local date for Sheets comparison');
+  var localUtcMs = Date.UTC(
+    Number(parts[1]), Number(parts[2]) - 1, Number(parts[3]),
+    Number(parts[4]), Number(parts[5]), Number(parts[6]), Number(parts[7])
+  );
+  return localUtcMs / 86400000 + 25569;
+}
+
 function wbFbsSupplyMatricesEqual_(expected, actual) {
   if (!Array.isArray(expected) || !Array.isArray(actual) || expected.length !== actual.length) return false;
   for (var r = 0; r < expected.length; r++) {
@@ -217,8 +228,8 @@ function wbFbsSupplyMatricesEqual_(expected, actual) {
     for (var c = 0; c < left.length; c++) {
       var a = left[c], b = right[c];
       if (a instanceof Date || b instanceof Date) {
-        var aSerial = a instanceof Date ? a.getTime() / 86400000 + 25569 : (typeof a === 'number' ? a : NaN);
-        var bSerial = b instanceof Date ? b.getTime() / 86400000 + 25569 : (typeof b === 'number' ? b : NaN);
+        var aSerial = a instanceof Date ? wbFbsSupplyDateSerial_(a) : (typeof a === 'number' ? a : NaN);
+        var bSerial = b instanceof Date ? wbFbsSupplyDateSerial_(b) : (typeof b === 'number' ? b : NaN);
         if (!isFinite(aSerial) || !isFinite(bSerial) || Math.abs(aSerial - bSerial) > 1e-8) return false;
       } else if ((a == null || a === '') && (b == null || b === '')) {
         continue;
