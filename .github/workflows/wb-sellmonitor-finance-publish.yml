@@ -234,9 +234,9 @@ jobs:
                   next_action = phases[phase_index + 1] if phase_index + 1 < len(phases) else "этапы магазина завершены"
                   with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as checkpoint_file:
                       if not summary_header_written:
-                          checkpoint_file.write("### Контроль публикации WB\\n\\n| Кабинет | Период | Фаза | Версия источника | Итог | Проверка чтением | Следующее действие |\\n|---|---|---|---|---|---|---|\\n")
+                          checkpoint_file.write("### Контроль публикации WB\n\n| Кабинет | Период | Фаза | Версия источника | Итог | Проверка чтением | Следующее действие |\n|---|---|---|---|---|---|---|\n")
                           summary_header_written = True
-                      checkpoint_file.write("| " + store_id + " | " + str(item.get("source_min")) + "–" + str(item.get("source_max")) + " | " + phase + " | " + source_version + " | VERIFIED | " + verification + " | " + next_action + " |\\n")
+                      checkpoint_file.write("| " + store_id + " | " + str(item.get("source_min")) + "–" + str(item.get("source_max")) + " | " + phase + " | " + source_version + " | VERIFIED | " + verification + " | " + next_action + " |\n")
                   phase_item = (result.get("stores") or [{}])[0] if isinstance(result, dict) else {}
                   if phase_item.get("no_source_data"):
                       print("STORE=" + store_id + " PHASE=" + phase + " STATUS=NO_SOURCE_DATA", flush=True)
@@ -249,9 +249,9 @@ jobs:
           if errors or len(verified) != len(expected):
               retry_phase = failed_phases[0][1] if failed_phases else "summary"
               with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output_file:
-                  output_file.write("resume_phase=" + retry_phase + "\\n")
+                  output_file.write("resume_phase=" + retry_phase + "\n")
               with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as checkpoint_file:
-                  checkpoint_file.write("\\n| all | current | " + retry_phase + " | unknown | RETRY_REQUIRED | этап не прошёл проверку | повторить с этой фазы |\\n")
+                  checkpoint_file.write("\n| all | current | " + retry_phase + " | unknown | RETRY_REQUIRED | этап не прошёл проверку | повторить с этой фазы |\n")
               raise SystemExit("WB finance phased publication incomplete: " + json.dumps({"verified": len(verified), "expected": len(expected), "errors": errors}, ensure_ascii=False))
           print("WB_FINANCE_PHASED_PUBLICATION_OK stores=" + str(len(verified)), flush=True)
           PY
