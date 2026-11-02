@@ -509,7 +509,7 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
       return Math.round(n*100)/100;
     }
     byKey[key]={cabinet:cabinet,day:day,rows:count,total:money_(r.total,'total'),item:money_(r.item,'item'),posting:money_(r.posting,'posting'),nonItem:money_(r.non_item,'non_item'),other:money_(r.other,'other'),unknownCategories:Number(r.unknown_categories||0)};
-    byKey[key].other+=byKey[key].unknownCategories;
+    if(!isFinite(byKey[key].unknownCategories)||byKey[key].unknownCategories<0)throw new Error('OZON_FINANCE_UNKNOWN_CATEGORY_COUNT_INVALID:'+cabinet+':'+day);
   });
   if(dailyIn.length!==dates.length*accounts.length)throw new Error('OZON_FINANCE_DAY_COUNT_MISMATCH:'+dailyIn.length+':'+(dates.length*accounts.length));
   dates.forEach(function(d){accounts.forEach(function(c){if(!byKey[c+'|'+d])throw new Error('OZON_FINANCE_DAY_MISSING:'+c+':'+d);});});
@@ -548,7 +548,16 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
     var archiveId='FIN_'+cabinet+'_'+exported,archiveRows=0;
     function replace_(name,rows,width){
       var sh=ss.getSheetByName(name);if(!sh)sh=ss.insertSheet(name);
-      var oldLast=sh.getLastRow(),oldWidth=Math.max(width,sh.getLastColumn());
+      var oldLast=sh.getLastRow(),oldWidth=Math.max(width,sh.getLastColumn()),unchanged=false;
+      if(oldLast===rows.length&&oldWidth>=width){
+        var existing=sh.getRange(1,1,oldLast,width).getValues(),compareWidth=String(rows[0][width-1]||'')==='Время выгрузки'?width-1:width;
+        unchanged=true;
+        for(var er=0;er<rows.length&&unchanged;er++)for(var ec=0;ec<compareWidth;ec++)if(String(existing[er][ec]||'')!==String(rows[er][ec]||'')){unchanged=false;break;}
+        if(unchanged){
+          var stableCheck=sh.getRange(1,1,rows.length,width).getValues();
+          return {rows:rows.length-1,sha256:sellmonitorGithubOzonHash_(stableCheck),readback:true,unchanged:true};
+        }
+      }
       if(oldLast>0){
         var old=sh.getRange(1,1,oldLast,oldWidth).getValues();
         archiveRows+=sellmonitorGithubOzonArchive_(archive,name,'A1:'+oldWidth+':'+oldLast,old,exported,archiveId);
@@ -558,7 +567,7 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
       sh.setFrozenRows(1);sh.setHiddenGridlines(true);
       sh.getRange(1,1,1,width).setBackground('#17365D').setFontColor('#FFFFFF').setFontWeight('bold').setWrap(true);
       if(rows.length>1){
-        sh.getRange(2,2,rows.length-1,Math.min(4,width-1)).setNumberFormat('#,##0.00;[Red]-#,##0.00;–');
+        sh.getRange(2,2,rows.length-1,Math.min(5,width-1)).setNumberFormat('#,##0.00;[Red]-#,##0.00;–');
         sh.getRange(2,1,rows.length-1,1).setNumberFormat('@');
         sh.getRange(2,width,rows.length-1,1).setNumberFormat('@');
       }
@@ -587,7 +596,7 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
         if function_anchor not in worker_text:
             raise SystemExit("OZON_FINANCE_FUNCTION_ANCHOR_MISSING")
         worker_text = worker_text.replace(function_anchor, finance_function + "\n" + function_anchor, 1)
-        worker_text = worker_text.replace("VERSION: 'github-worker-1.3.85'", "VERSION: 'github-worker-1.3.86'", 1)
+        worker_text = worker_text.replace("VERSION: 'github-worker-1.3.84'", "VERSION: 'github-worker-1.3.86'", 1)
         print("OZON_FINANCE_DAY_LAYER=patched")
     elif "function sellmonitorGithubPublishOzonFinance_(" not in worker_text or "action === 'publish_ozon_api_finance'" not in worker_text:
         raise SystemExit("OZON_FINANCE_PATCH_PARTIAL")
