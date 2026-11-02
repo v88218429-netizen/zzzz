@@ -2,7 +2,7 @@
   "schema": 1,
   "channels": {
     "stable": {
-      "version": "1.1.42",
+      "version": "1.1.43",
       "channel": "stable",
       "notes": "Накопление полного обхода рекламных кампаний между циклами и проверка свежести данных.",
       "minimum_current_version": "1.0.0",
@@ -34,18 +34,18 @@
         },
         {
           "path": "plugin.json",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/616aa7afa0f20d50da0fe42098f602d4e8884597/wb_ai_manager/source/plugin.json",
-          "sha256": "bed4f41ca9aca754e66d5be3ee8870d05a2f407e30e51ef02d057f7bc93bf39d"
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/b2d1e61408310b0011fce7871b2b822b862b46f7/wb_ai_manager/source/plugin.json",
+          "sha256": "a9604018f56254bf39879b998d640852aa730ae27a52edbe739027ee6c55d1a7"
         },
         {
           "path": "pyproject.toml",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/94d13bbdcf8b8f870d6f5a02e63cdac1035a0ec3/wb_ai_manager/source/pyproject.toml",
-          "sha256": "e2213002515baaa4b4b8a245f9cd87c517a7ca97ca2074fd0478cf9a3bc80af9"
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/b2d1e61408310b0011fce7871b2b822b862b46f7/wb_ai_manager/source/pyproject.toml",
+          "sha256": "68fca59ecf0e908d43c52d3b554bcccc3b95609ffe42f7058e2144d19fbedc11"
         },
         {
           "path": "RELEASE_NOTES.md",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/e3284485b4aaddcdeeae36d17fb084dad86aa17b/wb_ai_manager/source/RELEASE_NOTES.md",
-          "sha256": "50c16cb47cf7fe0f6c8b007fa0af8a7f4271864122d9ed7a2a77bc89ad40473b"
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/b2d1e61408310b0011fce7871b2b822b862b46f7/wb_ai_manager/source/RELEASE_NOTES.md",
+          "sha256": "996e29de5a97851a200c0600a42e4896c703ac11e19b3990a92e8393b37daaff"
         },
         {
           "path": "scripts/auto_refresh_sheets.py",
@@ -130,8 +130,8 @@
         },
         {
           "path": "src/wb_control_center/__init__.py",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/84222134c150e6934c76ee6eb1c8afacab0cdbd8/wb_ai_manager/source/src/wb_control_center/__init__.py",
-          "sha256": "c97fbd423e4a84693bf56c483ffce1316f9daadc948d21af009533b2e9c34298"
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/b2d1e61408310b0011fce7871b2b822b862b46f7/wb_ai_manager/source/src/wb_control_center/__init__.py",
+          "sha256": "25e3c03e95e73a5a840b3ab1f91591d698c100a60c9ee755c616a6df5b4b925f"
         },
         {
           "path": "src/wb_control_center/__main__.py",
@@ -150,8 +150,8 @@
         },
         {
           "path": "src/wb_control_center/agents/advertising.py",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/f1f441fccfe51e08ccfa9d1ea0bb7d98ea43759a/wb_ai_manager/source/src/wb_control_center/agents/advertising.py",
-          "sha256": "de9671ffe32a259358467fc6393bd72d5419fef137a329384c4d378aed0ec655"
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/b2d1e61408310b0011fce7871b2b822b862b46f7/wb_ai_manager/source/src/wb_control_center/agents/advertising.py",
+          "sha256": "d0163551bd69cd4a97b285a44013b2c6c3d137e6befd02ded01c937b747eadc4"
         },
         {
           "path": "src/wb_control_center/agents/api_health.py",
