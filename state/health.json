@@ -1,0 +1,61 @@
+{
+  "generated_at": "2026-11-01T23:55:07.719677+00:00",
+  "health": "ok",
+  "connected_cabinets": 3,
+  "clean_cabinets": 3,
+  "expected_cabinets": 3,
+  "sheets_live": true,
+  "dashboard_published": true,
+  "optimizer_state_shops": 3,
+  "optimizer_sweeps_complete": 1,
+  "optimizer_sweep_progress": {
+    "ap": {
+      "sweep_id": 9,
+      "campaigns_seen": 36,
+      "campaigns_total": 44,
+      "products_seen": 36,
+      "products_total": 44,
+      "complete": false
+    },
+    "aa": {
+      "sweep_id": 33,
+      "campaigns_seen": 4,
+      "campaigns_total": 10,
+      "products_seen": 4,
+      "products_total": 10,
+      "complete": false
+    },
+    "yv": {
+      "sweep_id": 17,
+      "campaigns_seen": 24,
+      "campaigns_total": 24,
+      "products_seen": 24,
+      "products_total": 24,
+      "complete": true
+    }
+  },
+  "query_status": "ready_guarded",
+  "query_facts_status": "partial_refresh",
+  "query_operational_ready": true,
+  "query_rows": 2429,
+  "fresh_query_rows": 1987,
+  "blocked_query_rows": 442,
+  "ready_query_actions": 0,
+  "search_publish": {
+    "air": {
+      "ok": true,
+      "skipped": true,
+      "reason": "wb_search_no_query_rows",
+      "cabinet": "air",
+      "observed_at": "2026-11-01T23:58:38.106562+00:00"
+    },
+    "hozyushka": {
+      "ok": true,
+      "skipped": true,
+      "reason": "wb_search_no_query_rows",
+      "cabinet": "hozyushka",
+      "observed_at": "2026-11-01T23:58:32.990794+00:00"
+    }
+  },
+  "source_error_stages": []
+}
