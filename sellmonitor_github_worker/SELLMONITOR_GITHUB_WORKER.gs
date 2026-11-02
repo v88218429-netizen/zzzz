@@ -1,10 +1,10 @@
 /**
- * Sellmonitor GitHub Central Worker v1.3.80
+ * Sellmonitor GitHub Central Worker v1.3.81
  * GitHub is source-of-truth/scheduler. This Apps Script project is only
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.80',
+  VERSION: 'github-worker-1.3.81',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -6545,7 +6545,7 @@ function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId,onl
     var x=aggregate(list,code);return x==null?'':x;
   }
   var exactMax='';
-  built.day.forEach(function(r){var dayKey=String(r[1]||'');if(dayRangeMatch&&(dayKey<dayRangeStart||dayKey>dayRangeEnd))return;if(String(r[10+built.metricHeaders.length]||'')==='FACTUAL_INNER_ANALYTICS'&&dayKey>exactMax)exactMax=dayKey;});
+  built.day.forEach(function(r){var dayKey=String(r[1]||'');if(onlyPeriodStart&&(dayKey<onlyPeriodStart||dayKey>onlyPeriodEnd))return;if(onlyPeriodPrefix&&dayKey.indexOf(onlyPeriodPrefix)!==0)return;if(String(r[10+built.metricHeaders.length]||'')==='FACTUAL_INNER_ANALYTICS'&&dayKey>exactMax)exactMax=dayKey;});
   var stats=[];
   specs.forEach(function(spec){
     var sh=ss.getSheetByName(spec.name);if(!sh)throw new Error('WB_RNP_MATRIX_MISSING:'+spec.name);
