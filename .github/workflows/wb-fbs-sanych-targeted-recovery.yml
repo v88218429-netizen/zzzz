@@ -29,7 +29,7 @@ permissions:
 
 concurrency:
   # Source-only pushes that do not request historical replay must not block production writers.
-  group: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[SANYCH-90D-SLICED]') && 'wb-fbs-data-mutations' || github.event_name != 'push' && 'wb-fbs-data-mutations' || format('wb-fbs-noop-{0}', github.run_id) }}
+  group: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[SANYCH-90D-SLICED]') && 'wb-bridge-production-mutations' || github.event_name != 'push' && 'wb-bridge-production-mutations' || format('wb-fbs-noop-{0}', github.run_id) }}
   cancel-in-progress: false
   queue: max
 
@@ -118,7 +118,7 @@ jobs:
         run: python wb_worker/sanych_fbs_recovery.py
   recover_manual:
     if: ${{ github.event_name == 'workflow_dispatch' }}
-    name: "recover SANYCH manual range"
+    name: "recover SANYCH ${{ inputs.start_date }}–${{ inputs.end_date }}"
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
