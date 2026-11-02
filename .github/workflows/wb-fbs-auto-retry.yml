@@ -1,5 +1,5 @@
 name: WB FBS retry failed recovery windows
-run-name: WB FBS recovery pass ${{ inputs.pass || '1' }}
+run-name: WB FBS recovery source ${{ inputs.source_run_id || inputs.run_id }} pass ${{ inputs.pass || '1' }}
 
 on:
   workflow_dispatch:
@@ -13,13 +13,18 @@ on:
         description: "GitHub Actions run IDs, comma-separated, containing failed FBS windows"
         required: true
         type: string
+      source_run_id:
+        description: "Original FBS recovery run used to trace bounded retries"
+        required: false
+        default: ""
+        type: string
 
 permissions:
   actions: read
   contents: read
 
 concurrency:
-  group: wb-fbs-data-mutations
+  group: wb-bridge-production-mutations
   cancel-in-progress: false
   queue: max
 
