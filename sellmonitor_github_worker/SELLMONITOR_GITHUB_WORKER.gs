@@ -4,7 +4,7 @@
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.83',
+  VERSION: 'github-worker-1.3.84',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -5790,12 +5790,13 @@ function sellmonitorGithubOzonAgg_(records, storeId, today) {
 
 function sellmonitorGithubPublishOzonSummaryOrders_(payload) { 
   var apiMode=!!(payload&&payload.source==='ozon_seller_api');
-  var sourceFallback=false,sourceActivityVerified=false,records=[],ignored=0;
+  var sourceFallback=false,sourceActivityVerified=false,apiPagesComplete=false,records=[],ignored=0;
   var sourceStatus='',sourceLastSuccess='',sourceUpdated='',coverageFrom='',coverageTo='';
   if(apiMode){
     if(payload.complete!==true)throw new Error('OZON_API_EXPORT_INCOMPLETE_PRESERVE');
     var completed=(payload.completed_accounts||[]).map(String).sort();
     if(JSON.stringify(completed)!==JSON.stringify(['1','2']))throw new Error('OZON_API_ACCOUNT_COVERAGE_INCOMPLETE_PRESERVE');
+    apiPagesComplete=true;
     sourceUpdated=String(payload.exported_at||'').trim();
     if(!sourceUpdated||!isFinite(new Date(sourceUpdated).getTime()))throw new Error('OZON_API_EXPORT_TIMESTAMP_INVALID');
     sourceLastSuccess=sourceUpdated;
@@ -5922,8 +5923,9 @@ function sellmonitorGithubPublishOzonSummaryOrders_(payload) {
     }
     var dailyPeriodCount=agg.summary.filter(function(row){return String(row[0]||'')==='День';}).length;
     var lastFullDay=agg.fullDays.length?String(agg.fullDays[agg.fullDays.length-1][0]||''):'';
-    var fullDayNote=sourceActivityVerified&&lastFullDay?'Последняя закрытая дата с данными — '+lastFullDay+'.':
-      (sourceActivityVerified?'Нет подтверждённой полной даты с данными.':'Проверка полноты выгрузки не подтверждена; данные предварительные.');
+    var completenessVerified=apiMode&&apiPagesComplete;
+    var fullDayNote=(completenessVerified||sourceActivityVerified)&&lastFullDay?'Последняя закрытая дата с данными — '+lastFullDay+'.':
+      ((completenessVerified||sourceActivityVerified)?'Нет подтверждённой полной даты с данными.':'Проверка полноты выгрузки не подтверждена; данные предварительные.');
     var currentDayNote=agg.maxDay===today?today+' — текущая неполная дата, предварительно.':
       (agg.maxDay<today?'За '+today+' строк в выгрузке нет; это не считается нулём.':'');
     var adCoverageNote=adMin&&adMax?'Реклама доступна только по кампаниям, без SKU/offer_id; покрытие строк дневного источника '+adMin+'–'+adMax+'.':
@@ -6112,7 +6114,7 @@ function sellmonitorGithubPublishOzonSummaryOrders_(payload) {
       results.push({store:cfg.name,ok:false,error:String(err && err.message || err),source_updated:sourceUpdated});
     }
   });
-  return {ok:results.every(function(x){return x.ok===true;}),action:'publish_ozon_summary_orders',source_id:SMC_OZON_SUMMARY.sourceId,source_rows:records.length,ignored_rows:ignored,source_updated:sourceUpdated,source_status:sourceStatus,source_fallback_used:sourceFallback,source_activity_verified:sourceActivityVerified,stores:results};
+  return {ok:results.every(function(x){return x.ok===true;}),action:'publish_ozon_summary_orders',source_id:SMC_OZON_SUMMARY.sourceId,source_rows:records.length,ignored_rows:ignored,source_updated:sourceUpdated,source_status:sourceStatus,source_fallback_used:sourceFallback,source_activity_verified:sourceActivityVerified,api_pages_complete:apiPagesComplete,stores:results};
 }
 
 
