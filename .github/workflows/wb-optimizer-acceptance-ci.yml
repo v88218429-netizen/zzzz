@@ -14,6 +14,8 @@ on:
     paths:
       - "wb_ai_manager/source/src/wb_control_center/optimizer_acceptance.py"
       - "wb_ai_manager/source/tests/test_optimizer_acceptance.py"
+      - "wb_ai_manager/source/src/wb_control_center/agents/advertising.py"
+      - "wb_ai_manager/source/tests/test_optimizer_resilience.py"
       - ".github/workflows/wb-optimizer-acceptance-ci.yml"
 
 permissions:
