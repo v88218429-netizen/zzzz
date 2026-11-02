@@ -7383,7 +7383,8 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
       var usedRows=Math.max(0,last-1),stale=false;
       mark('STATE_READ_START_NATIVE_'+rows.length+'_IDS_'+usedRows+'_ROWS');
       if(rows.length<=20){
-        // Small changed batches are sparse; read only their contiguous row groups.
+        // Sparse batches are fetched in one Sheets API call. SpreadsheetApp calls
+        // per scattered row made recovery batches exceed the six-minute runtime.
         var groups=[];
         rows.forEach(function(item){
           var group=groups.length?groups[groups.length-1]:null;
@@ -7391,16 +7392,30 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
           else group.end=item.row;
           group.items.push(item);
         });
-        groups.forEach(function(group){
-          var values=orderSheetNative.getRange(group.start,1,group.end-group.start+1,7).getDisplayValues();
+        mark('STATE_READ_START_SHEETS_API_SPARSE_'+rows.length+'_IDS_'+groups.length+'_RANGES');
+        var stateQuery=groups.map(function(group){
+          return 'ranges='+encodeURIComponent(orderSheet+'!A'+group.start+':G'+group.end);
+        }).join('&');
+        var stateResponse=fetchSheetApi(apiBase+'/values:batchGet?'+stateQuery+
+          '&majorDimension=ROWS&valueRenderOption=FORMATTED_VALUE',{method:'get'});
+        var stateCode=stateResponse.getResponseCode();
+        if(stateCode<200||stateCode>=300)
+          throw new Error('FBS_STATE_BATCH_READ_HTTP_'+stateCode+':'+sheetApiFailure(stateResponse));
+        var statePayload;
+        try{statePayload=JSON.parse(stateResponse.getContentText()||'{}');}
+        catch(stateParseError){throw new Error('FBS_STATE_BATCH_READ_INVALID_JSON');}
+        var stateRanges=statePayload.valueRanges||[];
+        if(stateRanges.length!==groups.length)throw new Error('FBS_STATE_BATCH_READ_RANGE_COUNT_MISMATCH');
+        groups.forEach(function(group,groupIndex){
+          var values=(stateRanges[groupIndex]||{}).values||[];
           group.items.forEach(function(item){
             var rowValues=values[item.row-group.start]||[];
             if(String(rowValues[0]||'')!==item.id){stale=true;return;}
             stateByRow[item.row]=[rowValues[4]||'',rowValues[5]||'',rowValues[6]||''];
           });
         });
-        mark('STATE_READ_DONE_NATIVE_SPARSE_'+rows.length+'_IDS_'+groups.length+'_RANGES');
-        console.log('FBS_STAGE_STATE_READ_NATIVE_SPARSE ids='+rows.length+' ranges='+groups.length+' ms='+(Date.now()-fbsStarted));
+        mark('STATE_READ_DONE_SHEETS_API_SPARSE_'+rows.length+'_IDS_'+groups.length+'_RANGES');
+        console.log('FBS_STAGE_STATE_READ_SHEETS_API_SPARSE ids='+rows.length+' ranges='+groups.length+' ms='+(Date.now()-fbsStarted));
       }else{
         // Larger batches use two bounded whole-column reads instead of hundreds
         // of individual service calls for scattered rows.
