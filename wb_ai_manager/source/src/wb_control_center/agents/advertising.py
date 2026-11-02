@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from .base import BaseAgent
 from ..metrics import extract_ad_metrics, extract_ad_nm_metrics, extract_campaign_ids, summarize_for_prompt, to_number
 from ..models import AgentResult
+
+log = logging.getLogger(__name__)
 
 log = logging.getLogger(__name__)
 
@@ -143,6 +146,68 @@ def _transient_ad_read_error(exc: Exception) -> bool:
     return any(marker in text for marker in _TRANSIENT_AD_READ_MARKERS)
 
 
+_TRANSIENT_AD_READ_MARKERS = (
+    "remoteprotocolerror",
+    "server disconnected without sending a response",
+    "readtimeout",
+    "connecttimeout",
+    "connecterror",
+    "brokenresourceerror",
+    "closedresourceerror",
+    "endofstream",
+    "broken pipe",
+    "connection reset",
+    "connection aborted",
+    "temporarily unavailable",
+    "timed out",
+    "http 429",
+    "status code 429",
+    "status_code=429",
+    "http 500",
+    "http 502",
+    "http 503",
+    "http 504",
+)
+
+
+def _transient_ad_read_error(exc: Exception) -> bool:
+    text = f"{type(exc).__name__}: {exc}".lower()
+    return any(marker in text for marker in _TRANSIENT_AD_READ_MARKERS)
+
+
+def _broken_ad_transport(exc: Exception) -> bool:
+    text = f"{type(exc).__name__}: {exc}".lower()
+    return any(marker in text for marker in (
+        "remoteprotocolerror", "server disconnected without sending a response",
+        "readtimeout", "connecttimeout", "connecterror", "brokenresourceerror",
+        "closedresourceerror", "endofstream", "broken pipe", "connection reset",
+        "connection aborted",
+    ))
+
+
+async def _safe_ad_read(agent: BaseAgent, tool: str, **kwargs: Any) -> Any:
+    """Retry transient failures only for the advertising agents' read-only calls."""
+    for attempt in range(3):
+        try:
+            return await agent.call(tool, **kwargs)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            if attempt == 2 or not _transient_ad_read_error(exc):
+                return {"_error": str(exc), "_tool": tool}
+            log.warning(
+                "Temporary WB advertising read failure: tool=%s attempt=%s error=%s",
+                tool, attempt + 1, type(exc).__name__,
+            )
+            if _broken_ad_transport(exc):
+                try:
+                    await agent.ctx.wb.close()
+                except Exception as close_exc:
+                    log.warning("Could not reset WB MCP session: %s", type(close_exc).__name__)
+            await asyncio.sleep(2 ** (attempt + 1))
+    return {"_error": "WB advertising read failed after retry limit", "_tool": tool}
+
+
 class AdvertisingMonitorAgent(BaseAgent):
     name = "advertising_monitor"
 
@@ -205,26 +270,7 @@ class AdvertisingOptimizerAgent(BaseAgent):
     name = "advertising_optimizer"
 
     async def _safe(self, tool: str, **kwargs: Any) -> Any:
-        # This agent only calls WB read endpoints. Retry a small set of transient
-        # transport failures, and reset the persistent MCP session before retrying.
-        for attempt in range(3):
-            try:
-                return await self.call(tool, **kwargs)
-            except asyncio.CancelledError:
-                raise
-            except Exception as exc:
-                if attempt == 2 or not _transient_ad_read_error(exc):
-                    return {"_error": str(exc), "_tool": tool}
-                log.warning(
-                    "Temporary WB optimizer read failure: tool=%s attempt=%s error=%s; resetting MCP session",
-                    tool, attempt + 1, type(exc).__name__,
-                )
-                try:
-                    await self.ctx.wb.close()
-                except Exception as close_exc:
-                    log.warning("Could not reset WB MCP session: %s", type(close_exc).__name__)
-                await asyncio.sleep(2 ** (attempt + 1))
-        return {"_error": "WB read failed after retry limit", "_tool": tool}
+        return await _safe_ad_read(self, tool, **kwargs)
 
     async def run(self) -> AgentResult:
         out = AgentResult(agent=self.name)
