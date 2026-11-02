@@ -4,6 +4,11 @@ on:
   workflow_run:
     workflows:
       - WB FBS retry failed recovery windows
+      - WB FBS GitHub recovery
+      - WB FBS Sanych targeted recovery
+      - WB FBS production acceptance audit
+      - WB FBS supply sync via GitHub
+      - WB Sellmonitor finance summaries
     types:
       - completed
     branches:
@@ -22,7 +27,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
           SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
-          SOURCE_TITLE: ${{ github.event.workflow_run.display_title }}
+          SOURCE_TITLE: ${{ github.event.workflow_run.display_title }}\n          SOURCE_NAME: ${{ github.event.workflow_run.name }}\n          SOURCE_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
         run: |
           python - <<'PY'
           import json
@@ -35,53 +40,63 @@ jobs:
           repository = os.environ["REPOSITORY"]
           source_run_id = int(os.environ["SOURCE_RUN_ID"])
           source_title = os.environ.get("SOURCE_TITLE", "")
-          match = re.search(r"pass +([0-9]+)", source_title, re.IGNORECASE)
-          current_pass = int(match.group(1)) if match else 1
+          source_name = os.environ.get("SOURCE_NAME", "")
+          source_attempt = int(os.environ.get("SOURCE_ATTEMPT", "1"))
+          headers = {
+              "Accept": "application/vnd.github+json",
+              "Authorization": "Bearer " + os.environ["GH_TOKEN"],
+              "X-GitHub-Api-Version": "2022-11-28",
+              "Content-Type": "application/json",
+          }
 
-          if current_pass >= 3:
-              print("FBS_CONTINUATION_PASS_LIMIT_REACHED=" + str(current_pass), flush=True)
-              raise SystemExit(0)
+          def post(url, body):
+              request = urllib.request.Request(url, data=json.dumps(body).encode("utf-8"),
+                                               headers=headers, method="POST")
+              for attempt in range(1, 6):
+                  try:
+                      with urllib.request.urlopen(request, timeout=30) as response:
+                          return response.status
+                  except urllib.error.HTTPError as error:
+                      if error.code not in (408, 425, 429, 500, 502, 503, 504) or attempt == 5:
+                          raise
+                      time.sleep(min(60, attempt * 10))
 
-          next_pass = current_pass + 1
-          body = json.dumps({
-              "ref": "mainggg",
-              "inputs": {
-                  "run_id": str(source_run_id),
-                  "pass": str(next_pass),
-              },
-          }).encode("utf-8")
-          url = (
-              "https://api.github.com/repos/"
-              + repository
-              + "/actions/workflows/wb-fbs-auto-retry.yml/dispatches"
-          )
-          request = urllib.request.Request(
-              url,
-              data=body,
-              headers={
-                  "Accept": "application/vnd.github+json",
-                  "Authorization": "Bearer " + os.environ["GH_TOKEN"],
-                  "X-GitHub-Api-Version": "2022-11-28",
-                  "Content-Type": "application/json",
-              },
-              method="POST",
-          )
-
-          for attempt in range(1, 6):
-              try:
-                  with urllib.request.urlopen(request, timeout=30) as response:
-                      if response.status != 204:
-                          raise RuntimeError("DISPATCH_HTTP_" + str(response.status))
-                      print(
-                          "FBS_CONTINUATION_DISPATCHED="
-                          + str(next_pass)
-                          + " SOURCE_RUN_ID="
-                          + str(source_run_id),
-                          flush=True,
-                      )
-                      break
-              except urllib.error.HTTPError as error:
-                  if error.code not in (429, 500, 502, 503, 504) or attempt == 5:
-                      raise
-                  time.sleep(min(60, attempt * 10))
+          recovery_names = {"WB FBS GitHub recovery", "WB FBS Sanych targeted recovery"}
+          if source_name in recovery_names or source_name == "WB FBS retry failed recovery windows":
+              match = re.search(r"source +(\d+) +pass +(\d+)", source_title, re.IGNORECASE)
+              source_root_id = int(match.group(1)) if match else source_run_id
+              current_pass = int(match.group(2)) if match else 0
+              if current_pass >= 3:
+                  print("FBS_CONTINUATION_PASS_LIMIT_REACHED=" + str(current_pass), flush=True)
+                  raise SystemExit(0)
+              next_pass = current_pass + 1
+              body = {
+                  "ref": "mainggg",
+                  "inputs": {
+                      "run_id": str(source_run_id),
+                      "source_run_id": str(source_root_id),
+                      "pass": str(next_pass),
+                  },
+              }
+              url = "https://api.github.com/repos/" + repository + "/actions/workflows/wb-fbs-auto-retry.yml/dispatches"
+              status = post(url, body)
+              if status != 204:
+                  raise SystemExit("FBS_CONTINUATION_DISPATCH_HTTP_" + str(status))
+              print("FBS_CONTINUATION_DISPATCHED pass=" + str(next_pass) +
+                    " source=" + str(source_root_id) + " retry_source_run=" + str(source_run_id), flush=True)
+          elif source_name in {"WB FBS production acceptance audit",
+                               "WB FBS supply sync via GitHub",
+                               "WB Sellmonitor finance summaries"}:
+              if source_attempt >= 3:
+                  print("FBS_TRANSIENT_RETRY_LIMIT_REACHED run=" + str(source_run_id) +
+                        " attempts=" + str(source_attempt), flush=True)
+                  raise SystemExit(0)
+              url = "https://api.github.com/repos/" + repository + "/actions/runs/" + str(source_run_id) + "/rerun-failed-jobs"
+              status = post(url, {})
+              if status != 201:
+                  raise SystemExit("FBS_FAILED_JOB_RERUN_HTTP_" + str(status))
+              print("FBS_FAILED_JOBS_RERUN_REQUESTED run=" + str(source_run_id) +
+                    " next_attempt=" + str(source_attempt + 1), flush=True)
+          else:
+              print("FBS_CONTINUATION_NOT_APPLICABLE name=" + source_name, flush=True)
           PY
