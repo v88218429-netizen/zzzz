@@ -317,22 +317,70 @@ jobs:
                   "Content-Type": "application/json",
               }
               try:
-                  probe_response = api_post(
-                      "/v1/finance/accrual/by-day",
-                      {"last_id": "", "date": finance_probe_day},
-                      finance_headers,
-                  )
-                  probe_result = probe_response.get("result", probe_response)
-                  probe_rows = probe_result.get("accruals") if isinstance(probe_result, dict) else None
-                  probe_rows = probe_rows if isinstance(probe_rows, list) else []
-                  probe_cursor = probe_result.get("last_id") if isinstance(probe_result, dict) else None
+                  probe_rows = []
+                  probe_cursor = ""
+                  seen_probe_cursors = set()
+                  probe_pages = 0
+                  while True:
+                      probe_response = api_post(
+                          "/v1/finance/accrual/by-day",
+                          {"last_id": probe_cursor, "date": finance_probe_day},
+                          finance_headers,
+                      )
+                      probe_result = probe_response.get("result", probe_response)
+                      page_rows = probe_result.get("accruals") if isinstance(probe_result, dict) else None
+                      if not isinstance(page_rows, list):
+                          raise RuntimeError("OZON_FINANCE_PROBE_INVALID_ACCRUALS")
+                      probe_rows.extend(page_rows)
+                      probe_pages += 1
+                      next_cursor = str(probe_result.get("last_id") or "").strip()
+                      if not next_cursor:
+                          break
+                      if next_cursor == probe_cursor or next_cursor in seen_probe_cursors:
+                          raise RuntimeError("OZON_FINANCE_PROBE_CURSOR_REPEATED")
+                      seen_probe_cursors.add(next_cursor)
+                      probe_cursor = next_cursor
+                      if probe_pages >= 50:
+                          raise RuntimeError("OZON_FINANCE_PROBE_PAGE_GUARD")
+                  def safe_keys(value):
+                      return sorted(value.keys()) if isinstance(value, dict) else []
+                  sample = next((x for x in probe_rows if isinstance(x, dict)), {})
+                  posting = sample.get("posting") if isinstance(sample, dict) else {}
+                  products = posting.get("products") if isinstance(posting, dict) else []
+                  product = next((x for x in products or [] if isinstance(x, dict)), {})
+                  commission = product.get("commission") if isinstance(product, dict) else {}
+                  delivery = product.get("delivery") if isinstance(product, dict) else {}
+                  services = delivery.get("services") if isinstance(delivery, dict) else []
+                  item_fees = sample.get("item_fees") if isinstance(sample, dict) else {}
+                  fee_groups = item_fees.get("fees") if isinstance(item_fees, dict) else []
+                  fee_group = next((x for x in fee_groups or [] if isinstance(x, dict)), {})
+                  fee_items = fee_group.get("fees") if isinstance(fee_group, dict) else []
+                  fee_item = next((x for x in fee_items or [] if isinstance(x, dict)), {})
+                  non_item = sample.get("non_item_fee") if isinstance(sample, dict) else {}
+                  category_counts = {}
+                  for accrual in probe_rows:
+                      category = str(accrual.get("accrued_category") or "<empty>") if isinstance(accrual, dict) else "<invalid>"
+                      category_counts[category] = category_counts.get(category, 0) + 1
+                  schema = {
+                      "accrual": safe_keys(sample),
+                      "posting": safe_keys(posting),
+                      "product": safe_keys(product),
+                      "commission": safe_keys(commission),
+                      "delivery": safe_keys(delivery),
+                      "delivery_service": safe_keys(next((x for x in services or [] if isinstance(x, dict)), {})),
+                      "item_fees": safe_keys(item_fees),
+                      "fee_group": safe_keys(fee_group),
+                      "fee_item": safe_keys(fee_item),
+                      "non_item_fee": safe_keys(non_item),
+                  }
                   print(
                       "OZON_FINANCE_PROBE=store=" + label
                       + ";day=" + finance_probe_day
                       + ";status=AVAILABLE"
+                      + ";pages=" + str(probe_pages)
                       + ";rows=" + str(len(probe_rows))
-                      + ";next_page=" + str(bool(probe_cursor))
-                      + ";response_keys=" + ",".join(sorted(probe_result.keys()))[:500],
+                      + ";categories=" + json.dumps(category_counts, ensure_ascii=True, sort_keys=True)
+                      + ";schema=" + json.dumps(schema, ensure_ascii=True, sort_keys=True)[:1800],
                       flush=True,
                   )
               except Exception as exc:
