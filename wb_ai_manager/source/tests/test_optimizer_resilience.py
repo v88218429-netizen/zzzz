@@ -203,7 +203,7 @@ def test_optimizer_cursor_resets_when_product_catalog_changes():
     previous["swept_campaign_ids"] = [101]
     previous["swept_nm_ids"] = {"101": [1001]}
 
-    updated = _scan_cursor(previous, [101], {101: [1001, 1002]})
+    updated = _scan_cursor({"data": previous}, [101], {101: [1001, 1002]})
 
     assert updated["sweep_id"] == previous["sweep_id"] + 1
     assert updated["next_campaign_index"] == 0
