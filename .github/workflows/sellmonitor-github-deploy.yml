@@ -221,6 +221,15 @@ jobs:
               env.write('EXPECTED_WORKER_VERSION=' + match.group(1) + '\n')
           PY
           python sellmonitor_github_worker/patch_master.py /tmp/sellmonitor-gh-worker
+          python - <<'PY'
+          import os, re
+          from pathlib import Path
+          source = Path('/tmp/sellmonitor-gh-worker/SELLMONITOR_GITHUB_WORKER.gs').read_text(encoding='utf-8')
+          match = re.search(r"VERSION:\\s*'([^']+)'", source)
+          if not match: raise SystemExit('patched worker version missing')
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as env: env.write('EXPECTED_WORKER_VERSION=' + match.group(1) + '\\n')
+          print('EXPECTED_WORKER_VERSION_SET=' + match.group(1))
+          PY
 
       - name: Syntax check full live project
         shell: bash
