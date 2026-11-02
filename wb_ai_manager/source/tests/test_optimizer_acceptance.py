@@ -69,15 +69,25 @@ class OptimizerAcceptanceTests(unittest.TestCase):
         self.assertFalse(result["ready"])
         self.assertTrue(any("Юнит-экономика" in item for item in result["blockers"]))
 
-    def test_partial_query_facts_block_acceptance(self):
+    def test_partial_query_facts_are_reported_without_blocking_ads_acceptance(self):
         args = fixture()
         args[2]["summary"]["facts_status"] = "partial_refresh"
         args[2]["summary"]["blocked_query_rows"] = 1
         result = evaluate_optimizer_acceptance(
             *args, now=datetime(2026, 11, 2, 8, tzinfo=timezone.utc),
         )
-        self.assertFalse(result["ready"])
-        self.assertTrue(any("Поисковые факты" in item for item in result["blockers"]))
+        self.assertTrue(result["ready"])
+        self.assertFalse(any("Поисковые факты" in item for item in result["blockers"]))
+        self.assertTrue(any("неполные" in item for item in result["warnings"]))
+
+    def test_fresh_primary_plan_can_gate_ads_when_actual_ad_facts_are_separate(self):
+        args = fixture()
+        args[1]["own_27"]["primary_unit_economics"]["semantics"] = "plan_model_only"
+        result = evaluate_optimizer_acceptance(
+            *args, now=datetime(2026, 11, 2, 8, tzinfo=timezone.utc),
+        )
+        self.assertTrue(result["ready"])
+        self.assertTrue(any("без отдельного факта продаж" in item for item in result["warnings"]))
 
     def test_campaign_cache_accumulates_bounded_runs_and_preserves_observation_times(self):
         from wb_control_center.optimizer_acceptance import merge_campaign_cache

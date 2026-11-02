@@ -20,6 +20,70 @@ def test_bridge_is_optional_and_connections_stay_read_only(tmp_path):
     assert any(x["id"] == "own_27" for x in c["sources"])
 
 
+def test_primary_unit_economics_reads_live_table_and_uses_subject_to_resolve_duplicate_names(tmp_path):
+    service = PortfolioService(Settings(data_dir=str(tmp_path), wb_api_token=""))
+    header = [None] * 42
+    header[0], header[1] = "Группа товаров", "Товар"
+
+    def plan(group, cost, profit):
+        row = [None] * 42
+        row[0], row[1] = group, "Ваза 17л ЧЕРНЫЕ"
+        row[5], row[8], row[10] = cost, 100, 90
+        row[11], row[12], row[15], row[16], row[17] = 30, 20, 5, 3, 2
+        row[19], row[20], row[21], row[23] = 2, 2, "УСН 6%", 6
+        row[24], row[25], row[26] = profit, 20, 25
+        return row
+
+    out = {"own_27": {"products": [{
+        "sku": "123", "name": "Вазон 17л Черный", "subject": "Вазоны",
+        "cabinet": "Аир", "cost_rub": 0, "price_rub": 100,
+    }]}}
+    payload = {"generated_at": "2026-11-02T14:00:00+00:00", "sources": {
+        "primary_unit_economics": {
+            "spreadsheet_id": "primary-sheet-id",
+            "read_at": "2026-11-02T14:00:00+00:00",
+            "ranges": {"unit_economics": {"values": [
+                ["Данные о товарах"], header, [],
+                plan("Вазоны", 25, 20), plan("Вазы", 50, 10),
+            ]}},
+        },
+    }}
+
+    service._parse_primary_economics_axis(payload, out)
+
+    product = out["own_27"]["products"][0]
+    assert product["primary_unit_source_row"] == 4
+    assert product["cost_rub"] == 25
+    assert product["price_rub"] == 100
+    assert product["profit_rub"] == 20
+    assert product["unit_economics_decision_ready"] is True
+    assert product["legacy_unit_economics"]["cost_rub"] == 0
+    economics = out["own_27"]["primary_unit_economics"]
+    assert economics["source_spreadsheet_id"] == "primary-sheet-id"
+    assert economics["snapshot_date"] == "2026-11-02"
+    assert economics["snapshot_basis"] == "live_source_read"
+    assert economics["semantics"] == "plan_model_only"
+
+
+def test_primary_unit_economics_zero_cost_rows_do_not_authorize_money_decisions(tmp_path):
+    service = PortfolioService(Settings(data_dir=str(tmp_path), wb_api_token=""))
+    row = [None] * 42
+    row[0], row[1] = "Известь", "Известь 2кг"
+    row[5], row[8], row[24] = 0, 375, 227.47
+    out = {"own_27": {"products": [{"sku": "123", "name": "Известь 2 кг", "cabinet": "Дом Саныча"}]}}
+    payload = {"generated_at": "2026-11-02T14:00:00+00:00", "sources": {
+        "primary_unit_economics": {
+            "read_at": "2026-11-02T14:00:00+00:00",
+            "ranges": {"unit_economics": {"values": [["title"], ["group", "item"], [], row]}},
+        },
+    }}
+    service._parse_primary_economics_axis(payload, out)
+    product = out["own_27"]["products"][0]
+    assert product["unit_economics_role"] == "primary_plan"
+    assert product["cost_rub"] == 0
+    assert product["unit_economics_decision_ready"] is False
+
+
 def test_order_history_builds_real_short_vs_baseline_demand_trend(tmp_path):
     s = Settings(data_dir=str(tmp_path), wb_api_token="")
     svc = PortfolioService(s)
