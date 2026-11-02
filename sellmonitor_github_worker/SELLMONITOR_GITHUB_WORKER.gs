@@ -7340,37 +7340,87 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
     }
     function sheetRows(rows){return rows.map(function(row){return row.map(fbsLocalSerial_);});}
     mark('SHEET_READ_START');
-    // Read the used-row boundary and ID column with SpreadsheetApp. The previous
-    // REST request used A2:A (the entire grid); on large books Sheets batchGet
-    // timed out before the recovery could reach its bounded status reads.
-    mark('SPREADSHEET_OPEN_START');
-    var orderParent=SpreadsheetApp.openById(spreadsheetId);
-    mark('SPREADSHEET_OPEN_DONE');
-    mark('SHEET_LOOKUP_START');
-    var orderSheetNative=orderParent.getSheetByName('📦 FBS Заказы');
-    mark('SHEET_LOOKUP_DONE');
-    if(!orderSheetNative)throw new Error('FBS_ORDER_SHEET_NOT_FOUND');
-    mark('TIMEZONE_READ_START');
-    var sheetTimeZone=orderParent.getSpreadsheetTimeZone();
-    mark('TIMEZONE_READ_DONE');
-    function fbsLocalSerial_(value){
-      if(value instanceof Date){
-        var local=Utilities.formatDate(value,sheetTimeZone,'yyyy-MM-dd HH:mm:ss').match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/);
-        if(!local)throw new Error('FBS_LOCAL_TIME_FORMAT_FAILED');
-        return Date.UTC(Number(local[1]),Number(local[2])-1,Number(local[3]),Number(local[4]),Number(local[5]),Number(local[6]))/86400000+25569;
-      }
-      return value==null?'':value;
+    // Use the already-authorized Sheets REST API throughout this write path.
+    // SpreadsheetApp.openById/getRange can stall for minutes on large production books.
+    mark('SPREADSHEET_METADATA_START');
+    var metadataResponse=fetchSheetApi(apiBase+
+      '?fields='+encodeURIComponent('properties(timeZone),sheets(properties(sheetId,title,gridProperties(rowCount)))'),
+      {method:'get'});
+    var metadataCode=metadataResponse.getResponseCode();
+    if(metadataCode<200||metadataCode>=300)
+      throw new Error('FBS_SPREADSHEET_METADATA_HTTP_'+metadataCode+':'+sheetApiFailure(metadataResponse));
+    var metadataPayload;
+    try{metadataPayload=JSON.parse(metadataResponse.getContentText()||'{}');}
+    catch(metadataParseError){throw new Error('FBS_SPREADSHEET_METADATA_INVALID_JSON');}
+    var orderSheetInfo=(metadataPayload.sheets||[]).map(function(sheet){return sheet.properties||{};})
+      .filter(function(properties){return String(properties.title||'')==='📦 FBS Заказы';})[0];
+    if(!orderSheetInfo)throw new Error('FBS_ORDER_SHEET_NOT_FOUND');
+    var orderSheetId=Number(orderSheetInfo.sheetId);
+    var gridRows=Number((orderSheetInfo.gridProperties||{}).rowCount||0);
+    if(!orderSheetId||gridRows<1||gridRows>100000)throw new Error('FBS_ROW_COUNT_UNEXPECTED');
+    var sheetTimeZone=String((metadataPayload.properties||{}).timeZone||'Etc/GMT');
+    function columnLetter_(column){
+      var value='',n=Number(column);
+      while(n>0){var rem=(n-1)%26;value=String.fromCharCode(65+rem)+value;n=Math.floor((n-1)/26);}
+      return value;
     }
+    function readDisplayGrid_(startRow,startColumn,rowCount,columnCount){
+      if(rowCount<=0)return [];
+      var a1=orderSheet+'!'+columnLetter_(startColumn)+startRow+':'+
+        columnLetter_(startColumn+columnCount-1)+(startRow+rowCount-1);
+      var response=fetchSheetApi(apiBase+'/values/'+encodeURIComponent(a1)+
+        '?valueRenderOption=FORMATTED_VALUE',{method:'get'});
+      var code=response.getResponseCode();
+      if(code<200||code>=300)
+        throw new Error('FBS_SHEET_RANGE_READ_HTTP_'+code+':'+sheetApiFailure(response));
+      var payload;
+      try{payload=JSON.parse(response.getContentText()||'{}');}
+      catch(parseError){throw new Error('FBS_SHEET_RANGE_READ_INVALID_JSON');}
+      var values=payload.values||[],out=[];
+      for(var row=0;row<rowCount;row++){
+        var source=values[row]||[],normalized=[];
+        for(var column=0;column<columnCount;column++)
+          normalized.push(String(source[column]==null?'':source[column]));
+        out.push(normalized);
+      }
+      return out;
+    }
+    mark('SPREADSHEET_METADATA_DONE_'+gridRows);
+    mark('SHEET_LOOKUP_DONE');
+    mark('TIMEZONE_READ_DONE');
     mark('LAST_ROW_READ_START');
-    var last=orderSheetNative.getLastRow();
+    var idColumnValues=readDisplayGrid_(2,1,gridRows-1,1);
+    var last=1;
+    for(var idRowIndex=0;idRowIndex<idColumnValues.length;idRowIndex++)
+      if(String((idColumnValues[idRowIndex]||[])[0]||'').trim())last=idRowIndex+2;
     mark('LAST_ROW_READ_DONE_'+last);
     if(last<1||last>100000)throw new Error('FBS_ROW_COUNT_UNEXPECTED');
     mark('HEADER_READ_START');
-    var head=orderSheetNative.getRange(1,1,1,7).getDisplayValues()[0]||[];
+    var head=readDisplayGrid_(1,1,1,7)[0]||[];
     mark('HEADER_READ_DONE');
-    mark('SHEET_READ_DONE_NATIVE');
-    if(String(head[0]||'')!=='ID заказа'||String(head[4]||'')!=='Статус продавца'||String(head[5]||'')!=='Статус WB')
-      throw new Error('FBS_COLUMN_SCHEMA_MISMATCH');
+    mark('SHEET_READ_DONE_SHEETS_API');
+    var orderSheetNative={
+      getLastRow:function(){return last;},
+      getMaxRows:function(){return gridRows;},
+      getRange:function(row,column,numRows,numColumns){
+        return {getDisplayValues:function(){return readDisplayGrid_(row,column,numRows,numColumns);}};
+      },
+      insertRowsAfter:function(afterPosition,howMany){
+        if(Number(afterPosition)!==gridRows||Number(howMany)<1)
+          throw new Error('FBS_GRID_APPEND_POSITION_INVALID');
+        var response=fetchSheetApi(apiBase+':batchUpdate',{
+          method:'post',contentType:'application/json',
+          payload:JSON.stringify({requests:[{appendDimension:{
+            sheetId:orderSheetId,dimension:'ROWS',length:Number(howMany)
+          }}]})
+        });
+        var code=response.getResponseCode();
+        if(code<200||code>=300)
+          throw new Error('FBS_GRID_EXTEND_HTTP_'+code+':'+sheetApiFailure(response));
+        gridRows+=Number(howMany);
+        return this;
+      }
+    };
     mark('ID_INDEX_LOOKUP_START');
     var indexState=sellmonitorGithubFbsLoadIdIndex_(orderSheetNative,client,last,mark,false);
     var byId=indexState.map,idByRow={};
@@ -7500,7 +7550,7 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
         throw new Error('FBS_PATCH_BATCH_HTTP_'+writeCode+':'+writeDiagnostic);
       }
       mark('STATE_VERIFY_START_BOUNDED');
-      SpreadsheetApp.flush();
+
       Utilities.sleep(500);
       // Read verification ranges in bounded Sheets API batches. A large sparse
       // byDataFilter POST timed out while verifying many changed order rows.
@@ -7572,7 +7622,7 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
       if(insertEnd>currentGridRows){
         mark('GRID_EXTEND_START_'+currentGridRows+'_TO_'+insertEnd);
         orderSheetNative.insertRowsAfter(currentGridRows,insertEnd-currentGridRows);
-        SpreadsheetApp.flush();
+
         mark('GRID_EXTEND_DONE_'+orderSheetNative.getMaxRows());
       }
       var insertRange=orderSheet+'!A'+insertStart+':AS'+insertEnd;
@@ -7605,7 +7655,7 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
       // The Sheets API write response can include persisted values, avoiding
       // a second read request that may time out under API load. Fall back to a
       // bounded readback only if the response omits or mismatches those values.
-      SpreadsheetApp.flush();
+
       var insertIds=[],insertReadbackMatched=false,insertReadbackAttempts=0,insertReadbackApiError='';
       try{
         var insertWritePayload=JSON.parse(insertResponse.getContentText()||'{}');
