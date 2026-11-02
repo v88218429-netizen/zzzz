@@ -79,6 +79,56 @@ class OptimizerAcceptanceTests(unittest.TestCase):
         self.assertFalse(result["ready"])
         self.assertTrue(any("Поисковые факты" in item for item in result["blockers"]))
 
+    def test_campaign_cache_accumulates_bounded_runs_and_preserves_observation_times(self):
+        from wb_control_center.optimizer_acceptance import merge_campaign_cache
+        first = merge_campaign_cache({}, {
+            "active_campaign_ids": [11, 22], "catalog_complete": True,
+            "campaigns": [{"campaign_id": 11, "scan_complete": True, "nm_ids": [101], "recommendations": {"101": {"bid": 45}}}],
+            "sweep_complete": False, "sweep_campaigns_total": 2,
+        }, "2026-11-02T08:00:00+00:00")
+        self.assertFalse(first["campaign_cache_complete"])
+        second = merge_campaign_cache(first, {
+            "active_campaign_ids": [11, 22], "catalog_complete": True,
+            "campaigns": [{"campaign_id": 22, "scan_complete": True, "nm_ids": [202], "recommendations": {"202": {"bid": 60}}}],
+            "sweep_complete": True, "sweep_campaigns_total": 2,
+            "sweep_campaigns_seen": 2, "sweep_products_seen": 2, "sweep_products_total": 2,
+        }, "2026-11-02T08:10:00+00:00")
+        self.assertTrue(second["campaign_cache_complete"])
+        self.assertTrue(second["sweep_complete"])
+        self.assertEqual([x["campaign_id"] for x in second["campaigns"]], [11, 22])
+        self.assertEqual(second["campaigns"][0]["observed_at"], "2026-11-02T08:00:00+00:00")
+
+    def test_campaign_cache_does_not_refresh_failed_scan_and_resets_changed_catalog(self):
+        from wb_control_center.optimizer_acceptance import merge_campaign_cache
+        prior = merge_campaign_cache({}, {
+            "active_campaign_ids": [11], "catalog_complete": True,
+            "campaigns": [{"campaign_id": 11, "scan_complete": True, "budget": 500}],
+        }, "2026-11-02T08:00:00+00:00")
+        failed = merge_campaign_cache(prior, {
+            "active_campaign_ids": [11], "catalog_complete": True,
+            "campaigns": [{"campaign_id": 11, "scan_complete": False, "budget": {"_error": "source"}}],
+            "sweep_complete": False,
+        }, "2026-11-02T08:15:00+00:00")
+        self.assertEqual(failed["campaigns"][0]["observed_at"], "2026-11-02T08:00:00+00:00")
+        changed = merge_campaign_cache(prior, {
+            "active_campaign_ids": [33], "catalog_complete": True,
+            "campaigns": [{"campaign_id": 33, "scan_complete": True}],
+        }, "2026-11-02T08:20:00+00:00")
+        self.assertEqual([x["campaign_id"] for x in changed["campaigns"]], [33])
+
+    def test_confirmed_empty_catalog_is_complete_but_unavailable_catalog_is_not(self):
+        from wb_control_center.optimizer_acceptance import merge_campaign_cache
+        empty = merge_campaign_cache({}, {
+            "active_campaign_ids": [], "catalog_complete": True, "note": "no active campaigns",
+            "campaigns": [], "sweep_complete": True,
+        }, "2026-11-02T08:00:00+00:00")
+        unavailable = merge_campaign_cache({}, {
+            "active_campaign_ids": [], "catalog_complete": False,
+            "note": "campaign catalog unavailable", "campaigns": [],
+        }, "2026-11-02T08:00:00+00:00")
+        self.assertTrue(empty["sweep_complete"])
+        self.assertFalse(unavailable["sweep_complete"])
+
 
 if __name__ == "__main__":
     unittest.main()
