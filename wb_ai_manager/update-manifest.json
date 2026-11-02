@@ -380,8 +380,8 @@
         },
         {
           "path": "src/wb_control_center/optimizer_acceptance.py",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/8a5bc75412c52b10cefbaa9d30ce2a48813abdbe/wb_ai_manager/source/src/wb_control_center/optimizer_acceptance.py",
-          "sha256": "d88a5ef196acae5224a1ec1b6a8ff2b7d3c11289f4ae3de0a9e6e570cc57d0d2"
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/95f01ce2bf1e05d46e72680e995d8dc40e20d54f/wb_ai_manager/source/src/wb_control_center/optimizer_acceptance.py",
+          "sha256": "120220ca1d0d269f995226092b5515b2c90a2490ec5983b1ba4af927d4509d75"
         },
         {
           "path": "src/wb_control_center/outcome_evaluator.py",
@@ -405,8 +405,8 @@
         },
         {
           "path": "src/wb_control_center/portfolio.py",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/299a607fe3230363143e4b8ed891b289cda52e17/wb_ai_manager/source/src/wb_control_center/portfolio.py",
-          "sha256": "75c6066c6c4fc02f9dd8abf5c79747fcdb5c1420b813f1da3eef6826a81ebe55"
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/95f01ce2bf1e05d46e72680e995d8dc40e20d54f/wb_ai_manager/source/src/wb_control_center/portfolio.py",
+          "sha256": "84bb79f0a38416ac5e6ebecaf898c8ae212f786d72538e2604db511d0c1be2ec"
         },
         {
           "path": "src/wb_control_center/public_wb.py",
@@ -455,8 +455,8 @@
         },
         {
           "path": "src/wb_control_center/ui/dashboard.js",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/a9e808c455cbd0e151671ea1b1a8118d3c214577/wb_ai_manager/source/src/wb_control_center/ui/dashboard.js",
-          "sha256": "dbe18b2337837be5ff0e5642e0525b0f22cc43401003112b11663c2ffc5859c9"
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/95f01ce2bf1e05d46e72680e995d8dc40e20d54f/wb_ai_manager/source/src/wb_control_center/ui/dashboard.js",
+          "sha256": "bad440ad213e6f5e18a6a3efa5e4de88e89c8ad5a67456dabcdebf2088bc113b"
         },
         {
           "path": "src/wb_control_center/updater.py",
