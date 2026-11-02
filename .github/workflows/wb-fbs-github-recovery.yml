@@ -38,7 +38,7 @@ permissions:
 concurrency:
   # Ordinary code pushes can create a skipped recovery run. Give those runs
   # unique groups so they cannot occupy or replace the production mutation queue.
-  group: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[FBS-90D-SLICED]') && 'wb-fbs-data-mutations' || github.event_name != 'push' && 'wb-fbs-data-mutations' || format('wb-fbs-noop-{0}', github.run_id) }}
+  group: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[FBS-90D-SLICED]') && 'wb-bridge-production-mutations' || github.event_name != 'push' && 'wb-bridge-production-mutations' || format('wb-fbs-noop-{0}', github.run_id) }}
   cancel-in-progress: false
   queue: max
 
@@ -172,7 +172,7 @@ jobs:
         run: python wb_worker/github_fbs_recovery.py
   recover_manual:
     if: ${{ github.event_name == 'workflow_dispatch' }}
-    name: "recover AIR and HOZYAYUSHKA manual range"
+    name: "recover ${{ inputs.client }} ${{ inputs.start_date }}–${{ inputs.end_date }}"
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
