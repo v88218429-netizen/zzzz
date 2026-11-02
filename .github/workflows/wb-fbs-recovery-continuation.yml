@@ -29,6 +29,7 @@ jobs:
           SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
           SOURCE_TITLE: ${{ github.event.workflow_run.display_title }}
           SOURCE_NAME: ${{ github.event.workflow_run.name }}
+          SOURCE_PATH: ${{ github.event.workflow_run.path }}
           SOURCE_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
         run: |
           python - <<'PY'
@@ -43,6 +44,7 @@ jobs:
           source_run_id = int(os.environ["SOURCE_RUN_ID"])
           source_title = os.environ.get("SOURCE_TITLE", "")
           source_name = os.environ.get("SOURCE_NAME", "")
+          source_path = os.environ.get("SOURCE_PATH", "")
           source_attempt = int(os.environ.get("SOURCE_ATTEMPT", "1"))
           headers = {
               "Accept": "application/vnd.github+json",
@@ -64,7 +66,9 @@ jobs:
                       time.sleep(min(60, attempt * 10))
 
           recovery_names = {"WB FBS GitHub recovery", "WB FBS Sanych targeted recovery"}
-          if source_name in recovery_names or source_name == "WB FBS retry failed recovery windows":
+          if source_path in {".github/workflows/wb-fbs-github-recovery.yml",
+                             ".github/workflows/wb-fbs-sanych-targeted-recovery.yml",
+                             ".github/workflows/wb-fbs-auto-retry.yml"} or source_name in recovery_names or source_name == "WB FBS retry failed recovery windows":
               match = re.search(r"source +(\d+) +pass +(\d+)", source_title, re.IGNORECASE)
               source_root_id = int(match.group(1)) if match else source_run_id
               current_pass = int(match.group(2)) if match else 0
@@ -86,7 +90,9 @@ jobs:
                   raise SystemExit("FBS_CONTINUATION_DISPATCH_HTTP_" + str(status))
               print("FBS_CONTINUATION_DISPATCHED pass=" + str(next_pass) +
                     " source=" + str(source_root_id) + " retry_source_run=" + str(source_run_id), flush=True)
-          elif source_name in {"WB FBS production acceptance audit",
+          elif source_path in {".github/workflows/wb-fbs-production-acceptance-audit.yml",
+                               ".github/workflows/wb-fbs-supply-sync.yml",
+                               ".github/workflows/wb-sellmonitor-finance-publish.yml"} or source_name in {"WB FBS production acceptance audit",
                                "WB FBS supply sync via GitHub",
                                "WB Sellmonitor finance summaries"}:
               if source_attempt >= 3:
