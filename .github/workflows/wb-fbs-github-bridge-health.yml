@@ -55,7 +55,12 @@ jobs:
                   runs = json.load(response).get('workflow_runs', [])
               names = {'WB FBS GitHub recovery', 'WB FBS Sanych targeted recovery',
                        'WB FBS retry failed recovery windows', 'WB FBS supply sync via GitHub'}
-              active = any(item.get('name') in names and item.get('status') in
+              writer_paths = {'.github/workflows/wb-fbs-github-recovery.yml',
+                              '.github/workflows/wb-fbs-sanych-targeted-recovery.yml',
+                              '.github/workflows/wb-fbs-auto-retry.yml',
+                              '.github/workflows/wb-fbs-supply-sync.yml'}
+              active = any((item.get('name') in names or item.get('path') in writer_paths)
+                           and item.get('status') in
                            {'queued', 'in_progress', 'pending', 'waiting', 'requested'}
                            for item in runs)
           with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
