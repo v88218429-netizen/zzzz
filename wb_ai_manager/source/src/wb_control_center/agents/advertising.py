@@ -53,7 +53,7 @@ def _nm_ids(row: dict[str, Any]) -> list[int]:
 
 
 def _deep_scan_limits(runtime: dict[str, Any]) -> tuple[int, int, int]:
-    """Hard-bound supplementary WB API calls per run."""
+    """Keep every run bounded while allowing the complete active catalog to finish promptly."""
     def bounded(name: str, default: int, ceiling: int) -> int:
         try:
             value = int(runtime.get(name, default) or default)
@@ -62,7 +62,7 @@ def _deep_scan_limits(runtime: dict[str, Any]) -> tuple[int, int, int]:
         return max(1, min(ceiling, value))
 
     return (
-        bounded("max_campaigns_deep_scan", 4, 4),
+        bounded("max_campaigns_deep_scan", 12, 12),
         bounded("max_nms_per_campaign", 2, 2),
         bounded("deep_scan_concurrency", 2, 2),
     )
@@ -398,7 +398,15 @@ class AdvertisingOptimizerAgent(BaseAgent):
             for c in campaigns if _campaign_id(c)
         )
         swept_campaign_count = len(cursor["swept_campaign_ids"])
-        swept_product_count = sum(len(x) for x in cursor["swept_nm_ids"].values())
+        # Product progress counts unique catalog products from completed campaigns only.
+        # Multi-campaign products are deduplicated, and failed partial scans stay excluded.
+        swept_product_ids = {
+            nm_id
+            for campaign in campaigns
+            if _campaign_id(campaign) in set(cursor["swept_campaign_ids"])
+            for nm_id in _nm_ids(campaign)
+        }
+        swept_product_count = len(swept_product_ids)
         sweep_complete = (set(cursor["swept_campaign_ids"]) >= set(cursor["campaign_ids"])
                           and all_products_seen
                           and all(isinstance(item, dict) and item.get("scan_complete") is True for item in scanned))

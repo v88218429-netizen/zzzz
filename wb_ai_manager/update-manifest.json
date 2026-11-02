@@ -151,7 +151,7 @@
         {
           "path": "src/wb_control_center/agents/advertising.py",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/f1f441fccfe51e08ccfa9d1ea0bb7d98ea43759a/wb_ai_manager/source/src/wb_control_center/agents/advertising.py",
-          "sha256": "253c624454fe9084cd4cb43c76085d5ea20b68813f199ee7a727cb3baa9c9217"
+          "sha256": "de9671ffe32a259358467fc6393bd72d5419fef137a329384c4d378aed0ec655"
         },
         {
           "path": "src/wb_control_center/agents/api_health.py",
