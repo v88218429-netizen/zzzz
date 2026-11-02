@@ -579,7 +579,7 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
     var periodResult=replace_('19_API_Финансы_периоды',periodRows,11);
     var journal=ss.getSheetByName('20_API_Финансы_журнал');if(!journal)journal=ss.insertSheet('20_API_Финансы_журнал');
     if(journal.getLastRow()===0)journal.getRange(1,1,1,11).setValues([['Время выгрузки','Магазин','Источник','Период с','Период по','Дней получено','Начислений получено','Дневных строк','Периодов','SHA-256','Итог чтения']]).setFontWeight('bold').setBackground('#17365D').setFontColor('#FFFFFF');
-    var row=[exported,cfg.name,'Ozon Seller API · accrual/by-day',from,to,dates.length,storeDays.reduce(function(n,r){return n+Number(r[5]||0);},0),dayResult.rows,periodResult.rows,dayResult.sha256+' / '+periodResult.sha256,'OK: запись перечитана; пустой день отделён от сбоя'];
+    var row=[exported,cfg.name,'Ozon Seller API · accrual/by-day',from,to,dates.length,storeDays.reduce(function(n,r){return n+Number(r[6]||0);},0),dayResult.rows,periodResult.rows,dayResult.sha256+' / '+periodResult.sha256,'OK: запись перечитана; пустой день отделён от сбоя'];
     var at=journal.getLastRow()+1;sellmonitorGithubOzonEnsureRows_(journal,at);journal.getRange(at,1,1,row.length).setValues([row]);
     var check=journal.getRange(at,1,1,row.length).getValues()[0];
     if(JSON.stringify(check)!==JSON.stringify(row))throw new Error('OZON_FINANCE_JOURNAL_READBACK_FAILED:'+cfg.name);
