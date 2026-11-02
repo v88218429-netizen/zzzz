@@ -217,7 +217,9 @@ function wbFbsSupplyMatricesEqual_(expected, actual) {
     for (var c = 0; c < left.length; c++) {
       var a = left[c], b = right[c];
       if (a instanceof Date || b instanceof Date) {
-        if (!(a instanceof Date) || !(b instanceof Date) || a.getTime() !== b.getTime()) return false;
+        var aSerial = a instanceof Date ? a.getTime() / 86400000 + 25569 : (typeof a === 'number' ? a : NaN);
+        var bSerial = b instanceof Date ? b.getTime() / 86400000 + 25569 : (typeof b === 'number' ? b : NaN);
+        if (!isFinite(aSerial) || !isFinite(bSerial) || Math.abs(aSerial - bSerial) > 1e-8) return false;
       } else if ((a == null || a === '') && (b == null || b === '')) {
         continue;
       } else if (a !== b) {
@@ -226,6 +228,22 @@ function wbFbsSupplyMatricesEqual_(expected, actual) {
     }
   }
   return true;
+}
+
+function wbFbsSupplySheetsApiRead_(rangeA1, rowCount, columnCount) {
+  var response = Sheets.Spreadsheets.Values.get(
+    String(WB_FBS_DIRECT_SUPPLY_CFG.spreadsheetId),
+    String(rangeA1),
+    {valueRenderOption: 'UNFORMATTED_VALUE', dateTimeRenderOption: 'SERIAL_NUMBER'}
+  );
+  var rows = (response && response.values) || [];
+  var normalized = [];
+  for (var r = 0; r < rowCount; r++) {
+    var row = (rows[r] || []).slice(0, columnCount);
+    while (row.length < columnCount) row.push('');
+    normalized.push(row);
+  }
+  return normalized;
 }
 
 function wbFbsSupplyWriteSupplySheet_(ss, supplyRows, orderCounts, checkedAt) {
@@ -308,20 +326,23 @@ function wbFbsSupplyWriteSupplySheet_(ss, supplyRows, orderCounts, checkedAt) {
   wbFbsSupplySetStage_('SUPPLY_FLUSH_START', '');
   SpreadsheetApp.flush();
   wbFbsSupplySetStage_('SUPPLY_FLUSH_DONE', '');
+  var supplySheetA1 = "'" + String(WB_FBS_DIRECT_SUPPLY_CFG.suppliesSheet).replace(/'/g, "''") + "'!";
   wbFbsSupplySetStage_('SUPPLY_HEADER_READBACK_START', '');
-  var headerReadback=sh.getRange(1,1,1,header.length).getDisplayValues();
+  var headerReadback=wbFbsSupplySheetsApiRead_(supplySheetA1 + 'A1:I1', 1, header.length);
   wbFbsSupplySetStage_('SUPPLY_HEADER_READBACK_DONE', '');
   if(!wbFbsSupplyMatricesEqual_([header],[headerReadback[0]||[]]))
     throw new Error('WB_FBS_DIRECT: supply header readback mismatch');
   wbFbsSupplySetStage_('SUPPLY_ROWS_READBACK_START', 'rows=' + out.length);
-  var rowsReadback=out.length?sh.getRange(2,1,out.length,header.length).getValues():[];
+  var rowsReadback=out.length?wbFbsSupplySheetsApiRead_(supplySheetA1 + 'A2:I' + (out.length + 1), out.length, header.length):[];
   wbFbsSupplySetStage_('SUPPLY_ROWS_READBACK_DONE', 'rows=' + rowsReadback.length);
   if(!wbFbsSupplyMatricesEqual_(out,rowsReadback))
     throw new Error('WB_FBS_DIRECT: supply rows readback mismatch');
   var staleCount=Math.max(0,(oldLast-1)-out.length);
   if(staleCount){
     wbFbsSupplySetStage_('SUPPLY_STALE_READBACK_START', 'rows=' + staleCount);
-    var staleIds=sh.getRange(out.length+2,1,staleCount,1).getDisplayValues();
+    var staleStartRow=out.length+2;
+    var staleEndRow=staleStartRow+staleCount-1;
+    var staleIds=wbFbsSupplySheetsApiRead_(supplySheetA1 + 'A' + staleStartRow + ':A' + staleEndRow, staleCount, 1);
     wbFbsSupplySetStage_('SUPPLY_STALE_READBACK_DONE', '');
     if(staleIds.some(function(row){return String((row||[])[0]||'').trim()!=='';}))
       throw new Error('WB_FBS_DIRECT: stale supply rows remain after refresh');
