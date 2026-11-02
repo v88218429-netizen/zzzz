@@ -483,7 +483,8 @@ function sellmonitorGithubFbsAcceptanceAuditV1_(body) {
         worker_text = worker_text.replace(route_anchor, route + route_anchor, 1)
         function_anchor = "function sellmonitorGithubPublishOzonSummaryOrders_(payload) {"
         finance_function = r"""/* SELLMONITOR_OZON_FINANCE_DAY_LAYER_V1 */
-function sellmonitorGithubPublishOzonFinance_(payload) {\n  /* OZON_FINANCE_INDEPENDENT_ACCOUNT_OTHER_CATEGORY_V1 */
+function sellmonitorGithubPublishOzonFinance_(payload) {
+  /* OZON_FINANCE_INDEPENDENT_ACCOUNT_OTHER_CATEGORY_V1 */
   if (!payload || payload.source !== 'ozon_seller_api_accrual' || payload.complete !== true) throw new Error('OZON_FINANCE_EXPORT_INCOMPLETE_PRESERVE');
   var accounts=(payload.completed_accounts||[]).map(String).sort();
   if (!accounts.length || accounts.some(function(c,i){return ['1','2'].indexOf(c)<0 || accounts.indexOf(c)!==i;})) throw new Error('OZON_FINANCE_ACCOUNT_COVERAGE_INCOMPLETE_PRESERVE');
