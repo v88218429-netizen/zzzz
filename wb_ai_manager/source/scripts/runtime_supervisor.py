@@ -95,13 +95,39 @@ def preflight_restore_interrupted_update()->bool:
     return True
 
 
+class HealthWatchdog:
+    """Restart a live child when its health endpoint repeatedly stops responding."""
+
+    def __init__(self, interval_seconds: float = 10.0, failures_before_restart: int = 3):
+        self.interval_seconds = max(1.0, float(interval_seconds))
+        self.failures_before_restart = max(1, int(failures_before_restart))
+        self.failures = 0
+        self.next_check_at = 0.0
+
+    def due(self, now: float) -> bool:
+        return now >= self.next_check_at
+
+    def record(self, healthy: bool, now: float) -> bool:
+        self.next_check_at = now + self.interval_seconds
+        if healthy:
+            self.failures = 0
+            return False
+        self.failures += 1
+        return self.failures >= self.failures_before_restart
+
+    def reset(self, now: float = 0.0) -> None:
+        self.failures = 0
+        self.next_check_at = float(now)
+
+
 def health_info(port:int)->dict|None:
     try:
         with urllib.request.urlopen(f'http://127.0.0.1:{port}/health',timeout=1) as r:
             if r.status != 200:
                 return None
             data=json.loads(r.read().decode('utf-8'))
-            if isinstance(data,dict) and data.get('status') == 'ok' and data.get('app_version'):
+            # Authenticated installations deliberately return only {"status":"ok"}.
+            if isinstance(data,dict) and data.get('status') == 'ok':
                 return data
     except Exception:
         return None
@@ -187,17 +213,20 @@ def main()->int:
     last_check=time.time()
     opened=False
     crashes=0
+    watchdog=HealthWatchdog()
     while not stopping:
         if child is None or child.poll() is not None:
             if child is not None:
                 crashes+=1
                 print(f'Рабочий процесс остановился (код {child.returncode}). Перезапускаю…',flush=True)
                 time.sleep(min(10,2+crashes))
+            watchdog.reset(time.monotonic())
             cmd=[sys.executable,'-m','uvicorn','wb_control_center.api:app','--host',settings.app_host,'--port',str(settings.app_port)]
             env=os.environ.copy(); env['PYTHONPATH']=str(ROOT/'src')
             child=subprocess.Popen(cmd,cwd=ROOT,env=env)
             if wait_health(settings.app_port,child):
                 crashes=0
+                watchdog.record(True,time.monotonic())
                 post_run_all(settings.app_port)
                 if not opened:
                     webbrowser.open(f'http://127.0.0.1:{settings.app_port}/dashboard#decisions')
@@ -209,6 +238,14 @@ def main()->int:
                 print(f'Не удалось запустить веб-процесс на порту {settings.app_port} (код {code}). Повтор через несколько секунд…',flush=True)
                 time.sleep(min(10,2+crashes))
                 continue
+        elif watchdog.due(time.monotonic()):
+            healthy = health_info(settings.app_port) is not None
+            if watchdog.record(healthy,time.monotonic()):
+                print('Веб-процесс не отвечает на /health после трёх проверок. Перезапускаю…',flush=True)
+                stop_child(child)
+                child=None
+                crashes+=1
+                watchdog.reset(time.monotonic())
 
         if settings.auto_update_enabled and time.time()-last_check >= settings.auto_update_check_seconds:
             last_check=time.time()
