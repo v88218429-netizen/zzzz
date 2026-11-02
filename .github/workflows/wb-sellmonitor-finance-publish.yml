@@ -103,7 +103,12 @@ jobs:
           errors = []
           failed_phases = []
           summary_header_written = False
-          for store_id in expected:
+          def checkpoint_resume(store_id, phase):
+              with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output_file:
+                  output_file.write("resume_store=" + str(store_id) + "\n")
+                  output_file.write("resume_phase=" + str(phase) + "\n")
+
+          for store_index, store_id in enumerate(expected):
               daily_phases = sanych_chunks if store_id == "sanych_wb" else months
               phases = ("summary",) + tuple(daily_phases) + ("rnp_week", "rnp_month", "dashboard")
               store_result = {"store_id": store_id}
@@ -111,6 +116,7 @@ jobs:
               phases = phases[phase_start:]
               print("RESUME_FROM=store:" + store_id + ";phase:" + (phases[0] if phases else "complete"), flush=True)
               for phase_index, phase in enumerate(phases):
+                  checkpoint_resume(store_id, phase)
                   body = json.dumps({
                       "token": os.environ["WEBHOOK_SECRET"],
                       "action": "publish_wb_inner_periods",
@@ -240,6 +246,8 @@ jobs:
                           checkpoint_file.write("### Контроль публикации WB\n\n| Кабинет | Период | Фаза | Версия источника | Итог | Проверка чтением | Следующее действие |\n|---|---|---|---|---|---|---|\n")
                           summary_header_written = True
                       checkpoint_file.write("| " + store_id + " | " + str(item.get("source_min")) + "–" + str(item.get("source_max")) + " | " + phase + " | " + source_version + " | VERIFIED | " + verification + " | " + next_action + " |\n")
+                  next_phase = phases[phase_index + 1] if phase_index + 1 < len(phases) else "complete"
+                  checkpoint_resume(store_id, next_phase)
                   phase_item = (result.get("stores") or [{}])[0] if isinstance(result, dict) else {}
                   if phase_item.get("no_source_data"):
                       print("STORE=" + store_id + " PHASE=" + phase + " STATUS=NO_SOURCE_DATA", flush=True)
@@ -249,6 +257,10 @@ jobs:
                   if all(k in store_result for k in ("summary", "rnp", "dashboard")) and all(k in store_result["rnp"] for k in ("day", "week", "month")):
                       verified.append(store_result)
                       print("STORE=" + store_id + " OK=yes SOURCE_ROWS=" + str(store_result["source_rows"]) + " SOURCE_PERIOD=" + str(store_result["source_min"]) + ".." + str(store_result["source_max"]) + " DASHBOARD_OK=yes", flush=True)
+                      if store_index + 1 < len(expected):
+                          checkpoint_resume(expected[store_index + 1], "summary")
+                      else:
+                          checkpoint_resume(store_id, "complete")
           if errors or len(verified) != len(expected):
               retry_phase = failed_phases[0][1] if failed_phases else "summary"
               with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output_file:
