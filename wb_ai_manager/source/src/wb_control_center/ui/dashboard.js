@@ -795,10 +795,13 @@ function renderClusterAdvisor(){
   const campaignSearchBids=visible.filter(r=>r.campaign_search_bid_rub!==null&&r.campaign_search_bid_rub!==undefined).length;
   const wbGuidance=visible.filter(r=>r.wb_bid_guidance).length;
   const coverageText=Object.entries(optimizerShops).filter(([shop])=>selected==='all'||shop===({sanych:'ap',air:'aa',hozyushka:'yv'}[selected])).map(([shop,data])=>{const s=data.sweep||{};return `${({ap:'Саныч',aa:'AIR',yv:'Хозяюшка'})[shop]||shop}: кампании ${s.sweep_campaigns_seen??0}/${s.sweep_campaigns_total??s.eligible_campaigns??0}, товары ${s.sweep_products_seen??0}/${s.sweep_products_total??0}, цикл ${s.sweep_complete===true?'завершён':'не завершён'}`;}).join(' · ')||'охват оптимизатора не подтверждён';
+  const acceptance=optimizerSummary.acceptance||{};
+  const acceptanceReasons=(acceptance.blockers||[]).slice(0,2).join(' ');
+  const acceptanceText=acceptance.ready?'общая приёмка подтверждена':`общая приёмка не подтверждена${acceptanceReasons?': '+acceptanceReasons:''}`;
   const snapshotWarning=traffic.health?.status!=='FRESH'||traffic.cache_mode==='last_successful_snapshot'||optimizerSummary.refresh_status==='FAILED'
     ? ` ВНИМАНИЕ: снимок устарел или источник не обновился (${traffic.refresh_error_type||traffic.health?.status||'нет подтверждения свежести'}); числовые советы заблокированы.`:'';
   status.textContent=rows.length
-    ? `Источник: WB Promotion API + зашифрованные данные GitHub · период ${state.data?.period?.from||'—'} — ${state.data?.period?.to||'—'} · ${visible.length} кластеров${selected==='all'?' по всем кабинетам':' в выбранном магазине'} · ставка кластера: ${exactClusterBids} · ставка поиска товара: ${campaignSearchBids} · подсказка WB по диапазону: ${wbGuidance} · наши точные советы: ${advised} · заблокировано: ${blocked}. ${coverageText}. Изменения в WB не выполняются.${snapshotWarning}`
+    ? `Источник: WB Promotion API + зашифрованные данные GitHub · период ${state.data?.period?.from||'—'} — ${state.data?.period?.to||'—'} · ${visible.length} кластеров${selected==='all'?' по всем кабинетам':' в выбранном магазине'} · ставка кластера: ${exactClusterBids} · ставка поиска товара: ${campaignSearchBids} · подсказка WB по диапазону: ${wbGuidance} · наши точные советы: ${advised} · заблокировано: ${blocked} · ${acceptanceText}. ${coverageText}. Изменения в WB не выполняются.${snapshotWarning}`
     : `Кластерные данные не получены. ${traffic.error||'Проверь источник архивов GitHub и следующий сбор данных WB; пустой список не означает нулевую рекламу.'}${snapshotWarning}`;
   kpis.innerHTML=[
     ['Кластеры в выборке',visible.length],['Ставка кластера',exactClusterBids],['Подсказка WB по диапазону',wbGuidance],['Изменения ставок автоматически','Нет']
