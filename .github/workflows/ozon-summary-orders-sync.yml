@@ -117,11 +117,11 @@ jobs:
           def checkpoint(phase, store, state, source_version="pending", readback="pending", next_action=""):
               global checkpoint_header_written
               with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as f:
-                  f.write("resume_phase=" + phase + "\\n")
-                  f.write("resume_store=" + store + "\\n")
+                  f.write("resume_phase=" + phase + "\n")
+                  f.write("resume_store=" + store + "\n")
               with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as f:
                   if not checkpoint_header_written:
-                      f.write("### Контроль публикации Ozon\\n\\n| Кабинет | Период | Фаза | Версия источника | Состояние | Проверка чтением | Следующее действие |\\n|---|---|---|---|---|---|---|\\n")
+                      f.write("### Контроль публикации Ozon\n\n| Кабинет | Период | Фаза | Версия источника | Состояние | Проверка чтением | Следующее действие |\n|---|---|---|---|---|---|---|\n")
                       checkpoint_header_written = True
                   f.write("| " + store + " | " + COVERAGE_FROM + "–" + coverage_to + " | " + phase + " | " + source_version + " | " + state + " | " + readback + " | " + next_action + " |\\n")
               print("OZON_CHECKPOINT=store=" + store + ";period=" + COVERAGE_FROM + ".." + coverage_to + ";phase=" + phase + ";source=" + source_version + ";state=" + state + ";readback=" + readback + ";next=" + next_action, flush=True)
