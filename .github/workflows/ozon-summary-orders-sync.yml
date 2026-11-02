@@ -550,7 +550,10 @@ jobs:
 
           def finance_amount(value, store, day):
               if isinstance(value, dict):
-                  value = value.get("value")
+                  currency = str(value.get("currency") or "").strip().upper()
+                  if currency not in {"RUB", "RUR", "643"}:
+                      raise RuntimeError("OZON_FINANCE_CURRENCY_UNSUPPORTED:" + store + ":" + day + ":" + (currency or "MISSING"))
+                  value = value.get("amount", value.get("value"))
               if value is None or value == "":
                   raise RuntimeError("OZON_FINANCE_AMOUNT_MISSING:" + store + ":" + day)
               raw = str(value).strip()
