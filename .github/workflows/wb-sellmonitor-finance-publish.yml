@@ -57,7 +57,7 @@ jobs:
       WEBHOOK_SECRET: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
       PUBLISH_ONLY_STORE: ${{ github.event_name == 'workflow_dispatch' && inputs.store != 'all' && inputs.store || github.event_name == 'push' && contains(github.event.head_commit.message, '[air-only]') && 'air_wb' || github.event_name == 'push' && contains(github.event.head_commit.message, '[hozyayushka-only]') && 'hozyayushka_wb' || github.event_name == 'push' && contains(github.event.head_commit.message, '[sanych-only]') && 'sanych_wb' || '' }}
       RESUME_ATTEMPT: ${{ github.event_name == 'workflow_dispatch' && inputs.resume_attempt || '0' }}
-      RESUME_PHASE: ${{ github.event_name == 'workflow_dispatch' && inputs.resume_phase || 'summary' }}
+      RESUME_PHASE: ${{ github.event_name == 'workflow_dispatch' && inputs.resume_phase || github.event_name == 'push' && format('push:{0}', github.event.head_commit.message) || 'summary' }}
     steps:
       - name: Check configured authorization
         shell: bash
@@ -73,12 +73,17 @@ jobs:
         run: |
           set -euo pipefail
           python - <<'PY'
-          import hashlib, http.client, json, os, time, urllib.error, urllib.request
+          import hashlib, http.client, json, os, re, time, urllib.error, urllib.request
           from datetime import date
 
           url = "https://script.google.com/macros/s/" + os.environ["WEBAPP_DEPLOYMENT_ID"] + "/exec"
           selected_store = os.environ.get("PUBLISH_ONLY_STORE", "").strip()
-          resume_phase = os.environ.get("RESUME_PHASE", "summary").strip() or "summary"
+          resume_phase_input = os.environ.get("RESUME_PHASE", "summary").strip() or "summary"
+          if resume_phase_input.startswith("push:"):
+              marker = re.search(r"\\[resume-phase:([A-Za-z0-9_-]+)\\]", resume_phase_input[5:])
+              resume_phase = marker.group(1) if marker else "summary"
+          else:
+              resume_phase = resume_phase_input
           expected = (selected_store,) if selected_store in ("air_wb", "hozyayushka_wb", "sanych_wb") else ("air_wb", "hozyayushka_wb", "sanych_wb")
           today = date.today()
           end_year, end_month = today.year, today.month
