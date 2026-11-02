@@ -838,6 +838,10 @@ class PortfolioService:
                         and self._num(plan.get("price_after_discount_rub")) is not None
                         and self._num(plan.get("price_after_discount_rub")) > 0
                         and self._num(plan.get("plan_profit_rub")) is not None
+                        and self._num(plan.get("plan_margin_pct")) is not None
+                        and self._num(plan.get("commission_pct")) is not None
+                        and self._num(plan.get("tax_total_rub")) is not None
+                        and self._num(plan.get("logistics_total_rub")) is not None
                     ),
                 })
 

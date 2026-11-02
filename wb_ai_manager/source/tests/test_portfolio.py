@@ -65,6 +65,26 @@ def test_primary_unit_economics_reads_live_table_and_uses_subject_to_resolve_dup
     assert economics["semantics"] == "plan_model_only"
 
 
+def test_primary_unit_economics_missing_required_cost_components_do_not_authorize_money_decisions(tmp_path):
+    service = PortfolioService(Settings(data_dir=str(tmp_path), wb_api_token=""))
+    row = [None] * 42
+    row[0], row[1] = "Вазы", "Ваза керамическая"
+    row[5], row[8], row[11], row[12], row[23], row[24] = 25, 100, 30, 20, 6, 20
+    # Missing plan margin: a positive cost, price, and profit alone do not prove
+    # that the modeled economics are complete enough for a monetary decision.
+    out = {"own_27": {"products": [{"sku": "123", "name": "Ваза керамическая", "cabinet": "AIR"}]}}
+    payload = {"generated_at": "2026-11-02T14:00:00+00:00", "sources": {
+        "primary_unit_economics": {
+            "read_at": "2026-11-02T14:00:00+00:00",
+            "ranges": {"unit_economics": {"values": [["title"], ["group", "item"], [], row]}},
+        },
+    }}
+    service._parse_primary_economics_axis(payload, out)
+    product = out["own_27"]["products"][0]
+    assert product["unit_economics_role"] == "primary_plan"
+    assert product["unit_economics_decision_ready"] is False
+
+
 def test_primary_unit_economics_zero_cost_rows_do_not_authorize_money_decisions(tmp_path):
     service = PortfolioService(Settings(data_dir=str(tmp_path), wb_api_token=""))
     row = [None] * 42
