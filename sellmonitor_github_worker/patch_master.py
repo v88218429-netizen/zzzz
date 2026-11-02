@@ -483,10 +483,10 @@ function sellmonitorGithubFbsAcceptanceAuditV1_(body) {
         worker_text = worker_text.replace(route_anchor, route + route_anchor, 1)
         function_anchor = "function sellmonitorGithubPublishOzonSummaryOrders_(payload) {"
         finance_function = r"""/* SELLMONITOR_OZON_FINANCE_DAY_LAYER_V1 */
-function sellmonitorGithubPublishOzonFinance_(payload) {
+function sellmonitorGithubPublishOzonFinance_(payload) {\n  /* OZON_FINANCE_INDEPENDENT_ACCOUNT_OTHER_CATEGORY_V1 */
   if (!payload || payload.source !== 'ozon_seller_api_accrual' || payload.complete !== true) throw new Error('OZON_FINANCE_EXPORT_INCOMPLETE_PRESERVE');
   var accounts=(payload.completed_accounts||[]).map(String).sort();
-  if (JSON.stringify(accounts)!==JSON.stringify(['1','2'])) throw new Error('OZON_FINANCE_ACCOUNT_COVERAGE_INCOMPLETE_PRESERVE');
+  if (!accounts.length || accounts.some(function(c,i){return ['1','2'].indexOf(c)<0 || accounts.indexOf(c)!==i;})) throw new Error('OZON_FINANCE_ACCOUNT_COVERAGE_INCOMPLETE_PRESERVE');
   var from=String(payload.coverage_from||''),to=String(payload.coverage_to||''),exported=String(payload.exported_at||'');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(from)||!/^\d{4}-\d{2}-\d{2}$/.test(to)||from>'2026-09-01'||to<from||!isFinite(new Date(exported).getTime())) throw new Error('OZON_FINANCE_COVERAGE_INVALID');
   var dailyIn=payload.daily;
@@ -495,7 +495,7 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
   var dates=[],date=from;
   while(date<=to){dates.push(date);date=addDay_(date,1);if(dates.length>400)throw new Error('OZON_FINANCE_PERIOD_GUARD');}
   var today=Utilities.formatDate(new Date(),SMC_OZON_SUMMARY.timezone,'yyyy-MM-dd');
-  var byKey=Object.create(null),allowedCats={ITEM:1,POSTING:1,NON_ITEM:1};
+  var byKey=Object.create(null),allowedCats={ITEM:1,POSTING:1,NON_ITEM:1,OTHER:1};
   dailyIn.forEach(function(r,i){
     var cabinet=String(r.cabinet||''),day=String(r.day||'');
     if(!SMC_OZON_SUMMARY.stores[cabinet]||dates.indexOf(day)<0)throw new Error('OZON_FINANCE_INVALID_KEY:'+String(i+1));
@@ -507,20 +507,20 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
       if(v===null||v===''||!isFinite(n))throw new Error('OZON_FINANCE_INVALID_AMOUNT:'+name+':'+cabinet+':'+day);
       return Math.round(n*100)/100;
     }
-    byKey[key]={cabinet:cabinet,day:day,rows:count,total:money_(r.total,'total'),item:money_(r.item,'item'),posting:money_(r.posting,'posting'),nonItem:money_(r.non_item,'non_item'),unknownCategories:Number(r.unknown_categories||0)};
-    if(byKey[key].unknownCategories>0)throw new Error('OZON_FINANCE_UNKNOWN_CATEGORY:'+cabinet+':'+day);
+    byKey[key]={cabinet:cabinet,day:day,rows:count,total:money_(r.total,'total'),item:money_(r.item,'item'),posting:money_(r.posting,'posting'),nonItem:money_(r.non_item,'non_item'),other:money_(r.other,'other'),unknownCategories:Number(r.unknown_categories||0)};
+    byKey[key].other+=byKey[key].unknownCategories;
   });
-  if(dailyIn.length!==dates.length*2)throw new Error('OZON_FINANCE_DAY_COUNT_MISMATCH:'+dailyIn.length+':'+(dates.length*2));
-  dates.forEach(function(d){['1','2'].forEach(function(c){if(!byKey[c+'|'+d])throw new Error('OZON_FINANCE_DAY_MISSING:'+c+':'+d);});});
+  if(dailyIn.length!==dates.length*accounts.length)throw new Error('OZON_FINANCE_DAY_COUNT_MISMATCH:'+dailyIn.length+':'+(dates.length*accounts.length));
+  dates.forEach(function(d){accounts.forEach(function(c){if(!byKey[c+'|'+d])throw new Error('OZON_FINANCE_DAY_MISSING:'+c+':'+d);});});
   function round_(n){return Math.round(n*100)/100;}
   function buildStore_(cabinet,cfg){
-    var dayRows=[['Дата','Начислено всего, ₽','Товар (ITEM), ₽','Отправления (POSTING), ₽','Нетоварное (NON_ITEM), ₽','Начислений, шт.','Источник','Состояние','Время выгрузки']];
+    var dayRows=[['Дата','Начислено всего, ₽','Товар (ITEM), ₽','Отправления (POSTING), ₽','Нетоварное (NON_ITEM), ₽','Прочие категории, ₽','Начислений, шт.','Источник','Состояние','Время выгрузки']];
     var storeDays=dates.map(function(d){
       var r=byKey[cabinet+'|'+d],state=d===today?'Предварительно · текущий день':(r.rows?'Факт API · начисления получены':'Факт API · начислений нет');
-      return [d,r.total,r.item,r.posting,r.nonItem,r.rows,'Ozon Seller API · accrual/by-day',state,exported];
+      return [d,r.total,r.item,r.posting,r.nonItem,r.other,r.rows,'Ozon Seller API · accrual/by-day',state,exported];
     });
     dayRows=dayRows.concat(storeDays);
-    var periodRows=[['Период','Начало','Конец','Начислено всего, ₽','Товар (ITEM), ₽','Отправления (POSTING), ₽','Нетоварное (NON_ITEM), ₽','Дней покрыто','Дней в календарном периоде','Состояние']];
+    var periodRows=[['Период','Начало','Конец','Начислено всего, ₽','Товар (ITEM), ₽','Отправления (POSTING), ₽','Нетоварное (NON_ITEM), ₽','Прочие категории, ₽','Дней покрыто','Дней в календарном периоде','Состояние']];
     function aggregate_(grain){
       var map=Object.create(null);
       dates.forEach(function(d){
@@ -531,13 +531,13 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
           start=d.slice(0,7)+'-01';var next=new Date(Date.UTC(p[0],p[1],1,12));end=Utilities.formatDate(new Date(next.getTime()-86400000),'UTC','yyyy-MM-dd');label='Месяц';
         }
         var k=label+'|'+start;
-        if(!map[k])map[k]={type:label,start:start,end:end,total:0,item:0,posting:0,nonItem:0,days:0};
-        var a=map[k],r=byKey[cabinet+'|'+d];a.total+=r.total;a.item+=r.item;a.posting+=r.posting;a.nonItem+=r.nonItem;a.days++;
+        if(!map[k])map[k]={type:label,start:start,end:end,total:0,item:0,posting:0,nonItem:0,other:0,days:0};
+        var a=map[k],r=byKey[cabinet+'|'+d];a.total+=r.total;a.item+=r.item;a.posting+=r.posting;a.nonItem+=r.nonItem;a.other+=r.other;a.days++;
       });
       return Object.keys(map).sort().map(function(k){
         var a=map[k],calDays=datesBetween_(a.start,a.end),fullyCovered=a.start>=from&&a.end<=to,completed=a.end<today;
         var state=!fullyCovered?'Неполный диапазон источника':(!completed?'Предварительно · незавершённый период':'Полный календарный период · снимок API');
-        return [a.type,a.start,a.end,round_(a.total),round_(a.item),round_(a.posting),round_(a.nonItem),a.days,calDays,state];
+        return [a.type,a.start,a.end,round_(a.total),round_(a.item),round_(a.posting),round_(a.nonItem),round_(a.other),a.days,calDays,state];
       });
     }
     function datesBetween_(a,b){var n=0,d=a;while(d<=b&&n<400){n++;d=addDay_(d,1);}return n;}
@@ -565,8 +565,8 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
       if(JSON.stringify(check)!==JSON.stringify(rows))throw new Error('OZON_FINANCE_READBACK_MISMATCH:'+name);
       return {rows:rows.length-1,sha256:sellmonitorGithubOzonHash_(check),readback:true};
     }
-    var dayResult=replace_('18_API_Финансы_дни',dayRows,9);
-    var periodResult=replace_('19_API_Финансы_периоды',periodRows,10);
+    var dayResult=replace_('18_API_Финансы_дни',dayRows,10);
+    var periodResult=replace_('19_API_Финансы_периоды',periodRows,11);
     var journal=ss.getSheetByName('20_API_Финансы_журнал');if(!journal)journal=ss.insertSheet('20_API_Финансы_журнал');
     if(journal.getLastRow()===0)journal.getRange(1,1,1,11).setValues([['Время выгрузки','Магазин','Источник','Период с','Период по','Дней получено','Начислений получено','Дневных строк','Периодов','SHA-256','Итог чтения']]).setFontWeight('bold').setBackground('#17365D').setFontColor('#FFFFFF');
     var row=[exported,cfg.name,'Ozon Seller API · accrual/by-day',from,to,dates.length,storeDays.reduce(function(n,r){return n+Number(r[5]||0);},0),dayResult.rows,periodResult.rows,dayResult.sha256+' / '+periodResult.sha256,'OK: запись перечитана; пустой день отделён от сбоя'];
@@ -576,7 +576,7 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
     return {store:cfg.name,days:dayResult.rows,periods:periodResult.rows,accrual_rows:row[6],archived_rows:archiveRows,daily_sha256:dayResult.sha256,period_sha256:periodResult.sha256,readback:true};
   }
   var results=[];
-  ['1','2'].forEach(function(c){try{results.push(buildStore_(c,SMC_OZON_SUMMARY.stores[c]));}catch(e){results.push({store:SMC_OZON_SUMMARY.stores[c].name,ok:false,error:String(e&&e.message||e).slice(0,800)});}});
+  accounts.forEach(function(c){try{results.push(buildStore_(c,SMC_OZON_SUMMARY.stores[c]));}catch(e){results.push({store:SMC_OZON_SUMMARY.stores[c].name,ok:false,error:String(e&&e.message||e).slice(0,800)});}});
   var failed=results.filter(function(x){return x.ok===false;});
   if(failed.length)return {ok:false,action:'publish_ozon_api_finance',stores:results};
   return {ok:true,action:'publish_ozon_api_finance',coverage_from:from,coverage_to:to,stores:results,source:'Ozon Seller API · accrual/by-day'};
@@ -586,7 +586,7 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
         if function_anchor not in worker_text:
             raise SystemExit("OZON_FINANCE_FUNCTION_ANCHOR_MISSING")
         worker_text = worker_text.replace(function_anchor, finance_function + "\n" + function_anchor, 1)
-        worker_text = worker_text.replace("VERSION: 'github-worker-1.3.84'", "VERSION: 'github-worker-1.3.85'", 1)
+        worker_text = worker_text.replace("VERSION: 'github-worker-1.3.85'", "VERSION: 'github-worker-1.3.86'", 1)
         print("OZON_FINANCE_DAY_LAYER=patched")
     elif "function sellmonitorGithubPublishOzonFinance_(" not in worker_text or "action === 'publish_ozon_api_finance'" not in worker_text:
         raise SystemExit("OZON_FINANCE_PATCH_PARTIAL")
