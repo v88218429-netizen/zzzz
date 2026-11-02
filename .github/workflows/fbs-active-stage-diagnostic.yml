@@ -1,0 +1,42 @@
+name: WB FBS active stage diagnostic
+
+on:
+  push:
+    branches: [mainggg]
+    paths:
+      - ".github/workflows/fbs-active-stage-diagnostic.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      BRIDGE_URL: https://script.google.com/macros/s/AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw/exec
+      BRIDGE_KEY: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
+    steps:
+      - name: Read bridge runtime stage and leases
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, urllib.request
+          payload=json.dumps({"token":os.environ["BRIDGE_KEY"],"action":"health"}).encode()
+          request=urllib.request.Request(os.environ["BRIDGE_URL"],data=payload,
+              headers={"Content-Type":"application/json"},method="POST")
+          with urllib.request.urlopen(request,timeout=300) as response:
+              body=json.loads(response.read().decode("utf-8"))
+          result=body.get("result") or {}
+          if body.get("ok") is not True:
+              raise SystemExit("FBS_HEALTH_ACTION_FAILED")
+          print("FBS_STAGE_DIAGNOSTIC="+json.dumps({
+              "version":result.get("version"),
+              "runtime":result.get("runtime"),
+              "trigger_ok":result.get("trigger_ok"),
+              "trigger_count":result.get("trigger_count"),
+              "fbs_supply_stage":result.get("fbs_supply_stage"),
+              "fbs_ingest_stages":result.get("fbs_ingest_stages")
+          },ensure_ascii=False,separators=(",",":")),flush=True)
+          PY
