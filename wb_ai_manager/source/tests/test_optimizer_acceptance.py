@@ -51,6 +51,29 @@ class OptimizerAcceptanceTests(unittest.TestCase):
         self.assertTrue(result["ready"])
         self.assertEqual(result["query_facts"]["ready_query_actions"], 0)
 
+    def test_live_primary_economics_is_not_blocked_by_unrelated_stale_portfolio_source(self):
+        args = fixture()
+        args[1]["current_data"] = False
+        economics = args[1]["own_27"]["primary_unit_economics"]
+        economics.update({
+            "snapshot_basis": "live_source_read",
+            "source_retrieved_at": "2026-11-02T07:55:00+00:00",
+        })
+        result = evaluate_optimizer_acceptance(
+            *args, now=datetime(2026, 11, 2, 8, tzinfo=timezone.utc),
+        )
+        self.assertTrue(result["ready"])
+        self.assertFalse(any("Юнит-экономика не подтверждена" in item for item in result["blockers"]))
+
+    def test_unverified_primary_read_does_not_override_stale_portfolio(self):
+        args = fixture()
+        args[1]["current_data"] = False
+        result = evaluate_optimizer_acceptance(
+            *args, now=datetime(2026, 11, 2, 8, tzinfo=timezone.utc),
+        )
+        self.assertFalse(result["ready"])
+        self.assertTrue(any("Юнит-экономика не подтверждена" in item for item in result["blockers"]))
+
     def test_partial_campaign_sweep_blocks_acceptance(self):
         args = fixture()
         args[0]["shops"]["aa"]["sweep"]["sweep_complete"] = False
