@@ -1,4 +1,5 @@
 name: Ozon summary orders sync
+# Verify the 1.3.84 full-page freshness labels and chart date axis through the existing scheduled publication path.
 
 on:
   workflow_dispatch:
