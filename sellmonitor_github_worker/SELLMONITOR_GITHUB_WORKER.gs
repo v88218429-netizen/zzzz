@@ -7338,6 +7338,15 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
       if(value instanceof Date)return value.getTime()/86400000+25569;
       return value==null?'':value;
     }
+    var sheetTimeZone='Etc/GMT';
+    var fbsLocalSerial_ = function(value){
+      if(value instanceof Date){
+        var local=Utilities.formatDate(value,sheetTimeZone,'yyyy-MM-dd HH:mm:ss').match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/);
+        if(!local)throw new Error('FBS_LOCAL_TIME_FORMAT_FAILED');
+        return Date.UTC(Number(local[1]),Number(local[2])-1,Number(local[3]),Number(local[4]),Number(local[5]),Number(local[6]))/86400000+25569;
+      }
+      return value==null?'':value;
+    };
     function sheetRows(rows){return rows.map(function(row){return row.map(fbsLocalSerial_);});}
     mark('SHEET_READ_START');
     // Use the already-authorized Sheets REST API throughout this write path.
@@ -7358,15 +7367,7 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
     var orderSheetId=Number(orderSheetInfo.sheetId);
     var gridRows=Number((orderSheetInfo.gridProperties||{}).rowCount||0);
     if(!orderSheetId||gridRows<1||gridRows>100000)throw new Error('FBS_ROW_COUNT_UNEXPECTED');
-    var sheetTimeZone=String((metadataPayload.properties||{}).timeZone||'Etc/GMT');
-    function fbsLocalSerial_(value){
-      if(value instanceof Date){
-        var local=Utilities.formatDate(value,sheetTimeZone,'yyyy-MM-dd HH:mm:ss').match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/);
-        if(!local)throw new Error('FBS_LOCAL_TIME_FORMAT_FAILED');
-        return Date.UTC(Number(local[1]),Number(local[2])-1,Number(local[3]),Number(local[4]),Number(local[5]),Number(local[6]))/86400000+25569;
-      }
-      return value==null?'':value;
-    }
+    sheetTimeZone=String((metadataPayload.properties||{}).timeZone||'Etc/GMT');
     function columnLetter_(column){
       var value='',n=Number(column);
       while(n>0){var rem=(n-1)%26;value=String.fromCharCode(65+rem)+value;n=Math.floor((n-1)/26);}
