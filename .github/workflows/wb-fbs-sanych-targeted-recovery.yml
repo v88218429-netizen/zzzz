@@ -29,7 +29,7 @@ permissions:
 
 concurrency:
   # Source-only pushes that do not request historical replay must not block production writers.
-  group: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[SANYCH-90D-SLICED]') && 'wb-bridge-production-mutations' || github.event_name != 'push' && 'wb-bridge-production-mutations' || format('wb-fbs-noop-{0}', github.run_id) }}
+  group: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[SANYCH-90D-SLICED]') && 'wb-fbs-production-mutations' || github.event_name != 'push' && 'wb-fbs-production-mutations' || format('wb-fbs-noop-{0}', github.run_id) }}
   cancel-in-progress: false
   queue: max
 
