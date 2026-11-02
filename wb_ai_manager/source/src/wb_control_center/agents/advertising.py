@@ -53,7 +53,7 @@ def _nm_ids(row: dict[str, Any]) -> list[int]:
 
 
 def _deep_scan_limits(runtime: dict[str, Any]) -> tuple[int, int, int]:
-    """Hard-bound supplementary WB API calls per run."""
+    """Keep every run bounded while allowing the complete active catalog to finish promptly."""
     def bounded(name: str, default: int, ceiling: int) -> int:
         try:
             value = int(runtime.get(name, default) or default)
