@@ -117,7 +117,7 @@ jobs:
 
           for store_index, store_id in enumerate(expected):
               daily_phases = sanych_chunks if store_id == "sanych_wb" else months
-              phases = ("summary",) + tuple(daily_phases) + ("rnp_week", "rnp_month", "dashboard")
+              phases = ["summary", *daily_phases, "rnp_week", "rnp_month", "dashboard"]
               store_result = {"store_id": store_id}
               phase_start = phases.index(resume_phase) if resume_phase in phases else 0
               phases = phases[phase_start:]
