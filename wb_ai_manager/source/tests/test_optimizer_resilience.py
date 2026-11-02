@@ -10,6 +10,15 @@ import pytest
 from wb_control_center.agents.advertising import AdvertisingOptimizerAgent, _safe_ad_read
 
 
+
+def test_advertising_deep_scan_limits_allow_twelve_campaigns_without_unbounded_calls():
+    from wb_control_center.agents.advertising import _deep_scan_limits
+
+    assert _deep_scan_limits({}) == (12, 2, 2)
+    assert _deep_scan_limits({"max_campaigns_deep_scan": 999}) == (12, 2, 2)
+    assert _deep_scan_limits({"max_campaigns_deep_scan": 3}) == (3, 2, 2)
+
+
 def _load_runtime_supervisor():
     source = Path(__file__).resolve().parents[1] / "scripts" / "runtime_supervisor.py"
     spec = importlib.util.spec_from_file_location("runtime_supervisor_under_test", source)
