@@ -221,15 +221,26 @@ jobs:
                       grain = "day" if phase.startswith("rnp_day_") else phase[4:]
                       matrices = rnp.get("matrices") or []
                       expected_latest = None
+                      expected_earliest = None
                       source_max = item.get("source_max")
                       if source_max and grain == "week":
                           source_day = date.fromisoformat(str(source_max))
                           expected_latest = (source_day - __import__("datetime").timedelta(days=source_day.weekday())).isoformat()
                       elif source_max and grain == "month":
                           expected_latest = str(source_max)[:7] + "-01"
-                      elif source_max and grain == "day":
-                          expected_latest = str(source_max)
-                      latest_matches = len(matrices) == 1 and (expected_latest is None or matrices[0].get("max") == expected_latest)
+                      elif grain == "day":
+                          # Daily publication is deliberately split into bounded month or 7-day chunks.
+                          # Validate against this phase's own date window, not the final source date.
+                          phase_parts = phase.split("_")
+                          if len(phase_parts) >= 4 and phase_parts[2].isdigit() and phase_parts[3].isdigit():
+                              phase_year, phase_month = int(phase_parts[2]), int(phase_parts[3])
+                              phase_start_day = int(phase_parts[4]) if len(phase_parts) >= 6 and phase_parts[4].isdigit() else 1
+                              phase_end_day = int(phase_parts[5]) if len(phase_parts) >= 6 and phase_parts[5].isdigit() else (date(phase_year + (phase_month == 12), (phase_month % 12) + 1, 1) - __import__("datetime").timedelta(days=1)).day
+                              expected_earliest = date(phase_year, phase_month, phase_start_day).isoformat()
+                              phase_end = date(phase_year, phase_month, phase_end_day)
+                              source_day = date.fromisoformat(str(source_max)) if source_max else phase_end
+                              expected_latest = min(phase_end, source_day).isoformat()
+                      latest_matches = len(matrices) == 1 and (expected_latest is None or matrices[0].get("max") == expected_latest) and (expected_earliest is None or matrices[0].get("min") == expected_earliest)
                       if rnp.get("ok") is not True or rnp.get("readback") is not True or len(matrices) != 1 or matrices[0].get("sheet") != {"day":"01_Дни","week":"02_Недели","month":"03_Месяцы"}[grain] or not latest_matches:
                           last = "RNP matrix readback mismatch: " + json.dumps(rnp, ensure_ascii=False)[:1200]
                           errors.append("WB finance RNP readback failed for " + store_id + "/" + grain + ": " + last)
