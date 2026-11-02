@@ -22,7 +22,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: wb-fbs-production-mutations
+  group: wb-fbs-production-audits
   cancel-in-progress: false
   queue: max
 
