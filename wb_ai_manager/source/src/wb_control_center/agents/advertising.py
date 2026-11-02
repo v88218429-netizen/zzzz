@@ -86,17 +86,56 @@ def _rotating_nm_window(items: list[int], limit: int, window: int, campaign_id: 
     return doubled[start : start + count]
 
 
-def _scan_cursor(previous: Any, campaign_ids: list[int]) -> dict[str, Any]:
-    """Resume a fair per-cabinet sweep; reset only when the campaign catalog changes."""
+def _campaign_nm_catalog(
+    campaigns: list[dict[str, Any]],
+    exact_nm_stats: dict[tuple[int, int], dict[str, Any]],
+) -> dict[int, list[int]]:
+    """Union campaign settings with exact product IDs observed in WB ad statistics."""
+    catalog = {
+        cid: set(_nm_ids(campaign))
+        for campaign in campaigns
+        if (cid := _campaign_id(campaign))
+    }
+    for campaign_id, nm_id in exact_nm_stats:
+        if campaign_id in catalog and nm_id > 0:
+            catalog[campaign_id].add(int(nm_id))
+    return {cid: sorted(nms) for cid, nms in catalog.items()}
+
+
+def _sweep_progress(
+    campaign_nm_ids: dict[int, list[int]],
+    swept_nm_ids: dict[str, list[int]],
+) -> tuple[int, int, bool]:
+    """Count only actually scanned unique products and verify every campaign/SKU pair."""
+    expected = {cid: set(nms) for cid, nms in campaign_nm_ids.items()}
+    swept = {str(cid): set(ids) for cid, ids in swept_nm_ids.items()}
+    total_products = len(set().union(*expected.values())) if expected else 0
+    seen_products = len(
+        set().union(*(swept.get(str(cid), set()) & nms for cid, nms in expected.items()))
+    ) if expected else 0
+    complete = all(swept.get(str(cid), set()) >= nms for cid, nms in expected.items())
+    return seen_products, total_products, complete
+
+
+def _scan_cursor(
+    previous: Any,
+    campaign_ids: list[int],
+    campaign_nm_ids: dict[int, list[int]] | None = None,
+) -> dict[str, Any]:
+    """Resume a fair sweep; reset when either campaign IDs or their product set changes."""
     saved = previous.get("data") if isinstance(previous, dict) else previous
     saved = saved if isinstance(saved, dict) else {}
     expected = [int(x) for x in campaign_ids]
-    if saved.get("campaign_ids") != expected:
-        return {"campaign_ids": expected, "next_campaign_index": 0, "next_nm_index": {},
+    expected_nms = {str(cid): sorted({int(nm) for nm in nms}) for cid, nms in (campaign_nm_ids or {}).items()}
+    catalog_changed = saved.get("campaign_nm_ids") != expected_nms
+    if saved.get("campaign_ids") != expected or catalog_changed:
+        return {"campaign_ids": expected, "campaign_nm_ids": expected_nms,
+                "next_campaign_index": 0, "next_nm_index": {},
                 "sweep_id": int(saved.get("sweep_id") or 0) + 1,
                 "swept_campaign_ids": [], "swept_nm_ids": {}}
     return {
         "campaign_ids": expected,
+        "campaign_nm_ids": expected_nms,
         "next_campaign_index": max(0, int(saved.get("next_campaign_index") or 0)) % max(1, len(expected)),
         "next_nm_index": dict(saved.get("next_nm_index") or {}),
         "sweep_id": max(1, int(saved.get("sweep_id") or 1)),
@@ -281,10 +320,15 @@ class AdvertisingOptimizerAgent(BaseAgent):
         # Stable ID ordering plus a saved cursor prevents high-spend campaigns
         # from starving the rest of a cabinet during repeated bounded runs.
         campaigns = sorted(campaigns, key=lambda c: _campaign_id(c) or 0)
+        campaign_nm_ids = _campaign_nm_catalog(campaigns, exact_nm_stats)
         runtime = (self.ctx.policy.raw.get("runtime") or {}).get("advertising", {})
         max_campaigns, max_nms, concurrency = _deep_scan_limits(runtime)
         old_cursor = self.ctx.db.latest_snapshot(self.name, "deep_scan_cursor")
-        cursor = _scan_cursor(old_cursor, [_campaign_id(c) for c in campaigns if _campaign_id(c)])
+        cursor = _scan_cursor(
+            old_cursor,
+            [_campaign_id(c) for c in campaigns if _campaign_id(c)],
+            campaign_nm_ids,
+        )
         semaphore = asyncio.Semaphore(concurrency)
 
         async def limited(tool: str, **kwargs: Any) -> Any:
@@ -295,7 +339,7 @@ class AdvertisingOptimizerAgent(BaseAgent):
             cid = _campaign_id(campaign)
             if not cid:
                 return None
-            nms = _nm_ids(campaign)
+            nms = campaign_nm_ids.get(cid, [])
             nm_start = max(0, int(cursor["next_nm_index"].get(str(cid), 0)))
             selected_nms = _rotating_slice(nms, max_nms, nm_start)
             budget_task = asyncio.create_task(limited("wb_advert_budget", advert_id=cid))
@@ -377,7 +421,7 @@ class AdvertisingOptimizerAgent(BaseAgent):
                 scanned.append({
                     "campaign": campaign,
                     "campaign_id": _campaign_id(campaign),
-                    "nm_ids": _nm_ids(campaign),
+                    "nm_ids": campaign_nm_ids.get(_campaign_id(campaign) or 0, []),
                     "recommendation_nm_ids_scanned": [],
                     "_error": str(result),
                 })
@@ -393,20 +437,10 @@ class AdvertisingOptimizerAgent(BaseAgent):
                         cursor["swept_nm_ids"][str(cid)] = sorted(done)
                 scanned.append(result)
 
-        all_products_seen = all(
-            set(cursor["swept_nm_ids"].get(str(_campaign_id(c)), [])) >= set(_nm_ids(c))
-            for c in campaigns if _campaign_id(c)
-        )
         swept_campaign_count = len(cursor["swept_campaign_ids"])
-        # Product progress counts unique catalog products from completed campaigns only.
-        # Multi-campaign products are deduplicated, and failed partial scans stay excluded.
-        swept_product_ids = {
-            nm_id
-            for campaign in campaigns
-            if _campaign_id(campaign) in set(cursor["swept_campaign_ids"])
-            for nm_id in _nm_ids(campaign)
-        }
-        swept_product_count = len(swept_product_ids)
+        swept_product_count, total_product_count, all_products_seen = _sweep_progress(
+            campaign_nm_ids, cursor["swept_nm_ids"]
+        )
         sweep_complete = (set(cursor["swept_campaign_ids"]) >= set(cursor["campaign_ids"])
                           and all_products_seen
                           and all(isinstance(item, dict) and item.get("scan_complete") is True for item in scanned))
@@ -424,7 +458,7 @@ class AdvertisingOptimizerAgent(BaseAgent):
             "sweep_campaigns_seen": swept_campaign_count,
             "sweep_campaigns_total": len(cursor["campaign_ids"]),
             "sweep_products_seen": swept_product_count,
-            "sweep_products_total": sum(len(_nm_ids(c)) for c in campaigns),
+            "sweep_products_total": total_product_count,
             "cursor_before": before,
             "cursor_after": cursor["next_campaign_index"],
             "eligible_campaigns": len(campaigns),
