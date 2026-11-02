@@ -1,10 +1,10 @@
 /**
- * Sellmonitor GitHub Central Worker v1.3.74
+ * Sellmonitor GitHub Central Worker v1.3.80
  * GitHub is source-of-truth/scheduler. This Apps Script project is only
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.79',
+  VERSION: 'github-worker-1.3.80',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -6271,7 +6271,7 @@ function sellmonitorGithubPublishWbInnerPeriods_(onlyStore,requestedPhase){
         if(p.shop!==shop)return false;
         var period=String(p.period||'');
         if(dayMonthMatch)return period.indexOf(dayMonthPrefix)===0;
-        if(dayRangeMatch)return period>=dayRangeStart&&period<=dayRangeEnd;
+        if(dayRangeMatch){var rangeMonth=dayRangeStart.slice(0,7);return (period>=dayRangeStart&&period<=dayRangeEnd)||(rangeMonth===dayRangeEnd.slice(0,7)&&period===rangeMonth+'-01');}
         return true;
       }).sort(function(a,b){return a.period<b.period?-1:1;});
       if(!chosen.length&&(dayMonthMatch||dayRangeMatch)){
@@ -6545,7 +6545,7 @@ function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId,onl
     var x=aggregate(list,code);return x==null?'':x;
   }
   var exactMax='';
-  built.day.forEach(function(r){if(String(r[10+built.metricHeaders.length]||'')==='FACTUAL_INNER_ANALYTICS'&&String(r[1])>exactMax)exactMax=String(r[1]);});
+  built.day.forEach(function(r){var dayKey=String(r[1]||'');if(dayRangeMatch&&(dayKey<dayRangeStart||dayKey>dayRangeEnd))return;if(String(r[10+built.metricHeaders.length]||'')==='FACTUAL_INNER_ANALYTICS'&&dayKey>exactMax)exactMax=dayKey;});
   var stats=[];
   specs.forEach(function(spec){
     var sh=ss.getSheetByName(spec.name);if(!sh)throw new Error('WB_RNP_MATRIX_MISSING:'+spec.name);
@@ -6657,7 +6657,7 @@ function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId,onl
       queuedArchiveRecords=[];
     }
     updates.sort(function(a,b){return a.col-b.col;});
-    var ui=0,rowChunk=1000;
+    var ui=0,rowChunk=2500;
     while(ui<updates.length){
       var uj=ui+1;while(uj<updates.length&&updates[uj].col===updates[uj-1].col+1)uj++;
       var block=updates.slice(ui,uj),last=sh.getLastRow();
