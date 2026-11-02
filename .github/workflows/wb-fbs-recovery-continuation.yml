@@ -8,7 +8,6 @@ on:
       - WB FBS Sanych targeted recovery
       - WB FBS production acceptance audit
       - WB FBS supply sync via GitHub
-      - WB Sellmonitor finance summaries
     types:
       - completed
     branches:
@@ -91,10 +90,8 @@ jobs:
               print("FBS_CONTINUATION_DISPATCHED pass=" + str(next_pass) +
                     " source=" + str(source_root_id) + " retry_source_run=" + str(source_run_id), flush=True)
           elif source_path in {".github/workflows/wb-fbs-production-acceptance-audit.yml",
-                               ".github/workflows/wb-fbs-supply-sync.yml",
-                               ".github/workflows/wb-sellmonitor-finance-publish.yml"} or source_name in {"WB FBS production acceptance audit",
-                               "WB FBS supply sync via GitHub",
-                               "WB Sellmonitor finance summaries"}:
+                               ".github/workflows/wb-fbs-supply-sync.yml"} or source_name in {"WB FBS production acceptance audit",
+                               "WB FBS supply sync via GitHub"}:
               if source_attempt >= 3:
                   print("FBS_TRANSIENT_RETRY_LIMIT_REACHED run=" + str(source_run_id) +
                         " attempts=" + str(source_attempt), flush=True)
