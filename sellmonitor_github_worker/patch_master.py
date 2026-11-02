@@ -591,6 +591,30 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
     elif "function sellmonitorGithubPublishOzonFinance_(" not in worker_text or "action === 'publish_ozon_api_finance'" not in worker_text:
         raise SystemExit("OZON_FINANCE_PATCH_PARTIAL")
 
+    # Keep period-matrix freshness labels tied to the actual verified source and protect the prior cell value.
+    freshness_marker = "WB_RNP_FRESHNESS_AND_AXIS_READBACK_V1"
+    freshness_anchor = "    stats.push({sheet:spec.name,target_periods:targets.length,updated_columns:updates.length,archived_segments:archives,written_values:written,duplicates_removed:dupDates.length,min:targets[0]||'',max:targets.length?targets[targets.length-1]:''});"
+    if freshness_marker not in worker_text:
+        if worker_text.count(freshness_anchor) != 1:
+            raise SystemExit("WB RNP matrix stats anchor mismatch")
+        freshness_code = """/* WB_RNP_FRESHNESS_AND_AXIS_READBACK_V1 */
+    if(spec.grain==='week'||spec.grain==='month'){
+      var freshnessCell=sh.getRange('M1');
+      var freshnessText='Finance Inner exact periods · daily до '+(exactMax||'нет точного факта')+' · '+built.sourceRows+' фактов источника · предварительных дней: '+built.partialDays+' · FBS отдельно: операционный контроль';
+      var oldFreshness=freshnessCell.getDisplayValue();
+      if(oldFreshness!==freshnessText){
+        archiveSnapshot(sh,13,'SOURCE_FRESHNESS_NOTE','Обновление метки свежести после проверки источника',1,[oldFreshness]);
+        freshnessCell.setValue(freshnessText);
+        SpreadsheetApp.flush();
+        if(freshnessCell.getDisplayValue()!==freshnessText)throw new Error('WB_RNP_FRESHNESS_NOTE_READBACK_FAILED:'+spec.name);
+      }
+    }
+"""
+        worker_text = worker_text.replace(freshness_anchor, freshness_code + "\\n" + freshness_anchor, 1)
+        print("WB_RNP_FRESHNESS_AND_AXIS_READBACK=patched")
+    elif freshness_marker not in worker_text and "function sellmonitorGithubWbInnerSyncRnpMatrices_" in worker_text:
+        raise SystemExit("WB RNP freshness patch anchor changed")
+
     worker.write_text(worker_text, encoding="utf-8")
     print("WORKER_TRIGGER_REFRESH_V2=patched")
 candidates = []
