@@ -591,7 +591,7 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
     elif "function sellmonitorGithubPublishOzonFinance_(" not in worker_text or "action === 'publish_ozon_api_finance'" not in worker_text:
         raise SystemExit("OZON_FINANCE_PATCH_PARTIAL")
 
-  worker.write_text(worker_text, encoding="utf-8")
+    worker.write_text(worker_text, encoding="utf-8")
     print("WORKER_TRIGGER_REFRESH_V2=patched")
 candidates = []
 
