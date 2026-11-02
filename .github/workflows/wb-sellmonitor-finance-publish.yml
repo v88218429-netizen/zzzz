@@ -9,6 +9,19 @@ name: WB Sellmonitor finance summaries
 
 on:
   workflow_dispatch:
+    inputs:
+      store:
+        description: Cabinet scope
+        type: choice
+        options: [all, air_wb, hozyayushka_wb, sanych_wb]
+        default: all
+        required: true
+      resume_attempt:
+        description: Bounded automatic retry counter
+        type: choice
+        options: ["0", "1"]
+        default: "0"
+        required: true
   push:
     branches: [mainggg]
     paths:
@@ -32,7 +45,8 @@ jobs:
     env:
       WEBAPP_DEPLOYMENT_ID: AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw
       WEBHOOK_SECRET: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
-      PUBLISH_ONLY_STORE: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[air-only]') && 'air_wb' || github.event_name == 'push' && contains(github.event.head_commit.message, '[hozyayushka-only]') && 'hozyayushka_wb' || github.event_name == 'push' && contains(github.event.head_commit.message, '[sanych-only]') && 'sanych_wb' || '' }}
+      PUBLISH_ONLY_STORE: ${{ github.event_name == 'workflow_dispatch' && inputs.store != 'all' && inputs.store || github.event_name == 'push' && contains(github.event.head_commit.message, '[air-only]') && 'air_wb' || github.event_name == 'push' && contains(github.event.head_commit.message, '[hozyayushka-only]') && 'hozyayushka_wb' || github.event_name == 'push' && contains(github.event.head_commit.message, '[sanych-only]') && 'sanych_wb' || '' }}
+      RESUME_ATTEMPT: ${{ github.event_name == 'workflow_dispatch' && inputs.resume_attempt || '0' }}
     steps:
       - name: Check configured authorization
         shell: bash
@@ -196,4 +210,43 @@ jobs:
           if errors or len(verified) != len(expected):
               raise SystemExit("WB finance phased publication incomplete: " + json.dumps({"verified": len(verified), "expected": len(expected), "errors": errors}, ensure_ascii=False))
           print("WB_FINANCE_PHASED_PUBLICATION_OK stores=" + str(len(verified)), flush=True)
+          PY
+
+  recover:
+    needs: publish
+    if: ${{ failure() && (github.event_name != 'workflow_dispatch' || inputs.resume_attempt == '0') }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Queue one serialized recovery attempt
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RECOVERY_STORE: ${{ env.PUBLISH_ONLY_STORE || 'all' }}
+          RECOVERY_REF: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, urllib.request
+          payload = {
+              "ref": os.environ["RECOVERY_REF"],
+              "inputs": {"store": os.environ["RECOVERY_STORE"], "resume_attempt": "1"},
+          }
+          url = "https://api.github.com/repos/" + os.environ["GITHUB_REPOSITORY"] + "/actions/workflows/wb-sellmonitor-finance-publish.yml/dispatches"
+          req = urllib.request.Request(
+              url,
+              data=json.dumps(payload).encode("utf-8"),
+              headers={
+                  "Accept": "application/vnd.github+json",
+                  "Authorization": "Bearer " + os.environ["GH_TOKEN"],
+                  "X-GitHub-Api-Version": "2022-11-28",
+                  "Content-Type": "application/json",
+              },
+              method="POST",
+          )
+          with urllib.request.urlopen(req, timeout=30) as response:
+              if response.status != 204:
+                  raise SystemExit("WB_RECOVERY_DISPATCH_HTTP_" + str(response.status))
+          print("WB_AUTOMATIC_RECOVERY=queued; attempt=1; store=" + os.environ["RECOVERY_STORE"])
           PY
