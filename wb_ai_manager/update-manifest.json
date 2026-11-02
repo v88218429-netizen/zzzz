@@ -61,8 +61,8 @@
         },
         {
           "path": "scripts/github_runtime.py",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/8e178a3a30c147216effdde96a52061c4b31c6bc/wb_ai_manager/source/scripts/github_runtime.py",
-          "sha256": "60d2e5075b18443e6d5aff100f25e06ec87844b2cf941e76a398755eb576475b"
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/95f01ce2bf1e05d46e72680e995d8dc40e20d54f/wb_ai_manager/source/scripts/github_runtime.py",
+          "sha256": "9d76b4f23159e238408d5d3daeac7dc09b551f68c811f44004f1560f3bbe5296"
         },
         {
           "path": "scripts/install_launchd.sh",
