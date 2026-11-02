@@ -346,7 +346,7 @@ def test_advertising_deep_scan_is_hard_bounded_and_rotates():
 
     assert _deep_scan_limits({"max_campaigns_deep_scan": 99, "max_nms_per_campaign": 12, "deep_scan_concurrency": 4}) == (12, 2, 2)
     assert _deep_scan_limits({"max_campaigns_deep_scan": 3}) == (3, 2, 2)
-    assert _deep_scan_limits({}) == (4, 2, 2)
+    assert _deep_scan_limits({}) == (12, 2, 2)
     campaigns = [{"advertId": n} for n in range(8)]
     windows = [_rotating_campaign_window(campaigns, 2, step) for step in range(4)]
     assert [[x["advertId"] for x in window] for window in windows] == [[0, 1], [2, 3], [4, 5], [6, 7]]
