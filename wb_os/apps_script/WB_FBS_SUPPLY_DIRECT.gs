@@ -317,10 +317,13 @@ function wbFbsSupplyWriteSupplySheet_(ss, supplyRows, orderCounts, checkedAt) {
   wbFbsSupplySetStage_('SUPPLY_WRITE_HEADER_START', '');
   sh.getRange(1,1,1,header.length).setValues([header]);
   wbFbsSupplySetStage_('SUPPLY_WRITE_HEADER_DONE', '');
-  if(oldLast>1){
-    wbFbsSupplySetStage_('SUPPLY_CLEAR_OLD_START', 'rows=' + (oldLast-1));
-    sh.getRange(2,1,oldLast-1,header.length).clearContent();
-    wbFbsSupplySetStage_('SUPPLY_CLEAR_OLD_DONE', '');
+  var staleRows=Math.max(0,(oldLast-1)-out.length);
+  if(staleRows){
+    var staleStartRowForClear=out.length+2;
+    wbFbsSupplySetStage_('SUPPLY_CLEAR_STALE_START',
+      'rows=' + staleRows + ' start=' + staleStartRowForClear);
+    sh.getRange(staleStartRowForClear,1,staleRows,header.length).clearContent();
+    wbFbsSupplySetStage_('SUPPLY_CLEAR_STALE_DONE', '');
   }
   if(out.length){
     wbFbsSupplySetStage_('SUPPLY_WRITE_ROWS_START', 'rows=' + out.length);
