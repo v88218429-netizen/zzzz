@@ -3,6 +3,25 @@ name: Ozon summary orders sync
 
 on:
   workflow_dispatch:
+    inputs:
+      resume_store:
+        description: Кабинет из контрольной точки
+        type: choice
+        options: [all, ДОМ, Хозяюшка]
+        default: all
+        required: true
+      resume_phase:
+        description: Фаза продолжения
+        type: choice
+        options: [source, orders, finance]
+        default: source
+        required: true
+      resume_attempt:
+        description: Ограниченный повтор после сбоя
+        type: choice
+        options: ["0", "1"]
+        default: "0"
+        required: true
   push:
     branches: [mainggg]
     paths:
@@ -18,15 +37,22 @@ permissions:
 concurrency:
   group: ozon-summary-orders-bounded
   cancel-in-progress: false
+  queue: max
 
 jobs:
   publish:
+    outputs:
+      resume_store: ${{ steps.publish.outputs.resume_store }}
+      resume_phase: ${{ steps.publish.outputs.resume_phase }}
     if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
       WEBAPP_DEPLOYMENT_ID: AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw
       WEBHOOK_SECRET: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
+      RESUME_STORE: ${{ github.event_name == 'workflow_dispatch' && inputs.resume_store || 'all' }}
+      RESUME_PHASE: ${{ github.event_name == 'workflow_dispatch' && inputs.resume_phase || 'source' }}
+      RESUME_ATTEMPT: ${{ github.event_name == 'workflow_dispatch' && inputs.resume_attempt || '0' }}
     steps:
       - name: Check configured authorization
         shell: bash
@@ -60,6 +86,7 @@ jobs:
           PY
 
       - name: Fetch all Ozon Seller API pages, publish and verify both summaries
+        id: publish
         shell: bash
         env:
           OZON_DOM_CLIENT_ID: ${{ secrets.OZON_SELLER_DOM_CLIENT_ID }}
@@ -69,7 +96,7 @@ jobs:
         run: |
           set -euo pipefail
           python - <<'PY'
-          import datetime, json, os, time, urllib.error, urllib.request
+          import datetime, hashlib, json, os, time, urllib.error, urllib.request
           from zoneinfo import ZoneInfo
 
           MOSCOW = ZoneInfo("Europe/Moscow")
@@ -84,6 +111,25 @@ jobs:
               ("2", "HOZYAYUSHKA", "OZON_HOZYAYUSHKA_CLIENT_ID", "OZON_HOZYAYUSHKA_API_KEY"),
           )
 
+          resume_store = os.environ.get("RESUME_STORE", "all")
+          resume_phase = os.environ.get("RESUME_PHASE", "source")
+          checkpoint_header_written = False
+          def checkpoint(phase, store, state, source_version="pending", readback="pending", next_action=""):
+              global checkpoint_header_written
+              with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as f:
+                  f.write("resume_phase=" + phase + "\\n")
+                  f.write("resume_store=" + store + "\\n")
+              with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as f:
+                  if not checkpoint_header_written:
+                      f.write("### Контроль публикации Ozon\\n\\n| Кабинет | Период | Фаза | Версия источника | Состояние | Проверка чтением | Следующее действие |\\n|---|---|---|---|---|---|---|\\n")
+                      checkpoint_header_written = True
+                  f.write("| " + store + " | " + COVERAGE_FROM + "–" + coverage_to + " | " + phase + " | " + source_version + " | " + state + " | " + readback + " | " + next_action + " |\\n")
+              print("OZON_CHECKPOINT=store=" + store + ";period=" + COVERAGE_FROM + ".." + coverage_to + ";phase=" + phase + ";source=" + source_version + ";state=" + state + ";readback=" + readback + ";next=" + next_action, flush=True)
+          if resume_phase not in {"source", "orders", "finance"}:
+              raise SystemExit("INVALID_RESUME_PHASE:" + resume_phase)
+          if resume_store not in {"all", "ДОМ", "Хозяюшка"}:
+              raise SystemExit("INVALID_RESUME_STORE:" + resume_store)
+          checkpoint("source", "all", "RUNNING", until, "not_written", "получить и сверить все страницы")
           api_context = {"store": "", "flow": "", "page": 0}
 
           def api_post(endpoint, body, headers):
@@ -396,12 +442,20 @@ jobs:
           exported_at = now.isoformat().replace("+00:00", "Z")
           accepted_actions = {"publish_ozon_api_orders", "publish_ozon_summary_orders"}
           store_jobs = (("1", "ДОМ"), ("2", "Хозяюшка"))
+          if resume_phase == "finance":
+              active_store_jobs = ()
+          elif resume_store == "Хозяюшка":
+              active_store_jobs = store_jobs[1:]
+          else:
+              active_store_jobs = store_jobs
+          expected_order_stores = {store_name for _, store_name in active_store_jobs}
           records_by_cabinet = {cabinet: [] for cabinet, _ in store_jobs}
           for record in records:
               records_by_cabinet[record["cabinet"]].append(record)
           published = {}
           failures = []
-          for cabinet, store_name in store_jobs:
+          for cabinet, store_name in active_store_jobs:
+              checkpoint("orders", store_name, "RUNNING", exported_at + ":" + str(len(records)), "not_written", "записать кабинет и перечитать листы")
               store_records = records_by_cabinet[cabinet]
               if not store_records:
                   failures.append(store_name + ":EMPTY_COMPLETE_EXPORT")
@@ -419,7 +473,8 @@ jobs:
                   "records": store_records,
               }
               body = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-              print(f"OZON_API_STORE_EXPORT=store={store_name};records={len(store_records)};bytes={len(body)};coverage={COVERAGE_FROM}..{coverage_to}", flush=True)
+              source_digest = hashlib.sha256(body).hexdigest()
+              print(f"OZON_API_STORE_EXPORT=store={store_name};records={len(store_records)};bytes={len(body)};coverage={COVERAGE_FROM}..{coverage_to};source_sha256={source_digest}", flush=True)
               result = None
               publish_error = None
               for attempt in range(1, 6):
@@ -471,11 +526,22 @@ jobs:
                     + " ARCHIVED_ROWS=" + str(store_result.get("archived_rows"))
                     + " READBACK=" + str(store_result.get("readback"))
                     + " SHA256=" + str(store_result.get("sha256")), flush=True)
+              if not failures:
+                  completed_count = len(published)
+                  if completed_count < len(active_store_jobs):
+                      next_store = active_store_jobs[completed_count][1]
+                      checkpoint("orders", next_store, "RUNNING", exported_at + ":" + str(len(records)), "previous_store_readback=true", "продолжить со следующего кабинета")
+                  else:
+                      checkpoint("finance", "all", "RUNNING", exported_at + ":" + str(len(records)), "order_readback=true", "проверить финансовый источник")
           if failures:
+              failed_name = failures[0].split(":", 1)[0]
+              failed_store = failed_name if failed_name in {"ДОМ", "Хозяюшка"} else (resume_store if resume_store != "all" else "ДОМ")
+              checkpoint("orders", failed_store, "RETRY_REQUIRED", exported_at + ":" + str(len(records)), "readback=false", "повторить только неподтверждённый кабинет")
               raise SystemExit("OZON_API_STORE_PUBLISH_FAILED:" + json.dumps(failures, ensure_ascii=False)[:2400])
-          if set(published) != {"ДОМ", "Хозяюшка"}:
-              raise SystemExit("OZON_API_BOTH_STORE_READBACKS_REQUIRED:" + json.dumps(sorted(published), ensure_ascii=False))
+          if expected_order_stores - set(published):
+              raise SystemExit("OZON_API_ORDER_READBACK_REQUIRED:" + json.dumps(sorted(expected_order_stores - set(published)), ensure_ascii=False))
           from decimal import Decimal, InvalidOperation
+          checkpoint("finance", "all", "RUNNING", exported_at + ":" + str(len(records)), "order_readback=true", "получить финансовую историю")
           finance_days = []
           finance_ok_accounts = []
           finance_failures = []
@@ -632,9 +698,55 @@ jobs:
               print("OZON_FINANCE_PUBLISH=store="+label+";status=verified;days="+str(item.get("days"))+";periods="+str(item.get("periods"))+";accrual_rows="+str(item.get("accrual_rows"))+";archive_rows="+str(item.get("archived_rows"))+";readback=true;daily_sha256="+str(item.get("daily_sha256"))+";period_sha256="+str(item.get("period_sha256")),flush=True)
 
           if finance_failures:
+              checkpoint("finance", "all", "RETRY_REQUIRED", exported_at + ":" + str(len(records)), "finance_readback_incomplete", "повторить финансовый этап")
               raise SystemExit("OZON_FINANCE_SYNC_RETRY_REQUIRED:" + json.dumps(finance_failures, ensure_ascii=False)[:1800])
           if set(finance_published) != {"ДОМ", "Хозяюшка"}:
+              checkpoint("finance", "all", "RETRY_REQUIRED", exported_at + ":" + str(len(records)), "finance_readback_incomplete", "повторить финансовый этап")
               raise SystemExit("OZON_FINANCE_BOTH_STORE_READBACKS_REQUIRED:" + json.dumps(sorted(finance_published), ensure_ascii=False))
           print("OZON_FINANCE_PUBLISH_OK=true;stores=2;coverage="+COVERAGE_FROM+".."+coverage_to,flush=True)
+          checkpoint("complete", "all", "VERIFIED", exported_at + ":" + str(len(records)), "orders_and_finance_readback=true", "ожидать следующего штатного запуска")
 
+          PY
+
+  recover:
+    needs: publish
+    if: ${{ always() && (needs.publish.result == 'failure' || needs.publish.result == 'cancelled') && (github.event_name != 'workflow_dispatch' || inputs.resume_attempt == '0') }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Queue one serialized recovery attempt
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RECOVERY_REF: ${{ github.ref_name }}
+          RECOVERY_STORE: ${{ needs.publish.outputs.resume_store || 'all' }}
+          RECOVERY_PHASE: ${{ needs.publish.outputs.resume_phase || 'source' }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, urllib.request
+          payload = {
+              "ref": os.environ["RECOVERY_REF"],
+              "inputs": {
+                  "resume_store": os.environ["RECOVERY_STORE"],
+                  "resume_phase": os.environ["RECOVERY_PHASE"],
+                  "resume_attempt": "1",
+              },
+          }
+          request = urllib.request.Request(
+              "https://api.github.com/repos/" + os.environ["GITHUB_REPOSITORY"] + "/actions/workflows/ozon-summary-orders-sync.yml/dispatches",
+              data=json.dumps(payload).encode("utf-8"),
+              headers={
+                  "Accept": "application/vnd.github+json",
+                  "Authorization": "Bearer " + os.environ["GH_TOKEN"],
+                  "X-GitHub-Api-Version": "2022-11-28",
+                  "Content-Type": "application/json",
+              },
+              method="POST",
+          )
+          with urllib.request.urlopen(request, timeout=30) as response:
+              if response.status != 204:
+                  raise SystemExit("RECOVERY_DISPATCH_FAILED:HTTP_" + str(response.status))
+          print("OZON_RECOVERY_DISPATCHED=store:" + os.environ["RECOVERY_STORE"] + ";phase:" + os.environ["RECOVERY_PHASE"] + ";attempt:1", flush=True)
           PY
