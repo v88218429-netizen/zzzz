@@ -398,7 +398,15 @@ class AdvertisingOptimizerAgent(BaseAgent):
             for c in campaigns if _campaign_id(c)
         )
         swept_campaign_count = len(cursor["swept_campaign_ids"])
-        swept_product_count = sum(len(x) for x in cursor["swept_nm_ids"].values())
+        # Product progress counts unique catalog products from completed campaigns only.
+        # Multi-campaign products are deduplicated, and failed partial scans stay excluded.
+        swept_product_ids = {
+            nm_id
+            for campaign in campaigns
+            if _campaign_id(campaign) in set(cursor["swept_campaign_ids"])
+            for nm_id in _nm_ids(campaign)
+        }
+        swept_product_count = len(swept_product_ids)
         sweep_complete = (set(cursor["swept_campaign_ids"]) >= set(cursor["campaign_ids"])
                           and all_products_seen
                           and all(isinstance(item, dict) and item.get("scan_complete") is True for item in scanned))
