@@ -61,7 +61,7 @@
         },
         {
           "path": "scripts/github_runtime.py",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/95f01ce2bf1e05d46e72680e995d8dc40e20d54f/wb_ai_manager/source/scripts/github_runtime.py",
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/a65667ed8ac50726bb006d001d993d6e0eb05225/wb_ai_manager/source/scripts/github_runtime.py",
           "sha256": "9d76b4f23159e238408d5d3daeac7dc09b551f68c811f44004f1560f3bbe5296"
         },
         {
@@ -380,7 +380,7 @@
         },
         {
           "path": "src/wb_control_center/optimizer_acceptance.py",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/95f01ce2bf1e05d46e72680e995d8dc40e20d54f/wb_ai_manager/source/src/wb_control_center/optimizer_acceptance.py",
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/a65667ed8ac50726bb006d001d993d6e0eb05225/wb_ai_manager/source/src/wb_control_center/optimizer_acceptance.py",
           "sha256": "120220ca1d0d269f995226092b5515b2c90a2490ec5983b1ba4af927d4509d75"
         },
         {
@@ -405,8 +405,8 @@
         },
         {
           "path": "src/wb_control_center/portfolio.py",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/95f01ce2bf1e05d46e72680e995d8dc40e20d54f/wb_ai_manager/source/src/wb_control_center/portfolio.py",
-          "sha256": "84bb79f0a38416ac5e6ebecaf898c8ae212f786d72538e2604db511d0c1be2ec"
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/a65667ed8ac50726bb006d001d993d6e0eb05225/wb_ai_manager/source/src/wb_control_center/portfolio.py",
+          "sha256": "eee2716aa4d42d0cbdec768e057588bb7ab353039258c9d41b8ed8b5b96954a8"
         },
         {
           "path": "src/wb_control_center/public_wb.py",
@@ -455,7 +455,7 @@
         },
         {
           "path": "src/wb_control_center/ui/dashboard.js",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/95f01ce2bf1e05d46e72680e995d8dc40e20d54f/wb_ai_manager/source/src/wb_control_center/ui/dashboard.js",
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/a65667ed8ac50726bb006d001d993d6e0eb05225/wb_ai_manager/source/src/wb_control_center/ui/dashboard.js",
           "sha256": "bad440ad213e6f5e18a6a3efa5e4de88e89c8ad5a67456dabcdebf2088bc113b"
         },
         {
