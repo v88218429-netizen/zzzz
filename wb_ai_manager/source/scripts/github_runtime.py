@@ -16,6 +16,7 @@ from wb_control_center.config import Settings, load_policy
 from wb_control_center.engine import ControlCenter
 from wb_control_center.portfolio import PortfolioService
 from wb_control_center.query_manager import QueryManager, QueryManagerConfig
+from wb_control_center.optimizer_acceptance import evaluate_optimizer_acceptance
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = Path(os.environ.get("GITHUB_RUNTIME_OUTPUT", ROOT / "github_site")).resolve()
@@ -376,10 +377,12 @@ async def run() -> int:
         }
     q = query_manager(portfolio_snapshot, cabinet_snapshots.get("sanych") or {})
     optimizer_state["query_manager"] = q
+    acceptance = evaluate_optimizer_acceptance(optimizer_state, portfolio_snapshot, q, cabinets, source_errors)
+    optimizer_state["acceptance"] = acceptance
     dump("optimizer-state.json", optimizer_state)
     healthy_cabs = sum(1 for c in cabinets.values() if c.get("wb_connected"))
     clean_cabs = sum(1 for c in cabinets.values() if c.get("status") == "ok")
-    health = "ok" if healthy_cabs == len(CABINETS) and clean_cabs == len(CABINETS) and not source_errors else "degraded"
+    health = "ok" if healthy_cabs == len(CABINETS) and clean_cabs == len(CABINETS) and not source_errors and acceptance["ready"] else "degraded"
     payload = {
         "generated_at": generated_at,
         "health": health,
@@ -388,6 +391,7 @@ async def run() -> int:
         "clean_cabinets": clean_cabs,
         "expected_cabinets": len(CABINETS),
         "source_errors": source_errors,
+        "acceptance": acceptance,
         "portfolio": portfolio_snapshot,
         "query_manager": q,
         "search_publish": search_publish,
@@ -400,6 +404,10 @@ async def run() -> int:
         dashboard_publish = {"ok": False, "error": str(exc)}
         source_errors.append({"stage": "dashboard.publish", "error": str(exc)})
         payload["health"] = "degraded"
+        acceptance = evaluate_optimizer_acceptance(optimizer_state, portfolio_snapshot, q, cabinets, source_errors)
+        optimizer_state["acceptance"] = acceptance
+        payload["acceptance"] = acceptance
+        dump("optimizer-state.json", optimizer_state)
     payload["dashboard_publish"] = dashboard_publish
 
     dump("latest.json", payload)
@@ -412,6 +420,11 @@ async def run() -> int:
     public_health = {
         "generated_at": generated_at,
         "health": payload["health"],
+        "acceptance_ready": bool(acceptance.get("ready")),
+        "acceptance_status": acceptance.get("status"),
+        "acceptance_blockers": acceptance.get("blockers") or [],
+        "acceptance_economics": acceptance.get("economics") or {},
+        "acceptance_query_facts": acceptance.get("query_facts") or {},
         "connected_cabinets": healthy_cabs,
         "clean_cabinets": clean_cabs,
         "expected_cabinets": len(CABINETS),

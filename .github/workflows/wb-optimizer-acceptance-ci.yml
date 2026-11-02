@@ -1,0 +1,32 @@
+name: WB optimizer acceptance checks
+
+on:
+  pull_request:
+    paths:
+      - "wb_ai_manager/source/src/wb_control_center/optimizer_acceptance.py"
+      - "wb_ai_manager/source/tests/test_optimizer_acceptance.py"
+      - ".github/workflows/wb-optimizer-acceptance-ci.yml"
+  push:
+    branches:
+      - mainggg
+    paths:
+      - "wb_ai_manager/source/src/wb_control_center/optimizer_acceptance.py"
+      - "wb_ai_manager/source/tests/test_optimizer_acceptance.py"
+      - ".github/workflows/wb-optimizer-acceptance-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check readiness rules
+        working-directory: wb_ai_manager/source
+        env:
+          PYTHONPATH: src
+        run: python -m unittest discover -s tests -p "test_optimizer_acceptance.py"

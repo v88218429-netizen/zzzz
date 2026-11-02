@@ -76,6 +76,10 @@ jobs:
           python -m pip install -r requirements.txt
           python -m pip install -e . --no-deps
 
+      - name: Verify optimizer acceptance rules
+        working-directory: wb_ai_manager/source
+        run: python -m unittest discover -s tests -p "test_optimizer_acceptance.py"
+
       - name: Run three-cabinet WB audit and publish owner brief
         working-directory: wb_ai_manager/source
         env:
@@ -157,6 +161,8 @@ jobs:
             "",
             f"- Generated: {d.get('generated_at','')}",
             f"- Overall: {d.get('health','unknown')}",
+            f"- Optimizer acceptance: {'READY' if d.get('acceptance_ready') else 'NOT READY'}",
+            f"- Acceptance blockers: {len(d.get('acceptance_blockers',[]))}",
             f"- WB cabinets connected: {d.get('connected_cabinets',0)}/{d.get('expected_cabinets',3)}",
             f"- Google Sheets/Sellmonitor live: {d.get('sheets_live',False)}",
             f"- Private owner dashboard published: {d.get('dashboard_published',False)}",
