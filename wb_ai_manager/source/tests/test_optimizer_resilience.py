@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from wb_control_center.agents.advertising import AdvertisingOptimizerAgent
+from wb_control_center.agents.advertising import AdvertisingOptimizerAgent, _safe_ad_read
 
 
 def _load_runtime_supervisor():
@@ -126,3 +126,30 @@ def test_background_runtime_does_not_open_a_visible_browser(monkeypatch):
 
     assert supervisor.open_dashboard_if_enabled(8787) is False
     assert opened == []
+
+
+@pytest.mark.asyncio
+async def test_shared_ad_read_helper_retries_for_both_advertising_agents(monkeypatch):
+    wb = _FakeWB()
+    calls = 0
+    delays = []
+
+    async def fake_call(tool, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise RuntimeError("ReadTimeout: temporary source timeout")
+        return {"rows": []}
+
+    async def fake_sleep(delay):
+        delays.append(delay)
+
+    agent = SimpleNamespace(ctx=SimpleNamespace(wb=wb), call=fake_call)
+    monkeypatch.setattr(asyncio, "sleep", fake_sleep)
+
+    result = await _safe_ad_read(agent, "wb_advert_list", statuses=[9])
+
+    assert result == {"rows": []}
+    assert calls == 2
+    assert delays == [2]
+    assert wb.close_calls == 1
