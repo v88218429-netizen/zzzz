@@ -338,16 +338,15 @@ function wbFbsSupplyWriteSupplySheet_(ss, supplyRows, orderCounts, checkedAt) {
   SpreadsheetApp.flush();
   wbFbsSupplySetStage_('SUPPLY_FLUSH_DONE', '');
   var supplySheetA1 = "'" + String(WB_FBS_DIRECT_SUPPLY_CFG.suppliesSheet).replace(/'/g, "''") + "'!";
-  wbFbsSupplySetStage_('SUPPLY_HEADER_READBACK_START', '');
-  var headerReadback=wbFbsSupplySheetsApiRead_(supplySheetA1 + 'A1:I1', 1, header.length);
-  wbFbsSupplySetStage_('SUPPLY_HEADER_READBACK_DONE', '');
-  if(!wbFbsSupplyMatricesEqual_([header],[headerReadback[0]||[]]))
-    throw new Error('WB_FBS_DIRECT: supply header readback mismatch');
-  wbFbsSupplySetStage_('SUPPLY_ROWS_READBACK_START', 'rows=' + out.length);
-  var rowsReadback=out.length?wbFbsSupplySheetsApiRead_(supplySheetA1 + 'A2:I' + (out.length + 1), out.length, header.length):[];
-  wbFbsSupplySetStage_('SUPPLY_ROWS_READBACK_DONE', 'rows=' + rowsReadback.length);
-  if(!wbFbsSupplyMatricesEqual_(out,rowsReadback))
-    throw new Error('WB_FBS_DIRECT: supply rows readback mismatch');
+  // Verify header and written rows with one contiguous Sheets API read. Separate
+  // calls can stall independently under transient spreadsheet service latency,
+  // leaving a successful write stuck before timing backfill can continue.
+  wbFbsSupplySetStage_('SUPPLY_READBACK_START', 'rows=' + (out.length + 1));
+  var fullReadback=wbFbsSupplySheetsApiRead_(supplySheetA1 + 'A1:I' + (out.length + 1), out.length + 1, header.length);
+  wbFbsSupplySetStage_('SUPPLY_READBACK_DONE', 'rows=' + fullReadback.length);
+  if(!wbFbsSupplyMatricesEqual_([header].concat(out),fullReadback))
+    throw new Error('WB_FBS_DIRECT: supply sheet readback mismatch');
+  var rowsReadback=fullReadback.slice(1);
   var staleCount=Math.max(0,(oldLast-1)-out.length);
   if(staleCount){
     wbFbsSupplySetStage_('SUPPLY_STALE_READBACK_START', 'rows=' + staleCount);
