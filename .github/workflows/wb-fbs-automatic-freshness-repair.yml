@@ -10,6 +10,11 @@ permissions:
   actions: write
   contents: read
 
+concurrency:
+  group: wb-fbs-production-mutations
+  cancel-in-progress: false
+  queue: max
+
 jobs:
   repair_stale_clients:
     if: ${{ github.event.workflow_run.conclusion == 'failure' }}
