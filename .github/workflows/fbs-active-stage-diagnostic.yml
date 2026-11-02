@@ -1,6 +1,7 @@
 name: WB FBS active stage diagnostic
 
 on:
+  workflow_dispatch:
   push:
     branches: [mainggg]
     paths:
