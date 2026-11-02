@@ -92,6 +92,8 @@ jobs:
                     " source=" + str(source_root_id) + " retry_source_run=" + str(source_run_id), flush=True)
           elif source_path == ".github/workflows/wb-fbs-production-acceptance-audit.yml" and os.environ.get("SOURCE_CONCLUSION") == "cancelled":
               print("FBS_CANCELLED_ACCEPTANCE_NOT_RERUN run=" + str(source_run_id), flush=True)
+          elif source_path == ".github/workflows/wb-fbs-supply-sync.yml" and os.environ.get("SOURCE_CONCLUSION") == "cancelled":
+              print("FBS_CANCELLED_SUPPLY_NOT_RERUN run=" + str(source_run_id), flush=True)
           elif source_path in {".github/workflows/wb-fbs-production-acceptance-audit.yml",
                                ".github/workflows/wb-fbs-supply-sync.yml"} or source_name in {"WB FBS production acceptance audit",
                                "WB FBS supply sync via GitHub"}:
