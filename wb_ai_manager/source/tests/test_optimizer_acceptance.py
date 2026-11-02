@@ -163,5 +163,35 @@ class OptimizerAcceptanceTests(unittest.TestCase):
         self.assertFalse(unavailable["sweep_complete"])
 
 
+def test_campaign_cache_replaces_stale_nmids_and_prunes_removed_sku_facts():
+    from wb_control_center.optimizer_acceptance import merge_campaign_cache
+
+    previous = merge_campaign_cache({}, {
+        "active_campaign_ids": [11], "catalog_complete": True,
+        "campaigns": [{
+            "campaign_id": 11, "scan_complete": True,
+            "nm_ids": [101, 102], "recommendation_nm_ids_scanned": [101, 102],
+            "stats_by_nm": {"101": {"orders": 1}, "102": {"orders": 2}},
+            "recommendations": {"101": {"bid": 10}, "102": {"bid": 20}},
+        }],
+    }, "2026-11-02T08:00:00+00:00")
+
+    refreshed = merge_campaign_cache(previous, {
+        "active_campaign_ids": [11], "catalog_complete": True,
+        "campaigns": [{
+            "campaign_id": 11, "scan_complete": True,
+            "nm_ids": [101, 103], "recommendation_nm_ids_scanned": [103],
+            "stats_by_nm": {"101": {"orders": 3}, "103": {"orders": 4}},
+            "recommendations": {"103": {"bid": 30}},
+        }],
+    }, "2026-11-02T08:10:00+00:00")
+
+    campaign = refreshed["campaigns"][0]
+    assert campaign["nm_ids"] == [101, 103]
+    assert campaign["recommendation_nm_ids_scanned"] == [103]
+    assert set(campaign["stats_by_nm"]) == {"101", "103"}
+    assert set(campaign["recommendations"]) == {"101", "103"}
+
+
 if __name__ == "__main__":
     unittest.main()
