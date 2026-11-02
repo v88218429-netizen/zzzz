@@ -121,6 +121,9 @@ jobs:
               store_result = {"store_id": store_id}
               phase_start = phases.index(resume_phase) if resume_phase in phases else 0
               phases = phases[phase_start:]
+              # A resumed process re-checks the compact source summary before validating all phases.
+              if resume_phase != "summary":
+                  phases = ["summary"] + phases
               print("RESUME_FROM=store:" + store_id + ";phase:" + (phases[0] if phases else "complete"), flush=True)
               for phase_index, phase in enumerate(phases):
                   checkpoint_resume(store_id, phase)
@@ -270,9 +273,10 @@ jobs:
                           checkpoint_resume(store_id, "complete")
           if errors or len(verified) != len(expected):
               retry_phase = failed_phases[0][1] if failed_phases else "summary"
+              retry_store = failed_phases[0][0] if failed_phases else (expected[0] if expected else "all")
               with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output_file:
                   output_file.write("resume_phase=" + retry_phase + "\n")
-                  output_file.write("resume_store=" + failed_phases[0][0] + "\n")
+                  output_file.write("resume_store=" + retry_store + "\n")
               with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as checkpoint_file:
                   checkpoint_file.write("\n| all | current | " + retry_phase + " | unknown | RETRY_REQUIRED | этап не прошёл проверку | повторить с этой фазы |\n")
               raise SystemExit("WB finance phased publication incomplete: " + json.dumps({"verified": len(verified), "expected": len(expected), "errors": errors}, ensure_ascii=False))
