@@ -2,9 +2,9 @@
   "schema": 1,
   "channels": {
     "stable": {
-      "version": "1.1.40",
+      "version": "1.1.41",
       "channel": "stable",
-      "notes": "Тайм-аут агента закрывает запуск даже если вложенная задача не завершает отмену; повторный запуск блокируется до завершения старой задачи.",
+      "notes": "Проверка готовности оптимизатора и отображение причин неполноты сбора, экономики и точных ставок.",
       "minimum_current_version": "1.0.0",
       "files": [
         {
@@ -16,22 +16,6 @@
           "path": "Dockerfile",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/a70db23e37b51d8f870bb1fabed48ac312e2877d/wb_ai_manager/source/Dockerfile",
           "sha256": "5bcf57cbde254b8580d5aa79a161986d1cb43082c3e5d9903101e24d8bf6eca2"
-        },
-        {
-          "path": "RELEASE_NOTES.md",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/a9cb0318fb4a7b37887fae840d51b2a4167d9283/wb_ai_manager/source/RELEASE_NOTES.md",
-          "sha256": "002783b0b8c98d357c36e18506ae0bee967b18cd8ba3026c56a7573a8e99d60b"
-        },
-        {
-          "path": "START_WB_AI_MANAGER.command",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/a70db23e37b51d8f870bb1fabed48ac312e2877d/wb_ai_manager/source/START_WB_AI_MANAGER.command",
-          "sha256": "1a1041b6f037d56bce61b6f1af96c46d08526eca23a7d3b811b521704bdb4947",
-          "executable": true
-        },
-        {
-          "path": "VERSION",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/a9cb0318fb4a7b37887fae840d51b2a4167d9283/wb_ai_manager/source/VERSION",
-          "sha256": "3961c2370b58c5e541303ffa0c297ace3fb7254ec42fdddf2bc9910d4197112c"
         },
         {
           "path": "docs/AUTO_UPDATE.md",
@@ -50,13 +34,18 @@
         },
         {
           "path": "plugin.json",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/a9cb0318fb4a7b37887fae840d51b2a4167d9283/wb_ai_manager/source/plugin.json",
-          "sha256": "d739e24833ba6b1540642174caff51b8d620a27c405686255797ef9e4f17ab09"
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/a9e808c455cbd0e151671ea1b1a8118d3c214577/wb_ai_manager/source/plugin.json",
+          "sha256": "6a3c16bfd708013d3ce20d87abb63fa56466cc9853f4cb8ac08c0f50f538e0b0"
         },
         {
           "path": "pyproject.toml",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/a9cb0318fb4a7b37887fae840d51b2a4167d9283/wb_ai_manager/source/pyproject.toml",
-          "sha256": "48bf90a40360e5690a5d3e442e978f4bd34581b554858a7b73114f921d737109"
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/a9e808c455cbd0e151671ea1b1a8118d3c214577/wb_ai_manager/source/pyproject.toml",
+          "sha256": "37d078efefec2421d916264b8e8d27e4902ca9d7dbaf411107b27ae6f6648daf"
+        },
+        {
+          "path": "RELEASE_NOTES.md",
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/a9e808c455cbd0e151671ea1b1a8118d3c214577/wb_ai_manager/source/RELEASE_NOTES.md",
+          "sha256": "7b0f1e6d83eb5e05aa1aed4422ba717f997974bc9e0d0495115b59c6ce497e6d"
         },
         {
           "path": "scripts/auto_refresh_sheets.py",
@@ -72,8 +61,8 @@
         },
         {
           "path": "scripts/github_runtime.py",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/f1b3c14891576c5f92acdd31155590be2183ba9c/wb_ai_manager/source/scripts/github_runtime.py",
-          "sha256": "21720891ffa9d0cfa4e9c4bb7ec82c46c3f358d04c53858f46d17d1af2e3d456"
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/a9e808c455cbd0e151671ea1b1a8118d3c214577/wb_ai_manager/source/scripts/github_runtime.py",
+          "sha256": "295e79b6d7ff42c22722e2cbbc2a28d757fea88b448bf10d5e106442deee3a66"
         },
         {
           "path": "scripts/install_launchd.sh",
@@ -271,8 +260,8 @@
         },
         {
           "path": "src/wb_control_center/api.py",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/f1b3c14891576c5f92acdd31155590be2183ba9c/wb_ai_manager/source/src/wb_control_center/api.py",
-          "sha256": "99451f993f6685a3c0bc890583d3e94a14b5d6495c9e3af2b61afaf08ced7532"
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/a9e808c455cbd0e151671ea1b1a8118d3c214577/wb_ai_manager/source/src/wb_control_center/api.py",
+          "sha256": "9578b79ff5fb37887b2ea85ec71a1962e01714534574d982411a57011475d194"
         },
         {
           "path": "src/wb_control_center/auto_sheets.py",
@@ -288,6 +277,11 @@
           "path": "src/wb_control_center/cli.py",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/a70db23e37b51d8f870bb1fabed48ac312e2877d/wb_ai_manager/source/src/wb_control_center/cli.py",
           "sha256": "c0da548dbc7a39c70b58bb50d90f8259538ee1f1834baac72660743fc1818195"
+        },
+        {
+          "path": "src/wb_control_center/cluster_advisor.py",
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/f6ff9560e6040b5664b4a7e591ec65b1f5a528d4/wb_ai_manager/source/src/wb_control_center/cluster_advisor.py",
+          "sha256": "d14748b8bf4f7037e79b952d0ee45271996269b29b8210189f48074316dabf78"
         },
         {
           "path": "src/wb_control_center/cohort.py",
@@ -385,6 +379,11 @@
           "sha256": "5803a177a2c784d1dfe7fbf0ddb6489fac32d13825908fef6a548f9aeb595b05"
         },
         {
+          "path": "src/wb_control_center/optimizer_acceptance.py",
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/a9e808c455cbd0e151671ea1b1a8118d3c214577/wb_ai_manager/source/src/wb_control_center/optimizer_acceptance.py",
+          "sha256": "0e0a41c25431539ed7f3b8affd5fc8caa839f3ae456d56b5f1fd5da1c5c3f719"
+        },
+        {
           "path": "src/wb_control_center/outcome_evaluator.py",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/a70db23e37b51d8f870bb1fabed48ac312e2877d/wb_ai_manager/source/src/wb_control_center/outcome_evaluator.py",
           "sha256": "82de15997b8d4d0cd62e2f3d64e51ab6a95a6d29acb34daee0d6996741f3f0a2"
@@ -456,8 +455,8 @@
         },
         {
           "path": "src/wb_control_center/ui/dashboard.js",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/c00e79c3ecab1934c591cbeafa5be8a674020d8f/wb_ai_manager/source/src/wb_control_center/ui/dashboard.js",
-          "sha256": "5906d59d71cef824118397fd67ef0e68c0260e6912e3a8796f56924775ab55f8"
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/a9e808c455cbd0e151671ea1b1a8118d3c214577/wb_ai_manager/source/src/wb_control_center/ui/dashboard.js",
+          "sha256": "dbe18b2337837be5ff0e5642e0525b0f22cc43401003112b11663c2ffc5859c9"
         },
         {
           "path": "src/wb_control_center/updater.py",
@@ -480,9 +479,15 @@
           "sha256": "20bd805271c657c0dc096ffda63a461c441805ad53896bfec73dc8828db3754a"
         },
         {
-          "path": "src/wb_control_center/cluster_advisor.py",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/f6ff9560e6040b5664b4a7e591ec65b1f5a528d4/wb_ai_manager/source/src/wb_control_center/cluster_advisor.py",
-          "sha256": "d14748b8bf4f7037e79b952d0ee45271996269b29b8210189f48074316dabf78"
+          "path": "START_WB_AI_MANAGER.command",
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/a70db23e37b51d8f870bb1fabed48ac312e2877d/wb_ai_manager/source/START_WB_AI_MANAGER.command",
+          "sha256": "1a1041b6f037d56bce61b6f1af96c46d08526eca23a7d3b811b521704bdb4947",
+          "executable": true
+        },
+        {
+          "path": "VERSION",
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/a9e808c455cbd0e151671ea1b1a8118d3c214577/wb_ai_manager/source/VERSION",
+          "sha256": "b2ef37e702cfd7e5d7c2ea877f292e67b435c18c09bf8fc5303c4dfab8cc61b4"
         }
       ]
     }
