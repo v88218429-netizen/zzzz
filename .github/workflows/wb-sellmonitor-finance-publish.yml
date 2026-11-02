@@ -220,7 +220,17 @@ jobs:
                       rnp = item.get("rnp") or {}
                       grain = "day" if phase.startswith("rnp_day_") else phase[4:]
                       matrices = rnp.get("matrices") or []
-                      if rnp.get("ok") is not True or rnp.get("readback") is not True or len(matrices) != 1 or matrices[0].get("sheet") != {"day":"01_Дни","week":"02_Недели","month":"03_Месяцы"}[grain]:
+                      expected_latest = None
+                      source_max = item.get("source_max")
+                      if source_max and grain == "week":
+                          source_day = date.fromisoformat(str(source_max))
+                          expected_latest = (source_day - __import__("datetime").timedelta(days=source_day.weekday())).isoformat()
+                      elif source_max and grain == "month":
+                          expected_latest = str(source_max)[:7] + "-01"
+                      elif source_max and grain == "day":
+                          expected_latest = str(source_max)
+                      latest_matches = len(matrices) == 1 and (expected_latest is None or matrices[0].get("max") == expected_latest)
+                      if rnp.get("ok") is not True or rnp.get("readback") is not True or len(matrices) != 1 or matrices[0].get("sheet") != {"day":"01_Дни","week":"02_Недели","month":"03_Месяцы"}[grain] or not latest_matches:
                           last = "RNP matrix readback mismatch: " + json.dumps(rnp, ensure_ascii=False)[:1200]
                           errors.append("WB finance RNP readback failed for " + store_id + "/" + grain + ": " + last)
                           failed_phases.append((store_id, phase))
