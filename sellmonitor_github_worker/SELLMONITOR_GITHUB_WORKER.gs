@@ -1,10 +1,10 @@
 /**
- * Sellmonitor GitHub Central Worker v1.3.81
+ * Sellmonitor GitHub Central Worker v1.3.82
  * GitHub is source-of-truth/scheduler. This Apps Script project is only
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.81',
+  VERSION: 'github-worker-1.3.82',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -5909,7 +5909,33 @@ function sellmonitorGithubPublishOzonSummaryOrders_(payload) {
     if(!archive){archive=ss.insertSheet('13_API_Заказы_Архив');archive.getRange(1,1,1,7).setValues([['Архив ID','Время','Лист','Диапазон','Строка в диапазоне','Последний успешный экспорт источника','Старое значение JSON']]);}
     else if(archive.getLastRow()===0)archive.getRange(1,1,1,7).setValues([['Архив ID','Время','Лист','Диапазон','Строка в диапазоне','Время источника','Старое значение JSON']]);
     var archiveId=Utilities.getUuid(), archived=0;
+    var summarySheet=ss.getSheetByName('00_РНП_магазин');
+    if(!summarySheet)throw new Error('OZON_SUMMARY_RNP_TAB_MISSING:'+cfg.name);
+    var oldSummaryNote=String(summarySheet.getRange('A2').getValue()||'');
+    var adSheet=ss.getSheetByName('04_Реклама_Дни'),adMin='',adMax='';
+    if(adSheet&&adSheet.getLastRow()>=3){
+      adSheet.getRange(3,1,adSheet.getLastRow()-2,2).getValues().forEach(function(row){
+        if(String(row[0]||'')!==(cabinet==='1'?'DOM':'HOZYAIKA'))return;
+        var adDay=sellmonitorGithubOzonDateKey_(row[1]);if(!adDay)return;
+        if(!adMin||adDay<adMin)adMin=adDay;if(!adMax||adDay>adMax)adMax=adDay;
+      });
+    }
+    var dailyPeriodCount=agg.summary.filter(function(row){return String(row[0]||'')==='День';}).length;
+    var lastFullDay=agg.fullDays.length?String(agg.fullDays[agg.fullDays.length-1][0]||''):'';
+    var fullDayNote=sourceActivityVerified&&lastFullDay?'Последняя закрытая дата с данными — '+lastFullDay+'.':
+      (sourceActivityVerified?'Нет подтверждённой полной даты с данными.':'Проверка полноты выгрузки не подтверждена; данные предварительные.');
+    var currentDayNote=agg.maxDay===today?today+' — текущая неполная дата, предварительно.':
+      (agg.maxDay<today?'За '+today+' строк в выгрузке нет; это не считается нулём.':'');
+    var adCoverageNote=adMin&&adMax?'Реклама доступна только по кампаниям, без SKU/offer_id; покрытие строк дневного источника '+adMin+'–'+adMax+'.':
+      'Рекламных строк в целевой книге нет; отсутствие не заменено нулями.';
+    var newSummaryNote='Источник заказов: '+(apiMode?'Ozon Seller API через GitHub; все страницы FBO/FBS получены':'Ozon Заказы; сохранён последний подтверждённый снимок')+
+      '; период '+agg.minDay+'–'+agg.maxDay+'; обновлено '+sourceUpdated+'; '+agg.sourceRows+' строк источника, '+dailyPeriodCount+
+      ' дневных периодов, '+agg.products.length+' строк по артикулам. '+fullDayNote+' '+currentDayNote+
+      ' Дата заказа — «Принят в обработку» (UTC+3); заказ = кабинет + номер заказа, отправление = кабинет + posting number. '+
+      adCoverageNote+' Финансы, остатки и товарная воронка не передаются подключёнными источниками.';
+    var sameSummaryNote=oldSummaryNote===newSummaryNote;
     if(!sameStamp) archived+=sellmonitorGithubOzonArchive_(archive,'11_API_Заказы','A2',[[oldStamp]],sourceUpdated,archiveId);
+    if(!sameSummaryNote) archived+=sellmonitorGithubOzonArchive_(archive,'00_РНП_магазин','A2:A2',[[oldSummaryNote]],sourceUpdated,archiveId);
     if(!sameDaily) archived+=sellmonitorGithubOzonArchive_(archive,'11_API_Заказы','A5:J'+(4+oldDaily.length),oldDaily,sourceUpdated,archiveId);
     if(!sameSku) archived+=sellmonitorGithubOzonArchive_(archive,'12_API_Заказы_SKU','A5:L'+(4+oldSku.length),oldSku,sourceUpdated,archiveId);
     if(!sameHelper) archived+=sellmonitorGithubOzonArchive_(archive,'11_API_Заказы','L1:O'+(1+oldHelper.length),oldHelper,sourceUpdated,archiveId);
@@ -5919,6 +5945,7 @@ function sellmonitorGithubPublishOzonSummaryOrders_(payload) {
       if(Number(activity.rows)!==Number(agg.sourceRows)||String(activity.maxDay)!==String(agg.maxDay))throw new Error('OZON_SOURCE_ACTIVITY_READBACK_MISMATCH:'+cfg.name);
     }
     if(!sameStamp)daily.getRange(2,1,1,1).setValue(newStamp);
+    if(!sameSummaryNote)summarySheet.getRange('A2').setValue(newSummaryNote);
     if(!sameDaily){
       var need=dailyStart+dailyRows.length-1;sellmonitorGithubOzonEnsureRows_(daily,need);
       var clear=Math.max(oldDaily.length,dailyRows.length);
@@ -5942,6 +5969,7 @@ function sellmonitorGithubPublishOzonSummaryOrders_(payload) {
     }
     var newDaily=sellmonitorGithubOzonRows_(daily,dailyStart,1,10),newSku=sellmonitorGithubOzonRows_(skuSheet,5,1,12),newHelper=sellmonitorGithubOzonRows_(daily,1,12,4);
     if(JSON.stringify(sellmonitorGithubOzonNormalizeRows_(newDaily))!==JSON.stringify(sellmonitorGithubOzonNormalizeRows_(dailyRows)))throw new Error('OZON_DAILY_READBACK_MISMATCH:'+cfg.name);
+    if(String(summarySheet.getRange('A2').getValue()||'')!==newSummaryNote)throw new Error('OZON_SUMMARY_NOTE_READBACK_MISMATCH:'+cfg.name);
     var readSkuNorm=sellmonitorGithubOzonNormalizeRows_(newSku,true), expectedSkuNorm=sellmonitorGithubOzonNormalizeRows_(agg.products,true);
     if(JSON.stringify(readSkuNorm)!==JSON.stringify(expectedSkuNorm)){
       var mismatch={row:-1,col:-1,actualType:'missing',expectedType:'missing'};
@@ -6044,7 +6072,7 @@ function sellmonitorGithubPublishOzonSummaryOrders_(payload) {
     var log=ss.getSheetByName('14_API_Заказы_Журнал');
     if(!log){log=ss.insertSheet('14_API_Заказы_Журнал');log.getRange(1,1,1,12).setValues([['Время запуска','Магазин','Источник','Последний успешный экспорт','Строк источника','Период с','Период по','Строк сводки','Строк SKU','Строк в архиве','SHA-256 сводки','Проверка']]);}
     else if(log.getLastRow()===0)log.getRange(1,1,1,12).setValues([['Время','Магазин','Источник','Время изменения источника','Строк источника','Период с','Период по','Строк сводки','Строк SKU','Строк в архиве','SHA-256 сводки','Проверка']]);
-    var finalHash=sellmonitorGithubOzonHash_({summary:newDaily,products:newSku,helper:newHelper,articleViews:articleViews});
+    var finalHash=sellmonitorGithubOzonHash_({summary:newDaily,products:newSku,helper:newHelper,articleViews:articleViews,summary_note:newSummaryNote});
     var articleLog=articleViews.map(function(x){return x.sheet+'='+x.rows+' строк; SHA-256='+x.sha256;}).join('; ');
     var logStatus=(apiMode?'OK: FBO/FBS API; все страницы периода получены; запись перечитана':'OK: запись и чтение сводки совпали; пустые дни не заменены нулями')+'; листы дней/недель/месяцев перечитаны: '+articleLog;
     var logRow=[new Date(),cfg.name,apiMode?'Ozon Seller API через GitHub':SMC_OZON_SUMMARY.sourceSheet,sourceUpdated,agg.sourceRows,agg.minDay,agg.maxDay,newDaily.length,newSku.length,archived,finalHash,logStatus];
@@ -6671,11 +6699,11 @@ function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId,onl
       ui=uj;
     }
     if(spec.name==='01_Дни'&&exactMax){
-      var oldExact=sh.getRange('H1').getValue(),newExact=Utilities.formatDate(date_(exactMax),ss.getSpreadsheetTimeZone(),'dd.MM.yyyy');
-      if(String(oldExact||'')!==newExact){
+      var oldExactValue=sh.getRange('H1').getValue(),oldExactKey=key(oldExactValue),newExact=Utilities.formatDate(date_(exactMax),ss.getSpreadsheetTimeZone(),'dd.MM.yyyy');
+      if(!oldExactKey||exactMax>oldExactKey){
         var at=archive.getLastRow()+1;if(at>archive.getMaxRows())archive.insertRowsAfter(archive.getMaxRows(),100);
-        archive.getRange(at,1,1,7).setValues([[new Date(),storeName,sh.getName(),exactMax,1,JSON.stringify([oldExact]),'Обновление метки последнего точного факта']]);
-        var check=archive.getRange(at,1,1,7).getValues()[0];if(String(check[5])!==JSON.stringify([oldExact]))throw new Error('WB_RNP_METADATA_ARCHIVE_READBACK_FAILED');
+        archive.getRange(at,1,1,7).setValues([[new Date(),storeName,sh.getName(),exactMax,1,JSON.stringify([oldExactValue]),'Обновление метки последнего точного факта без отката даты']]);
+        var check=archive.getRange(at,1,1,7).getValues()[0];if(String(check[5])!==JSON.stringify([oldExactValue]))throw new Error('WB_RNP_METADATA_ARCHIVE_READBACK_FAILED');
         sh.getRange('H1').setValue(newExact);
         if(String(sh.getRange('H1').getDisplayValue())!==newExact)throw new Error('WB_RNP_METADATA_READBACK_FAILED');
       }
