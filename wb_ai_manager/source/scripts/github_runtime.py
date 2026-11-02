@@ -17,6 +17,7 @@ from wb_control_center.engine import ControlCenter
 from wb_control_center.portfolio import PortfolioService
 from wb_control_center.query_manager import QueryManager, QueryManagerConfig
 from wb_control_center.optimizer_acceptance import evaluate_optimizer_acceptance
+from wb_control_center.optimizer_acceptance import merge_campaign_cache
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = Path(os.environ.get("GITHUB_RUNTIME_OUTPUT", ROOT / "github_site")).resolve()
@@ -345,11 +346,25 @@ async def run() -> int:
     for slug, code in shop_codes.items():
         cabinet = cabinets.get(slug) or {}
         cabinet_snapshots_for_shop = cabinet_snapshots.get(slug) or {}
-        optimizer_snapshot = ((cabinet_snapshots_for_shop.get("advertising_optimizer") or {}).get("deep_scan") or {})
+        agent_snapshots = cabinet_snapshots_for_shop.get("advertising_optimizer") or {}
+        optimizer_snapshot = agent_snapshots.get("deep_scan") or {}
         deep_scan = copy.deepcopy(optimizer_snapshot.get("data") or {})
-        campaigns = deep_scan.get("campaigns") if isinstance(deep_scan, dict) else []
-        if not isinstance(campaigns, list):
-            campaigns = []
+        cursor_snapshot = agent_snapshots.get("deep_scan_cursor") or {}
+        cursor_data = cursor_snapshot.get("data") if isinstance(cursor_snapshot, dict) else {}
+        if isinstance(cursor_data, dict) and not deep_scan.get("active_campaign_ids"):
+            deep_scan["active_campaign_ids"] = cursor_data.get("campaign_ids") or []
+            deep_scan["catalog_complete"] = True
+        cache_path = DATA_ROOT / "optimizer_campaign_cache" / f"{slug}.json"
+        try:
+            old_cache = json.loads(cache_path.read_text(encoding="utf-8")) if cache_path.exists() else {}
+        except (OSError, json.JSONDecodeError):
+            old_cache = {}
+        cache = merge_campaign_cache(old_cache, deep_scan, optimizer_snapshot.get("created_at"))
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        cache_tmp = cache_path.with_suffix(".json.tmp")
+        cache_tmp.write_text(json.dumps(cache, ensure_ascii=False, indent=2), encoding="utf-8")
+        cache_tmp.replace(cache_path)
+        campaigns = copy.deepcopy(cache["campaigns"])
         for campaign in campaigns:
             if isinstance(campaign, dict):
                 campaign["shop"] = code
@@ -368,11 +383,13 @@ async def run() -> int:
             "campaigns": campaigns,
             "decisions": decisions,
             "sweep": {
-                key: deep_scan.get(key)
-                for key in ("sweep_id", "sweep_complete", "sweep_campaigns_seen",
-                            "sweep_campaigns_total", "sweep_products_seen", "sweep_products_total",
-                            "cursor_before", "cursor_after", "eligible_campaigns", "campaigns_scanned")
-                if key in deep_scan
+                **cache["sweep"],
+                "sweep_complete": cache["sweep_complete"],
+                "sweep_campaigns_seen": deep_scan.get("sweep_campaigns_seen", 0),
+                "sweep_campaigns_total": deep_scan.get("sweep_campaigns_total", len(cache.get("campaign_ids") or [])),
+                "campaign_cache_count": cache["campaign_cache_count"],
+                "campaign_cache_total": cache["campaign_cache_total"],
+                "campaign_cache_complete": cache["campaign_cache_complete"],
             },
         }
     q = query_manager(portfolio_snapshot, cabinet_snapshots.get("sanych") or {})
