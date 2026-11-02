@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
+import json
 from math import isfinite
 from typing import Any
 
@@ -163,4 +164,79 @@ def evaluate_optimizer_acceptance(
             "rows": query_rows, "fresh_rows": fresh_rows, "blocked_rows": blocked_rows,
             "ready_query_actions": int(summary.get("ready_query_actions") or 0),
         },
+    }
+
+
+
+def merge_campaign_cache(
+    previous: dict[str, Any] | None,
+    deep_scan: dict[str, Any],
+    observed_at: str | None,
+) -> dict[str, Any]:
+    """Accumulate bounded campaign scans without refreshing failed or old facts."""
+    prior = previous if isinstance(previous, dict) else {}
+    raw_ids = deep_scan.get("active_campaign_ids")
+    catalog_known = deep_scan.get("catalog_complete") is True and isinstance(raw_ids, list)
+    active_ids = sorted({str(x).strip() for x in (raw_ids or []) if str(x).strip().isdigit()}, key=int)
+    no_active = catalog_known and not active_ids and deep_scan.get("note") == "no active campaigns"
+    old_ids = prior.get("campaign_ids")
+    old_ids = sorted({str(x) for x in old_ids if str(x).isdigit()}, key=int) if isinstance(old_ids, list) else []
+    old_rows = prior.get("campaigns") if isinstance(prior.get("campaigns"), list) else []
+    rows_by_id: dict[str, dict[str, Any]] = {}
+    if (not catalog_known) or old_ids == active_ids:
+        for row in old_rows:
+            if isinstance(row, dict) and str(row.get("campaign_id") or "").isdigit():
+                rows_by_id[str(row["campaign_id"])] = row
+
+    def merge_value(old: Any, new: Any) -> Any:
+        if isinstance(old, dict) and isinstance(new, dict):
+            merged = dict(old)
+            for key, value in new.items():
+                merged[key] = merge_value(merged.get(key), value) if key in merged else value
+            return merged
+        if isinstance(old, list) and isinstance(new, list):
+            merged = list(old)
+            seen = {json.dumps(x, sort_keys=True, ensure_ascii=False, default=str) for x in merged}
+            for value in new:
+                marker = json.dumps(value, sort_keys=True, ensure_ascii=False, default=str)
+                if marker not in seen:
+                    merged.append(value)
+                    seen.add(marker)
+            return merged
+        return new
+
+    scans = deep_scan.get("campaigns") if isinstance(deep_scan.get("campaigns"), list) else []
+    for scan in scans:
+        if not isinstance(scan, dict):
+            continue
+        cid = str(scan.get("campaign_id") or "").strip()
+        if not cid.isdigit() or (catalog_known and cid not in active_ids):
+            continue
+        if scan.get("scan_complete") is not True:
+            continue
+        row = merge_value(rows_by_id.get(cid, {}), scan)
+        row["campaign_id"] = int(cid)
+        row["observed_at"] = observed_at or row.get("observed_at")
+        row["scan_complete"] = True
+        rows_by_id[cid] = row
+
+    if no_active:
+        rows_by_id = {}
+    campaigns = [rows_by_id[cid] for cid in sorted(rows_by_id, key=int) if not catalog_known or cid in active_ids]
+    total = len(active_ids) if catalog_known else int(deep_scan.get("sweep_campaigns_total") or 0)
+    cache_complete = bool(catalog_known and len(campaigns) == total and all(row.get("scan_complete") is True for row in campaigns))
+    sweep_complete = bool(no_active or (deep_scan.get("sweep_complete") is True and cache_complete))
+    return {
+        "campaign_ids": active_ids if catalog_known else old_ids,
+        "campaigns": campaigns,
+        "campaign_cache_count": len(campaigns),
+        "campaign_cache_total": total,
+        "campaign_cache_complete": cache_complete,
+        "catalog_complete": catalog_known,
+        "sweep_complete": sweep_complete,
+        "sweep": {key: deep_scan.get(key) for key in (
+            "sweep_id", "sweep_campaigns_seen", "sweep_campaigns_total",
+            "sweep_products_seen", "sweep_products_total", "cursor_before",
+            "cursor_after", "eligible_campaigns", "campaigns_scanned",
+        ) if key in deep_scan},
     }

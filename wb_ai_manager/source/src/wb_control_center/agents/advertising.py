@@ -251,8 +251,23 @@ class AdvertisingOptimizerAgent(BaseAgent):
         campaigns_raw = await self._safe("wb_advert_list", statuses=[9])
         campaigns = _rows(campaigns_raw)
         ids = [x for x in (_campaign_id(c) for c in campaigns) if x]
+        catalog_error = isinstance(campaigns_raw, dict) and bool(campaigns_raw.get("_error"))
+        catalog_complete = (
+            isinstance(campaigns_raw, list) and not catalog_error
+        ) or (
+            isinstance(campaigns_raw, dict) and not catalog_error
+            and any(isinstance(campaigns_raw.get(key), list) for key in ("campaigns", "adverts", "data", "items"))
+        )
         if not ids:
-            out.snapshots.append(("deep_scan", {"campaigns": [], "note": "no active campaigns"}))
+            empty_catalog = catalog_complete
+            out.snapshots.append(("deep_scan", {
+                "campaigns": [], "active_campaign_ids": [], "catalog_complete": empty_catalog,
+                "note": "no active campaigns" if empty_catalog else "campaign catalog unavailable",
+                "sweep_id": 0, "sweep_complete": empty_catalog,
+                "sweep_campaigns_seen": 0, "sweep_campaigns_total": 0,
+                "sweep_products_seen": 0, "sweep_products_total": 0,
+                "eligible_campaigns": 0, "campaigns_scanned": 0,
+            }))
             return out
 
         start, end = self.dates(14)
@@ -393,6 +408,8 @@ class AdvertisingOptimizerAgent(BaseAgent):
             cursor["swept_nm_ids"] = {}
 
         out.snapshots.append(("deep_scan", {
+            "active_campaign_ids": [int(x) for x in cursor["campaign_ids"]],
+            "catalog_complete": catalog_complete,
             "generated_for": {"from": start, "to": end},
             "sweep_id": cursor["sweep_id"],
             "sweep_complete": sweep_complete,
