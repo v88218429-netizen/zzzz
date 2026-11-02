@@ -239,6 +239,26 @@ def merge_campaign_cache(
         if scan.get("scan_complete") is not True:
             continue
         row = merge_value(rows_by_id.get(cid, {}), scan)
+        if isinstance(scan.get("nm_ids"), list):
+            # The scanned campaign catalog is authoritative; do not accumulate
+            # products that are no longer attached to this active campaign.
+            current_nms = sorted({
+                int(value) for value in scan["nm_ids"]
+                if str(value).strip().isdigit() and int(value) > 0
+            })
+            row["nm_ids"] = current_nms
+            row["recommendation_nm_ids_scanned"] = sorted({
+                int(value) for value in (scan.get("recommendation_nm_ids_scanned") or [])
+                if str(value).strip().isdigit() and int(value) > 0
+            })
+            current_nm_keys = {str(nm) for nm in current_nms}
+            for field in ("stats_by_nm", "recommendations"):
+                values = row.get(field)
+                if isinstance(values, dict):
+                    row[field] = {
+                        key: value for key, value in values.items()
+                        if str(key).strip().isdigit() and str(int(key)) in current_nm_keys
+                    }
         row["campaign_id"] = int(cid)
         row["observed_at"] = observed_at or row.get("observed_at")
         row["scan_complete"] = True
