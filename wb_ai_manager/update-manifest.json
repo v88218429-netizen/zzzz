@@ -2,9 +2,9 @@
   "schema": 1,
   "channels": {
     "stable": {
-      "version": "1.1.41",
+      "version": "1.1.42",
       "channel": "stable",
-      "notes": "Проверка готовности оптимизатора и отображение причин неполноты сбора, экономики и точных ставок.",
+      "notes": "Накопление полного обхода рекламных кампаний между циклами и проверка свежести данных.",
       "minimum_current_version": "1.0.0",
       "files": [
         {
@@ -61,8 +61,8 @@
         },
         {
           "path": "scripts/github_runtime.py",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/a9e808c455cbd0e151671ea1b1a8118d3c214577/wb_ai_manager/source/scripts/github_runtime.py",
-          "sha256": "295e79b6d7ff42c22722e2cbbc2a28d757fea88b448bf10d5e106442deee3a66"
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/0407e1148b10c21f57444861cf80e375731a1237/wb_ai_manager/source/scripts/github_runtime.py",
+          "sha256": "8ed6a603ce453a380e4f88e18b3a34deb62f2dfcd0fe12b7d8344ff042191b6c"
         },
         {
           "path": "scripts/install_launchd.sh",
@@ -150,8 +150,8 @@
         },
         {
           "path": "src/wb_control_center/agents/advertising.py",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/7acea23548eb87d8f168a4c448ece7299b978a0d/wb_ai_manager/source/src/wb_control_center/agents/advertising.py",
-          "sha256": "13fc1303cbbae7cea83ec07c9b8afa5dd82e5affbae81f82b17f3d4a9cd30d2a"
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/f1f441fccfe51e08ccfa9d1ea0bb7d98ea43759a/wb_ai_manager/source/src/wb_control_center/agents/advertising.py",
+          "sha256": "253c624454fe9084cd4cb43c76085d5ea20b68813f199ee7a727cb3baa9c9217"
         },
         {
           "path": "src/wb_control_center/agents/api_health.py",
@@ -380,8 +380,8 @@
         },
         {
           "path": "src/wb_control_center/optimizer_acceptance.py",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/a9e808c455cbd0e151671ea1b1a8118d3c214577/wb_ai_manager/source/src/wb_control_center/optimizer_acceptance.py",
-          "sha256": "0e0a41c25431539ed7f3b8affd5fc8caa839f3ae456d56b5f1fd5da1c5c3f719"
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/222e599a96f60289451ec56c94d87845ac6c0555/wb_ai_manager/source/src/wb_control_center/optimizer_acceptance.py",
+          "sha256": "f271fe164baaff4c2632ba1eac34f248eb52916868d9a4ec419faafb892b7006"
         },
         {
           "path": "src/wb_control_center/outcome_evaluator.py",
