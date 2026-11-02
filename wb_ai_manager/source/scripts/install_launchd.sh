@@ -14,6 +14,7 @@ cat > "$PLIST" <<PLIST
   <key>WorkingDirectory</key><string>$ROOT</string>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
+  <key>EnvironmentVariables</key><dict><key>WB_OPEN_BROWSER</key><string>false</string></dict>
   <key>StandardOutPath</key><string>$ROOT/data/launchd.out.log</string>
   <key>StandardErrorPath</key><string>$ROOT/data/launchd.err.log</string>
 </dict></plist>

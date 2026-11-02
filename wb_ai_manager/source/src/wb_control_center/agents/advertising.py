@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from .base import BaseAgent
 from ..metrics import extract_ad_metrics, extract_ad_nm_metrics, extract_campaign_ids, summarize_for_prompt, to_number
 from ..models import AgentResult
+
+log = logging.getLogger(__name__)
 
 
 def _rows(value: Any) -> list[dict[str, Any]]:
@@ -111,22 +114,90 @@ def _rotating_slice(items: list[Any], limit: int, start: int) -> list[Any]:
     return (items + items)[start:start + count]
 
 
+_TRANSIENT_AD_READ_MARKERS = (
+    "remoteprotocolerror",
+    "server disconnected without sending a response",
+    "readtimeout",
+    "connecttimeout",
+    "connecterror",
+    "brokenresourceerror",
+    "closedresourceerror",
+    "endofstream",
+    "broken pipe",
+    "connection reset",
+    "connection aborted",
+    "temporarily unavailable",
+    "timed out",
+    "http 429",
+    "status code 429",
+    "status_code=429",
+    "http 500",
+    "http 502",
+    "http 503",
+    "http 504",
+)
+
+
+def _transient_ad_read_error(exc: Exception) -> bool:
+    text = f"{type(exc).__name__}: {exc}".lower()
+    return any(marker in text for marker in _TRANSIENT_AD_READ_MARKERS)
+
+
+def _broken_ad_transport(exc: Exception) -> bool:
+    text = f"{type(exc).__name__}: {exc}".lower()
+    return any(marker in text for marker in (
+        "remoteprotocolerror", "server disconnected without sending a response",
+        "readtimeout", "connecttimeout", "connecterror", "brokenresourceerror",
+        "closedresourceerror", "endofstream", "broken pipe", "connection reset",
+        "connection aborted",
+    ))
+
+
+async def _safe_ad_read(agent: BaseAgent, tool: str, **kwargs: Any) -> Any:
+    """Retry transient failures only for the advertising agents' read-only calls."""
+    for attempt in range(3):
+        try:
+            return await agent.call(tool, **kwargs)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            if attempt == 2 or not _transient_ad_read_error(exc):
+                return {"_error": str(exc), "_tool": tool}
+            log.warning(
+                "Temporary WB advertising read failure: tool=%s attempt=%s error=%s",
+                tool, attempt + 1, type(exc).__name__,
+            )
+            if _broken_ad_transport(exc):
+                try:
+                    await agent.ctx.wb.close()
+                except Exception as close_exc:
+                    log.warning("Could not reset WB MCP session: %s", type(close_exc).__name__)
+            await asyncio.sleep(2 ** (attempt + 1))
+    return {"_error": "WB advertising read failed after retry limit", "_tool": tool}
+
+
 class AdvertisingMonitorAgent(BaseAgent):
     name = "advertising_monitor"
 
     async def run(self) -> AgentResult:
         out = AgentResult(agent=self.name)
         cfg = self.ctx.policy.thresholds.get("advertising", {})
-        campaigns = await self.call("wb_advert_list", statuses=[9])
+        campaigns = await _safe_ad_read(self, "wb_advert_list", statuses=[9])
         out.snapshots.append(("active_campaigns", campaigns if isinstance(campaigns, dict) else {"data": campaigns}))
+        if isinstance(campaigns, dict) and campaigns.get("_error"):
+            out.events.append(self.event("warning", "ad_campaign_list_unavailable", "Не удалось получить список рекламных кампаний", str(campaigns["_error"]), {"tool": campaigns.get("_tool")}))
+            return out
         campaign_rows = _rows(campaigns)
         campaign_by_id = {cid: row for row in campaign_rows if (cid := _campaign_id(row))}
         ids = sorted(campaign_by_id)
         if not ids:
             return out
         start, end = self.dates(7)
-        stats = await self.call("wb_advert_stats", advert_ids=ids, date_from=start, date_to=end)
+        stats = await _safe_ad_read(self, "wb_advert_stats", advert_ids=ids, date_from=start, date_to=end)
         out.snapshots.append(("stats_7d", stats if isinstance(stats, dict) else {"data": stats}))
+        if isinstance(stats, dict) and stats.get("_error"):
+            out.events.append(self.event("warning", "ad_stats_unavailable", "Не удалось получить статистику рекламы", str(stats["_error"]), {"tool": stats.get("_tool"), "campaign_ids": ids}))
+            return out
         # Fullstats contains nested day/app/SKU rows with spend but no campaign id.
         # Those are components of a campaign, not independent campaigns.
         rows = [r for r in extract_ad_metrics(stats) if r.get("advert_id") is not None]
@@ -173,10 +244,7 @@ class AdvertisingOptimizerAgent(BaseAgent):
     name = "advertising_optimizer"
 
     async def _safe(self, tool: str, **kwargs: Any) -> Any:
-        try:
-            return await self.call(tool, **kwargs)
-        except Exception as exc:
-            return {"_error": str(exc), "_tool": tool}
+        return await _safe_ad_read(self, tool, **kwargs)
 
     async def run(self) -> AgentResult:
         out = AgentResult(agent=self.name)
