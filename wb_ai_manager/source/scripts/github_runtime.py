@@ -351,7 +351,7 @@ async def run() -> int:
         deep_scan = copy.deepcopy(optimizer_snapshot.get("data") or {})
         cursor_snapshot = agent_snapshots.get("deep_scan_cursor") or {}
         cursor_data = cursor_snapshot.get("data") if isinstance(cursor_snapshot, dict) else {}
-        if isinstance(cursor_data, dict) and not deep_scan.get("active_campaign_ids"):
+        if isinstance(cursor_data, dict) and "active_campaign_ids" not in deep_scan:
             deep_scan["active_campaign_ids"] = cursor_data.get("campaign_ids") or []
             deep_scan["catalog_complete"] = True
         cache_path = DATA_ROOT / "optimizer_campaign_cache" / f"{slug}.json"
