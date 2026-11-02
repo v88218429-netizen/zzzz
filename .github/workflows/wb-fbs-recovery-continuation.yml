@@ -30,6 +30,7 @@ jobs:
           SOURCE_NAME: ${{ github.event.workflow_run.name }}
           SOURCE_PATH: ${{ github.event.workflow_run.path }}
           SOURCE_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+          SOURCE_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
         run: |
           python - <<'PY'
           import json
@@ -89,6 +90,8 @@ jobs:
                   raise SystemExit("FBS_CONTINUATION_DISPATCH_HTTP_" + str(status))
               print("FBS_CONTINUATION_DISPATCHED pass=" + str(next_pass) +
                     " source=" + str(source_root_id) + " retry_source_run=" + str(source_run_id), flush=True)
+          elif source_path == ".github/workflows/wb-fbs-production-acceptance-audit.yml" and os.environ.get("SOURCE_CONCLUSION") == "cancelled":
+              print("FBS_CANCELLED_ACCEPTANCE_NOT_RERUN run=" + str(source_run_id), flush=True)
           elif source_path in {".github/workflows/wb-fbs-production-acceptance-audit.yml",
                                ".github/workflows/wb-fbs-supply-sync.yml"} or source_name in {"WB FBS production acceptance audit",
                                "WB FBS supply sync via GitHub"}:
