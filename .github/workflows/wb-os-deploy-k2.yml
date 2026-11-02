@@ -14,13 +14,11 @@ on:
       - "wb_os/apps_script/STOCK_HISTORY_MATRIX.gs"
       - "wb_os/apps_script/WB_FF_PENALTIES_SYNC.gs"
       - "wb_os/apps_script/WB_FRESHNESS_GUARD.gs"
-      - "wb_os/apps_script/WB_FBS_SUPPLY_DIRECT.gs"
       - "wb_os/tools/discover_clasp_project.py"
       - "wb_os/tools/patch_live_master.py"
       - "wb_os/tools/patch_stock_history_matrix.py"
       - "wb_os/tools/patch_supplier_debt_cutoff.py"
       - "wb_os/tools/audit_and_repair_live.py"
-      - ".github/workflows/wb-os-deploy-k2.yml"
 
 permissions:
   contents: read
