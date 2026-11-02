@@ -81,6 +81,7 @@ jobs:
               if source_run.get("status") != "completed":
                   raise SystemExit("SOURCE_RUN_NOT_COMPLETED=" + run_id)
               source_runs.append(source_run)
+          source_by_id = {str(run.get("id")): run for run in source_runs}
           for run_id in run_ids:
               page = 1
               while True:
@@ -103,6 +104,8 @@ jobs:
                           wait = min(30, 2 ** attempt)
                           print(f"GITHUB_JOBS_API_RETRY type={type(error).__name__} attempt={attempt} wait_seconds={wait}", flush=True)
                           time.sleep(wait)
+                  for item in page_jobs:
+                      item["_source_run_id"] = run_id
                   jobs.extend(page_jobs)
                   if len(page_jobs) < 100:
                       break
@@ -114,8 +117,23 @@ jobs:
           for job in jobs:
               if job.get("conclusion") not in ("failure", "cancelled", "timed_out"):
                   continue
-              match = pattern.match(str(job.get("name") or ""))
+              job_name = str(job.get("name") or "")
+              match = pattern.match(job_name)
               if not match:
+                  scheduled_clients = {
+                      "scheduled FBS refresh AIR": "AIR",
+                      "scheduled FBS refresh HOZYAYUSHKA": "HOZYAYUSHKA",
+                      "scheduled SANYCH FBS refresh": "SANYCH",
+                  }
+                  client = scheduled_clients.get(job_name)
+                  source_run = source_by_id.get(str(job.get("_source_run_id"))) or {}
+                  created = source_run.get("created_at")
+                  if not client or not created:
+                      continue
+                  run_date = dt.datetime.fromisoformat(created.replace("Z", "+00:00")).date().isoformat()
+                  script = "wb_worker/sanych_fbs_recovery.py" if client == "SANYCH" else "wb_worker/github_fbs_recovery.py"
+                  rows.append({"client": client, "start_date": run_date, "end_date": run_date,
+                               "script": script, "batch_size": (5 if client == "AIR" else 10)})
                   continue
               client, start, end, prior_batch = match.groups()
               first, last = dt.date.fromisoformat(start), dt.date.fromisoformat(end)
