@@ -27,7 +27,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
           SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
-          SOURCE_TITLE: ${{ github.event.workflow_run.display_title }}\n          SOURCE_NAME: ${{ github.event.workflow_run.name }}\n          SOURCE_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+          SOURCE_TITLE: ${{ github.event.workflow_run.display_title }}
+          SOURCE_NAME: ${{ github.event.workflow_run.name }}
+          SOURCE_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
         run: |
           python - <<'PY'
           import json
