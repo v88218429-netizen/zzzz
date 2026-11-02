@@ -116,3 +116,13 @@ def test_runtime_supervisor_accepts_minimal_authenticated_health(monkeypatch):
     monkeypatch.setattr(supervisor.urllib.request, "urlopen", lambda *args, **kwargs: Response())
 
     assert supervisor.health_info(8787) == {"status": "ok"}
+
+
+def test_background_runtime_does_not_open_a_visible_browser(monkeypatch):
+    supervisor = _load_runtime_supervisor()
+    opened = []
+    monkeypatch.setenv("WB_OPEN_BROWSER", "false")
+    monkeypatch.setattr(supervisor.webbrowser, "open", lambda url: opened.append(url))
+
+    assert supervisor.open_dashboard_if_enabled(8787) is False
+    assert opened == []
