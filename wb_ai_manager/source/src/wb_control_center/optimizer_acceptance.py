@@ -183,7 +183,7 @@ def merge_campaign_cache(
     old_ids = sorted({str(x) for x in old_ids if str(x).isdigit()}, key=int) if isinstance(old_ids, list) else []
     old_rows = prior.get("campaigns") if isinstance(prior.get("campaigns"), list) else []
     rows_by_id: dict[str, dict[str, Any]] = {}
-    if catalog_known and old_ids == active_ids:
+    if (not catalog_known) or old_ids == active_ids:
         for row in old_rows:
             if isinstance(row, dict) and str(row.get("campaign_id") or "").isdigit():
                 rows_by_id[str(row["campaign_id"])] = row
