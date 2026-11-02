@@ -11,13 +11,18 @@ on:
   workflow_dispatch:
     inputs:
       store:
-        description: Cabinet scope
+        description: Кабинет
         type: choice
         options: [all, air_wb, hozyayushka_wb, sanych_wb]
         default: all
         required: true
+      resume_phase:
+        description: Фаза продолжения после сбоя
+        type: string
+        default: summary
+        required: true
       resume_attempt:
-        description: Bounded automatic retry counter
+        description: Число автоматических повторов
         type: choice
         options: ["0", "1"]
         default: "0"
@@ -39,6 +44,8 @@ concurrency:
 
 jobs:
   publish:
+    outputs:
+      resume_phase: ${{ steps.publish.outputs.resume_phase }}
     if: ${{ (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success') && !(github.event_name == 'push' && contains(github.event.head_commit.message, '[skip-finance-publish]')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 50
@@ -47,6 +54,7 @@ jobs:
       WEBHOOK_SECRET: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
       PUBLISH_ONLY_STORE: ${{ github.event_name == 'workflow_dispatch' && inputs.store != 'all' && inputs.store || github.event_name == 'push' && contains(github.event.head_commit.message, '[air-only]') && 'air_wb' || github.event_name == 'push' && contains(github.event.head_commit.message, '[hozyayushka-only]') && 'hozyayushka_wb' || github.event_name == 'push' && contains(github.event.head_commit.message, '[sanych-only]') && 'sanych_wb' || '' }}
       RESUME_ATTEMPT: ${{ github.event_name == 'workflow_dispatch' && inputs.resume_attempt || '0' }}
+      RESUME_PHASE: ${{ github.event_name == 'workflow_dispatch' && inputs.resume_phase || 'summary' }}
     steps:
       - name: Check configured authorization
         shell: bash
@@ -57,15 +65,17 @@ jobs:
           echo "::add-mask::$WEBHOOK_SECRET"
 
       - name: Publish and verify all WB finance summaries in bounded phases
+        id: publish
         shell: bash
         run: |
           set -euo pipefail
           python - <<'PY'
-          import http.client, json, os, time, urllib.error, urllib.request
+          import hashlib, http.client, json, os, time, urllib.error, urllib.request
           from datetime import date
 
           url = "https://script.google.com/macros/s/" + os.environ["WEBAPP_DEPLOYMENT_ID"] + "/exec"
           selected_store = os.environ.get("PUBLISH_ONLY_STORE", "").strip()
+          resume_phase = os.environ.get("RESUME_PHASE", "summary").strip() or "summary"
           expected = (selected_store,) if selected_store in ("air_wb", "hozyayushka_wb", "sanych_wb") else ("air_wb", "hozyayushka_wb", "sanych_wb")
           today = date.today()
           end_year, end_month = today.year, today.month
@@ -88,11 +98,16 @@ jobs:
           print("PUBLISH_SCOPE=" + (selected_store or "all_stores"), flush=True)
           verified = []
           errors = []
+          failed_phases = []
+          summary_header_written = False
           for store_id in expected:
               daily_phases = sanych_chunks if store_id == "sanych_wb" else months
               phases = ("summary",) + tuple(daily_phases) + ("rnp_week", "rnp_month", "dashboard")
               store_result = {"store_id": store_id}
-              for phase in phases:
+              phase_start = phases.index(resume_phase) if resume_phase in phases else 0
+              phases = phases[phase_start:]
+              print("RESUME_FROM=store:" + store_id + ";phase:" + (phases[0] if phases else "complete"), flush=True)
+              for phase_index, phase in enumerate(phases):
                   body = json.dumps({
                       "token": os.environ["WEBHOOK_SECRET"],
                       "action": "publish_wb_inner_periods",
@@ -161,6 +176,7 @@ jobs:
                       break
                   if last:
                       errors.append("WB finance phase failed for " + store_id + "/" + phase + ": " + last)
+                      failed_phases.append((store_id, phase))
                       print("STORE=" + store_id + " PHASE=" + phase + " OK=no ERROR=" + last, flush=True)
                       break
                   item = result["stores"][0]
@@ -172,6 +188,7 @@ jobs:
                               break
                       if last:
                           errors.append("WB finance summary readback failed for " + store_id + ": " + last)
+                          failed_phases.append((store_id, phase))
                           print("STORE=" + store_id + " PHASE=summary OK=no ERROR=" + last, flush=True)
                           break
                       store_result.update({
@@ -187,6 +204,7 @@ jobs:
                       if rnp.get("ok") is not True or rnp.get("readback") is not True or len(matrices) != 1 or matrices[0].get("sheet") != {"day":"01_Дни","week":"02_Недели","month":"03_Месяцы"}[grain]:
                           last = "RNP matrix readback mismatch: " + json.dumps(rnp, ensure_ascii=False)[:1200]
                           errors.append("WB finance RNP readback failed for " + store_id + "/" + grain + ": " + last)
+                          failed_phases.append((store_id, phase))
                           print("STORE=" + store_id + " PHASE=" + phase + " OK=no ERROR=" + last, flush=True)
                           break
                       store_result.setdefault("rnp", {}).setdefault(grain, []).append(matrices[0])
@@ -195,9 +213,30 @@ jobs:
                       if dashboard.get("ok") is not True:
                           last = "dashboard readback failed: " + json.dumps(dashboard, ensure_ascii=False)[:1200]
                           errors.append("WB finance dashboard failed for " + store_id + ": " + last)
+                          failed_phases.append((store_id, phase))
                           print("STORE=" + store_id + " PHASE=dashboard OK=no ERROR=" + last, flush=True)
                           break
                       store_result["dashboard"] = dashboard
+                  source_facts = {
+                      "ids": item.get("source_ids") or [],
+                      "rows": item.get("source_rows"),
+                      "min": item.get("source_min"),
+                      "max": item.get("source_max"),
+                  }
+                  source_version = hashlib.sha256(json.dumps(source_facts, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
+                  verification = "readback=verified"
+                  if phase == "summary":
+                      verification = "day=" + str(item["day"].get("verified")) + "/" + str(item["day"].get("rows")) + ";week=" + str(item["week"].get("verified")) + "/" + str(item["week"].get("rows")) + ";month=" + str(item["month"].get("verified")) + "/" + str(item["month"].get("rows"))
+                  elif phase.startswith("rnp_"):
+                      verification = "matrix_readback=" + str((item.get("rnp") or {}).get("readback")) + ";matrices=" + str(len((item.get("rnp") or {}).get("matrices") or []))
+                  else:
+                      verification = "dashboard=" + str((item.get("dashboard") or {}).get("ok"))
+                  next_action = phases[phase_index + 1] if phase_index + 1 < len(phases) else "этапы магазина завершены"
+                  with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as checkpoint_file:
+                      if not summary_header_written:
+                          checkpoint_file.write("### Контроль публикации WB\\n\\n| Кабинет | Период | Фаза | Версия источника | Итог | Проверка чтением | Следующее действие |\\n|---|---|---|---|---|---|---|\\n")
+                          summary_header_written = True
+                      checkpoint_file.write("| " + store_id + " | " + str(item.get("source_min")) + "–" + str(item.get("source_max")) + " | " + phase + " | " + source_version + " | VERIFIED | " + verification + " | " + next_action + " |\\n")
                   phase_item = (result.get("stores") or [{}])[0] if isinstance(result, dict) else {}
                   if phase_item.get("no_source_data"):
                       print("STORE=" + store_id + " PHASE=" + phase + " STATUS=NO_SOURCE_DATA", flush=True)
@@ -208,13 +247,18 @@ jobs:
                       verified.append(store_result)
                       print("STORE=" + store_id + " OK=yes SOURCE_ROWS=" + str(store_result["source_rows"]) + " SOURCE_PERIOD=" + str(store_result["source_min"]) + ".." + str(store_result["source_max"]) + " DASHBOARD_OK=yes", flush=True)
           if errors or len(verified) != len(expected):
+              retry_phase = failed_phases[0][1] if failed_phases else "summary"
+              with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output_file:
+                  output_file.write("resume_phase=" + retry_phase + "\\n")
+              with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as checkpoint_file:
+                  checkpoint_file.write("\\n| all | current | " + retry_phase + " | unknown | RETRY_REQUIRED | этап не прошёл проверку | повторить с этой фазы |\\n")
               raise SystemExit("WB finance phased publication incomplete: " + json.dumps({"verified": len(verified), "expected": len(expected), "errors": errors}, ensure_ascii=False))
           print("WB_FINANCE_PHASED_PUBLICATION_OK stores=" + str(len(verified)), flush=True)
           PY
 
   recover:
     needs: publish
-    if: ${{ failure() && (github.event_name != 'workflow_dispatch' || inputs.resume_attempt == '0') }}
+    if: ${{ always() && (needs.publish.result == 'failure' || needs.publish.result == 'cancelled') && (github.event_name != 'workflow_dispatch' || inputs.resume_attempt == '0') }}
     runs-on: ubuntu-latest
     permissions:
       actions: write
@@ -225,13 +269,14 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RECOVERY_STORE: ${{ github.event_name == 'workflow_dispatch' && inputs.store != 'all' && inputs.store || github.event_name == 'push' && contains(github.event.head_commit.message, '[air-only]') && 'air_wb' || github.event_name == 'push' && contains(github.event.head_commit.message, '[hozyayushka-only]') && 'hozyayushka_wb' || github.event_name == 'push' && contains(github.event.head_commit.message, '[sanych-only]') && 'sanych_wb' || 'all' }}
           RECOVERY_REF: ${{ github.ref_name }}
+          RECOVERY_PHASE: ${{ needs.publish.outputs.resume_phase || 'summary' }}
         run: |
           set -euo pipefail
           python - <<'PY'
           import json, os, urllib.request
           payload = {
               "ref": os.environ["RECOVERY_REF"],
-              "inputs": {"store": os.environ["RECOVERY_STORE"], "resume_attempt": "1"},
+              "inputs": {"store": os.environ["RECOVERY_STORE"], "resume_phase": os.environ["RECOVERY_PHASE"], "resume_attempt": "1"},
           }
           url = "https://api.github.com/repos/" + os.environ["GITHUB_REPOSITORY"] + "/actions/workflows/wb-sellmonitor-finance-publish.yml/dispatches"
           req = urllib.request.Request(
