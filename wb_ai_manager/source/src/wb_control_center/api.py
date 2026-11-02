@@ -1075,6 +1075,7 @@ async def dashboard_data(days: int = 7, from_date: str | None = None, to_date: s
         "generated_at": optimizer_bundle.get("generated_at"),
         "last_successful_read_at": optimizer_read_at.isoformat() if optimizer_read_at else None,
         "refresh_status": "FAILED" if optimizer_read_error else "OK" if optimizer_bundle else "UNAVAILABLE",
+        "acceptance": optimizer_bundle.get("acceptance") if isinstance(optimizer_bundle.get("acceptance"), dict) else {},
         "shops": {key: {"status": value.get("status"), "wb_connected": value.get("wb_connected"),
                          "sweep": value.get("sweep") or {}}
                   for key, value in optimizer_shops.items() if isinstance(value, dict)},
@@ -1090,6 +1091,31 @@ async def dashboard_data(days: int = 7, from_date: str | None = None, to_date: s
         cluster_data_observed_at=cluster_times,
         freshness_hours=3.0,
     )
+    cluster_rows = (traffic.get("cluster_analysis") or {}).get("rows") or []
+    exact_bid_rows = sum(1 for row in cluster_rows if row.get("current_bid_rub") is not None)
+    economics_rows = sum(1 for row in cluster_rows if row.get("max_cpa_rub") is not None)
+    unblocked_rows = sum(1 for row in cluster_rows if not row.get("blockers"))
+    rate_validation_ready = bool(cluster_rows) and exact_bid_rows == len(cluster_rows) and economics_rows == len(cluster_rows) and unblocked_rows == len(cluster_rows)
+    acceptance = traffic["optimizer_summary"].get("acceptance") or {}
+    acceptance_blockers = list(acceptance.get("blockers") or [])
+    if not rate_validation_ready:
+        acceptance_blockers.append(
+            f"Проверка точных ставок в панели не пройдена: ставки {exact_bid_rows}/{len(cluster_rows)}, "
+            f"экономика {economics_rows}/{len(cluster_rows)}, решений без блокировок {unblocked_rows}/{len(cluster_rows)}."
+        )
+    if optimizer_read_error or traffic_read_error:
+        acceptance_blockers.append("Не обновились источники ставки/статистики; старый снимок не подтверждает готовность.")
+    traffic["optimizer_summary"]["rate_validation"] = {
+        "ready": rate_validation_ready and not optimizer_read_error and not traffic_read_error,
+        "cluster_rows": len(cluster_rows), "exact_current_bid_rows": exact_bid_rows,
+        "economics_bound_rows": economics_rows, "unblocked_rows": unblocked_rows,
+    }
+    traffic["optimizer_summary"]["acceptance"] = {
+        **acceptance,
+        "ready": bool(acceptance.get("ready")) and rate_validation_ready and not optimizer_read_error and not traffic_read_error,
+        "status": "ready" if bool(acceptance.get("ready")) and rate_validation_ready and not optimizer_read_error and not traffic_read_error else "not_ready",
+        "blockers": list(dict.fromkeys(acceptance_blockers)),
+    }
     # Raw cluster inputs are already represented by the enriched analysis rows.
     # Returning both copies multiplies the largest dashboard payload without
     # serving any UI consumer; the detail table keeps the complete row set.
