@@ -572,7 +572,7 @@ jobs:
           PY
 
       - name: Seed client WB tokens from GitHub Secrets
-        if: github.event_name != 'push' || !contains(fromJSON('["Run Ozon export continuation via GitHub","Diagnose Ozon export status via GitHub","Repair and resume Ozon export via GitHub","Inspect FBS audit source via GitHub"]'), github.event.head_commit.message)
+        if: ${{ (github.event_name != 'push' || !contains(fromJSON('["Run Ozon export continuation via GitHub","Diagnose Ozon export status via GitHub","Repair and resume Ozon export via GitHub","Inspect FBS audit source via GitHub"]'), github.event.head_commit.message)) && (github.event_name != 'push' || !contains(github.event.head_commit.message, '[no-token-seed]')) }}
         shell: bash
         run: |
           set -euo pipefail
