@@ -475,150 +475,153 @@ jobs:
               raise SystemExit("OZON_API_STORE_PUBLISH_FAILED:" + json.dumps(failures, ensure_ascii=False)[:2400])
           if set(published) != {"ДОМ", "Хозяюшка"}:
               raise SystemExit("OZON_API_BOTH_STORE_READBACKS_REQUIRED:" + json.dumps(sorted(published), ensure_ascii=False))
-                    from decimal import Decimal, InvalidOperation
-                    finance_days = []
-                    finance_ok_accounts = []
-                    finance_failures = []
-                    first_day = datetime.date.fromisoformat(COVERAGE_FROM)
-                    last_day = datetime.date.fromisoformat(coverage_to)
+          from decimal import Decimal, InvalidOperation
+          finance_days = []
+          finance_ok_accounts = []
+          finance_failures = []
+          first_day = datetime.date.fromisoformat(COVERAGE_FROM)
+          last_day = datetime.date.fromisoformat(coverage_to)
 
-                    def finance_amount(value, store, day):
-                        if isinstance(value, dict):
-                            value = value.get("value")
-                        if value is None or value == "":
-                            raise RuntimeError("OZON_FINANCE_AMOUNT_MISSING:" + store + ":" + day)
-                        raw = str(value).strip()
-                        if raw.lower().startswith("value:"):
-                            raw = raw.split(":", 1)[1].strip().strip('"')
-                        if "," in raw and "." not in raw:
-                            raw = raw.replace(",", ".")
-                        try:
-                            amount = Decimal(raw)
-                        except InvalidOperation:
-                            raise RuntimeError("OZON_FINANCE_AMOUNT_INVALID:" + store + ":" + day)
-                        if not amount.is_finite():
-                            raise RuntimeError("OZON_FINANCE_AMOUNT_NONFINITE:" + store + ":" + day)
-                        return amount.quantize(Decimal("0.01"))
+          def finance_amount(value, store, day):
+              if isinstance(value, dict):
+                  value = value.get("value")
+              if value is None or value == "":
+                  raise RuntimeError("OZON_FINANCE_AMOUNT_MISSING:" + store + ":" + day)
+              raw = str(value).strip()
+              if raw.lower().startswith("value:"):
+                  raw = raw.split(":", 1)[1].strip().strip('"')
+              if "," in raw and "." not in raw:
+                  raw = raw.replace(",", ".")
+              try:
+                  amount = Decimal(raw)
+              except InvalidOperation:
+                  raise RuntimeError("OZON_FINANCE_AMOUNT_INVALID:" + store + ":" + day)
+              if not amount.is_finite():
+                  raise RuntimeError("OZON_FINANCE_AMOUNT_NONFINITE:" + store + ":" + day)
+              return amount.quantize(Decimal("0.01"))
 
-                    for cabinet, label, client_var, key_var in stores:
-                        store_daily = []
-                        try:
-                            headers = {
-                                "Client-Id": os.environ[client_var],
-                                "Api-Key": os.environ[key_var],
-                                "Content-Type": "application/json",
-                            }
-                            day = first_day
-                            finance_pages = 0
-                            finance_rows = 0
-                            category_totals = {k: Decimal("0.00") for k in ("ITEM", "POSTING", "NON_ITEM", "OTHER")}
-                            while day <= last_day:
-                                day_key = day.isoformat()
-                                cursor = ""
-                                seen_cursors = set()
-                                day_rows = 0
-                                day_totals = {k: Decimal("0.00") for k in ("ITEM", "POSTING", "NON_ITEM", "OTHER")}
-                                while True:
-                                    finance_pages += 1
-                                    api_context.update({"store": label, "flow": "FINANCE", "page": finance_pages})
-                                    response = api_post(
-                                        "/v1/finance/accrual/by-day",
-                                        {"last_id": cursor, "date": day_key},
-                                        headers,
-                                    )
-                                    result_page = response.get("result", response)
-                                    accruals = result_page.get("accruals") if isinstance(result_page, dict) else None
-                                    if not isinstance(accruals, list):
-                                        raise RuntimeError("OZON_FINANCE_ACCRUALS_MISSING:" + label + ":" + day_key)
-                                    for accrual in accruals:
-                                        if not isinstance(accrual, dict):
-                                            raise RuntimeError("OZON_FINANCE_INVALID_ROW:" + label + ":" + day_key)
-                                        amount = finance_amount(accrual.get("total_amount"), label, day_key)
-                                        raw_category = str(accrual.get("accrued_category") or "").strip().upper()
-                                        category = raw_category if raw_category in ("ITEM", "POSTING", "NON_ITEM") else "OTHER"
-                                        day_totals[category] += amount
-                                        day_rows += 1
-                                        finance_rows += 1
-                                    next_cursor = str(result_page.get("last_id") or "").strip()
-                                    if not next_cursor:
-                                        break
-                                    if next_cursor == cursor or next_cursor in seen_cursors:
-                                        raise RuntimeError("OZON_FINANCE_CURSOR_REPEATED:" + label + ":" + day_key)
-                                    seen_cursors.add(next_cursor)
-                                    cursor = next_cursor
-                                    if len(seen_cursors) >= 50:
-                                        raise RuntimeError("OZON_FINANCE_PAGE_GUARD:" + label + ":" + day_key)
-                                total = sum(day_totals.values(), Decimal("0.00"))
-                                category_totals = {k: category_totals[k] + day_totals[k] for k in category_totals}
-                                store_daily.append({
-                                    "cabinet": cabinet,
-                                    "day": day_key,
-                                    "rows": day_rows,
-                                    "total": str(total),
-                                    "item": str(day_totals["ITEM"]),
-                                    "posting": str(day_totals["POSTING"]),
-                                    "non_item": str(day_totals["NON_ITEM"]),
-                                    "other": str(day_totals["OTHER"]),
-                                    "unknown_categories": sum(1 for a in []),
-                                })
-                                day += datetime.timedelta(days=1)
-                            finance_days.extend(store_daily)
-                            finance_ok_accounts.append(cabinet)
-                            print("OZON_FINANCE_SOURCE=store="+label+";status=complete;days="+str(len(store_daily))+";rows="+str(finance_rows)+";pages="+str(finance_pages)+";coverage="+COVERAGE_FROM+".."+coverage_to+";category_sums="+json.dumps({k:str(v) for k,v in category_totals.items()},sort_keys=True),flush=True)
-                        except Exception as exc:
-                            finance_failures.append(label + ":" + type(exc).__name__ + ":" + str(exc)[:240])
-                            print("OZON_FINANCE_SOURCE=store="+label+";status=retry_required;error_class="+type(exc).__name__+";reason="+str(exc)[:220],flush=True)
+          for cabinet, label, client_var, key_var in stores:
+              store_daily = []
+              try:
+                  headers = {
+                      "Client-Id": os.environ[client_var],
+                      "Api-Key": os.environ[key_var],
+                      "Content-Type": "application/json",
+                  }
+                  day = first_day
+                  finance_pages = 0
+                  finance_rows = 0
+                  category_totals = {k: Decimal("0.00") for k in ("ITEM", "POSTING", "NON_ITEM", "OTHER")}
+                  while day <= last_day:
+                      day_key = day.isoformat()
+                      cursor = ""
+                      seen_cursors = set()
+                      day_rows = 0
+                      day_unknown_categories = 0
+                      day_totals = {k: Decimal("0.00") for k in ("ITEM", "POSTING", "NON_ITEM", "OTHER")}
+                      while True:
+                          finance_pages += 1
+                          api_context.update({"store": label, "flow": "FINANCE", "page": finance_pages})
+                          response = api_post(
+                              "/v1/finance/accrual/by-day",
+                              {"last_id": cursor, "date": day_key},
+                              headers,
+                          )
+                          result_page = response.get("result", response)
+                          accruals = result_page.get("accruals") if isinstance(result_page, dict) else None
+                          if not isinstance(accruals, list):
+                              raise RuntimeError("OZON_FINANCE_ACCRUALS_MISSING:" + label + ":" + day_key)
+                          for accrual in accruals:
+                              if not isinstance(accrual, dict):
+                                  raise RuntimeError("OZON_FINANCE_INVALID_ROW:" + label + ":" + day_key)
+                              amount = finance_amount(accrual.get("total_amount"), label, day_key)
+                              raw_category = str(accrual.get("accrued_category") or "").strip().upper()
+                              category = raw_category if raw_category in ("ITEM", "POSTING", "NON_ITEM") else "OTHER"
+                              day_totals[category] += amount
+                              if category == "OTHER":
+                                  day_unknown_categories += 1
+                              day_rows += 1
+                              finance_rows += 1
+                          next_cursor = str(result_page.get("last_id") or "").strip()
+                          if not next_cursor:
+                              break
+                          if next_cursor == cursor or next_cursor in seen_cursors:
+                              raise RuntimeError("OZON_FINANCE_CURSOR_REPEATED:" + label + ":" + day_key)
+                          seen_cursors.add(next_cursor)
+                          cursor = next_cursor
+                          if len(seen_cursors) >= 50:
+                              raise RuntimeError("OZON_FINANCE_PAGE_GUARD:" + label + ":" + day_key)
+                      total = sum(day_totals.values(), Decimal("0.00"))
+                      category_totals = {k: category_totals[k] + day_totals[k] for k in category_totals}
+                      store_daily.append({
+                          "cabinet": cabinet,
+                          "day": day_key,
+                          "rows": day_rows,
+                          "total": str(total),
+                          "item": str(day_totals["ITEM"]),
+                          "posting": str(day_totals["POSTING"]),
+                          "non_item": str(day_totals["NON_ITEM"]),
+                          "other": str(day_totals["OTHER"]),
+                          "unknown_categories": day_unknown_categories,
+                      })
+                      day += datetime.timedelta(days=1)
+                  finance_days.extend(store_daily)
+                  finance_ok_accounts.append(cabinet)
+                  print("OZON_FINANCE_SOURCE=store="+label+";status=complete;days="+str(len(store_daily))+";rows="+str(finance_rows)+";pages="+str(finance_pages)+";coverage="+COVERAGE_FROM+".."+coverage_to+";category_sums="+json.dumps({k:str(v) for k,v in category_totals.items()},sort_keys=True),flush=True)
+              except Exception as exc:
+                  finance_failures.append(label + ":" + type(exc).__name__ + ":" + str(exc)[:240])
+                  print("OZON_FINANCE_SOURCE=store="+label+";status=retry_required;error_class="+type(exc).__name__+";reason="+str(exc)[:220],flush=True)
 
-                    finance_published = {}
-                    for cabinet, label, client_var, key_var in stores:
-                        if cabinet not in finance_ok_accounts:
-                            continue
-                        daily = [row for row in finance_days if row["cabinet"] == cabinet]
-                        payload = {
-                            "token": os.environ["WEBHOOK_SECRET"],
-                            "action": "publish_ozon_api_finance",
-                            "source": "ozon_seller_api_accrual",
-                            "complete": True,
-                            "completed_accounts": [cabinet],
-                            "coverage_from": COVERAGE_FROM,
-                            "coverage_to": coverage_to,
-                            "exported_at": exported_at,
-                            "daily": daily,
-                        }
-                        body = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-                        result = None
-                        publish_error = None
-                        for attempt in range(1, 6):
-                            req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"}, method="POST")
-                            try:
-                                with urllib.request.urlopen(req, timeout=420) as response:
-                                    response_text = response.read().decode("utf-8").strip()
-                                if not response_text:
-                                    raise json.JSONDecodeError("empty Apps Script response", "", 0)
-                                result = json.loads(response_text)
-                                break
-                            except urllib.error.HTTPError as exc:
-                                publish_error = "HTTPError:" + str(exc.code)
-                                if exc.code not in {408, 425, 429, 500, 502, 503, 504}:
-                                    break
-                            except (urllib.error.URLError, TimeoutError, ConnectionError, OSError, json.JSONDecodeError) as exc:
-                                publish_error = type(exc).__name__ + ":" + str(exc)[:180]
-                            if attempt < 5:
-                                delay = min(10 * (2 ** (attempt - 1)), 120)
-                                print("OZON_FINANCE_PUBLISH_RETRY=store="+label+";attempt="+str(attempt+1)+"/5;wait="+str(delay)+"s;cause="+str(publish_error),flush=True)
-                                time.sleep(delay)
-                        item = next((x for x in (result or {}).get("stores", []) if x.get("store") == label), None) if isinstance(result, dict) else None
-                        if not isinstance(result, dict) or result.get("ok") is not True or not item or item.get("readback") is not True:
-                            finance_failures.append(label + ":PUBLISH_READBACK_FAILED:" + json.dumps(item or result, ensure_ascii=False)[:500])
-                            print("OZON_FINANCE_PUBLISH=store="+label+";status=retry_required;readback=false",flush=True)
-                            continue
-                        finance_published[label] = item
-                        print("OZON_FINANCE_PUBLISH=store="+label+";status=verified;days="+str(item.get("days"))+";periods="+str(item.get("periods"))+";accrual_rows="+str(item.get("accrual_rows"))+";archive_rows="+str(item.get("archived_rows"))+";readback=true;daily_sha256="+str(item.get("daily_sha256"))+";period_sha256="+str(item.get("period_sha256")),flush=True)
+          finance_published = {}
+          for cabinet, label, client_var, key_var in stores:
+              if cabinet not in finance_ok_accounts:
+                  continue
+              daily = [row for row in finance_days if row["cabinet"] == cabinet]
+              payload = {
+                  "token": os.environ["WEBHOOK_SECRET"],
+                  "action": "publish_ozon_api_finance",
+                  "source": "ozon_seller_api_accrual",
+                  "complete": True,
+                  "completed_accounts": [cabinet],
+                  "coverage_from": COVERAGE_FROM,
+                  "coverage_to": coverage_to,
+                  "exported_at": exported_at,
+                  "daily": daily,
+              }
+              body = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+              result = None
+              publish_error = None
+              for attempt in range(1, 6):
+                  req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"}, method="POST")
+                  try:
+                      with urllib.request.urlopen(req, timeout=420) as response:
+                          response_text = response.read().decode("utf-8").strip()
+                      if not response_text:
+                          raise json.JSONDecodeError("empty Apps Script response", "", 0)
+                      result = json.loads(response_text)
+                      break
+                  except urllib.error.HTTPError as exc:
+                      publish_error = "HTTPError:" + str(exc.code)
+                      if exc.code not in {408, 425, 429, 500, 502, 503, 504}:
+                          break
+                  except (urllib.error.URLError, TimeoutError, ConnectionError, OSError, json.JSONDecodeError) as exc:
+                      publish_error = type(exc).__name__ + ":" + str(exc)[:180]
+                  if attempt < 5:
+                      delay = min(10 * (2 ** (attempt - 1)), 120)
+                      print("OZON_FINANCE_PUBLISH_RETRY=store="+label+";attempt="+str(attempt+1)+"/5;wait="+str(delay)+"s;cause="+str(publish_error),flush=True)
+                      time.sleep(delay)
+              item = next((x for x in (result or {}).get("stores", []) if x.get("store") == label), None) if isinstance(result, dict) else None
+              if not isinstance(result, dict) or result.get("ok") is not True or not item or item.get("readback") is not True:
+                  finance_failures.append(label + ":PUBLISH_READBACK_FAILED:" + json.dumps(item or result, ensure_ascii=False)[:500])
+                  print("OZON_FINANCE_PUBLISH=store="+label+";status=retry_required;readback=false",flush=True)
+                  continue
+              finance_published[label] = item
+              print("OZON_FINANCE_PUBLISH=store="+label+";status=verified;days="+str(item.get("days"))+";periods="+str(item.get("periods"))+";accrual_rows="+str(item.get("accrual_rows"))+";archive_rows="+str(item.get("archived_rows"))+";readback=true;daily_sha256="+str(item.get("daily_sha256"))+";period_sha256="+str(item.get("period_sha256")),flush=True)
 
-                    if finance_failures:
-                        raise SystemExit("OZON_FINANCE_SYNC_RETRY_REQUIRED:" + json.dumps(finance_failures, ensure_ascii=False)[:1800])
-                    if set(finance_published) != {"ДОМ", "Хозяюшка"}:
-                        raise SystemExit("OZON_FINANCE_BOTH_STORE_READBACKS_REQUIRED:" + json.dumps(sorted(finance_published), ensure_ascii=False))
-                    print("OZON_FINANCE_PUBLISH_OK=true;stores=2;coverage="+COVERAGE_FROM+".."+coverage_to,flush=True)
+          if finance_failures:
+              raise SystemExit("OZON_FINANCE_SYNC_RETRY_REQUIRED:" + json.dumps(finance_failures, ensure_ascii=False)[:1800])
+          if set(finance_published) != {"ДОМ", "Хозяюшка"}:
+              raise SystemExit("OZON_FINANCE_BOTH_STORE_READBACKS_REQUIRED:" + json.dumps(sorted(finance_published), ensure_ascii=False))
+          print("OZON_FINANCE_PUBLISH_OK=true;stores=2;coverage="+COVERAGE_FROM+".."+coverage_to,flush=True)
 
           PY
