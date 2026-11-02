@@ -145,6 +145,14 @@ def wait_health(port:int,child:subprocess.Popen|None=None,seconds:int=45)->bool:
     return False
 
 
+def open_dashboard_if_enabled(port:int)->bool:
+    enabled=os.environ.get('WB_OPEN_BROWSER','true').strip().lower() in {'1','true','yes','on'}
+    if not enabled:
+        return False
+    webbrowser.open(f'http://127.0.0.1:{port}/dashboard#decisions')
+    return True
+
+
 def post_run_all(port:int)->None:
     try:
         req=urllib.request.Request(f'http://127.0.0.1:{port}/run-all?background=true',data=b'',method='POST')
@@ -166,7 +174,7 @@ def main()->int:
     existing=health_info(boot_port)
     if existing:
         print(f"WB AI Manager уже запущен на порту {boot_port} (версия {existing.get('app_version')}). Открываю текущий экземпляр.",flush=True)
-        webbrowser.open(f'http://127.0.0.1:{boot_port}/dashboard#decisions')
+        open_dashboard_if_enabled(boot_port)
         return 0
     try:
         preflight_restored=preflight_restore_interrupted_update()
@@ -229,7 +237,7 @@ def main()->int:
                 watchdog.record(True,time.monotonic())
                 post_run_all(settings.app_port)
                 if not opened:
-                    webbrowser.open(f'http://127.0.0.1:{settings.app_port}/dashboard#decisions')
+                    open_dashboard_if_enabled(settings.app_port)
                     opened=True
             else:
                 code=child.poll() if child else None
