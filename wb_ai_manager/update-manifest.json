@@ -380,8 +380,8 @@
         },
         {
           "path": "src/wb_control_center/optimizer_acceptance.py",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/a65667ed8ac50726bb006d001d993d6e0eb05225/wb_ai_manager/source/src/wb_control_center/optimizer_acceptance.py",
-          "sha256": "120220ca1d0d269f995226092b5515b2c90a2490ec5983b1ba4af927d4509d75"
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/f02bcd5fdcb0ca197a6cf2a276a61d7c7387f174/wb_ai_manager/source/src/wb_control_center/optimizer_acceptance.py",
+          "sha256": "75048fd75c62a73891b322010ef504cd2470c3e6ec6d5eeb4d25241d768c1e38"
         },
         {
           "path": "src/wb_control_center/outcome_evaluator.py",

@@ -99,8 +99,23 @@ def evaluate_optimizer_acceptance(
     economics = own.get("primary_unit_economics") if isinstance(own.get("primary_unit_economics"), dict) else {}
     snapshot_date = _date(economics.get("snapshot_date"))
     age_days = (now.date() - snapshot_date).days if snapshot_date else None
+    source_retrieved_at = str(economics.get("source_retrieved_at") or "").strip()
+    source_read_fresh = False
+    if economics.get("snapshot_basis") == "live_source_read" and source_retrieved_at:
+        try:
+            retrieved = datetime.fromisoformat(source_retrieved_at.replace("Z", "+00:00"))
+            if retrieved.tzinfo is None:
+                retrieved = retrieved.replace(tzinfo=timezone.utc)
+            read_age_hours = (now.astimezone(timezone.utc) - retrieved.astimezone(timezone.utc)).total_seconds() / 3600
+            source_read_fresh = -0.25 <= read_age_hours <= 24
+        except ValueError:
+            source_read_fresh = False
+    # The PRIMARY unit-economics workbook is a separately timestamped live source.
+    # Do not let an unrelated stale inventory/traffic source invalidate a fresh
+    # economics read; those sources have their own decision gates.
+    source_current = portfolio.get("current_data") is True or source_read_fresh
     economics_ok = bool(
-        portfolio.get("current_data") is True
+        source_current
         and economics.get("semantics") in {"plan_model_only", "plan_model_plus_independent_fact"}
         and snapshot_date is not None and 0 <= age_days <= 7
     )
