@@ -162,3 +162,50 @@ async def test_shared_ad_read_helper_retries_for_both_advertising_agents(monkeyp
     assert calls == 2
     assert delays == [2]
     assert wb.close_calls == 1
+
+
+
+def test_optimizer_product_catalog_includes_exact_nmids_seen_in_campaign_statistics():
+    from wb_control_center.agents.advertising import _campaign_nm_catalog
+
+    campaigns = [
+        {"advertId": 101, "nmIds": [1001]},
+        {"advertId": 202, "nmIds": [2001, 2002]},
+    ]
+    exact_nm_stats = {
+        (101, 1001): {"nmId": 1001, "orders": 1},
+        (101, 1002): {"nmId": 1002, "orders": 2},
+        (202, 2003): {"nmId": 2003, "orders": 1},
+        (999, 9999): {"nmId": 9999, "orders": 1},
+    }
+
+    assert _campaign_nm_catalog(campaigns, exact_nm_stats) == {
+        101: [1001, 1002],
+        202: [2001, 2002, 2003],
+    }
+
+
+def test_optimizer_progress_counts_only_scanned_unique_products_and_requires_each_campaign_sku():
+    from wb_control_center.agents.advertising import _sweep_progress
+
+    expected = {101: [1001, 1002], 202: [1002, 2001]}
+    partially_scanned = {"101": [1001], "202": [1002]}
+
+    assert _sweep_progress(expected, partially_scanned) == (2, 3, False)
+    assert _sweep_progress(expected, {"101": [1001, 1002], "202": [1002, 2001]}) == (3, 3, True)
+
+
+def test_optimizer_cursor_resets_when_product_catalog_changes():
+    from wb_control_center.agents.advertising import _scan_cursor
+
+    previous = _scan_cursor(None, [101], {101: [1001]})
+    previous["next_campaign_index"] = 1
+    previous["swept_campaign_ids"] = [101]
+    previous["swept_nm_ids"] = {"101": [1001]}
+
+    updated = _scan_cursor(previous, [101], {101: [1001, 1002]})
+
+    assert updated["sweep_id"] == previous["sweep_id"] + 1
+    assert updated["next_campaign_index"] == 0
+    assert updated["swept_campaign_ids"] == []
+    assert updated["swept_nm_ids"] == {}
