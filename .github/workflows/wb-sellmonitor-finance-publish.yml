@@ -73,15 +73,17 @@ jobs:
         run: |
           set -euo pipefail
           python - <<'PY'
-          import hashlib, http.client, json, os, re, time, urllib.error, urllib.request
+          import hashlib, http.client, json, os, time, urllib.error, urllib.request
           from datetime import date
 
           url = "https://script.google.com/macros/s/" + os.environ["WEBAPP_DEPLOYMENT_ID"] + "/exec"
           selected_store = os.environ.get("PUBLISH_ONLY_STORE", "").strip()
           resume_phase_input = os.environ.get("RESUME_PHASE", "summary").strip() or "summary"
           if resume_phase_input.startswith("push:"):
-              marker = re.search(r"\\[resume-phase:([A-Za-z0-9_-]+)\\]", resume_phase_input[5:])
-              resume_phase = marker.group(1) if marker else "summary"
+              marker_prefix = "[resume-phase:"
+              marker_start = resume_phase_input.find(marker_prefix)
+              marker_end = resume_phase_input.find("]", marker_start + len(marker_prefix)) if marker_start >= 0 else -1
+              resume_phase = resume_phase_input[marker_start + len(marker_prefix):marker_end] if marker_end > marker_start else "summary"
           else:
               resume_phase = resume_phase_input
           expected = (selected_store,) if selected_store in ("air_wb", "hozyayushka_wb", "sanych_wb") else ("air_wb", "hozyayushka_wb", "sanych_wb")
