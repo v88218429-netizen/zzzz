@@ -72,9 +72,15 @@ jobs:
               "WB FBS retry failed recovery windows",
               "WB FBS supply sync via GitHub",
           }
+          mutation_paths = {
+              ".github/workflows/wb-fbs-github-recovery.yml",
+              ".github/workflows/wb-fbs-sanych-targeted-recovery.yml",
+              ".github/workflows/wb-fbs-auto-retry.yml",
+              ".github/workflows/wb-fbs-supply-sync.yml",
+          }
           active_mutation = next((
               item for item in runs
-              if item.get("name") in mutation_names
+              if (item.get("name") in mutation_names or item.get("path") in mutation_paths)
               and item.get("status") in {"queued", "in_progress", "pending", "waiting", "requested"}
           ), None)
           if active_mutation:
