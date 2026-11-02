@@ -98,16 +98,42 @@ jobs:
         shell: bash
         run: |
           python3 - <<'PY'
-          import json, os, urllib.request
+          import http.client, json, os, time, urllib.error, urllib.request
           url=os.environ["BRIDGE_URL"]
           key=os.environ["BRIDGE_KEY"]
+
+          def bridge_post(payload, label, attempts=4, timeout=480):
+              encoded=json.dumps(payload,ensure_ascii=False).encode("utf-8")
+              for attempt in range(1,attempts+1):
+                  request=urllib.request.Request(url,data=encoded,
+                        headers={"Content-Type":"application/json"},method="POST")
+                  try:
+                      with urllib.request.urlopen(request,timeout=timeout) as response:
+                          raw=response.read().decode("utf-8")
+                      return json.loads(raw)
+                  except urllib.error.HTTPError as error:
+                      if error.code not in (408,425,429,500,502,503,504) or attempt==attempts:
+                          raise
+                      retry=error.headers.get("Retry-After","")
+                      try:
+                          delay=min(60,max(5,float(retry)))
+                      except ValueError:
+                          delay=min(60,10*attempt)
+                      reason="HTTP_"+str(error.code)
+                  except (urllib.error.URLError,TimeoutError,OSError,http.client.HTTPException,
+                          json.JSONDecodeError,UnicodeDecodeError) as error:
+                      if attempt==attempts:
+                          raise RuntimeError("FBS_BRIDGE_RETRY_EXHAUSTED:"+label+":"+type(error).__name__) from None
+                      delay=min(60,10*attempt)
+                      reason=type(error).__name__
+                  print("FBS_BRIDGE_RETRY label="+label+" attempt="+str(attempt)+
+                        " wait_seconds="+str(int(delay))+" reason="+reason,flush=True)
+                  time.sleep(delay)
+              raise RuntimeError("FBS_BRIDGE_RETRY_EXHAUSTED:"+label)
+
+          runtime=bridge_post({"token":key,"action":"health"},"runtime_health")
           if not key:
               raise SystemExit("FBS_AUDIT_BRIDGE_SECRET_MISSING")
-          runtime_payload=json.dumps({"token":key,"action":"health"}).encode("utf-8")
-          runtime_request=urllib.request.Request(url,data=runtime_payload,
-                headers={"Content-Type":"application/json"},method="POST")
-          with urllib.request.urlopen(runtime_request,timeout=480) as response:
-              runtime=json.loads(response.read().decode("utf-8"))
           runtime_result=runtime.get("result") or {}
           if runtime.get("ok") is not True or runtime_result.get("ok") is not True or runtime_result.get("trigger_ok") is not True:
               print("FBS_RUNTIME_HEALTH_FAILED "+json.dumps(runtime,ensure_ascii=False)[:6000],flush=True)
@@ -116,11 +142,7 @@ jobs:
                 ("version","runtime","trigger","trigger_count","inner_finance_trigger_count",
                  "project_trigger_handlers","trigger_ok","fbs_ingest_stages","fbs_supply_stage")},
                 ensure_ascii=False,separators=(",",":")),flush=True)
-          health_payload=json.dumps({"token":key,"action":"fbs_targets_health"}).encode("utf-8")
-          health_request=urllib.request.Request(url,data=health_payload,
-                headers={"Content-Type":"application/json"},method="POST")
-          with urllib.request.urlopen(health_request,timeout=480) as response:
-              health=json.loads(response.read().decode("utf-8"))
+          health=bridge_post({"token":key,"action":"fbs_targets_health"},"targets_health")
           if health.get("ok") is not True or (health.get("result") or {}).get("ok") is not True:
               print("FBS_TARGET_HEALTH_FAILED "+json.dumps(health,ensure_ascii=False)[:6000],flush=True)
               raise SystemExit("FBS_TARGET_HEALTH_FAILED")
@@ -128,13 +150,8 @@ jobs:
           quality_issues=[]
           expected_charts={"SANYCH":27,"AIR":2,"HOZYAYUSHKA":22}
           for client in ("SANYCH","AIR","HOZYAYUSHKA","ARCHIVES"):
-              payload=json.dumps({"token":key,"action":"fbs_acceptance_audit","client":client},
-                                 ensure_ascii=False).encode("utf-8")
-              request=urllib.request.Request(url,data=payload,
-                    headers={"Content-Type":"application/json"},method="POST")
-              with urllib.request.urlopen(request,timeout=480) as response:
-                  raw=response.read().decode("utf-8")
-              result=json.loads(raw)
+              result=bridge_post({"token":key,"action":"fbs_acceptance_audit","client":client},
+                                     "acceptance_"+client)
               if result.get("ok") is not True or (result.get("result") or {}).get("ok") is not True:
                   print("FBS_AUDIT_FAILED client="+client+" response="+
                         json.dumps(result,ensure_ascii=False,separators=(",",":"))[:6000],flush=True)
