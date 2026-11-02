@@ -625,6 +625,50 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
     elif freshness_marker not in worker_text and "function sellmonitorGithubWbInnerSyncRnpMatrices_" in worker_text:
         raise SystemExit("WB RNP freshness patch anchor changed")
 
+    # Keep the order freshness note in the existing store daily sheet tied to the verified Seller API export.
+    ozon_freshness_marker = "OZON_ORDER_FRESHNESS_NOTE_V1"
+    ozon_freshness_anchor = "    var sameSummaryNote=oldSummaryNote===newSummaryNote;"
+    if ozon_freshness_marker not in worker_text:
+        if worker_text.count(ozon_freshness_anchor) != 1:
+            raise SystemExit("OZON order freshness note anchor mismatch")
+        ozon_freshness_code = """/* OZON_ORDER_FRESHNESS_NOTE_V1 */
+    var orderFreshnessSheet=ss.getSheetByName('06_Магазин_дни');
+    if(!orderFreshnessSheet)throw new Error('OZON_ORDER_FRESHNESS_SHEET_MISSING:'+cfg.name);
+    var oldOrderFreshnessNote=String(orderFreshnessSheet.getRange('A1').getValue()||'');
+    var orderCoverageNote=adMin&&adMax?'покрытие '+adMin+'–'+adMax:'покрытие не подтверждено';
+    var newOrderFreshnessNote='Заказы: '+(apiMode?'Ozon Seller API через GitHub, все страницы получены':'последняя подтверждённая выгрузка')+
+      '; обновлено '+sourceUpdated+'; период '+agg.minDay+'–'+agg.maxDay+'. '+fullDayNote+' '+currentDayNote+
+      ' Реклама: Ozon Performance API по кампаниям, '+orderCoverageNote+
+      '. Рекламных показателей по SKU нет; пустое значение не считается нулём.';
+    var sameOrderFreshnessNote=oldOrderFreshnessNote===newOrderFreshnessNote;
+    if(!sameOrderFreshnessNote)archived+=sellmonitorGithubOzonArchive_(archive,'06_Магазин_дни','A1',[[oldOrderFreshnessNote]],sourceUpdated,archiveId);
+"""
+        worker_text = worker_text.replace(ozon_freshness_anchor, ozon_freshness_code + ozon_freshness_anchor, 1)
+        print("OZON_ORDER_FRESHNESS_NOTE=patched")
+    elif "var sameOrderFreshnessNote=oldOrderFreshnessNote===newOrderFreshnessNote;" not in worker_text:
+        raise SystemExit("OZON order freshness patch partial")
+    order_write_anchor = "    if(!sameGraphNote)graphSheet.getRange('A2').setValue(newGraphNote);"
+    order_write_marker = "OZON_ORDER_FRESHNESS_NOTE_WRITE_V1"
+    if order_write_marker not in worker_text:
+        if worker_text.count(order_write_anchor) != 1:
+            raise SystemExit("OZON order freshness write anchor mismatch")
+        worker_text = worker_text.replace(order_write_anchor,
+            order_write_anchor + "\n    /* OZON_ORDER_FRESHNESS_NOTE_WRITE_V1 */\n    if(!sameOrderFreshnessNote)orderFreshnessSheet.getRange('A1').setValue(newOrderFreshnessNote);", 1)
+        print("OZON_ORDER_FRESHNESS_NOTE_WRITE=patched")
+    readback_anchor = "    if(String(summarySheet.getRange('A2').getValue()||'')!==newSummaryNote)throw new Error('OZON_SUMMARY_NOTE_READBACK_MISMATCH:'+cfg.name);"
+    readback_marker = "OZON_ORDER_FRESHNESS_NOTE_READBACK_V1"
+    if readback_marker not in worker_text:
+        if worker_text.count(readback_anchor) != 1:
+            raise SystemExit("OZON order freshness readback anchor mismatch")
+        worker_text = worker_text.replace(readback_anchor,
+            readback_anchor + "\n    /* OZON_ORDER_FRESHNESS_NOTE_READBACK_V1 */\n    if(String(orderFreshnessSheet.getRange('A1').getValue()||'')!==newOrderFreshnessNote)throw new Error('OZON_ORDER_FRESHNESS_NOTE_READBACK_FAILED:'+cfg.name);", 1)
+        print("OZON_ORDER_FRESHNESS_NOTE_READBACK=patched")
+    elif "orderFreshnessSheet.getRange('A1').getValue()||'')!==newOrderFreshnessNote" not in worker_text:
+        raise SystemExit("OZON order freshness readback patch partial")
+    worker_text = worker_text.replace("VERSION: 'github-worker-1.3.86'", "VERSION: 'github-worker-1.3.87'", 1)
+    if "VERSION: 'github-worker-1.3.87'" not in worker_text:
+        raise SystemExit("OZON freshness worker version bump anchor mismatch")
+
     worker.write_text(worker_text, encoding="utf-8")
     print("WORKER_TRIGGER_REFRESH_V2=patched")
 candidates = []
