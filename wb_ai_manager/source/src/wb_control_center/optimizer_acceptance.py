@@ -69,6 +69,7 @@ def evaluate_optimizer_acceptance(
     if now.tzinfo is None:
         now = now.replace(tzinfo=timezone.utc)
     blockers: list[str] = []
+    warnings: list[str] = []
     shops = optimizer_state.get("shops") if isinstance(optimizer_state.get("shops"), dict) else {}
     sweep_rows: dict[str, dict[str, Any]] = {}
     if len(cabinets) != 3 or sum(1 for cab in cabinets.values() if cab.get("wb_connected") is True) != 3:
@@ -100,7 +101,7 @@ def evaluate_optimizer_acceptance(
     age_days = (now.date() - snapshot_date).days if snapshot_date else None
     economics_ok = bool(
         portfolio.get("current_data") is True
-        and economics.get("semantics") == "plan_model_plus_independent_fact"
+        and economics.get("semantics") in {"plan_model_only", "plan_model_plus_independent_fact"}
         and snapshot_date is not None and 0 <= age_days <= 7
     )
     if not economics_ok:
@@ -138,12 +139,19 @@ def evaluate_optimizer_acceptance(
         elif not campaign_nms and sweep_rows[code]["products_total"]:
             blockers.append(f"{name}: рекламируемые nmID не переданы для проверки связи с юнит-экономикой.")
 
+    if economics.get("semantics") == "plan_model_only":
+        warnings.append("Основная юнит-экономика содержит свежую плановую модель без отдельного факта продаж; фактические рекламные расходы, переходы и заказы проверяются по данным WB.")
+
     summary = query_manager.get("summary") if isinstance(query_manager.get("summary"), dict) else {}
     query_rows = int(summary.get("query_rows") or 0)
     fresh_rows = int(summary.get("fresh_query_rows") or 0)
     blocked_rows = int(summary.get("blocked_query_rows") or 0)
     if summary.get("facts_status") != "all_fresh" or query_rows <= 0 or blocked_rows > 0:
-        blockers.append(f"Поисковые факты не полностью свежие: свежих {fresh_rows}/{query_rows}, заблокировано {blocked_rows}.")
+        # Organic search facts are useful context, but they are not required for
+        # an independently evidenced ads decision based on exact campaign/SKU
+        # statistics, current bids, and primary economics. Keep the limitation
+        # visible without making it a global ad-optimizer gate.
+        warnings.append(f"Поисковые факты неполные: свежих {fresh_rows}/{query_rows}, заблокировано {blocked_rows}; рекламные решения не используют их как обязательное условие.")
     for error in source_errors or []:
         if isinstance(error, dict):
             blockers.append(f"Ошибка источника: {error.get('stage') or 'неизвестный этап'}.")
@@ -153,6 +161,7 @@ def evaluate_optimizer_acceptance(
         "ready": not deduplicated,
         "status": "ready" if not deduplicated else "not_ready",
         "blockers": deduplicated,
+        "warnings": warnings,
         "shops": sweep_rows,
         "economics": {
             "snapshot_date": snapshot_date.isoformat() if snapshot_date else None,

@@ -440,6 +440,7 @@ async def run() -> int:
         "acceptance_ready": bool(acceptance.get("ready")),
         "acceptance_status": acceptance.get("status"),
         "acceptance_blockers": acceptance.get("blockers") or [],
+        "optional_data_warnings": acceptance.get("warnings") or [],
         "acceptance_economics": acceptance.get("economics") or {},
         "acceptance_query_facts": acceptance.get("query_facts") or {},
         "connected_cabinets": healthy_cabs,

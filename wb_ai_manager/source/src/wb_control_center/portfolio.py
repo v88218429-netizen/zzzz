@@ -568,14 +568,13 @@ class PortfolioService:
     def _parse_primary_economics_axis(self, payload: dict[str, Any], out: dict[str, Any]) -> None:
         """Overlay the authoritative plan model and an independent factual snapshot.
 
-        The live Sheets bridge already reads sanych_sellmonitor/06_Остатки.  A compact
-        JSON block beginning with an economics_axis_snapshot marker is stored in the
-        unused technical tail of that range.  This lets production consume the new
-        primary unit-economics model without pretending that plan values are WB facts.
+        The live Sheets bridge returns the primary unit-economics workbook directly.
+        Legacy marker rows in Sellmonitor may add independent facts, but they are not
+        a substitute for parsing the primary workbook itself.
         """
         values = self._range_values(payload, "sanych_sellmonitor", "stocks")
         if not values:
-            return
+            values = []
         marker: dict[str, Any] | None = None
         plans: list[dict[str, Any]] = []
         facts: dict[str, dict[str, Any]] = {}
@@ -599,6 +598,57 @@ class PortfolioService:
                     sku = str(record.get("nmId") or "").strip()
                     if sku.isdigit():
                         facts[sku] = record
+
+        # The primary workbook's first two rows contain merged section and header
+        # cells, row 3 contains subheaders, and product data begins at row 4.
+        # Keep the actual spreadsheet row for traceable mapping evidence.
+        primary_source = (payload.get("sources") or {}).get("primary_unit_economics") or {}
+        primary_values = self._range_values(payload, "primary_unit_economics", "unit_economics")
+        direct_plans: list[dict[str, Any]] = []
+        current_group = ""
+        for index, row in enumerate(primary_values[3:], start=4):
+            if not isinstance(row, list):
+                continue
+            group = str(row[0] if len(row) > 0 else "").strip()
+            if group:
+                current_group = group
+            name = str(row[1] if len(row) > 1 else "").strip()
+            if not name or name.lower() == "товар":
+                continue
+
+            def cell(column: int) -> Any:
+                return row[column] if column < len(row) else None
+
+            direct_plans.append({
+                "name": name, "group": current_group, "source_row": index,
+                "cost_rub": self._num(cell(5)),
+                "price_after_discount_rub": self._num(cell(8)),
+                "price_after_spp_rub": self._num(cell(10)),
+                "commission_pct": self._num(cell(11)),
+                "logistics_total_rub": self._num(cell(12)),
+                "acceptance_rub": self._num(cell(15)),
+                "plan_drr_pct": self._num(cell(16)),
+                "constructor_pct": self._num(cell(17)),
+                "acquiring_pct": self._num(cell(19)),
+                "acquiring_rub": self._num(cell(20)),
+                "tax_regime": cell(21),
+                "tax_total_rub": self._num(cell(23)),
+                "plan_profit_rub": self._num(cell(24)),
+                "plan_margin_pct": self._num(cell(25)),
+                "plan_roi_pct": self._num(cell(26)),
+                "target_profit_rub": self._num(cell(28)),
+                "target_margin_pct": self._num(cell(32)),
+                "target_roi_pct": self._num(cell(36)),
+            })
+        if direct_plans:
+            plans = direct_plans
+
+        source_read_at = str(primary_source.get("read_at") or payload.get("generated_at") or "").strip()
+        source_snapshot_date = (marker or {}).get("snapshot_date")
+        if not source_snapshot_date and source_read_at:
+            # Record retrieval time as the live snapshot date; do not claim it is
+            # the workbook's last human edit time.
+            source_snapshot_date = source_read_at[:10]
         if not plans:
             return
 
@@ -642,11 +692,19 @@ class PortfolioService:
                 if len(candidates) == 1:
                     plan = candidates[0]
             if plan is None:
-                # Seller article wins over the physical/K2 parent row.  This prevents,
-                # for example, a 10 kg cement SKU from inheriting the 5 kg plan merely
-                # because several variants sit under the same physical source row.
+                # Seller article wins over the physical/K2 parent row. If a plan
+                # title repeats, the exact WB subject may disambiguate the source
+                # group, but only when it selects one row.
                 seller_matches = plan_by_name.get(self._economics_norm(prod.get("name"))) or []
                 seller_unique = {int(x.get("source_row") or 0): x for x in seller_matches}
+                if len(seller_unique) > 1:
+                    subject = self._economics_norm(prod.get("subject") or prod.get("category_name"))
+                    subject_matches = {
+                        int(x.get("source_row") or 0): x for x in seller_unique.values()
+                        if subject and self._economics_norm(x.get("group")) == subject
+                    }
+                    if len(subject_matches) == 1:
+                        seller_unique = subject_matches
                 if len(seller_unique) == 1:
                     plan = next(iter(seller_unique.values()))
             if plan is None and prod.get("physical_position"):
@@ -673,8 +731,10 @@ class PortfolioService:
                 # bundle size and strong product traits must agree and exactly one
                 # plan row must survive.
                 seller_text = str(prod.get("name") or "")
-                identity_text = seller_text + " " + str(prod.get("physical_position") or "")
-                seller_families = self._economics_families(seller_text)
+                identity_text = " ".join(str(prod.get(key) or "") for key in (
+                    "name", "subject", "category_name", "physical_position",
+                ))
+                seller_families = self._economics_families(identity_text)
                 seller_units = self._economics_units(seller_text)
                 seller_pack = self._economics_pack_count(seller_text)
                 seller_traits = self._economics_traits(identity_text)
@@ -693,6 +753,10 @@ class PortfolioService:
                             continue
                         if seller_pack > 1 and seller_pack != plan_pack:
                             continue
+                    elif plan_pack not in {None, 1}:
+                        # An unspecified product count must not inherit a multi-pack
+                        # model row.
+                        continue
 
                     plan_traits = self._economics_traits(plan_text)
                     strong = {"zinc", "construction", "hermetic", "toilet", "hanging", "europe", "with_handle"}
@@ -720,6 +784,14 @@ class PortfolioService:
                     candidates.append(candidate)
 
                 unique = {int(x.get("source_row") or 0): x for x in candidates}
+                if len(unique) > 1:
+                    subject = self._economics_norm(prod.get("subject") or prod.get("category_name"))
+                    subject_matches = {
+                        int(x.get("source_row") or 0): x for x in unique.values()
+                        if subject and self._economics_norm(x.get("group")) == subject
+                    }
+                    if len(subject_matches) == 1:
+                        unique = subject_matches
                 if len(unique) == 1:
                     plan = next(iter(unique.values()))
 
@@ -760,7 +832,17 @@ class PortfolioService:
                     "primary_unit_source_row": plan.get("source_row"),
                     "unit_economics_source": "Юнит-экономика вб / WB FBS новая",
                     "unit_economics_role": "primary_plan",
-                    "unit_economics_decision_ready": True,
+                    "unit_economics_decision_ready": bool(
+                        self._num(plan.get("cost_rub")) is not None
+                        and self._num(plan.get("cost_rub")) > 0
+                        and self._num(plan.get("price_after_discount_rub")) is not None
+                        and self._num(plan.get("price_after_discount_rub")) > 0
+                        and self._num(plan.get("plan_profit_rub")) is not None
+                        and self._num(plan.get("plan_margin_pct")) is not None
+                        and self._num(plan.get("commission_pct")) is not None
+                        and self._num(plan.get("tax_total_rub")) is not None
+                        and self._num(plan.get("logistics_total_rub")) is not None
+                    ),
                 })
 
             fact = facts.get(sku)
@@ -779,14 +861,16 @@ class PortfolioService:
 
         own["primary_unit_economics"] = {
             "source": "Юнит-экономика вб / WB FBS новая",
-            "source_spreadsheet_id": (marker or {}).get("primary_spreadsheet_id") or (marker or {}).get("source_spreadsheet_id"),
-            "snapshot_date": (marker or {}).get("snapshot_date"),
+            "source_spreadsheet_id": (marker or {}).get("primary_spreadsheet_id") or (marker or {}).get("source_spreadsheet_id") or primary_source.get("spreadsheet_id"),
+            "snapshot_date": source_snapshot_date,
+            "source_retrieved_at": source_read_at or None,
+            "snapshot_basis": "live_source_read" if not (marker or {}).get("snapshot_date") and source_read_at else "source_marker",
             "plan_records": len(plans),
             "fact_records": len(facts),
             "mapped_products": mapped,
             "unmatched_products": len(unmatched),
             "fact_period": (marker or {}).get("fact_period"),
-            "semantics": "plan_model_plus_independent_fact",
+            "semantics": "plan_model_plus_independent_fact" if facts else "plan_model_only",
         }
         own["primary_unit_unmatched_examples"] = unmatched[:30]
 
