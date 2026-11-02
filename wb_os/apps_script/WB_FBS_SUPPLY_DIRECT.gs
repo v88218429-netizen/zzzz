@@ -341,11 +341,27 @@ function wbFbsSupplyWriteSupplySheet_(ss, supplyRows, orderCounts, checkedAt) {
   // Verify header and written rows with one contiguous Sheets API read. Separate
   // calls can stall independently under transient spreadsheet service latency,
   // leaving a successful write stuck before timing backfill can continue.
-  wbFbsSupplySetStage_('SUPPLY_READBACK_START', 'rows=' + (out.length + 1));
-  var fullReadback=wbFbsSupplySheetsApiRead_(supplySheetA1 + 'A1:I' + (out.length + 1), out.length + 1, header.length);
+  var expectedReadback = [header].concat(out);
+  var readbackChunkRows = 1000;
+  var fullReadback = [];
+  wbFbsSupplySetStage_('SUPPLY_READBACK_START',
+    'rows=' + expectedReadback.length + ' chunk_rows=' + readbackChunkRows);
+  for (var readStart = 1; readStart <= expectedReadback.length; readStart += readbackChunkRows) {
+    var readEnd = Math.min(expectedReadback.length, readStart + readbackChunkRows - 1);
+    var rangeA1 = supplySheetA1 + 'A' + readStart + ':I' + readEnd;
+    wbFbsSupplySetStage_('SUPPLY_READBACK_CHUNK_START',
+      'range=' + readStart + ':' + readEnd);
+    var readChunk = wbFbsSupplySheetsApiRead_(rangeA1, readEnd - readStart + 1, header.length);
+    var expectedChunk = expectedReadback.slice(readStart - 1, readEnd);
+    if (!wbFbsSupplyMatricesEqual_(expectedChunk, readChunk)) {
+      throw new Error('WB_FBS_DIRECT: supply sheet readback mismatch range=' +
+        readStart + ':' + readEnd);
+    }
+    fullReadback = fullReadback.concat(readChunk);
+    wbFbsSupplySetStage_('SUPPLY_READBACK_CHUNK_DONE',
+      'range=' + readStart + ':' + readEnd);
+  }
   wbFbsSupplySetStage_('SUPPLY_READBACK_DONE', 'rows=' + fullReadback.length);
-  if(!wbFbsSupplyMatricesEqual_([header].concat(out),fullReadback))
-    throw new Error('WB_FBS_DIRECT: supply sheet readback mismatch');
   var rowsReadback=fullReadback.slice(1);
   var staleCount=Math.max(0,(oldLast-1)-out.length);
   if(staleCount){
@@ -551,10 +567,15 @@ function wbFbsSupplySyncCore_(progress) {
   return result;
 }
 
-function wbFbsSupplySyncAllStores_() {
+function wbFbsSupplySyncAllStores_(requestedClient) {
   // One cabinet per invocation keeps the official WB/API and Sheets work below the
-  // Apps Script execution ceiling. GitHub Actions calls this function once per cabinet.
+  // Apps Script execution ceiling. GitHub Actions supplies the cabinet explicitly;
+  // time-based callers may omit it and use the persisted round-robin cursor.
   var storeNames = ['SANYCH', 'AIR', 'HOZYAYUSHKA'];
+  requestedClient = String(requestedClient || '').trim().toUpperCase();
+  if (requestedClient && storeNames.indexOf(requestedClient) < 0) {
+    throw new Error('WB_FBS_DIRECT: unsupported client ' + requestedClient);
+  }
   var scriptProps = PropertiesService.getScriptProperties();
   var leaseKey = 'WB_FBS_DIRECT_ALL_STORES_LEASE';
   var cursorKey = 'WB_FBS_DIRECT_NEXT_STORE_INDEX';
@@ -571,8 +592,12 @@ function wbFbsSupplySyncAllStores_() {
     if (active && Number(active.expiresAt) > Date.now()) {
       throw new Error('WB_FBS_DIRECT: supply sync already running');
     }
-    index = Number(scriptProps.getProperty(cursorKey) || 0);
-    if (!isFinite(index) || index < 0 || index >= storeNames.length || Math.floor(index) !== index) index = 0;
+    if (requestedClient) {
+      index = storeNames.indexOf(requestedClient);
+    } else {
+      index = Number(scriptProps.getProperty(cursorKey) || 0);
+      if (!isFinite(index) || index < 0 || index >= storeNames.length || Math.floor(index) !== index) index = 0;
+    }
     scriptProps.setProperty(leaseKey, JSON.stringify({
       token: leaseToken,
       expiresAt: Date.now() + 8 * 60 * 1000

@@ -148,11 +148,12 @@ jobs:
               "action": "fbs_supply_sync",
               "key": os.environ["GOOGLE_BRIDGE_KEY"],
           }).encode("utf-8")
-          expected = {"SANYCH", "AIR", "HOZYAYUSHKA"}
-          seen = {}
+          expected = ["SANYCH", "AIR", "HOZYAYUSHKA"]
+          seen = []
           failures = []
-          retry_failures = 0
           max_retry_failures = 8
+          max_attempts = 90
+          total_attempts = 0
           def active_supply_lease():
               request = urllib.request.Request(
                   os.environ["GOOGLE_BRIDGE_URL"],
@@ -165,113 +166,129 @@ jobs:
                   return bool(stage.get("leaseActive")), max(0,int(stage.get("leaseRemainingMs") or 0))
               except Exception:
                   return None, 0
-          for attempt in range(1, 46):
-              request = urllib.request.Request(
-                  os.environ["GOOGLE_BRIDGE_URL"],
-                  data=payload,
-                  headers={"Content-Type": "application/json"},
-                  method="POST",
-              )
-              try:
-                  with urllib.request.urlopen(request, timeout=420) as response:
-                      result = json.loads(response.read().decode("utf-8"))
-              except Exception as error:
-                  retry_failures += 1
-                  lease_active, lease_ms = active_supply_lease()
-                  wait_seconds = (min(540, max(60, (lease_ms + 999) // 1000 + 15))
-                                  if lease_active else 480 if lease_active is None else 45)
-                  print("FBS_SUPPLY_SYNC_RETRY attempt=" + str(attempt) +
-                        " type=" + type(error).__name__ +
-                        " retry_failures=" + str(retry_failures) +
-                        " lease_active=" + str(lease_active) +
-                        " wait_seconds=" + str(wait_seconds), flush=True)
-                  if attempt < 45 and retry_failures < max_retry_failures:
-                      time.sleep(wait_seconds)
-                      continue
-                  failures.append("NO_VALID_RESPONSE")
-                  break
-              if result.get("ok") is not True:
-                  details = json.dumps(result, ensure_ascii=False, separators=(",", ":"))
-                  print("FBS_SUPPLY_SYNC_RESPONSE_ERROR " + details, flush=True)
-                  lower_details = details.lower()
-                  busy = "already running" in lower_details or "credential store is busy" in lower_details
-                  retryable = busy or any(marker in lower_details for marker in (
-                      "address unavailable", "supplies http 429", "supplies http 5",
-                      "timed out", "timeout", "urlfetch", "remote end closed",
-                      "temporarily unavailable", "connection reset", "connection refused",
-                      "temporary failure", "network error",
-                  ))
-                  if retryable and attempt < 45:
+          for expected_client in expected:
+              retry_failures = 0
+              client_complete = False
+              while total_attempts < max_attempts:
+                  total_attempts += 1
+                  payload = json.dumps({
+                      "action": "fbs_supply_sync",
+                      "key": os.environ["GOOGLE_BRIDGE_KEY"],
+                      "client": expected_client,
+                  }).encode("utf-8")
+                  request = urllib.request.Request(
+                      os.environ["GOOGLE_BRIDGE_URL"],
+                      data=payload,
+                      headers={"Content-Type": "application/json"},
+                      method="POST",
+                  )
+                  try:
+                      with urllib.request.urlopen(request, timeout=420) as response:
+                          result = json.loads(response.read().decode("utf-8"))
+                  except Exception as error:
                       retry_failures += 1
                       lease_active, lease_ms = active_supply_lease()
-                      if lease_active:
-                          wait_seconds = min(540, max(60, (lease_ms + 999) // 1000 + 15))
-                      elif lease_active is None:
-                          wait_seconds = 480 if busy else 120
-                      else:
-                          wait_seconds = 75 if "credential store is busy" in lower_details else 45
-                      label = "busy" if busy else "transient_wb_or_bridge_error"
-                      print("FBS_SUPPLY_SYNC_RETRYABLE attempt=" + str(attempt) +
+                      wait_seconds = (min(540, max(60, (lease_ms + 999) // 1000 + 15))
+                                      if lease_active else 480 if lease_active is None else 45)
+                      print("FBS_SUPPLY_SYNC_RETRY client=" + expected_client +
+                            " attempt=" + str(total_attempts) +
+                            " type=" + type(error).__name__ +
                             " retry_failures=" + str(retry_failures) +
                             " lease_active=" + str(lease_active) +
-                            " wait_seconds=" + str(wait_seconds) + " reason=" + label, flush=True)
-                      if retry_failures < max_retry_failures:
+                            " wait_seconds=" + str(wait_seconds), flush=True)
+                      if total_attempts < max_attempts and retry_failures < max_retry_failures:
                           time.sleep(wait_seconds)
                           continue
-                      failures.append("RETRY_FAILURE_LIMIT")
+                      failures.append(expected_client + ":NO_VALID_RESPONSE")
                       break
-                  failures.append("BRIDGE_REJECTED")
-                  break
-              stores = (result.get("result") or {}).get("stores") or []
-              if len(stores) != 1:
-                  print("FBS_SUPPLY_SYNC_INVALID_STORE_COUNT=" + str(len(stores)), flush=True)
-                  failures.append("EXPECTED_ONE_STORE_PER_CALL")
-                  break
-              retry_failures = 0
-              store = stores[0]
-              client = str(store.get("client") or "")
-              if client not in expected:
-                  print("FBS_SUPPLY_SYNC_UNKNOWN_CLIENT=" + client, flush=True)
-                  failures.append("UNKNOWN_CLIENT")
-                  break
-              if store.get("ok") is not True:
-                  summary = {key: store.get(key) for key in ("client", "error")}
-                  print("FBS_SUPPLY_SYNC_STORE_FAILED " +
-                        json.dumps(summary, ensure_ascii=False, separators=(",", ":")), flush=True)
-                  failures.append(client)
-                  break
-              backfill_complete = store.get("backfillComplete") is True
-              readback_complete = (
-                  store.get("supplyReadbackVerified") is True and
-                  store.get("timingReadbackVerified") is True and
-                  store.get("sortedReadbackVerified") is True and
-                  isinstance(store.get("suppliesWritten"), (int, float))
-              )
-              complete = backfill_complete and readback_complete
-              if complete:
-                  seen[client] = True
-              print("FBS_SUPPLY_SYNC_STORE " + json.dumps({
-                  key: store.get(key) for key in (
-                      "client", "apiPages", "apiSupplies", "suppliesWritten",
-                      "preservedNotReturned", "preservedDuplicateRows",
-                      "orderRowsChecked", "orderRowsMatched",
-                      "orderSupplyIdsNotInCurrentApi", "sortedBackfilled",
-                      "backfillComplete", "backfillRemainingRows",
-                      "backfillRowsCheckedTotal", "backfillRowsMatchedTotal",
-                      "supplyReadbackVerified", "timingReadbackVerified",
-                      "sortedReadbackVerified",
-                      "backfillSortedTotal", "backfillStartRow", "backfillEndRow"
+                  if result.get("ok") is not True:
+                      details = json.dumps(result, ensure_ascii=False, separators=(",", ":"))
+                      print("FBS_SUPPLY_SYNC_RESPONSE_ERROR client=" + expected_client + " " + details, flush=True)
+                      lower_details = details.lower()
+                      busy = "already running" in lower_details or "credential store is busy" in lower_details
+                      retryable = busy or any(marker in lower_details for marker in (
+                          "address unavailable", "supplies http 429", "supplies http 5",
+                          "timed out", "timeout", "urlfetch", "remote end closed",
+                          "temporarily unavailable", "connection reset", "connection refused",
+                          "temporary failure", "network error",
+                      ))
+                      if retryable:
+                          retry_failures += 1
+                          lease_active, lease_ms = active_supply_lease()
+                          if lease_active:
+                              wait_seconds = min(540, max(60, (lease_ms + 999) // 1000 + 15))
+                          elif lease_active is None:
+                              wait_seconds = 480 if busy else 120
+                          else:
+                              wait_seconds = 75 if "credential store is busy" in lower_details else 45
+                          label = "busy" if busy else "transient_wb_or_bridge_error"
+                          print("FBS_SUPPLY_SYNC_RETRYABLE client=" + expected_client +
+                                " attempt=" + str(total_attempts) +
+                                " retry_failures=" + str(retry_failures) +
+                                " lease_active=" + str(lease_active) +
+                                " wait_seconds=" + str(wait_seconds) + " reason=" + label, flush=True)
+                          if total_attempts < max_attempts and retry_failures < max_retry_failures:
+                              time.sleep(wait_seconds)
+                              continue
+                          failures.append(expected_client + ":RETRY_FAILURE_LIMIT")
+                          break
+                      failures.append(expected_client + ":BRIDGE_REJECTED")
+                      break
+                  stores = (result.get("result") or {}).get("stores") or []
+                  if len(stores) != 1:
+                      print("FBS_SUPPLY_SYNC_INVALID_STORE_COUNT client=" + expected_client +
+                            " actual=" + str(len(stores)), flush=True)
+                      failures.append(expected_client + ":EXPECTED_ONE_STORE_PER_CALL")
+                      break
+                  retry_failures = 0
+                  store = stores[0]
+                  client = str(store.get("client") or "")
+                  if client != expected_client:
+                      print("FBS_SUPPLY_SYNC_UNEXPECTED_CLIENT expected=" + expected_client +
+                            " actual=" + client, flush=True)
+                      failures.append(expected_client + ":UNEXPECTED_CLIENT:" + client)
+                      break
+                  if store.get("ok") is not True:
+                      summary = {key: store.get(key) for key in ("client", "error")}
+                      print("FBS_SUPPLY_SYNC_STORE_FAILED " +
+                            json.dumps(summary, ensure_ascii=False, separators=(",", ":")), flush=True)
+                      failures.append(client)
+                      break
+                  backfill_complete = store.get("backfillComplete") is True
+                  readback_complete = (
+                      store.get("supplyReadbackVerified") is True and
+                      store.get("timingReadbackVerified") is True and
+                      store.get("sortedReadbackVerified") is True and
+                      isinstance(store.get("suppliesWritten"), (int, float))
                   )
-              }, ensure_ascii=False, separators=(",", ":")), flush=True)
-              if complete:
-                  print("FBS_SUPPLY_BACKFILL_COMPLETE client=" + client, flush=True)
-              else:
+                  complete = backfill_complete and readback_complete
+                  print("FBS_SUPPLY_SYNC_STORE " + json.dumps({
+                      key: store.get(key) for key in (
+                          "client", "apiPages", "apiSupplies", "suppliesWritten",
+                          "preservedNotReturned", "preservedDuplicateRows",
+                          "orderRowsChecked", "orderRowsMatched",
+                          "orderSupplyIdsNotInCurrentApi", "sortedBackfilled",
+                          "backfillComplete", "backfillRemainingRows",
+                          "backfillRowsCheckedTotal", "backfillRowsMatchedTotal",
+                          "supplyReadbackVerified", "timingReadbackVerified",
+                          "sortedReadbackVerified",
+                          "backfillSortedTotal", "backfillStartRow", "backfillEndRow"
+                      )
+                  }, ensure_ascii=False, separators=(",", ":")), flush=True)
+                  if complete:
+                      seen.append(client)
+                      client_complete = True
+                      print("FBS_SUPPLY_BACKFILL_COMPLETE client=" + client, flush=True)
+                      break
                   print("FBS_SUPPLY_BACKFILL_CONTINUE client=" + client +
                         " next_row=" + str(store.get("backfillStartRow")) +
                         " processed=" + str(store.get("orderRowsChecked")), flush=True)
-              if set(seen) == expected:
+              if failures:
                   break
-          missing = sorted(expected - set(seen))
+              if not client_complete:
+                  failures.append(expected_client + ":ATTEMPT_LIMIT")
+                  break
+          missing = [client for client in expected if client not in seen]
           if failures or missing:
               print("FBS_SUPPLY_SYNC_INCOMPLETE missing=" + ",".join(missing), flush=True)
               sys.exit(1)

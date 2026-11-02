@@ -6893,7 +6893,8 @@ function doPost(e) {
     }
 
     if (action === 'fbs_supply_sync') {
-      var supplyResult = wbFbsSupplySyncAllStores_();
+      var supplyClient = String(body.client || '').trim().toUpperCase();
+      var supplyResult = wbFbsSupplySyncAllStores_(supplyClient);
       return sellmonitorGithubWebJson_({ok:supplyResult.ok===true,action:action,result:supplyResult});
     }
 
