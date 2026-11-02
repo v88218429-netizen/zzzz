@@ -610,7 +610,7 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
       }
     }
 """
-        worker_text = worker_text.replace(freshness_anchor, freshness_code + "\\n" + freshness_anchor, 1)
+        worker_text = worker_text.replace(freshness_anchor, freshness_code + "\n" + freshness_anchor, 1)
         print("WB_RNP_FRESHNESS_AND_AXIS_READBACK=patched")
     elif freshness_marker not in worker_text and "function sellmonitorGithubWbInnerSyncRnpMatrices_" in worker_text:
         raise SystemExit("WB RNP freshness patch anchor changed")
