@@ -206,13 +206,13 @@ function wbFbsSupplyCountOrders_(ordersSheet) {
 function wbFbsSupplyEnsureRows_(sheet, neededRows) {
   var currentRows = sheet.getMaxRows();
   if (currentRows < neededRows) {
-    Sheets.Spreadsheets.batchUpdate({
-      requests: [{appendDimension: {
+    wbFbsSupplySheetsApiBatchUpdate_([{
+      appendDimension: {
         sheetId: sheet.getSheetId(),
         dimension: 'ROWS',
         length: neededRows - currentRows
-      }}]
-    }, String(WB_FBS_DIRECT_SUPPLY_CFG.spreadsheetId));
+      }
+    }]);
   }
 }
 
@@ -286,12 +286,39 @@ function wbFbsSupplySheetsApiClear_(rangeA1) {
   );
 }
 
-function wbFbsSupplySheetsApiFormat_(requests) {
+function wbFbsSupplySheetsApiBatchUpdate_(requests) {
   if (!requests || !requests.length) return;
-  return Sheets.Spreadsheets.batchUpdate(
-    {requests: requests},
-    String(WB_FBS_DIRECT_SUPPLY_CFG.spreadsheetId)
-  );
+  var spreadsheetId = String(WB_FBS_DIRECT_SUPPLY_CFG.spreadsheetId);
+  var maxAttempts = 4;
+  for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return Sheets.Spreadsheets.batchUpdate({requests: requests}, spreadsheetId);
+    } catch (error) {
+      var message = String(error && error.message ? error.message : error);
+      var lower = message.toLowerCase();
+      var retryable = lower.indexOf('service is currently unavailable') >= 0 ||
+        lower.indexOf('service unavailable') >= 0 ||
+        lower.indexOf('temporarily unavailable') >= 0 ||
+        lower.indexOf('backend error') >= 0 ||
+        lower.indexOf('internal error') >= 0 ||
+        lower.indexOf('rate limit') >= 0 ||
+        lower.indexOf('too many requests') >= 0 ||
+        lower.indexOf('http 429') >= 0 ||
+        lower.indexOf('http 500') >= 0 ||
+        lower.indexOf('http 502') >= 0 ||
+        lower.indexOf('http 503') >= 0 ||
+        lower.indexOf('http 504') >= 0;
+      if (!retryable || attempt >= maxAttempts) throw error;
+      var waitMs = Math.min(8000, 1000 * Math.pow(2, attempt - 1));
+      Logger.log('WB_FBS_SHEETS_BATCH_UPDATE_RETRY attempt=' + attempt +
+        ' wait_ms=' + waitMs + ' reason=' + message.slice(0, 180));
+      Utilities.sleep(waitMs);
+    }
+  }
+}
+
+function wbFbsSupplySheetsApiFormat_(requests) {
+  return wbFbsSupplySheetsApiBatchUpdate_(requests);
 }
 
 function wbFbsSupplyWriteSupplySheet_(ss, supplyRows, orderCounts, checkedAt) {

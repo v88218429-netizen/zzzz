@@ -240,7 +240,6 @@ jobs:
                             " actual=" + str(len(stores)), flush=True)
                       failures.append(expected_client + ":EXPECTED_ONE_STORE_PER_CALL")
                       break
-                  retry_failures = 0
                   store = stores[0]
                   client = str(store.get("client") or "")
                   if client != expected_client:
@@ -249,11 +248,40 @@ jobs:
                       failures.append(expected_client + ":UNEXPECTED_CLIENT:" + client)
                       break
                   if store.get("ok") is not True:
+                      store_error = str(store.get("error") or "")
+                      lower_store_error = store_error.lower()
+                      retryable_store_error = any(marker in lower_store_error for marker in (
+                          "service is currently unavailable", "service unavailable",
+                          "temporarily unavailable", "backend error", "internal error",
+                          "rate limit", "too many requests", "http 429", "http 500",
+                          "http 502", "http 503", "http 504", "timed out", "timeout",
+                      ))
+                      if retryable_store_error:
+                          retry_failures += 1
+                          lease_active, lease_ms = active_supply_lease()
+                          if lease_active:
+                              wait_seconds = min(540, max(60, (lease_ms + 999) // 1000 + 15))
+                          elif lease_active is None:
+                              wait_seconds = 120
+                          else:
+                              wait_seconds = 75
+                          print("FBS_SUPPLY_SYNC_STORE_RETRYABLE client=" + expected_client +
+                                " attempt=" + str(total_attempts) +
+                                " retry_failures=" + str(retry_failures) +
+                                " lease_active=" + str(lease_active) +
+                                " wait_seconds=" + str(wait_seconds) +
+                                " error=" + store_error[:240], flush=True)
+                          if total_attempts < max_attempts and retry_failures < max_retry_failures:
+                              time.sleep(wait_seconds)
+                              continue
+                          failures.append(client + ":TRANSIENT_STORE_RETRY_LIMIT")
+                          break
                       summary = {key: store.get(key) for key in ("client", "error")}
                       print("FBS_SUPPLY_SYNC_STORE_FAILED " +
                             json.dumps(summary, ensure_ascii=False, separators=(",", ":")), flush=True)
                       failures.append(client)
                       break
+                  retry_failures = 0
                   backfill_complete = store.get("backfillComplete") is True
                   readback_complete = (
                       store.get("supplyReadbackVerified") is True and
