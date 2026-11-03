@@ -6912,6 +6912,18 @@ function doPost(e) {
       return sellmonitorGithubWebJson_({ok:true,action:action,result:sellmonitorGithubFbsTargetHealthV1_()});
     }
 
+    if (action === 'fbs_supply_stage') {
+      return sellmonitorGithubWebJson_({
+        ok: true,
+        action: action,
+        result: {
+          version: SMC_GH.VERSION,
+          runtime: 'GITHUB_ACTIONS',
+          fbs_supply_stage: sellmonitorGithubFbsSupplyStageSnapshot_()
+        }
+      });
+    }
+
     if (action === 'health') {
       return sellmonitorGithubWebJson_({
         ok: true,

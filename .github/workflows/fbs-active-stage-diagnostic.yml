@@ -24,7 +24,7 @@ jobs:
           set -euo pipefail
           python3 - <<'PY'
           import json, os, urllib.request
-          payload=json.dumps({"token":os.environ["BRIDGE_KEY"],"action":"health"}).encode()
+          payload=json.dumps({"token":os.environ["BRIDGE_KEY"],"action":"fbs_supply_stage"}).encode()
           request=urllib.request.Request(os.environ["BRIDGE_URL"],data=payload,
               headers={"Content-Type":"application/json"},method="POST")
           with urllib.request.urlopen(request,timeout=300) as response:
