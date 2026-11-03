@@ -409,17 +409,23 @@ function wbFbsSupplyWriteSupplySheet_(ss, supplyRows, orderCounts, checkedAt) {
   wbFbsSupplySetStage_('SUPPLY_ENSURE_ROWS_START', 'rows=' + out.length);
   wbFbsSupplyEnsureRows_(sh,Math.max(2,out.length+1));
   wbFbsSupplySetStage_('SUPPLY_ENSURE_ROWS_DONE', '');
-  wbFbsSupplySetStage_('SUPPLY_WRITE_HEADER_START', 'response_readback=true');
   var sheetApiId = sh.getSheetId();
   var supplySheetA1 = "'" + String(WB_FBS_DIRECT_SUPPLY_CFG.suppliesSheet).replace(/'/g, "''") + "'!";
-  var headerWrite = wbFbsSupplySheetsApiWrite_(supplySheetA1 + 'A1:I1', [header], true);
-  var headerReturned = wbFbsSupplyNormalizeRows_(
-    ((headerWrite.response || {}).updatedData || {}).values || [], 1, header.length
-  );
-  if (!wbFbsSupplyMatricesEqual_(headerWrite.normalizedValues, headerReturned)) {
-    throw new Error('WB_FBS_DIRECT: supply header write response readback mismatch');
+  wbFbsSupplySetStage_('SUPPLY_VERIFY_HEADER_START', '');
+  var existingHeader = sh.getRange(1, 1, 1, header.length).getValues();
+  if (wbFbsSupplyMatricesEqual_([header], existingHeader)) {
+    wbFbsSupplySetStage_('SUPPLY_VERIFY_HEADER_DONE', 'existing_header=verified');
+  } else {
+    wbFbsSupplySetStage_('SUPPLY_WRITE_HEADER_START', 'response_readback=true');
+    var headerWrite = wbFbsSupplySheetsApiWrite_(supplySheetA1 + 'A1:I1', [header], true);
+    var headerReturned = wbFbsSupplyNormalizeRows_(
+      ((headerWrite.response || {}).updatedData || {}).values || [], 1, header.length
+    );
+    if (!wbFbsSupplyMatricesEqual_(headerWrite.normalizedValues, headerReturned)) {
+      throw new Error('WB_FBS_DIRECT: supply header write response readback mismatch');
+    }
+    wbFbsSupplySetStage_('SUPPLY_WRITE_HEADER_DONE', 'response_readback=verified');
   }
-  wbFbsSupplySetStage_('SUPPLY_WRITE_HEADER_DONE', 'response_readback=verified');
   var staleRows=Math.max(0,(oldLast-1)-out.length);
   if(staleRows){
     var staleStartRowForClear=out.length+2;
