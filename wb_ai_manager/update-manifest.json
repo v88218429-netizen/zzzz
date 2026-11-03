@@ -62,7 +62,7 @@
         {
           "path": "scripts/github_runtime.py",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/3e2f76b65423a5fd8155da6a60c891b31dc2249b/wb_ai_manager/source/scripts/github_runtime.py",
-          "sha256": "208d55b83a93ebdd4e9545da7501cec331ffdcdc70f9f0fd257e799b9744c962"
+          "sha256": "dc34ec87ee07591f1cded94569ff049a362eea1bd7019ca26c92b370aa783ef4"
         },
         {
           "path": "scripts/install_launchd.sh",
