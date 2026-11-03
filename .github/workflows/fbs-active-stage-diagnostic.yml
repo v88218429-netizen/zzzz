@@ -19,7 +19,7 @@ jobs:
       BRIDGE_KEY: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
       CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
     steps:
-      - name: Read bridge runtime stage and leases (fresh check 26)
+      - name: Read bridge runtime stage and leases (fresh check 27)
         shell: bash
         run: |
           set -euo pipefail
