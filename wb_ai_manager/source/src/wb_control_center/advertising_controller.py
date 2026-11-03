@@ -30,7 +30,9 @@ def _first(d: dict[str, Any] | None, *keys: str) -> Any:
     return None
 
 
-def _extract_bid_rub(campaign: dict[str, Any] | None, nm_id: int | None = None) -> float | None:
+def _extract_bid_rub(
+    campaign: dict[str, Any] | None, nm_id: int | None = None, placement: str = "search"
+) -> float | None:
     """Extract the current bid without crossing SKU branches.
 
     WB payloads sometimes nest the bid one or two levels below the dict that carries
@@ -67,6 +69,11 @@ def _extract_bid_rub(campaign: dict[str, Any] | None, nm_id: int | None = None) 
                 matches = False
             for k, v in x.items():
                 lk = str(k).lower()
+                if lk in {"bids_kopecks", "bidskopecks"} and isinstance(v, dict) and matches:
+                    placement_key = str(placement or "search").strip().lower()
+                    placement_bid = _n(v.get(placement_key))
+                    if placement_bid is not None and placement_bid > 0:
+                        candidates.append((scope, -(depth + 1), placement_bid, True))
                 val = _n(v)
                 if val is not None and val > 0 and matches and ("bid" in lk or lk in {"cpm", "cpc"}):
                     explicit_kopecks = "kopeck" in lk or "kopecks" in lk
