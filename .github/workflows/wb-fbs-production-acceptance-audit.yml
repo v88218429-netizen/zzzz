@@ -193,6 +193,16 @@ jobs:
                   alt=((audit_data.get("clients") or {}).get("SANYCH") or {}).get("alternate") or {}
                   if not alt.get("accessible"):
                       quality_issues.append("SANYCH_ALTERNATE_BOOK_UNAVAILABLE")
+                  else:
+                      alt_orders=alt.get("orders") or {}
+                      for field in ("duplicateRows","invalidIds","missingSupplierStatus","missingWbStatus","missingBothStatuses"):
+                          if alt_orders.get(field,0):
+                              quality_issues.append("SANYCH_ALTERNATE:"+field+"="+str(alt_orders.get(field)))
+                      for field in ("onlyInMain","onlyInAlternate"):
+                          if alt.get(field,0):
+                              quality_issues.append("SANYCH_BOOKS_DIFFER:"+field+"="+str(alt.get(field)))
+                      if alt_orders.get("uniqueIds") != ((audit_data.get("clients") or {}).get("SANYCH") or {}).get("orders",{}).get("uniqueIds"):
+                          quality_issues.append("SANYCH_BOOKS_UNIQUE_ID_COUNT_MISMATCH")
           if quality_issues:
               print("FBS_ACCEPTANCE_QUALITY_ISSUES="+json.dumps(quality_issues,ensure_ascii=False),flush=True)
               raise SystemExit("FBS_PRODUCTION_ACCEPTANCE_FAILED:QUALITY_GATE")
