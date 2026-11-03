@@ -54,7 +54,7 @@ jobs:
           const { randomBytes, createCipheriv, publicEncrypt } = require('node:crypto');
           const publicKey = `-----BEGIN PUBLIC KEY-----
           MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA0EKuKAUjBkLHeLgT1oyO
-          zPxV0Rg9HDjh76GVtVAhGo9HDjh76GVtVAhGoV2IJsotxCTcMtgsS0aEXolpziuMSLAFMW7mUby/PVU
+          zPxV0Rg9HDjh76GVtVAhGoV2IJsotxCTcMtgsS0aEXolpziuMSLAFMW7mUby/PVU
           Gcog/0BYRO72UnpsD3bH6mFIm/pGeGY3vFHoBjLEyClVSWWL7yEAWetmC1kRJvsy
           R0SPedNQ4FYVAPS7fzA2+y6yiA9jdeEUpwl5sCIKUo0DH/WyGcq1obR0ygMqBMgf
           7KlTt6yL+Ha07HbR/ZuHkujGKHgfbQuTEPftOKALFNxK9L67yvnE6i4UeOMbwoUw
