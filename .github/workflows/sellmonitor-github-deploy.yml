@@ -194,7 +194,7 @@ jobs:
           root = pathlib.Path('/tmp/sellmonitor-gh-worker')
           source = pathlib.Path('sellmonitor_github_worker/SELLMONITOR_GITHUB_WORKER.gs')
           source_text = source.read_text(encoding='utf-8')
-          source_match = re.search(r"VERSION:\\s*'github-worker-(\\d+(?:\\.\\d+){2})'", source_text)
+          source_match = re.search(r"VERSION:\s*'github-worker-(\d+(?:\.\d+){2})'", source_text)
           if not source_match:
               raise SystemExit('repository worker semantic version missing')
           candidates = [root / 'SELLMONITOR_GITHUB_WORKER.gs', root / 'SELLMONITOR_GITHUB_WORKER.js']
@@ -203,7 +203,7 @@ jobs:
           live_text = ''
           if live is not None:
               live_text = live.read_text(encoding='utf-8')
-              live_match = re.search(r"VERSION:\\s*'github-worker-(\\d+(?:\\.\\d+){2})'", live_text)
+              live_match = re.search(r"VERSION:\s*'github-worker-(\d+(?:\.\d+){2})'", live_text)
               finance_marker = 'SELLMONITOR_OZON_FINANCE_DAY_LAYER_V1'
               keep_live = finance_marker in live_text and finance_marker not in source_text
               if live_match:
