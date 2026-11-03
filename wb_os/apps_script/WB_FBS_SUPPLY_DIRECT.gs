@@ -648,7 +648,14 @@ function wbFbsSupplyWriteHealth_(ss, state, detail) {
 }
 
 function wbFbsSupplySyncCore_(progress) {
-  var cfg=WB_FBS_DIRECT_SUPPLY_CFG,ss=wbFbsSupplySpreadsheet_(),token=wbFbsSupplyToken_(),checkedAt=new Date();
+  var cfg=WB_FBS_DIRECT_SUPPLY_CFG;
+  wbFbsSupplySetStage_('CORE_OPEN_BOOK_START', 'client=' + cfg.client);
+  var ss=wbFbsSupplySpreadsheet_();
+  wbFbsSupplySetStage_('CORE_OPEN_BOOK_DONE', 'client=' + cfg.client);
+  wbFbsSupplySetStage_('CORE_TOKEN_START', 'client=' + cfg.client);
+  var token=wbFbsSupplyToken_();
+  wbFbsSupplySetStage_('CORE_TOKEN_DONE', 'client=' + cfg.client);
+  var checkedAt=new Date();
   wbFbsSupplySetStage_('CORE_START', 'continuing=' + Boolean(progress));
   progress=progress||null;
   var continuing=!!(progress&&progress.client===cfg.client&&Number(progress.nextEndRow)>=2);
