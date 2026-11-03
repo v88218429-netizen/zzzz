@@ -5078,7 +5078,9 @@ function sellmonitorGithubPublishDashboard_(dashboard) {
   }
 
   push('WB AI MANAGER', '', '', '', '', '', '', '');
-  push('Обновлено', dashboard.generated_at || new Date().toISOString(), 'Статус', dashboard.overall_status || '', '', '', '', '');
+  push('Обновлено', dashboard.generated_at || new Date().toISOString(), 'Статус', dashboard.overall_status || '',
+    'Приёмка', dashboard.acceptance_status || 'не подтверждена',
+    'Блокеров приёмки', dashboard.acceptance_blocker_count == null ? '' : dashboard.acceptance_blocker_count);
   push('', '', '', '', '', '', '', '');
   push('КАБИНЕТ', 'WB', 'СТАТУС', 'РЕШЕНИЙ', 'CRITICAL', 'WARNING', 'ОШИБОК АГЕНТОВ', '');
   (dashboard.cabinets || []).forEach(function(x) {
@@ -5089,6 +5091,20 @@ function sellmonitorGithubPublishDashboard_(dashboard) {
   push('ПРИОРИТЕТ', 'КАБИНЕТ', 'РЕШЕНИЕ', 'ДИАГНОЗ', 'УВЕРЕННОСТЬ', 'FOLLOW-UP', 'ОБЪЕКТ', '');
   (dashboard.top_actions || []).forEach(function(x) {
     push(x.priority || '', x.cabinet || '', x.title || '', x.diagnosis || '', x.confidence || '', x.follow_up || '', x.entity_id || '', '');
+  });
+
+  push('', '', '', '', '', '', '', '');
+  push('ПРОБЛЕМЫ СОПОСТАВЛЕНИЯ ЮНИТ-ЭКОНОМИКИ',
+    'КАБИНЕТ', 'nmID', 'ЭТАП', 'ПРИЧИНЫ', 'АРТИКУЛ', 'ТОВАР', 'ИСТОЧНИК / СТРОКА');
+  var economicsDiagnostics = dashboard.economics_diagnostics_by_shop || {};
+  var economicsShopNames = {ap:'Саныч', aa:'AIR', yv:'Хозяюшка'};
+  Object.keys(economicsDiagnostics).sort().forEach(function(code) {
+    (economicsDiagnostics[code] || []).forEach(function(x) {
+      push('', economicsShopNames[code] || code, x.nm_id || '',
+        x.stage || '', (x.reason_codes || []).join(', '),
+        x.seller_article || '', x.product_name || '',
+        (x.source || '') + (x.source_row ? ' / строка ' + x.source_row : ''));
+    });
   });
 
   push('', '', '', '', '', '', '', '');
