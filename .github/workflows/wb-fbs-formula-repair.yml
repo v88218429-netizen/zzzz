@@ -16,7 +16,7 @@ jobs:
       FBS_BRIDGE_KEY: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
       GH_TOKEN: ${{ github.token }}
       REPOSITORY: ${{ github.repository }}
-      REQUIRED_DEPLOY_SHA: 32cf353deb21919a57b25d3cf489fbdcc73f9d92
+      REQUIRED_DEPLOY_SHA: cc73b6b80e9d78751b6cc916b7db22fa3b76997f
     steps:
       - name: Wait for the guarded formula-repair handler deployment
         shell: bash
