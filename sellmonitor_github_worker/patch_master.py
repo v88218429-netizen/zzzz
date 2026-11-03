@@ -801,9 +801,17 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
       source_status:sync.partial===true?'PARTIAL':(sync.ok===false?'ERROR':(sync.attempted===true?'COMPLETE':'SKIPPED'))
     });"""
         worker_text = worker_text.replace(tick_anchor, tick_replacement, 1)
-        worker_text = worker_text.replace("VERSION: 'github-worker-1.3.89'", "VERSION: 'github-worker-1.3.90'", 1)
-        if "VERSION: 'github-worker-1.3.90'" not in worker_text:
+        version_matches = re.findall(r"VERSION:\\s*'github-worker-(\\d+)\\.(\\d+)\\.(\\d+)'", worker_text)
+        if len(version_matches) != 1:
+            raise SystemExit("INNER_FINANCE_PARTIAL_VERSION_PATTERN_MISMATCH")
+        major, minor, patch = [int(value) for value in version_matches[0]]
+        current_version = ".".join(str(value) for value in (major, minor, patch))
+        next_version = ".".join(str(value) for value in (major, minor, patch + 1))
+        version_anchor = "VERSION: 'github-worker-" + current_version + "'"
+        if worker_text.count(version_anchor) != 1:
             raise SystemExit("INNER_FINANCE_PARTIAL_VERSION_ANCHOR_MISMATCH")
+        worker_text = worker_text.replace(version_anchor, "VERSION: 'github-worker-" + next_version + "'", 1)
+        print("INNER_FINANCE_WORKER_VERSION=" + current_version + "->" + next_version)
         print("INNER_FINANCE_PARTIAL_STATUS=patched")
 
     worker.write_text(worker_text, encoding="utf-8")
