@@ -131,9 +131,18 @@ def evaluate_optimizer_acceptance(
 
     economics_coverage: dict[str, dict[str, int]] = {}
     for code, name in SHOP_NAMES.items():
-        campaign_nms: set[str] = set()
-        for campaign in (shops.get(code) or {}).get("campaigns") or []:
-            campaign_nms.update(_campaign_nms(campaign))
+        advertised_nm_ids = item.get("advertised_nm_ids")
+        if isinstance(advertised_nm_ids, list):
+            campaign_nms = {
+                str(nm).strip() for nm in advertised_nm_ids
+                if str(nm).strip().isdigit() and int(str(nm).strip()) > 0
+            }
+        else:
+            # Backward-compatible path for snapshots written before the live
+            # campaign-product catalog was copied out of the durable cursor.
+            campaign_nms: set[str] = set()
+            for campaign in (shops.get(code) or {}).get("campaigns") or []:
+                campaign_nms.update(_campaign_nms(campaign))
         matched = 0
         ready = 0
         for sku in campaign_nms:

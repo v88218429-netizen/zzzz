@@ -74,6 +74,24 @@ class OptimizerAcceptanceTests(unittest.TestCase):
         self.assertFalse(result["ready"])
         self.assertTrue(any("Юнит-экономика не подтверждена" in item for item in result["blockers"]))
 
+    def test_economics_coverage_uses_live_advertised_catalog_over_stale_campaign_cache(self):
+        args = fixture()
+        # The cached campaign list is missing one nmID that the durable live sweep
+        # catalog still expects. The missing product must remain in the denominator.
+        args[0]["shops"]["aa"]["advertised_nm_ids"] = ["101", "102"]
+        args[0]["shops"]["aa"]["campaigns"] = [{"nm_ids": ["101"]}]
+
+        result = evaluate_optimizer_acceptance(
+            *args, now=datetime(2026, 11, 2, 8, tzinfo=timezone.utc),
+        )
+
+        self.assertEqual(
+            result["economics"]["coverage_by_shop"]["aa"],
+            {"advertised_products": 2, "matched_products": 1, "decision_ready_products": 1},
+        )
+        self.assertFalse(result["ready"])
+        self.assertTrue(any("AIR" in item and "1/2" in item for item in result["blockers"]))
+
     def test_partial_campaign_sweep_blocks_acceptance(self):
         args = fixture()
         args[0]["shops"]["aa"]["sweep"]["sweep_complete"] = False
