@@ -10,6 +10,7 @@ on:
   pull_request:
     paths:
       - "sellmonitor_github_worker/**"
+      - "wb_os/apps_script/WB_FBS_SUPPLY_DIRECT.gs"
       - ".github/workflows/sellmonitor-github-ci.yml"
   workflow_dispatch:
 
