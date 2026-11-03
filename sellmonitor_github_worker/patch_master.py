@@ -665,7 +665,7 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
         print("OZON_ORDER_FRESHNESS_NOTE_READBACK=patched")
     elif "orderFreshnessSheet.getRange('A1').getValue()||'')!==newOrderFreshnessNote" not in worker_text:
         raise SystemExit("OZON order freshness readback patch partial")
-    version_match = re.search(r"VERSION:\s*'github-worker-(\\d+(?:\\.\\d+){2})'", worker_text)
+    version_match = re.search(r"VERSION:\s*'github-worker-(\d+(?:\.\d+){2})'", worker_text)
     if not version_match:
         raise SystemExit("worker semantic version missing")
     worker_version = tuple(int(x) for x in version_match.group(1).split("."))
@@ -675,11 +675,11 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
             "VERSION: 'github-worker-1.3.87'",
             1,
         )
-        version_match = re.search(r"VERSION:\s*'github-worker-(\\d+(?:\\.\\d+){2})'", worker_text)
+        version_match = re.search(r"VERSION:\s*'github-worker-(\d+(?:\.\d+){2})'", worker_text)
     finance_start = worker_text.find("function sellmonitorGithubPublishOzonFinance_(")
     if finance_start < 0:
         raise SystemExit("OZON finance writer missing; refusing deployment downgrade")
-    finance_end = worker_text.find("\\nfunction ", finance_start + 10)
+    finance_end = worker_text.find("\nfunction ", finance_start + 10)
     if finance_end < 0:
         finance_end = len(worker_text)
     finance_block = worker_text[finance_start:finance_end]
