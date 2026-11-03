@@ -78,6 +78,8 @@ def optimizer_sweep_progress(optimizer_state: dict[str, Any]) -> dict[str, dict[
             "campaigns_total": sweep.get("sweep_campaigns_total", 0),
             "products_seen": sweep.get("sweep_products_seen", 0),
             "products_total": sweep.get("sweep_products_total", 0),
+            "campaign_product_pairs_seen": sweep.get("sweep_pairs_seen", 0),
+            "campaign_product_pairs_total": sweep.get("sweep_pairs_total", 0),
             "complete": sweep.get("sweep_complete") is True,
         }
     return progress
@@ -387,6 +389,10 @@ async def run() -> int:
                 "sweep_complete": cache["sweep_complete"],
                 "sweep_campaigns_seen": deep_scan.get("sweep_campaigns_seen", 0),
                 "sweep_campaigns_total": deep_scan.get("sweep_campaigns_total", len(cache.get("campaign_ids") or [])),
+                "sweep_products_seen": deep_scan.get("sweep_products_seen", 0),
+                "sweep_products_total": deep_scan.get("sweep_products_total", 0),
+                "sweep_pairs_seen": deep_scan.get("sweep_pairs_seen", 0),
+                "sweep_pairs_total": deep_scan.get("sweep_pairs_total", 0),
                 "campaign_cache_count": cache["campaign_cache_count"],
                 "campaign_cache_total": cache["campaign_cache_total"],
                 "campaign_cache_complete": cache["campaign_cache_complete"],

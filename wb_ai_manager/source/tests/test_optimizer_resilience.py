@@ -195,6 +195,27 @@ def test_optimizer_progress_counts_only_scanned_unique_products_and_requires_eac
     assert _sweep_progress(expected, {"101": [1001, 1002], "202": [1002, 2001]}) == (3, 3, True)
 
 
+
+def test_optimizer_progress_counts_campaign_product_pairs_and_only_complete_campaigns():
+    from wb_control_center.agents.advertising import (
+        _completed_sweep_campaign_ids,
+        _sweep_pair_progress,
+        _sweep_progress,
+    )
+
+    expected = {101: [1001, 1002], 202: [1002, 2001]}
+    partial = {"101": [1001, 1002], "202": [1002]}
+
+    # Every unique nmID has appeared, but campaign 202 still lacks one required pair.
+    assert _sweep_progress(expected, partial) == (3, 3, False)
+    assert _sweep_pair_progress(expected, partial) == (3, 4, False)
+    assert _completed_sweep_campaign_ids(expected, partial, [101, 202]) == [101]
+
+    complete = {"101": [1001, 1002], "202": [1002, 2001]}
+    assert _sweep_pair_progress(expected, complete) == (4, 4, True)
+    assert _completed_sweep_campaign_ids(expected, complete, [101, 202]) == [101, 202]
+
+
 def test_optimizer_cursor_resets_when_product_catalog_changes():
     from wb_control_center.agents.advertising import _scan_cursor
 
