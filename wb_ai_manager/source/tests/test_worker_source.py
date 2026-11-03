@@ -36,6 +36,7 @@ def test_worker_stream_meta_unreliable_without_fact_time():
 def test_optimizer_bundle_uses_separate_encrypted_github_state_branch():
     import inspect
     source = inspect.getsource(WorkerSource.optimizer_bundle)
+    source += inspect.getsource(WorkerSource._optimizer_bundle_view)
     assert "_github_state_root" in source
     assert '"optimizer-state"' in source
     assert "optimizer-dashboard.tar.gz.enc" in source
