@@ -571,7 +571,10 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
       sh.setFrozenRows(1);sh.setHiddenGridlines(true);
       sh.getRange(1,1,1,width).setBackground('#17365D').setFontColor('#FFFFFF').setFontWeight('bold').setWrap(true);
       if(rows.length>1){
-        sh.getRange(2,2,rows.length-1,Math.min(5,width-1)).setNumberFormat('#,##0.00;[Red]-#,##0.00;–');
+        var moneyStart=name==='19_API_Финансы_периоды'?4:2;
+        var moneyWidth=name==='19_API_Финансы_периоды'?5:5;
+        sh.getRange(2,moneyStart,rows.length-1,moneyWidth).setNumberFormat('#,##0.00;[Red]-#,##0.00;–');
+        if(name==='19_API_Финансы_периоды')sh.getRange(2,2,rows.length-1,2).setNumberFormat('@');
         sh.getRange(2,1,rows.length-1,1).setNumberFormat('@');
         sh.getRange(2,width,rows.length-1,1).setNumberFormat('@');
       }
