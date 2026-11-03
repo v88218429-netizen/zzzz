@@ -18,7 +18,7 @@ jobs:
       BRIDGE_URL: https://script.google.com/macros/s/AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw/exec
       BRIDGE_KEY: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
     steps:
-      - name: Read bridge runtime stage and leases (fresh check 17)
+      - name: Read bridge runtime stage and leases (fresh check 18)
         shell: bash
         run: |
           set -euo pipefail
