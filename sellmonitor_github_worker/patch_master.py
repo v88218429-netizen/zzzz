@@ -777,6 +777,35 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
     if "VERSION: 'github-worker-1.3.88'" not in worker_text:
         raise SystemExit("OZON finance worker version bump anchor mismatch")
 
+    # Distinguish a partial Sellmonitor source response from a complete finance refresh.
+    partial_status_marker = "INNER_FINANCE_PARTIAL_STATUS_V1"
+    if partial_status_marker not in worker_text:
+        log_status_anchor = "sync.ok ? 'DONE' : 'ERROR',sync.ok ? sync.date : sync.error,sync"
+        if worker_text.count(log_status_anchor) != 1:
+            raise SystemExit("INNER_FINANCE_PARTIAL_LOG_STATUS_ANCHOR_MISMATCH")
+        worker_text = worker_text.replace(log_status_anchor, """/* INNER_FINANCE_PARTIAL_STATUS_V1 */
+        sync.partial === true ? 'PARTIAL' : (sync.ok ? 'DONE' : 'ERROR'),sync.ok ? sync.date : sync.error,sync""", 1)
+        registry_anchor = "Object.keys(byKey).length,dates[0] || '',dates[dates.length - 1] || '',digest,'OK','PASS','',''"
+        if worker_text.count(registry_anchor) != 1:
+            raise SystemExit("INNER_FINANCE_PARTIAL_REGISTRY_ANCHOR_MISMATCH")
+        worker_text = worker_text.replace(registry_anchor, "Object.keys(byKey).length,dates[0] || '',dates[dates.length - 1] || '',digest,'OK',partialRows>0?'PASS_PARTIAL':'PASS','',''", 1)
+        result_anchor = "checksum:digest,qc_status:'PASS',trusted_rows:merged.length - partialRows,partial_rows:partialRows,"
+        if worker_text.count(result_anchor) != 1:
+            raise SystemExit("INNER_FINANCE_PARTIAL_RESULT_ANCHOR_MISMATCH")
+        worker_text = worker_text.replace(result_anchor, "checksum:digest,qc_status:partialRows>0?'PASS_PARTIAL':'PASS',coverage_status:partialRows>0?'PARTIAL':'COMPLETE',trusted_rows:merged.length - partialRows,partial_rows:partialRows,", 1)
+        tick_anchor = "return Object.assign({ok:sync.ok !== false,version:SMC_GH.VERSION,store_id:storeId},sync);"
+        if worker_text.count(tick_anchor) != 1:
+            raise SystemExit("INNER_FINANCE_PARTIAL_TICK_RESULT_ANCHOR_MISMATCH")
+        tick_replacement = """return Object.assign({ok:sync.ok !== false,version:SMC_GH.VERSION,store_id:storeId},sync,{
+      complete:sync.attempted===true && sync.ok===true && sync.partial!==true,
+      source_status:sync.partial===true?'PARTIAL':(sync.ok===false?'ERROR':(sync.attempted===true?'COMPLETE':'SKIPPED'))
+    });"""
+        worker_text = worker_text.replace(tick_anchor, tick_replacement, 1)
+        worker_text = worker_text.replace("VERSION: 'github-worker-1.3.89'", "VERSION: 'github-worker-1.3.90'", 1)
+        if "VERSION: 'github-worker-1.3.90'" not in worker_text:
+            raise SystemExit("INNER_FINANCE_PARTIAL_VERSION_ANCHOR_MISMATCH")
+        print("INNER_FINANCE_PARTIAL_STATUS=patched")
+
     worker.write_text(worker_text, encoding="utf-8")
     print("WORKER_TRIGGER_REFRESH_V2=patched")
 candidates = []
