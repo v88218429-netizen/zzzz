@@ -450,7 +450,9 @@ function wbFbsSupplyWriteSupplySheet_(ss, supplyRows, orderCounts, checkedAt) {
     var rangeA1 = supplySheetA1 + 'A' + readStart + ':I' + readEnd;
     wbFbsSupplySetStage_('SUPPLY_READBACK_CHUNK_START',
       'range=' + readStart + ':' + readEnd);
-    var readChunk = wbFbsSupplySheetsApiRead_(rangeA1, readEnd - readStart + 1, header.length);
+    // Advanced Sheets Values.get stalled repeatedly on this small readback range.
+    // The existing supply rows were already read through SpreadsheetApp in this run.
+    var readChunk = sh.getRange(readStart, 1, readEnd - readStart + 1, header.length).getValues();
     var expectedChunk = expectedReadback.slice(readStart - 1, readEnd);
     if (!wbFbsSupplyMatricesEqual_(expectedChunk, readChunk)) {
       throw new Error('WB_FBS_DIRECT: supply sheet readback mismatch range=' +
