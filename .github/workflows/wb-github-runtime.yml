@@ -178,19 +178,7 @@ jobs:
           pathlib.Path(os.environ["OUT"]).write_text("\n".join(lines)+"\n",encoding="utf-8")
           PY
 
-      - name: Replace runtime branch with encrypted state only
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config user.name "wb-ai-manager[bot]"
-          git config user.email "wb-ai-manager[bot]@users.noreply.github.com"
-          git checkout --orphan runtime-state-next
-          git rm -rf . >/dev/null 2>&1 || true
-          cp -R "$RUNNER_TEMP/wb-runtime-publish/." .
-          git add README.md state
-          git commit -m "runtime: encrypted latest WB state"
-          git push origin HEAD:runtime-state --force
-
+      # Keep this before the orphan checkout, which removes source modules from the runner workspace.
       - name: Continue optimizer sweep when the latest run advanced it
         if: success()
         working-directory: wb_ai_manager/source
@@ -220,6 +208,19 @@ jobs:
           else:
               print("No incomplete sweep made progress; waiting for the next scheduled retry.")
           PY
+
+      - name: Replace runtime branch with encrypted state only
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "wb-ai-manager[bot]"
+          git config user.email "wb-ai-manager[bot]@users.noreply.github.com"
+          git checkout --orphan runtime-state-next
+          git rm -rf . >/dev/null 2>&1 || true
+          cp -R "$RUNNER_TEMP/wb-runtime-publish/." .
+          git add README.md state
+          git commit -m "runtime: encrypted latest WB state"
+          git push origin HEAD:runtime-state --force
 
       - name: Fail run when published production acceptance is incomplete
         if: success()

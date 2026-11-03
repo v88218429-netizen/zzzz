@@ -239,5 +239,16 @@ def test_campaign_cache_replaces_stale_nmids_and_prunes_removed_sku_facts():
     assert set(campaign["recommendations"]) == {"101", "103"}
 
 
+class TestRuntimeWorkflowContinuationOrder(unittest.TestCase):
+    def test_continuation_runs_before_runtime_state_orphan_checkout(self):
+        from pathlib import Path
+
+        repository_root = Path(__file__).resolve().parents[3]
+        workflow = (repository_root / ".github/workflows/wb-github-runtime.yml").read_text(encoding="utf-8")
+        continuation = workflow.index("Continue optimizer sweep when the latest run advanced it")
+        orphan_checkout = workflow.index("Replace runtime branch with encrypted state only")
+        self.assertLess(continuation, orphan_checkout)
+
+
 if __name__ == "__main__":
     unittest.main()
