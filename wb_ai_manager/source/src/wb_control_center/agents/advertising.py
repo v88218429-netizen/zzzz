@@ -117,6 +117,36 @@ def _sweep_progress(
     return seen_products, total_products, complete
 
 
+def _sweep_pair_progress(
+    campaign_nm_ids: dict[int, list[int]],
+    swept_nm_ids: dict[str, list[int]],
+) -> tuple[int, int, bool]:
+    """Count campaign×product pairs, the actual unit of sweep completion."""
+    expected = {cid: set(nms) for cid, nms in campaign_nm_ids.items()}
+    swept = {str(cid): set(ids) for cid, ids in swept_nm_ids.items()}
+    total = sum(len(nms) for nms in expected.values())
+    seen = sum(len(swept.get(str(cid), set()) & nms) for cid, nms in expected.items())
+    return seen, total, seen == total
+
+
+def _completed_sweep_campaign_ids(
+    campaign_nm_ids: dict[int, list[int]],
+    swept_nm_ids: dict[str, list[int]],
+    successful_campaign_ids: list[int],
+) -> list[int]:
+    """Count campaigns only after every advertised product in that campaign was scanned."""
+    swept = {str(cid): set(ids) for cid, ids in swept_nm_ids.items()}
+    successful = {int(cid) for cid in successful_campaign_ids}
+    completed = []
+    for cid, nms in campaign_nm_ids.items():
+        expected = {int(nm) for nm in nms}
+        if expected and swept.get(str(cid), set()) >= expected:
+            completed.append(int(cid))
+        elif not expected and int(cid) in successful:
+            completed.append(int(cid))
+    return sorted(completed)
+
+
 def _scan_cursor(
     previous: Any,
     campaign_ids: list[int],
@@ -437,12 +467,21 @@ class AdvertisingOptimizerAgent(BaseAgent):
                         cursor["swept_nm_ids"][str(cid)] = sorted(done)
                 scanned.append(result)
 
+        cursor["swept_campaign_ids"] = _completed_sweep_campaign_ids(
+            campaign_nm_ids,
+            cursor["swept_nm_ids"],
+            cursor["swept_campaign_ids"],
+        )
         swept_campaign_count = len(cursor["swept_campaign_ids"])
-        swept_product_count, total_product_count, all_products_seen = _sweep_progress(
+        swept_product_count, total_product_count, all_campaign_products_seen = _sweep_progress(
+            campaign_nm_ids, cursor["swept_nm_ids"]
+        )
+        swept_pair_count, total_pair_count, all_campaign_pairs_seen = _sweep_pair_progress(
             campaign_nm_ids, cursor["swept_nm_ids"]
         )
         sweep_complete = (set(cursor["swept_campaign_ids"]) >= set(cursor["campaign_ids"])
-                          and all_products_seen
+                          and all_campaign_products_seen
+                          and all_campaign_pairs_seen
                           and all(isinstance(item, dict) and item.get("scan_complete") is True for item in scanned))
         if sweep_complete:
             cursor["sweep_id"] += 1
@@ -459,6 +498,8 @@ class AdvertisingOptimizerAgent(BaseAgent):
             "sweep_campaigns_total": len(cursor["campaign_ids"]),
             "sweep_products_seen": swept_product_count,
             "sweep_products_total": total_product_count,
+            "sweep_pairs_seen": swept_pair_count,
+            "sweep_pairs_total": total_pair_count,
             "cursor_before": before,
             "cursor_after": cursor["next_campaign_index"],
             "eligible_campaigns": len(campaigns),

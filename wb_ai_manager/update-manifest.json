@@ -61,8 +61,8 @@
         },
         {
           "path": "scripts/github_runtime.py",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/a65667ed8ac50726bb006d001d993d6e0eb05225/wb_ai_manager/source/scripts/github_runtime.py",
-          "sha256": "9d76b4f23159e238408d5d3daeac7dc09b551f68c811f44004f1560f3bbe5296"
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/3e2f76b65423a5fd8155da6a60c891b31dc2249b/wb_ai_manager/source/scripts/github_runtime.py",
+          "sha256": "208d55b83a93ebdd4e9545da7501cec331ffdcdc70f9f0fd257e799b9744c962"
         },
         {
           "path": "scripts/install_launchd.sh",
@@ -150,8 +150,8 @@
         },
         {
           "path": "src/wb_control_center/agents/advertising.py",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/027d5fe3d08bc0b8424e0677c59f78be2923c468/wb_ai_manager/source/src/wb_control_center/agents/advertising.py",
-          "sha256": "d0163551bd69cd4a97b285a44013b2c6c3d137e6befd02ded01c937b747eadc4"
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/3e2f76b65423a5fd8155da6a60c891b31dc2249b/wb_ai_manager/source/src/wb_control_center/agents/advertising.py",
+          "sha256": "d50567bb93fdf86ff2396e7437b2ecb72c0e633ac3dda89e83a0ea12e1a61103"
         },
         {
           "path": "src/wb_control_center/agents/api_health.py",
@@ -380,8 +380,8 @@
         },
         {
           "path": "src/wb_control_center/optimizer_acceptance.py",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/027d5fe3d08bc0b8424e0677c59f78be2923c468/wb_ai_manager/source/src/wb_control_center/optimizer_acceptance.py",
-          "sha256": "f0ed171dcb9443b7ce943df46aa2162a9b1a9240bad8789916d7d589694020c0"
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/3e2f76b65423a5fd8155da6a60c891b31dc2249b/wb_ai_manager/source/src/wb_control_center/optimizer_acceptance.py",
+          "sha256": "109292d3bf320fc686aca24f3c7f44862c6ef2f830b18df8b98427baa3261035"
         },
         {
           "path": "src/wb_control_center/outcome_evaluator.py",

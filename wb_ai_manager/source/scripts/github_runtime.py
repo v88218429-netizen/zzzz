@@ -78,6 +78,8 @@ def optimizer_sweep_progress(optimizer_state: dict[str, Any]) -> dict[str, dict[
             "campaigns_total": sweep.get("sweep_campaigns_total", 0),
             "products_seen": sweep.get("sweep_products_seen", 0),
             "products_total": sweep.get("sweep_products_total", 0),
+            "campaign_product_pairs_seen": sweep.get("sweep_pairs_seen", 0),
+            "campaign_product_pairs_total": sweep.get("sweep_pairs_total", 0),
             "complete": sweep.get("sweep_complete") is True,
         }
     return progress
@@ -351,9 +353,11 @@ async def run() -> int:
         deep_scan = copy.deepcopy(optimizer_snapshot.get("data") or {})
         cursor_snapshot = agent_snapshots.get("deep_scan_cursor") or {}
         cursor_data = cursor_snapshot.get("data") if isinstance(cursor_snapshot, dict) else {}
-        if isinstance(cursor_data, dict) and "active_campaign_ids" not in deep_scan:
-            deep_scan["active_campaign_ids"] = cursor_data.get("campaign_ids") or []
-            deep_scan["catalog_complete"] = True
+        if isinstance(cursor_data, dict):
+            deep_scan.setdefault("campaign_nm_ids", cursor_data.get("campaign_nm_ids") or {})
+            if "active_campaign_ids" not in deep_scan:
+                deep_scan["active_campaign_ids"] = cursor_data.get("campaign_ids") or []
+                deep_scan["catalog_complete"] = True
         cache_path = DATA_ROOT / "optimizer_campaign_cache" / f"{slug}.json"
         try:
             old_cache = json.loads(cache_path.read_text(encoding="utf-8")) if cache_path.exists() else {}
@@ -381,12 +385,23 @@ async def run() -> int:
             "observed_at": optimizer_snapshot.get("created_at"),
             "economics_observed_at": (portfolio_snapshot or {}).get("generated_at"),
             "campaigns": campaigns,
+            "advertised_nm_ids": sorted({
+                str(int(nm))
+                for nm_ids in (deep_scan.get("campaign_nm_ids") or {}).values()
+                if isinstance(nm_ids, list)
+                for nm in nm_ids
+                if str(nm).strip().isdigit() and int(nm) > 0
+            }),
             "decisions": decisions,
             "sweep": {
                 **cache["sweep"],
                 "sweep_complete": cache["sweep_complete"],
                 "sweep_campaigns_seen": deep_scan.get("sweep_campaigns_seen", 0),
                 "sweep_campaigns_total": deep_scan.get("sweep_campaigns_total", len(cache.get("campaign_ids") or [])),
+                "sweep_products_seen": deep_scan.get("sweep_products_seen", 0),
+                "sweep_products_total": deep_scan.get("sweep_products_total", 0),
+                "sweep_pairs_seen": deep_scan.get("sweep_pairs_seen", 0),
+                "sweep_pairs_total": deep_scan.get("sweep_pairs_total", 0),
                 "campaign_cache_count": cache["campaign_cache_count"],
                 "campaign_cache_total": cache["campaign_cache_total"],
                 "campaign_cache_complete": cache["campaign_cache_complete"],
