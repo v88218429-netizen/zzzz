@@ -15,7 +15,7 @@ on:
 
 permissions:
   contents: write
-  actions: read
+  actions: write
 
 concurrency:
   group: wb-github-runtime-${{ github.ref }}
@@ -41,6 +41,9 @@ jobs:
           mkdir -p wb_ai_manager/source/data/github-runtime
           if git ls-remote --exit-code --heads origin runtime-state >/dev/null 2>&1; then
             git fetch --depth=1 origin runtime-state:refs/remotes/origin/runtime-state
+            if git cat-file -e "origin/runtime-state:state/health.json" 2>/dev/null; then
+              git show "origin/runtime-state:state/health.json" > "$RUNNER_TEMP/previous-health.json"
+            fi
             STATE_CIPHER="$RUNNER_TEMP/runtime.tar.gz.enc"
             if git cat-file -e "origin/runtime-state:state/runtime.tar.gz.enc" 2>/dev/null; then
               # Backward-compatible restore for the previous single-file format.
@@ -173,6 +176,32 @@ jobs:
             "Runtime state is AES-256 encrypted and replaced on every successful run.",
           ]
           pathlib.Path(os.environ["OUT"]).write_text("\n".join(lines)+"\n",encoding="utf-8")
+          PY
+
+      - name: Continue optimizer sweep when the latest run advanced it
+        if: success()
+        working-directory: wb_ai_manager/source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          PYTHONPATH=.:scripts python - <<'PY'
+          import json
+          import pathlib
+          import subprocess
+          from github_runtime import should_continue_optimizer_sweep
+
+          current = json.loads(pathlib.Path("github_site/data/health.json").read_text(encoding="utf-8"))
+          previous_path = pathlib.Path("${RUNNER_TEMP}/previous-health.json")
+          previous = json.loads(previous_path.read_text(encoding="utf-8")) if previous_path.exists() else {}
+          if should_continue_optimizer_sweep(previous, current):
+              print("Incomplete sweep advanced; dispatching exactly one continuation run.")
+              subprocess.run(
+                  ["gh", "workflow", "run", "wb-github-runtime.yml", "--ref", "mainggg"],
+                  check=True,
+              )
+          else:
+              print("No incomplete sweep made progress; waiting for the next scheduled retry.")
           PY
 
       - name: Replace runtime branch with encrypted state only
