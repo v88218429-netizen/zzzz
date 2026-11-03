@@ -197,10 +197,13 @@ jobs:
           previous = json.loads(previous_path.read_text(encoding="utf-8")) if previous_path.exists() else {}
           if should_continue_optimizer_sweep(previous, current):
               print("Incomplete sweep advanced; dispatching exactly one continuation run.")
-              subprocess.run(
+              result = subprocess.run(
                   ["gh", "workflow", "run", "wb-github-runtime.yml", "--ref", "mainggg"],
-                  check=True,
+                  check=False, capture_output=True, text=True,
               )
+              if result.returncode:
+                  print("::warning::Continuation dispatch failed; the saved checkpoint will resume on the next schedule.")
+                  print(result.stderr.strip())
           else:
               print("No incomplete sweep made progress; waiting for the next scheduled retry.")
           PY
