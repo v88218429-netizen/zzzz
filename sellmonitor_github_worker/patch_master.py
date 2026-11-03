@@ -665,10 +665,28 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
         print("OZON_ORDER_FRESHNESS_NOTE_READBACK=patched")
     elif "orderFreshnessSheet.getRange('A1').getValue()||'')!==newOrderFreshnessNote" not in worker_text:
         raise SystemExit("OZON order freshness readback patch partial")
-    worker_text = worker_text.replace("VERSION: 'github-worker-1.3.86'", "VERSION: 'github-worker-1.3.87'", 1)
-    if "VERSION: 'github-worker-1.3.87'" not in worker_text:
-        raise SystemExit("OZON freshness worker version bump anchor mismatch")
-
+    version_match = re.search(r"VERSION:\s*'github-worker-(\\d+(?:\\.\\d+){2})'", worker_text)
+    if not version_match:
+        raise SystemExit("worker semantic version missing")
+    worker_version = tuple(int(x) for x in version_match.group(1).split("."))
+    if worker_version < (1, 3, 87):
+        worker_text = worker_text.replace(
+            "VERSION: '" + version_match.group(1) + "'",
+            "VERSION: 'github-worker-1.3.87'",
+            1,
+        )
+        version_match = re.search(r"VERSION:\s*'github-worker-(\\d+(?:\\.\\d+){2})'", worker_text)
+    finance_start = worker_text.find("function sellmonitorGithubPublishOzonFinance_(")
+    if finance_start < 0:
+        raise SystemExit("OZON finance writer missing; refusing deployment downgrade")
+    finance_end = worker_text.find("\\nfunction ", finance_start + 10)
+    if finance_end < 0:
+        finance_end = len(worker_text)
+    finance_block = worker_text[finance_start:finance_end]
+    finance_marker = "OZON_FINANCE_DATE_READBACK_V3"
+    if finance_marker not in finance_block or "sameFinanceRows_" not in finance_block or "'dd.mm.yyyy'" not in finance_block or "OZON_FINANCE_READBACK_MISMATCH" not in finance_block:
+        raise SystemExit("OZON finance idempotent date-normalized readback missing; refusing deployment")
+    print("OZON_FINANCE_DATE_READBACK=verified")
     worker.write_text(worker_text, encoding="utf-8")
     print("WORKER_TRIGGER_REFRESH_V2=patched")
 candidates = []
