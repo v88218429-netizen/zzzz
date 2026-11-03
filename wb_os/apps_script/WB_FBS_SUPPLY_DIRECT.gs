@@ -204,8 +204,15 @@ function wbFbsSupplyCountOrders_(ordersSheet) {
 }
 
 function wbFbsSupplyEnsureRows_(sheet, neededRows) {
-  if (sheet.getMaxRows() < neededRows) {
-    sheet.insertRowsAfter(sheet.getMaxRows(), neededRows - sheet.getMaxRows());
+  var currentRows = sheet.getMaxRows();
+  if (currentRows < neededRows) {
+    Sheets.Spreadsheets.batchUpdate({
+      requests: [{appendDimension: {
+        sheetId: sheet.getSheetId(),
+        dimension: 'ROWS',
+        length: neededRows - currentRows
+      }}]
+    }, String(WB_FBS_DIRECT_SUPPLY_CFG.spreadsheetId));
   }
 }
 
@@ -255,6 +262,36 @@ function wbFbsSupplySheetsApiRead_(rangeA1, rowCount, columnCount) {
     normalized.push(row);
   }
   return normalized;
+}
+
+function wbFbsSupplySheetsApiWrite_(rangeA1, values) {
+  var normalized = (values || []).map(function(row) {
+    return (row || []).map(function(value) {
+      return value instanceof Date ? wbFbsSupplyDateSerial_(value) : value;
+    });
+  });
+  return Sheets.Spreadsheets.Values.update(
+    {values: normalized},
+    String(WB_FBS_DIRECT_SUPPLY_CFG.spreadsheetId),
+    String(rangeA1),
+    {valueInputOption: 'RAW'}
+  );
+}
+
+function wbFbsSupplySheetsApiClear_(rangeA1) {
+  return Sheets.Spreadsheets.Values.clear(
+    {},
+    String(WB_FBS_DIRECT_SUPPLY_CFG.spreadsheetId),
+    String(rangeA1)
+  );
+}
+
+function wbFbsSupplySheetsApiFormat_(requests) {
+  if (!requests || !requests.length) return;
+  return Sheets.Spreadsheets.batchUpdate(
+    {requests: requests},
+    String(WB_FBS_DIRECT_SUPPLY_CFG.spreadsheetId)
+  );
 }
 
 function wbFbsSupplyWriteSupplySheet_(ss, supplyRows, orderCounts, checkedAt) {
@@ -315,32 +352,42 @@ function wbFbsSupplyWriteSupplySheet_(ss, supplyRows, orderCounts, checkedAt) {
   wbFbsSupplyEnsureRows_(sh,Math.max(2,out.length+1));
   wbFbsSupplySetStage_('SUPPLY_ENSURE_ROWS_DONE', '');
   wbFbsSupplySetStage_('SUPPLY_WRITE_HEADER_START', '');
-  sh.getRange(1,1,1,header.length).setValues([header]);
+  var sheetApiId = sh.getSheetId();
+  var supplySheetA1 = "'" + String(WB_FBS_DIRECT_SUPPLY_CFG.suppliesSheet).replace(/'/g, "''") + "'!";
+  wbFbsSupplySheetsApiWrite_(supplySheetA1 + 'A1:I1', [header]);
   wbFbsSupplySetStage_('SUPPLY_WRITE_HEADER_DONE', '');
   var staleRows=Math.max(0,(oldLast-1)-out.length);
   if(staleRows){
     var staleStartRowForClear=out.length+2;
     wbFbsSupplySetStage_('SUPPLY_CLEAR_STALE_START',
       'rows=' + staleRows + ' start=' + staleStartRowForClear);
-    sh.getRange(staleStartRowForClear,1,staleRows,header.length).clearContent();
+    wbFbsSupplySheetsApiClear_(supplySheetA1 + 'A' + staleStartRowForClear + ':I' + (staleStartRowForClear + staleRows - 1));
     wbFbsSupplySetStage_('SUPPLY_CLEAR_STALE_DONE', '');
   }
   if(out.length){
     wbFbsSupplySetStage_('SUPPLY_WRITE_ROWS_START', 'rows=' + out.length);
-    sh.getRange(2,1,out.length,header.length).setValues(out);
+    wbFbsSupplySheetsApiWrite_(supplySheetA1 + 'A2:I' + (out.length + 1), out);
     wbFbsSupplySetStage_('SUPPLY_WRITE_ROWS_DONE', 'rows=' + out.length);
   }
   if(out.length){
     wbFbsSupplySetStage_('SUPPLY_FORMAT_START', 'rows=' + out.length);
-    sh.getRange(2,2,out.length,3).setNumberFormat('dd.MM.yyyy HH:mm:ss');
-    sh.getRange(2,6,out.length,1).setNumberFormat('dd.MM.yyyy HH:mm:ss');
-    sh.getRange(2,7,out.length,2).setNumberFormat('0');
+    wbFbsSupplySheetsApiFormat_([
+      {repeatCell: {range: {sheetId: sheetApiId, startRowIndex: 1, endRowIndex: out.length + 1,
+        startColumnIndex: 1, endColumnIndex: 4},
+        cell: {userEnteredFormat: {numberFormat: {type: 'DATE_TIME', pattern: 'dd.MM.yyyy HH:mm:ss'}}},
+        fields: 'userEnteredFormat.numberFormat'}},
+      {repeatCell: {range: {sheetId: sheetApiId, startRowIndex: 1, endRowIndex: out.length + 1,
+        startColumnIndex: 5, endColumnIndex: 6},
+        cell: {userEnteredFormat: {numberFormat: {type: 'DATE_TIME', pattern: 'dd.MM.yyyy HH:mm:ss'}}},
+        fields: 'userEnteredFormat.numberFormat'}},
+      {repeatCell: {range: {sheetId: sheetApiId, startRowIndex: 1, endRowIndex: out.length + 1,
+        startColumnIndex: 6, endColumnIndex: 8},
+        cell: {userEnteredFormat: {numberFormat: {type: 'NUMBER', pattern: '0'}}},
+        fields: 'userEnteredFormat.numberFormat'}}
+    ]);
     wbFbsSupplySetStage_('SUPPLY_FORMAT_DONE', '');
   }
-  wbFbsSupplySetStage_('SUPPLY_FLUSH_START', '');
-  SpreadsheetApp.flush();
-  wbFbsSupplySetStage_('SUPPLY_FLUSH_DONE', '');
-  var supplySheetA1 = "'" + String(WB_FBS_DIRECT_SUPPLY_CFG.suppliesSheet).replace(/'/g, "''") + "'!";
+  wbFbsSupplySetStage_('SUPPLY_API_WRITE_DONE', 'rows=' + out.length);
   // Verify header and written rows with one contiguous Sheets API read. Separate
   // calls can stall independently under transient spreadsheet service latency,
   // leaving a successful write stuck before timing backfill can continue.
@@ -377,7 +424,12 @@ function wbFbsSupplyWriteSupplySheet_(ss, supplyRows, orderCounts, checkedAt) {
       throw new Error('WB_FBS_DIRECT: stale supply rows remain after refresh');
   }
   wbFbsSupplySetStage_('SUPPLY_FREEZE_HEADER_START', '');
-  sh.setFrozenRows(1);
+  wbFbsSupplySheetsApiFormat_([{
+    updateSheetProperties: {
+      properties: {sheetId: sheetApiId, gridProperties: {frozenRowCount: 1}},
+      fields: 'gridProperties.frozenRowCount'
+    }
+  }]);
   wbFbsSupplySetStage_('SUPPLY_WRITE_COMPLETE', 'rows=' + out.length);
   return {totalRows:out.length,apiRows:supplyRows.length,
     preservedNotReturned:preservedNotReturned,preservedDuplicateRows:preservedDuplicateRows,
@@ -480,20 +532,46 @@ function wbFbsSupplyBackfillOrders_(ss, suppliesById, options) {
   var timingChanged=!wbFbsSupplyMatricesEqual_(timingsBefore,timings);
   var sortedChanged=!wbFbsSupplyMatricesEqual_(sortedBefore,sortedCols);
   if (timingChanged) {
-    sh.getRange(start, 46, n, 6).setValues(timings);
-    sh.getRange(start, 46, n, 2).setNumberFormat('dd.MM.yyyy HH:mm:ss');
-    sh.getRange(start, 48, n, 4).setNumberFormat('0.00');
+    var ordersA1 = "'" + String(WB_FBS_DIRECT_SUPPLY_CFG.ordersSheet).replace(/'/g, "''") + "'!";
+    wbFbsSupplySheetsApiWrite_(ordersA1 + 'AT' + start + ':AY' + end, timings);
+    wbFbsSupplySheetsApiFormat_([{
+      repeatCell: {range: {sheetId: sh.getSheetId(), startRowIndex: start - 1, endRowIndex: end,
+        startColumnIndex: 45, endColumnIndex: 47},
+        cell: {userEnteredFormat: {numberFormat: {type: 'DATE_TIME', pattern: 'dd.MM.yyyy HH:mm:ss'}}},
+        fields: 'userEnteredFormat.numberFormat'}
+    }, {
+      repeatCell: {range: {sheetId: sh.getSheetId(), startRowIndex: start - 1, endRowIndex: end,
+        startColumnIndex: 47, endColumnIndex: 51},
+        cell: {userEnteredFormat: {numberFormat: {type: 'NUMBER', pattern: '0.00'}}},
+        fields: 'userEnteredFormat.numberFormat'}
+    }]);
   }
   if (sortedChanged) {
-    sh.getRange(start, 58, n, 2).setValues(sortedCols);
-    sh.getRange(start, 58, n, 1).setNumberFormat('dd.MM.yyyy HH:mm:ss');
-    sh.getRange(start, 59, n, 1).setNumberFormat('0.00');
+    var orderSheetA1 = "'" + String(WB_FBS_DIRECT_SUPPLY_CFG.ordersSheet).replace(/'/g, "''") + "'!";
+    wbFbsSupplySheetsApiWrite_(orderSheetA1 + 'BF' + start + ':BG' + end, sortedCols);
+    wbFbsSupplySheetsApiFormat_([{
+      repeatCell: {range: {sheetId: sh.getSheetId(), startRowIndex: start - 1, endRowIndex: end,
+        startColumnIndex: 57, endColumnIndex: 58},
+        cell: {userEnteredFormat: {numberFormat: {type: 'DATE_TIME', pattern: 'dd.MM.yyyy HH:mm:ss'}}},
+        fields: 'userEnteredFormat.numberFormat'}
+    }, {
+      repeatCell: {range: {sheetId: sh.getSheetId(), startRowIndex: start - 1, endRowIndex: end,
+        startColumnIndex: 58, endColumnIndex: 59},
+        cell: {userEnteredFormat: {numberFormat: {type: 'NUMBER', pattern: '0.00'}}},
+        fields: 'userEnteredFormat.numberFormat'}
+    }]);
   }
-  if(timingChanged||sortedChanged)SpreadsheetApp.flush();
-  if(timingChanged&&!wbFbsSupplyMatricesEqual_(timings,sh.getRange(start,46,n,6).getValues()))
-    throw new Error('WB_FBS_DIRECT: order timing readback mismatch');
-  if(sortedChanged&&!wbFbsSupplyMatricesEqual_(sortedCols,sh.getRange(start,58,n,2).getValues()))
-    throw new Error('WB_FBS_DIRECT: sorted history readback mismatch');
+  var ordersApiA1 = "'" + String(WB_FBS_DIRECT_SUPPLY_CFG.ordersSheet).replace(/'/g, "''") + "'!";
+  if (timingChanged) {
+    var timingReadback = wbFbsSupplySheetsApiRead_(ordersApiA1 + 'AT' + start + ':AY' + end, n, 6);
+    if (!wbFbsSupplyMatricesEqual_(timings, timingReadback))
+      throw new Error('WB_FBS_DIRECT: order timing readback mismatch');
+  }
+  if (sortedChanged) {
+    var sortedReadback = wbFbsSupplySheetsApiRead_(ordersApiA1 + 'BF' + start + ':BG' + end, n, 2);
+    if (!wbFbsSupplyMatricesEqual_(sortedCols, sortedReadback))
+      throw new Error('WB_FBS_DIRECT: sorted history readback mismatch');
+  }
 
   return {checked: n, matched: matched, sorted: sortedFilled,
     timingReadbackVerified:true,sortedReadbackVerified:true,
@@ -510,8 +588,14 @@ function wbFbsSupplyWriteHealth_(ss, state, detail) {
     ['Supply Detail', String(detail || '').slice(0, 500)],
     ['Supply Source', 'DIRECT WB /api/v3/supplies']
   ];
-  sh.getRange(14, 1, labels.length, 2).setValues(labels);
-  sh.getRange(15, 2).setNumberFormat('dd.MM.yyyy HH:mm:ss');
+  var workerA1 = "'" + String(WB_FBS_DIRECT_SUPPLY_CFG.workerSheet).replace(/'/g, "''") + "'!";
+  wbFbsSupplySheetsApiWrite_(workerA1 + 'A14:B17', labels);
+  wbFbsSupplySheetsApiFormat_([{
+    repeatCell: {range: {sheetId: sh.getSheetId(), startRowIndex: 14, endRowIndex: 15,
+      startColumnIndex: 1, endColumnIndex: 2},
+      cell: {userEnteredFormat: {numberFormat: {type: 'DATE_TIME', pattern: 'dd.MM.yyyy HH:mm:ss'}}},
+      fields: 'userEnteredFormat.numberFormat'}
+  }]);
 }
 
 function wbFbsSupplySyncCore_(progress) {
@@ -544,7 +628,6 @@ function wbFbsSupplySyncCore_(progress) {
   var unmatchedOrderSupplyIds=continuing&&!backfill.complete?null:Object.keys(counts).filter(function(id){
     return !Object.prototype.hasOwnProperty.call(fetched.byId,id);
   }).length;
-  SpreadsheetApp.flush();
   var result={
     ok:true,client:cfg.client,checkedAt:checkedAt.toISOString(),apiPages:fetched.pageCount,
     apiSupplies:fetched.rows.length,apiSuppliesScanned:fetched.scannedCount,

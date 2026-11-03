@@ -225,7 +225,8 @@ def ingest(client: str, orders: list[dict]) -> dict:
                     "GITHUB_FBS_LOCK_BUSY", "Service invoked too many times",
                     "Service Spreadsheets failed", "Exceeded maximum execution",
                     "Internal error", "backendError", "HTTP_429", "HTTP_500",
-                    "HTTP_502", "HTTP_503", "HTTP_504"
+                    "HTTP_502", "HTTP_503", "HTTP_504", "Timeout:", "timed out",
+                    "FBS_INSERT_WRITE_TIMEOUT", "FBS_INSERT_WRITE_EXCEPTION"
                 )
             )
             if not retryable or attempt == attempts:
@@ -234,6 +235,7 @@ def ingest(client: str, orders: list[dict]) -> dict:
                     "FBS_DATE_OUTSIDE_RECOVERY_WINDOW", "FBS_ID_INVALID",
                     "FBS_MISSING_CONFIRMED_STATUS", "FBS_DATE_INVALID",
                     "FBS_COLUMN_SCHEMA_MISMATCH", "FBS_INSERT_READBACK_FAILED",
+                    "FBS_INSERT_WRITE_TIMEOUT", "FBS_INSERT_WRITE_EXCEPTION",
                     "FBS_BOOK_SCHEMA_MISSING", "FBS_CLIENT_NOT_ALLOWED",
                     "GITHUB_FBS_LOCK_BUSY", "Service Spreadsheets failed",
                     "You do not have permission", "Exceeded maximum execution",

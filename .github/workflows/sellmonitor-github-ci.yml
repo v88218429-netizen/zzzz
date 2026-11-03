@@ -5,10 +5,12 @@ on:
     branches: [mainggg]
     paths:
       - "sellmonitor_github_worker/**"
+      - "wb_os/apps_script/WB_FBS_SUPPLY_DIRECT.gs"
       - ".github/workflows/sellmonitor-github-ci.yml"
   pull_request:
     paths:
       - "sellmonitor_github_worker/**"
+      - "wb_os/apps_script/WB_FBS_SUPPLY_DIRECT.gs"
       - ".github/workflows/sellmonitor-github-ci.yml"
   workflow_dispatch:
 
@@ -35,7 +37,9 @@ jobs:
         run: |
           set -euo pipefail
           cp sellmonitor_github_worker/SELLMONITOR_GITHUB_WORKER.gs /tmp/sellmonitor_worker.js
+          cp wb_os/apps_script/WB_FBS_SUPPLY_DIRECT.gs /tmp/wb_fbs_supply_direct.js
           node --check /tmp/sellmonitor_worker.js
+          node --check /tmp/wb_fbs_supply_direct.js
       - name: Paused-client worker slot regression
         run: node sellmonitor_github_worker/test_worker_capacity.mjs
       - name: WB traffic publisher fixture

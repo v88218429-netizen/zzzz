@@ -7434,23 +7434,43 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
       // Keep large production-book reads below UrlFetch time and response limits.
       // The full ID column is inspected during each bounded ingest call, so one
       // request for tens of thousands of rows can stall before any write begins.
-      var chunkRows=5000;
+      var chunkRows=500;
       if(rowCount>chunkRows){
         var combined=[];
         for(var offset=0;offset<rowCount;offset+=chunkRows){
           var size=Math.min(chunkRows,rowCount-offset);
-          var part=readDisplayGrid_(startRow+offset,startColumn,size,columnCount);
+          var chunkStart=startRow+offset;
+          mark('SHEETS_API_ID_READ_CHUNK_START_'+chunkStart+'_ROWS_'+size);
+          var part=readDisplayGrid_(chunkStart,startColumn,size,columnCount);
           for(var partRow=0;partRow<part.length;partRow++)combined.push(part[partRow]);
+          mark('SHEETS_API_ID_READ_CHUNK_DONE_'+chunkStart+'_ROWS_'+size);
         }
         return combined;
       }
       var a1=orderSheet+'!'+columnLetter_(startColumn)+startRow+':'+
         columnLetter_(startColumn+columnCount-1)+(startRow+rowCount-1);
-      var response=fetchSheetApi(apiBase+'/values/'+encodeURIComponent(a1)+
-        '?valueRenderOption=FORMATTED_VALUE',{method:'get'});
-      var code=response.getResponseCode();
-      if(code<200||code>=300)
-        throw new Error('FBS_SHEET_RANGE_READ_HTTP_'+code+':'+sheetApiFailure(response));
+      var readUrl=apiBase+'/values/'+encodeURIComponent(a1)+
+        '?valueRenderOption=FORMATTED_VALUE';
+      var response=null,code=0,readError='';
+      for(var readAttempt=1;readAttempt<=3;readAttempt++){
+        try{
+          response=fetchSheetApi(readUrl,{method:'get'});
+          code=response.getResponseCode();
+          if(code>=200&&code<300)break;
+          readError='HTTP_'+code+':'+sheetApiFailure(response);
+          if(code!==429&&code<500)
+            throw new Error('FBS_SHEET_RANGE_READ_HTTP_'+readError);
+        }catch(readRequestError){
+          var readMessage=String(readRequestError&&readRequestError.message||readRequestError);
+          if(readMessage.indexOf('FBS_SHEET_RANGE_READ_HTTP_')===0)throw readRequestError;
+          readError=/timeout|timed out/i.test(readMessage)?'TIMEOUT':readMessage.slice(0,180);
+          response=null;
+        }
+        if(readAttempt<3)Utilities.sleep([500,1500][readAttempt-1]);
+      }
+      if(!response||code<200||code>=300)
+        throw new Error('FBS_SHEET_RANGE_READ_RETRY_EXHAUSTED_'+
+          String(readError||('HTTP_'+code)).replace(/[^A-Z0-9_:.-]/gi,'_'));
       var payload;
       try{payload=JSON.parse(response.getContentText()||'{}');}
       catch(parseError){throw new Error('FBS_SHEET_RANGE_READ_INVALID_JSON');}
