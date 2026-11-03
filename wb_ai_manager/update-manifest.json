@@ -381,7 +381,7 @@
         {
           "path": "src/wb_control_center/optimizer_acceptance.py",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/3e2f76b65423a5fd8155da6a60c891b31dc2249b/wb_ai_manager/source/src/wb_control_center/optimizer_acceptance.py",
-          "sha256": "109292d3bf320fc686aca24f3c7f44862c6ef2f830b18df8b98427baa3261035"
+          "sha256": "2d8add32ab7fdb6e148689620afa84a761064ded613bcef73de25d98677ef70b"
         },
         {
           "path": "src/wb_control_center/outcome_evaluator.py",
@@ -416,7 +416,7 @@
         {
           "path": "src/wb_control_center/query_manager.py",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/a70db23e37b51d8f870bb1fabed48ac312e2877d/wb_ai_manager/source/src/wb_control_center/query_manager.py",
-          "sha256": "ea841dfe9de79b8a7934d9d36ce5fef7be15227ca7adeaaec9713aae06767b03"
+          "sha256": "a42ce315151f7884d2118affa4e2fa6cdc4a2a73a531fa7b3ca12ca4c68ab054"
         },
         {
           "path": "src/wb_control_center/remote_policy.py",
@@ -476,7 +476,7 @@
         {
           "path": "src/wb_control_center/worker_source.py",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/3a7b278bde69642c2193ce9044d48c5120104977/wb_ai_manager/source/src/wb_control_center/worker_source.py",
-          "sha256": "20bd805271c657c0dc096ffda63a461c441805ad53896bfec73dc8828db3754a"
+          "sha256": "8556902f17092406efb8eea394c819717275ec358ef0af8d877f62ed10731fc7"
         },
         {
           "path": "START_WB_AI_MANAGER.command",
