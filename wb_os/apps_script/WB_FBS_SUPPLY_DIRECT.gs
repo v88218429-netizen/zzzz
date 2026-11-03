@@ -416,15 +416,17 @@ function wbFbsSupplyWriteSupplySheet_(ss, supplyRows, orderCounts, checkedAt) {
   if (wbFbsSupplyMatricesEqual_([header], existingHeader)) {
     wbFbsSupplySetStage_('SUPPLY_VERIFY_HEADER_DONE', 'existing_header=verified');
   } else {
-    wbFbsSupplySetStage_('SUPPLY_WRITE_HEADER_START', 'response_readback=true');
-    var headerWrite = wbFbsSupplySheetsApiWrite_(supplySheetA1 + 'A1:I1', [header], true);
-    var headerReturned = wbFbsSupplyNormalizeRows_(
-      ((headerWrite.response || {}).updatedData || {}).values || [], 1, header.length
-    );
-    if (!wbFbsSupplyMatricesEqual_(headerWrite.normalizedValues, headerReturned)) {
-      throw new Error('WB_FBS_DIRECT: supply header write response readback mismatch');
+    wbFbsSupplySetStage_('SUPPLY_WRITE_HEADER_NATIVE_START',
+      'expected=' + JSON.stringify(header) + ' actual=' + JSON.stringify(existingHeader[0] || []));
+    var headerRange = sh.getRange(1, 1, 1, header.length);
+    headerRange.setValues([header]);
+    SpreadsheetApp.flush();
+    var headerReturned = headerRange.getValues();
+    if (!wbFbsSupplyMatricesEqual_([header], headerReturned)) {
+      throw new Error('WB_FBS_DIRECT: supply native header write readback mismatch actual=' +
+        JSON.stringify(headerReturned[0] || []));
     }
-    wbFbsSupplySetStage_('SUPPLY_WRITE_HEADER_DONE', 'response_readback=verified');
+    wbFbsSupplySetStage_('SUPPLY_WRITE_HEADER_NATIVE_DONE', 'native_readback=verified');
   }
   var staleRows=Math.max(0,(oldLast-1)-out.length);
   if(staleRows){
