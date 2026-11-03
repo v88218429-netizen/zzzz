@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from wb_control_center.advertising_controller import AdvertisingController
+from wb_control_center.advertising_controller import AdvertisingController, _extract_bid_rub
 from wb_control_center.config import load_policy
 from wb_control_center.db import Database
 from wb_control_center.runtime_policy import RuntimePolicyStore
@@ -20,6 +20,19 @@ def daily(orders, views=None, spend=None, revenue=None):
         {"date": f"2026-09-{i+1:02d}", "orders": o, "views": v, "sum": s, "sum_price": r, "clicks": 60}
         for i, (o, v, s, r) in enumerate(zip(orders, views, spend, revenue))
     ]
+
+
+def test_wb_v2_campaign_bid_is_read_from_exact_nm_settings_in_kopecks():
+    campaign = {
+        "nm_settings": [
+            {"nm_id": 925, "bids_kopecks": {"search": 7250, "recommendations": 6100}},
+            {"nm_id": 926, "bids_kopecks": {"search": 3125, "recommendations": 1500}},
+        ],
+    }
+    assert _extract_bid_rub(campaign, 925) == 72.5
+    assert _extract_bid_rub(campaign, 925, "recommendations") == 61.0
+    assert _extract_bid_rub(campaign, 926) == 31.25
+    assert _extract_bid_rub(campaign, 999) is None
 
 
 def test_profitable_campaign_gets_numeric_scale_up_with_step_cap():
