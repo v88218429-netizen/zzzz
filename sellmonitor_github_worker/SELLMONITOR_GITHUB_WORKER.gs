@@ -6887,6 +6887,11 @@ function doPost(e) {
       return sellmonitorGithubWebJson_({ok:formulaDiagnostic.ok===true,action:action,result:formulaDiagnostic});
     }
 
+    if (action === 'fbs_formula_repair') {
+      var formulaRepair = sellmonitorGithubFbsFormulaRepairV1_(body);
+      return sellmonitorGithubWebJson_({ok:formulaRepair.ok===true,action:action,result:formulaRepair});
+    }
+
     if (action === 'fbs_ingest_batch') {
       var fbsResult = sellmonitorGithubFbsIngestBatchV1_(body);
       return sellmonitorGithubWebJson_({ok:fbsResult.ok===true,action:action,result:fbsResult});
@@ -7030,7 +7035,37 @@ function sellmonitorGithubFbsFormulaDiagnosticV1_(body) {
   var filters={};
   ['D3','H3','AE2','AF2','AG2'].forEach(function(a1){
     var filterCell=sheet.getRange(a1);
-    filters[a1]={formula:String(filterCell.getFormula()||''),displayValue:String(filterCell.getDisplayValue()||'')};
+    filters[a1]={formula:String(filterCell.getFormula()||''),displayVa
+
+function sellmonitorGithubFbsFormulaRepairV1_(body) {
+  var client=String(body&&body.client||'').trim().toUpperCase();
+  if(client!=='SANYCH')throw new Error('FBS_FORMULA_REPAIR_CLIENT_NOT_ALLOWED');
+  var ss=SpreadsheetApp.openById('1v0qt-thJDOw3tLFdZVGhdXJdBM8rDPRz9mHlcHmuuyM');
+  var sheet=ss.getSheetByName('🧠 Центр решений');
+  if(!sheet)throw new Error('FBS_FORMULA_REPAIR_SHEET_NOT_FOUND');
+  var cell=sheet.getRange('AH1');
+  var before=String(cell.getFormula()||'');
+  var marker="'📦 FBS Заказы'!B2:L27045";
+  var alreadyFixed=before.indexOf("=IFNA(QUERY('📦 FBS Заказы'!B2:L;")===0;
+  var after=before;
+  if(!alreadyFixed){
+    if(before.indexOf('=QUERY(')!==0||before.charAt(before.length-1)!==')'||before.indexOf(marker)<0)
+      throw new Error('FBS_FORMULA_REPAIR_UNEXPECTED_SOURCE');
+    var expanded=before.replace(marker,"'📦 FBS Заказы'!B2:L");
+    after='=IFNA('+expanded.slice(1)+';"Нет данных по выбранным фильтрам")';
+    cell.setFormula(after);
+    SpreadsheetApp.flush();
+  }
+  var readback=String(cell.getFormula()||'');
+  var display=String(cell.getDisplayValue()||'');
+  if(readback!==after)throw new Error('FBS_FORMULA_REPAIR_READBACK_MISMATCH');
+  if(/^#/.test(display))throw new Error('FBS_FORMULA_REPAIR_FORMULA_ERROR');
+  var noMatches=display==='Нет данных по выбранным фильтрам';
+  return {ok:true,client:client,sheet:'🧠 Центр решений',range:'AH1',
+    changed:!alreadyFixed,formula:readback,displayValue:display,
+    queryHasData:!noMatches,checkedAt:new Date().toISOString()};
+}
+lue:String(filterCell.getDisplayValue()||'')};
   });
   return {ok:true,client:client,sheet:'🧠 Центр решений',range:'AH1',formula:String(cell.getFormula()||''),displayValue:String(cell.getDisplayValue()||''),filters:filters};
 }
