@@ -611,6 +611,83 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
     elif "function sellmonitorGithubPublishOzonFinance_(" not in worker_text or "action === 'publish_ozon_api_finance'" not in worker_text:
         raise SystemExit("OZON_FINANCE_PATCH_PARTIAL")
 
+    # Add verified store-level finance facts to the existing shop RNP, without assigning them to SKUs.
+    store_rnp_marker = "OZON_STORE_RNP_FINANCE_V1"
+    if store_rnp_marker not in worker_text:
+        store_rnp_anchor = "    var periodResult=replace_('19_API_Финансы_периоды',periodRows,11);\n"
+        store_rnp_code = r"""    /* OZON_STORE_RNP_FINANCE_V1 */
+    var rnpSheet=ss.getSheetByName('00_РНП_магазин');
+    if(!rnpSheet)throw new Error('OZON_FINANCE_RNP_SHEET_MISSING:'+cfg.name);
+    if(rnpSheet.getMaxColumns()<17)rnpSheet.insertColumnsAfter(rnpSheet.getMaxColumns(),17-rnpSheet.getMaxColumns());
+    var rnpLast=Math.max(1,rnpSheet.getLastRow());
+    var rnpLabelRows=rnpSheet.getRange(1,1,rnpLast,3).getDisplayValues();
+    var rnpHeaders=['Начислено всего, ₽','Товар (ITEM), ₽','Отправления (POSTING), ₽','Нетоварное (NON_ITEM), ₽','Прочие категории, ₽','Строк начислений / дней с данными','Состояние финансового источника'];
+    var rnpHeaderRows=[];
+    var rnpRange=rnpSheet.getRange(1,11,rnpLast,7);
+    var oldRnpFormulas=rnpRange.getFormulas();
+    if(oldRnpFormulas.some(function(row){return row.some(function(value){return String(value||'')!=='';});}))
+      throw new Error('OZON_FINANCE_RNP_FORMULA_PROTECTED:'+cfg.name);
+    var oldRnp=rnpRange.getValues();
+    var nextRnp=oldRnp.map(function(row){return row.slice();});
+    var rnpByDay=Object.create(null),rnpByPeriod=Object.create(null);
+    storeDays.forEach(function(row){rnpByDay[String(row[0])]=row;});
+    periodRows.slice(1).forEach(function(row){rnpByPeriod[String(row[0])+'|'+String(row[1])+'|'+String(row[2])]=row;});
+    function rnpIso_(value){
+      var text=String(value||'').trim(),match=text.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+      if(match)return match[3]+'-'+('0'+match[2]).slice(-2)+'-'+('0'+match[1]).slice(-2);
+      return /^\d{4}-\d{2}-\d{2}$/.test(text)?text:'';
+    }
+    function rnpFinanceMissing_(){return ['','','','','','','Нет покрытия источника'];}
+    for(var ri=0;ri<rnpLabelRows.length;ri++){
+      var label=String(rnpLabelRows[ri][0]||'').trim();
+      if(label==='Дневные итоги'||label==='Недельные итоги'||label==='Месячные итоги'){
+        nextRnp[ri]=rnpHeaders.slice();rnpHeaderRows.push(ri+1);continue;
+      }
+      var fromDay=rnpIso_(rnpLabelRows[ri][1]),toDay=rnpIso_(rnpLabelRows[ri][2]||rnpLabelRows[ri][1]);
+      if(label==='День'&&fromDay){
+        var dayFact=rnpByDay[fromDay];
+        nextRnp[ri]=dayFact?[dayFact[1],dayFact[2],dayFact[3],dayFact[4],dayFact[5],dayFact[6],dayFact[8]]:rnpFinanceMissing_();
+      }else if((label==='Неделя'||label==='Месяц')&&fromDay&&toDay){
+        var periodFact=rnpByPeriod[label+'|'+fromDay+'|'+toDay];
+        nextRnp[ri]=periodFact?[periodFact[3],periodFact[4],periodFact[5],periodFact[6],periodFact[7],periodFact[8],periodFact[10]]:rnpFinanceMissing_();
+      }
+    }
+    var rnpChanged=JSON.stringify(oldRnp)!==JSON.stringify(nextRnp),rnpArchived=0;
+    if(rnpChanged){
+      var rnpHasOld=oldRnp.some(function(row){return row.some(function(value){return value!==''&&value!==null;});});
+      if(rnpHasOld)rnpArchived+=sellmonitorGithubOzonArchive_(archive,'00_РНП_магазин','K1:Q'+rnpLast,oldRnp,exported,archiveId);
+      rnpRange.setValues(nextRnp);SpreadsheetApp.flush();
+    }
+    rnpHeaderRows.forEach(function(row){
+      rnpSheet.getRange(row,11,1,7).setBackground('#17365D').setFontColor('#FFFFFF').setFontWeight('bold').setWrap(true);
+    });
+    if(rnpLast>1){
+      rnpSheet.getRange(1,11,rnpLast,5).setNumberFormat('#,##0.00;[Red]-#,##0.00;0.00');
+      rnpSheet.getRange(1,16,rnpLast,1).setNumberFormat('#,##0');
+      rnpSheet.getRange(1,17,rnpLast,1).setWrap(true);
+    }
+    var oldRnpDescription=String(rnpSheet.getRange('A3').getValue()||'');
+    var financeNotice='Начисления Ozon: только уровень магазина в колонках K:Q; это не прибыль и не разбивка по артикулам.';
+    var newRnpDescription=oldRnpDescription.indexOf(financeNotice)>=0?oldRnpDescription:
+      (oldRnpDescription?oldRnpDescription+' '+financeNotice:financeNotice);
+    if(oldRnpDescription!==newRnpDescription){
+      rnpArchived+=sellmonitorGithubOzonArchive_(archive,'00_РНП_магазин','A3',[[oldRnpDescription]],exported,archiveId);
+      rnpSheet.getRange('A3').setValue(newRnpDescription);
+    }
+    var rnpReadback=rnpRange.getValues();
+    if(JSON.stringify(rnpReadback)!==JSON.stringify(nextRnp)||String(rnpSheet.getRange('A3').getValue()||'')!==newRnpDescription)
+      throw new Error('OZON_FINANCE_RNP_READBACK_FAILED:'+cfg.name);
+    var rnpResult={rows:rnpHeaderRows.length? rnpLast:0,sha256:sellmonitorGithubOzonHash_(rnpReadback),readback:true,archived_rows:rnpArchived};
+    archiveRows+=rnpArchived;
+    var journal=ss.getSheetByName('20_API_Финансы_журнал');""";
+        if worker_text.count(store_rnp_anchor) != 1:
+            raise SystemExit("OZON_STORE_RNP_FINANCE_ANCHOR_MISMATCH")
+        worker_text = worker_text.replace(store_rnp_anchor, store_rnp_anchor + store_rnp_code, 1)
+        worker_text = worker_text.replace("VERSION: 'github-worker-1.3.88'", "VERSION: 'github-worker-1.3.89'", 1)
+        print("OZON_STORE_RNP_FINANCE=patched")
+    elif "var rnpResult={rows:rnpHeaderRows.length?" not in worker_text:
+        raise SystemExit("OZON_STORE_RNP_FINANCE_PATCH_PARTIAL")
+
     # Keep period-matrix freshness labels tied to the actual verified source and protect the prior cell value.
     freshness_marker = "WB_RNP_FRESHNESS_AND_AXIS_READBACK_V1"
     freshness_anchor = "    stats.push({sheet:spec.name,target_periods:targets.length,updated_columns:updates.length,archived_segments:archives,written_values:written,duplicates_removed:dupDates.length,min:targets[0]||'',max:targets.length?targets[targets.length-1]:''});"
