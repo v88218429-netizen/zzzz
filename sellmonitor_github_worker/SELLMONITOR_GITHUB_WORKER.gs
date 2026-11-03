@@ -7035,7 +7035,11 @@ function sellmonitorGithubFbsFormulaDiagnosticV1_(body) {
   var filters={};
   ['D3','H3','AE2','AF2','AG2'].forEach(function(a1){
     var filterCell=sheet.getRange(a1);
-    filters[a1]={formula:String(filterCell.getFormula()||''),displayVa
+    filters[a1]={formula:String(filterCell.getFormula()||''),displayValue:String(filterCell.getDisplayValue()||'')};
+  });
+  return {ok:true,client:client,sheet:'🧠 Центр решений',range:'AH1',
+    formula:String(cell.getFormula()||''),displayValue:String(cell.getDisplayValue()||''),filters:filters};
+}
 
 function sellmonitorGithubFbsFormulaRepairV1_(body) {
   var client=String(body&&body.client||'').trim().toUpperCase();
@@ -7064,10 +7068,6 @@ function sellmonitorGithubFbsFormulaRepairV1_(body) {
   return {ok:true,client:client,sheet:'🧠 Центр решений',range:'AH1',
     changed:!alreadyFixed,formula:readback,displayValue:display,
     queryHasData:!noMatches,checkedAt:new Date().toISOString()};
-}
-lue:String(filterCell.getDisplayValue()||'')};
-  });
-  return {ok:true,client:client,sheet:'🧠 Центр решений',range:'AH1',formula:String(cell.getFormula()||''),displayValue:String(cell.getDisplayValue()||''),filters:filters};
 }
 
 /** Read-only health check over real order IDs and the maximum order timestamp. */
