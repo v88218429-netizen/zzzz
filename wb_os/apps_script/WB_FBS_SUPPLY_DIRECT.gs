@@ -437,20 +437,33 @@ function wbFbsSupplyWriteSupplySheet_(ss, supplyRows, orderCounts, checkedAt) {
     wbFbsSupplySetStage_('SUPPLY_CLEAR_STALE_DONE', '');
   }
   if(out.length){
-    wbFbsSupplySetStage_('SUPPLY_WRITE_ROWS_START', 'rows=' + out.length + ' response_readback=true');
-    var rowsWrite = wbFbsSupplySheetsApiWrite_(
-      supplySheetA1 + 'A2:I' + (out.length + 1), out, true
-    );
-    wbFbsSupplySetStage_('SUPPLY_WRITE_ROWS_DONE', 'rows=' + out.length);
-    var expectedRows = rowsWrite.normalizedValues || [];
-    var returnedRows = wbFbsSupplyNormalizeRows_(
-      ((rowsWrite.response || {}).updatedData || {}).values || [], expectedRows.length, header.length
-    );
-    wbFbsSupplySetStage_('SUPPLY_READBACK_RESPONSE_COMPARE_START', 'rows=' + expectedRows.length);
-    if (!wbFbsSupplyMatricesEqual_(expectedRows, returnedRows)) {
-      throw new Error('WB_FBS_DIRECT: supply write response readback mismatch rows=' + expectedRows.length);
+    var writeChunkSize = 250;
+    wbFbsSupplySetStage_('SUPPLY_WRITE_ROWS_START',
+      'rows=' + out.length + ' chunk_size=' + writeChunkSize + ' response_readback=true');
+    for (var writeOffset = 0; writeOffset < out.length; writeOffset += writeChunkSize) {
+      var writeChunk = out.slice(writeOffset, writeOffset + writeChunkSize);
+      var writeStartRow = writeOffset + 2;
+      var writeEndRow = writeStartRow + writeChunk.length - 1;
+      wbFbsSupplySetStage_('SUPPLY_WRITE_ROWS_CHUNK_START',
+        'start_row=' + writeStartRow + ' end_row=' + writeEndRow + ' rows=' + writeChunk.length);
+      var rowsWrite = wbFbsSupplySheetsApiWrite_(
+        supplySheetA1 + 'A' + writeStartRow + ':I' + writeEndRow, writeChunk, true
+      );
+      var expectedRows = rowsWrite.normalizedValues || [];
+      var returnedRows = wbFbsSupplyNormalizeRows_(
+        ((rowsWrite.response || {}).updatedData || {}).values || [], expectedRows.length, header.length
+      );
+      wbFbsSupplySetStage_('SUPPLY_READBACK_RESPONSE_COMPARE_START',
+        'start_row=' + writeStartRow + ' rows=' + expectedRows.length);
+      if (!wbFbsSupplyMatricesEqual_(expectedRows, returnedRows)) {
+        throw new Error('WB_FBS_DIRECT: supply write response readback mismatch start_row=' +
+          writeStartRow + ' rows=' + expectedRows.length);
+      }
+      wbFbsSupplySetStage_('SUPPLY_READBACK_RESPONSE_DONE',
+        'start_row=' + writeStartRow + ' rows=' + returnedRows.length);
     }
-    wbFbsSupplySetStage_('SUPPLY_READBACK_RESPONSE_DONE', 'rows=' + returnedRows.length);
+    wbFbsSupplySetStage_('SUPPLY_WRITE_ROWS_DONE', 'rows=' + out.length + ' chunks=' +
+      Math.ceil(out.length / writeChunkSize) + ' response_readback=verified');
   }
   // Existing rows already have these formats; formatting the whole supply
   // table on every refresh can stall large workbooks. Format only newly appended
