@@ -279,6 +279,7 @@ function wbFbsSupplySheetsApiRetry_(operation, call) {
 }
 
 function wbFbsSupplyNormalizeRows_(rows, rowCount, columnCount) {
+  rows = rows || [];
   var normalized = [];
   for (var r = 0; r < rowCount; r++) {
     var row = (rows[r] || []).slice(0, columnCount);
@@ -471,7 +472,6 @@ function wbFbsSupplyWriteSupplySheet_(ss, supplyRows, orderCounts, checkedAt) {
     wbFbsSupplySetStage_('SUPPLY_FORMAT_SKIP', 'existing_rows_keep_format');
   }
   wbFbsSupplySetStage_('SUPPLY_API_WRITE_DONE', 'rows=' + out.length + ' response_readback=verified');
-  var rowsReadback = out;
   var staleCount=Math.max(0,(oldLast-1)-out.length);
   if(staleCount){
     wbFbsSupplySetStage_('SUPPLY_STALE_READBACK_START', 'rows=' + staleCount);
@@ -634,7 +634,7 @@ function wbFbsSupplyBackfillOrders_(ss, suppliesById, options) {
   var sortedReadbackVerified = true;
 
   return {checked: n, matched: matched, sorted: sortedFilled,
-    timingReadbackVerified:true,sortedReadbackVerified:true,
+    timingReadbackVerified:timingReadbackVerified,sortedReadbackVerified:sortedReadbackVerified,
     startRow: start, endRow: end, complete: start <= 2};
 }
 
