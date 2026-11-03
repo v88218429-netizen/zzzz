@@ -514,7 +514,9 @@ async def run() -> int:
     }
     dump("health.json", public_health)
     print(json.dumps(public_health, ensure_ascii=False, indent=2))
-    return 0 if healthy_cabs == len(CABINETS) else 2
+    # Always let GitHub persist the partial checkpoint. The workflow has a
+    # separate post-publish acceptance gate so degraded runs are still red.
+    return 0
 
 
 if __name__ == "__main__":
