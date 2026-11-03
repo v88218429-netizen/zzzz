@@ -156,6 +156,10 @@ def owner_dashboard(payload: dict[str, Any]) -> dict[str, Any]:
     return {
         "generated_at": payload.get("generated_at"),
         "overall_status": payload.get("health"),
+        "acceptance_status": (payload.get("acceptance") or {}).get("status"),
+        "acceptance_ready": (payload.get("acceptance") or {}).get("ready") is True,
+        "acceptance_blocker_count": len((payload.get("acceptance") or {}).get("blockers") or []),
+        "economics_diagnostics_by_shop": (payload.get("acceptance") or {}).get("economics_diagnostics_by_shop") or {},
         "cabinets": rows,
         "top_actions": actions,
         "query_summary": q.get("summary") or {},
