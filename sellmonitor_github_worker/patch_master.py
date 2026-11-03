@@ -801,7 +801,7 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
       source_status:sync.partial===true?'PARTIAL':(sync.ok===false?'ERROR':(sync.attempted===true?'COMPLETE':'SKIPPED'))
     });"""
         worker_text = worker_text.replace(tick_anchor, tick_replacement, 1)
-        version_matches = re.findall(r"VERSION:\\s*'github-worker-(\\d+)\\.(\\d+)\\.(\\d+)'", worker_text)
+        version_matches = re.findall(r"VERSION:\s*'github-worker-(\d+)\.(\d+)\.(\d+)'", worker_text)
         if len(version_matches) != 1:
             raise SystemExit("INNER_FINANCE_PARTIAL_VERSION_PATTERN_MISMATCH")
         major, minor, patch = [int(value) for value in version_matches[0]]
