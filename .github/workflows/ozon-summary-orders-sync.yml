@@ -135,7 +135,8 @@ jobs:
           def api_post(endpoint, body, headers):
               last = None
               for attempt in range(5):
-                  print("OZON_API_REQUEST=store="+str(api_context["store"])+";flow="+str(api_context["flow"])+";page="+str(api_context["page"])+";endpoint="+endpoint+";attempt="+str(attempt+1), flush=True)
+                  if attempt > 0:
+                      print("OZON_API_RETRY=store="+str(api_context["store"])+";flow="+str(api_context["flow"])+";page="+str(api_context["page"])+";endpoint="+endpoint+";attempt="+str(attempt+1), flush=True)
                   req = urllib.request.Request(
                       "https://api-seller.ozon.ru" + endpoint,
                       data=json.dumps(body, separators=(",", ":")).encode("utf-8"),
@@ -151,7 +152,8 @@ jobs:
                           page_rows = result.get("postings") if isinstance(result, dict) else None
                           page_has_next = result.get("has_next", parsed.get("has_next", False)) if isinstance(result, dict) else parsed.get("has_next", False)
                           page_cursor = result.get("cursor") or result.get("next_cursor") if isinstance(result, dict) else None
-                          print("OZON_API_RESPONSE=store="+str(api_context["store"])+";flow="+str(api_context["flow"])+";page="+str(api_context["page"])+";endpoint="+endpoint+";rows="+str(len(page_rows) if isinstance(page_rows,list) else -1)+";has_next="+str(bool(page_has_next))+";cursor="+str(bool(page_cursor)), flush=True)
+                          if api_context["page"] == 1 or api_context["page"] % 50 == 0:
+                              print("OZON_API_PROGRESS=store="+str(api_context["store"])+";flow="+str(api_context["flow"])+";page="+str(api_context["page"])+";endpoint="+endpoint+";rows="+str(len(page_rows) if isinstance(page_rows,list) else -1)+";has_next="+str(bool(page_has_next))+";cursor="+str(bool(page_cursor)), flush=True)
                           return parsed
                   except urllib.error.HTTPError as exc:
                       detail = exc.read(1200).decode("utf-8", "replace").replace("\\n", " ")[:600]
