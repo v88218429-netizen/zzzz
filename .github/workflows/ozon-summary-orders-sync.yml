@@ -48,7 +48,7 @@ jobs:
     outputs:
       resume_store: ${{ steps.publish.outputs.resume_store }}
       resume_phase: ${{ steps.publish.outputs.resume_phase }}
-    if: ${{ (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success') && !(github.event_name == 'push' && contains(fromJSON('["Serialize Ozon publication after worker deployment","Repair Ozon finance journal and resume checkpoint","Gate Ozon runs to relevant worker changes","Fix Ozon scope gate output newlines"]'), github.event.head_commit.message)) }}
+    if: ${{ (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success') && !(github.event_name == 'push' && contains(fromJSON('["Serialize Ozon publication after worker deployment","Repair Ozon finance journal and resume checkpoint","Gate Ozon runs to relevant worker changes","Fix Ozon scope gate output newlines","Fix Ozon finance publication store labels"]'), github.event.head_commit.message)) }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
@@ -788,7 +788,8 @@ jobs:
                       delay = min(10 * (2 ** (attempt - 1)), 120)
                       print("OZON_FINANCE_PUBLISH_RETRY=store="+label+";attempt="+str(attempt+1)+"/5;wait="+str(delay)+"s;cause="+str(publish_error),flush=True)
                       time.sleep(delay)
-              item = next((x for x in (result or {}).get("stores", []) if x.get("store") == label), None) if isinstance(result, dict) else None
+              expected_store_name = {"DOM": "ДОМ", "HOZYAYUSHKA": "Хозяюшка"}.get(label)
+              item = next((x for x in (result or {}).get("stores", []) if x.get("store") == expected_store_name), None) if isinstance(result, dict) else None
               if not isinstance(result, dict) or result.get("ok") is not True or not item or item.get("readback") is not True:
                   finance_failures.append(label + ":PUBLISH_READBACK_FAILED:" + json.dumps(item or result, ensure_ascii=False)[:500])
                   print("OZON_FINANCE_PUBLISH=store="+label+";status=retry_required;readback=false",flush=True)
