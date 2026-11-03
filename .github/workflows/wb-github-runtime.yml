@@ -220,3 +220,30 @@ jobs:
           git add README.md state
           git commit -m "runtime: encrypted latest WB state"
           git push origin HEAD:runtime-state --force
+
+      - name: Fail run when published production acceptance is incomplete
+        if: success()
+        run: |
+          python - <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          health = json.loads(pathlib.Path("state/health.json").read_text(encoding="utf-8"))
+          failures = []
+          if health.get("health") != "ok":
+              failures.append("runtime health is not ok")
+          if health.get("acceptance_ready") is not True:
+              failures.append("optimizer acceptance is not ready")
+          if health.get("connected_cabinets") != health.get("expected_cabinets"):
+              failures.append("not all WB cabinets are connected")
+          if health.get("sheets_live") is not True or health.get("dashboard_published") is not True:
+              failures.append("fresh Google Sheets dashboard was not confirmed")
+          if health.get("source_error_stages"):
+              failures.append("source errors: " + ", ".join(health["source_error_stages"]))
+          if failures:
+              for failure in failures:
+                  print("::error::" + failure)
+              raise SystemExit(1)
+          print("Published runtime snapshot passed production acceptance.")
+          PY
