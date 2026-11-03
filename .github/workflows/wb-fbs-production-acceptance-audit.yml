@@ -183,6 +183,13 @@ jobs:
                   formula_errors=sum(int(sheet.get("formulaErrorCount") or 0) for sheet in analytics)
                   if formula_errors:
                       quality_issues.append(client+":formulaErrors="+str(formula_errors))
+                  unverified_formula_scans=[
+                      str(sheet.get("sheet") or "unknown")
+                      for sheet in analytics
+                      if sheet.get("scanTruncated") is not False
+                  ]
+                  if unverified_formula_scans:
+                      quality_issues.append(client+":formulaScanIncomplete="+",".join(unverified_formula_scans))
                   chart_total=int((client_data.get("charts") or {}).get("total") or 0)
                   if chart_total!=expected_charts[client]:
                       quality_issues.append(client+":charts="+str(chart_total)+" expected="+str(expected_charts[client]))
