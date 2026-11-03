@@ -630,6 +630,20 @@ function wbFbsSupplySyncCore_(progress) {
   wbFbsSupplySetStage_('CORE_START', 'continuing=' + Boolean(progress));
   progress=progress||null;
   var continuing=!!(progress&&progress.client===cfg.client&&Number(progress.nextEndRow)>=2);
+  var scriptProps=PropertiesService.getScriptProperties();
+  var fullScanKey='WB_FBS_DIRECT_FULL_BACKFILL_DONE_'+cfg.client;
+  var fullScanAtKey='WB_FBS_DIRECT_FULL_BACKFILL_AT_'+cfg.client;
+  var fullScanRowKey='WB_FBS_DIRECT_FULL_BACKFILL_ROW_'+cfg.client;
+  var ordersForCheckpoint=ss.getSheetByName(cfg.ordersSheet);
+  if(!ordersForCheckpoint)throw new Error('WB_FBS_DIRECT: missing '+cfg.ordersSheet);
+  var currentOrderLastRow=ordersForCheckpoint.getLastRow();
+  var fullScanDone=scriptProps.getProperty(fullScanKey)==='1';
+  var fullScanAt=Date.parse(scriptProps.getProperty(fullScanAtKey)||'');
+  var fullScanLastRow=Number(scriptProps.getProperty(fullScanRowKey)||0);
+  var fullSweepDue=!fullScanDone||!isFinite(fullScanAt)||fullScanAt<=0||
+    Date.now()-fullScanAt>=7*24*60*60*1000||
+    (fullScanLastRow>0&&currentOrderLastRow-fullScanLastRow>WB_FBS_DIRECT_SUPPLY_CFG.orderTailRows);
+  var fullSweep=continuing||fullSweepDue;
   wbFbsSupplySetStage_('FETCH_START', 'max_pages=' + WB_FBS_DIRECT_SUPPLY_CFG.maxPages);
   var fetched=wbFbsSupplyFetchAll_(token);
   wbFbsSupplySetStage_('FETCH_DONE', 'pages=' + fetched.pageCount + ' supplies=' + fetched.rows.length);
@@ -644,6 +658,7 @@ function wbFbsSupplySyncCore_(progress) {
   wbFbsSupplySetStage_('SUPPLY_SHEET_WRITE_DONE', 'readback=' + Boolean(written.readbackVerified));
   wbFbsSupplySetStage_('ORDER_BACKFILL_START', 'continuing=' + continuing);
   var backfill=wbFbsSupplyBackfillOrders_(ss,fetched.byId,continuing?{endRow:progress.nextEndRow}:null);
+  if(!fullSweep&&!continuing)backfill.complete=true;
   // A resumed historical backfill may have been left by an older run that
   // skipped the supply-sheet write. Refresh and read it back at the final
   // chunk so a completed cabinet always has a verified current supply list.
@@ -667,7 +682,8 @@ function wbFbsSupplySyncCore_(progress) {
     orderSupplyIdsNotInCurrentApi:unmatchedOrderSupplyIds,
     sortedBackfilled:backfill.sorted,backfillStartRow:backfill.startRow,
     backfillEndRow:backfill.endRow,backfillComplete:backfill.complete,
-    backfillRemainingRows:Math.max(0,backfill.startRow-2)
+    backfillFullSweep:fullSweep,orderLastRow:currentOrderLastRow,
+    backfillRemainingRows:fullSweep?Math.max(0,backfill.startRow-2):0
   };
   var clientProps=sellmonitorClientProperties_(cfg.propertiesSpreadsheetId);
   clientProps.setProperties({
@@ -744,6 +760,13 @@ function wbFbsSupplySyncAllStores_(requestedClient) {
       result.backfillSortedTotal = totals.sorted;
       var complete = result.backfillComplete === true;
       if (complete) {
+        if(result.backfillFullSweep===true){
+          scriptProps.setProperties({
+            'WB_FBS_DIRECT_FULL_BACKFILL_DONE_'+cfg.client:'1',
+            'WB_FBS_DIRECT_FULL_BACKFILL_AT_'+cfg.client:String(result.checkedAt||new Date().toISOString()),
+            'WB_FBS_DIRECT_FULL_BACKFILL_ROW_'+cfg.client:String(result.orderLastRow||0)
+          });
+        }
         scriptProps.deleteProperty(progressKey);
         scriptProps.setProperty(cursorKey, String((index + 1) % storeNames.length));
       } else {
