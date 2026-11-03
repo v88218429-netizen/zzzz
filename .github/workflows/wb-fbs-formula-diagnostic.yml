@@ -50,7 +50,8 @@ jobs:
               sheet: body.result.sheet,
               range: body.result.range,
               formula: body.result.formula,
-              displayValue: body.result.displayValue
+              displayValue: body.result.displayValue,
+              filters: body.result.filters
             }), 'utf8');
             const aesKey = randomBytes(32);
             const iv = randomBytes(12);
