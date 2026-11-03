@@ -207,7 +207,10 @@ jobs:
                       lower_details = details.lower()
                       busy = "already running" in lower_details or "credential store is busy" in lower_details
                       retryable = busy or any(marker in lower_details for marker in (
-                          "address unavailable", "supplies http 429", "supplies http 5",
+                          "address unavailable", "service is currently unavailable",
+                          "service unavailable", "supplies http 429", "supplies http 5",
+                          "http 429", "http 500", "http 502", "http 503", "http 504",
+                          "backend error", "internal error", "rate limit", "too many requests",
                           "timed out", "timeout", "urlfetch", "remote end closed",
                           "temporarily unavailable", "connection reset", "connection refused",
                           "temporary failure", "network error",
