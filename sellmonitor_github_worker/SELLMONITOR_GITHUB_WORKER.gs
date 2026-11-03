@@ -5087,7 +5087,7 @@ function sellmonitorGithubPublishDashboard_(dashboard) {
 
   push('', '', '', '', '', '', '', '');
   push('ПРИОРИТЕТ', 'КАБИНЕТ', 'РЕШЕНИЕ', 'ДИАГНОЗ', 'УВЕРЕННОСТЬ', 'FOLLOW-UP', 'ОБЪЕКТ', '');
-  (dashboard.top_actions || []).slice(0, 25).forEach(function(x) {
+  (dashboard.top_actions || []).forEach(function(x) {
     push(x.priority || '', x.cabinet || '', x.title || '', x.diagnosis || '', x.confidence || '', x.follow_up || '', x.entity_id || '', '');
   });
 
@@ -5104,20 +5104,37 @@ function sellmonitorGithubPublishDashboard_(dashboard) {
     ['Готовых действий', qs.ready_query_actions],
     ['Блокеров данных', qs.data_blockers]
   ].forEach(function(x) { push(x[0], x[1] == null ? '' : x[1], '', '', '', '', '', ''); });
+  var blockedCounts = qs.blocked_reason_counts || {};
+  Object.keys(blockedCounts).sort().forEach(function(reason) {
+    push('Причина: ' + reason, blockedCounts[reason], '', '', '', '', '', '');
+  });
 
   push('', '', '', '', '', '', '', '');
   push('ЗАДАЧИ ПО ЗАПРОСАМ', 'SKU', 'ЗАПРОС', 'ОЧЕРЕДЬ', 'РЕШЕНИЕ', 'СТАВКА СЕЙЧАС', 'ЦЕЛЬ', 'РЕЖИМ');
-  (dashboard.query_tasks || []).slice(0, 30).forEach(function(x) {
+  (dashboard.query_tasks || []).forEach(function(x) {
     push('', x.sku || '', x.query || '', x.queue || '', x.decision || '', x.current_search_bid_rub == null ? '' : x.current_search_bid_rub, x.target_search_bid_rub == null ? '' : x.target_search_bid_rub, x.execution_mode || '');
   });
 
   push('', '', '', '', '', '', '', '');
-  push('БЛОКЕРЫ ДАННЫХ', 'SKU', 'ЗАПРОС', 'БЛОКЕРЫ', '', '', '', '');
-  (dashboard.data_blockers || []).slice(0, 30).forEach(function(x) {
-    push('', x.sku || '', x.query || '', (x.blockers || []).join(', '), '', '', '', '');
+  push('БЛОКЕРЫ ДАННЫХ', 'SKU', 'АРТИКУЛ', 'ПОИСКОВАЯ ФРАЗА', 'КАБИНЕТ', 'ПРИЧИНЫ', 'ЗНАЧЕНИЯ ФАКТОВ', 'ИСТОЧНИК И СВЕЖЕСТЬ');
+  (dashboard.data_blockers || []).forEach(function(x) {
+    var freshness = x.freshness || {};
+    var timestamps = x.timestamps || {};
+    var frequency = freshness.frequency || {};
+    var position = freshness.position || {};
+    var values = 'Частотность: ' + (x.frequency == null ? 'нет' : x.frequency) +
+      '; позиция: ' + (x.position == null ? 'нет' : x.position);
+    var freshnessText = 'Частотность: ' + (frequency.status || 'нет статуса') +
+      ' (' + (frequency.at || timestamps.frequency || 'нет времени') + ')' +
+      '; позиция: ' + (position.status || 'нет статуса') +
+      ' (' + (position.at || timestamps.position || 'нет времени') + ')';
+    push('', x.sku || '', x.seller_article || '', x.query || '', x.store_id || '',
+      (x.blockers || []).join(', '), values, (x.source || '') + '; ' + freshnessText);
   });
 
   if (rows.length) {
+    var currentRows = sh.getMaxRows();
+    if (currentRows < rows.length) sh.insertRowsAfter(currentRows, rows.length - currentRows);
     sh.getRange(1, 1, rows.length, 8).setValues(rows);
     sh.getRange(1, 1, 1, 8).setFontWeight('bold').setFontSize(14);
     sh.getRange(4, 1, 1, 8).setFontWeight('bold');
