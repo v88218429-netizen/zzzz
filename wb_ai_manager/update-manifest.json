@@ -141,7 +141,7 @@
         {
           "path": "src/wb_control_center/advertising_controller.py",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/a70db23e37b51d8f870bb1fabed48ac312e2877d/wb_ai_manager/source/src/wb_control_center/advertising_controller.py",
-          "sha256": "4a88c51b44212e89b68e6116c19bbba6599f33ae0415402a38709ba327e66450"
+          "sha256": "fbe0969d2d8ceada303140208fd5e65c7ae7bfdc4c67abfaddfa907d9b07f570"
         },
         {
           "path": "src/wb_control_center/agents/__init__.py",
