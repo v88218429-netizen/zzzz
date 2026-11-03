@@ -115,7 +115,7 @@ jobs:
           import json, os, sys, time, urllib.request
           repository = os.environ['REPOSITORY']
           commit = os.environ['COMMIT_SHA']
-          url = 'https://api.github.com/repos/' + repository + '/actions/runs?per_page=100'
+          url = 'https://api.github.com/repos/' + repository + '/actions/runs?head_sha=' + commit + '&per_page=100'
           headers = {'Authorization': 'Bearer ' + os.environ['GH_TOKEN'],
                      'Accept': 'application/vnd.github+json',
                      'X-GitHub-Api-Version': '2022-11-28'}

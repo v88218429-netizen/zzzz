@@ -20,17 +20,15 @@ jobs:
       BRIDGE_KEY: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
       CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
     steps:
-      - name: Release obsolete FBS run waiting for an impossible deployment
+      - name: Coalesce superseded FBS supply runs before any write
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
         shell: bash
         run: |
           python3 - <<'PY'
-          import json, os, urllib.request
+          import json, os, urllib.parse, urllib.request
           repo=os.environ["REPOSITORY"]
-          run_id="41645459967"
-          expected_sha="3832653086f756c6cc232ca732827a3b2916f512"
           headers={"Authorization":"Bearer "+os.environ["GH_TOKEN"],
                    "Accept":"application/vnd.github+json",
                    "X-GitHub-Api-Version":"2022-11-28"}
@@ -39,28 +37,33 @@ jobs:
               request=urllib.request.Request(url,headers=headers)
               with urllib.request.urlopen(request,timeout=20) as response:
                   return json.load(response)
-          run=get(base+"/actions/runs/"+run_id)
-          if (run.get("head_sha")!=expected_sha or run.get("run_attempt")!=1 or
-              run.get("status") not in {"queued","in_progress","pending","waiting","requested"}):
-              print("FBS_OBSOLETE_RUN_CANCEL=skipped status_or_identity_changed",flush=True)
-              raise SystemExit(0)
-          jobs=get(base+"/actions/runs/"+run_id+"/jobs?per_page=100").get("jobs",[])
-          waiting=any(
-              step.get("name")=="Wait for the matching Apps Script deployment" and
-              step.get("status")=="in_progress"
-              for job in jobs for step in job.get("steps",[])
-          )
-          if not waiting:
-              print("FBS_OBSOLETE_RUN_CANCEL=skipped wait_step_not_active",flush=True)
-              raise SystemExit(0)
-          request=urllib.request.Request(
-              base+"/actions/runs/"+run_id+"/cancel",
-              data=b"{}",
-              headers={**headers,"Content-Type":"application/json"},
-              method="POST")
-          with urllib.request.urlopen(request,timeout=20) as response:
-              print("FBS_OBSOLETE_RUN_CANCEL=sent run="+run_id+
-                    " http="+str(response.status),flush=True)
+          current=get(base+"/contents/wb_os/apps_script/WB_FBS_SUPPLY_DIRECT.gs?ref=mainggg").get("sha")
+          runs=get(base+"/actions/workflows/402532076/runs?branch=mainggg&per_page=100").get("workflow_runs",[])
+          active={"queued","in_progress","pending","waiting","requested"}
+          for run in runs:
+              if run.get("status") not in active:
+                  continue
+              run_id=str(run.get("id"))
+              source=run.get("head_sha") or ""
+              source_blob=get(base+"/contents/wb_os/apps_script/WB_FBS_SUPPLY_DIRECT.gs?ref="+urllib.parse.quote(source,safe="")).get("sha")
+              if not source_blob or source_blob==current:
+                  continue
+              status=run.get("status")
+              safe_to_cancel=status in {"queued","pending","waiting","requested"}
+              if status=="in_progress":
+                  jobs=get(base+"/actions/runs/"+run_id+"/jobs?per_page=100").get("jobs",[])
+                  steps=[step for job in jobs for step in job.get("steps",[])]
+                  waiting=any(step.get("name")=="Wait for the matching Apps Script deployment" and step.get("status")=="in_progress" for step in steps)
+                  sync_step=next((step for step in steps if step.get("name")=="Reconcile supply lists and order timings"),None)
+                  safe_to_cancel=waiting or (sync_step is not None and sync_step.get("status")=="pending")
+              if not safe_to_cancel:
+                  continue
+              request=urllib.request.Request(base+"/actions/runs/"+run_id+"/cancel",data=b"{}",
+                  headers={**headers,"Content-Type":"application/json"},method="POST")
+              with urllib.request.urlopen(request,timeout=20) as response:
+                  print("FBS_SUPPLY_SUPERSEDED_CANCEL=sent run="+run_id+
+                        " http="+str(response.status),flush=True)
+          print("FBS_SUPPLY_CURRENT_SOURCE_BLOB="+str(current),flush=True)
           PY
 
       - name: Read bridge runtime stage and leases (fresh check 27)
