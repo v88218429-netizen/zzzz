@@ -7375,6 +7375,19 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
     }
     function readDisplayGrid_(startRow,startColumn,rowCount,columnCount){
       if(rowCount<=0)return [];
+      // Keep large production-book reads below UrlFetch time and response limits.
+      // The full ID column is inspected during each bounded ingest call, so one
+      // request for tens of thousands of rows can stall before any write begins.
+      var chunkRows=5000;
+      if(rowCount>chunkRows){
+        var combined=[];
+        for(var offset=0;offset<rowCount;offset+=chunkRows){
+          var size=Math.min(chunkRows,rowCount-offset);
+          var part=readDisplayGrid_(startRow+offset,startColumn,size,columnCount);
+          for(var partRow=0;partRow<part.length;partRow++)combined.push(part[partRow]);
+        }
+        return combined;
+      }
       var a1=orderSheet+'!'+columnLetter_(startColumn)+startRow+':'+
         columnLetter_(startColumn+columnCount-1)+(startRow+rowCount-1);
       var response=fetchSheetApi(apiBase+'/values/'+encodeURIComponent(a1)+
