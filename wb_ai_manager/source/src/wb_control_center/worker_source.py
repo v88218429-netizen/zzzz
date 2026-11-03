@@ -242,6 +242,22 @@ class WorkerSource:
         value = json.loads(stream.read().decode("utf-8"))
         return value if isinstance(value, dict) else {}
 
+    @staticmethod
+    def _optimizer_bundle_view(payload: dict[str, Any], retrieved_at: str | None = None) -> dict[str, Any]:
+        shops = payload.get("shops")
+        if payload.get("schema_version") != 1 or not isinstance(shops, dict):
+            raise WorkerSourceError("GitHub optimizer archive has an unsupported or incomplete schema")
+        return {
+            "source": "github-optimizer-state",
+            "retrieved_at": retrieved_at or datetime.now(timezone.utc).isoformat(),
+            "generated_at": payload.get("generated_at"),
+            "shops": {key: value for key, value in shops.items()
+                      if key in {"ap", "aa", "yv"} and isinstance(value, dict)},
+            "query_manager": payload.get("query_manager") if isinstance(payload.get("query_manager"), dict) else {},
+            "portfolio": payload.get("portfolio") if isinstance(payload.get("portfolio"), dict) else {},
+            "acceptance": payload.get("acceptance") if isinstance(payload.get("acceptance"), dict) else {},
+        }
+
     async def optimizer_bundle(self) -> dict[str, Any]:
         """Read the cabinet-scoped optimizer payload from encrypted GitHub state."""
         if not self.traffic_configured:
@@ -284,18 +300,7 @@ class WorkerSource:
                     if path.is_absolute() or ".." in path.parts:
                         raise WorkerSourceError("Unsafe path in GitHub optimizer archive")
                 payload = self._json_from_archive(archive, "optimizer-state.json")
-        shops = payload.get("shops")
-        if payload.get("schema_version") != 1 or not isinstance(shops, dict):
-            raise WorkerSourceError("GitHub optimizer archive has an unsupported or incomplete schema")
-        return {
-            "source": "github-optimizer-state",
-            "retrieved_at": datetime.now(timezone.utc).isoformat(),
-            "generated_at": payload.get("generated_at"),
-            "shops": {key: value for key, value in shops.items()
-                      if key in {"ap", "aa", "yv"} and isinstance(value, dict)},
-            "query_manager": payload.get("query_manager") if isinstance(payload.get("query_manager"), dict) else {},
-            "portfolio": payload.get("portfolio") if isinstance(payload.get("portfolio"), dict) else {},
-        }
+        return self._optimizer_bundle_view(payload)
 
     async def traffic_bundle(self) -> dict[str, Any]:
         """Read private, encrypted WB traffic facts stored only in GitHub."""
