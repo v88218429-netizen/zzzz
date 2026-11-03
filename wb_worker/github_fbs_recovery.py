@@ -269,7 +269,9 @@ def ingest(client: str, orders: list[dict]) -> dict:
                         # Fixed-range order-ID upserts are safe to retry after ambiguous responses.
                         "FBS_INSERT_WRITE_TIMEOUT", "FBS_INSERT_WRITE_EXCEPTION",
                         "FBS_INSERT_HTTP_429", "FBS_INSERT_HTTP_500",
-                        "FBS_INSERT_HTTP_502", "FBS_INSERT_HTTP_503", "FBS_INSERT_HTTP_504"
+                        "FBS_INSERT_HTTP_502", "FBS_INSERT_HTTP_503", "FBS_INSERT_HTTP_504",
+                        # Reads are retried internally per 500-row block; retry the same idempotent batch if all attempts time out.
+                        "FBS_SHEET_RANGE_READ_RETRY_EXHAUSTED_"
                     )
                 )
                 if not retryable and details:
@@ -281,6 +283,7 @@ def ingest(client: str, orders: list[dict]) -> dict:
                         "FBS_DATE_OUTSIDE_RECOVERY_WINDOW", "FBS_ID_INVALID",
                         "FBS_MISSING_CONFIRMED_STATUS", "FBS_DATE_INVALID",
                         "FBS_COLUMN_SCHEMA_MISMATCH", "FBS_INSERT_READBACK_FAILED",
+                        "FBS_SHEET_RANGE_READ_RETRY_EXHAUSTED_",
                         "FBS_BOOK_SCHEMA_MISSING", "FBS_CLIENT_NOT_ALLOWED",
                         "GITHUB_FBS_LOCK_BUSY", "Service Spreadsheets failed",
                         "You do not have permission", "Exceeded maximum execution",
