@@ -396,23 +396,32 @@ function wbFbsSupplyWriteSupplySheet_(ss, supplyRows, orderCounts, checkedAt) {
     wbFbsSupplySheetsApiWrite_(supplySheetA1 + 'A2:I' + (out.length + 1), out);
     wbFbsSupplySetStage_('SUPPLY_WRITE_ROWS_DONE', 'rows=' + out.length);
   }
-  if(out.length){
-    wbFbsSupplySetStage_('SUPPLY_FORMAT_START', 'rows=' + out.length);
+  // Existing rows already have these formats; formatting the whole supply
+  // table on every refresh can stall large workbooks. Format only newly appended
+  // rows, and still initialize formats on a first write to an empty sheet.
+  var formatStartRowIndex = Math.max(1, oldLast);
+  var formatEndRowIndex = out.length + 1;
+  if (formatStartRowIndex < formatEndRowIndex) {
+    wbFbsSupplySetStage_('SUPPLY_FORMAT_START',
+      'start_row=' + (formatStartRowIndex + 1) + ' rows=' +
+      (formatEndRowIndex - formatStartRowIndex));
     wbFbsSupplySheetsApiFormat_([
-      {repeatCell: {range: {sheetId: sheetApiId, startRowIndex: 1, endRowIndex: out.length + 1,
+      {repeatCell: {range: {sheetId: sheetApiId, startRowIndex: formatStartRowIndex, endRowIndex: formatEndRowIndex,
         startColumnIndex: 1, endColumnIndex: 4},
         cell: {userEnteredFormat: {numberFormat: {type: 'DATE_TIME', pattern: 'dd.MM.yyyy HH:mm:ss'}}},
         fields: 'userEnteredFormat.numberFormat'}},
-      {repeatCell: {range: {sheetId: sheetApiId, startRowIndex: 1, endRowIndex: out.length + 1,
+      {repeatCell: {range: {sheetId: sheetApiId, startRowIndex: formatStartRowIndex, endRowIndex: formatEndRowIndex,
         startColumnIndex: 5, endColumnIndex: 6},
         cell: {userEnteredFormat: {numberFormat: {type: 'DATE_TIME', pattern: 'dd.MM.yyyy HH:mm:ss'}}},
         fields: 'userEnteredFormat.numberFormat'}},
-      {repeatCell: {range: {sheetId: sheetApiId, startRowIndex: 1, endRowIndex: out.length + 1,
+      {repeatCell: {range: {sheetId: sheetApiId, startRowIndex: formatStartRowIndex, endRowIndex: formatEndRowIndex,
         startColumnIndex: 6, endColumnIndex: 8},
         cell: {userEnteredFormat: {numberFormat: {type: 'NUMBER', pattern: '0'}}},
         fields: 'userEnteredFormat.numberFormat'}}
     ]);
     wbFbsSupplySetStage_('SUPPLY_FORMAT_DONE', '');
+  } else {
+    wbFbsSupplySetStage_('SUPPLY_FORMAT_SKIP', 'existing_rows_keep_format');
   }
   wbFbsSupplySetStage_('SUPPLY_API_WRITE_DONE', 'rows=' + out.length);
   // Verify header and written rows with one contiguous Sheets API read. Separate
