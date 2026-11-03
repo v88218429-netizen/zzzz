@@ -7027,7 +7027,12 @@ function sellmonitorGithubFbsFormulaDiagnosticV1_(body) {
   var sheet=ss.getSheetByName('🧠 Центр решений');
   if(!sheet)throw new Error('FBS_FORMULA_DIAGNOSTIC_SHEET_NOT_FOUND');
   var cell=sheet.getRange('AH1');
-  return {ok:true,client:client,sheet:'🧠 Центр решений',range:'AH1',formula:String(cell.getFormula()||''),displayValue:String(cell.getDisplayValue()||'')};
+  var filters={};
+  ['D3','H3','AE2','AF2','AG2'].forEach(function(a1){
+    var filterCell=sheet.getRange(a1);
+    filters[a1]={formula:String(filterCell.getFormula()||''),displayValue:String(filterCell.getDisplayValue()||'')};
+  });
+  return {ok:true,client:client,sheet:'🧠 Центр решений',range:'AH1',formula:String(cell.getFormula()||''),displayValue:String(cell.getDisplayValue()||''),filters:filters};
 }
 
 /** Read-only health check over real order IDs and the maximum order timestamp. */
