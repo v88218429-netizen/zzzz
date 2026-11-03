@@ -187,12 +187,13 @@ jobs:
           set -euo pipefail
           PYTHONPATH=.:scripts python - <<'PY'
           import json
+          import os
           import pathlib
           import subprocess
           from github_runtime import should_continue_optimizer_sweep
 
           current = json.loads(pathlib.Path("github_site/data/health.json").read_text(encoding="utf-8"))
-          previous_path = pathlib.Path("${RUNNER_TEMP}/previous-health.json")
+          previous_path = pathlib.Path(os.environ["RUNNER_TEMP"]) / "previous-health.json"
           previous = json.loads(previous_path.read_text(encoding="utf-8")) if previous_path.exists() else {}
           if should_continue_optimizer_sweep(previous, current):
               print("Incomplete sweep advanced; dispatching exactly one continuation run.")
