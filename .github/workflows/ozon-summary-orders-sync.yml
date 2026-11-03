@@ -48,7 +48,7 @@ jobs:
     outputs:
       resume_store: ${{ steps.publish.outputs.resume_store }}
       resume_phase: ${{ steps.publish.outputs.resume_phase }}
-    if: ${{ (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success') && !(github.event_name == 'push' && github.event.head_commit.message == 'Serialize Ozon publication after worker deployment') }}
+    if: ${{ (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success') && !(github.event_name == 'push' && contains(fromJSON('["Serialize Ozon publication after worker deployment","Repair Ozon finance journal and resume checkpoint"]'), github.event.head_commit.message)) }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
@@ -133,7 +133,7 @@ jobs:
               raise SystemExit("INVALID_RESUME_PHASE:" + resume_phase)
           if resume_store not in {"all", "ДОМ", "Хозяюшка"}:
               raise SystemExit("INVALID_RESUME_STORE:" + resume_store)
-          checkpoint("source", "all", "RUNNING", until, "not_written", "получить и сверить все страницы")
+          checkpoint(resume_phase, resume_store, "RUNNING", until, "not_written", "продолжить с сохранённой фазы " + resume_phase)
           api_context = {"store": "", "flow": "", "page": 0}
 
           def api_post(endpoint, body, headers):
@@ -183,182 +183,190 @@ jobs:
                   raise RuntimeError("OZON_API_POSTINGS_MISSING")
               return result, postings, bool(result.get("has_next", response.get("has_next", False)))
 
-          records_by_key = {}
-          completed_accounts = []
-          store_page_counts = {}
-          store_posting_counts = {}
-          for cabinet, label, client_var, key_var in stores:
-              client, key = os.environ.get(client_var, ""), os.environ.get(key_var, "")
-              if not client or not key:
-                  raise RuntimeError("OZON_API_CREDENTIALS_MISSING:" + label)
-              print("::add-mask::" + client)
-              print("::add-mask::" + key)
-              headers = {"Client-Id": client, "Api-Key": key, "Content-Type": "application/json"}
-              window = {"since": since, "to": until}
-              store_pages = 0
-              store_postings = 0
-              duplicate_postings = 0
-              seen_fbo_postings = {}
-              seen_fbs_postings = {}
+          if resume_phase != "finance":
+              records_by_key = {}
+              completed_accounts = []
+              store_page_counts = {}
+              store_posting_counts = {}
+              for cabinet, label, client_var, key_var in stores:
+                  client, key = os.environ.get(client_var, ""), os.environ.get(key_var, "")
+                  if not client or not key:
+                      raise RuntimeError("OZON_API_CREDENTIALS_MISSING:" + label)
+                  print("::add-mask::" + client)
+                  print("::add-mask::" + key)
+                  headers = {"Client-Id": client, "Api-Key": key, "Content-Type": "application/json"}
+                  window = {"since": since, "to": until}
+                  store_pages = 0
+                  store_postings = 0
+                  duplicate_postings = 0
+                  seen_fbo_postings = {}
+                  seen_fbs_postings = {}
 
-              def register_posting(flow, posting, timestamp, posting_number, order_id):
-                  global duplicate_postings
-                  products = posting.get("products")
-                  signature = json.dumps(
-                      [timestamp, order_id, sorted([
-                          [str(p.get("offer_id") or ""), str(p.get("sku") or ""),
-                           str(p.get("name") or ""), str(p.get("quantity") or "")]
-                          for p in products if isinstance(p, dict)
-                      ]) if isinstance(products, list) else None],
-                      ensure_ascii=False, separators=(",", ":"),
-                  )
-                  seen = seen_fbo_postings if flow == "FBO" else seen_fbs_postings
-                  prior = seen.get(posting_number)
-                  if prior is not None:
-                      if prior != signature:
-                          raise RuntimeError("OZON_" + flow + "_POSTING_CHANGED_DURING_PAGINATION:" + label)
-                      duplicate_postings += 1
-                      return False
-                  seen[posting_number] = signature
-                  return True
-
-              def posting_day(timestamp, flow):
-                  try:
-                      parsed = datetime.datetime.fromisoformat(str(timestamp).replace("Z", "+00:00"))
-                      if parsed.tzinfo is None:
-                          raise ValueError("timezone missing")
-                      return parsed.astimezone(MOSCOW).date().isoformat()
-                  except (TypeError, ValueError) as exc:
-                      raise RuntimeError("OZON_" + flow + "_INVALID_POSTING_TIMESTAMP:" + label + ":" + str(exc)[:120])
-
-              cursor = ""
-              seen_fbo_cursors = set()
-              while True:
-                  api_context.update({"store": label, "flow": "FBO", "page": store_pages + 1})
-                  response = api_post("/v3/posting/fbo/list", {
-                      "dir": "DESC", "filter": dict(window), "limit": 100, "cursor": cursor,
-                      "with": {"analytics_data": False, "financial_data": False},
-                  }, headers)
-                  page, postings, has_next = page_parts(response)
-                  store_pages += 1
-                  store_postings += len(postings)
-                  page_dates = []
-                  for posting in postings:
-                      timestamp = posting.get("in_process_at") or posting.get("created_at")
-                      if not timestamp:
-                          raise RuntimeError("OZON_FBO_REQUIRED_POSTING_FIELDS_MISSING:" + label)
-                      day = posting_day(timestamp, "FBO")
-                      page_dates.append(day)
-                      if day < COVERAGE_FROM or day > coverage_to:
-                          continue
-                      posting_number = str(posting.get("posting_number") or "").strip()
-                      order_id = str(posting.get("order_id") or "").strip()
-                      if not posting_number or not order_id:
-                          raise RuntimeError("OZON_FBO_REQUIRED_POSTING_FIELDS_MISSING:" + label)
-                      if not register_posting("FBO", posting, str(timestamp), posting_number, order_id):
-                          continue
+                  def register_posting(flow, posting, timestamp, posting_number, order_id):
+                      global duplicate_postings
                       products = posting.get("products")
-                      if not isinstance(products, list) or not products:
-                          raise RuntimeError("OZON_FBO_PRODUCTS_MISSING:" + label)
-                      for product in products:
-                          offer = str(product.get("offer_id") or "").strip()
-                          sku = str(product.get("sku") or "").strip()
-                          title = str(product.get("name") or "").strip()
-                          qty = float(product.get("quantity") or 0)
-                          if not offer or not sku or not title or not qty.is_integer() or qty <= 0:
-                              raise RuntimeError("OZON_FBO_PRODUCT_ID_OR_QUANTITY_MISSING:" + label)
-                          row_key = (cabinet, day, posting_number, order_id, offer, sku, title)
-                          records_by_key[row_key] = records_by_key.get(row_key, 0) + int(qty)
-                  if page_dates:
-                      page_oldest, page_newest = min(page_dates), max(page_dates)
-                      retained = sum(COVERAGE_FROM <= day <= coverage_to for day in page_dates)
-                      outside = len(page_dates) - retained
-                      print(f"OZON_API_{label}_FBO_PAGE_DATES={page_oldest}..{page_newest};retained={retained};outside={outside}")
-                      if outside:
-                          raise RuntimeError("OZON_FBO_FILTER_DATES_OUTSIDE_COVERAGE:" + label + ":" + page_oldest + ".." + page_newest)
-                  if not has_next:
-                      break
-                  if not postings:
-                      raise RuntimeError("OZON_FBO_EMPTY_PAGE_WITH_NEXT:" + label)
-                  next_cursor = str(page.get("cursor") or page.get("next_cursor") or response.get("cursor") or response.get("next_cursor") or "").strip()
-                  if not next_cursor or next_cursor == cursor or next_cursor in seen_fbo_cursors:
-                      raise RuntimeError("OZON_FBO_CURSOR_MISSING_OR_REPEATED:" + label)
-                  seen_fbo_cursors.add(next_cursor)
-                  cursor = next_cursor
-                  if store_pages >= 5000:
-                      raise RuntimeError("OZON_FBO_PAGE_GUARD:" + label)
+                      signature = json.dumps(
+                          [timestamp, order_id, sorted([
+                              [str(p.get("offer_id") or ""), str(p.get("sku") or ""),
+                               str(p.get("name") or ""), str(p.get("quantity") or "")]
+                              for p in products if isinstance(p, dict)
+                          ]) if isinstance(products, list) else None],
+                          ensure_ascii=False, separators=(",", ":"),
+                      )
+                      seen = seen_fbo_postings if flow == "FBO" else seen_fbs_postings
+                      prior = seen.get(posting_number)
+                      if prior is not None:
+                          if prior != signature:
+                              raise RuntimeError("OZON_" + flow + "_POSTING_CHANGED_DURING_PAGINATION:" + label)
+                          duplicate_postings += 1
+                          return False
+                      seen[posting_number] = signature
+                      return True
 
-              cursor = ""
-              seen_cursors = set()
-              previous_fbs_oldest = None
-              while True:
-                  api_context.update({"store": label, "flow": "FBS", "page": store_pages + 1})
-                  body = {
-                      "dir": "DESC", "filter": dict(window, status=""), "limit": 100, "cursor": cursor,
-                      "with": {"analytics_data": False, "financial_data": False},
-                  }
-                  response = api_post("/v4/posting/fbs/list", body, headers)
-                  page, postings, has_next = page_parts(response)
-                  store_pages += 1
-                  store_postings += len(postings)
-                  page_dates = []
-                  for posting in postings:
-                      timestamp = posting.get("in_process_at") or posting.get("created_at")
-                      if not timestamp:
-                          raise RuntimeError("OZON_FBS_REQUIRED_POSTING_FIELDS_MISSING:" + label)
-                      day = posting_day(timestamp, "FBS")
-                      page_dates.append(day)
-                      if day < COVERAGE_FROM or day > coverage_to:
-                          continue
-                      posting_number = str(posting.get("posting_number") or "").strip()
-                      order_id = str(posting.get("order_id") or "").strip()
-                      if not posting_number or not order_id:
-                          raise RuntimeError("OZON_FBS_REQUIRED_POSTING_FIELDS_MISSING:" + label)
-                      if not register_posting("FBS", posting, str(timestamp), posting_number, order_id):
-                          continue
-                      products = posting.get("products")
-                      if not isinstance(products, list) or not products:
-                          raise RuntimeError("OZON_FBS_PRODUCTS_MISSING:" + label)
-                      for product in products:
-                          offer = str(product.get("offer_id") or "").strip()
-                          sku = str(product.get("sku") or "").strip()
-                          title = str(product.get("name") or "").strip()
-                          qty = float(product.get("quantity") or 0)
-                          if not offer or not sku or not title or not qty.is_integer() or qty <= 0:
-                              raise RuntimeError("OZON_FBS_PRODUCT_ID_OR_QUANTITY_MISSING:" + label)
-                          row_key = (cabinet, day, posting_number, order_id, offer, sku, title)
-                          records_by_key[row_key] = records_by_key.get(row_key, 0) + int(qty)
-                  if page_dates:
-                      page_oldest, page_newest = min(page_dates), max(page_dates)
-                      retained = sum(COVERAGE_FROM <= day <= coverage_to for day in page_dates)
-                      outside = len(page_dates) - retained
-                      print(f"OZON_API_{label}_FBS_PAGE_DATES={page_oldest}..{page_newest};retained={retained};outside={outside}")
-                      if outside:
-                          raise RuntimeError("OZON_FBS_FILTER_DATES_OUTSIDE_COVERAGE:" + label + ":" + page_oldest + ".." + page_newest)
-                  if not has_next:
-                      break
-                  if not postings:
-                      raise RuntimeError("OZON_FBS_EMPTY_PAGE_WITH_NEXT:" + label)
-                  next_cursor = str(page.get("cursor") or page.get("next_cursor") or response.get("cursor") or response.get("next_cursor") or "").strip()
-                  if not next_cursor or next_cursor == cursor or next_cursor in seen_cursors:
-                      raise RuntimeError("OZON_FBS_CURSOR_MISSING_OR_REPEATED:" + label)
-                  seen_cursors.add(next_cursor)
-                  cursor = next_cursor
-                  if store_pages >= 5000:
-                      raise RuntimeError("OZON_FBS_PAGE_GUARD:" + label)
+                  def posting_day(timestamp, flow):
+                      try:
+                          parsed = datetime.datetime.fromisoformat(str(timestamp).replace("Z", "+00:00"))
+                          if parsed.tzinfo is None:
+                              raise ValueError("timezone missing")
+                          return parsed.astimezone(MOSCOW).date().isoformat()
+                      except (TypeError, ValueError) as exc:
+                          raise RuntimeError("OZON_" + flow + "_INVALID_POSTING_TIMESTAMP:" + label + ":" + str(exc)[:120])
 
-              completed_accounts.append(cabinet)
-              store_page_counts[label] = store_pages
-              store_posting_counts[label] = store_postings
-              print(f"OZON_API_{label}_COMPLETE=true;pages={store_pages};postings={store_postings};duplicate_postings_skipped={duplicate_postings}")
+                  cursor = ""
+                  seen_fbo_cursors = set()
+                  while True:
+                      api_context.update({"store": label, "flow": "FBO", "page": store_pages + 1})
+                      response = api_post("/v3/posting/fbo/list", {
+                          "dir": "DESC", "filter": dict(window), "limit": 100, "cursor": cursor,
+                          "with": {"analytics_data": False, "financial_data": False},
+                      }, headers)
+                      page, postings, has_next = page_parts(response)
+                      store_pages += 1
+                      store_postings += len(postings)
+                      page_dates = []
+                      for posting in postings:
+                          timestamp = posting.get("in_process_at") or posting.get("created_at")
+                          if not timestamp:
+                              raise RuntimeError("OZON_FBO_REQUIRED_POSTING_FIELDS_MISSING:" + label)
+                          day = posting_day(timestamp, "FBO")
+                          page_dates.append(day)
+                          if day < COVERAGE_FROM or day > coverage_to:
+                              continue
+                          posting_number = str(posting.get("posting_number") or "").strip()
+                          order_id = str(posting.get("order_id") or "").strip()
+                          if not posting_number or not order_id:
+                              raise RuntimeError("OZON_FBO_REQUIRED_POSTING_FIELDS_MISSING:" + label)
+                          if not register_posting("FBO", posting, str(timestamp), posting_number, order_id):
+                              continue
+                          products = posting.get("products")
+                          if not isinstance(products, list) or not products:
+                              raise RuntimeError("OZON_FBO_PRODUCTS_MISSING:" + label)
+                          for product in products:
+                              offer = str(product.get("offer_id") or "").strip()
+                              sku = str(product.get("sku") or "").strip()
+                              title = str(product.get("name") or "").strip()
+                              qty = float(product.get("quantity") or 0)
+                              if not offer or not sku or not title or not qty.is_integer() or qty <= 0:
+                                  raise RuntimeError("OZON_FBO_PRODUCT_ID_OR_QUANTITY_MISSING:" + label)
+                              row_key = (cabinet, day, posting_number, order_id, offer, sku, title)
+                              records_by_key[row_key] = records_by_key.get(row_key, 0) + int(qty)
+                      if page_dates:
+                          page_oldest, page_newest = min(page_dates), max(page_dates)
+                          retained = sum(COVERAGE_FROM <= day <= coverage_to for day in page_dates)
+                          outside = len(page_dates) - retained
+                          print(f"OZON_API_{label}_FBO_PAGE_DATES={page_oldest}..{page_newest};retained={retained};outside={outside}")
+                          if outside:
+                              raise RuntimeError("OZON_FBO_FILTER_DATES_OUTSIDE_COVERAGE:" + label + ":" + page_oldest + ".." + page_newest)
+                      if not has_next:
+                          break
+                      if not postings:
+                          raise RuntimeError("OZON_FBO_EMPTY_PAGE_WITH_NEXT:" + label)
+                      next_cursor = str(page.get("cursor") or page.get("next_cursor") or response.get("cursor") or response.get("next_cursor") or "").strip()
+                      if not next_cursor or next_cursor == cursor or next_cursor in seen_fbo_cursors:
+                          raise RuntimeError("OZON_FBO_CURSOR_MISSING_OR_REPEATED:" + label)
+                      seen_fbo_cursors.add(next_cursor)
+                      cursor = next_cursor
+                      if store_pages >= 5000:
+                          raise RuntimeError("OZON_FBO_PAGE_GUARD:" + label)
 
-          if sorted(completed_accounts) != ["1", "2"] or not records_by_key:
-              raise RuntimeError("OZON_API_BOTH_CABINETS_AND_NONEMPTY_HISTORY_REQUIRED")
-          records = [
-              {"cabinet": key[0], "day": key[1], "posting": key[2], "order": key[3],
-               "offer": key[4], "sku": key[5], "title": key[6], "qty": qty}
-              for key, qty in sorted(records_by_key.items())
-          ]
+                  cursor = ""
+                  seen_cursors = set()
+                  previous_fbs_oldest = None
+                  while True:
+                      api_context.update({"store": label, "flow": "FBS", "page": store_pages + 1})
+                      body = {
+                          "dir": "DESC", "filter": dict(window, status=""), "limit": 100, "cursor": cursor,
+                          "with": {"analytics_data": False, "financial_data": False},
+                      }
+                      response = api_post("/v4/posting/fbs/list", body, headers)
+                      page, postings, has_next = page_parts(response)
+                      store_pages += 1
+                      store_postings += len(postings)
+                      page_dates = []
+                      for posting in postings:
+                          timestamp = posting.get("in_process_at") or posting.get("created_at")
+                          if not timestamp:
+                              raise RuntimeError("OZON_FBS_REQUIRED_POSTING_FIELDS_MISSING:" + label)
+                          day = posting_day(timestamp, "FBS")
+                          page_dates.append(day)
+                          if day < COVERAGE_FROM or day > coverage_to:
+                              continue
+                          posting_number = str(posting.get("posting_number") or "").strip()
+                          order_id = str(posting.get("order_id") or "").strip()
+                          if not posting_number or not order_id:
+                              raise RuntimeError("OZON_FBS_REQUIRED_POSTING_FIELDS_MISSING:" + label)
+                          if not register_posting("FBS", posting, str(timestamp), posting_number, order_id):
+                              continue
+                          products = posting.get("products")
+                          if not isinstance(products, list) or not products:
+                              raise RuntimeError("OZON_FBS_PRODUCTS_MISSING:" + label)
+                          for product in products:
+                              offer = str(product.get("offer_id") or "").strip()
+                              sku = str(product.get("sku") or "").strip()
+                              title = str(product.get("name") or "").strip()
+                              qty = float(product.get("quantity") or 0)
+                              if not offer or not sku or not title or not qty.is_integer() or qty <= 0:
+                                  raise RuntimeError("OZON_FBS_PRODUCT_ID_OR_QUANTITY_MISSING:" + label)
+                              row_key = (cabinet, day, posting_number, order_id, offer, sku, title)
+                              records_by_key[row_key] = records_by_key.get(row_key, 0) + int(qty)
+                      if page_dates:
+                          page_oldest, page_newest = min(page_dates), max(page_dates)
+                          retained = sum(COVERAGE_FROM <= day <= coverage_to for day in page_dates)
+                          outside = len(page_dates) - retained
+                          print(f"OZON_API_{label}_FBS_PAGE_DATES={page_oldest}..{page_newest};retained={retained};outside={outside}")
+                          if outside:
+                              raise RuntimeError("OZON_FBS_FILTER_DATES_OUTSIDE_COVERAGE:" + label + ":" + page_oldest + ".." + page_newest)
+                      if not has_next:
+                          break
+                      if not postings:
+                          raise RuntimeError("OZON_FBS_EMPTY_PAGE_WITH_NEXT:" + label)
+                      next_cursor = str(page.get("cursor") or page.get("next_cursor") or response.get("cursor") or response.get("next_cursor") or "").strip()
+                      if not next_cursor or next_cursor == cursor or next_cursor in seen_cursors:
+                          raise RuntimeError("OZON_FBS_CURSOR_MISSING_OR_REPEATED:" + label)
+                      seen_cursors.add(next_cursor)
+                      cursor = next_cursor
+                      if store_pages >= 5000:
+                          raise RuntimeError("OZON_FBS_PAGE_GUARD:" + label)
+
+                  completed_accounts.append(cabinet)
+                  store_page_counts[label] = store_pages
+                  store_posting_counts[label] = store_postings
+                  print(f"OZON_API_{label}_COMPLETE=true;pages={store_pages};postings={store_postings};duplicate_postings_skipped={duplicate_postings}")
+
+              if sorted(completed_accounts) != ["1", "2"] or not records_by_key:
+                  raise RuntimeError("OZON_API_BOTH_CABINETS_AND_NONEMPTY_HISTORY_REQUIRED")
+              records = [
+                  {"cabinet": key[0], "day": key[1], "posting": key[2], "order": key[3],
+                   "offer": key[4], "sku": key[5], "title": key[6], "qty": qty}
+                  for key, qty in sorted(records_by_key.items())
+              ]
+          else:
+              records_by_key = {}
+              completed_accounts = ["1", "2"]
+              store_page_counts = {}
+              store_posting_counts = {}
+              records = []
+
           # Read-only check for the currently supported Ozon accrual endpoint; keep order publication independent.
           finance_probe_day = "2026-10-31"
           for cabinet, label, client_var, key_var in stores:

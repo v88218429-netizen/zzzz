@@ -537,7 +537,7 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
       });
       return Object.keys(map).sort().map(function(k){
         var a=map[k],calDays=datesBetween_(a.start,a.end),fullyCovered=a.start>=from&&a.end<=to,completed=a.end<today;
-        var state=!fullyCovered?'Неполный диапазон источника':(!completed?'Предварительно · незавершённый период':'Полный календарный период · снимок API');
+        var currentPartial=a.start<=today&&a.end>=today;var state=!fullyCovered?(currentPartial?'Предварительно · текущий период; данные по '+to:'Неполный диапазон источника'):(!completed?'Предварительно · незавершённый период':'Полный календарный период · снимок API');
         return [a.type,a.start,a.end,round_(a.total),round_(a.item),round_(a.posting),round_(a.nonItem),round_(a.other),a.days,calDays,state];
       });
     }
@@ -587,9 +587,12 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
     var journal=ss.getSheetByName('20_API_Финансы_журнал');if(!journal)journal=ss.insertSheet('20_API_Финансы_журнал');
     if(journal.getLastRow()===0)journal.getRange(1,1,1,11).setValues([['Время выгрузки','Магазин','Источник','Период с','Период по','Дней получено','Начислений получено','Дневных строк','Периодов','SHA-256','Итог чтения']]).setFontWeight('bold').setBackground('#17365D').setFontColor('#FFFFFF');
     var row=[exported,cfg.name,'Ozon Seller API · accrual/by-day',from,to,dates.length,storeDays.reduce(function(n,r){return n+Number(r[6]||0);},0),dayResult.rows,periodResult.rows,dayResult.sha256+' / '+periodResult.sha256,'OK: запись перечитана; пустой день отделён от сбоя'];
-    var at=journal.getLastRow()+1;sellmonitorGithubOzonEnsureRows_(journal,at);journal.getRange(at,1,1,row.length).setValues([row]);
-    var check=journal.getRange(at,1,1,row.length).getValues()[0];
-    if(JSON.stringify(check)!==JSON.stringify(row))throw new Error('OZON_FINANCE_JOURNAL_READBACK_FAILED:'+cfg.name);
+    var at=journal.getLastRow()+1;sellmonitorGithubOzonEnsureRows_(journal,at);
+    journal.getRange(at,4,1,2).setNumberFormat('yyyy-mm-dd');
+    journal.getRange(at,1,1,row.length).setValues([row]);
+    var check=journal.getRange(at,1,1,row.length).getValues()[0],normalizedCheck=check.slice();
+    [3,4].forEach(function(ci){if(normalizedCheck[ci] instanceof Date)normalizedCheck[ci]=Utilities.formatDate(normalizedCheck[ci],'Etc/GMT','yyyy-MM-dd');});
+    if(JSON.stringify(normalizedCheck)!==JSON.stringify(row))throw new Error('OZON_FINANCE_JOURNAL_READBACK_FAILED:'+cfg.name);
     return {store:cfg.name,days:dayResult.rows,periods:periodResult.rows,accrual_rows:row[6],archived_rows:archiveRows,daily_sha256:dayResult.sha256,period_sha256:periodResult.sha256,readback:true};
   }
   var results=[];
@@ -672,9 +675,30 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
         print("OZON_ORDER_FRESHNESS_NOTE_READBACK=patched")
     elif "orderFreshnessSheet.getRange('A1').getValue()||'')!==newOrderFreshnessNote" not in worker_text:
         raise SystemExit("OZON order freshness readback patch partial")
-    worker_text = worker_text.replace("VERSION: 'github-worker-1.3.86'", "VERSION: 'github-worker-1.3.87'", 1)
-    if "VERSION: 'github-worker-1.3.87'" not in worker_text:
-        raise SystemExit("OZON freshness worker version bump anchor mismatch")
+    # Keep Ozon notes aligned with the connected store-level finance source.
+    finance_note_marker = "OZON_FINANCE_COVERAGE_NOTE_V1"
+    if finance_note_marker not in worker_text:
+        finance_note_replacements = (
+            ("adCoverageNote+' Финансы, остатки и товарная воронка не передаются подключёнными источниками.';",
+             "adCoverageNote+' Финансовые начисления Ozon Seller API доступны на уровне магазина на листах 18/19; свежесть — в листе 20_API_Финансы_журнал. Это не прибыль; маржа и разбивка начислений по товару не подтверждены. Остатки и товарная воронка не подключены.';"),
+            ("Атрибутированная сумма рекламных заказов не является начисленной выручкой. Финансы, маржа, выкуп, остатки и органическая воронка не получены.",
+             "Атрибутированная сумма рекламных заказов не является начисленной выручкой. Начисления Ozon Seller API доступны по магазину на листах 18/19; это не прибыль. Маржа, выкуп, остатки и органическая воронка не подключены."),
+            ("Финансы и реклама на уровне артикула не предоставляются этим источником.",
+             "Финансовые начисления доступны только по магазину на листах 18/19; разреза по артикулам нет. Реклама показывается по кампаниям, без SKU/offer_id.")
+        )
+        for old_note, new_note in finance_note_replacements:
+            if worker_text.count(old_note) != 1:
+                raise SystemExit("OZON_FINANCE_COVERAGE_NOTE_ANCHOR_MISMATCH")
+            worker_text = worker_text.replace(old_note, new_note, 1)
+        summary_anchor = "    var newSummaryNote="
+        if worker_text.count(summary_anchor) != 1:
+            raise SystemExit("OZON_FINANCE_COVERAGE_NOTE_MARKER_ANCHOR_MISMATCH")
+        worker_text = worker_text.replace(summary_anchor, "    /* " + finance_note_marker + " */\n" + summary_anchor, 1)
+        print("OZON_FINANCE_COVERAGE_NOTE=patched")
+
+    worker_text = worker_text.replace("VERSION: 'github-worker-1.3.86'", "VERSION: 'github-worker-1.3.88'", 1)
+    if "VERSION: 'github-worker-1.3.88'" not in worker_text:
+        raise SystemExit("OZON finance worker version bump anchor mismatch")
 
     worker.write_text(worker_text, encoding="utf-8")
     print("WORKER_TRIGGER_REFRESH_V2=patched")
