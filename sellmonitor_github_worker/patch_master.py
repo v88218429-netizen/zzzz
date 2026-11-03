@@ -563,6 +563,10 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
         archiveRows+=sellmonitorGithubOzonArchive_(archive,name,'A1:'+oldWidth+':'+oldLast,old,exported,archiveId);
       }
       sh.clearContents();
+      if(rows.length>1){
+        if(name==='18_API_Финансы_дни')sh.getRange(2,1,rows.length-1,1).setNumberFormat('@');
+        else if(name==='19_API_Финансы_периоды')sh.getRange(2,2,rows.length-1,2).setNumberFormat('@');
+      }
       sh.getRange(1,1,rows.length,width).setValues(rows);
       sh.setFrozenRows(1);sh.setHiddenGridlines(true);
       sh.getRange(1,1,1,width).setBackground('#17365D').setFontColor('#FFFFFF').setFontWeight('bold').setWrap(true);
