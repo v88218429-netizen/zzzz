@@ -761,11 +761,9 @@ function wbFbsSupplySyncAllStores_(requestedClient) {
       var complete = result.backfillComplete === true;
       if (complete) {
         if(result.backfillFullSweep===true){
-          scriptProps.setProperties({
-            'WB_FBS_DIRECT_FULL_BACKFILL_DONE_'+cfg.client:'1',
-            'WB_FBS_DIRECT_FULL_BACKFILL_AT_'+cfg.client:String(result.checkedAt||new Date().toISOString()),
-            'WB_FBS_DIRECT_FULL_BACKFILL_ROW_'+cfg.client:String(result.orderLastRow||0)
-          });
+          scriptProps.setProperty('WB_FBS_DIRECT_FULL_BACKFILL_DONE_'+cfg.client,'1');
+          scriptProps.setProperty('WB_FBS_DIRECT_FULL_BACKFILL_AT_'+cfg.client,String(result.checkedAt||new Date().toISOString()));
+          scriptProps.setProperty('WB_FBS_DIRECT_FULL_BACKFILL_ROW_'+cfg.client,String(result.orderLastRow||0));
         }
         scriptProps.deleteProperty(progressKey);
         scriptProps.setProperty(cursorKey, String((index + 1) % storeNames.length));
