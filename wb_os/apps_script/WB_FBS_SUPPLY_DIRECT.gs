@@ -441,7 +441,7 @@ function wbFbsSupplyWriteSupplySheet_(ss, supplyRows, orderCounts, checkedAt) {
   // calls can stall independently under transient spreadsheet service latency,
   // leaving a successful write stuck before timing backfill can continue.
   var expectedReadback = [header].concat(out);
-  var readbackChunkRows = 1000;
+  var readbackChunkRows = 250;
   var fullReadback = [];
   wbFbsSupplySetStage_('SUPPLY_READBACK_START',
     'rows=' + expectedReadback.length + ' chunk_rows=' + readbackChunkRows);
