@@ -553,7 +553,13 @@ jobs:
                   currency = str(value.get("currency") or "").strip().upper()
                   if currency not in {"RUB", "RUR", "643"}:
                       raise RuntimeError("OZON_FINANCE_CURRENCY_UNSUPPORTED:" + store + ":" + day + ":" + (currency or "MISSING"))
-                  value = value.get("amount", value.get("value"))
+                  amount_object = value
+                  currency = str(amount_object.get("currency") or "").strip().upper()
+                  if currency not in {"RUB", "RUR", "643"}:
+                      raise RuntimeError("OZON_FINANCE_CURRENCY_UNSUPPORTED:" + store + ":" + day + ":" + (currency or "MISSING"))
+                  value = amount_object.get("amount")
+                  if value is None or value == "":
+                      value = amount_object.get("value")
               if value is None or value == "":
                   raise RuntimeError("OZON_FINANCE_AMOUNT_MISSING:" + store + ":" + day)
               raw = str(value).strip()
@@ -587,6 +593,9 @@ jobs:
                       seen_cursors = set()
                       day_rows = 0
                       day_unknown_categories = 0
+                      missing_amount_rows = 0
+                      missing_amount_categories = {}
+                      missing_amount_samples = []
                       day_totals = {k: Decimal("0.00") for k in ("ITEM", "POSTING", "NON_ITEM", "OTHER")}
                       while True:
                           finance_pages += 1
@@ -604,20 +613,34 @@ jobs:
                               if not isinstance(accrual, dict):
                                   raise RuntimeError("OZON_FINANCE_INVALID_ROW:" + label + ":" + day_key)
                               total_raw = accrual.get("total_amount")
-                              total_value = total_raw.get("value") if isinstance(total_raw, dict) else total_raw
-                              total_missing = total_value is None or total_value == ""
-                              if total_missing:
-                                  nested = {}
-                                  for field in ("posting", "item_fees", "non_item_fee"):
-                                      item = accrual.get(field)
-                                      nested[field] = sorted(item.keys()) if isinstance(item, dict) else type(item).__name__
-                                  total_keys = sorted(total_raw.keys()) if isinstance(total_raw, dict) else []
-                                  value_type = type(total_value).__name__
-                                  print("OZON_FINANCE_MISSING_AMOUNT_DIAGNOSTIC=store="+label+";day="+day_key+";category="+str(accrual.get("accrued_category") or "<empty>")+";total_type="+type(total_raw).__name__+";total_keys="+json.dumps(total_keys,ensure_ascii=True)+";value_type="+value_type+";top_keys="+json.dumps(sorted(accrual.keys()),ensure_ascii=True)+";nested_keys="+json.dumps(nested,ensure_ascii=True,sort_keys=True),flush=True)
-                                  amount = finance_amount(total_raw, label, day_key)
-                              else:
-                                  amount = finance_amount(total_raw, label, day_key)
                               raw_category = str(accrual.get("accrued_category") or "").strip().upper()
+                              try:
+                                  amount = finance_amount(total_raw, label, day_key)
+                              except RuntimeError as amount_error:
+                                  if not str(amount_error).startswith("OZON_FINANCE_AMOUNT_MISSING:"):
+                                      raise
+                                  missing_amount_rows += 1
+                                  missing_amount_categories[raw_category or "<empty>"] = missing_amount_categories.get(raw_category or "<empty>", 0) + 1
+                                  if len(missing_amount_samples) < 3:
+                                      nested = {}
+                                      for field in ("posting", "item_fees", "non_item_fee", "container_fees"):
+                                          item = accrual.get(field)
+                                          nested[field] = {
+                                              "keys": sorted(item.keys()) if isinstance(item, dict) else [],
+                                              "type": type(item).__name__,
+                                          }
+                                          if field == "posting" and isinstance(item, dict):
+                                              products = item.get("products")
+                                              nested[field]["product_count"] = len(products) if isinstance(products, list) else None
+                                          if field == "item_fees" and isinstance(item, dict):
+                                              groups = item.get("fees")
+                                              nested[field]["group_count"] = len(groups) if isinstance(groups, list) else None
+                                      missing_amount_samples.append({
+                                          "category": raw_category or "<empty>",
+                                          "total_amount_keys": sorted(total_raw.keys()) if isinstance(total_raw, dict) else [],
+                                          "nested": nested,
+                                      })
+                                  continue
                               category = raw_category if raw_category in ("ITEM", "POSTING", "NON_ITEM") else "OTHER"
                               day_totals[category] += amount
                               if category == "OTHER":
@@ -633,6 +656,9 @@ jobs:
                           cursor = next_cursor
                           if len(seen_cursors) >= 50:
                               raise RuntimeError("OZON_FINANCE_PAGE_GUARD:" + label + ":" + day_key)
+                      if missing_amount_rows:
+                          print("OZON_FINANCE_AMOUNT_GAPS=store="+label+";day="+day_key+";rows="+str(missing_amount_rows)+";categories="+json.dumps(missing_amount_categories,sort_keys=True)+";samples="+json.dumps(missing_amount_samples,ensure_ascii=True,sort_keys=True),flush=True)
+                          raise RuntimeError("OZON_FINANCE_AMOUNT_MISSING_SUMMARY:" + label + ":" + day_key + ":" + str(missing_amount_rows))
                       total = sum(day_totals.values(), Decimal("0.00"))
                       category_totals = {k: category_totals[k] + day_totals[k] for k in category_totals}
                       store_daily.append({
