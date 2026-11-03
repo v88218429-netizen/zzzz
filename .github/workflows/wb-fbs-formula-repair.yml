@@ -1,0 +1,110 @@
+name: WB FBS repair Sanych decision formula (encrypted)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      FBS_BRIDGE_URL: https://script.google.com/macros/s/AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw/exec
+      FBS_BRIDGE_KEY: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
+      GH_TOKEN: ${{ github.token }}
+      REPOSITORY: ${{ github.repository }}
+      REQUIRED_DEPLOY_SHA: 32cf353deb21919a57b25d3cf489fbdcc73f9d92
+    steps:
+      - name: Wait for the guarded formula-repair handler deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, time, urllib.request
+          headers={"Authorization":"Bearer "+os.environ["GH_TOKEN"],
+                   "Accept":"application/vnd.github+json",
+                   "X-GitHub-Api-Version":"2022-11-28"}
+          url="https://api.github.com/repos/"+os.environ["REPOSITORY"]+"/actions/runs?per_page=100"
+          for attempt in range(90):
+              req=urllib.request.Request(url,headers=headers)
+              with urllib.request.urlopen(req,timeout=20) as response:
+                  runs=json.load(response).get("workflow_runs",[])
+              matches=[run for run in runs
+                       if run.get("name")=="Sellmonitor GitHub worker deploy"
+                       and run.get("head_sha")==os.environ["REQUIRED_DEPLOY_SHA"]]
+              if matches:
+                  deployment=max(matches,key=lambda run:run.get("run_number",0))
+                  if deployment.get("status")=="completed" and deployment.get("conclusion")=="success":
+                      print("FBS_FORMULA_HANDLER_DEPLOYED=yes",flush=True)
+                      raise SystemExit(0)
+                  if deployment.get("status")=="completed":
+                      raise SystemExit("FBS_FORMULA_HANDLER_DEPLOY_FAILED")
+              time.sleep(10)
+          raise SystemExit("FBS_FORMULA_HANDLER_DEPLOY_WAIT_TIMEOUT")
+          PY
+      - name: Repair one guarded formula and encrypt readback
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$FBS_BRIDGE_KEY"
+          node <<'NODE'
+          const { randomBytes, createCipheriv, publicEncrypt } = require('node:crypto');
+          const publicKey = `-----BEGIN PUBLIC KEY-----
+          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA0EKuKAUjBkLHeLgT1oyO
+          zPxV0Rg9HDjh76GVtVAhGo9HDjh76GVtVAhGoV2IJsotxCTcMtgsS0aEXolpziuMSLAFMW7mUby/PVU
+          Gcog/0BYRO72UnpsD3bH6mFIm/pGeGY3vFHoBjLEyClVSWWL7yEAWetmC1kRJvsy
+          R0SPedNQ4FYVAPS7fzA2+y6yiA9jdeEUpwl5sCIKUo0DH/WyGcq1obR0ygMqBMgf
+          7KlTt6yL+Ha07HbR/ZuHkujGKHgfbQuTEPftOKALFNxK9L67yvnE6i4UeOMbwoUw
+          FkPiRlWCWaKOjX5moUiapQzwnh81RmOUWu5FCIGVKMnboXxwwocJ8yiMLsESwSs2
+          KQIDAQAB
+          -----END PUBLIC KEY-----`;
+          (async () => {
+            const response = await fetch(process.env.FBS_BRIDGE_URL, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                token: process.env.FBS_BRIDGE_KEY,
+                action: 'fbs_formula_repair',
+                client: 'SANYCH'
+              })
+            });
+            if (!response.ok) throw new Error('BRIDGE_HTTP_' + response.status);
+            let body;
+            try { body = await response.json(); } catch (_) { throw new Error('BRIDGE_INVALID_JSON'); }
+            if (body.ok !== true || !body.result || body.result.ok !== true)
+              throw new Error('BRIDGE_FORMULA_REPAIR_FAILED');
+            const plain = Buffer.from(JSON.stringify({
+              client: body.result.client,
+              sheet: body.result.sheet,
+              range: body.result.range,
+              changed: body.result.changed,
+              queryHasData: body.result.queryHasData,
+              formula: body.result.formula,
+              displayValue: body.result.displayValue,
+              checkedAt: body.result.checkedAt
+            }), 'utf8');
+            const aesKey = randomBytes(32);
+            const iv = randomBytes(12);
+            const cipher = createCipheriv('aes-256-gcm', aesKey, iv);
+            const ciphertext = Buffer.concat([cipher.update(plain), cipher.final()]);
+            const encryptedKey = publicEncrypt(
+              { key: publicKey, oaepHash: 'sha256' },
+              aesKey
+            );
+            const envelope = {
+              key: encryptedKey.toString('base64'),
+              iv: iv.toString('base64'),
+              tag: cipher.getAuthTag().toString('base64'),
+              data: ciphertext.toString('base64')
+            };
+            console.log('FBS_FORMULA_REPAIR_ENCRYPTED_v1=' +
+              Buffer.from(JSON.stringify(envelope)).toString('base64'));
+          })().catch(error => {
+            console.error('FBS_FORMULA_REPAIR_FAILED=' +
+              String(error && error.message || 'UNKNOWN').replace(/[^A-Z0-9_]/gi, '_'));
+            process.exitCode = 1;
+          });
+          NODE
