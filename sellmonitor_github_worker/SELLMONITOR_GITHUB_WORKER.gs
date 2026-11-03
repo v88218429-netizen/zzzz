@@ -2210,7 +2210,18 @@ function sellmonitorGithubLoadSource_(codeSheet, file) {
   }
 
   if (!parts.length) throw new Error('Active code not found: ' + file);
-  return parts.map(function(x) { return x.code; }).join('\n');
+  var loadedSource = parts.map(function(x) { return x.code; }).join('\n');
+  if (file === 'inner_product_harvest_fast_v311') {
+    var targetNeedle = "String(r[1])!=='get_product_list'";
+    var sameNeedle = "String(z[1])==='get_product_list'";
+    if (loadedSource.split(targetNeedle).length !== 2 || loadedSource.split(sameNeedle).length !== 2) {
+      throw new Error('Inner product parser source alias patch anchor mismatch');
+    }
+    loadedSource = loadedSource
+      .replace(targetNeedle, "['get_product_list','analytics_get_product_list'].indexOf(String(r[1]))<0")
+      .replace(sameNeedle, "['get_product_list','analytics_get_product_list'].indexOf(String(z[1]))>=0");
+  }
+  return loadedSource;
 }
 
 function sellmonitorGithubRebindSource_(source, spreadsheetId) {
