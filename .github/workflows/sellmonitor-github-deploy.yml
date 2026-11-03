@@ -188,8 +188,41 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          rm -f /tmp/sellmonitor-gh-worker/SELLMONITOR_GITHUB_WORKER.js /tmp/sellmonitor-gh-worker/SELLMONITOR_GITHUB_WORKER.gs
-          cp sellmonitor_github_worker/SELLMONITOR_GITHUB_WORKER.gs /tmp/sellmonitor-gh-worker/SELLMONITOR_GITHUB_WORKER.gs
+          rm -f /tmp/sellmonitor-gh-worker/SELLMONITOR_GITHUB_WORKER.js
+          python - <<'PY'
+          import pathlib, re, shutil
+          root = pathlib.Path('/tmp/sellmonitor-gh-worker')
+          source = pathlib.Path('sellmonitor_github_worker/SELLMONITOR_GITHUB_WORKER.gs')
+          source_text = source.read_text(encoding='utf-8')
+          source_match = re.search(r"VERSION:\\s*'github-worker-(\\d+(?:\\.\\d+){2})'", source_text)
+          if not source_match:
+              raise SystemExit('repository worker semantic version missing')
+          candidates = [root / 'SELLMONITOR_GITHUB_WORKER.gs', root / 'SELLMONITOR_GITHUB_WORKER.js']
+          live = next((candidate for candidate in candidates if candidate.exists()), None)
+          keep_live = False
+          live_text = ''
+          if live is not None:
+              live_text = live.read_text(encoding='utf-8')
+              live_match = re.search(r"VERSION:\\s*'github-worker-(\\d+(?:\\.\\d+){2})'", live_text)
+              finance_marker = 'SELLMONITOR_OZON_FINANCE_DAY_LAYER_V1'
+              keep_live = finance_marker in live_text and finance_marker not in source_text
+              if live_match:
+                  live_version = tuple(int(x) for x in live_match.group(1).split('.'))
+                  source_version = tuple(int(x) for x in source_match.group(1).split('.'))
+                  keep_live = keep_live or live_version >= source_version
+          target = root / 'SELLMONITOR_GITHUB_WORKER.gs'
+          if keep_live:
+              if live != target:
+                  target.write_text(live_text, encoding='utf-8')
+                  live.unlink()
+              print('WORKER_SOURCE_GUARD=preserved_newer_live_adapter')
+          else:
+              for candidate in candidates:
+                  if candidate.exists():
+                      candidate.unlink()
+              shutil.copyfile(source, target)
+              print('WORKER_SOURCE_GUARD=repository_version_selected')
+          PY
           rm -f /tmp/sellmonitor-gh-worker/WB_FBS_SUPPLY_DIRECT.js /tmp/sellmonitor-gh-worker/WB_FBS_SUPPLY_DIRECT.gs
           cp wb_os/apps_script/WB_FBS_SUPPLY_DIRECT.gs /tmp/sellmonitor-gh-worker/WB_FBS_SUPPLY_DIRECT.gs
           python - <<'PY'
