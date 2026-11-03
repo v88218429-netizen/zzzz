@@ -26,6 +26,8 @@ on:
     branches: [mainggg]
     paths:
       - ".github/workflows/ozon-summary-orders-sync.yml"
+      - "sellmonitor_github_worker/SELLMONITOR_GITHUB_WORKER.gs"
+      - "sellmonitor_github_worker/patch_master.py"
   # Часовое обновление Seller API; изменение этого файла запускает штатную проверку публикации.
   # Повторная выгрузка после исправления подсчёта SKU в неделях и месяцах.
   schedule:
