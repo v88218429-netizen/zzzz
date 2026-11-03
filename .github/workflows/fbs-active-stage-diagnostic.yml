@@ -17,8 +17,9 @@ jobs:
     env:
       BRIDGE_URL: https://script.google.com/macros/s/AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw/exec
       BRIDGE_KEY: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
+      CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
     steps:
-      - name: Read bridge runtime stage and leases (fresh check 24)
+      - name: Read bridge runtime stage and leases (fresh check 25)
         shell: bash
         run: |
           set -euo pipefail
@@ -40,4 +41,62 @@ jobs:
               "fbs_supply_stage":result.get("fbs_supply_stage"),
               "fbs_ingest_stages":result.get("fbs_ingest_stages")
           },ensure_ascii=False,separators=(",",":")),flush=True)
+          # Read only the AIR supply header and spreadsheet grid dimensions.
+          import urllib.parse
+          cfg=json.loads(os.environ["CLASPRC_JSON"])
+          token_map=cfg.get("tokens") or {}
+          credentials=list(token_map.values()) if isinstance(token_map,dict) else (token_map if isinstance(token_map,list) else [])
+          def find(obj,names):
+              wanted={x.lower().replace("_","") for x in names}
+              if isinstance(obj,dict):
+                  for key,value in obj.items():
+                      if str(key).lower().replace("_","") in wanted and isinstance(value,str) and value:return value
+                  for value in obj.values():
+                      found=find(value,names)
+                      if found:return found
+              elif isinstance(obj,list):
+                  for value in obj:
+                      found=find(value,names)
+                      if found:return found
+              return ""
+          def api_get(url,access):
+              request=urllib.request.Request(url,headers={"Authorization":"Bearer "+access})
+              with urllib.request.urlopen(request,timeout=20) as response:
+                  return json.loads(response.read().decode("utf-8"))
+          sheet_id="1qJvhEOIku7sOMydfrUz0PR5dkcU0sLjv433pa1MFBcM"
+          range_a1="'🚚 Поставки FBS'!A1:I1"
+          range_url="https://sheets.googleapis.com/v4/spreadsheets/"+sheet_id+"/values/"+urllib.parse.quote(range_a1,safe="!")
+          header_url=range_url+"?valueRenderOption=UNFORMATTED_VALUE"
+          meta_url="https://sheets.googleapis.com/v4/spreadsheets/"+sheet_id+"?"+urllib.parse.urlencode({"fields":"spreadsheetId,properties(title),sheets(properties(title,sheetId,gridProperties(rowCount,columnCount)))"})
+          air_header=None; spreadsheet=None
+          for index,cred in enumerate(credentials):
+              if not isinstance(cred,dict): continue
+              access=find(cred,["access_token","accessToken"])
+              refresh=find(cred,["refresh_token","refreshToken"])
+              try:
+                  if access:
+                      try:
+                          air_header=api_get(header_url,access)
+                          spreadsheet=api_get(meta_url,access)
+                      except urllib.error.HTTPError as exc:
+                          if exc.code not in (401,403): raise
+                  if (air_header is None or spreadsheet is None) and refresh:
+                      client_id=find(cred,["client_id","clientId"]) or find(cfg,["client_id","clientId"])
+                      client_secret=find(cred,["client_secret","clientSecret"]) or find(cfg,["client_secret","clientSecret"])
+                      if client_id and client_secret:
+                          form=urllib.parse.urlencode({"client_id":client_id,"client_secret":client_secret,"refresh_token":refresh,"grant_type":"refresh_token"}).encode()
+                          req=urllib.request.Request("https://oauth2.googleapis.com/token",data=form,method="POST")
+                          with urllib.request.urlopen(req,timeout=30) as response: new_access=json.loads(response.read().decode())["access_token"]
+                          air_header=api_get(header_url,new_access)
+                          spreadsheet=api_get(meta_url,new_access)
+                  if air_header is not None and spreadsheet is not None: break
+              except urllib.error.HTTPError as exc:
+                  print("AIR_SHEETS_READ_PROFILE_HTTP="+str(index)+":"+str(exc.code),flush=True)
+                  continue
+          if air_header is None or spreadsheet is None:
+              raise SystemExit("AIR_SHEETS_HEADER_DIAGNOSTIC_UNAVAILABLE")
+          print("AIR_SUPPLY_HEADER="+json.dumps((air_header.get("values") or [[]])[0],ensure_ascii=False,separators=(",",":")),flush=True)
+          sheets=[x.get("properties") or {} for x in spreadsheet.get("sheets",[])]
+          grid_cells=sum(int((p.get("gridProperties") or {}).get("rowCount") or 0)*int((p.get("gridProperties") or {}).get("columnCount") or 0) for p in sheets)
+          print("AIR_SPREADSHEET_GRID="+json.dumps({"title":(spreadsheet.get("properties") or {}).get("title"),"tabs":len(sheets),"configuredGridCells":grid_cells,"tabDimensions":[{"title":p.get("title"),"rows":(p.get("gridProperties") or {}).get("rowCount"),"columns":(p.get("gridProperties") or {}).get("columnCount")} for p in sheets]},ensure_ascii=False,separators=(",",":")),flush=True)
           PY
