@@ -203,15 +203,15 @@ def test_optimizer_progress_counts_campaign_product_pairs_and_only_complete_camp
         _sweep_progress,
     )
 
-    expected = {101: [1001, 1002], 202: [1002, 2001]}
-    partial = {"101": [1001, 1002], "202": [1002]}
+    expected = {101: [1001, 1002], 202: [1001, 1002]}
+    partial = {"101": [1001, 1002], "202": [1001]}
 
     # Every unique nmID has appeared, but campaign 202 still lacks one required pair.
-    assert _sweep_progress(expected, partial) == (3, 3, False)
+    assert _sweep_progress(expected, partial) == (2, 2, False)
     assert _sweep_pair_progress(expected, partial) == (3, 4, False)
     assert _completed_sweep_campaign_ids(expected, partial, [101, 202]) == [101]
 
-    complete = {"101": [1001, 1002], "202": [1002, 2001]}
+    complete = {"101": [1001, 1002], "202": [1001, 1002]}
     assert _sweep_pair_progress(expected, complete) == (4, 4, True)
     assert _completed_sweep_campaign_ids(expected, complete, [101, 202]) == [101, 202]
 

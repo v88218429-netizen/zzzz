@@ -131,7 +131,7 @@ def evaluate_optimizer_acceptance(
 
     economics_coverage: dict[str, dict[str, int]] = {}
     for code, name in SHOP_NAMES.items():
-        advertised_nm_ids = item.get("advertised_nm_ids")
+        advertised_nm_ids = (shops.get(code) or {}).get("advertised_nm_ids")
         if isinstance(advertised_nm_ids, list):
             campaign_nms = {
                 str(nm).strip() for nm in advertised_nm_ids
