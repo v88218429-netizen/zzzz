@@ -248,51 +248,11 @@ function wbFbsSupplyMatricesEqual_(expected, actual) {
   return true;
 }
 
-function wbFbsSupplySheetsApiRead_(rangeA1, rowCount, columnCount) {
-  var response = Sheets.Spreadsheets.Values.get(
-    String(WB_FBS_DIRECT_SUPPLY_CFG.spreadsheetId),
-    String(rangeA1),
-    {valueRenderOption: 'UNFORMATTED_VALUE', dateTimeRenderOption: 'SERIAL_NUMBER'}
-  );
-  var rows = (response && response.values) || [];
-  var normalized = [];
-  for (var r = 0; r < rowCount; r++) {
-    var row = (rows[r] || []).slice(0, columnCount);
-    while (row.length < columnCount) row.push('');
-    normalized.push(row);
-  }
-  return normalized;
-}
-
-function wbFbsSupplySheetsApiWrite_(rangeA1, values) {
-  var normalized = (values || []).map(function(row) {
-    return (row || []).map(function(value) {
-      return value instanceof Date ? wbFbsSupplyDateSerial_(value) : value;
-    });
-  });
-  return Sheets.Spreadsheets.Values.update(
-    {values: normalized},
-    String(WB_FBS_DIRECT_SUPPLY_CFG.spreadsheetId),
-    String(rangeA1),
-    {valueInputOption: 'RAW'}
-  );
-}
-
-function wbFbsSupplySheetsApiClear_(rangeA1) {
-  return Sheets.Spreadsheets.Values.clear(
-    {},
-    String(WB_FBS_DIRECT_SUPPLY_CFG.spreadsheetId),
-    String(rangeA1)
-  );
-}
-
-function wbFbsSupplySheetsApiBatchUpdate_(requests) {
-  if (!requests || !requests.length) return;
-  var spreadsheetId = String(WB_FBS_DIRECT_SUPPLY_CFG.spreadsheetId);
+function wbFbsSupplySheetsApiRetry_(operation, call) {
   var maxAttempts = 4;
   for (var attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      return Sheets.Spreadsheets.batchUpdate({requests: requests}, spreadsheetId);
+      return call();
     } catch (error) {
       var message = String(error && error.message ? error.message : error);
       var lower = message.toLowerCase();
@@ -310,11 +270,64 @@ function wbFbsSupplySheetsApiBatchUpdate_(requests) {
         lower.indexOf('http 504') >= 0;
       if (!retryable || attempt >= maxAttempts) throw error;
       var waitMs = Math.min(8000, 1000 * Math.pow(2, attempt - 1));
-      Logger.log('WB_FBS_SHEETS_BATCH_UPDATE_RETRY attempt=' + attempt +
-        ' wait_ms=' + waitMs + ' reason=' + message.slice(0, 180));
+      Logger.log('WB_FBS_SHEETS_API_RETRY operation=' + operation +
+        ' attempt=' + attempt + ' wait_ms=' + waitMs +
+        ' reason=' + message.slice(0, 180));
       Utilities.sleep(waitMs);
     }
   }
+}
+
+function wbFbsSupplySheetsApiRead_(rangeA1, rowCount, columnCount) {
+  var response = wbFbsSupplySheetsApiRetry_('values.get', function() {
+    return Sheets.Spreadsheets.Values.get(
+      String(WB_FBS_DIRECT_SUPPLY_CFG.spreadsheetId),
+      String(rangeA1),
+      {valueRenderOption: 'UNFORMATTED_VALUE', dateTimeRenderOption: 'SERIAL_NUMBER'}
+    );
+  });
+  var rows = (response && response.values) || [];
+  var normalized = [];
+  for (var r = 0; r < rowCount; r++) {
+    var row = (rows[r] || []).slice(0, columnCount);
+    while (row.length < columnCount) row.push('');
+    normalized.push(row);
+  }
+  return normalized;
+}
+
+function wbFbsSupplySheetsApiWrite_(rangeA1, values) {
+  var normalized = (values || []).map(function(row) {
+    return (row || []).map(function(value) {
+      return value instanceof Date ? wbFbsSupplyDateSerial_(value) : value;
+    });
+  });
+  return wbFbsSupplySheetsApiRetry_('values.update', function() {
+    return Sheets.Spreadsheets.Values.update(
+      {values: normalized},
+      String(WB_FBS_DIRECT_SUPPLY_CFG.spreadsheetId),
+      String(rangeA1),
+      {valueInputOption: 'RAW'}
+    );
+  });
+}
+
+function wbFbsSupplySheetsApiClear_(rangeA1) {
+  return wbFbsSupplySheetsApiRetry_('values.clear', function() {
+    return Sheets.Spreadsheets.Values.clear(
+      {},
+      String(WB_FBS_DIRECT_SUPPLY_CFG.spreadsheetId),
+      String(rangeA1)
+    );
+  });
+}
+
+function wbFbsSupplySheetsApiBatchUpdate_(requests) {
+  if (!requests || !requests.length) return;
+  var spreadsheetId = String(WB_FBS_DIRECT_SUPPLY_CFG.spreadsheetId);
+  return wbFbsSupplySheetsApiRetry_('batchUpdate', function() {
+    return Sheets.Spreadsheets.batchUpdate({requests: requests}, spreadsheetId);
+  });
 }
 
 function wbFbsSupplySheetsApiFormat_(requests) {
