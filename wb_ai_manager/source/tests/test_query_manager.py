@@ -78,6 +78,24 @@ def test_unknown_economics_never_increases_bid():
     assert card["bid_decision"]["decision"]=="HOLD"
     assert card["execution_mode"]=="INFORMATION_ONLY"
 
+def test_operator_brief_reports_every_blocked_query_and_reason_count():
+    rows = [
+        row(query=f"товарная фраза {i}", snapshot_at="2026-09-20T00:00:00+00:00")
+        for i in range(12)
+    ]
+    result = QueryManager(now=NOW).build({"own_27":{"products":[product(rows)]}})
+    brief = result["operator_brief"]
+    assert len(brief["data_blockers"]) == 12
+    assert brief["query_summary"]["blocked_reason_counts"] == {
+        "stale_frequency": 12, "stale_position": 12,
+    }
+    item = brief["data_blockers"][0]
+    assert item["sku"] == "566189858"
+    assert item["query"].startswith("товарная фраза")
+    assert item["campaign_id"] == "36632705"
+    assert item["freshness"]["position"]["status"] == "stale"
+
+
 def test_mixed_freshness_is_operational_but_stale_rows_stay_quarantined():
     rows=[
         row(query="ведро",snapshot_at="2026-10-03T08:00:00+00:00"),

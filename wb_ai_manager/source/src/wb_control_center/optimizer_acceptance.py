@@ -130,6 +130,7 @@ def evaluate_optimizer_acceptance(
             product_by_shop[code][sku] = product
 
     economics_coverage: dict[str, dict[str, int]] = {}
+    economics_diagnostics: dict[str, list[dict[str, Any]]] = {}
     for code, name in SHOP_NAMES.items():
         advertised_nm_ids = (shops.get(code) or {}).get("advertised_nm_ids")
         if isinstance(advertised_nm_ids, list):
@@ -145,16 +146,44 @@ def evaluate_optimizer_acceptance(
                 campaign_nms.update(_campaign_nms(campaign))
         matched = 0
         ready = 0
-        for sku in campaign_nms:
+        diagnostics: list[dict[str, Any]] = []
+        for sku in sorted(campaign_nms, key=int):
             product = product_by_shop[code].get(sku)
             if product is None:
+                diagnostics.append({
+                    "nm_id": sku, "stage": "shop_nm_id_to_portfolio_product",
+                    "reason_codes": ["exact_shop_nm_id_match_missing"],
+                })
                 continue
             matched += 1
             cost = _number(product.get("cost_rub"))
             price = _number(product.get("price_rub") or product.get("price_client_rub"))
             profit = _number(product.get("profit_rub"))
-            if product.get("unit_economics_decision_ready") is True and cost is not None and cost > 0 and price is not None and price > 0 and profit is not None:
+            reasons = []
+            if product.get("unit_economics_decision_ready") is not True:
+                reasons.append("unit_economics_not_decision_ready")
+            if cost is None:
+                reasons.append("cost_rub_missing_or_unreadable")
+            elif cost <= 0:
+                reasons.append("cost_rub_not_positive")
+            if price is None:
+                reasons.append("price_rub_missing_or_unreadable")
+            elif price <= 0:
+                reasons.append("price_rub_not_positive")
+            if profit is None:
+                reasons.append("profit_rub_missing_or_unreadable")
+            if reasons:
+                diagnostics.append({
+                    "nm_id": sku, "stage": "unit_economics_validation",
+                    "seller_article": product.get("seller_article") or product.get("article"),
+                    "product_name": product.get("name"),
+                    "source": product.get("unit_economics_source"),
+                    "source_row": product.get("unit_economics_source_row") or product.get("source_row"),
+                    "reason_codes": reasons,
+                })
+            else:
                 ready += 1
+        economics_diagnostics[code] = diagnostics
         economics_coverage[code] = {
             "advertised_products": len(campaign_nms), "matched_products": matched, "decision_ready_products": ready,
         }
@@ -192,6 +221,7 @@ def evaluate_optimizer_acceptance(
             "age_days": age_days,
             "coverage_by_shop": economics_coverage,
         },
+        "economics_diagnostics_by_shop": economics_diagnostics,
         "query_facts": {
             "status": summary.get("facts_status") or "unknown",
             "rows": query_rows, "fresh_rows": fresh_rows, "blocked_rows": blocked_rows,

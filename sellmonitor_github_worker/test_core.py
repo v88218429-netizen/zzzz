@@ -1,5 +1,6 @@
 import unittest
 from datetime import datetime, timezone
+from pathlib import Path
 
 from core import ClientState, Stage, acquire_lock, evaluate_qc, run_until_terminal
 
@@ -23,6 +24,15 @@ GOOD_QC = {
 
 
 class CoreTests(unittest.TestCase):
+    def test_dashboard_publisher_keeps_full_actions_and_diagnostics(self):
+        source = (Path(__file__).resolve().parent / "SELLMONITOR_GITHUB_WORKER.gs").read_text(encoding="utf-8")
+        self.assertIn("(dashboard.top_actions || []).forEach(function(x) {", source)
+        self.assertIn("(dashboard.data_blockers || []).forEach(function(x) {", source)
+        self.assertNotIn("(dashboard.top_actions || []).slice(0, 25)", source)
+        self.assertNotIn("(dashboard.data_blockers || []).slice(0, 30)", source)
+        self.assertIn("economics_diagnostics_by_shop", source)
+        self.assertIn("if (currentRows < rows.length) sh.insertRowsAfter", source)
+
     def test_qc_fail_closed(self):
         bad = dict(GOOD_QC)
         bad["traffic_complete"] = False

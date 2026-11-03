@@ -36,11 +36,25 @@ def test_worker_stream_meta_unreliable_without_fact_time():
 def test_optimizer_bundle_uses_separate_encrypted_github_state_branch():
     import inspect
     source = inspect.getsource(WorkerSource.optimizer_bundle)
+    source += inspect.getsource(WorkerSource._optimizer_bundle_view)
     assert "_github_state_root" in source
     assert '"optimizer-state"' in source
     assert "optimizer-dashboard.tar.gz.enc" in source
     assert "optimizer-dashboard.key.enc" in source
     assert "schema_version" in source
+
+
+def test_optimizer_bundle_preserves_acceptance_for_the_panel():
+    acceptance = {"ready": False, "status": "not_ready", "blockers": ["sweep incomplete"]}
+    result = WorkerSource._optimizer_bundle_view({
+        "schema_version": 1,
+        "generated_at": "2026-11-03T12:00:00+00:00",
+        "shops": {"ap": {}, "other": {}},
+        "acceptance": acceptance,
+    }, retrieved_at="2026-11-03T12:01:00+00:00")
+    assert result["acceptance"] == acceptance
+    assert set(result["shops"]) == {"ap"}
+    assert result["retrieved_at"] == "2026-11-03T12:01:00+00:00"
 
 
 def test_optimizer_sweep_progress_contains_aggregate_counts_only():
@@ -63,6 +77,28 @@ def test_optimizer_sweep_progress_contains_aggregate_counts_only():
         "aa": {"sweep_id": 1, "campaigns_seen": 10, "campaigns_total": 10,
                "products_seen": 10, "products_total": 10, "campaign_product_pairs_seen": 0, "campaign_product_pairs_total": 0, "complete": True},
     }
+
+
+def test_runtime_continues_only_when_incomplete_sweep_makes_progress():
+    runtime_path = Path(__file__).resolve().parents[1] / "scripts" / "github_runtime.py"
+    spec = importlib.util.spec_from_file_location("github_runtime_continuation_test", runtime_path)
+    runtime = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(runtime)
+    previous = {"optimizer_sweep_progress": {
+        "ap": {"sweep_id": 4, "campaigns_seen": 8, "campaign_product_pairs_seen": 20, "complete": False},
+    }}
+    advanced = {"optimizer_sweep_progress": {
+        "ap": {"sweep_id": 4, "campaigns_seen": 9, "campaign_product_pairs_seen": 24, "complete": False},
+    }}
+    stalled = {"optimizer_sweep_progress": {
+        "ap": {"sweep_id": 4, "campaigns_seen": 8, "campaign_product_pairs_seen": 20, "complete": False},
+    }}
+    complete = {"optimizer_sweep_progress": {
+        "ap": {"sweep_id": 4, "campaigns_seen": 9, "campaign_product_pairs_seen": 24, "complete": True},
+    }}
+    assert runtime.should_continue_optimizer_sweep(previous, advanced)
+    assert not runtime.should_continue_optimizer_sweep(previous, stalled)
+    assert not runtime.should_continue_optimizer_sweep(advanced, complete)
 
 
 def test_github_state_root_pins_and_caches_verified_commit(monkeypatch, tmp_path):

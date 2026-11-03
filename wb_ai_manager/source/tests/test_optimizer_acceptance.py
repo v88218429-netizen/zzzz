@@ -92,6 +92,34 @@ class OptimizerAcceptanceTests(unittest.TestCase):
         self.assertFalse(result["ready"])
         self.assertTrue(any("AIR" in item and "1/2" in item for item in result["blockers"]))
 
+    def test_economics_diagnostics_names_unmatched_campaign_nm_id_and_stage(self):
+        args = fixture()
+        args[0]["shops"]["aa"]["advertised_nm_ids"] = ["101", "999"]
+        result = evaluate_optimizer_acceptance(
+            *args, now=datetime(2026, 11, 2, 8, tzinfo=timezone.utc),
+        )
+        self.assertEqual(result["economics_diagnostics_by_shop"]["aa"], [{
+            "nm_id": "999",
+            "stage": "shop_nm_id_to_portfolio_product",
+            "reason_codes": ["exact_shop_nm_id_match_missing"],
+        }])
+
+    def test_economics_diagnostics_names_missing_fields_for_matched_product(self):
+        args = fixture()
+        product = args[1]["own_27"]["products"][1]
+        product["unit_economics_decision_ready"] = False
+        product.pop("profit_rub")
+        result = evaluate_optimizer_acceptance(
+            *args, now=datetime(2026, 11, 2, 8, tzinfo=timezone.utc),
+        )
+        diagnostic = result["economics_diagnostics_by_shop"]["aa"][0]
+        self.assertEqual(diagnostic["nm_id"], "101")
+        self.assertEqual(diagnostic["stage"], "unit_economics_validation")
+        self.assertEqual(
+            diagnostic["reason_codes"],
+            ["unit_economics_not_decision_ready", "profit_rub_missing_or_unreadable"],
+        )
+
     def test_partial_campaign_sweep_blocks_acceptance(self):
         args = fixture()
         args[0]["shops"]["aa"]["sweep"]["sweep_complete"] = False

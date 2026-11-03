@@ -15,7 +15,7 @@ on:
 
 permissions:
   contents: write
-  actions: read
+  actions: write
 
 concurrency:
   group: wb-github-runtime-${{ github.ref }}
@@ -41,6 +41,9 @@ jobs:
           mkdir -p wb_ai_manager/source/data/github-runtime
           if git ls-remote --exit-code --heads origin runtime-state >/dev/null 2>&1; then
             git fetch --depth=1 origin runtime-state:refs/remotes/origin/runtime-state
+            if git cat-file -e "origin/runtime-state:state/health.json" 2>/dev/null; then
+              git show "origin/runtime-state:state/health.json" > "$RUNNER_TEMP/previous-health.json"
+            fi
             STATE_CIPHER="$RUNNER_TEMP/runtime.tar.gz.enc"
             if git cat-file -e "origin/runtime-state:state/runtime.tar.gz.enc" 2>/dev/null; then
               # Backward-compatible restore for the previous single-file format.
@@ -187,3 +190,60 @@ jobs:
           git add README.md state
           git commit -m "runtime: encrypted latest WB state"
           git push origin HEAD:runtime-state --force
+
+      - name: Continue optimizer sweep when the latest run advanced it
+        if: success()
+        working-directory: wb_ai_manager/source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          PYTHONPATH=.:scripts python - <<'PY'
+          import json
+          import os
+          import pathlib
+          import subprocess
+          from github_runtime import should_continue_optimizer_sweep
+
+          current = json.loads(pathlib.Path("github_site/data/health.json").read_text(encoding="utf-8"))
+          previous_path = pathlib.Path(os.environ["RUNNER_TEMP"]) / "previous-health.json"
+          previous = json.loads(previous_path.read_text(encoding="utf-8")) if previous_path.exists() else {}
+          if should_continue_optimizer_sweep(previous, current):
+              print("Incomplete sweep advanced; dispatching exactly one continuation run.")
+              result = subprocess.run(
+                  ["gh", "workflow", "run", "wb-github-runtime.yml", "--ref", "mainggg"],
+                  check=False, capture_output=True, text=True,
+              )
+              if result.returncode:
+                  print("::warning::Continuation dispatch failed; the saved checkpoint will resume on the next schedule.")
+                  print(result.stderr.strip())
+          else:
+              print("No incomplete sweep made progress; waiting for the next scheduled retry.")
+          PY
+
+      - name: Fail run when published production acceptance is incomplete
+        if: success()
+        run: |
+          python - <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          health = json.loads(pathlib.Path("state/health.json").read_text(encoding="utf-8"))
+          failures = []
+          if health.get("health") != "ok":
+              failures.append("runtime health is not ok")
+          if health.get("acceptance_ready") is not True:
+              failures.append("optimizer acceptance is not ready")
+          if health.get("connected_cabinets") != health.get("expected_cabinets"):
+              failures.append("not all WB cabinets are connected")
+          if health.get("sheets_live") is not True or health.get("dashboard_published") is not True:
+              failures.append("fresh Google Sheets dashboard was not confirmed")
+          if health.get("source_error_stages"):
+              failures.append("source errors: " + ", ".join(health["source_error_stages"]))
+          if failures:
+              for failure in failures:
+                  print("::error::" + failure)
+              raise SystemExit(1)
+          print("Published runtime snapshot passed production acceptance.")
+          PY

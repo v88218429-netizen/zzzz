@@ -85,6 +85,38 @@ def optimizer_sweep_progress(optimizer_state: dict[str, Any]) -> dict[str, dict[
     return progress
 
 
+def should_continue_optimizer_sweep(previous_health: dict[str, Any], current_health: dict[str, Any]) -> bool:
+    """Continue a bounded sweep only when the latest run made measurable progress."""
+    current = current_health.get("optimizer_sweep_progress")
+    if not isinstance(current, dict) or not current:
+        return False
+    previous = previous_health.get("optimizer_sweep_progress")
+    previous = previous if isinstance(previous, dict) else {}
+    incomplete = any(
+        isinstance(row, dict) and row.get("complete") is not True
+        for row in current.values()
+    )
+    if not incomplete:
+        return False
+
+    for code, row in current.items():
+        if not isinstance(row, dict):
+            continue
+        old = previous.get(code) if isinstance(previous.get(code), dict) else {}
+        if not old and any(int(row.get(key) or 0) > 0 for key in (
+            "campaigns_seen", "products_seen", "campaign_product_pairs_seen"
+        )):
+            return True
+        if row.get("complete") is True and old.get("complete") is not True:
+            return True
+        if row.get("sweep_id") is not None and row.get("sweep_id") != old.get("sweep_id"):
+            return True
+        for key in ("campaigns_seen", "products_seen", "campaign_product_pairs_seen"):
+            if int(row.get(key) or 0) > int(old.get(key) or 0):
+                return True
+    return False
+
+
 def compact_decision(row: dict[str, Any], cabinet: str) -> dict[str, Any]:
     return {
         "cabinet": cabinet,
@@ -96,7 +128,7 @@ def compact_decision(row: dict[str, Any], cabinet: str) -> dict[str, Any]:
         "diagnosis": row.get("diagnosis"),
         "follow_up": row.get("follow_up"),
         "recommended_actions": (row.get("recommended_actions") or [])[:3],
-        "blockers": (row.get("blockers") or [])[:5],
+        "blockers": row.get("blockers") or [],
     }
 
 
@@ -124,8 +156,12 @@ def owner_dashboard(payload: dict[str, Any]) -> dict[str, Any]:
     return {
         "generated_at": payload.get("generated_at"),
         "overall_status": payload.get("health"),
+        "acceptance_status": (payload.get("acceptance") or {}).get("status"),
+        "acceptance_ready": (payload.get("acceptance") or {}).get("ready") is True,
+        "acceptance_blocker_count": len((payload.get("acceptance") or {}).get("blockers") or []),
+        "economics_diagnostics_by_shop": (payload.get("acceptance") or {}).get("economics_diagnostics_by_shop") or {},
         "cabinets": rows,
-        "top_actions": actions[:25],
+        "top_actions": actions,
         "query_summary": q.get("summary") or {},
         "query_tasks": (q.get("operator_brief") or {}).get("tasks") or [],
         "data_blockers": (q.get("operator_brief") or {}).get("data_blockers") or [],
@@ -478,7 +514,9 @@ async def run() -> int:
     }
     dump("health.json", public_health)
     print(json.dumps(public_health, ensure_ascii=False, indent=2))
-    return 0 if healthy_cabs == len(CABINETS) else 2
+    # Always let GitHub persist the partial checkpoint. The workflow has a
+    # separate post-publish acceptance gate so degraded runs are still red.
+    return 0
 
 
 if __name__ == "__main__":

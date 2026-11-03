@@ -357,6 +357,9 @@ class QueryManager:
     def _summary(self,cards:list[dict[str,Any]])->dict[str,Any]:
         qs=Counter(str(x.get("queue") or "unknown") for x in cards); rs=Counter(str(x.get("role") or "unknown") for x in cards)
         blockers=sum(1 for x in cards if x.get("blockers"))
+        blocked_reason_counts=Counter(
+            str(reason) for card in cards for reason in (card.get("blockers") or [])
+        )
         ready=sum(1 for x in cards if (x.get("bid_decision") or {}).get("monetary") and not x.get("blockers"))
         stale=qs.get("refresh_fact",0)
         fresh=max(0,len(cards)-blockers)
@@ -380,7 +383,8 @@ class QueryManager:
         return {"query_rows":len(cards),"fresh_query_rows":fresh,"blocked_query_rows":blockers,
                 "refresh_fact":stale,"observe":qs.get("observe",0),"protect_top":qs.get("protect_top",0),
                 "fix_gap":qs.get("fix_gap",0),"avoid_overbuy":qs.get("avoid_overbuy",0),"ready_query_actions":ready,
-                "data_blockers":blockers,"query_status":query_status,"facts_status":facts_status,
+                "data_blockers":blockers,"blocked_reason_counts":dict(sorted(blocked_reason_counts.items())),
+                "query_status":query_status,"facts_status":facts_status,
                 "operational_ready":bool(cards and fresh>0),"roles":dict(rs)}
 
     def _plans(self,cards:list[dict[str,Any]])->dict[str,list[dict[str,Any]]]:
@@ -396,7 +400,13 @@ class QueryManager:
 
     def _brief(self,cards:list[dict[str,Any]],s:dict[str,Any])->dict[str,Any]:
         tasks=[self._task(c) for c in cards if c.get("queue") in {"protect_top","fix_gap","avoid_overbuy"}][:10]
-        blockers=[{"sku":c.get("sku"),"query":c.get("query"),"blockers":c.get("blockers")} for c in cards if c.get("blockers")][:10]
+        blockers=[{
+            "sku":c.get("sku"),"seller_article":c.get("seller_article"),"query":c.get("query"),
+            "store_id":c.get("store_id"),"campaign_id":c.get("campaign_id"),"source":c.get("source"),
+            "frequency":c.get("frequency"),"position":c.get("position"),
+            "timestamps":c.get("timestamps"),"freshness":c.get("freshness"),
+            "blockers":c.get("blockers"),
+        } for c in cards if c.get("blockers")]
         controls=[{"sku":c.get("sku"),"query":c.get("query"),"checkpoints":c.get("control_checkpoints")} for c in cards if c.get("control_checkpoints")][:10]
         return {"headline":f"Сделать {len(tasks)} задач, добить {s['data_blockers']} блокеров данных, проверить {len(controls)} контрольных точек.",
                 "query_rows":s["query_rows"],"query_status":s["query_status"],"query_summary":s,"tasks":tasks,"data_blockers":blockers,"controls":controls}
