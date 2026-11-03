@@ -94,9 +94,11 @@ jobs:
                   print("AIR_SHEETS_READ_PROFILE_HTTP="+str(index)+":"+str(exc.code),flush=True)
                   continue
           if air_header is None or spreadsheet is None:
-              raise SystemExit("AIR_SHEETS_HEADER_DIAGNOSTIC_UNAVAILABLE")
-          print("AIR_SUPPLY_HEADER="+json.dumps((air_header.get("values") or [[]])[0],ensure_ascii=False,separators=(",",":")),flush=True)
-          sheets=[x.get("properties") or {} for x in spreadsheet.get("sheets",[])]
-          grid_cells=sum(int((p.get("gridProperties") or {}).get("rowCount") or 0)*int((p.get("gridProperties") or {}).get("columnCount") or 0) for p in sheets)
-          print("AIR_SPREADSHEET_GRID="+json.dumps({"title":(spreadsheet.get("properties") or {}).get("title"),"tabs":len(sheets),"configuredGridCells":grid_cells,"tabDimensions":[{"title":p.get("title"),"rows":(p.get("gridProperties") or {}).get("rowCount"),"columns":(p.get("gridProperties") or {}).get("columnCount")} for p in sheets]},ensure_ascii=False,separators=(",",":")),flush=True)
+              print("AIR_SHEETS_HEADER_DIAGNOSTIC=unavailable",flush=True)
+          else:
+              print("AIR_SHEETS_HEADER_DIAGNOSTIC=available",flush=True)
+              print("AIR_SUPPLY_HEADER="+json.dumps((air_header.get("values") or [[]])[0],ensure_ascii=False,separators=(",",":")),flush=True)
+              sheets=[x.get("properties") or {} for x in spreadsheet.get("sheets",[])]
+              grid_cells=sum(int((p.get("gridProperties") or {}).get("rowCount") or 0)*int((p.get("gridProperties") or {}).get("columnCount") or 0) for p in sheets)
+              print("AIR_SPREADSHEET_GRID="+json.dumps({"title":(spreadsheet.get("properties") or {}).get("title"),"tabs":len(sheets),"configuredGridCells":grid_cells,"tabDimensions":[{"title":p.get("title"),"rows":(p.get("gridProperties") or {}).get("rowCount"),"columns":(p.get("gridProperties") or {}).get("columnCount")} for p in sheets]},ensure_ascii=False,separators=(",",":")),flush=True)
           PY
