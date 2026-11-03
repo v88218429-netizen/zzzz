@@ -7117,6 +7117,7 @@ function sellmonitorGithubFbsStatusReadV1_(body) {
   var startedAt=Date.now();
   var stores={
     SANYCH:'1v0qt-thJDOw3tLFdZVGhdXJdBM8rDPRz9mHlcHmuuyM',
+    SANYCH_ALTERNATE:'1_rMW6w4a7ZKhsWAyVo4B4Hn2x1cXwJWVW7K4JAHpjI8',
     AIR:'1qJvhEOIku7sOMydfrUz0PR5dkcU0sLjv433pa1MFBcM',
     HOZYAYUSHKA:'1f9dxXeZxkDth8h2C9GA7L7WqAr1-Ok-Oi5YtufLYOOk'
   };
@@ -7200,6 +7201,16 @@ function sellmonitorGithubFbsStatusReadV1_(body) {
     indexState=sellmonitorGithubFbsLoadIdIndex_(sheet,client,last,function(){},true);
     if(readStates_())throw new Error('FBS_ID_INDEX_STALE_AFTER_REBUILD');
   }
+  if(client==='SANYCH'){
+    var alternate=sellmonitorGithubFbsStatusReadV1_({client:'SANYCH_ALTERNATE',orderIds:ids});
+    var alternateStates=alternate.statuses||{};
+    ids.forEach(function(id){
+      var mainState=states[id],alternateState=alternateStates[id];
+      if(!mainState||!alternateState||
+         mainState.supplierStatus!==alternateState.supplierStatus||
+         mainState.wbStatus!==alternateState.wbStatus)delete states[id];
+    });
+  }
   console.log('FBS_STATUS_READ_DONE client='+client+' requested='+ids.length+
     ' found='+Object.keys(states).length+' rows_read='+rowsRead+' ranges='+rangeCount+
     ' api_requests='+apiRequests+' sheet_read_ms='+rowReadMs+' total_ms='+(Date.now()-startedAt));
@@ -7250,6 +7261,19 @@ function sellmonitorGithubFbsIngestBatchV1_(body) {
   try {
     mark('CORE_START');
     var result = sellmonitorGithubFbsIngestBatchV1Core_(body, mark);
+    if(client==='SANYCH'){
+      mark('ALTERNATE_COPY_INGEST_START');
+      var alternateBody={};
+      Object.keys(body||{}).forEach(function(key){alternateBody[key]=body[key];});
+      alternateBody.client='SANYCH_ALTERNATE';
+      var alternateResult=sellmonitorGithubFbsIngestBatchV1Core_(alternateBody,function(stage){mark('ALTERNATE_'+stage);});
+      result.alternateCopy={
+        client:'SANYCH_ALTERNATE',received:alternateResult.received,
+        inserted:alternateResult.inserted,existing:alternateResult.existing,
+        changed:alternateResult.changed,events:alternateResult.events
+      };
+      mark('ALTERNATE_COPY_INGEST_DONE');
+    }
     mark('CORE_DONE');
     return result;
   } catch (e) {
@@ -7325,6 +7349,7 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
   mark = typeof mark === 'function' ? mark : function() {};
   var stores={
     SANYCH:'1v0qt-thJDOw3tLFdZVGhdXJdBM8rDPRz9mHlcHmuuyM',
+    SANYCH_ALTERNATE:'1_rMW6w4a7ZKhsWAyVo4B4Hn2x1cXwJWVW7K4JAHpjI8',
     AIR:'1qJvhEOIku7sOMydfrUz0PR5dkcU0sLjv433pa1MFBcM',
     HOZYAYUSHKA:'1f9dxXeZxkDth8h2C9GA7L7WqAr1-Ok-Oi5YtufLYOOk'
   };
