@@ -73,7 +73,7 @@ jobs:
           PY
       - name: Skip superseded source sync
         id: push_guard
-        if: ${{ github.event_name == 'push' }}
+        if: ${{ github.event_name == 'push' && steps.push_guard.outputs.skip != 'true' && (contains(github.event.head_commit.modified, 'wb_os/apps_script/WB_FBS_SUPPLY_DIRECT.gs') || contains(github.event.head_commit.modified, 'sellmonitor_github_worker/SELLMONITOR_GITHUB_WORKER.gs') || contains(github.event.head_commit.modified, 'sellmonitor_github_worker/patch_master.py')) }}
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
