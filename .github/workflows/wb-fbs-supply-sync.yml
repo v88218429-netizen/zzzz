@@ -151,7 +151,7 @@ jobs:
           expected = ["SANYCH", "AIR", "HOZYAYUSHKA"]
           seen = []
           failures = []
-          max_retry_failures = 3
+          max_retry_failures = 5
           max_attempts = 90
           total_attempts = 0
           def active_supply_lease():
@@ -221,7 +221,7 @@ jobs:
                           if lease_active:
                               wait_seconds = min(540, max(60, (lease_ms + 999) // 1000 + 15))
                           elif lease_active is None:
-                              wait_seconds = 90 if busy else 90
+                              wait_seconds = 180 if busy else 45
                           else:
                               wait_seconds = 75 if "credential store is busy" in lower_details else 45
                           label = "busy" if busy else "transient_wb_or_bridge_error"
