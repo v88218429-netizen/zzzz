@@ -21,7 +21,7 @@ def test_catalog_delta_preserves_unchanged_pairs_and_cursor_target():
     cursor = _scan_cursor(
         previous,
         [5, 11, 22],
-        {"5": [51], "11": [101, 103], "22": [201]},
+        {5: [51], 11: [101, 103], 22: [201]},
     )
 
     assert cursor["catalog_changed"] is True
