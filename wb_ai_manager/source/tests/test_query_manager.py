@@ -158,3 +158,14 @@ def test_runtime_sellmonitor_fallback_does_not_fake_freshness():
     c=QueryManager(now=NOW).build({"own_27":{"products":[product([stale])]}},snapshots)["cards"][0]
     assert c["position"]==22
     assert "stale_position" in c["blockers"]
+
+
+def test_google_sheets_us_date_display_is_fresh():
+    now = datetime(2026, 11, 4, 8, 55, tzinfo=timezone.utc)
+    card = QueryManager(now=now).build({
+        "own_27": {"products": [product([row(snapshot_at="11/3/2026")])]}
+    })["cards"][0]
+    assert card["timestamps"]["position"] == "2026-11-03T00:00:00+00:00"
+    assert card["timestamps"]["frequency"] == "2026-11-03T00:00:00+00:00"
+    assert card["freshness"]["position"]["status"] == "fresh"
+    assert card["freshness"]["frequency"]["status"] == "fresh"
