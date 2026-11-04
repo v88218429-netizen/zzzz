@@ -40,7 +40,7 @@ def _dt(v:Any)->datetime|None:
     if isinstance(v,datetime): d=v
     else:
         s=str(v).strip(); d=None
-        for fmt in ("%d.%m.%Y %H:%M:%S","%d.%m.%Y %H:%M","%d.%m.%Y","%Y-%m-%d"):
+        for fmt in ("%d.%m.%Y %H:%M:%S","%d.%m.%Y %H:%M","%d.%m.%Y","%m/%d/%Y %H:%M:%S","%m/%d/%Y %H:%M","%m/%d/%Y","%Y-%m-%d"):
             try: d=datetime.strptime(s,fmt); break
             except ValueError: pass
         if d is None:
