@@ -22,7 +22,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: wb-fbs-production-audits
+  group: ${{ github.event_name == 'workflow_dispatch' && inputs.inspect_live_stage == true && 'wb-fbs-live-stage-read' || 'wb-fbs-production-audits' }}
   cancel-in-progress: false
   queue: max
 
