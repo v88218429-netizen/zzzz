@@ -541,6 +541,35 @@ function wbFbsSupplySortedMap_(ss) {
   return map;
 }
 
+function wbFbsSupplyReadSheetSnapshot_(ss) {
+  var sh = ss.getSheetByName(WB_FBS_DIRECT_SUPPLY_CFG.suppliesSheet);
+  if (!sh) throw new Error('WB_FBS_DIRECT: missing verified supply snapshot sheet');
+  var header = ['ID поставки','createdAt','closedAt','scanDt','done','Последняя проверка',
+    'Заказов в поставке','closed → scan, мин','Статус контроля'];
+  var actualHeader = sh.getRange(1, 1, 1, header.length).getValues();
+  if (!wbFbsSupplyMatricesEqual_([header], actualHeader))
+    throw new Error('WB_FBS_DIRECT: supply snapshot header mismatch');
+  var last = sh.getLastRow();
+  var rows = last > 1 ? sh.getRange(2, 1, last - 1, header.length).getValues() : [];
+  var byId = Object.create(null), currentById = Object.create(null);
+  var preservedNotReturned = 0, preservedDuplicateRows = 0;
+  for (var i = 0; i < rows.length; i++) {
+    var row = rows[i] || [];
+    var id = String(row[0] || '').trim();
+    if (!id) continue;
+    var status = String(row[8] || '');
+    var isNotReturned = status.indexOf('НЕ ПОДТВЕРЖДЕНА В ТЕКУЩЕМ ОТВЕТЕ WB') >= 0;
+    var isDuplicate = status.indexOf('ДУБЛЬ ID') >= 0;
+    var item = {id: id, createdAt: row[1], closedAt: row[2], scanDt: row[3], done: row[4]};
+    if (isNotReturned) preservedNotReturned++;
+    if (isDuplicate) preservedDuplicateRows++;
+    if (!byId[id] || (!isNotReturned && !isDuplicate)) byId[id] = item;
+    if (!isNotReturned && !isDuplicate) currentById[id] = item;
+  }
+  return {byId: byId, currentById: currentById, rowCount: rows.length,
+    preservedNotReturned: preservedNotReturned, preservedDuplicateRows: preservedDuplicateRows};
+}
+
 function wbFbsSupplyBackfillOrders_(ss, suppliesById, options) {
   var sh = ss.getSheetByName(WB_FBS_DIRECT_SUPPLY_CFG.ordersSheet);
   if (!sh || sh.getLastRow() < 2) return {checked: 0, matched: 0, sorted: 0, startRow: 2, endRow: 1, complete: true};
@@ -680,82 +709,128 @@ function wbFbsSupplyWriteHealth_(ss, state, detail) {
 }
 
 function wbFbsSupplySyncCore_(progress) {
-  var cfg=WB_FBS_DIRECT_SUPPLY_CFG;
+  var cfg = WB_FBS_DIRECT_SUPPLY_CFG;
   wbFbsSupplySetStage_('CORE_OPEN_BOOK_START', 'client=' + cfg.client);
-  var ss=wbFbsSupplySpreadsheet_();
+  var ss = wbFbsSupplySpreadsheet_();
   wbFbsSupplySetStage_('CORE_OPEN_BOOK_DONE', 'client=' + cfg.client);
   wbFbsSupplySetStage_('CORE_TOKEN_START', 'client=' + cfg.client);
-  var token=wbFbsSupplyToken_();
+  var token = wbFbsSupplyToken_();
   wbFbsSupplySetStage_('CORE_TOKEN_DONE', 'client=' + cfg.client);
-  var checkedAt=new Date();
-  wbFbsSupplySetStage_('CORE_START', 'continuing=' + Boolean(progress));
-  progress=progress||null;
-  var continuing=!!(progress&&progress.client===cfg.client&&Number(progress.nextEndRow)>=2);
-  var scriptProps=PropertiesService.getScriptProperties();
-  var fullScanKey='WB_FBS_DIRECT_FULL_BACKFILL_DONE_'+cfg.client;
-  var fullScanAtKey='WB_FBS_DIRECT_FULL_BACKFILL_AT_'+cfg.client;
-  var fullScanRowKey='WB_FBS_DIRECT_FULL_BACKFILL_ROW_'+cfg.client;
-  var ordersForCheckpoint=ss.getSheetByName(cfg.ordersSheet);
-  if(!ordersForCheckpoint)throw new Error('WB_FBS_DIRECT: missing '+cfg.ordersSheet);
-  var currentOrderLastRow=ordersForCheckpoint.getLastRow();
-  var fullScanDone=scriptProps.getProperty(fullScanKey)==='1';
-  var fullScanAt=Date.parse(scriptProps.getProperty(fullScanAtKey)||'');
-  var fullScanLastRow=Number(scriptProps.getProperty(fullScanRowKey)||0);
-  var fullSweepDue=!fullScanDone||!isFinite(fullScanAt)||fullScanAt<=0||
-    Date.now()-fullScanAt>=7*24*60*60*1000||
-    (fullScanLastRow>0&&currentOrderLastRow-fullScanLastRow>WB_FBS_DIRECT_SUPPLY_CFG.orderTailRows);
-  var fullSweep=continuing||fullSweepDue;
-  wbFbsSupplySetStage_('FETCH_START', 'max_pages=' + WB_FBS_DIRECT_SUPPLY_CFG.maxPages);
-  var fetched=wbFbsSupplyFetchAll_(token);
-  wbFbsSupplySetStage_('FETCH_DONE', 'pages=' + fetched.pageCount + ' supplies=' + fetched.rows.length);
-  var orders=ss.getSheetByName(cfg.ordersSheet);
-  if(!orders)throw new Error('WB_FBS_DIRECT: missing '+cfg.ordersSheet);
-  wbFbsSupplySetStage_('COUNT_ORDERS_START', 'continuing=' + continuing);
-  var counts=continuing?null:wbFbsSupplyCountOrders_(orders);
-  wbFbsSupplySetStage_('COUNT_ORDERS_DONE', 'rows=' + (counts ? Object.keys(counts).length : 0));
-  wbFbsSupplySetStage_('SUPPLY_SHEET_WRITE_START', 'api_supplies=' + fetched.rows.length);
-  var written=continuing?{totalRows:null,preservedNotReturned:null,preservedDuplicateRows:null,readbackVerified:false}:
-    wbFbsSupplyWriteSupplySheet_(ss,fetched.rows,counts,checkedAt);
-  wbFbsSupplySetStage_('SUPPLY_SHEET_WRITE_DONE', 'readback=' + Boolean(written.readbackVerified));
-  wbFbsSupplySetStage_('ORDER_BACKFILL_START', 'continuing=' + continuing);
-  var backfill=wbFbsSupplyBackfillOrders_(ss,fetched.byId,continuing?{endRow:progress.nextEndRow}:null);
-  if(!fullSweep&&!continuing)backfill.complete=true;
-  // A resumed historical backfill may have been left by an older run that
-  // skipped the supply-sheet write. Refresh and read it back at the final
-  // chunk so a completed cabinet always has a verified current supply list.
-  if(continuing&&backfill.complete){
-    counts=wbFbsSupplyCountOrders_(orders);
-    written=wbFbsSupplyWriteSupplySheet_(ss,fetched.rows,counts,checkedAt);
+  var checkedAt = new Date();
+  progress = progress || null;
+  var continuing = !!(progress && progress.client === cfg.client && Number(progress.nextEndRow) >= 2);
+  wbFbsSupplySetStage_('CORE_START', 'continuing=' + continuing);
+  var scriptProps = PropertiesService.getScriptProperties();
+  var fullScanKey = 'WB_FBS_DIRECT_FULL_BACKFILL_DONE_' + cfg.client;
+  var fullScanAtKey = 'WB_FBS_DIRECT_FULL_BACKFILL_AT_' + cfg.client;
+  var fullScanRowKey = 'WB_FBS_DIRECT_FULL_BACKFILL_ROW_' + cfg.client;
+  var orders = ss.getSheetByName(cfg.ordersSheet);
+  if (!orders) throw new Error('WB_FBS_DIRECT: missing ' + cfg.ordersSheet);
+  var currentOrderLastRow = orders.getLastRow();
+  var fullScanDone = scriptProps.getProperty(fullScanKey) === '1';
+  var fullScanAt = Date.parse(scriptProps.getProperty(fullScanAtKey) || '');
+  var fullScanLastRow = Number(scriptProps.getProperty(fullScanRowKey) || 0);
+  var fullScanDue = !fullScanDone || !isFinite(fullScanAt) || fullScanAt <= 0 ||
+    Date.now() - fullScanAt >= 7 * 24 * 60 * 60 * 1000 ||
+    (fullScanLastRow > 0 && currentOrderLastRow - fullScanLastRow > cfg.orderTailRows);
+  var fullSweep = continuing || fullScanDue;
+  var fetched, supplyData, written, supplySummary;
+  var counts = null;
+
+  if (continuing) {
+    wbFbsSupplySetStage_('SUPPLY_SNAPSHOT_READ_START', 'source=verified_sheet');
+    supplyData = wbFbsSupplyReadSheetSnapshot_(ss);
+    wbFbsSupplySetStage_('SUPPLY_SNAPSHOT_READ_DONE',
+      'rows=' + supplyData.rowCount + ' ids=' + Object.keys(supplyData.byId).length);
+    supplySummary = progress.supplySummary || {
+      apiPages: null,
+      apiSupplies: Object.keys(supplyData.currentById).length,
+      apiSuppliesScanned: null,
+      suppliesWritten: supplyData.rowCount,
+      preservedNotReturned: supplyData.preservedNotReturned,
+      preservedDuplicateRows: supplyData.preservedDuplicateRows,
+      supplyReadbackVerified: true,
+      supplySnapshotAt: '',
+      snapshotSource: 'VERIFIED_SHEET_CHECKPOINT'
+    };
+  } else {
+    wbFbsSupplySetStage_('FETCH_START', 'max_pages=' + cfg.maxPages);
+    fetched = wbFbsSupplyFetchAll_(token);
+    wbFbsSupplySetStage_('FETCH_DONE', 'pages=' + fetched.pageCount + ' supplies=' + fetched.rows.length);
+    counts = wbFbsSupplyCountOrders_(orders);
+    wbFbsSupplySetStage_('SUPPLY_SHEET_WRITE_START', 'api_supplies=' + fetched.rows.length);
+    written = wbFbsSupplyWriteSupplySheet_(ss, fetched.rows, counts, checkedAt);
+    if (written.readbackVerified !== true)
+      throw new Error('WB_FBS_DIRECT: supply sheet readback was not verified');
+    wbFbsSupplySetStage_('SUPPLY_SHEET_WRITE_DONE', 'readback=verified');
+    wbFbsSupplySetStage_('SUPPLY_SNAPSHOT_READ_START', 'source=verified_sheet');
+    supplyData = wbFbsSupplyReadSheetSnapshot_(ss);
+    wbFbsSupplySetStage_('SUPPLY_SNAPSHOT_READ_DONE',
+      'rows=' + supplyData.rowCount + ' ids=' + Object.keys(supplyData.byId).length);
+    supplySummary = {
+      apiPages: fetched.pageCount,
+      apiSupplies: fetched.rows.length,
+      apiSuppliesScanned: fetched.scannedCount,
+      suppliesWritten: written.totalRows,
+      preservedNotReturned: written.preservedNotReturned,
+      preservedDuplicateRows: written.preservedDuplicateRows,
+      supplyReadbackVerified: written.readbackVerified === true,
+      supplySnapshotAt: checkedAt.toISOString(),
+      snapshotSource: 'WB_API_AND_VERIFIED_SHEET'
+    };
   }
-  wbFbsSupplySetStage_('ORDER_BACKFILL_DONE', 'checked=' + backfill.checked + ' matched=' + backfill.matched + ' complete=' + backfill.complete);
-  var unmatchedOrderSupplyIds=continuing&&!backfill.complete?null:Object.keys(counts).filter(function(id){
-    return !Object.prototype.hasOwnProperty.call(fetched.byId,id);
-  }).length;
-  var result={
-    ok:true,client:cfg.client,checkedAt:checkedAt.toISOString(),apiPages:fetched.pageCount,
-    apiSupplies:fetched.rows.length,apiSuppliesScanned:fetched.scannedCount,
-    suppliesWritten:written.totalRows,preservedNotReturned:written.preservedNotReturned,
-    preservedDuplicateRows:written.preservedDuplicateRows,
-    supplyReadbackVerified:written.readbackVerified===true,
-    orderRowsChecked:backfill.checked,orderRowsMatched:backfill.matched,
-    timingReadbackVerified:backfill.timingReadbackVerified===true,
-    sortedReadbackVerified:backfill.sortedReadbackVerified===true,
-    orderSupplyIdsNotInCurrentApi:unmatchedOrderSupplyIds,
-    sortedBackfilled:backfill.sorted,backfillStartRow:backfill.startRow,
-    backfillEndRow:backfill.endRow,backfillComplete:backfill.complete,
-    backfillFullSweep:fullSweep,orderLastRow:currentOrderLastRow,
-    backfillRemainingRows:fullSweep?Math.max(0,backfill.startRow-2):0
+
+  wbFbsSupplySetStage_('ORDER_BACKFILL_START', 'continuing=' + continuing);
+  var backfill = wbFbsSupplyBackfillOrders_(ss, supplyData.byId,
+    continuing ? {endRow: progress.nextEndRow} : null);
+  if (!fullSweep && !continuing) backfill.complete = true;
+  wbFbsSupplySetStage_('ORDER_BACKFILL_DONE', 'checked=' + backfill.checked +
+    ' matched=' + backfill.matched + ' complete=' + backfill.complete);
+  var unmatchedOrderSupplyIds = null;
+  if (!continuing || backfill.complete) {
+    if (!counts) counts = wbFbsSupplyCountOrders_(orders);
+    unmatchedOrderSupplyIds = Object.keys(counts).filter(function(id) {
+      return !Object.prototype.hasOwnProperty.call(supplyData.currentById, id);
+    }).length;
+  }
+  var result = {
+    ok: true,
+    client: cfg.client,
+    checkedAt: checkedAt.toISOString(),
+    supplySnapshotAt: supplySummary.supplySnapshotAt || null,
+    supplySnapshotSource: supplySummary.snapshotSource,
+    apiPages: supplySummary.apiPages,
+    apiSupplies: supplySummary.apiSupplies,
+    apiSuppliesScanned: supplySummary.apiSuppliesScanned,
+    suppliesWritten: supplySummary.suppliesWritten,
+    preservedNotReturned: supplySummary.preservedNotReturned,
+    preservedDuplicateRows: supplySummary.preservedDuplicateRows,
+    supplyReadbackVerified: supplySummary.supplyReadbackVerified === true,
+    orderRowsChecked: backfill.checked,
+    orderRowsMatched: backfill.matched,
+    timingReadbackVerified: backfill.timingReadbackVerified === true,
+    sortedReadbackVerified: backfill.sortedReadbackVerified === true,
+    orderSupplyIdsNotInCurrentApi: unmatchedOrderSupplyIds,
+    sortedBackfilled: backfill.sorted,
+    backfillStartRow: backfill.startRow,
+    backfillEndRow: backfill.endRow,
+    backfillComplete: backfill.complete,
+    backfillFullSweep: fullSweep,
+    orderLastRow: currentOrderLastRow,
+    backfillRemainingRows: fullSweep ? Math.max(0, backfill.startRow - 2) : 0
   };
-  var clientProps=sellmonitorClientProperties_(cfg.propertiesSpreadsheetId);
+  var clientProps = sellmonitorClientProperties_(cfg.propertiesSpreadsheetId);
   clientProps.setProperties({
-    WB_FBS_DIRECT_LAST_STATUS:backfill.complete?'OK':'BACKFILLING',
-    WB_FBS_DIRECT_LAST_RESULT:JSON.stringify(result)
+    WB_FBS_DIRECT_LAST_STATUS: backfill.complete ? 'OK' : 'BACKFILLING',
+    WB_FBS_DIRECT_LAST_RESULT: JSON.stringify(result)
   });
-  if(backfill.complete)clientProps.setProperty('WB_FBS_DIRECT_LAST_SUCCESS_AT',checkedAt.toISOString());
-  wbFbsSupplyWriteHealth_(ss,backfill.complete?'OK':'RUNNING',JSON.stringify(result));
-  Logger.log('WB_FBS_DIRECT_'+(backfill.complete?'OK ':'BACKFILLING ')+JSON.stringify(result));
+  if (backfill.complete) clientProps.setProperty('WB_FBS_DIRECT_LAST_SUCCESS_AT', checkedAt.toISOString());
+  wbFbsSupplyWriteHealth_(ss, backfill.complete ? 'OK' : 'RUNNING', JSON.stringify(result));
+  Logger.log('WB_FBS_DIRECT_' + (backfill.complete ? 'OK ' : 'BACKFILLING ') + JSON.stringify(result));
+  result.supplySummary = supplySummary;
   return result;
 }
+
 
 function wbFbsSupplySyncAllStores_(requestedClient) {
   // One cabinet per invocation keeps the official WB/API and Sheets work below the
@@ -834,7 +909,8 @@ function wbFbsSupplySyncAllStores_(requestedClient) {
           nextEndRow: result.backfillStartRow - 1,
           totalChecked: totals.checked,
           totalMatched: totals.matched,
-          totalSorted: totals.sorted
+          totalSorted: totals.sorted,
+          supplySummary: result.supplySummary || (progress && progress.supplySummary) || null
         }));
         scriptProps.setProperty(cursorKey, String(index));
       }
