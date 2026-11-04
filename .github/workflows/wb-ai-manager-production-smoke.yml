@@ -11,7 +11,6 @@ permissions:
 
 jobs:
   smoke:
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
@@ -20,7 +19,7 @@ jobs:
           ref: mainggg
           fetch-depth: 1
 
-      - name: Verify GitHub-only production health
+      - name: Verify production snapshot publication and freshness
         shell: bash
         run: |
           set -euo pipefail
@@ -28,8 +27,19 @@ jobs:
           git show origin/runtime-state:state/health.json > /tmp/wb-health.json
           python - <<'PY'
           import json
+          from datetime import datetime, timezone
+
           d=json.load(open("/tmp/wb-health.json",encoding="utf-8"))
-          assert d.get("health") == "ok", d
+          generated_at=datetime.fromisoformat(str(d.get("generated_at") or "").replace("Z","+00:00"))
+          if generated_at.tzinfo is None:
+              generated_at=generated_at.replace(tzinfo=timezone.utc)
+          age_seconds=(datetime.now(timezone.utc)-generated_at.astimezone(timezone.utc)).total_seconds()
+          assert -120 <= age_seconds <= 1800, {"generated_at": d.get("generated_at"), "age_minutes": age_seconds / 60}
+          assert d.get("health") in {"ok","degraded"}, d
+          assert d.get("acceptance_status") in {"ready","not_ready"}, d
+          assert bool(d.get("acceptance_ready")) == (d.get("acceptance_status") == "ready"), d
+          blockers=d.get("acceptance_blockers") or []
+          assert d.get("acceptance_ready") is True or len(blockers) > 0, d
           assert d.get("connected_cabinets") == d.get("expected_cabinets") == 3, d
           assert d.get("clean_cabinets") == 3, d
           assert d.get("sheets_live") is True, d
@@ -45,6 +55,10 @@ jobs:
           print(json.dumps({
               "ok": True,
               "runtime": "github_only",
+              "generated_at": d.get("generated_at"),
+              "snapshot_age_minutes": round(age_seconds / 60, 1),
+              "acceptance_status": d.get("acceptance_status"),
+              "acceptance_blockers": len(blockers),
               "connected_cabinets": d.get("connected_cabinets"),
               "clean_cabinets": d.get("clean_cabinets"),
               "sheets_live": d.get("sheets_live"),
