@@ -152,28 +152,98 @@ def _scan_cursor(
     campaign_ids: list[int],
     campaign_nm_ids: dict[int, list[int]] | None = None,
 ) -> dict[str, Any]:
-    """Resume a fair sweep; reset when either campaign IDs or their product set changes."""
+    """Resume completed campaign-product pairs and only queue changed catalog items."""
     saved = previous.get("data") if isinstance(previous, dict) else previous
     saved = saved if isinstance(saved, dict) else {}
     expected = [int(x) for x in campaign_ids]
-    expected_nms = {str(cid): sorted({int(nm) for nm in nms}) for cid, nms in (campaign_nm_ids or {}).items()}
-    catalog_changed = saved.get("campaign_nm_ids") != expected_nms
-    if saved.get("campaign_ids") != expected or catalog_changed:
-        return {"campaign_ids": expected, "campaign_nm_ids": expected_nms,
-                "next_campaign_index": 0, "next_nm_index": {},
-                "sweep_id": int(saved.get("sweep_id") or 0) + 1,
-                "swept_campaign_ids": [], "swept_nm_ids": {}}
+    expected_nms = {
+        str(cid): sorted({int(nm) for nm in nms})
+        for cid, nms in (campaign_nm_ids or {}).items()
+    }
+
+    previous_campaign_ids = [
+        int(x) for x in saved.get("campaign_ids") or [] if str(x).isdigit()
+    ]
+    previous_nms_raw = saved.get("campaign_nm_ids")
+    previous_nms: dict[str, list[int]] = {}
+    if isinstance(previous_nms_raw, dict):
+        previous_nms = {
+            str(cid): sorted({int(nm) for nm in values if str(nm).isdigit()})
+            for cid, values in previous_nms_raw.items()
+            if isinstance(values, list)
+        }
+    previous_swept_raw = saved.get("swept_nm_ids")
+    previous_swept: dict[str, set[int]] = {}
+    if isinstance(previous_swept_raw, dict):
+        previous_swept = {
+            str(cid): {int(nm) for nm in values if str(nm).isdigit()}
+            for cid, values in previous_swept_raw.items()
+            if isinstance(values, list)
+        }
+
+    catalog_changed = previous_campaign_ids != expected or previous_nms != expected_nms
+
+    # Keep the same next campaign when IDs are inserted before the saved cursor.
+    next_campaign_value = saved.get("next_campaign_id")
+    next_campaign_id = (
+        int(next_campaign_value) if str(next_campaign_value).isdigit() else None
+    )
+    if next_campaign_id in expected:
+        next_campaign_index = expected.index(next_campaign_id)
+    else:
+        saved_index = max(0, int(saved.get("next_campaign_index") or 0))
+        previous_next_id = (
+            previous_campaign_ids[saved_index % len(previous_campaign_ids)]
+            if previous_campaign_ids else None
+        )
+        if previous_next_id in expected:
+            next_campaign_index = expected.index(previous_next_id)
+        else:
+            next_campaign_index = saved_index % max(1, len(expected))
+
+    # A catalog delta invalidates only removed/changed pairs. Successful unchanged
+    # pairs remain valid, while new pairs naturally remain absent until scanned.
+    swept_nm_ids: dict[str, list[int]] = {}
+    for cid, nms in expected_nms.items():
+        retained = previous_swept.get(cid, set())
+        old_products = set(previous_nms.get(cid, []))
+        if old_products:
+            retained &= old_products
+        retained &= set(nms)
+        if retained:
+            swept_nm_ids[cid] = sorted(retained)
+
+    previous_completed = [
+        int(x) for x in saved.get("swept_campaign_ids") or []
+        if str(x).isdigit() and int(x) in expected
+    ]
+    swept_campaign_ids = _completed_sweep_campaign_ids(
+        expected_nms, swept_nm_ids, previous_completed
+    )
+
+    previous_next_nm_raw = saved.get("next_nm_index")
+    previous_next_nm = previous_next_nm_raw if isinstance(previous_next_nm_raw, dict) else {}
+    next_nm_index: dict[str, int] = {}
+    for cid, nms in expected_nms.items():
+        if nms:
+            next_nm_index[cid] = (
+                max(0, int(previous_next_nm.get(cid) or 0)) % len(nms)
+            )
+
+    saved_sweep_id = max(0, int(saved.get("sweep_id") or 0))
+    sweep_id = max(1, saved_sweep_id + (1 if catalog_changed and saved_sweep_id else 0))
+    next_campaign_id = expected[next_campaign_index] if expected else None
     return {
         "campaign_ids": expected,
         "campaign_nm_ids": expected_nms,
-        "next_campaign_index": max(0, int(saved.get("next_campaign_index") or 0)) % max(1, len(expected)),
-        "next_nm_index": dict(saved.get("next_nm_index") or {}),
-        "sweep_id": max(1, int(saved.get("sweep_id") or 1)),
-        "swept_campaign_ids": [int(x) for x in saved.get("swept_campaign_ids") or [] if str(x).isdigit()],
-        "swept_nm_ids": {str(k): [int(x) for x in v if str(x).isdigit()]
-                          for k, v in (saved.get("swept_nm_ids") or {}).items() if isinstance(v, list)},
+        "next_campaign_index": next_campaign_index,
+        "next_campaign_id": next_campaign_id,
+        "next_nm_index": next_nm_index,
+        "sweep_id": sweep_id,
+        "catalog_changed": catalog_changed,
+        "swept_campaign_ids": swept_campaign_ids,
+        "swept_nm_ids": swept_nm_ids,
     }
-
 
 def _rotating_slice(items: list[Any], limit: int, start: int) -> list[Any]:
     if not items or limit <= 0:
@@ -441,6 +511,9 @@ class AdvertisingOptimizerAgent(BaseAgent):
         before = int(cursor["next_campaign_index"])
         selected_campaigns = _rotating_slice(campaigns, max_campaigns, before)
         cursor["next_campaign_index"] = (before + len(selected_campaigns)) % max(1, len(campaigns))
+        cursor["next_campaign_id"] = (
+            _campaign_id(campaigns[cursor["next_campaign_index"]]) if campaigns else None
+        )
         results = await asyncio.gather(
             *(scan_campaign(c) for c in selected_campaigns),
             return_exceptions=True,
