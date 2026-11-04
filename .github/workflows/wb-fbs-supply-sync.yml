@@ -151,7 +151,7 @@ jobs:
           expected = ["SANYCH", "AIR", "HOZYAYUSHKA"]
           seen = []
           failures = []
-          max_retry_failures = 8
+          max_retry_failures = 3
           max_attempts = 90
           total_attempts = 0
           def active_supply_lease():
@@ -189,7 +189,7 @@ jobs:
                       retry_failures += 1
                       lease_active, lease_ms = active_supply_lease()
                       wait_seconds = (min(540, max(60, (lease_ms + 999) // 1000 + 15))
-                                      if lease_active else 480 if lease_active is None else 45)
+                                      if lease_active else 90 if lease_active is None else 45)
                       print("FBS_SUPPLY_SYNC_RETRY client=" + expected_client +
                             " attempt=" + str(total_attempts) +
                             " type=" + type(error).__name__ +
@@ -221,7 +221,7 @@ jobs:
                           if lease_active:
                               wait_seconds = min(540, max(60, (lease_ms + 999) // 1000 + 15))
                           elif lease_active is None:
-                              wait_seconds = 480 if busy else 120
+                              wait_seconds = 90 if busy else 90
                           else:
                               wait_seconds = 75 if "credential store is busy" in lower_details else 45
                           label = "busy" if busy else "transient_wb_or_bridge_error"
