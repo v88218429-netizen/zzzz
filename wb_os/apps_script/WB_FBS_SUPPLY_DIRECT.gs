@@ -75,6 +75,17 @@ function wbFbsSupplySetStage_(stage, detail) {
   } catch (ignored) {}
 }
 
+function wbFbsSupplyActiveGithubLease_() {
+  var value = PropertiesService.getScriptProperties().getProperty('WB_FBS_DIRECT_ALL_STORES_LEASE');
+  if (!value) return null;
+  try {
+    var lease = JSON.parse(value);
+    return lease && Number(lease.expiresAt) > Date.now() ? lease : null;
+  } catch (ignored) {
+    return null;
+  }
+}
+
 function wbFbsSupplyFetchPage_(token, cursor) {
   var url =
     WB_FBS_DIRECT_SUPPLY_CFG.apiUrl +
@@ -969,6 +980,12 @@ function wbFbsSupplyMaybeSync_() {
         (Date.now() - last) < WB_FBS_DIRECT_SUPPLY_CFG.syncEveryMinutes * 60000) {
       return {ok: true, skipped: true, reason: 'fresh_after_lock'};
     }
+    var activeLease = wbFbsSupplyActiveGithubLease_();
+    if (activeLease) {
+      Logger.log('WB_FBS_DIRECT_SKIP_TRIGGER reason=github_supply_sync_active expires_at=' +
+        new Date(Number(activeLease.expiresAt)).toISOString());
+      return {ok: true, skipped: true, reason: 'github_supply_sync_active'};
+    }
     return wbFbsSupplySyncCore_();
   } catch (e) {
     var msg = String(e && e.message ? e.message : e);
@@ -991,11 +1008,14 @@ function wbFbsSupplySyncNow() {
   var lock = LockService.getUserLock();
   if (!lock.tryLock(30000)) throw new Error('WB_FBS_DIRECT: another sync is running');
   try {
+    if (wbFbsSupplyActiveGithubLease_())
+      throw new Error('WB_FBS_DIRECT: supply sync already running via GitHub');
     return JSON.stringify(wbFbsSupplySyncCore_());
   } finally {
     lock.releaseLock();
   }
 }
+
 
 function wbFbsSupplyEnsureTrigger() {
   var handler = 'wbFbsSupplyMaybeSync_';
