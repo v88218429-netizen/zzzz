@@ -11,7 +11,6 @@ permissions:
 
 jobs:
   smoke:
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
