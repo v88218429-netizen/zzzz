@@ -800,7 +800,7 @@ jobs:
           if finance_failures:
               checkpoint("finance", "all", "RETRY_REQUIRED", exported_at + ":" + str(len(records)), "finance_readback_incomplete", "повторить финансовый этап")
               raise SystemExit("OZON_FINANCE_SYNC_RETRY_REQUIRED:" + json.dumps(finance_failures, ensure_ascii=False)[:1800])
-          if set(finance_published) != {"ДОМ", "Хозяюшка"}:
+          if set(finance_published) != {label for _, label, _, _ in stores}:
               checkpoint("finance", "all", "RETRY_REQUIRED", exported_at + ":" + str(len(records)), "finance_readback_incomplete", "повторить финансовый этап")
               raise SystemExit("OZON_FINANCE_BOTH_STORE_READBACKS_REQUIRED:" + json.dumps(sorted(finance_published), ensure_ascii=False))
           print("OZON_FINANCE_PUBLISH_OK=true;stores=2;coverage="+COVERAGE_FROM+".."+coverage_to,flush=True)
