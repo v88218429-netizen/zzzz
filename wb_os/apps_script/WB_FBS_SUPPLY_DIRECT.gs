@@ -457,20 +457,22 @@ function wbFbsSupplyWriteSupplySheet_(ss, supplyRows, orderCounts, checkedAt) {
       var writeEndRow = writeStartRow + writeChunk.length - 1;
       wbFbsSupplySetStage_('SUPPLY_WRITE_ROWS_CHUNK_START',
         'start_row=' + writeStartRow + ' end_row=' + writeEndRow + ' rows=' + writeChunk.length);
-      var rowsWrite = wbFbsSupplySheetsApiWrite_(
-        supplySheetA1 + 'A' + writeStartRow + ':I' + writeEndRow, writeChunk, true
-      );
-      var expectedRows = rowsWrite.normalizedValues || [];
-      var returnedRows = wbFbsSupplyNormalizeRows_(
-        ((rowsWrite.response || {}).updatedData || {}).values || [], expectedRows.length, header.length
-      );
-      wbFbsSupplySetStage_('SUPPLY_READBACK_RESPONSE_COMPARE_START',
+      var writeRange = sh.getRange(writeStartRow, 1, writeChunk.length, header.length);
+      wbFbsSupplySetStage_('SUPPLY_WRITE_ROWS_NATIVE_SET_START',
+        'start_row=' + writeStartRow + ' rows=' + writeChunk.length);
+      writeRange.setValues(writeChunk);
+      SpreadsheetApp.flush();
+      wbFbsSupplySetStage_('SUPPLY_WRITE_ROWS_NATIVE_SET_DONE',
+        'start_row=' + writeStartRow + ' rows=' + writeChunk.length);
+      var expectedRows = writeChunk;
+      wbFbsSupplySetStage_('SUPPLY_READBACK_NATIVE_COMPARE_START',
         'start_row=' + writeStartRow + ' rows=' + expectedRows.length);
+      var returnedRows = writeRange.getValues();
       if (!wbFbsSupplyMatricesEqual_(expectedRows, returnedRows)) {
-        throw new Error('WB_FBS_DIRECT: supply write response readback mismatch start_row=' +
+        throw new Error('WB_FBS_DIRECT: supply native write readback mismatch start_row=' +
           writeStartRow + ' rows=' + expectedRows.length);
       }
-      wbFbsSupplySetStage_('SUPPLY_READBACK_RESPONSE_DONE',
+      wbFbsSupplySetStage_('SUPPLY_READBACK_NATIVE_DONE',
         'start_row=' + writeStartRow + ' rows=' + returnedRows.length);
     }
     wbFbsSupplySetStage_('SUPPLY_WRITE_ROWS_DONE', 'rows=' + out.length + ' chunks=' +
