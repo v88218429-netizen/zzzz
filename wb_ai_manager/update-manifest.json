@@ -2,9 +2,9 @@
   "schema": 1,
   "channels": {
     "stable": {
-      "version": "1.1.44",
+      "version": "1.1.45",
       "channel": "stable",
-      "notes": "Точные ставки WB API v2, полный список причин отказа, статус приёмки в панели и автоматическое продолжение обхода.",
+      "notes": "Версия 1.1.45: исправлен разбор дат Google Sheets MM/DD/YYYY, чтобы свежие поисковые строки не блокировались из-за отсутствующей даты. Режим записи ставок WB не меняется.",
       "minimum_current_version": "1.0.0",
       "files": [
         {
@@ -34,18 +34,18 @@
         },
         {
           "path": "plugin.json",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/f75ffb4a4a6c3ff063cf7521397e2f40fe9670b6/wb_ai_manager/source/plugin.json",
-          "sha256": "82acc25ff45c9083ebd81f9dc437dd47896cdf1f1cf47aaf26d12a77d2ee58af"
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/f612800844be6189504c1ed001ecc4ce687df3e7/wb_ai_manager/source/plugin.json",
+          "sha256": "e968c7e056cfb3e1cb237ebbd3ab9b2a02841437d583668763009b0076811407"
         },
         {
           "path": "pyproject.toml",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/f75ffb4a4a6c3ff063cf7521397e2f40fe9670b6/wb_ai_manager/source/pyproject.toml",
-          "sha256": "2bbc47fad291684d8d43dc6625cab19e1b535b3dbb4762f54449e377271a82d9"
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/f612800844be6189504c1ed001ecc4ce687df3e7/wb_ai_manager/source/pyproject.toml",
+          "sha256": "dc8dfd48bab29ddd3c8592a3a66dd4cd8f57420fe34705223b52ae96aaa35a85"
         },
         {
           "path": "RELEASE_NOTES.md",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/f75ffb4a4a6c3ff063cf7521397e2f40fe9670b6/wb_ai_manager/source/RELEASE_NOTES.md",
-          "sha256": "fe7fb39761fca0238a00a70e1bd75694f9840aa72354389752cd64d5d5a298e3"
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/f612800844be6189504c1ed001ecc4ce687df3e7/wb_ai_manager/source/RELEASE_NOTES.md",
+          "sha256": "5746ef639b8bf28e21190c90b08d562ce9a8bc0da007803d0b35988989ebb80b"
         },
         {
           "path": "scripts/auto_refresh_sheets.py",
@@ -130,8 +130,8 @@
         },
         {
           "path": "src/wb_control_center/__init__.py",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/f75ffb4a4a6c3ff063cf7521397e2f40fe9670b6/wb_ai_manager/source/src/wb_control_center/__init__.py",
-          "sha256": "3ed3285f4ed95e26e894f11a532824797f73f1adaf0449f4b21d2dd54f30ceb1"
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/f612800844be6189504c1ed001ecc4ce687df3e7/wb_ai_manager/source/src/wb_control_center/__init__.py",
+          "sha256": "fba843d0658450396d89335d01a2c189d4d31573be4863cc142155eeb6aba20e"
         },
         {
           "path": "src/wb_control_center/__main__.py",
@@ -415,8 +415,8 @@
         },
         {
           "path": "src/wb_control_center/query_manager.py",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/f75ffb4a4a6c3ff063cf7521397e2f40fe9670b6/wb_ai_manager/source/src/wb_control_center/query_manager.py",
-          "sha256": "a42ce315151f7884d2118affa4e2fa6cdc4a2a73a531fa7b3ca12ca4c68ab054"
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/f612800844be6189504c1ed001ecc4ce687df3e7/wb_ai_manager/source/src/wb_control_center/query_manager.py",
+          "sha256": "6e225de604e1ebd8dc9b3ebd581222125e3fabed635dc1b2b0b2380d2a3966c0"
         },
         {
           "path": "src/wb_control_center/remote_policy.py",
@@ -486,8 +486,8 @@
         },
         {
           "path": "VERSION",
-          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/f75ffb4a4a6c3ff063cf7521397e2f40fe9670b6/wb_ai_manager/source/VERSION",
-          "sha256": "42fa917361a5ae8be9869720205e483a9489da967a30fa56cbb8ab0b6208c1ac"
+          "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/f612800844be6189504c1ed001ecc4ce687df3e7/wb_ai_manager/source/VERSION",
+          "sha256": "7c0e53e34866bc8c53b670c363cccf04a6e858ea5a3def25cf4c482bcf7779c7"
         }
       ]
     }
