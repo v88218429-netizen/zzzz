@@ -216,7 +216,7 @@ def test_optimizer_progress_counts_campaign_product_pairs_and_only_complete_camp
     assert _completed_sweep_campaign_ids(expected, complete, [101, 202]) == [101, 202]
 
 
-def test_optimizer_cursor_resets_when_product_catalog_changes():
+def test_optimizer_cursor_preserves_unchanged_products_when_catalog_changes():
     from wb_control_center.agents.advertising import _scan_cursor
 
     previous = _scan_cursor(None, [101], {101: [1001]})
@@ -226,7 +226,8 @@ def test_optimizer_cursor_resets_when_product_catalog_changes():
 
     updated = _scan_cursor({"data": previous}, [101], {101: [1001, 1002]})
 
+    assert updated["catalog_changed"] is True
     assert updated["sweep_id"] == previous["sweep_id"] + 1
     assert updated["next_campaign_index"] == 0
-    assert updated["swept_campaign_ids"] == []
-    assert updated["swept_nm_ids"] == {}
+    assert updated["swept_campaign_ids"] == [101]
+    assert updated["swept_nm_ids"] == {"101": [1001]}
