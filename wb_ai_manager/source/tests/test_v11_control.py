@@ -358,6 +358,9 @@ def test_advertising_deep_scan_is_hard_bounded_and_rotates():
     assert [x["advertId"] for x in _rotating_slice(campaigns, 2, 4)] == [4, 5]
     cursor = _scan_cursor(None, [1, 2, 3])
     cursor["next_campaign_index"] = 2
+    cursor["next_campaign_id"] = 3
     resumed = _scan_cursor({"data": cursor}, [1, 2, 3])
     assert resumed["next_campaign_index"] == 2
-    assert _scan_cursor({"data": cursor}, [1, 2, 4])["next_campaign_index"] == 0
+    changed = _scan_cursor({"data": cursor}, [1, 2, 4])
+    assert changed["catalog_changed"] is True
+    assert changed["next_campaign_index"] == 2
