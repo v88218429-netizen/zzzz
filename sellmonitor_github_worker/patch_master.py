@@ -863,6 +863,8 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
         financeReportProbe = {ok:false,error:financeReportMessage};
       }
     }
+"""
+        worker_text = worker_text.replace(probe_anchor, probe_code + "\n" + probe_anchor, 1)
         finance_return_anchor = "      partial:partial,fresh_categories:freshCategories,\n      source_rows:products.length,finance_rows:rows.length,part:part"
         if worker_text.count(finance_return_anchor) != 1:
             raise SystemExit("INNER_FINANCE_REPORT_ROWS_PROBE_RETURN_ANCHOR_MISMATCH")
