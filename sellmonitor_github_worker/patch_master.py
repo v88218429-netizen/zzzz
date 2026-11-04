@@ -814,6 +814,72 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
         print("INNER_FINANCE_WORKER_VERSION=" + current_version + "->" + next_version)
         print("INNER_FINANCE_PARTIAL_STATUS=patched")
 
+    # Probe Sellmonitor's compact WB finance report when product analytics marks finance stale.
+    # This records only response shape/count; it never logs financial values or tokens.
+    report_probe_marker = "INNER_FINANCE_REPORT_ROWS_PROBE_V1"
+    if report_probe_marker not in worker_text:
+        probe_anchor = "    var rows = sellmonitorGithubInnerFinanceRows_(cfg,dateKey,nextDay,products,new Date(),{partial:partial,freshness:freshness});"
+        if worker_text.count(probe_anchor) != 1:
+            raise SystemExit("INNER_FINANCE_REPORT_ROWS_PROBE_ANCHOR_MISMATCH")
+        probe_code = """    /* INNER_FINANCE_REPORT_ROWS_PROBE_V1 */
+    var financeReportProbe = null;
+    if (partial && (!sellmonitorGithubInnerCategoryFresh_(freshness,'financial_operations') ||
+                    !sellmonitorGithubInnerCategoryFresh_(freshness,'financial_report_rows'))) {
+      try {
+        var financeReportData = sellmonitorGithubInnerMcpCall_(cfg.spreadsheetId,'get_wb_financial_report_rows',{
+          marketplaceCode:'wb',marketplaceAccountId:cfg.accountId,
+          from:dateKey,to:nextDay,dateField:'rrDt',mode:'aggregate',
+          groupBy:['nmId','rrDt'],
+          sumFields:['retailPrice','retailAmount','retailPriceWithDiscRub','deliveryRub','ppvzSalesCommission',
+            'ppvzForPay','ppvzReward','acquiringFee','penalty','additionalPayment','rebillLogisticCost',
+            'storageFee','deduction','acceptance'],
+          limit:2000
+        });
+        var financeReportRows = [];
+        var reportCandidates = [
+          financeReportData,
+          financeReportData && financeReportData.data,
+          financeReportData && financeReportData.rows,
+          financeReportData && financeReportData.items,
+          financeReportData && financeReportData.data && financeReportData.data.rows,
+          financeReportData && financeReportData.data && financeReportData.data.items
+        ];
+        for (var reportIndex=0;reportIndex<reportCandidates.length;reportIndex++) {
+          if (Array.isArray(reportCandidates[reportIndex])) { financeReportRows=reportCandidates[reportIndex]; break; }
+        }
+        var financeReportFirst = financeReportRows.length ? financeReportRows[0] : null;
+        financeReportProbe = {
+          ok:true,
+          response_type:Array.isArray(financeReportData)?'array':typeof financeReportData,
+          response_keys:financeReportData && typeof financeReportData==='object' ? Object.keys(financeReportData).slice(0,30) : [],
+          data_keys:financeReportData && financeReportData.data && typeof financeReportData.data==='object' && !Array.isArray(financeReportData.data)
+            ? Object.keys(financeReportData.data).slice(0,30) : [],
+          rows:financeReportRows.length,
+          first_row_keys:financeReportFirst && typeof financeReportFirst==='object' ? Object.keys(financeReportFirst).slice(0,40) : []
+        };
+      } catch (financeReportError) {
+        var financeReportMessage = String(financeReportError && financeReportError.message ? financeReportError.message : financeReportError)
+          .replace(/[A-Za-z0-9_-]{32,}/g,'[redacted]').slice(0,300);
+        financeReportProbe = {ok:false,error:financeReportMessage};
+      }
+    }
+        finance_return_anchor = "      partial:partial,fresh_categories:freshCategories,\n      source_rows:products.length,finance_rows:rows.length,part:part"
+        if worker_text.count(finance_return_anchor) != 1:
+            raise SystemExit("INNER_FINANCE_REPORT_ROWS_PROBE_RETURN_ANCHOR_MISMATCH")
+        worker_text = worker_text.replace(finance_return_anchor, "      partial:partial,fresh_categories:freshCategories,finance_report_probe:financeReportProbe,\n      source_rows:products.length,finance_rows:rows.length,part:part", 1)
+        probe_versions = re.findall(r"VERSION:\s*'github-worker-(\d+)\.(\d+)\.(\d+)'", worker_text)
+        if len(probe_versions) != 1:
+            raise SystemExit("INNER_FINANCE_REPORT_ROWS_PROBE_VERSION_PATTERN_MISMATCH")
+        probe_major, probe_minor, probe_patch = [int(value) for value in probe_versions[0]]
+        probe_current = ".".join(str(value) for value in (probe_major, probe_minor, probe_patch))
+        probe_next = ".".join(str(value) for value in (probe_major, probe_minor, probe_patch + 1))
+        probe_version_anchor = "VERSION: 'github-worker-" + probe_current + "'"
+        if worker_text.count(probe_version_anchor) != 1:
+            raise SystemExit("INNER_FINANCE_REPORT_ROWS_PROBE_VERSION_ANCHOR_MISMATCH")
+        worker_text = worker_text.replace(probe_version_anchor, "VERSION: 'github-worker-" + probe_next + "'", 1)
+        print("INNER_FINANCE_REPORT_ROWS_PROBE_VERSION=" + probe_current + "->" + probe_next)
+        print("INNER_FINANCE_REPORT_ROWS_PROBE=patched")
+
     worker.write_text(worker_text, encoding="utf-8")
     print("WORKER_TRIGGER_REFRESH_V2=patched")
 candidates = []
