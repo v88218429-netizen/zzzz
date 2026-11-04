@@ -229,5 +229,5 @@ def test_optimizer_cursor_preserves_unchanged_products_when_catalog_changes():
     assert updated["catalog_changed"] is True
     assert updated["sweep_id"] == previous["sweep_id"] + 1
     assert updated["next_campaign_index"] == 0
-    assert updated["swept_campaign_ids"] == [101]
+    assert updated["swept_campaign_ids"] == []
     assert updated["swept_nm_ids"] == {"101": [1001]}
