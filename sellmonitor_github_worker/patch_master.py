@@ -814,8 +814,8 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
         print("INNER_FINANCE_WORKER_VERSION=" + current_version + "->" + next_version)
         print("INNER_FINANCE_PARTIAL_STATUS=patched")
 
-    # Discover tools from the authenticated Inner MCP itself; the spreadsheet tool inventory is unrelated.
-    probe_marker = "INNER_FINANCE_TOOL_DISCOVERY_PROBE_V2"
+    # Discover actual Inner MCP financial routes, then inspect only the selected day's compact report rows.
+    probe_marker = "INNER_FINANCE_RAW_REPORT_PROBE_V3"
     if probe_marker not in worker_text:
         mcp_call_anchor = "  var call = post({jsonrpc:'2.0',id:2,method:'tools/call',params:{name:tool,arguments:args || {}}},init.session);"
         if worker_text.count(mcp_call_anchor) != 1:
@@ -826,9 +826,10 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
         worker_text = worker_text.replace(mcp_call_anchor, mcp_call_replacement, 1)
         probe_anchor = "    var rows = sellmonitorGithubInnerFinanceRows_(cfg,dateKey,nextDay,products,new Date(),{partial:partial,freshness:freshness});"
         if worker_text.count(probe_anchor) != 1:
-            raise SystemExit("INNER_FINANCE_TOOL_DISCOVERY_PROBE_ANCHOR_MISMATCH")
-        probe_code = """    /* INNER_FINANCE_TOOL_DISCOVERY_PROBE_V2 */
+            raise SystemExit("INNER_FINANCE_RAW_REPORT_PROBE_ANCHOR_MISMATCH")
+        probe_code = """    /* INNER_FINANCE_RAW_REPORT_PROBE_V3 */
     var financeToolsProbe = null;
+    var financeRawProbe = null;
     if (partial && (!sellmonitorGithubInnerCategoryFresh_(freshness,'financial_operations') ||
                     !sellmonitorGithubInnerCategoryFresh_(freshness,'financial_report_rows'))) {
       var toolProbeProps = sellmonitorClientProperties_(cfg.spreadsheetId);
@@ -860,25 +861,62 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
           financeToolsProbe = {ok:false,error:toolProbeMessage};
         }
       }
+      var rawProbeKey = 'SMC_INNER_MCP_RAW_REPORT_PROBE_LAST_MS';
+      var rawProbeLast = Number(toolProbeProps.getProperty(rawProbeKey) || 0);
+      if (!rawProbeLast || Date.now() - rawProbeLast >= 30 * 60 * 1000) {
+        toolProbeProps.setProperty(rawProbeKey,String(Date.now()));
+        try {
+          var rawReportData = sellmonitorGithubInnerMcpCall_(cfg.spreadsheetId,'analytics_get_marketplace_raw_report_rows',{
+            marketplaceCode:'wb',marketplaceAccountId:cfg.accountId,
+            from:dateKey,to:nextDay,dateField:'rrDt',limit:1000
+          });
+          var rawReportCandidates = [
+            rawReportData,
+            rawReportData && rawReportData.data,
+            rawReportData && rawReportData.rows,
+            rawReportData && rawReportData.items,
+            rawReportData && rawReportData.data && rawReportData.data.rows,
+            rawReportData && rawReportData.data && rawReportData.data.items
+          ];
+          var rawReportRows = [];
+          for (var rawIndex=0;rawIndex<rawReportCandidates.length;rawIndex++) {
+            if (Array.isArray(rawReportCandidates[rawIndex])) { rawReportRows=rawReportCandidates[rawIndex]; break; }
+          }
+          var rawFirst = rawReportRows.length ? rawReportRows[0] : null;
+          financeRawProbe = {
+            ok:true,
+            response_type:Array.isArray(rawReportData)?'array':typeof rawReportData,
+            response_keys:rawReportData && typeof rawReportData==='object' ? Object.keys(rawReportData).slice(0,30) : [],
+            data_keys:rawReportData && rawReportData.data && typeof rawReportData.data==='object' && !Array.isArray(rawReportData.data)
+              ? Object.keys(rawReportData.data).slice(0,30) : [],
+            rows:rawReportRows.length,
+            first_row_keys:rawFirst && typeof rawFirst==='object' ? Object.keys(rawFirst).slice(0,40) : []
+          };
+        } catch (rawProbeError) {
+          var rawProbeMessage = String(rawProbeError && rawProbeError.message ? rawProbeError.message : rawProbeError)
+            .replace(/[A-Za-z0-9_-]{32,}/g,'[redacted]').slice(0,300);
+          financeRawProbe = {ok:false,error:rawProbeMessage};
+        }
+      }
     }
 """
         worker_text = worker_text.replace(probe_anchor, probe_code + "\n" + probe_anchor, 1)
         finance_return_anchor = "fresh_categories:freshCategories,"
         if worker_text.count(finance_return_anchor) != 1:
-            raise SystemExit("INNER_FINANCE_TOOL_DISCOVERY_PROBE_RETURN_ANCHOR_MISMATCH")
-        worker_text = worker_text.replace(finance_return_anchor, "fresh_categories:freshCategories,finance_tools_probe:financeToolsProbe,", 1)
+            raise SystemExit("INNER_FINANCE_RAW_REPORT_PROBE_RETURN_ANCHOR_MISMATCH")
+        worker_text = worker_text.replace(finance_return_anchor, "fresh_categories:freshCategories,finance_tools_probe:financeToolsProbe,finance_raw_probe:financeRawProbe,", 1)
         probe_versions = re.findall(r"VERSION:\s*'github-worker-(\d+)\.(\d+)\.(\d+)'", worker_text)
         if len(probe_versions) != 1:
-            raise SystemExit("INNER_FINANCE_TOOL_DISCOVERY_PROBE_VERSION_PATTERN_MISMATCH")
+            raise SystemExit("INNER_FINANCE_RAW_REPORT_PROBE_VERSION_PATTERN_MISMATCH")
         probe_major, probe_minor, probe_patch = [int(value) for value in probe_versions[0]]
         probe_current = ".".join(str(value) for value in (probe_major, probe_minor, probe_patch))
-        probe_next = ".".join(str(value) for value in (probe_major, probe_minor, probe_patch + 1))
+        probe_next = ".".join(str(value) for value in (probe_major, probe_minor, probe_patch + 2))
         probe_version_anchor = "VERSION: 'github-worker-" + probe_current + "'"
         if worker_text.count(probe_version_anchor) != 1:
-            raise SystemExit("INNER_FINANCE_TOOL_DISCOVERY_PROBE_VERSION_ANCHOR_MISMATCH")
+            raise SystemExit("INNER_FINANCE_RAW_REPORT_PROBE_VERSION_ANCHOR_MISMATCH")
         worker_text = worker_text.replace(probe_version_anchor, "VERSION: 'github-worker-" + probe_next + "'", 1)
         print("INNER_FINANCE_WORKER_VERSION=" + probe_current + "->" + probe_next)
-        print("INNER_FINANCE_TOOL_DISCOVERY_PROBE=patched")
+        print("INNER_FINANCE_RAW_REPORT_PROBE=patched")
 
     worker.write_text(worker_text, encoding="utf-8")
     print("WORKER_TRIGGER_REFRESH_V2=patched")
