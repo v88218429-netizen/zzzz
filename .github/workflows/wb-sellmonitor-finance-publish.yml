@@ -26,7 +26,7 @@ on:
       resume_attempt:
         description: Число автоматических повторов
         type: choice
-        options: ["0", "1"]
+        options: ["0", "1", "2"]
         default: "0"
         required: true
   push:
@@ -121,11 +121,10 @@ jobs:
               daily_phases = sanych_chunks if store_id == "sanych_wb" else months
               phases = ["summary", *daily_phases, "rnp_week", "rnp_month", "dashboard"]
               store_result = {"store_id": store_id}
-              phase_start = phases.index(resume_phase) if resume_phase in phases else 0
-              phases = phases[phase_start:]
-              # A resumed process re-checks the compact source summary before validating all phases.
+              phase_checkpoint = resume_phase if resume_phase in phases else "summary"
+              # Rebuild the in-memory verification chain by replaying bounded, idempotent phases.
               if resume_phase != "summary":
-                  phases = ["summary"] + phases
+                  print("WB_RESUME_REPLAY=store:" + store_id + ";checkpoint:" + phase_checkpoint + ";from:summary;idempotent=yes", flush=True)
               print("RESUME_FROM=store:" + store_id + ";phase:" + (phases[0] if phases else "complete"), flush=True)
               for phase_index, phase in enumerate(phases):
                   checkpoint_resume(store_id, phase)
@@ -286,6 +285,36 @@ jobs:
                       print("STORE=" + store_id + " PHASE=" + phase + " STATUS=NO_SOURCE_DATA", flush=True)
                   else:
                       print("STORE=" + store_id + " PHASE=" + phase + " OK=yes", flush=True)
+              missing_state = []
+              if "summary" not in store_result:
+                  missing_state.append("summary")
+              if "rnp" not in store_result:
+                  missing_state.extend(("rnp.day", "rnp.week", "rnp.month"))
+              else:
+                  missing_state.extend("rnp." + grain for grain in ("day", "week", "month") if grain not in store_result["rnp"])
+              if "dashboard" not in store_result:
+                  missing_state.append("dashboard")
+              has_phase_error = any(
+                  e.startswith("WB finance phase failed for " + store_id)
+                  or e.startswith("WB finance summary readback failed for " + store_id)
+                  or e.startswith("WB finance RNP readback failed for " + store_id)
+                  or e.startswith("WB finance dashboard failed for " + store_id)
+                  for e in errors
+              )
+              if store_id in expected and missing_state and not has_phase_error:
+                  if "summary" in missing_state:
+                      incomplete_phase = "summary"
+                  elif "rnp.day" in missing_state:
+                      incomplete_phase = daily_phases[0] if daily_phases else "rnp_week"
+                  elif "rnp.week" in missing_state:
+                      incomplete_phase = "rnp_week"
+                  elif "rnp.month" in missing_state:
+                      incomplete_phase = "rnp_month"
+                  else:
+                      incomplete_phase = "dashboard"
+                  errors.append("WB finance verification state incomplete for " + store_id + ";missing=" + ",".join(missing_state))
+                  failed_phases.append((store_id, incomplete_phase))
+                  print("STORE=" + store_id + " STATUS=RETRY_REQUIRED MISSING=" + ",".join(missing_state) + ";RESUME=" + incomplete_phase, flush=True)
               if store_id in expected and not any(e.startswith("WB finance phase failed for " + store_id) or e.startswith("WB finance summary readback failed for " + store_id) or e.startswith("WB finance RNP readback failed for " + store_id) or e.startswith("WB finance dashboard failed for " + store_id) for e in errors):
                   if all(k in store_result for k in ("summary", "rnp", "dashboard")) and all(k in store_result["rnp"] for k in ("day", "week", "month")):
                       verified.append(store_result)
@@ -308,7 +337,7 @@ jobs:
 
   recover:
     needs: publish
-    if: ${{ always() && (needs.publish.result == 'failure' || needs.publish.result == 'cancelled') && (github.event_name != 'workflow_dispatch' || inputs.resume_attempt == '0') }}
+    if: ${{ always() && (needs.publish.result == 'failure' || needs.publish.result == 'cancelled') && (github.event_name != 'workflow_dispatch' || inputs.resume_attempt != '2') }}
     runs-on: ubuntu-latest
     permissions:
       actions: write
@@ -320,13 +349,14 @@ jobs:
           RECOVERY_STORE: ${{ needs.publish.outputs.resume_store || (github.event_name == 'workflow_dispatch' && inputs.store != 'all' && inputs.store || github.event_name == 'push' && contains(github.event.head_commit.message, '[air-only]') && 'air_wb' || github.event_name == 'push' && contains(github.event.head_commit.message, '[hozyayushka-only]') && 'hozyayushka_wb' || github.event_name == 'push' && contains(github.event.head_commit.message, '[sanych-only]') && 'sanych_wb' || 'all') }}
           RECOVERY_REF: ${{ github.ref_name }}
           RECOVERY_PHASE: ${{ needs.publish.outputs.resume_phase || 'summary' }}
+          RECOVERY_ATTEMPT: ${{ github.event_name == 'workflow_dispatch' && inputs.resume_attempt || '0' }}
         run: |
           set -euo pipefail
           python - <<'PY'
           import json, os, urllib.request
           payload = {
               "ref": os.environ["RECOVERY_REF"],
-              "inputs": {"store": os.environ["RECOVERY_STORE"], "resume_phase": os.environ["RECOVERY_PHASE"], "resume_attempt": "1"},
+              "inputs": {"store": os.environ["RECOVERY_STORE"], "resume_phase": os.environ["RECOVERY_PHASE"], "resume_attempt": str(min(2, int(os.environ.get("RECOVERY_ATTEMPT", "0")) + 1))},
           }
           url = "https://api.github.com/repos/" + os.environ["GITHUB_REPOSITORY"] + "/actions/workflows/wb-sellmonitor-finance-publish.yml/dispatches"
           req = urllib.request.Request(
