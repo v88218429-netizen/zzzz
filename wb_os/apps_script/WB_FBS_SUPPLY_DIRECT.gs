@@ -452,18 +452,17 @@ function wbFbsSupplyWriteSupplySheet_(ss, supplyRows, orderCounts, checkedAt) {
     var writeEndRow = writeStartRow + out.length - 1;
     wbFbsSupplySetStage_('SUPPLY_WRITE_ROWS_START',
       'rows=' + out.length + ' write_readback=single_snapshot');
-    var writeRange = sh.getRange(writeStartRow, 1, out.length, header.length);
-    wbFbsSupplySetStage_('SUPPLY_WRITE_ROWS_NATIVE_SET_START',
+    var supplyWriteRangeA1 = supplySheetA1 + 'A' + writeStartRow + ':I' + writeEndRow;
+    wbFbsSupplySetStage_('SUPPLY_WRITE_ROWS_SHEETS_API_START',
       'start_row=' + writeStartRow + ' rows=' + out.length);
-    writeRange.setValues(out);
-    SpreadsheetApp.flush();
-    wbFbsSupplySetStage_('SUPPLY_WRITE_ROWS_NATIVE_SET_DONE',
+    wbFbsSupplySheetsApiWrite_(supplyWriteRangeA1, out, false);
+    wbFbsSupplySetStage_('SUPPLY_WRITE_ROWS_SHEETS_API_DONE',
       'start_row=' + writeStartRow + ' rows=' + out.length);
     wbFbsSupplySetStage_('SUPPLY_READBACK_SHEETS_API_COMPARE_START',
       'start_row=' + writeStartRow + ' rows=' + out.length);
     var returnedRows = wbFbsSupplySheetsApiRead_(supplySheetA1 + 'A' + writeStartRow + ':I' + writeEndRow, out.length, header.length);
     if (!wbFbsSupplyMatricesEqual_(out, returnedRows)) {
-      throw new Error('WB_FBS_DIRECT: supply native write readback mismatch start_row=' +
+      throw new Error('WB_FBS_DIRECT: supply Sheets API write readback mismatch start_row=' +
         writeStartRow + ' rows=' + out.length);
     }
     wbFbsSupplySetStage_('SUPPLY_READBACK_SHEETS_API_DONE',
