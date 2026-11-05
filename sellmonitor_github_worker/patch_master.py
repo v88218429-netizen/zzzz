@@ -917,6 +917,27 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
         print("INNER_FINANCE_WORKER_VERSION=" + probe_current + "->" + probe_next)
         print("INNER_FINANCE_RAW_REPORT_PROBE=patched")
 
+    # The WB raw-report endpoint requires an explicit subject. Keep the
+    # probe bounded to one day and request only the supported finance rows.
+    subject_patch_marker = "INNER_FINANCE_RAW_REPORT_SUBJECT_V5"
+    subject_patch_anchor = "            marketplaceCode:'wb',marketplaceAccountId:cfg.accountId,\\n            from:dateKey,to:nextDay,dateField:'rrDt',limit:1000"
+    subject_patch_replacement = "            marketplaceCode:'wb',marketplaceAccountId:cfg.accountId,\\n            subject:'financial_report_rows',from:dateKey,to:nextDay,limit:1000"
+    if subject_patch_marker not in worker_text:
+        if worker_text.count(subject_patch_anchor) != 1:
+            raise SystemExit("INNER_FINANCE_RAW_REPORT_SUBJECT_ANCHOR_MISMATCH")
+        worker_text = worker_text.replace(subject_patch_anchor, subject_patch_replacement, 1)
+        subject_versions = re.findall(r"VERSION:\\s*'github-worker-(\\d+)\\.(\\d+)\\.(\\d+)'", worker_text)
+        if len(subject_versions) != 1:
+            raise SystemExit("INNER_FINANCE_RAW_REPORT_SUBJECT_VERSION_MISMATCH")
+        subject_major, subject_minor, subject_patch = [int(value) for value in subject_versions[0]]
+        subject_current = ".".join(str(value) for value in (subject_major, subject_minor, subject_patch))
+        subject_next = ".".join(str(value) for value in (subject_major, subject_minor, subject_patch + 2))
+        subject_version_anchor = "VERSION: 'github-worker-" + subject_current + "'"
+        if worker_text.count(subject_version_anchor) != 1:
+            raise SystemExit("INNER_FINANCE_RAW_REPORT_SUBJECT_VERSION_ANCHOR_MISMATCH")
+        worker_text = worker_text.replace(subject_version_anchor, "VERSION: 'github-worker-" + subject_next + "'", 1)
+        print("INNER_FINANCE_WORKER_VERSION=" + subject_current + "->" + subject_next)
+        print("INNER_FINANCE_RAW_REPORT_SUBJECT=patched")
     worker.write_text(worker_text, encoding="utf-8")
     print("WORKER_TRIGGER_REFRESH_V2=patched")
 candidates = []
