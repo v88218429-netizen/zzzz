@@ -591,9 +591,10 @@ class PortfolioService:
         crosswalk = self._range_values(payload, "unit_economics_crosswalk", "crosswalk")
         catalog = self._range_values(payload, "unit_economics_crosswalk", "catalog")
         audit = self._range_values(payload, "unit_economics_crosswalk", "audit")
+        verification = self._range_values(payload, "unit_economics_crosswalk", "verification")
         by_shop: dict[str, dict[str, dict[str, Any]]] = {}
         diagnostics: dict[str, dict[str, dict[str, Any]]] = {}
-        if not crosswalk or not catalog or not audit:
+        if not crosswalk or not catalog or (not audit and not verification):
             return by_shop, diagnostics
 
         def header_map(row: list[Any]) -> dict[str, list[int]]:
@@ -612,11 +613,19 @@ class PortfolioService:
             return -1, {}
 
         cross_header_row, cross_headers = find_header(crosswalk, {"Ключ", "Строка юнитки", "Товар в юнитке"})
-        audit_header_row, audit_headers = find_header(audit, {"Артикул WB", "Артикул продавца", "Магазин", "Ключ"})
+        audit_header_row, audit_headers = find_header(audit, {"Артикул WB", "Артикул продавца", "Магазин", "Ключ"}) if audit else (-1, {})
+        verification_header_row, verification_headers = find_header(
+            verification,
+            {
+                "Код кабинета", "Артикул WB", "Артикул продавца из остатков",
+                "Ключ Связка цен", "Есть в Связка цен", "Строка юнитки",
+                "Товар в юнитке", "Есть в WB FBS новая",
+            },
+        ) if verification else (-1, {})
         catalog_header_row, catalog_headers = find_header(
             catalog, {"Технический ключ связки", "Магазин", "Артикул продавца", "Себестоимость до передачи на маркетплейс"}
         )
-        if min(cross_header_row, audit_header_row, catalog_header_row) < 0:
+        if cross_header_row < 0 or catalog_header_row < 0 or (audit_header_row < 0 and verification_header_row < 0):
             return by_shop, diagnostics
 
         def cell(row: list[Any], headers: dict[str, list[int]], name: str, occurrence: int = 0) -> Any:
@@ -633,6 +642,52 @@ class PortfolioService:
             text = str(value or "").strip()
             parts = [text, *re.split(r"\s+/\s+", text)]
             return {key_norm(part) for part in parts if key_norm(part)}
+
+        if verification_header_row >= 0:
+            merged_headers = [
+                "Источник связки", "Строка источника", "Артикул WB", "Артикул продавца",
+                "Наименование", "Магазин", "Ключ", "Статус связки", "Строка юнитки",
+                "Товар в юнитке", "Есть в Связка цен", "Есть в WB FBS новая",
+            ]
+            merged_audit = [merged_headers]
+            verified_nm_ids: set[str] = set()
+            for verify_index, row in enumerate(verification[verification_header_row + 1:], start=verification_header_row + 2):
+                nm_id = str(cell(row, verification_headers, "Артикул WB") or "").strip()
+                if not nm_id.isdigit() or int(nm_id) <= 0:
+                    continue
+                verified_nm_ids.add(nm_id)
+                seller_article = str(cell(row, verification_headers, "Артикул продавца из остатков") or "").strip()
+                unit_name = str(cell(row, verification_headers, "Товар в юнитке") or "").strip()
+                crosswalk_ok = str(cell(row, verification_headers, "Есть в Связка цен") or "").strip().casefold() == "да"
+                catalog_ok = str(cell(row, verification_headers, "Есть в WB FBS новая") or "").strip().casefold() == "да"
+                merged_audit.append([
+                    "Проверка товаров WB", verify_index, nm_id, seller_article, unit_name,
+                    cell(row, verification_headers, "Код кабинета"),
+                    cell(row, verification_headers, "Ключ Связка цен"),
+                    "есть связка" if crosswalk_ok and catalog_ok else "не подтверждено",
+                    cell(row, verification_headers, "Строка юнитки"), unit_name,
+                    cell(row, verification_headers, "Есть в Связка цен"),
+                    cell(row, verification_headers, "Есть в WB FBS новая"),
+                ])
+            if audit_header_row >= 0:
+                for audit_index, row in enumerate(audit[audit_header_row + 1:], start=audit_header_row + 2):
+                    nm_id = str(cell(row, audit_headers, "Артикул WB") or "").strip()
+                    if nm_id in verified_nm_ids:
+                        continue
+                    merged_audit.append([
+                        "Аудит ассортимента", audit_index,
+                        cell(row, audit_headers, "Артикул WB"),
+                        cell(row, audit_headers, "Артикул продавца"),
+                        cell(row, audit_headers, "Наименование"),
+                        cell(row, audit_headers, "Магазин"),
+                        cell(row, audit_headers, "Ключ"),
+                        cell(row, audit_headers, "Статус связки"),
+                        cell(row, audit_headers, "Строка юнитки"),
+                        cell(row, audit_headers, "Товар в юнитке"), "", "",
+                    ])
+            audit = merged_audit
+            audit_header_row = 0
+            audit_headers = header_map(merged_headers)
 
         cross_by_key: dict[str, list[dict[str, Any]]] = {}
         for index, row in enumerate(crosswalk[cross_header_row + 1:], start=cross_header_row + 2):
@@ -655,13 +710,16 @@ class PortfolioService:
                 catalog_by_row[index] = record
 
         def add_diag(code: str, nm_id: str, item: dict[str, Any], reasons: list[str]) -> None:
+            mapping_source = item.get("mapping_source") or "Аудит ассортимента"
             diagnostics.setdefault(code or "unknown", {})[nm_id] = {
                 "nm_id": nm_id,
                 "seller_article": item.get("seller_article") or "",
                 "product_name": item.get("product_name") or "",
-                "source": "Связка цен / Аудит ассортимента / 📊 WB FBS новая",
-                "source_row": item.get("unit_row") or item.get("audit_source_row"),
+                "source": f"Связка цен / {mapping_source} / 📊 WB FBS новая",
+                "mapping_source": mapping_source,
+                "source_row": item.get("unit_row") or item.get("verification_source_row") or item.get("audit_source_row"),
                 "audit_source_row": item.get("audit_source_row"),
+                "verification_source_row": item.get("verification_source_row"),
                 "unit_row": item.get("unit_row"),
                 "key": item.get("key") or "",
                 "reason_codes": list(dict.fromkeys(reasons)),
@@ -671,6 +729,8 @@ class PortfolioService:
             nm_id = str(cell(row, audit_headers, "Артикул WB") or "").strip()
             if not nm_id.isdigit() or int(nm_id) <= 0:
                 continue
+            mapping_source = str(cell(row, audit_headers, "Источник связки") or "Аудит ассортимента").strip()
+            source_row = int(self._num(cell(row, audit_headers, "Строка источника")) or audit_index)
             code = self._economics_shop_code(cell(row, audit_headers, "Магазин"))
             seller_article = str(cell(row, audit_headers, "Артикул продавца") or "").strip()
             product_name = str(cell(row, audit_headers, "Наименование") or "").strip()
@@ -680,13 +740,20 @@ class PortfolioService:
             audit_unit_name = str(cell(row, audit_headers, "Товар в юнитке") or "").strip()
             audit_item = {
                 "seller_article": seller_article, "product_name": product_name,
-                "key": key, "unit_row": unit_row, "audit_source_row": audit_index,
+                "key": key, "unit_row": unit_row, "mapping_source": mapping_source,
+                "audit_source_row": source_row if mapping_source == "Аудит ассортимента" else None,
+                "verification_source_row": source_row if mapping_source == "Проверка товаров WB" else None,
             }
             reasons: list[str] = []
             mapping_notes: list[str] = []
             if not code:
                 reasons.append("shop_code_unknown")
-            if audit_status.strip().casefold() != "есть связка":
+            if mapping_source == "Проверка товаров WB":
+                if str(cell(row, audit_headers, "Есть в Связка цен") or "").strip().casefold() != "да":
+                    reasons.append("verification_crosswalk_link_not_confirmed")
+                if str(cell(row, audit_headers, "Есть в WB FBS новая") or "").strip().casefold() != "да":
+                    reasons.append("verification_catalog_link_not_confirmed")
+            elif audit_status.strip().casefold() != "есть связка":
                 reasons.append("audit_link_not_confirmed")
             if not key:
                 reasons.append("audit_key_missing")
@@ -765,8 +832,10 @@ class PortfolioService:
                 "sku": nm_id, "nm_id": nm_id, "shop_code": code, "seller_article": seller_article,
                 "name": cross_name, "product_name": product_name, "group": str(catalog_record.get("Группа товаров") or "").strip(),
                 "source_row": unit_row, "unit_economics_source_row": unit_row,
-                "audit_source_row": audit_index, "crosswalk_source_row": cross.get("source_row"),
-                "unit_economics_source": "Связка цен / Аудит ассортимента / 📊 WB FBS новая",
+                "audit_source_row": audit_item.get("audit_source_row"),
+                "verification_source_row": audit_item.get("verification_source_row"),
+                "crosswalk_source_row": cross.get("source_row"),
+                "unit_economics_source": f"Связка цен / {mapping_source} / 📊 WB FBS новая",
                 "unit_economics_source_spreadsheet_id": source.get("spreadsheet_id"),
                 "unit_economics_source_key": key, "unit_economics_mapping_validation_ok": True,
                 "unit_economics_mapping_notes": mapping_notes,
