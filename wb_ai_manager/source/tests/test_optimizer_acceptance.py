@@ -120,6 +120,61 @@ class OptimizerAcceptanceTests(unittest.TestCase):
             ["unit_economics_not_decision_ready", "profit_rub_missing_or_unreadable"],
         )
 
+    def test_exact_shop_nm_id_crosswalk_supplies_economics_without_portfolio_name_join(self):
+        args = fixture()
+        own = args[1]["own_27"]
+        own["products"] = []
+        own["unit_economics_by_shop_nm_id"] = {
+            code: {
+                str(100 + index): {
+                    "sku": str(100 + index),
+                    "seller_article": f"Товар {code}",
+                    "name": f"Товар {code}",
+                    "unit_economics_decision_ready": True,
+                    "cost_rub": 10, "price_rub": 30, "profit_rub": 5,
+                    "unit_economics_source": "exact crosswalk",
+                },
+            }
+            for index, code in enumerate(("ap", "aa", "yv"))
+        }
+
+        result = evaluate_optimizer_acceptance(
+            *args, now=datetime(2026, 11, 2, 8, tzinfo=timezone.utc),
+        )
+
+        self.assertTrue(result["ready"])
+        for code in ("ap", "aa", "yv"):
+            self.assertEqual(
+                result["economics"]["coverage_by_shop"][code],
+                {"advertised_products": 1, "matched_products": 1, "decision_ready_products": 1},
+            )
+            self.assertEqual(result["economics_diagnostics_by_shop"][code], [])
+
+    def test_crosswalk_failure_reports_article_stage_and_reason(self):
+        args = fixture()
+        own = args[1]["own_27"]
+        own["products"] = [x for x in own["products"] if x["sku"] != "101"]
+        own["unit_economics_mapping_diagnostics_by_shop"] = {
+            "aa": {
+                "101": {
+                    "nm_id": "101", "seller_article": "Ветошь 10кг",
+                    "product_name": "Ветошь для уборки", "source": "crosswalk",
+                    "source_row": 9, "audit_source_row": 114, "key": "АА|Ветошь 10кг",
+                    "reason_codes": ["crosswalk_unit_row_mismatch"],
+                },
+            },
+        }
+
+        result = evaluate_optimizer_acceptance(
+            *args, now=datetime(2026, 11, 2, 8, tzinfo=timezone.utc),
+        )
+        diagnostic = result["economics_diagnostics_by_shop"]["aa"][0]
+        self.assertEqual(diagnostic["stage"], "unit_economics_mapping")
+        self.assertEqual(diagnostic["seller_article"], "Ветошь 10кг")
+        self.assertEqual(diagnostic["audit_source_row"], 114)
+        self.assertEqual(diagnostic["mapping_key"], "АА|Ветошь 10кг")
+        self.assertEqual(diagnostic["reason_codes"], ["crosswalk_unit_row_mismatch"])
+
     def test_partial_campaign_sweep_blocks_acceptance(self):
         args = fixture()
         args[0]["shops"]["aa"]["sweep"]["sweep_complete"] = False
