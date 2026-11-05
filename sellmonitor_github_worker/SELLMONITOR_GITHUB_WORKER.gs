@@ -5164,6 +5164,23 @@ function sellmonitorGithubPublishDashboard_(dashboard) {
   });
 
   push('', '', '', '', '', '', '', '');
+  push('ПРИЧИНЫ НЕПОЛНОГО ОБХОДА РЕКЛАМЫ',
+    'КАБИНЕТ', 'КАМПАНИЯ', 'nmID', 'ТОЧКА СБОЯ', 'ОШИБКА', 'ВРЕМЯ', '');
+  var sweepErrors = dashboard.optimizer_sweep_errors_by_shop || {};
+  Object.keys(sweepErrors).sort().forEach(function(code) {
+    (sweepErrors[code] || []).forEach(function(x) {
+      push('', economicsShopNames[code] || code, x.campaign_id || '',
+        x.nm_id || '', x.endpoint || '', x.error || '', x.observed_at || '', '');
+    });
+  });
+
+  push('', '', '', '', '', '', '', '');
+  push('ОШИБКИ ИСТОЧНИКОВ', 'ЭТАП', 'ОПИСАНИЕ', '', '', '', '', '');
+  (dashboard.source_errors || []).forEach(function(x) {
+    push('', x.stage || '', x.error || '', '', '', '', '', '');
+  });
+
+  push('', '', '', '', '', '', '', '');
   push('QUERY MANAGER', 'ЗНАЧЕНИЕ', '', '', '', '', '', '');
   var qs = dashboard.query_summary || {};
   [
