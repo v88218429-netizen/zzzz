@@ -118,7 +118,7 @@ jobs:
                   output_file.write("resume_phase=" + str(phase) + "\n")
 
           for store_index, store_id in enumerate(expected):
-              daily_phases = sanych_chunks if store_id == "sanych_wb" else months
+              daily_phases = months
               phases = ["summary", *daily_phases, "rnp_week", "rnp_month", "dashboard"]
               store_result = {"store_id": store_id}
               phase_checkpoint = resume_phase if resume_phase in phases else "summary"
