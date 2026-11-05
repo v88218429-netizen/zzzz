@@ -575,6 +575,14 @@ class PortfolioService:
         }
         return aliases.get(key, "")
 
+    @staticmethod
+    def _economics_primary_name_key(value: Any) -> str:
+        text = PortfolioService._economics_norm(value)
+        text = re.sub(r"(?<=\d)\s*л\b", "", text)
+        text = re.sub(r"(?:\s*[-–—]\s*)?1\s*шт\b\.?$", "", text)
+        text = re.sub(r"\s*шт\b\.?$", "", text)
+        return re.sub(r"[^a-zа-я0-9]+", "", text)
+
     def _parse_unit_economics_crosswalk(
         self, payload: dict[str, Any],
     ) -> tuple[dict[str, dict[str, dict[str, Any]]], dict[str, dict[str, dict[str, Any]]]]:
@@ -884,6 +892,99 @@ class PortfolioService:
         ]
         if not plans:
             plans = crosswalk_plans
+
+        if direct_plans and crosswalk_by_shop:
+            direct_by_exact_name: dict[str, list[dict[str, Any]]] = {}
+            direct_by_identity: dict[str, list[dict[str, Any]]] = {}
+            for direct in direct_plans:
+                exact_name = self._economics_norm(direct.get("name"))
+                identity = self._economics_primary_name_key(direct.get("name"))
+                if exact_name:
+                    direct_by_exact_name.setdefault(exact_name, []).append(direct)
+                if identity:
+                    direct_by_identity.setdefault(identity, []).append(direct)
+
+            fallback_fields = {
+                "cost_rub": "cost_rub",
+                "price_rub": "price_after_discount_rub",
+                "price_after_discount_rub": "price_after_discount_rub",
+                "price_client_rub": "price_after_spp_rub",
+                "price_after_spp_rub": "price_after_spp_rub",
+                "profit_rub": "plan_profit_rub",
+                "plan_profit_rub": "plan_profit_rub",
+                "margin_pct": "plan_margin_pct",
+                "plan_margin_pct": "plan_margin_pct",
+                "roi_pct": "plan_roi_pct",
+                "plan_roi_pct": "plan_roi_pct",
+                "commission_pct": "commission_pct",
+                "logistics_total_rub": "logistics_total_rub",
+                "acceptance_rub": "acceptance_rub",
+                "constructor_pct": "constructor_pct",
+                "acquiring_pct": "acquiring_pct",
+                "acquiring_rub": "acquiring_rub",
+                "tax_regime": "tax_regime",
+                "tax_total_rub": "tax_total_rub",
+                "target_profit_rub": "target_profit_rub",
+                "target_margin_pct": "target_margin_pct",
+                "target_roi_pct": "target_roi_pct",
+                "plan_drr_pct": "plan_drr_pct",
+            }
+            for shop_items in crosswalk_by_shop.values():
+                for item in shop_items.values():
+                    exact_name = self._economics_norm(item.get("name"))
+                    candidates = direct_by_exact_name.get(exact_name, []) if exact_name else []
+                    match_kind = "exact_name"
+                    if len(candidates) != 1:
+                        identity = self._economics_primary_name_key(item.get("name"))
+                        candidates = direct_by_identity.get(identity, []) if identity else []
+                        match_kind = "unit_format_normalized_name"
+                    if len(candidates) != 1:
+                        continue
+                    direct = candidates[0]
+                    filled_fields: list[str] = []
+                    for target, source_key in fallback_fields.items():
+                        if self._num(item.get(target)) is not None:
+                            continue
+                        value = direct.get(source_key)
+                        if value is not None and value != "":
+                            item[target] = value
+                            filled_fields.append(target)
+                    if filled_fields:
+                        item["unit_economics_fallback_source"] = "primary_unit_economics"
+                        item["unit_economics_fallback_source_row"] = direct.get("source_row")
+                        item["unit_economics_fallback_match"] = match_kind
+                        notes = item.get("unit_economics_mapping_notes")
+                        notes = notes if isinstance(notes, list) else []
+                        notes.append("missing_copy_fields_filled_from_unique_primary_name")
+                        item["unit_economics_mapping_notes"] = list(dict.fromkeys(notes))
+                    validation: list[str] = []
+                    cost = self._num(item.get("cost_rub"))
+                    price = self._num(item.get("price_rub") or item.get("price_client_rub"))
+                    profit = self._num(item.get("profit_rub"))
+                    margin = self._num(item.get("margin_pct"))
+                    commission = self._num(item.get("commission_pct"))
+                    logistics = self._num(item.get("logistics_total_rub"))
+                    tax_total = self._num(item.get("tax_total_rub"))
+                    if cost is None:
+                        validation.append("cost_rub_missing_or_unreadable")
+                    elif cost <= 0:
+                        validation.append("cost_rub_not_positive")
+                    if price is None:
+                        validation.append("price_rub_missing_or_unreadable")
+                    elif price <= 0:
+                        validation.append("price_rub_not_positive")
+                    if profit is None:
+                        validation.append("profit_rub_missing_or_unreadable")
+                    if margin is None:
+                        validation.append("margin_pct_missing_or_unreadable")
+                    if commission is None:
+                        validation.append("commission_pct_missing_or_unreadable")
+                    if logistics is None:
+                        validation.append("logistics_total_rub_missing_or_unreadable")
+                    if tax_total is None:
+                        validation.append("tax_total_rub_missing_or_unreadable")
+                    item["unit_economics_validation_reasons"] = validation
+                    item["unit_economics_decision_ready"] = not validation
 
         crosswalk_source = (payload.get("sources") or {}).get("unit_economics_crosswalk") or {}
         source_read_at = str(primary_source.get("read_at") or crosswalk_source.get("read_at") or payload.get("generated_at") or "").strip()
