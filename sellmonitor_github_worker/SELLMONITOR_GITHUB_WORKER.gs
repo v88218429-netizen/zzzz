@@ -4,7 +4,7 @@
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.97',
+  VERSION: 'github-worker-1.3.98',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -4942,6 +4942,42 @@ function sellmonitorGithubReadRange_(ss, a1) {
   return sellmonitorGithubTrimRows_(sh.getRange(startRow, startCol, rows, cols).getDisplayValues());
 }
 
+function sellmonitorGithubPortfolioSources_() {
+  var sources = JSON.parse(JSON.stringify(SMC_PORTFOLIO_SOURCES));
+  var cc = SpreadsheetApp.openById(SMC_GH.CONTROL_CENTER_ID);
+  var configSheet = cc.getSheetByName('WB_AI_PRIVATE_SOURCES');
+  if (!configSheet) throw new Error('WB_AI_PRIVATE_SOURCES sheet missing');
+  var rows = configSheet.getDataRange().getDisplayValues();
+  var config = {};
+  for (var i = 1; i < rows.length; i++) {
+    var key = String(rows[i][0] || '').trim();
+    if (key) config[key] = String(rows[i][1] || '').trim();
+  }
+  var primaryId = config.primary_unit_economics_spreadsheet_id;
+  var primaryRange = config.primary_unit_economics_range;
+  if (primaryId && primaryRange) {
+    sources.primary_unit_economics = {
+      spreadsheet_id: primaryId,
+      ranges: {unit_economics: primaryRange}
+    };
+  }
+  var crosswalkId = config.unit_economics_crosswalk_spreadsheet_id;
+  var crosswalkRange = config.unit_economics_crosswalk_range;
+  var catalogRange = config.unit_economics_crosswalk_catalog_range;
+  if (crosswalkId && crosswalkRange && catalogRange) {
+    sources.unit_economics_crosswalk = {
+      spreadsheet_id: crosswalkId,
+      ranges: {
+        crosswalk: crosswalkRange,
+        catalog: catalogRange,
+        audit: config.unit_economics_audit_range || 'Аудит ассортимента!A1:K1000'
+      }
+    };
+  }
+  return sources;
+}
+
+
 function sellmonitorGithubPortfolioSnapshot_(mode) {
   mode = String(mode || 'fast').toLowerCase();
   var heavyOwn27 = {
@@ -4952,13 +4988,20 @@ function sellmonitorGithubPortfolioSnapshot_(mode) {
   };
   var out = {
     ok: true,
-    generated_at: new Date().toISOString(),
+    started_at: new Date().toISOString(),
     runtime: 'GITHUB_ACTIONS_GOOGLE_ADAPTER',
     sources: {},
     errors: []
   };
-  Object.keys(SMC_PORTFOLIO_SOURCES).forEach(function(sourceId) {
-    var cfg = SMC_PORTFOLIO_SOURCES[sourceId];
+  var sourceConfigs;
+  try {
+    sourceConfigs = sellmonitorGithubPortfolioSources_();
+  } catch (configError) {
+    sourceConfigs = JSON.parse(JSON.stringify(SMC_PORTFOLIO_SOURCES));
+    out.errors.push({source: 'WB_AI_PRIVATE_SOURCES', error: String(configError.message || configError)});
+  }
+  Object.keys(sourceConfigs).forEach(function(sourceId) {
+    var cfg = sourceConfigs[sourceId];
     var source = {
       spreadsheet_id: cfg.spreadsheet_id,
       modified_at: '',
@@ -4985,8 +5028,10 @@ function sellmonitorGithubPortfolioSnapshot_(mode) {
       source.error = String(sourceError.message || sourceError);
       out.errors.push({source: sourceId, error: source.error});
     }
+    source.read_at = new Date().toISOString();
     out.sources[sourceId] = source;
   });
+  out.generated_at = new Date().toISOString();
   return out;
 }
 
