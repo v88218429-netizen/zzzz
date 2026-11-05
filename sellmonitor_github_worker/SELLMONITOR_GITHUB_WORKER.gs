@@ -7196,18 +7196,7 @@ function sellmonitorGithubFbsStatusReadV1_(body) {
   if(last>100000){
     // Resolve a long sheet using actual numeric order IDs in column A.
     var lastOrderCell=sheet.getRange(2,1,last-1,1)
-      .createTextFinder('^[0-9][0-9][0-9][0-9][0-9][0-9]+$')
-      .useRegularExpression(true)
-      .matchEntireCell(true)
-      .matchFormulaText(false)
-      .findPrevious();
-    last=lastOrderCell?lastOrderCell.getRow():1;
-    console.log('FBS_STATUS_READ_ROW_RESOLVED client='+client+
-      ' sheet_last_row='+sheetLastRow+' order_id_last_row='+last);
-  }
-  if(last<1||last>100000)
-    throw new Error('FBS_ORDER_ID_ROW_COUNT_UNEXPECTED:resolved='+last+
-      ':sheet_last='+sheetLastRow);
+      .createTextFinder('^[0-9]{6,20}
   var head=sheet.getRange(1,1,1,7).getDisplayValues()[0]||[];
   if(String(head[0]||'')!=='ID заказа'||String(head[4]||'')!=='Статус продавца'||String(head[5]||'')!=='Статус WB')
     throw new Error('FBS_COLUMN_SCHEMA_MISMATCH');
