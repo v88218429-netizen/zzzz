@@ -1015,7 +1015,19 @@ class DecisionEngine:
         base_cfg = dict(runtime.get("advertising") or {})
         group_overrides = runtime.get("group_overrides") if isinstance(runtime.get("group_overrides"), dict) else {}
         sku_overrides = runtime.get("sku_overrides") if isinstance(runtime.get("sku_overrides"), dict) else {}
-        products = {str(x.get("sku")): x for x in (p.get("own_27") or {}).get("products", []) if isinstance(x, dict) and x.get("sku")}
+        own = p.get("own_27") or {}
+        products = {str(x.get("sku")): x for x in own.get("products", []) if isinstance(x, dict) and x.get("sku")}
+        # GitHub scopes this exact nmID map to the cabinet being processed. Keep
+        # it separate from the inventory catalogue and use it only for ad decisions.
+        advertising_economics = own.get("advertising_economics_by_nm_id")
+        if isinstance(advertising_economics, dict):
+            for nm_id, exact in advertising_economics.items():
+                if not str(nm_id).isdigit() or not isinstance(exact, dict):
+                    continue
+                merged = dict(products.get(str(nm_id)) or {})
+                merged.update(exact)
+                merged["sku"] = str(nm_id)
+                products[str(nm_id)] = merged
         live_economics = _live_economics_fact_index(snapshots)
 
         deep = _snap(snapshots, "advertising_optimizer", "deep_scan")
