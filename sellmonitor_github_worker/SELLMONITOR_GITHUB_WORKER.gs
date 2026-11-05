@@ -7205,7 +7205,7 @@ function sellmonitorGithubFbsStatusReadV1_(body) {
     console.log('FBS_STATUS_READ_ROW_RESOLVED client='+client+
       ' sheet_last_row='+sheetLastRow+' order_id_last_row='+last);
   }
-  if(last<1||last>100000)
+  if(last<1||last>500000)
     throw new Error('FBS_ORDER_ID_ROW_COUNT_UNEXPECTED:resolved='+last+
       ':sheet_last='+sheetLastRow);
   var head=sheet.getRange(1,1,1,7).getDisplayValues()[0]||[];
@@ -7377,7 +7377,7 @@ function sellmonitorGithubFbsLoadIdIndex_(sheet, client, lastRow, mark, forceReb
   if(!forceRebuild){
     try{
       var meta=JSON.parse(cache.get(prefix+'meta')||'null');
-      if(meta&&meta.client===client&&Number(meta.parts)>0&&Number(meta.parts)<20&&Number(meta.lastRow)<=lastRow){
+      if(meta&&meta.client===client&&Number(meta.parts)>0&&Number(meta.parts)<200&&Number(meta.lastRow)<=lastRow){
         var chunks=[];
         for(var i=0;i<meta.parts;i++){
           var part=cache.get(prefix+'part_'+i);
@@ -7396,7 +7396,7 @@ function sellmonitorGithubFbsLoadIdIndex_(sheet, client, lastRow, mark, forceReb
       var values=sheet.getRange(2,1,lastRow-1,1).getDisplayValues();
       for(var r=0;r<values.length;r++){
         var id=String((values[r]||[])[0]||'');
-        if(id&&!Object.prototype.hasOwnProperty.call(index,id))index[id]=r+2;
+        if(/^[0-9]{6,20}$/.test(id)&&!Object.prototype.hasOwnProperty.call(index,id))index[id]=r+2;
       }
     }
     indexLast=lastRow;rebuilt=true;
@@ -7406,7 +7406,7 @@ function sellmonitorGithubFbsLoadIdIndex_(sheet, client, lastRow, mark, forceReb
     var tail=sheet.getRange(indexLast+1,1,lastRow-indexLast,1).getDisplayValues();
     for(var t=0;t<tail.length;t++){
       var tailId=String((tail[t]||[])[0]||'');
-      if(tailId&&!Object.prototype.hasOwnProperty.call(index,tailId))index[tailId]=indexLast+1+t;
+      if(/^[0-9]{6,20}$/.test(tailId)&&!Object.prototype.hasOwnProperty.call(index,tailId))index[tailId]=indexLast+1+t;
     }
     indexLast=lastRow;rebuilt=true;
     mark('ID_INDEX_TAIL_READ_DONE');
@@ -7602,7 +7602,7 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
       if(/^[0-9]{6,20}$/.test(idValue))last=idRowIndex+2;
     }
     mark('LAST_ROW_READ_DONE_'+last+'_ID_VALUES_'+idColumnValues.length);
-    if(last<1||last>100000)throw new Error('FBS_ORDER_ID_ROW_COUNT_UNEXPECTED:'+last);
+    if(last<1||last>500000)throw new Error('FBS_ORDER_ID_ROW_COUNT_UNEXPECTED:'+last);
     mark('HEADER_READ_START');
     var head=readDisplayGrid_(1,1,1,7)[0]||[];
     mark('HEADER_READ_DONE');
