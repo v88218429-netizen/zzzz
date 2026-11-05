@@ -314,5 +314,28 @@ class TestRuntimeWorkflowContinuationOrder(unittest.TestCase):
         self.assertLess(continuation, orphan_checkout)
 
 
+def test_campaign_cache_retains_latest_endpoint_error_and_ignores_malformed_history():
+    from wb_control_center.optimizer_acceptance import merge_campaign_cache
+
+    previous = {
+        "campaign_ids": ["11"],
+        "campaigns": [],
+        "scan_errors": "malformed legacy value",
+    }
+    result = merge_campaign_cache(previous, {
+        "active_campaign_ids": [11],
+        "catalog_complete": True,
+        "campaigns": [],
+        "scan_errors": [{
+            "campaign_id": 11, "nm_id": 101,
+            "endpoint": "wb_advert_bids_recommendations",
+            "error": "HTTP 503", "observed_at": "2026-11-05T11:20:00+00:00",
+        }],
+    }, "2026-11-05T11:20:00+00:00")
+    assert len(result["scan_errors"]) == 1
+    assert result["scan_errors"][0]["nm_id"] == 101
+    assert result["scan_errors"][0]["endpoint"] == "wb_advert_bids_recommendations"
+
+
 if __name__ == "__main__":
     unittest.main()
