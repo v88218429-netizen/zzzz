@@ -7275,9 +7275,12 @@ function sellmonitorGithubFbsStatusReadV1_(body) {
     rowMap=findRequestedRows_();
     if(readStates_())throw new Error('FBS_STATUS_TARGETED_LOOKUP_STALE');
   }
+  var alternateRowMap={},alternateSheetLastRow=0;
   if(client==='SANYCH'){
     var alternate=sellmonitorGithubFbsStatusReadV1_({client:'SANYCH_ALTERNATE',orderIds:ids});
     var alternateStates=alternate.statuses||{};
+    alternateRowMap=alternate.rowMap||{};
+    alternateSheetLastRow=Number(alternate.sheetLastRow||0);
     ids.forEach(function(id){
       var mainState=states[id],alternateState=alternateStates[id];
       if(!mainState||!alternateState||
@@ -7288,7 +7291,9 @@ function sellmonitorGithubFbsStatusReadV1_(body) {
   console.log('FBS_STATUS_READ_DONE client='+client+' requested='+ids.length+
     ' found='+Object.keys(states).length+' rows_read='+rowsRead+' ranges='+rangeCount+
     ' api_requests='+apiRequests+' sheet_read_ms='+rowReadMs+' total_ms='+(Date.now()-startedAt));
-  return {ok:true,client:client,requested:ids.length,found:Object.keys(states).length,statuses:states};
+  return {ok:true,client:client,requested:ids.length,found:Object.keys(states).length,
+    statuses:states,rowMap:rowMap,sheetLastRow:sheetLastRow,
+    alternateRowMap:alternateRowMap,alternateSheetLastRow:alternateSheetLastRow};
 }
 
 function sellmonitorGithubFbsStageSnapshot_() {
@@ -7588,31 +7593,32 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
     // Resolve the last numeric order row and only requested IDs without
     // transferring the entire order-ID column through UrlFetch.
     mark('LAST_ROW_READ_START');
-    var orderSheetSearch=SpreadsheetApp.openById(spreadsheetId).getSheetByName('📦 FBS Заказы');
-    if(!orderSheetSearch)throw new Error('FBS_ORDER_SHEET_NOT_FOUND');
-    var sheetLastRow=orderSheetSearch.getLastRow();
-    var lastOrderCell=sheetLastRow>1?orderSheetSearch.getRange(2,1,sheetLastRow-1,1)
-      .createTextFinder('^[0-9]{6,20}$').useRegularExpression(true)
-      .matchEntireCell(true).matchFormulaText(false).findPrevious():null;
-    var last=lastOrderCell?lastOrderCell.getRow():1;
-    if(last<1||last>gridRows)throw new Error('FBS_ORDER_ID_ROW_COUNT_UNEXPECTED:'+last);
-    mark('LAST_ROW_READ_DONE_'+last+'_TARGETED_TEXTFINDER');
+    // The preceding status-read returned row hints for these exact IDs and the
+    // sheet's used-row boundary. Reuse them instead of rescanning the full ID
+    // column inside every write batch.
+    var rowHintField=client==='SANYCH_ALTERNATE'?'_fbsAltRowHint':'_fbsRowHint';
+    var lastRowField=client==='SANYCH_ALTERNATE'?'_fbsAltSheetLastRow':'_fbsSheetLastRow';
+    var sheetLastRow=0;
+    parsed.forEach(function(item){
+      var hintedLast=Number(item.source[lastRowField]||0);
+      if(!isFinite(hintedLast)||hintedLast<1||hintedLast>gridRows)
+        throw new Error('FBS_STATUS_READ_LAST_ROW_HINT_INVALID');
+      if(sheetLastRow&&sheetLastRow!==hintedLast)
+        throw new Error('FBS_STATUS_READ_LAST_ROW_HINT_MISMATCH');
+      sheetLastRow=hintedLast;
+    });
+    if(!sheetLastRow)throw new Error('FBS_STATUS_READ_LAST_ROW_HINT_MISSING');
+    var last=sheetLastRow;
+    mark('LAST_ROW_READ_DONE_'+last+'_STATUS_READ_HINT');
     function findRequestedOrderRows_(){
       var rowMap=Object.create(null);
-      if(sheetLastRow<2||!parsed.length)return rowMap;
-      var columnA=orderSheetSearch.getRange(2,1,sheetLastRow-1,1);
-      for(var searchOffset=0;searchOffset<parsed.length;searchOffset+=40){
-        var part=parsed.slice(searchOffset,searchOffset+40).map(function(item){return item.id;});
-        var matches=columnA.createTextFinder('^(?:'+part.join('|')+')$')
-          .useRegularExpression(true).matchEntireCell(true).matchFormulaText(false).findAll()||[];
-        matches.sort(function(a,b){return a.getRow()-b.getRow();});
-        matches.forEach(function(cell){
-          var foundId=String(cell.getDisplayValue()||'').trim();
-          if(dedupe[foundId]&&!Object.prototype.hasOwnProperty.call(rowMap,foundId))
-            rowMap[foundId]=cell.getRow();
-        });
-        mark('ID_TARGETED_FIND_DONE_'+Math.floor(searchOffset/40+1)+'_MATCHES_'+matches.length);
-      }
+      parsed.forEach(function(item){
+        var row=Number(item.source[rowHintField]||0);
+        if(!isFinite(row)||row<0||row>last)
+          throw new Error('FBS_STATUS_READ_ROW_HINT_INVALID');
+        if(row>=2)rowMap[item.id]=row;
+      });
+      mark('ID_ROW_HINTS_DONE_'+Object.keys(rowMap).length);
       return rowMap;
     }
     mark('HEADER_READ_START');
