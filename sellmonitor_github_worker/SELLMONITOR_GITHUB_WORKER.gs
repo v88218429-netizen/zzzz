@@ -7198,20 +7198,18 @@ function sellmonitorGithubFbsStatusReadV1_(body) {
   function findRequestedRows_(){
     var rowMap=Object.create(null);
     if(sheetLastRow<2||!ids.length)return rowMap;
-    var columnA=sheet.getRange(2,1,sheetLastRow-1,1);
-    for(var searchOffset=0;searchOffset<ids.length;searchOffset+=40){
-      var part=ids.slice(searchOffset,searchOffset+40);
-      var matches=columnA.createTextFinder('^(?:'+part.join('|')+')$')
-        .useRegularExpression(true).matchEntireCell(true).matchFormulaText(false).findAll()||[];
-      matches.sort(function(a,b){return a.getRow()-b.getRow();});
-      matches.forEach(function(cell){
-        var foundId=String(cell.getDisplayValue()||'').trim();
-        if(seen[foundId]&&!Object.prototype.hasOwnProperty.call(rowMap,foundId))
-          rowMap[foundId]=cell.getRow();
-      });
-      console.log('FBS_STATUS_FIND_IDS client='+client+' requested='+part.length+
-        ' matches='+matches.length+' sheet_last_row='+sheetLastRow);
+    var requestedIds=Object.create(null);
+    ids.forEach(function(id){requestedIds[id]=true;});
+    // One bounded column read replaces repeated TextFinder scans (one per 40 IDs).
+    // Keep display strings so long WB IDs are never rounded as JavaScript numbers.
+    var columnA=sheet.getRange(2,1,sheetLastRow-1,1).getDisplayValues();
+    for(var i=0;i<columnA.length;i++){
+      var foundId=String((columnA[i]||[])[0]||'').trim();
+      if(requestedIds[foundId]&&!Object.prototype.hasOwnProperty.call(rowMap,foundId))
+        rowMap[foundId]=i+2;
     }
+    console.log('FBS_STATUS_FIND_IDS client='+client+' requested='+ids.length+
+      ' matches='+Object.keys(rowMap).length+' sheet_last_row='+sheetLastRow);
     return rowMap;
   }
   var rowMap=findRequestedRows_();
