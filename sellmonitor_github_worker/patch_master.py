@@ -814,8 +814,8 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
         print("INNER_FINANCE_WORKER_VERSION=" + current_version + "->" + next_version)
         print("INNER_FINANCE_PARTIAL_STATUS=patched")
 
-    # Discover actual Inner MCP financial routes, then inspect only the selected day's compact report rows.
-    probe_marker = "INNER_FINANCE_RAW_REPORT_PROBE_V3"
+    # Inspect the exact schemas and safe error details for the exposed finance routes.
+    probe_marker = "INNER_FINANCE_RAW_REPORT_PROBE_V4"
     if probe_marker not in worker_text:
         mcp_call_anchor = "  var call = post({jsonrpc:'2.0',id:2,method:'tools/call',params:{name:tool,arguments:args || {}}},init.session);"
         if worker_text.count(mcp_call_anchor) != 1:
@@ -827,41 +827,41 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
         probe_anchor = "    var rows = sellmonitorGithubInnerFinanceRows_(cfg,dateKey,nextDay,products,new Date(),{partial:partial,freshness:freshness});"
         if worker_text.count(probe_anchor) != 1:
             raise SystemExit("INNER_FINANCE_RAW_REPORT_PROBE_ANCHOR_MISMATCH")
-        probe_code = """    /* INNER_FINANCE_RAW_REPORT_PROBE_V3 */
+        probe_code = """    /* INNER_FINANCE_RAW_REPORT_PROBE_V4 */
     var financeToolsProbe = null;
     var financeRawProbe = null;
     if (partial && (!sellmonitorGithubInnerCategoryFresh_(freshness,'financial_operations') ||
                     !sellmonitorGithubInnerCategoryFresh_(freshness,'financial_report_rows'))) {
       var toolProbeProps = sellmonitorClientProperties_(cfg.spreadsheetId);
-      var toolProbeKey = 'SMC_INNER_MCP_TOOLS_PROBE_LAST_MS';
+      var toolProbeKey = 'SMC_INNER_MCP_TOOLS_PROBE_V2_LAST_MS';
       var toolProbeLast = Number(toolProbeProps.getProperty(toolProbeKey) || 0);
       if (!toolProbeLast || Date.now() - toolProbeLast >= 6 * 60 * 60 * 1000) {
         toolProbeProps.setProperty(toolProbeKey,String(Date.now()));
         try {
           var toolCatalog = sellmonitorGithubInnerMcpCall_(cfg.spreadsheetId,'__SELLMONITOR_TOOLS_LIST__',{});
           var exposedTools = toolCatalog && Array.isArray(toolCatalog.tools) ? toolCatalog.tools : [];
-          var relevantTools = exposedTools.filter(function(t) {
-            return /finance|financial|report|expense|sales|product|order|ads|advert|stock/i.test(String(t && t.name || '') + ' ' + String(t && t.description || ''));
+          var focusNames = ['analytics_get_marketplace_raw_report_rows','analytics_get_marketplace_expenses','analytics_get_product_list'];
+          var focusTools = exposedTools.filter(function(t) {
+            return focusNames.indexOf(String(t && t.name || '')) >= 0;
           }).map(function(t) {
             var schema = t && (t.inputSchema || t.input_schema) || {};
             return {
               name:String(t && t.name || ''),
-              description:String(t && t.description || '').slice(0,160),
-              input_keys:Object.keys(schema.properties || {})
+              description:String(t && t.description || '').slice(0,500),
+              input_schema:{
+                required:Array.isArray(schema.required)?schema.required:[],
+                properties:schema.properties || {}
+              }
             };
-          }).slice(0,25);
-          financeToolsProbe = {
-            ok:true,total:exposedTools.length,
-            has_next_cursor:!!(toolCatalog && toolCatalog.nextCursor),
-            relevant_tools:relevantTools
-          };
+          });
+          financeToolsProbe = {ok:true,total:exposedTools.length,focus_tools:focusTools};
         } catch (toolProbeError) {
           var toolProbeMessage = String(toolProbeError && toolProbeError.message ? toolProbeError.message : toolProbeError)
             .replace(/[A-Za-z0-9_-]{32,}/g,'[redacted]').slice(0,300);
           financeToolsProbe = {ok:false,error:toolProbeMessage};
         }
       }
-      var rawProbeKey = 'SMC_INNER_MCP_RAW_REPORT_PROBE_LAST_MS';
+      var rawProbeKey = 'SMC_INNER_MCP_RAW_REPORT_PROBE_V2_LAST_MS';
       var rawProbeLast = Number(toolProbeProps.getProperty(rawProbeKey) || 0);
       if (!rawProbeLast || Date.now() - rawProbeLast >= 30 * 60 * 1000) {
         toolProbeProps.setProperty(rawProbeKey,String(Date.now()));
@@ -871,11 +871,8 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
             from:dateKey,to:nextDay,dateField:'rrDt',limit:1000
           });
           var rawReportCandidates = [
-            rawReportData,
-            rawReportData && rawReportData.data,
-            rawReportData && rawReportData.rows,
-            rawReportData && rawReportData.items,
-            rawReportData && rawReportData.data && rawReportData.data.rows,
+            rawReportData,rawReportData && rawReportData.data,rawReportData && rawReportData.rows,
+            rawReportData && rawReportData.items,rawReportData && rawReportData.data && rawReportData.data.rows,
             rawReportData && rawReportData.data && rawReportData.data.items
           ];
           var rawReportRows = [];
@@ -884,9 +881,11 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
           }
           var rawFirst = rawReportRows.length ? rawReportRows[0] : null;
           financeRawProbe = {
-            ok:true,
-            response_type:Array.isArray(rawReportData)?'array':typeof rawReportData,
+            ok:true,response_type:Array.isArray(rawReportData)?'array':typeof rawReportData,
             response_keys:rawReportData && typeof rawReportData==='object' ? Object.keys(rawReportData).slice(0,30) : [],
+            code:String(rawReportData && (rawReportData.code || rawReportData.errorCode) || ''),
+            message:String(rawReportData && (rawReportData.message || rawReportData.error) || '')
+              .replace(/[A-Za-z0-9_-]{32,}/g,'[redacted]').slice(0,400),
             data_keys:rawReportData && rawReportData.data && typeof rawReportData.data==='object' && !Array.isArray(rawReportData.data)
               ? Object.keys(rawReportData.data).slice(0,30) : [],
             rows:rawReportRows.length,
