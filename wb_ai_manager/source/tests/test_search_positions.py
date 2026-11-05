@@ -9,9 +9,10 @@ import wb_control_center.agents.search_positions as search_positions
 
 
 class _Response:
-    def __init__(self, status_code=200, payload=None):
+    def __init__(self, status_code=200, payload=None, headers=None):
         self.status_code = status_code
         self._payload = payload or {}
+        self.headers = headers or {}
 
     def json(self):
         return self._payload
@@ -68,6 +69,30 @@ async def test_direct_search_requests_respect_wb_payload_and_pacing_limits(monke
     assert diagnostic["status"] == "ok"
     assert diagnostic["chunks_total"] == 3
     assert diagnostic["chunks_failed"] == 0
+
+
+@pytest.mark.asyncio
+async def test_direct_search_retries_rate_limit_once_after_retry_after(monkeypatch):
+    client = _Client([
+        _Response(429, {"message": "too many requests"}, {"Retry-After": "5"}),
+        _Response(payload={"data": {"items": [{
+            "nmId": 12345,
+            "text": "товар",
+            "avgPosition": {"current": 2},
+            "frequency": {"current": 10},
+        }]}}),
+    ])
+    monkeypatch.setattr(search_positions.httpx, "AsyncClient", lambda **_kwargs: client)
+    sleep = AsyncMock()
+    monkeypatch.setattr(search_positions.asyncio, "sleep", sleep)
+
+    rows, diagnostic = await _agent()._direct_query_rows([12345], "2026-11-03", "2026-11-04")
+
+    assert len(client.calls) == 2
+    assert sleep.await_args_list == [call(20.0)]
+    assert rows[0]["query"] == "товар"
+    assert diagnostic["status"] == "ok"
+    assert diagnostic["requests"] == 2
 
 
 @pytest.mark.asyncio
