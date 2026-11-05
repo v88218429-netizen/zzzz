@@ -327,6 +327,24 @@ def merge_campaign_cache(
     total = len(active_ids) if catalog_known else int(deep_scan.get("sweep_campaigns_total") or 0)
     cache_complete = bool(catalog_known and len(campaigns) == total and all(row.get("scan_complete") is True for row in campaigns))
     sweep_complete = bool(no_active or (deep_scan.get("sweep_complete") is True and cache_complete))
+    error_rows = [
+        row for row in (prior.get("scan_errors") or []) + (deep_scan.get("scan_errors") or [])
+        if isinstance(row, dict) and str(row.get("campaign_id") or "").isdigit()
+    ]
+    latest_errors: dict[tuple[str, str, str], dict[str, Any]] = {}
+    for row in error_rows:
+        cid = str(row.get("campaign_id"))
+        if catalog_known and active_ids and cid not in active_ids:
+            continue
+        key = (cid, str(row.get("nm_id") or ""), str(row.get("endpoint") or ""))
+        previous_error = latest_errors.get(key)
+        if previous_error is None or str(row.get("observed_at") or "") >= str(previous_error.get("observed_at") or ""):
+            latest_errors[key] = row
+    scan_errors = sorted(
+        latest_errors.values(),
+        key=lambda row: str(row.get("observed_at") or ""),
+        reverse=True,
+    )[:100]
     return {
         "campaign_ids": active_ids if catalog_known else old_ids,
         "campaigns": campaigns,
@@ -335,6 +353,7 @@ def merge_campaign_cache(
         "campaign_cache_complete": cache_complete,
         "catalog_complete": catalog_known,
         "sweep_complete": sweep_complete,
+        "scan_errors": scan_errors,
         "sweep": {key: deep_scan.get(key) for key in (
             "sweep_id", "sweep_campaigns_seen", "sweep_campaigns_total",
             "sweep_products_seen", "sweep_products_total", "cursor_before",
