@@ -773,9 +773,11 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
         worker_text = worker_text.replace(summary_anchor, "    /* " + finance_note_marker + " */\n" + summary_anchor, 1)
         print("OZON_FINANCE_COVERAGE_NOTE=patched")
 
-    worker_text = worker_text.replace("VERSION: 'github-worker-1.3.86'", "VERSION: 'github-worker-1.3.88'", 1)
-    if "VERSION: 'github-worker-1.3.88'" not in worker_text:
-        raise SystemExit("OZON finance worker version bump anchor mismatch")
+    version_matches = re.findall(r"VERSION:\\s*'github-worker-(\\d+)\\.(\\d+)\\.(\\d+)'", worker_text)
+    if len(version_matches) != 1:
+        raise SystemExit("OZON_FINANCE_WORKER_VERSION_PATTERN_MISMATCH")
+    if tuple(int(value) for value in version_matches[0]) < (1, 3, 88):
+        raise SystemExit("OZON_FINANCE_WORKER_VERSION_TOO_OLD")
 
     # Distinguish a partial Sellmonitor source response from a complete finance refresh.
     partial_status_marker = "INNER_FINANCE_PARTIAL_STATUS_V1"
