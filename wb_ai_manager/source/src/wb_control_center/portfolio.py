@@ -1830,6 +1830,33 @@ class PortfolioService:
         # Refresh source-health timestamps from the bridge without allowing a stale source
         # to silently become authoritative. Trust/usage policy remains local.
         bridge_sources = payload.get("sources") or {}
+        bridge_errors: list[dict[str, str]] = []
+        seen_errors: set[tuple[str, str]] = set()
+
+        def record_bridge_error(source_id: Any, range_id: Any, message: Any) -> None:
+            source_name = str(source_id or "unknown").strip()
+            range_name = str(range_id or "").strip()
+            stage = "portfolio." + source_name + ("." + range_name if range_name else "")
+            safe = str(message or "source read failed")
+            safe = re.sub(r"(?i)bearer\\s+\\S+", "Bearer [REDACTED]", safe)
+            safe = re.sub(r"(?i)(token|secret|authorization)(\\s*[:=]\\s*)[^\\s,;]+", r"\\1\\2[REDACTED]", safe)
+            marker = (stage, safe[:500])
+            if marker not in seen_errors:
+                seen_errors.add(marker)
+                bridge_errors.append({"stage": stage, "error": safe[:500]})
+
+        for error in payload.get("errors") or []:
+            if isinstance(error, dict):
+                record_bridge_error(error.get("source"), error.get("range"), error.get("error"))
+        for source_id, source in bridge_sources.items():
+            if not isinstance(source, dict):
+                continue
+            if source.get("error"):
+                record_bridge_error(source_id, "", source.get("error"))
+            for range_id, range_data in (source.get("ranges") or {}).items():
+                if isinstance(range_data, dict) and range_data.get("error"):
+                    record_bridge_error(source_id, range_id, range_data.get("error"))
+        out["bridge_source_errors"] = bridge_errors
         for h in out.get("source_health", []):
             src = bridge_sources.get(h.get("id")) if isinstance(h, dict) else None
             if src and src.get("modified_at"):
