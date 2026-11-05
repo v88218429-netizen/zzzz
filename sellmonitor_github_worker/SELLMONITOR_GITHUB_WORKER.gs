@@ -6508,7 +6508,7 @@ function sellmonitorGithubPublishWbInnerPeriods_(onlyStore,requestedPhase){
 function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId,onlyGrain,onlyPeriodPrefix,onlyPeriodStart,onlyPeriodEnd){
   var specs=[
     {name:'01_Дни',grain:'day',rows:built.day,min:'2026-09-01',format:'dd.mm.yyyy',startCol:15,baseCols:14,source:'Источник_дни'},
-    {name:'02_Недели',grain:'week',rows:built.week,min:'2026-09-07',format:'dd.mm.yyyy',startCol:15,baseCols:14,source:'Источник_недели'},
+    {name:'02_Недели',grain:'week',rows:built.week,min:'2026-09-07',format:'dd.mm.yyyy',startCol:14,baseCols:13,source:'Источник_недели'},
     {name:'03_Месяцы',grain:'month',rows:built.month,min:'2026-09-01',format:'mmm yyyy',startCol:14,baseCols:13,source:'Источник_месяцы'}
   ];
   if(onlyGrain)specs=specs.filter(function(spec){return spec.grain===onlyGrain;});
