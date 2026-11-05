@@ -7,6 +7,7 @@ on:
       - "sellmonitor_github_worker/SELLMONITOR_GITHUB_WORKER.gs"
       - "sellmonitor_github_worker/patch_master.py"
       - "wb_os/apps_script/WB_FBS_SUPPLY_DIRECT.gs"
+      - ".github/workflows/sellmonitor-github-deploy.yml"
   workflow_dispatch:
 
 permissions:
