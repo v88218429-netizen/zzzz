@@ -7585,7 +7585,6 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
     mark('SPREADSHEET_METADATA_DONE_'+gridRows);
     mark('SHEET_LOOKUP_DONE');
     mark('TIMEZONE_READ_DONE');
-    mark('LAST_ROW_READ_START');
     // Resolve the last numeric order row and only requested IDs without
     // transferring the entire order-ID column through UrlFetch.
     mark('LAST_ROW_READ_START');
