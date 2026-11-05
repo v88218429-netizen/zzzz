@@ -20,6 +20,73 @@ def test_bridge_is_optional_and_connections_stay_read_only(tmp_path):
     assert any(x["id"] == "own_27" for x in c["sources"])
 
 
+def test_exact_crosswalk_maps_advertised_nm_id_to_copy_workbook_economics(tmp_path):
+    service = PortfolioService(Settings(data_dir=str(tmp_path), wb_api_token=""))
+    catalog_headers = [None] * 43
+    header_values = {
+        0: "Группа товаров", 1: "Товар", 2: "Технический ключ связки",
+        3: "Магазин", 4: "Артикул продавца",
+        8: "Себестоимость до передачи на маркетплейс",
+        9: "Цена продажи до скидки", 10: "% скидки", 11: "Цена после скидки",
+        12: "Цена WB после текущей скидки (из входа)", 13: "СПП, %",
+        14: "Цена после СПП", 15: "Комиссия, %", 16: "Логистика, руб",
+        19: "Платная приемка, руб", 21: "Конструктор тарифов, %",
+        23: "Эквайринг, %", 24: "Эквайринг, руб", 25: "Налоговый режим",
+        27: "Налоги всего, руб", 28: "Прибыль, руб", 29: "Маржинальность, %",
+        30: "Рентабельность (ROI), %", 32: "План прибыль, руб",
+        36: "План маржинальность, %", 40: "План ROI, %",
+    }
+    for column, value in header_values.items():
+        catalog_headers[column] = value
+    catalog_row = [None] * 43
+    row_values = {
+        0: "Ветошь", 1: "Ветошь 10 кг 40х60", 2: "АА|Ветошь 10кг",
+        3: "АА", 4: "Ветошь 10кг", 8: "р.1 126,88",
+        9: "р.9 261,74", 10: "70,00%", 11: "р.2 778,52",
+        12: "р.2 421,00", 13: "26,31%", 14: "р.2 047,49",
+        15: "33,00%", 16: "р.38,00", 19: "р.5,00", 21: "2,50%",
+        23: "2,31%", 24: "р.64,27", 25: "УСН 6% + НДС 5%",
+        27: "р.220,35", 28: "р.333,42", 29: "12,00%",
+        30: "29,59%", 32: "р.78,29", 36: "12,00%", 40: "31,00%",
+    }
+    for column, value in row_values.items():
+        catalog_row[column] = value
+    catalog_rows = [[], catalog_headers, []] + [[None] * 43 for _ in range(5)] + [catalog_row]
+    payload = {
+        "generated_at": "2026-11-05T10:00:00+00:00",
+        "sources": {
+            "unit_economics_crosswalk": {
+                "spreadsheet_id": "copy-workbook",
+                "read_at": "2026-11-05T10:00:00+00:00",
+                "ranges": {
+                    "crosswalk": {"values": [
+                        ["Ключ", "Строка юнитки", "Новая цена", "Новая скидка, %", "Товар в юнитке"],
+                        ["АА|Ветошь 10кг", "9", "р.9 261,74", "70", "Ветошь 10 кг 40х60"],
+                    ]},
+                    "audit": {"values": [
+                        ["Кабинет", "Артикул WB", "Артикул продавца", "Наименование", "Магазин", "Ключ", "Статус связки", "Строка юнитки", "Товар в юнитке", "Цена юнитки", "Скидка юнитки"],
+                        ["2", "273197463", "Ветошь 10кг", "Ветошь обтирочная трикотажная ХБ для уборки и протирки 10кг", "АА", "АА|Ветошь 10кг", "ЕСТЬ СВЯЗКА", "9", "Ветошь 10 кг 40х60", "9261,738642", "70"],
+                    ]},
+                    "catalog": {"values": catalog_rows},
+                },
+            },
+        },
+    }
+    out = {"own_27": {"products": []}}
+
+    service._parse_primary_economics_axis(payload, out)
+
+    mapped = out["own_27"]["unit_economics_by_shop_nm_id"]["aa"]["273197463"]
+    assert mapped["source_row"] == 9
+    assert mapped["cost_rub"] == 1126.88
+    assert mapped["price_rub"] == 2778.52
+    assert mapped["profit_rub"] == 333.42
+    assert mapped["target_profit_rub"] == 78.29
+    assert mapped["unit_economics_decision_ready"] is True
+    assert out["own_27"]["primary_unit_economics"]["snapshot_date"] == "2026-11-05"
+    assert out["own_27"]["unit_economics_mapping_diagnostics_by_shop"] == {}
+
+
 def test_primary_unit_economics_reads_live_table_and_uses_subject_to_resolve_duplicate_names(tmp_path):
     service = PortfolioService(Settings(data_dir=str(tmp_path), wb_api_token=""))
     header = [None] * 42
