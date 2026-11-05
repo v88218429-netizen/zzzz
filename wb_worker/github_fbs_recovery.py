@@ -19,6 +19,7 @@ BRIDGE_URL = os.environ["GOOGLE_BRIDGE_URL"]
 BRIDGE_KEY = os.environ["GOOGLE_BRIDGE_KEY"]
 LOOKBACK_DAYS = max(1, min(90, int(os.environ.get("FBS_LOOKBACK_DAYS", "7"))))
 # AIR needs smaller writes: sparse status changes otherwise exceed Apps Script execution time.
+# AIR's 2026-11-05 retry is queued through the GitHub recovery workflow with two-order batches.
 # Keep AIR gateway calls small enough to finish within the Apps Script runtime ceiling.
 # New recovery runs replace the stalled legacy matrix; upserts remain safe to resume.
 # Batch identity searches on the live gateway are bounded to the IDs in each idempotent batch.
