@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -292,6 +293,22 @@ def _broken_ad_transport(exc: Exception) -> bool:
     ))
 
 
+def _scan_error_record(campaign_id: int, endpoint: str, value: Any, nm_id: int | None = None) -> dict[str, Any] | None:
+    if not isinstance(value, dict) or not value.get("_error"):
+        return None
+    message = str(value.get("_error") or "")
+    message = re.sub(r"(?i)bearer\s+\S+", "Bearer [REDACTED]", message)
+    message = re.sub(r"(?i)(token|secret|authorization)(\s*[:=]\s*)[^\s,;]+", r"\1\2[REDACTED]", message)
+    message = re.sub(r"https?://[^\s?]+\?[^\s]+", "[URL_WITH_QUERY_REDACTED]", message)
+    return {
+        "campaign_id": int(campaign_id),
+        "nm_id": int(nm_id) if nm_id is not None else None,
+        "endpoint": str(endpoint)[:100],
+        "error": message[:320],
+        "observed_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
 async def _safe_ad_read(agent: BaseAgent, tool: str, **kwargs: Any) -> Any:
     """Retry transient failures only for the advertising agents' read-only calls."""
     for attempt in range(3):
@@ -489,6 +506,20 @@ class AdvertisingOptimizerAgent(BaseAgent):
             scan_complete = bool(responses) and all(
                 not (isinstance(value, dict) and value.get("_error")) for value in responses
             )
+            scan_errors = []
+            for endpoint, value in (
+                ("wb_advert_budget", budget),
+                ("wb_advert_clusters", clusters),
+                ("wb_advert_clusters_stats", cluster_stats),
+                ("wb_advert_cluster_bids_get", cluster_bids),
+            ):
+                error = _scan_error_record(cid, endpoint, value)
+                if error:
+                    scan_errors.append(error)
+            for nm, value in recommendations.items():
+                error = _scan_error_record(cid, "wb_advert_bids_recommendations", value, int(nm))
+                if error:
+                    scan_errors.append(error)
             return {
                 "campaign": campaign,
                 "campaign_id": cid,
@@ -506,6 +537,7 @@ class AdvertisingOptimizerAgent(BaseAgent):
                 "cluster_bids": cluster_bids,
                 "cluster_bids_observed_at": cluster_bids_observed_at,
                 "scan_complete": scan_complete,
+                "scan_errors": scan_errors,
             }
 
         before = int(cursor["next_campaign_index"])
@@ -521,12 +553,22 @@ class AdvertisingOptimizerAgent(BaseAgent):
         scanned: list[dict[str, Any]] = []
         for campaign, result in zip(selected_campaigns, results):
             if isinstance(result, BaseException):
+                campaign_id = _campaign_id(campaign)
+                safe_error = re.sub(r"(?i)bearer\s+\S+", "Bearer [REDACTED]", str(result))[:320]
+                scan_errors = [{
+                    "campaign_id": campaign_id,
+                    "nm_id": None,
+                    "endpoint": "campaign_scan",
+                    "error": safe_error,
+                    "observed_at": datetime.now(timezone.utc).isoformat(),
+                }] if campaign_id else []
                 scanned.append({
                     "campaign": campaign,
-                    "campaign_id": _campaign_id(campaign),
-                    "nm_ids": campaign_nm_ids.get(_campaign_id(campaign) or 0, []),
+                    "campaign_id": campaign_id,
+                    "nm_ids": campaign_nm_ids.get(campaign_id or 0, []),
                     "recommendation_nm_ids_scanned": [],
-                    "_error": str(result),
+                    "_error": safe_error,
+                    "scan_errors": scan_errors,
                 })
             elif result is not None:
                 cid = _campaign_id(campaign)
@@ -561,6 +603,13 @@ class AdvertisingOptimizerAgent(BaseAgent):
             cursor["swept_campaign_ids"] = []
             cursor["swept_nm_ids"] = {}
 
+        scan_errors = [
+            error
+            for item in scanned
+            if isinstance(item, dict)
+            for error in (item.get("scan_errors") or [])
+            if isinstance(error, dict)
+        ]
         out.snapshots.append(("deep_scan", {
             "active_campaign_ids": [int(x) for x in cursor["campaign_ids"]],
             "catalog_complete": catalog_complete,
@@ -578,6 +627,7 @@ class AdvertisingOptimizerAgent(BaseAgent):
             "eligible_campaigns": len(campaigns),
             "campaigns_scanned": len(scanned),
             "hard_limits": {"campaigns": max_campaigns, "nms_per_campaign": max_nms, "concurrent_calls": concurrency},
+            "scan_errors": scan_errors,
             "campaigns": scanned,
         }))
         out.snapshots.append(("deep_scan_cursor", cursor))
