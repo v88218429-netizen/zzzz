@@ -751,8 +751,10 @@ class PortfolioService:
             if mapping_source == "Проверка товаров WB":
                 if str(cell(row, audit_headers, "Есть в Связка цен") or "").strip().casefold() != "да":
                     reasons.append("verification_crosswalk_link_not_confirmed")
+                # The workbook flag compares only the displayed unit name with catalog column B.
+                # Treat it as a label warning; exact key, row, seller article, and shop are checked below.
                 if str(cell(row, audit_headers, "Есть в WB FBS новая") or "").strip().casefold() != "да":
-                    reasons.append("verification_catalog_link_not_confirmed")
+                    mapping_notes.append("verification_catalog_display_flag_false_exact_identity_checked")
             elif audit_status.strip().casefold() != "есть связка":
                 reasons.append("audit_link_not_confirmed")
             if not key:

@@ -87,7 +87,7 @@ def test_exact_crosswalk_maps_advertised_nm_id_to_copy_workbook_economics(tmp_pa
                     ]},
                     "verification": {"values": [
                         ["Код кабинета", "Кабинет", "Артикул WB", "Артикул продавца из остатков", "Ключ Связка цен", "Есть в Связка цен", "Строка юнитки", "Товар в юнитке", "Есть в WB FBS новая"],
-                        ["AA", "AIR", "273197463", "Ветошь 10кг", "АА|Ветошь 10кг", "ДА", "9", "Ветошь 10 кг 40х60", "ДА"],
+                        ["AA", "AIR", "273197463", "Ветошь 10кг", "АА|Ветошь 10кг", "ДА", "9", "Ветошь 10 кг 40х60", "НЕТ"],
                     ]},
                     "catalog": {"values": catalog_rows},
                 },
@@ -110,6 +110,7 @@ def test_exact_crosswalk_maps_advertised_nm_id_to_copy_workbook_economics(tmp_pa
     assert mapped["target_profit_rub"] == 78.29
     assert mapped["unit_economics_decision_ready"] is True
     assert mapped["unit_economics_mapping_notes"] == [
+        "verification_catalog_display_flag_false_exact_identity_checked",
         "catalog_display_name_differs_from_linked_unit_name",
         "missing_copy_fields_filled_from_unique_primary_name",
     ]
