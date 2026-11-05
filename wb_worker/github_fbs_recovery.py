@@ -333,8 +333,12 @@ def ingest(client: str, orders: list[dict]) -> dict:
 
 
 
-def read_current_states(client: str, orders: list[dict]) -> dict[str, dict[str, str]]:
+def read_current_states(client: str, orders: list[dict]) -> tuple[dict[str, dict[str, str]], dict[str, object]]:
     states: dict[str, dict[str, str]] = {}
+    row_map: dict[str, int] = {}
+    alt_row_map: dict[str, int] = {}
+    sheet_last_row: int | None = None
+    alt_sheet_last_row: int | None = None
     ids = [str(order.get("id") or "") for order in orders]
     transient_markers = (
         "NETWORK_RETRY_EXHAUSTED", "INVALID_JSON_RESPONSE_RETRY_EXHAUSTED",
@@ -348,11 +352,11 @@ def read_current_states(client: str, orders: list[dict]) -> dict[str, dict[str, 
         print("FBS_STATUS_READ_START="+json.dumps({"store":client,"chunk":offset//1000+1,"requested":len(batch_ids)}),flush=True)
         for attempt in range(1, 5):
             try:
-                read_started=time.monotonic()
+                read_started = time.monotonic()
                 reply = request(
                     BRIDGE_URL,
                     body={"token": BRIDGE_KEY, "action": "fbs_status_read",
-                          "client": client, "orderIds": batch_ids},
+                          "client": client, "orderIds": batch_ids}, 
                     max_attempts=1,
                     timeout=120,
                 )
@@ -360,7 +364,7 @@ def read_current_states(client: str, orders: list[dict]) -> dict[str, dict[str, 
                 last_detail = str(ex)
                 transient = any(marker.lower() in last_detail.lower() for marker in transient_markers)
                 if not transient or attempt == 4:
-                    detail = safe_bridge_detail(last_detail)
+                    detail = safe_bridge_detail(last_detail) if "safe_bridge_detail" in globals() else re.sub(r"\s+", " ", last_detail)[:240]
                     print(client + "_FBS_STATUS_READ_REJECT=" + detail, flush=True)
                     raise RuntimeError(client + ":FBS_STATUS_READ_REJECTED") from None
                 wait_seconds = min(30, 10 * attempt)
@@ -374,62 +378,65 @@ def read_current_states(client: str, orders: list[dict]) -> dict[str, dict[str, 
                     and result.get("ok") is True
                     and int(result.get("requested", -1)) == len(batch_ids)):
                 batch_states = result.get("statuses")
-                if not isinstance(batch_states, dict):
-                    last_detail = "FBS_STATUS_READ_INVALID"
-                    print(client + "_FBS_STATUS_READ_REJECT=" + last_detail, flush=True)
-                    raise RuntimeError(client + ":FBS_STATUS_READ_INVALID")
+                batch_rows = result.get("rowMap")
+                try:
+                    batch_last_row = int(result.get("sheetLastRow", 0))
+                except (TypeError, ValueError):
+                    batch_last_row = 0
+                if (not isinstance(batch_states, dict) or not isinstance(batch_rows, dict)
+                        or batch_last_row < 1):
+                    raise RuntimeError(client + ":FBS_STATUS_READ_METADATA_INVALID")
+                if sheet_last_row is not None and sheet_last_row != batch_last_row:
+                    raise RuntimeError(client + ":FBS_STATUS_READ_LAST_ROW_CHANGED")
+                sheet_last_row = batch_last_row
                 allowed = set(batch_ids)
-                valid = True
                 for oid, pair in batch_states.items():
                     if oid not in allowed or not isinstance(pair, dict):
-                        valid = False
-                        break
-                    seller = pair.get("supplierStatus")
-                    wb = pair.get("wbStatus")
+                        raise RuntimeError(client + ":FBS_STATUS_READ_INVALID")
+                    seller, wb = pair.get("supplierStatus"), pair.get("wbStatus")
                     if not isinstance(seller, str) or not isinstance(wb, str):
-                        valid = False
-                        break
-                if not valid:
-                    last_detail = "FBS_STATUS_READ_INVALID"
-                    print(client + "_FBS_STATUS_READ_REJECT=" + last_detail, flush=True)
-                    raise RuntimeError(client + ":FBS_STATUS_READ_INVALID")
-                for oid, pair in batch_states.items():
-                    states[oid] = {
-                        "supplierStatus": pair["supplierStatus"],
-                        "wbStatus": pair["wbStatus"],
-                    }
+                        raise RuntimeError(client + ":FBS_STATUS_READ_INVALID")
+                    states[oid] = {"supplierStatus": seller, "wbStatus": wb}
+                for oid, row_value in batch_rows.items():
+                    try:
+                        row = int(row_value)
+                    except (TypeError, ValueError):
+                        raise RuntimeError(client + ":FBS_STATUS_READ_ROW_HINT_INVALID") from None
+                    if oid not in allowed or row < 2 or row > batch_last_row:
+                        raise RuntimeError(client + ":FBS_STATUS_READ_ROW_HINT_INVALID")
+                    row_map[oid] = row
+
                 print("FBS_STATUS_READ_DONE="+json.dumps({"store":client,"chunk":offset//1000+1,
                       "requested":len(batch_ids),"found":len(batch_states),
                       "elapsed_sec":round(time.monotonic()-read_started,2)}),flush=True)
                 break
-            else:
-                last_detail = str(reply.get("error") or result.get("error") or (
-                    "shape: outer_ok=" + str(reply.get("ok")) +
-                    " action=" + str(reply.get("action")) +
-                    " result_ok=" + str(result.get("ok")) +
-                    " requested=" + str(result.get("requested")) +
-                    " expected=" + str(len(batch_ids))
-                ))
-                transient = bool(result.get("retryable")) or any(
-                    marker.lower() in last_detail.lower() for marker in transient_markers
-                )
-                if not transient or attempt == 4:
-                    detail = safe_bridge_detail(last_detail)
-                    print(client + "_FBS_STATUS_READ_REJECT=" + detail, flush=True)
-                    raise RuntimeError(client + ":FBS_STATUS_READ_REJECTED") from None
-                wait_seconds = min(30, 10 * attempt)
-                print(client + "_FBS_STATUS_READ_RETRY=" + str(attempt) +
-                      ":SAME_READ_ONLY_REQUEST:WAIT_SECONDS=" + str(wait_seconds), flush=True)
-                time.sleep(wait_seconds)
+            last_detail = str(reply.get("error") or result.get("error") or "FBS_STATUS_READ_INVALID_RESPONSE")
+            transient = bool(result.get("retryable")) or any(
+                marker.lower() in last_detail.lower() for marker in transient_markers
+            )
+            if not transient or attempt == 4:
+                detail = re.sub(r"\s+", " ", last_detail)[:240]
+                print(client + "_FBS_STATUS_READ_REJECT=" + detail, flush=True)
+                raise RuntimeError(client + ":FBS_STATUS_READ_REJECTED") from None
+            wait_seconds = min(30, 10 * attempt)
+            print(client + "_FBS_STATUS_READ_RETRY=" + str(attempt) +
+                  ":SAME_READ_ONLY_REQUEST:WAIT_SECONDS=" + str(wait_seconds), flush=True)
+            time.sleep(wait_seconds)
         else:
-            detail = safe_bridge_detail(last_detail)
-            print(client + "_FBS_STATUS_READ_REJECT=" + detail, flush=True)
             raise RuntimeError(client + ":FBS_STATUS_READ_REJECTED")
-    return states
+    if orders and sheet_last_row is None:
+        raise RuntimeError(client + ":FBS_STATUS_READ_METADATA_MISSING")
+    metadata: dict[str, object] = {
+        "rowMap": row_map,
+        "sheetLastRow": sheet_last_row or 1,
+    }
+    return states, metadata
+
 
 def select_changed_orders(client: str, orders: list[dict]) -> tuple[list[dict], int]:
     filter_started=time.monotonic()
-    states = read_current_states(client, orders)
+    states, metadata = read_current_states(client, orders)
+    row_map = metadata["rowMap"]
     changed = []
     for order in orders:
         oid = str(order.get("id") or "")
@@ -437,7 +444,10 @@ def select_changed_orders(client: str, orders: list[dict]) -> tuple[list[dict], 
         if (current is None
                 or current["supplierStatus"] != str(order.get("supplierStatus") or "").strip()
                 or current["wbStatus"] != str(order.get("wbStatus") or "").strip()):
-            changed.append(order)
+            enriched = dict(order)
+            enriched["_fbsRowHint"] = int(row_map.get(oid, 0))
+            enriched["_fbsSheetLastRow"] = int(metadata["sheetLastRow"])
+            changed.append(enriched)
     unchanged=len(orders)-len(changed)
     print("FBS_CHANGE_FILTER_DONE="+json.dumps({"store":client,"orders":len(orders),
           "changed":len(changed),"unchanged":unchanged,
