@@ -7191,8 +7191,741 @@ function sellmonitorGithubFbsStatusReadV1_(body) {
   });
   var sheet=SpreadsheetApp.openById(spreadsheetId).getSheetByName('📦 FBS Заказы');
   if(!sheet)throw new Error('FBS_ORDER_SHEET_NOT_FOUND');
-  var last=sheet.getLastRow();
-  if(last<1||last>100000)throw new Error('FBS_ROW_COUNT_UNEXPECTED');
+  var sheetLastRow=sheet.getLastRow();
+  var last=sheetLastRow;
+  if(last>100000){
+    // Other columns can contain formulas far below the actual order table.
+    // Resolve the last numeric order ID in column A before enforcing the index bound.
+    var lastOrderCell=sheet.getRange(2,1,last-1,1)
+      .createTextFinder('^[0-9]{6,20}
+  var head=sheet.getRange(1,1,1,7).getDisplayValues()[0]||[];
+  if(String(head[0]||'')!=='ID заказа'||String(head[4]||'')!=='Статус продавца'||String(head[5]||'')!=='Статус WB')
+    throw new Error('FBS_COLUMN_SCHEMA_MISMATCH');
+  var indexState=sellmonitorGithubFbsLoadIdIndex_(sheet,client,last,function(){},false);
+  var states={},rowsRead=0,rangeCount=0,apiRequests=0,rowReadMs=0;
+  console.log('FBS_STATUS_READ_START client='+client+' requested='+ids.length+' last_row='+last);
+  function readStates_(){
+    states={}; rowsRead=0; rangeCount=0; apiRequests=0;
+    var matches=[];
+    ids.forEach(function(id){var row=indexState.map[id];if(row)matches.push({id:id,row:Number(row)});});
+    if(!matches.length)return false;
+    matches.sort(function(a,b){return a.row-b.row;});
+    var blocks=[];
+    matches.forEach(function(item){
+      var block=blocks.length?blocks[blocks.length-1]:null;
+      if(!block||item.row-block.end>25||item.row-block.start+1>250){
+        block={start:item.row,end:item.row,matches:[item]};
+        blocks.push(block);
+      } else {
+        block.end=item.row;
+        block.matches.push(item);
+      }
+    });
+    rangeCount=blocks.length;
+    var token=ScriptApp.getOAuthToken(),stale=false,readStarted=Date.now();
+    for(var offset=0;offset<blocks.length;offset+=50){
+      var part=blocks.slice(offset,offset+50);
+      var query=part.map(function(block){
+        var a1="'📦 FBS Заказы'!A"+block.start+":F"+block.end;
+        return "ranges="+encodeURIComponent(a1);
+      }).join("&");
+      var url="https://sheets.googleapis.com/v4/spreadsheets/"+encodeURIComponent(spreadsheetId)+
+        "/values:batchGet?"+query+"&valueRenderOption=FORMATTED_VALUE&majorDimension=ROWS";
+      var response=UrlFetchApp.fetch(url,{
+        method:"get",
+        headers:{Authorization:"Bearer "+token},
+        muteHttpExceptions:true
+      });
+      var code=response.getResponseCode();
+      if(code<200||code>=300)throw new Error("FBS_STATUS_READ_SHEETS_API_HTTP_"+code);
+      var payload;
+      try{payload=JSON.parse(response.getContentText()||"{}");}
+      catch(parseError){throw new Error("FBS_STATUS_READ_SHEETS_API_INVALID_JSON");}
+      var valueRanges=payload.valueRanges||[];
+      if(valueRanges.length!==part.length)throw new Error("FBS_STATUS_READ_RANGE_COUNT_MISMATCH");
+      apiRequests++;
+      part.forEach(function(block,blockIndex){
+        var range=valueRanges[blockIndex]||{},values=range.values||[];
+        rowsRead+=block.end-block.start+1;
+        block.matches.forEach(function(item){
+          var row=values[item.row-block.start]||[];
+          if(String(row[0]||'')!==item.id){stale=true;return;}
+          states[item.id]={supplierStatus:String(row[4]||''),wbStatus:String(row[5]||'')};
+        });
+      });
+    }
+    rowReadMs=Date.now()-readStarted;
+    return stale||Object.keys(states).length!==matches.length;
+  }
+  if(readStates_()){
+    console.log('FBS_STATUS_INDEX_REBUILD client='+client+' requested='+ids.length);
+    indexState=sellmonitorGithubFbsLoadIdIndex_(sheet,client,last,function(){},true);
+    if(readStates_())throw new Error('FBS_ID_INDEX_STALE_AFTER_REBUILD');
+  }
+  if(client==='SANYCH'){
+    var alternate=sellmonitorGithubFbsStatusReadV1_({client:'SANYCH_ALTERNATE',orderIds:ids});
+    var alternateStates=alternate.statuses||{};
+    ids.forEach(function(id){
+      var mainState=states[id],alternateState=alternateStates[id];
+      if(!mainState||!alternateState||
+         mainState.supplierStatus!==alternateState.supplierStatus||
+         mainState.wbStatus!==alternateState.wbStatus)delete states[id];
+    });
+  }
+  console.log('FBS_STATUS_READ_DONE client='+client+' requested='+ids.length+
+    ' found='+Object.keys(states).length+' rows_read='+rowsRead+' ranges='+rangeCount+
+    ' api_requests='+apiRequests+' sheet_read_ms='+rowReadMs+' total_ms='+(Date.now()-startedAt));
+  return {ok:true,client:client,requested:ids.length,found:Object.keys(states).length,statuses:states};
+}
+
+function sellmonitorGithubFbsStageSnapshot_() {
+  var props = PropertiesService.getScriptProperties(), out = {};
+  ['SANYCH','AIR','HOZYAYUSHKA'].forEach(function(client) {
+    try { var raw = props.getProperty('GITHUB_FBS_STAGE_' + client); if (raw) out[client] = JSON.parse(raw); } catch (e) {}
+  });
+  return out;
+}
+
+/** Safe bounded FBS upsert; authenticated at the doPost entry point. No external service. */
+function sellmonitorGithubFbsIngestBatchV1_(body) {
+  // Different stores may recover concurrently. UserLock protects only the short
+  // lease claim; long-running Sellmonitor and finance ticks use ScriptLock.
+  var client = String(body && body.client || '').trim().toUpperCase();
+  if (['SANYCH','AIR','HOZYAYUSHKA'].indexOf(client) < 0) {
+    throw new Error('FBS_CLIENT_NOT_ALLOWED');
+  }
+  var props = PropertiesService.getScriptProperties();
+  var traceId = Utilities.getUuid(), startedAt = Date.now();
+  function mark(stage) {
+    try { props.setProperty('GITHUB_FBS_STAGE_' + client, JSON.stringify({client:client,trace:traceId,stage:stage,elapsedMs:Date.now()-startedAt,at:new Date().toISOString()})); } catch (e) {}
+  }
+  mark('LEASE_CLAIM_START');
+  var leaseKey = 'GITHUB_FBS_INGEST_LEASE_' + client;
+  var leaseToken = Utilities.getUuid();
+  var leaseMs = 7 * 60 * 1000;
+  var lock = LockService.getUserLock();
+  if (!lock.tryLock(10000)) throw new Error('GITHUB_FBS_LOCK_BUSY');
+  try {
+    var current = null;
+    try { current = JSON.parse(props.getProperty(leaseKey) || 'null'); } catch (e) {}
+    if (current && Number(current.expiresAt) > Date.now()) {
+      throw new Error('GITHUB_FBS_LOCK_BUSY');
+    }
+    props.setProperty(leaseKey, JSON.stringify({
+      token: leaseToken, expiresAt: Date.now() + leaseMs
+    }));
+    mark('LEASE_CLAIMED');
+  } finally {
+    lock.releaseLock();
+  }
+
+  try {
+    mark('CORE_START');
+    var result = sellmonitorGithubFbsIngestBatchV1Core_(body, mark);
+    if(client==='SANYCH'){
+      mark('ALTERNATE_COPY_INGEST_START');
+      var alternateBody={};
+      Object.keys(body||{}).forEach(function(key){alternateBody[key]=body[key];});
+      alternateBody.client='SANYCH_ALTERNATE';
+      var alternateResult=sellmonitorGithubFbsIngestBatchV1Core_(alternateBody,function(stage){mark('ALTERNATE_'+stage);});
+      result.alternateCopy={
+        client:'SANYCH_ALTERNATE',received:alternateResult.received,
+        inserted:alternateResult.inserted,existing:alternateResult.existing,
+        changed:alternateResult.changed,events:alternateResult.events
+      };
+      mark('ALTERNATE_COPY_INGEST_DONE');
+    }
+    mark('CORE_DONE');
+    return result;
+  } catch (e) {
+    mark('CORE_ERROR');
+    throw e;
+  } finally {
+    mark('LEASE_RELEASE_START');
+    if (lock.tryLock(10000)) {
+      try {
+        var active = null;
+        try { active = JSON.parse(props.getProperty(leaseKey) || 'null'); } catch (e) {}
+        if (active && active.token === leaseToken) props.deleteProperty(leaseKey);
+        mark('LEASE_RELEASED');
+      } finally {
+        lock.releaseLock();
+      }
+    }
+  }
+}
+
+function sellmonitorGithubFbsSaveIdIndex_(cache, prefix, client, lastRow, index) {
+  var json=JSON.stringify(index),chunkSize=60000,parts=[];
+  for(var i=0;i<json.length;i+=chunkSize)parts.push(json.slice(i,i+chunkSize));
+  for(var p=0;p<parts.length;p++)cache.put(prefix+'part_'+p,parts[p],21600);
+  cache.put(prefix+'meta',JSON.stringify({client:client,lastRow:lastRow,parts:parts.length}),21600);
+}
+
+function sellmonitorGithubFbsLoadIdIndex_(sheet, client, lastRow, mark, forceRebuild) {
+  var cache=CacheService.getScriptCache(),prefix='SMC_FBS_ID_INDEX_V2_',index=null,indexLast=0;
+  if(!forceRebuild){
+    try{
+      var meta=JSON.parse(cache.get(prefix+'meta')||'null');
+      if(meta&&meta.client===client&&Number(meta.parts)>0&&Number(meta.parts)<20&&Number(meta.lastRow)<=lastRow){
+        var chunks=[];
+        for(var i=0;i<meta.parts;i++){
+          var part=cache.get(prefix+'part_'+i);
+          if(part===null){chunks=[];break;}
+          chunks.push(part);
+        }
+        if(chunks.length===meta.parts){index=JSON.parse(chunks.join(''));indexLast=Number(meta.lastRow);}
+      }
+    }catch(ignoreIndexCache){index=null;}
+  }
+  var rebuilt=false;
+  if(!index||indexLast>lastRow){
+    mark('ID_INDEX_BUILD_START');
+    index={};
+    if(lastRow>1){
+      var values=sheet.getRange(2,1,lastRow-1,1).getDisplayValues();
+      for(var r=0;r<values.length;r++){
+        var id=String((values[r]||[])[0]||'');
+        if(id&&!Object.prototype.hasOwnProperty.call(index,id))index[id]=r+2;
+      }
+    }
+    indexLast=lastRow;rebuilt=true;
+    mark('ID_INDEX_BUILD_DONE_'+Object.keys(index).length);
+  }else if(indexLast<lastRow){
+    mark('ID_INDEX_TAIL_READ_START');
+    var tail=sheet.getRange(indexLast+1,1,lastRow-indexLast,1).getDisplayValues();
+    for(var t=0;t<tail.length;t++){
+      var tailId=String((tail[t]||[])[0]||'');
+      if(tailId&&!Object.prototype.hasOwnProperty.call(index,tailId))index[tailId]=indexLast+1+t;
+    }
+    indexLast=lastRow;rebuilt=true;
+    mark('ID_INDEX_TAIL_READ_DONE');
+  }
+  if(rebuilt)sellmonitorGithubFbsSaveIdIndex_(cache,prefix,client,indexLast,index);
+  return {map:index,lastRow:indexLast,cache:cache,prefix:prefix,client:client};
+}
+
+
+function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
+  mark = typeof mark === 'function' ? mark : function() {};
+  var stores={
+    SANYCH:'1v0qt-thJDOw3tLFdZVGhdXJdBM8rDPRz9mHlcHmuuyM',
+    SANYCH_ALTERNATE:'1_rMW6w4a7ZKhsWAyVo4B4Hn2x1cXwJWVW7K4JAHpjI8',
+    AIR:'1qJvhEOIku7sOMydfrUz0PR5dkcU0sLjv433pa1MFBcM',
+    HOZYAYUSHKA:'1f9dxXeZxkDth8h2C9GA7L7WqAr1-Ok-Oi5YtufLYOOk'
+  };
+  var client=String(body.client||'');
+  var spreadsheetId=stores[client];
+  if(!spreadsheetId)throw new Error('FBS_CLIENT_NOT_ALLOWED');
+  var batch=body.orders;
+  if(!Array.isArray(batch)||batch.length<1||batch.length>1000)throw new Error('FBS_BATCH_SIZE_INVALID');
+  function str(x,limit) {
+    var s=String(x==null?'':x).slice(0,limit||300);
+    if(/^[=+@]/.test(s))s="'"+s;
+    return s;
+  }
+  function rub(x) {
+    var v=Number(x);
+    return isFinite(v)&&v>=0&&v<1000000000 ? Math.round(v)/100 : 0;
+  }
+  function human(a,b){
+    var sa={new:'Новый',confirm:'На сборке',complete:'Передан в доставку',cancel:'Отменён продавцом'};
+    var wb={waiting:'WB ожидает заказ',sorted:'Отсортирован WB',sold:'Продан',
+      canceled:'Отменён WB',canceled_by_client:'Отказ покупателя',
+      declined_by_client:'Отмена покупателем в первый час',ready_for_pickup:'Готов к получению',
+      defect:'Брак',canceled_by_missed_call:'Отмена из-за недозвона'};
+    return [a?(sa[a]||a):'',b?(wb[b]||b):''].filter(Boolean).join(' / ')||'Статус не получен';
+  }
+  var fbsStarted=Date.now(); console.log('FBS_STAGE_BEGIN client='+client+' orders='+batch.length);
+  var parsed=[],dedupe={};
+  batch.forEach(function(v){
+    if(!v||typeof v!=='object')throw new Error('FBS_ROW_INVALID');
+    var id=str(v.id,32);
+    if(!/^\d{6,20}$/.test(id))throw new Error('FBS_ID_INVALID');
+    if(dedupe[id])throw new Error('FBS_DUPLICATE_WITHIN_BATCH');
+    dedupe[id]=true;
+    var created=new Date(String(v.createdAt||''));
+    if(isNaN(created.getTime()))throw new Error('FBS_DATE_INVALID');
+    var ageDays=(Date.now()-created.getTime())/86400000;
+    if(ageDays>120||ageDays< -1)throw new Error('FBS_DATE_OUTSIDE_RECOVERY_WINDOW');
+    var seller=str(v.supplierStatus,90),wb=str(v.wbStatus,90);
+    if(!seller||!wb)throw new Error('FBS_MISSING_CONFIRMED_STATUS');
+    parsed.push({id:id,created:created,seller:seller,wb:wb,source:v});
+  });
+  // GitHub recovery workflow serializes all calls to this endpoint. Do not
+  // share the adapter-wide UserLock with the independent finance sync.
+
+    console.log('FBS_STAGE_PARSE ms='+(Date.now()-fbsStarted)+' client='+client+' orders='+parsed.length);
+    var authToken=ScriptApp.getOAuthToken();
+    var apiBase='https://sheets.googleapis.com/v4/spreadsheets/'+encodeURIComponent(spreadsheetId);
+    var orderSheet="'📦 FBS Заказы'";
+    function fetchSheetApi(url,options){
+      var opt=options||{}; opt.headers=opt.headers||{};
+      opt.headers.Authorization='Bearer '+authToken; opt.muteHttpExceptions=true; opt.timeoutSeconds=30;
+      return UrlFetchApp.fetch(url,opt);
+    }
+    function sheetApiFailure(response){
+      try {
+        var body=JSON.parse(response.getContentText()).error||{};
+        var reasons=(body.errors||[]).map(function(e){return e.reason;}).filter(Boolean);
+        var msg=String(body.message||'').toLowerCase(), category='';
+        if(/insufficient.*scope|authentication scope|scope.*insufficient/.test(msg)) category='OAUTH_SCOPE';
+        else if(/service.*disabled|not enabled|accessnotconfigured/.test(msg)) category='SHEETS_API_DISABLED';
+        else if(/does not have permission|permission denied|not authorized/.test(msg)) category='SHEET_ACCESS_PERMISSION';
+        else if(/not found/.test(msg)) category='SHEET_OR_RANGE_NOT_FOUND';
+        return [body.status,body.code,category].concat(reasons).filter(Boolean).join(':')||'NO_ERROR_DETAIL';
+      } catch(e) { return 'NO_ERROR_DETAIL'; }
+    }
+    function asSheetValue(value){
+      if(value instanceof Date)return value.getTime()/86400000+25569;
+      return value==null?'':value;
+    }
+    var sheetTimeZone='Etc/GMT';
+    var fbsLocalSerial_ = function(value){
+      if(value instanceof Date){
+        var local=Utilities.formatDate(value,sheetTimeZone,'yyyy-MM-dd HH:mm:ss').match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/);
+        if(!local)throw new Error('FBS_LOCAL_TIME_FORMAT_FAILED');
+        return Date.UTC(Number(local[1]),Number(local[2])-1,Number(local[3]),Number(local[4]),Number(local[5]),Number(local[6]))/86400000+25569;
+      }
+      return value==null?'':value;
+    };
+    function sheetRows(rows){return rows.map(function(row){return row.map(fbsLocalSerial_);});}
+    mark('SHEET_READ_START');
+    // Use the already-authorized Sheets REST API throughout this write path.
+    // SpreadsheetApp.openById/getRange can stall for minutes on large production books.
+    mark('SPREADSHEET_METADATA_START');
+    var metadataResponse=fetchSheetApi(apiBase+
+      '?fields='+encodeURIComponent('properties(timeZone),sheets(properties(sheetId,title,gridProperties(rowCount)))'),
+      {method:'get'});
+    var metadataCode=metadataResponse.getResponseCode();
+    if(metadataCode<200||metadataCode>=300)
+      throw new Error('FBS_SPREADSHEET_METADATA_HTTP_'+metadataCode+':'+sheetApiFailure(metadataResponse));
+    var metadataPayload;
+    try{metadataPayload=JSON.parse(metadataResponse.getContentText()||'{}');}
+    catch(metadataParseError){throw new Error('FBS_SPREADSHEET_METADATA_INVALID_JSON');}
+    var orderSheetInfo=(metadataPayload.sheets||[]).map(function(sheet){return sheet.properties||{};})
+      .filter(function(properties){return String(properties.title||'')==='📦 FBS Заказы';})[0];
+    if(!orderSheetInfo)throw new Error('FBS_ORDER_SHEET_NOT_FOUND');
+    var orderSheetId=Number(orderSheetInfo.sheetId);
+    var gridRows=Number((orderSheetInfo.gridProperties||{}).rowCount||0);
+    if(!orderSheetId||gridRows<1||gridRows>100000)throw new Error('FBS_ROW_COUNT_UNEXPECTED');
+    sheetTimeZone=String((metadataPayload.properties||{}).timeZone||'Etc/GMT');
+    function columnLetter_(column){
+      var value='',n=Number(column);
+      while(n>0){var rem=(n-1)%26;value=String.fromCharCode(65+rem)+value;n=Math.floor((n-1)/26);}
+      return value;
+    }
+    function readDisplayGrid_(startRow,startColumn,rowCount,columnCount){
+      if(rowCount<=0)return [];
+      // Keep large production-book reads below UrlFetch time and response limits.
+      // The full ID column is inspected during each bounded ingest call, so one
+      // request for tens of thousands of rows can stall before any write begins.
+      var chunkRows=500;
+      if(rowCount>chunkRows){
+        var combined=[];
+        for(var offset=0;offset<rowCount;offset+=chunkRows){
+          var size=Math.min(chunkRows,rowCount-offset);
+          var chunkStart=startRow+offset;
+          mark('SHEETS_API_ID_READ_CHUNK_START_'+chunkStart+'_ROWS_'+size);
+          var part=readDisplayGrid_(chunkStart,startColumn,size,columnCount);
+          for(var partRow=0;partRow<part.length;partRow++)combined.push(part[partRow]);
+          mark('SHEETS_API_ID_READ_CHUNK_DONE_'+chunkStart+'_ROWS_'+size);
+        }
+        return combined;
+      }
+      var a1=orderSheet+'!'+columnLetter_(startColumn)+startRow+':'+
+        columnLetter_(startColumn+columnCount-1)+(startRow+rowCount-1);
+      var readUrl=apiBase+'/values/'+encodeURIComponent(a1)+
+        '?valueRenderOption=FORMATTED_VALUE';
+      var response=null,code=0,readError='';
+      for(var readAttempt=1;readAttempt<=3;readAttempt++){
+        try{
+          response=fetchSheetApi(readUrl,{method:'get'});
+          code=response.getResponseCode();
+          if(code>=200&&code<300)break;
+          readError='HTTP_'+code+':'+sheetApiFailure(response);
+          if(code!==429&&code<500)
+            throw new Error('FBS_SHEET_RANGE_READ_HTTP_'+readError);
+        }catch(readRequestError){
+          var readMessage=String(readRequestError&&readRequestError.message||readRequestError);
+          if(readMessage.indexOf('FBS_SHEET_RANGE_READ_HTTP_')===0)throw readRequestError;
+          readError=/timeout|timed out/i.test(readMessage)?'TIMEOUT':readMessage.slice(0,180);
+          response=null;
+        }
+        if(readAttempt<3)Utilities.sleep([500,1500][readAttempt-1]);
+      }
+      if(!response||code<200||code>=300)
+        throw new Error('FBS_SHEET_RANGE_READ_RETRY_EXHAUSTED_'+
+          String(readError||('HTTP_'+code)).replace(/[^A-Z0-9_:.-]/gi,'_'));
+      var payload;
+      try{payload=JSON.parse(response.getContentText()||'{}');}
+      catch(parseError){throw new Error('FBS_SHEET_RANGE_READ_INVALID_JSON');}
+      var values=payload.values||[],out=[];
+      for(var row=0;row<rowCount;row++){
+        var source=values[row]||[],normalized=[];
+        for(var column=0;column<columnCount;column++)
+          normalized.push(String(source[column]==null?'':source[column]));
+        out.push(normalized);
+      }
+      return out;
+    }
+    mark('SPREADSHEET_METADATA_DONE_'+gridRows);
+    mark('SHEET_LOOKUP_DONE');
+    mark('TIMEZONE_READ_DONE');
+    mark('LAST_ROW_READ_START');
+    var idColumnValues=readDisplayGrid_(2,1,gridRows-1,1);
+    var last=1;
+    for(var idRowIndex=0;idRowIndex<idColumnValues.length;idRowIndex++)
+      if(String((idColumnValues[idRowIndex]||[])[0]||'').trim())last=idRowIndex+2;
+    mark('LAST_ROW_READ_DONE_'+last);
+    if(last<1||last>100000)throw new Error('FBS_ROW_COUNT_UNEXPECTED');
+    mark('HEADER_READ_START');
+    var head=readDisplayGrid_(1,1,1,7)[0]||[];
+    mark('HEADER_READ_DONE');
+    mark('SHEET_READ_DONE_SHEETS_API');
+    var orderSheetNative={
+      getLastRow:function(){return last;},
+      getMaxRows:function(){return gridRows;},
+      getRange:function(row,column,numRows,numColumns){
+        return {getDisplayValues:function(){return readDisplayGrid_(row,column,numRows,numColumns);}};
+      },
+      insertRowsAfter:function(afterPosition,howMany){
+        if(Number(afterPosition)!==gridRows||Number(howMany)<1)
+          throw new Error('FBS_GRID_APPEND_POSITION_INVALID');
+        var response=fetchSheetApi(apiBase+':batchUpdate',{
+          method:'post',contentType:'application/json',
+          payload:JSON.stringify({requests:[{appendDimension:{
+            sheetId:orderSheetId,dimension:'ROWS',length:Number(howMany)
+          }}]})
+        });
+        var code=response.getResponseCode();
+        if(code<200||code>=300)
+          throw new Error('FBS_GRID_EXTEND_HTTP_'+code+':'+sheetApiFailure(response));
+        gridRows+=Number(howMany);
+        return this;
+      }
+    };
+    mark('ID_INDEX_LOOKUP_START');
+    var indexState=sellmonitorGithubFbsLoadIdIndex_(orderSheetNative,client,last,mark,false);
+    var byId=indexState.map,idByRow={};
+    Object.keys(byId).forEach(function(id){idByRow[byId[id]]=id;});
+    var stateByRow={},syncTimesByRow={};
+    function readExistingStates_(){
+      var rows=[];
+      parsed.forEach(function(r){var row=byId[r.id];if(row)rows.push({id:r.id,row:Number(row)});});
+      if(!rows.length){mark('STATE_READ_DONE_NATIVE_BLOCK_0_ROWS');return false;}
+      rows.sort(function(a,b){return a.row-b.row;});
+      var usedRows=Math.max(0,last-1),stale=false;
+      mark('STATE_READ_START_NATIVE_'+rows.length+'_IDS_'+usedRows+'_ROWS');
+      if(rows.length<=20){
+        // Sparse batches are fetched in one Sheets API call. SpreadsheetApp calls
+        // per scattered row made recovery batches exceed the six-minute runtime.
+        var groups=[];
+        rows.forEach(function(item){
+          var group=groups.length?groups[groups.length-1]:null;
+          if(!group||item.row!==group.end+1){group={start:item.row,end:item.row,items:[]};groups.push(group);}
+          else group.end=item.row;
+          group.items.push(item);
+        });
+        mark('STATE_READ_START_SHEETS_API_SPARSE_'+rows.length+'_IDS_'+groups.length+'_RANGES');
+        var stateQuery=groups.map(function(group){
+          return 'ranges='+encodeURIComponent(orderSheet+'!A'+group.start+':G'+group.end);
+        }).join('&');
+        var stateResponse=fetchSheetApi(apiBase+'/values:batchGet?'+stateQuery+
+          '&majorDimension=ROWS&valueRenderOption=FORMATTED_VALUE',{method:'get'});
+        var stateCode=stateResponse.getResponseCode();
+        if(stateCode<200||stateCode>=300)
+          throw new Error('FBS_STATE_BATCH_READ_HTTP_'+stateCode+':'+sheetApiFailure(stateResponse));
+        var statePayload;
+        try{statePayload=JSON.parse(stateResponse.getContentText()||'{}');}
+        catch(stateParseError){throw new Error('FBS_STATE_BATCH_READ_INVALID_JSON');}
+        var stateRanges=statePayload.valueRanges||[];
+        if(stateRanges.length!==groups.length)throw new Error('FBS_STATE_BATCH_READ_RANGE_COUNT_MISMATCH');
+        groups.forEach(function(group,groupIndex){
+          var values=(stateRanges[groupIndex]||{}).values||[];
+          group.items.forEach(function(item){
+            var rowValues=values[item.row-group.start]||[];
+            if(String(rowValues[0]||'')!==item.id){stale=true;return;}
+            stateByRow[item.row]=[rowValues[4]||'',rowValues[5]||'',rowValues[6]||''];
+          });
+        });
+        mark('STATE_READ_DONE_SHEETS_API_SPARSE_'+rows.length+'_IDS_'+groups.length+'_RANGES');
+        console.log('FBS_STAGE_STATE_READ_SHEETS_API_SPARSE ids='+rows.length+' ranges='+groups.length+' ms='+(Date.now()-fbsStarted));
+      }else{
+        // Larger batches use two bounded whole-column reads instead of hundreds
+        // of individual service calls for scattered rows.
+        var idValues=usedRows?orderSheetNative.getRange(2,1,usedRows,1).getDisplayValues():[];
+        var statusValues=usedRows?orderSheetNative.getRange(2,5,usedRows,3).getDisplayValues():[];
+        rows.forEach(function(item){
+          var offset=item.row-2,idRow=idValues[offset]||[],stateRow=statusValues[offset]||[];
+          if(String(idRow[0]||'')!==item.id){stale=true;return;}
+          stateByRow[item.row]=[stateRow[0]||'',stateRow[1]||'',stateRow[2]||''];
+        });
+        mark('STATE_READ_DONE_NATIVE_FULL_'+rows.length+'_IDS_'+usedRows+'_ROWS');
+        console.log('FBS_STAGE_STATE_READ_NATIVE_FULL ids='+rows.length+' used_rows='+usedRows+' ms='+(Date.now()-fbsStarted));
+      }
+      return stale||rows.some(function(item){return !Object.prototype.hasOwnProperty.call(stateByRow,item.row);});
+    }
+    if(readExistingStates_()){
+      mark('ID_INDEX_STALE_REBUILD');
+      indexState=sellmonitorGithubFbsLoadIdIndex_(orderSheetNative,client,last,mark,true);
+      byId=indexState.map;idByRow={};stateByRow={};
+      Object.keys(byId).forEach(function(id){idByRow[byId[id]]=id;});
+      if(readExistingStates_())throw new Error('FBS_ID_INDEX_STALE_AFTER_REBUILD');
+    }
+    console.log('FBS_STAGE_ID_INDEX ms='+(Date.now()-fbsStarted)+' entries='+Object.keys(byId).length);
+    var n=new Date(),insert=[],patch=[],events=[],already=0,updated=0,confirmed=0;
+    parsed.forEach(function(r){
+      var o=r.source,id=r.id,rowNumber=byId[id];
+      if(rowNumber) {
+        already++;
+        var old=stateByRow[rowNumber]||[],os=str(old[0],90),ow=str(old[1],90);
+        if(os!==r.seller||ow!==r.wb){
+          old[0]=r.seller;old[1]=r.wb;old[2]=human(r.seller,r.wb);stateByRow[rowNumber]=old;
+          syncTimesByRow[rowNumber]=[n,n];patch.push(rowNumber);updated++;
+          events.push([n,id,str(o.article,300),r.created,os,r.seller,ow,r.wb,'',
+            'СМЕНА СТАТУСА',human(r.seller,r.wb),'GITHUB_WB_FBS']);
+        } else confirmed++;
+        return;
+      }
+      var row=Array(45).fill('');
+      var age=Math.max(0,Math.floor((n.getTime()-r.created.getTime())/60000));
+      row[0]=id;row[1]=r.created;row[2]=age;row[3]=age+' мин';
+      row[4]=r.seller;row[5]=r.wb;row[6]=human(r.seller,r.wb);
+      row[7]=str(o.article,300);row[8]=str(o.nmId,50);row[9]=rub(o.priceKopecks);
+      row[10]=str(o.supplyId,90);row[11]=str(o.warehouseId,50);row[12]=str(o.officeId,50);
+      row[13]=str(o.deliveryType,40);row[14]=str(o.cargoType,40);
+      row[15]=str(o.orderUid,150);row[16]=str(o.rid,150);row[17]=n;row[21]=n;row[22]=n;
+      row[26]=['confirm','complete'].indexOf(r.seller)!==-1?'ДА':'НЕТ';
+      row[27]='НЕТ';row[31]='НЕТ';row[32]='GITHUB_WB_FBS';
+      row[34]=str(o.comment,500);row[36]=str(o.barcode,100);row[37]=str(o.chrtId,100);
+      row[43]='❔ Не проверено';
+      insert.push(row);byId[id]=last+insert.length;idByRow[last+insert.length]=id;
+      events.push([n,id,str(o.article,300),r.created,'',r.seller,'',r.wb,age+' мин',
+        'СНИМОК СТАТУСА','Статус WB подтверждён при импорте из GitHub','GITHUB_WB_FBS']);
+    });
+    if(patch.length&&last>1){
+      patch.sort(function(a,b){return a-b;});
+      var segments=[],segmentStart=patch[0],segmentEnd=patch[0];
+      for(var pi=1;pi<patch.length;pi++){
+        if(patch[pi]===segmentEnd+1){segmentEnd=patch[pi];continue;}
+        segments.push([segmentStart,segmentEnd]);segmentStart=segmentEnd=patch[pi];
+      }
+      segments.push([segmentStart,segmentEnd]);
+      var patchData=[],verifyFilters=[];
+      segments.forEach(function(seg){
+        var startRow=seg[0],endRow=seg[1],offset=startRow-2,count=endRow-startRow+1;
+        patchData.push({range:"'📦 FBS Заказы'!E"+startRow+":G"+endRow,
+          majorDimension:'ROWS',values:Array.from({length:count},function(_,i){return (stateByRow[startRow+i]||[]).slice(0,3).map(asSheetValue);})});
+        patchData.push({range:"'📦 FBS Заказы'!V"+startRow+":W"+endRow,
+          majorDimension:'ROWS',values:Array.from({length:count},function(_,i){return (syncTimesByRow[startRow+i]||[]).map(fbsLocalSerial_);})});
+        verifyFilters.push({a1Range:"'📦 FBS Заказы'!A"+startRow+":G"+endRow});
+        verifyFilters.push({a1Range:"'📦 FBS Заказы'!V"+startRow+":W"+endRow});
+      });
+      mark('STATE_WRITE_START'); var writeResponse=fetchSheetApi(apiBase+'/values:batchUpdate',{
+        method:'post',contentType:'application/json',
+        headers:{Authorization:'Bearer '+authToken},muteHttpExceptions:true,
+        payload:JSON.stringify({valueInputOption:'RAW',data:patchData})
+      });
+      var writeCode=writeResponse.getResponseCode(); console.log('FBS_STAGE_STATE_WRITE ms='+(Date.now()-fbsStarted)+' http='+writeCode+' segments='+segments.length); mark('STATE_WRITE_DONE_'+writeCode);
+      if(writeCode<200||writeCode>=300){
+        var writeDiagnostic='UNKNOWN';
+        try { var writeError=JSON.parse(writeResponse.getContentText()||'{}').error||{}; writeDiagnostic=String(writeError.status||writeError.message||'UNKNOWN').slice(0,180); } catch(writeParseError) {}
+        throw new Error('FBS_PATCH_BATCH_HTTP_'+writeCode+':'+writeDiagnostic);
+      }
+      mark('STATE_VERIFY_START_BOUNDED');
+
+      Utilities.sleep(500);
+      // Read verification ranges in bounded Sheets API batches. A large sparse
+      // byDataFilter POST timed out while verifying many changed order rows.
+      var verifyByA1={},verifySpecs=[];
+      segments.forEach(function(seg){
+        var stateA1=orderSheet+'!A'+seg[0]+':G'+seg[1];
+        var timesA1=orderSheet+'!V'+seg[0]+':W'+seg[1];
+        verifyByA1[stateA1]={segment:seg,kind:'state'};
+        verifyByA1[timesA1]={segment:seg,kind:'times'};
+        verifySpecs.push({a1:stateA1,segment:seg,kind:'state'});
+        verifySpecs.push({a1:timesA1,segment:seg,kind:'times'});
+      });
+      mark('STATE_VERIFY_START_BATCHED_'+segments.length+'_SEGMENTS_'+verifySpecs.length+'_RANGES');
+      var verifiedA1={};
+      for(var verifyOffset=0;verifyOffset<verifySpecs.length;verifyOffset+=5){
+        var verifyPart=verifySpecs.slice(verifyOffset,verifyOffset+5);
+        var verifyQuery=verifyPart.map(function(spec){
+          return 'ranges='+encodeURIComponent(spec.a1);
+        }).join('&');
+        var verifyResponse=fetchSheetApi(apiBase+'/values:batchGet?'+verifyQuery+
+          '&majorDimension=ROWS&valueRenderOption=FORMATTED_VALUE',{method:'get'});
+        var verifyCode=verifyResponse.getResponseCode();
+        if(verifyCode<200||verifyCode>=300)
+          throw new Error('FBS_PATCH_READBACK_HTTP_'+verifyCode+':'+sheetApiFailure(verifyResponse));
+        var verifyPayload;
+        try{verifyPayload=JSON.parse(verifyResponse.getContentText()||'{}');}
+        catch(verifyParseError){throw new Error('FBS_PATCH_READBACK_INVALID_JSON');}
+        var verifyRanges=verifyPayload.valueRanges||[];
+        if(verifyRanges.length!==verifyPart.length)
+          throw new Error('FBS_PATCH_READBACK_RANGE_COUNT_MISMATCH');
+        verifyPart.forEach(function(requested,partIndex){
+          var a1=requested.a1,spec=verifyByA1[a1];
+          if(!spec)throw new Error('FBS_PATCH_READBACK_RANGE_MAPPING_INVALID');
+          if(verifiedA1[a1])throw new Error('FBS_PATCH_READBACK_RANGE_DUPLICATE');
+          verifiedA1[a1]=true;
+          var values=(verifyRanges[partIndex]||{}).values||[];
+          var seg=spec.segment;
+          for(var rowNumber=seg[0];rowNumber<=seg[1];rowNumber++){
+            var rowOffset=rowNumber-seg[0],rowValues=values[rowOffset]||[];
+            var expectedState=stateByRow[rowNumber]||[],expectedTimes=syncTimesByRow[rowNumber]||[];
+            if(spec.kind==='state'){
+              if(String(rowValues[0]||'')!==String(idByRow[rowNumber]||'')||
+                 String(rowValues[4]||'')!==String(expectedState[0]||'')||
+                 String(rowValues[5]||'')!==String(expectedState[1]||'')||
+                 String(rowValues[6]||'')!==String(expectedState[2]||''))
+                throw new Error('FBS_PATCH_READBACK_FAILED');
+            }else{
+              for(var t=0;t<2;t++){
+                var expectedDisplay=expectedTimes[t] instanceof Date?
+                  Utilities.formatDate(expectedTimes[t],sheetTimeZone,'dd.MM.yyyy HH:mm:ss'):String(expectedTimes[t]||'');
+                var actualDisplay=String(rowValues[t]||'');
+                if(!expectedDisplay||actualDisplay!==expectedDisplay)
+                  throw new Error('FBS_PATCH_TIME_READBACK_FAILED:row='+rowNumber+':column='+(22+t)+':expected='+expectedDisplay+':actual='+actualDisplay);
+              }
+            }
+          }
+        });
+        console.log('FBS_STAGE_STATE_VERIFY_BATCH='+Math.floor(verifyOffset/50+1)+' ranges='+verifyPart.length+' elapsed_ms='+(Date.now()-fbsStarted));
+      }
+      if(Object.keys(verifiedA1).length!==verifySpecs.length)
+        throw new Error('FBS_PATCH_READBACK_RANGE_MISSING');
+      mark('STATE_VERIFY_DONE_BOUNDED');
+    }
+    console.log('FBS_STAGE_PATCH ms='+(Date.now()-fbsStarted)+' changed='+updated+' events='+events.length);
+    if(insert.length){
+      mark('INSERT_START');
+      var insertStart=last+1,insertEnd=last+insert.length;
+      var currentGridRows=orderSheetNative.getMaxRows();
+      if(insertEnd>currentGridRows){
+        mark('GRID_EXTEND_START_'+currentGridRows+'_TO_'+insertEnd);
+        orderSheetNative.insertRowsAfter(currentGridRows,insertEnd-currentGridRows);
+
+        mark('GRID_EXTEND_DONE_'+orderSheetNative.getMaxRows());
+      }
+      var insertRange=orderSheet+'!A'+insertStart+':AS'+insertEnd;
+      var insertRequestBody=JSON.stringify({valueInputOption:'RAW',includeValuesInResponse:true,
+        responseValueRenderOption:'UNFORMATTED_VALUE',data:[{
+          range:insertRange,majorDimension:'ROWS',values:sheetRows(insert)
+        }]});
+      var insertResponse=null,insertCode=0,insertWriteError='';
+      // A timeout may occur after Sheets has committed the fixed-range write.
+      // Retrying this exact RAW range is idempotent and avoids losing the batch.
+      for(var insertWriteAttempt=0;insertWriteAttempt<3;insertWriteAttempt++){
+        mark('INSERT_WRITE_ATTEMPT_'+(insertWriteAttempt+1));
+        try{
+          insertResponse=fetchSheetApi(apiBase+'/values:batchUpdate',{
+            method:'post',contentType:'application/json',payload:insertRequestBody
+          });
+          insertCode=insertResponse.getResponseCode();
+          if(insertCode>=200&&insertCode<300)break;
+          if(insertCode!==429&&insertCode<500)break;
+          insertWriteError='HTTP_'+insertCode;
+        }catch(insertWriteException){
+          insertWriteError=/timeout|timed out/i.test(String(insertWriteException))?'TIMEOUT':'EXCEPTION';
+          if(insertWriteError!=='TIMEOUT'||insertWriteAttempt>=2)throw new Error('FBS_INSERT_WRITE_'+insertWriteError);
+        }
+        if(insertWriteAttempt<2)Utilities.sleep([1000,3000][insertWriteAttempt]);
+      }
+      if(!insertResponse)throw new Error('FBS_INSERT_WRITE_'+(insertWriteError||'NO_RESPONSE'));
+      mark('INSERT_RESPONSE_'+insertCode);
+      if(insertCode<200||insertCode>=300)throw new Error('FBS_INSERT_HTTP_'+insertCode+':'+sheetApiFailure(insertResponse));
+      // The Sheets API write response can include persisted values, avoiding
+      // a second read request that may time out under API load. Fall back to a
+      // bounded readback only if the response omits or mismatches those values.
+
+      var insertIds=[],insertReadbackMatched=false,insertReadbackAttempts=0,insertReadbackApiError='';
+      try{
+        var insertWritePayload=JSON.parse(insertResponse.getContentText()||'{}');
+        var insertWriteRows=((((insertWritePayload.responses)||[])[0]||{}).updatedData||{}).values||[];
+        insertIds=insertWriteRows.map(function(v){return String((v||[])[0]||'');});
+        insertReadbackMatched=insertIds.length===insert.length;
+        if(insertReadbackMatched){
+          for(var writeVerifyIndex=0;writeVerifyIndex<insert.length;writeVerifyIndex++){
+            if(insertIds[writeVerifyIndex]!==String(insert[writeVerifyIndex][0])){
+              insertReadbackMatched=false;break;
+            }
+          }
+        }
+      }catch(insertWriteParseError){insertReadbackMatched=false;}
+      if(!insertReadbackMatched)for(var insertAttempt=0;insertAttempt<4;insertAttempt++){
+        insertReadbackAttempts=insertAttempt+1;
+        try{
+          var insertVerifyResponse=fetchSheetApi(apiBase+'/values/'+
+            encodeURIComponent(orderSheet+'!A'+insertStart+':A'+insertEnd)+
+            '?valueRenderOption=FORMATTED_VALUE',{method:'get'});
+          var insertVerifyCode=insertVerifyResponse.getResponseCode();
+          if(insertVerifyCode<200||insertVerifyCode>=300){
+            if(insertVerifyCode!==429&&insertVerifyCode<500)
+              throw new Error('FBS_INSERT_READBACK_HTTP_'+insertVerifyCode+':'+sheetApiFailure(insertVerifyResponse));
+            insertReadbackApiError='API_HTTP_'+insertVerifyCode;
+          }else{
+            var insertVerifyPayload;
+            try{insertVerifyPayload=JSON.parse(insertVerifyResponse.getContentText()||'{}');}
+            catch(insertVerifyParseError){throw new Error('FBS_INSERT_READBACK_INVALID_JSON');}
+            insertIds=((insertVerifyPayload.values)||[]).map(function(v){return String((v||[])[0]||'');});
+            insertReadbackMatched=insertIds.length===insert.length;
+            if(insertReadbackMatched){
+              for(var verifyInsertIndex=0;verifyInsertIndex<insert.length;verifyInsertIndex++){
+                if(insertIds[verifyInsertIndex]!==String(insert[verifyInsertIndex][0])){
+                  insertReadbackMatched=false;break;
+                }
+              }
+            }
+            if(insertReadbackMatched)break;
+            insertReadbackApiError='';
+          }
+        }catch(insertReadbackError){
+          if(String(insertReadbackError).indexOf('FBS_INSERT_READBACK_HTTP_')===0||
+             String(insertReadbackError).indexOf('FBS_INSERT_READBACK_INVALID_JSON')===0)throw insertReadbackError;
+          insertReadbackApiError=/timeout|timed out/i.test(String(insertReadbackError))?'API_TIMEOUT':'API_EXCEPTION';
+        }
+        if(insertAttempt<3)Utilities.sleep([500,1500,3000][insertAttempt]);
+      }
+      mark('INSERT_READBACK_ATTEMPTS_'+insertReadbackAttempts+'_MATCH_'+insertReadbackMatched+
+        (insertReadbackApiError?'_ERROR_'+insertReadbackApiError:''));
+      if(!insertReadbackMatched&&insertReadbackApiError==='API_TIMEOUT')
+        throw new Error('FBS_INSERT_READBACK_API_TIMEOUT');
+      if(insertIds.length!==insert.length)throw new Error('FBS_INSERT_READBACK_COUNT_MISMATCH');
+      for(var ii=0;ii<insert.length;ii++){
+        if(insertIds[ii]!==String(insert[ii][0]))throw new Error('FBS_INSERT_READBACK_FAILED');
+        byId[insertIds[ii]]=insertStart+ii;
+        idByRow[insertStart+ii]=insertIds[ii];
+      }
+      indexState.lastRow=insertEnd;
+      sellmonitorGithubFbsSaveIdIndex_(indexState.cache,indexState.prefix,indexState.client,indexState.lastRow,byId);
+    }
+    if(events.length){
+      mark('HISTORY_WRITE_START');
+      var historyResponse=fetchSheetApi(apiBase+'/values/'+encodeURIComponent("'🕘 История статусов'!A:L")+':append?valueInputOption=RAW&insertDataOption=INSERT_ROWS',{
+        method:'post',contentType:'application/json',
+        payload:JSON.stringify({majorDimension:'ROWS',values:sheetRows(events)})
+      });
+      var historyCode=historyResponse.getResponseCode(); mark('HISTORY_WRITE_DONE_'+historyCode);
+      if(historyCode<200||historyCode>=300)throw new Error('FBS_HISTORY_WRITE_HTTP_'+historyCode);
+    }
+    console.log('FBS_STAGE_DONE ms='+(Date.now()-fbsStarted)+' inserted='+insert.length+' changed='+updated);
+    return {ok:true,client:client,received:parsed.length,inserted:insert.length,
+      existing:already,changed:updated,unchanged:confirmed,events:events.length,
+      latestWorkbookOrderRows:last-1+insert.length,checkedAt:n.toISOString()};
+})
+      .useRegularExpression(true)
+      .matchEntireCell(true)
+      .matchFormulaText(false)
+      .findPrevious();
+    last=lastOrderCell?lastOrderCell.getRow():1;
+    console.log('FBS_STATUS_READ_ROW_RESOLVED client='+client+
+      ' sheet_last_row='+sheetLastRow+' order_id_last_row='+last);
+  }
+  if(last<1||last>100000)
+    throw new Error('FBS_ORDER_ID_ROW_COUNT_UNEXPECTED:resolved='+last+
+      ':sheet_last='+sheetLastRow);
   var head=sheet.getRange(1,1,1,7).getDisplayValues()[0]||[];
   if(String(head[0]||'')!=='ID заказа'||String(head[4]||'')!=='Статус продавца'||String(head[5]||'')!=='Статус WB')
     throw new Error('FBS_COLUMN_SCHEMA_MISMATCH');
