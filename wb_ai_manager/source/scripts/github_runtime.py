@@ -80,6 +80,7 @@ def optimizer_sweep_progress(optimizer_state: dict[str, Any]) -> dict[str, dict[
             "products_total": sweep.get("sweep_products_total", 0),
             "campaign_product_pairs_seen": sweep.get("sweep_pairs_seen", 0),
             "campaign_product_pairs_total": sweep.get("sweep_pairs_total", 0),
+            "scan_error_count": len(sweep.get("scan_errors") or []),
             "complete": sweep.get("sweep_complete") is True,
         }
     return progress
@@ -166,6 +167,7 @@ def owner_dashboard(payload: dict[str, Any]) -> dict[str, Any]:
         "query_tasks": (q.get("operator_brief") or {}).get("tasks") or [],
         "data_blockers": (q.get("operator_brief") or {}).get("data_blockers") or [],
         "source_errors": payload.get("source_errors") or [],
+        "optimizer_sweep_errors_by_shop": payload.get("optimizer_sweep_errors_by_shop") or {},
         "note": "GitHub is the scheduler/runtime. Google Apps Script is only the authenticated Google Sheets adapter.",
     }
 
@@ -313,6 +315,12 @@ async def run() -> int:
     except Exception as exc:
         portfolio_snapshot = portfolio_service.snapshot()
         source_errors.append({"stage": "portfolio.refresh", "error": str(exc)})
+    for error in (portfolio_snapshot or {}).get("bridge_source_errors") or []:
+        if isinstance(error, dict):
+            source_errors.append({
+                "stage": str(error.get("stage") or "portfolio.unknown"),
+                "error": str(error.get("error") or "Google Sheets source read failed"),
+            })
 
     cabinets: dict[str, Any] = {}
     cabinet_snapshots: dict[str, dict[str, Any]] = {}
@@ -380,6 +388,8 @@ async def run() -> int:
         except Exception as exc:
             search_publish[slug] = {"ok": False, "error": str(exc)}
             source_errors.append({"stage": f"search.publish.{slug}", "error": str(exc)})
+
+    generated_at = datetime.now(timezone.utc).isoformat()
 
     # The panel reads this cabinet-scoped, non-secret payload from a separate
     # encrypted GitHub state branch. It is never put into the public site or
@@ -453,6 +463,7 @@ async def run() -> int:
                 "campaign_cache_count": cache["campaign_cache_count"],
                 "campaign_cache_total": cache["campaign_cache_total"],
                 "campaign_cache_complete": cache["campaign_cache_complete"],
+                "scan_errors": deep_scan.get("scan_errors") or [],
             },
         }
     q = query_manager(portfolio_snapshot, cabinet_snapshots.get("sanych") or {})
@@ -475,6 +486,10 @@ async def run() -> int:
         "portfolio": portfolio_snapshot,
         "query_manager": q,
         "search_publish": search_publish,
+        "optimizer_sweep_errors_by_shop": {
+            code: (optimizer_state["shops"].get(code) or {}).get("sweep", {}).get("scan_errors") or []
+            for code in ("ap", "aa", "yv")
+        },
         "cabinets": cabinets,
     }
     dashboard = owner_dashboard(payload)
@@ -514,6 +529,10 @@ async def run() -> int:
         "optimizer_state_shops": sum(1 for x in optimizer_state["shops"].values() if x.get("observed_at")),
         "optimizer_sweeps_complete": sum(1 for x in optimizer_state["shops"].values() if x.get("sweep", {}).get("sweep_complete") is True),
         "optimizer_sweep_progress": optimizer_sweep_progress(optimizer_state),
+        "optimizer_sweep_error_counts": {
+            code: len(errors)
+            for code, errors in (payload.get("optimizer_sweep_errors_by_shop") or {}).items()
+        },
         "query_status": (q.get("summary") or {}).get("query_status"),
         "query_facts_status": (q.get("summary") or {}).get("facts_status"),
         "query_operational_ready": bool((q.get("summary") or {}).get("operational_ready")),
