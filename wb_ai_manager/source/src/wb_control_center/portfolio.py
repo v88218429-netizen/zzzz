@@ -669,6 +669,7 @@ class PortfolioService:
                 "key": key, "unit_row": unit_row, "audit_source_row": audit_index,
             }
             reasons: list[str] = []
+            mapping_notes: list[str] = []
             if not code:
                 reasons.append("shop_code_unknown")
             if audit_status.strip().casefold() != "есть связка":
@@ -689,19 +690,27 @@ class PortfolioService:
             if cross and key_norm(cross.get("key")) != key_norm(key):
                 reasons.append("crosswalk_key_mismatch")
             catalog_key = str((catalog_record or {}).get("Технический ключ связки") or "").strip()
-            if catalog_record and key_norm(catalog_key) != key_norm(key):
+            if catalog_record and key_norm(key) not in exact_cell_aliases(catalog_key):
                 reasons.append("catalog_key_mismatch")
             cross_name = str((cross or {}).get("unit_name") or "").strip()
             catalog_name = str((catalog_record or {}).get("Товар") or "").strip()
             if cross and self._economics_norm(cross_name) != self._economics_norm(audit_unit_name):
                 reasons.append("audit_crosswalk_product_name_mismatch")
             if catalog_record and self._economics_norm(catalog_name) != self._economics_norm(cross_name or audit_unit_name):
-                reasons.append("catalog_product_name_mismatch")
+                # Display names can differ for one confirmed unit row (for example,
+                # "Вазон" and "Кашпо"). Exact shop, seller-article, key and row
+                # checks below establish identity; preserve the label difference.
+                mapping_notes.append("catalog_display_name_differs_from_linked_unit_name")
             catalog_article = str((catalog_record or {}).get("Артикул продавца") or "").strip()
-            if catalog_record and self._economics_norm(catalog_article) != self._economics_norm(seller_article):
+            if catalog_record and key_norm(seller_article) not in exact_cell_aliases(catalog_article):
                 reasons.append("seller_article_mismatch")
-            catalog_code = self._economics_shop_code((catalog_record or {}).get("Магазин"))
-            if catalog_record and catalog_code != code:
+            catalog_shop_values = str((catalog_record or {}).get("Магазин") or "").strip()
+            catalog_shop_codes = {
+                self._economics_shop_code(part)
+                for part in [catalog_shop_values, *re.split(r"\\s+/\\s+", catalog_shop_values)]
+                if part.strip()
+            }
+            if catalog_record and code not in catalog_shop_codes:
                 reasons.append("catalog_shop_mismatch")
             if reasons:
                 add_diag(code, nm_id, audit_item, reasons)
@@ -746,6 +755,7 @@ class PortfolioService:
                 "unit_economics_source": "Связка цен / Аудит ассортимента / 📊 WB FBS новая",
                 "unit_economics_source_spreadsheet_id": source.get("spreadsheet_id"),
                 "unit_economics_source_key": key, "unit_economics_mapping_validation_ok": True,
+                "unit_economics_mapping_notes": mapping_notes,
                 "unit_economics_decision_ready": not validation,
                 "unit_economics_validation_reasons": validation,
                 "cost_rub": cost, "price_rub": price, "price_client_rub": price_client,
