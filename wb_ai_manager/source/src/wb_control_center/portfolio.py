@@ -620,6 +620,11 @@ class PortfolioService:
         def key_norm(value: Any) -> str:
             return re.sub(r"\s+", " ", str(value or "").strip().lower().replace("ё", "е"))
 
+        def exact_cell_aliases(value: Any) -> set[str]:
+            text = str(value or "").strip()
+            parts = [text, *re.split(r"\s+/\s+", text)]
+            return {key_norm(part) for part in parts if key_norm(part)}
+
         cross_by_key: dict[str, list[dict[str, Any]]] = {}
         for index, row in enumerate(crosswalk[cross_header_row + 1:], start=cross_header_row + 2):
             key = key_norm(cell(row, cross_headers, "Ключ"))
@@ -707,7 +712,7 @@ class PortfolioService:
             catalog_shop_values = str((catalog_record or {}).get("Магазин") or "").strip()
             catalog_shop_codes = {
                 self._economics_shop_code(part)
-                for part in [catalog_shop_values, *re.split(r"\\s+/\\s+", catalog_shop_values)]
+                for part in [catalog_shop_values, *re.split(r"\s+/\s+", catalog_shop_values)]
                 if part.strip()
             }
             if catalog_record and code not in catalog_shop_codes:
