@@ -1031,6 +1031,98 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
         print("INNER_FINANCE_WORKER_VERSION=" + snapshot_current + "->" + snapshot_next)
         print("INNER_FINANCE_RAW_REPORT_SNAPSHOT=patched")
 
+
+    # Summarize the bounded Sellmonitor expense response by its own metric labels.
+    # Keep this diagnostic free of product IDs, raw rows, and credentials.
+    expense_v7_marker = "INNER_FINANCE_EXPENSE_METRIC_SUMMARY_V7"
+    if expense_v7_marker not in worker_text:
+        expense_anchor = """            rows:expenseRows.length,
+            has_more:!!(expenseEnvelope && expenseEnvelope.hasMore),
+            first_row_keys:expenseRows.length && expenseRows[0] && typeof expenseRows[0]==='object'
+              ? Object.keys(expenseRows[0]).slice(0,32) : []"""
+        expense_replacement = """            rows:expenseRows.length,
+            has_more:!!(expenseEnvelope && expenseEnvelope.hasMore),
+            metric_summary:(function() {
+              /* INNER_FINANCE_EXPENSE_METRIC_SUMMARY_V7 */
+              var buckets={};
+              function number_(v) {
+                if (typeof v==='number') return isFinite(v)?v:null;
+                if (typeof v!=='string' || !v.trim()) return null;
+                var n=Number(v.trim().replace(/\\s/g,'').replace(',','.'));
+                return isFinite(n)?n:null;
+              }
+              expenseRows.forEach(function(row) {
+                row=row && typeof row==='object'?row:{};
+                var metric=String(row.dashboardMetric || '');
+                var role=String(row.dashboardFormulaRole || '');
+                var type=String(row.type || '');
+                var group=String(row.group || '');
+                var key=[metric,role,type,group].join('|');
+                var b=buckets[key] || (buckets[key]={
+                  metric:metric,role:role,type:type,group:group,rows:0,source_rows:0,
+                  products:{},reliable_rows:0,dashboard_rows:0,numeric_cost_rows:0,
+                  missing_cost_rows:0,object_cost_rows:0,sum_all:0,sum_reliable:0,
+                  sum_dashboard:0,cost_object_keys:[],note:''
+                });
+                b.rows++;
+                b.source_rows+=number_(row.rowsCount) || 0;
+                if (row.nmId!=null && String(row.nmId)) b.products[String(row.nmId)]=1;
+                var cost=row.cost;
+                if (cost===null || cost===undefined || cost==='') {
+                  b.missing_cost_rows++;
+                } else if (typeof cost==='object') {
+                  b.object_cost_rows++;
+                  b.cost_object_keys=Object.keys(cost).slice(0,12);
+                } else {
+                  var n=number_(cost);
+                  if (n===null) b.missing_cost_rows++;
+                  else {
+                    b.numeric_cost_rows++;
+                    b.sum_all+=n;
+                    if (row.reliableForAnalysis===true) {
+                      b.reliable_rows++;
+                      b.sum_reliable+=n;
+                    }
+                    if (row.contributesToDashboardTotal===true) {
+                      b.dashboard_rows++;
+                      b.sum_dashboard+=n;
+                    }
+                  }
+                }
+                if (!b.note && row.dashboardFormulaNote) b.note=String(row.dashboardFormulaNote).slice(0,100);
+              });
+              return Object.keys(buckets).sort().slice(0,40).map(function(k) {
+                var b=buckets[k];
+                return {
+                  metric:b.metric,role:b.role,type:b.type,group:b.group,rows:b.rows,
+                  source_rows:b.source_rows,products:Object.keys(b.products).length,
+                  reliable_rows:b.reliable_rows,dashboard_rows:b.dashboard_rows,
+                  numeric_cost_rows:b.numeric_cost_rows,missing_cost_rows:b.missing_cost_rows,
+                  object_cost_rows:b.object_cost_rows,
+                  sum_all:Math.round(b.sum_all*100)/100,
+                  sum_reliable:Math.round(b.sum_reliable*100)/100,
+                  sum_dashboard:Math.round(b.sum_dashboard*100)/100,
+                  cost_object_keys:b.cost_object_keys,note:b.note
+                };
+              });
+            })(),
+            first_row_keys:expenseRows.length && expenseRows[0] && typeof expenseRows[0]==='object'
+              ? Object.keys(expenseRows[0]).slice(0,32) : []"""
+        if worker_text.count(expense_anchor) != 1:
+            raise SystemExit("INNER_FINANCE_EXPENSE_METRIC_V7_ANCHOR_MISMATCH")
+        worker_text=worker_text.replace(expense_anchor,expense_replacement,1)
+        versions=re.findall(r"VERSION:\\s*'github-worker-(\\d+)\\.(\\d+)\\.(\\d+)'",worker_text)
+        if len(versions)!=1:
+            raise SystemExit("INNER_FINANCE_EXPENSE_METRIC_V7_VERSION_MISMATCH")
+        major,minor,patch_no=[int(v) for v in versions[0]]
+        current=".".join(str(v) for v in (major,minor,patch_no))
+        next_version=".".join(str(v) for v in (major,minor,patch_no+1))
+        version_anchor="VERSION: 'github-worker-"+current+"'"
+        if worker_text.count(version_anchor)!=1:
+            raise SystemExit("INNER_FINANCE_EXPENSE_METRIC_V7_VERSION_ANCHOR_MISMATCH")
+        worker_text=worker_text.replace(version_anchor,"VERSION: 'github-worker-"+next_version+"'",1)
+        print("INNER_FINANCE_WORKER_VERSION="+current+"->"+next_version)
+        print("INNER_FINANCE_EXPENSE_METRIC_SUMMARY_V7=patched")
     worker.write_text(worker_text, encoding="utf-8")
     print("WORKER_TRIGGER_REFRESH_V2=patched")
 candidates = []
