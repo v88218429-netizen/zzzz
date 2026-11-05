@@ -569,7 +569,7 @@ class PortfolioService:
     def _economics_shop_code(value: Any) -> str:
         key = PortfolioService._economics_norm(value).replace(" ", "")
         aliases = {
-            "аа": "aa", "air": "aa", "аир": "aa",
+            "аа": "aa", "aa": "aa", "air": "aa", "аир": "aa", "air_wb": "aa",
             "ап": "ap", "ap": "ap", "sanych": "ap", "саныч": "ap", "домсаныча": "ap",
             "юв": "yv", "yv": "yv", "hozyushka": "yv", "хозяюшка": "yv",
         }
