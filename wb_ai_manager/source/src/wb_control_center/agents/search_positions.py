@@ -61,13 +61,13 @@ class SearchPositionsAgent(BaseAgent):
                 value = payload.get(key)
                 if not isinstance(value, (str, int, float)):
                     continue
-                detail = re.sub(r"\\s+", " ", str(value)).strip()
+                detail = re.sub(r"\s+", " ", str(value)).strip()
                 detail = re.sub(
-                    r"(?i)(authorization|token|api[_ -]?key)(\\s*[:=]\\s*)[^\\s,;]+",
-                    r"\\1\\2[скрыто]",
+                    r"(?i)(authorization|token|api[_ -]?key)(\s*[:=]\s*)[^\s,;]+",
+                    r"\1\2[скрыто]",
                     detail,
                 )
-                detail = re.sub(r"\\b[A-Za-z0-9._-]{32,}\\b", "[скрыто]", detail)
+                detail = re.sub(r"\b[A-Za-z0-9._-]{32,}\b", "[скрыто]", detail)
                 return detail[:240]
             return ""
 
