@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, call
 
 import pytest
 
@@ -63,7 +63,7 @@ async def test_direct_search_requests_respect_wb_payload_and_pacing_limits(monke
 
     assert [len(call["body"]["nmIds"]) for call in client.calls] == [50, 50, 1]
     assert [call["body"]["limit"] for call in client.calls] == [30, 30, 30]
-    assert sleep.await_args_list == [pytest.call(20.0), pytest.call(20.0)]
+    assert sleep.await_args_list == [call(20.0), call(20.0)]
     assert len(rows) == 3
     assert diagnostic["status"] == "ok"
     assert diagnostic["chunks_total"] == 3
