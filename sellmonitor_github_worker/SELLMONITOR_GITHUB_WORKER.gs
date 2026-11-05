@@ -7518,7 +7518,7 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
     if(!orderSheetInfo)throw new Error('FBS_ORDER_SHEET_NOT_FOUND');
     var orderSheetId=Number(orderSheetInfo.sheetId);
     var gridRows=Number((orderSheetInfo.gridProperties||{}).rowCount||0);
-    if(!orderSheetId||gridRows<1||gridRows>100000)throw new Error('FBS_ROW_COUNT_UNEXPECTED');
+    if(!orderSheetId||gridRows<1||gridRows>10000000)throw new Error('FBS_GRID_ROW_COUNT_UNEXPECTED');
     sheetTimeZone=String((metadataPayload.properties||{}).timeZone||'Etc/GMT');
     function columnLetter_(column){
       var value='',n=Number(column);
@@ -7583,12 +7583,26 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
     mark('SHEET_LOOKUP_DONE');
     mark('TIMEZONE_READ_DONE');
     mark('LAST_ROW_READ_START');
-    var idColumnValues=readDisplayGrid_(2,1,gridRows-1,1);
+    // Inspect only populated values in column A. The book may have formatting or
+    // formulas far below its actual order data, so gridProperties.rowCount is
+    // not a safe proxy for the last order row.
+    var idColumnResponse=fetchSheetApi(apiBase+'/values/'+
+      encodeURIComponent(orderSheet+'!A2:A')+
+      '?valueRenderOption=FORMATTED_VALUE',{method:'get'});
+    var idColumnCode=idColumnResponse.getResponseCode();
+    if(idColumnCode<200||idColumnCode>=300)
+      throw new Error('FBS_ORDER_ID_COLUMN_HTTP_'+idColumnCode+':'+sheetApiFailure(idColumnResponse));
+    var idColumnPayload;
+    try{idColumnPayload=JSON.parse(idColumnResponse.getContentText()||'{}');}
+    catch(idColumnParseError){throw new Error('FBS_ORDER_ID_COLUMN_INVALID_JSON');}
+    var idColumnValues=idColumnPayload.values||[];
     var last=1;
-    for(var idRowIndex=0;idRowIndex<idColumnValues.length;idRowIndex++)
-      if(String((idColumnValues[idRowIndex]||[])[0]||'').trim())last=idRowIndex+2;
-    mark('LAST_ROW_READ_DONE_'+last);
-    if(last<1||last>100000)throw new Error('FBS_ROW_COUNT_UNEXPECTED');
+    for(var idRowIndex=0;idRowIndex<idColumnValues.length;idRowIndex++){
+      var idValue=String((idColumnValues[idRowIndex]||[])[0]||'').trim();
+      if(/^[0-9]{6,20}$/.test(idValue))last=idRowIndex+2;
+    }
+    mark('LAST_ROW_READ_DONE_'+last+'_ID_VALUES_'+idColumnValues.length);
+    if(last<1||last>100000)throw new Error('FBS_ORDER_ID_ROW_COUNT_UNEXPECTED:'+last);
     mark('HEADER_READ_START');
     var head=readDisplayGrid_(1,1,1,7)[0]||[];
     mark('HEADER_READ_DONE');
