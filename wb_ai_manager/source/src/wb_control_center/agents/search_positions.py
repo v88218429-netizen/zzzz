@@ -87,28 +87,53 @@ class SearchPositionsAgent(BaseAgent):
                     # 30 is valid on every tariff; 100 is restricted to Advanced/Premium Jam.
                     "limit": 30,
                 }
-                request_count += 1
-                try:
-                    response = await client.post(
-                        url,
-                        json=body,
-                        headers={"Authorization": token, "Accept": "application/json"},
-                    )
-                    if response.status_code != 200:
+                response = None
+                request_failed = False
+                for attempt in range(2):
+                    request_count += 1
+                    try:
+                        response = await client.post(
+                            url,
+                            json=body,
+                            headers={"Authorization": token, "Accept": "application/json"},
+                        )
+                    except Exception as exc:
                         failures.append({
                             "chunk": chunk_index + 1,
                             "nm_ids": chunk,
-                            "http_status": int(response.status_code),
-                            "reason": error_reason(int(response.status_code)),
-                            "detail": safe_detail(response),
+                            "reason": "network_or_response_error",
+                            "error_type": type(exc).__name__,
                         })
+                        request_failed = True
+                        break
+                    if response.status_code == 429 and attempt == 0:
+                        retry_after = 20.0
+                        try:
+                            retry_after = float(response.headers.get("Retry-After", retry_after))
+                        except (TypeError, ValueError, AttributeError):
+                            pass
+                        await asyncio.sleep(max(20.0, min(60.0, retry_after)))
                         continue
+                    break
+                if request_failed:
+                    continue
+                if response is None or response.status_code != 200:
+                    status_code = int(response.status_code) if response is not None else 0
+                    failures.append({
+                        "chunk": chunk_index + 1,
+                        "nm_ids": chunk,
+                        "http_status": status_code or None,
+                        "reason": error_reason(status_code) if status_code else "no_response",
+                        "detail": safe_detail(response) if response is not None else "",
+                    })
+                    continue
+                try:
                     payload = response.json()
                 except Exception as exc:
                     failures.append({
                         "chunk": chunk_index + 1,
                         "nm_ids": chunk,
-                        "reason": "network_or_response_error",
+                        "reason": "invalid_json_response",
                         "error_type": type(exc).__name__,
                     })
                     continue
