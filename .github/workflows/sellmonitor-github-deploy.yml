@@ -639,7 +639,7 @@ jobs:
           PY
 
       - name: Run one authenticated Sellmonitor Inner finance tick
-        if: github.event_name != 'push' # Scheduled separately; avoid lock contention on code pushes.["Run Ozon export continuation via GitHub","Diagnose Ozon export status via GitHub","Repair and resume Ozon export via GitHub"]'), github.event.head_commit.message)
+        if: github.event_name != 'push' || contains(github.event.head_commit.message, '[inner-finance-tick]') # The script lock serializes this one explicit refresh with the minute trigger.["Run Ozon export continuation via GitHub","Diagnose Ozon export status via GitHub","Repair and resume Ozon export via GitHub"]'), github.event.head_commit.message)
         continue-on-error: true
         shell: bash
         run: |
