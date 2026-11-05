@@ -7182,7 +7182,7 @@ function sellmonitorGithubFbsStatusReadV1_(body) {
   if(!spreadsheetId)throw new Error('FBS_CLIENT_NOT_ALLOWED');
   var requested=body&&body.orderIds;
   if(!Array.isArray(requested)||requested.length>1000)throw new Error('FBS_STATUS_READ_BATCH_INVALID');
-  var ids=[],seen={};
+  var ids=[],seen=Object.create(null);
   requested.forEach(function(value){
     var id=String(value==null?'':value).trim();
     if(!/^[0-9]{6,20}$/.test(id))throw new Error('FBS_ID_INVALID');
@@ -7195,84 +7195,24 @@ function sellmonitorGithubFbsStatusReadV1_(body) {
   var head=sheet.getRange(1,1,1,7).getDisplayValues()[0]||[];
   if(String(head[0]||'')!=='ID заказа'||String(head[4]||'')!=='Статус продавца'||String(head[5]||'')!=='Статус WB')
     throw new Error('FBS_COLUMN_SCHEMA_MISMATCH');
-  function findRequestedRows_(){
-    var rowMap=Object.create(null);
-    if(sheetLastRow<2||!ids.length)return rowMap;
-    var requestedIds=Object.create(null);
-    ids.forEach(function(id){requestedIds[id]=true;});
-    // One bounded column read replaces repeated TextFinder scans (one per 40 IDs).
-    // Keep display strings so long WB IDs are never rounded as JavaScript numbers.
-    var columnA=sheet.getRange(2,1,sheetLastRow-1,1).getDisplayValues();
-    for(var i=0;i<columnA.length;i++){
-      var foundId=String((columnA[i]||[])[0]||'').trim();
-      if(requestedIds[foundId]&&!Object.prototype.hasOwnProperty.call(rowMap,foundId))
-        rowMap[foundId]=i+2;
+
+  // Read one coherent A:F snapshot and derive both row hints and statuses from it.
+  // This avoids hundreds of small Sheets API ranges and the extra UrlFetch quota.
+  var grid=sheetLastRow>1?sheet.getRange(2,1,sheetLastRow-1,6).getDisplayValues():[];
+  var requestedIds=Object.create(null),rowMap=Object.create(null),states=Object.create(null);
+  ids.forEach(function(id){requestedIds[id]=true;});
+  for(var i=0;i<grid.length;i++){
+    var row=grid[i]||[];
+    var foundId=String(row[0]||'').trim();
+    if(requestedIds[foundId]&&!Object.prototype.hasOwnProperty.call(rowMap,foundId)){
+      rowMap[foundId]=i+2;
+      states[foundId]={supplierStatus:String(row[4]||''),wbStatus:String(row[5]||'')};
     }
-    console.log('FBS_STATUS_FIND_IDS client='+client+' requested='+ids.length+
-      ' matches='+Object.keys(rowMap).length+' sheet_last_row='+sheetLastRow);
-    return rowMap;
   }
-  var rowMap=findRequestedRows_();
-  var states={},rowsRead=0,rangeCount=0,apiRequests=0,rowReadMs=0;
-  console.log('FBS_STATUS_READ_START client='+client+' requested='+ids.length+' sheet_last_row='+sheetLastRow+' found_ids='+Object.keys(rowMap).length);
-  function readStates_(){
-    states={}; rowsRead=0; rangeCount=0; apiRequests=0;
-    var matches=[];
-    ids.forEach(function(id){var row=rowMap[id];if(row)matches.push({id:id,row:Number(row)});});
-    if(!matches.length)return false;
-    matches.sort(function(a,b){return a.row-b.row;});
-    var blocks=[];
-    matches.forEach(function(item){
-      var block=blocks.length?blocks[blocks.length-1]:null;
-      if(!block||item.row-block.end>25||item.row-block.start+1>250){
-        block={start:item.row,end:item.row,matches:[item]};
-        blocks.push(block);
-      } else {
-        block.end=item.row;
-        block.matches.push(item);
-      }
-    });
-    rangeCount=blocks.length;
-    var token=ScriptApp.getOAuthToken(),stale=false,readStarted=Date.now();
-    for(var offset=0;offset<blocks.length;offset+=50){
-      var part=blocks.slice(offset,offset+50);
-      var query=part.map(function(block){
-        var a1="'📦 FBS Заказы'!A"+block.start+":F"+block.end;
-        return "ranges="+encodeURIComponent(a1);
-      }).join("&");
-      var url="https://sheets.googleapis.com/v4/spreadsheets/"+encodeURIComponent(spreadsheetId)+
-        "/values:batchGet?"+query+"&valueRenderOption=FORMATTED_VALUE&majorDimension=ROWS";
-      var response=UrlFetchApp.fetch(url,{
-        method:"get",
-        headers:{Authorization:"Bearer "+token},
-        muteHttpExceptions:true
-      });
-      var code=response.getResponseCode();
-      if(code<200||code>=300)throw new Error("FBS_STATUS_READ_SHEETS_API_HTTP_"+code);
-      var payload;
-      try{payload=JSON.parse(response.getContentText()||"{}");}
-      catch(parseError){throw new Error("FBS_STATUS_READ_SHEETS_API_INVALID_JSON");}
-      var valueRanges=payload.valueRanges||[];
-      if(valueRanges.length!==part.length)throw new Error("FBS_STATUS_READ_RANGE_COUNT_MISMATCH");
-      apiRequests++;
-      part.forEach(function(block,blockIndex){
-        var range=valueRanges[blockIndex]||{},values=range.values||[];
-        rowsRead+=block.end-block.start+1;
-        block.matches.forEach(function(item){
-          var row=values[item.row-block.start]||[];
-          if(String(row[0]||'')!==item.id){stale=true;return;}
-          states[item.id]={supplierStatus:String(row[4]||''),wbStatus:String(row[5]||'')};
-        });
-      });
-    }
-    rowReadMs=Date.now()-readStarted;
-    return stale||Object.keys(states).length!==matches.length;
-  }
-  if(readStates_()){
-    console.log('FBS_STATUS_TARGETED_LOOKUP_RETRY client='+client+' requested='+ids.length);
-    rowMap=findRequestedRows_();
-    if(readStates_())throw new Error('FBS_STATUS_TARGETED_LOOKUP_STALE');
-  }
+  console.log('FBS_STATUS_READ_SNAPSHOT client='+client+' requested='+ids.length+
+    ' matched='+Object.keys(rowMap).length+' rows='+grid.length+
+    ' elapsed_ms='+(Date.now()-startedAt));
+
   var alternateRowMap={},alternateSheetLastRow=0;
   if(client==='SANYCH'){
     var alternate=sellmonitorGithubFbsStatusReadV1_({client:'SANYCH_ALTERNATE',orderIds:ids});
@@ -7287,13 +7227,12 @@ function sellmonitorGithubFbsStatusReadV1_(body) {
     });
   }
   console.log('FBS_STATUS_READ_DONE client='+client+' requested='+ids.length+
-    ' found='+Object.keys(states).length+' rows_read='+rowsRead+' ranges='+rangeCount+
-    ' api_requests='+apiRequests+' sheet_read_ms='+rowReadMs+' total_ms='+(Date.now()-startedAt));
+    ' found='+Object.keys(states).length+' rows_read='+grid.length+
+    ' total_ms='+(Date.now()-startedAt));
   return {ok:true,client:client,requested:ids.length,found:Object.keys(states).length,
     statuses:states,rowMap:rowMap,sheetLastRow:sheetLastRow,
     alternateRowMap:alternateRowMap,alternateSheetLastRow:alternateSheetLastRow};
 }
-
 function sellmonitorGithubFbsStageSnapshot_() {
   var props = PropertiesService.getScriptProperties(), out = {};
   ['SANYCH','AIR','HOZYAYUSHKA'].forEach(function(client) {
