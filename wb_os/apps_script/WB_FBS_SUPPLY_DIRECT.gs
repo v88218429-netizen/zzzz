@@ -459,14 +459,14 @@ function wbFbsSupplyWriteSupplySheet_(ss, supplyRows, orderCounts, checkedAt) {
     SpreadsheetApp.flush();
     wbFbsSupplySetStage_('SUPPLY_WRITE_ROWS_NATIVE_SET_DONE',
       'start_row=' + writeStartRow + ' rows=' + out.length);
-    wbFbsSupplySetStage_('SUPPLY_READBACK_NATIVE_COMPARE_START',
+    wbFbsSupplySetStage_('SUPPLY_READBACK_SHEETS_API_COMPARE_START',
       'start_row=' + writeStartRow + ' rows=' + out.length);
-    var returnedRows = writeRange.getValues();
+    var returnedRows = wbFbsSupplySheetsApiRead_(supplySheetA1 + 'A' + writeStartRow + ':I' + writeEndRow, out.length, header.length);
     if (!wbFbsSupplyMatricesEqual_(out, returnedRows)) {
       throw new Error('WB_FBS_DIRECT: supply native write readback mismatch start_row=' +
         writeStartRow + ' rows=' + out.length);
     }
-    wbFbsSupplySetStage_('SUPPLY_READBACK_NATIVE_DONE',
+    wbFbsSupplySetStage_('SUPPLY_READBACK_SHEETS_API_DONE',
       'start_row=' + writeStartRow + ' rows=' + returnedRows.length);
     wbFbsSupplySetStage_('SUPPLY_WRITE_ROWS_DONE',
       'rows=' + out.length + ' write_readback=verified');
