@@ -1,4 +1,5 @@
 # Fresh read-only lease and backfill diagnostic for the active GitHub recovery stage.
+# Keep the push entry point available for protected GitHub-only diagnostics.
 name: WB FBS active stage diagnostic
 
 on:
