@@ -41,20 +41,37 @@ def test_exact_crosswalk_maps_advertised_nm_id_to_copy_workbook_economics(tmp_pa
     catalog_row = [None] * 43
     row_values = {
         0: "Ветошь", 1: "Ветошь 10 кг 40х60 (старое название)", 2: "АА|Ветошь 10кг / АА|Ветошь ХПП 10кг",
-        3: "АА", 4: "Ветошь 10кг / Ветошь ХПП 10кг", 8: "р.1 126,88",
+        3: "АА", 4: "Ветошь 10кг / Ветошь ХПП 10кг", 8: None,
         9: "р.9 261,74", 10: "70,00%", 11: "р.2 778,52",
         12: "р.2 421,00", 13: "26,31%", 14: "р.2 047,49",
         15: "33,00%", 16: "р.38,00", 19: "р.5,00", 21: "2,50%",
         23: "2,31%", 24: "р.64,27", 25: "УСН 6% + НДС 5%",
-        27: "р.220,35", 28: "р.333,42", 29: "12,00%",
+        27: "р.220,35", 28: None, 29: None,
         30: "29,59%", 32: "р.78,29", 36: "12,00%", 40: "31,00%",
     }
     for column, value in row_values.items():
         catalog_row[column] = value
     catalog_rows = [[], catalog_headers, []] + [[None] * 43 for _ in range(5)] + [catalog_row]
+    primary_row = [None] * 42
+    primary_row_values = {
+        0: "Ветошь", 1: "Ветошь 10 кг 40х60",
+        5: "р.1 126,88", 8: "р.2 778,52", 10: "р.2 047,49",
+        11: "33,00%", 12: "р.38,00", 15: "р.5,00",
+        17: "2,50%", 19: "2,31%", 20: "р.64,27",
+        21: "УСН 6% + НДС 5%", 23: "р.220,35",
+        24: "р.333,42", 25: "12,00%", 26: "29,59%",
+        28: "р.78,29", 32: "12,00%", 36: "31,00%",
+    }
+    for column, value in primary_row_values.items():
+        primary_row[column] = value
     payload = {
         "generated_at": "2026-11-05T10:00:00+00:00",
         "sources": {
+            "primary_unit_economics": {
+                "spreadsheet_id": "primary-workbook",
+                "read_at": "2026-11-05T10:00:00+00:00",
+                "ranges": {"unit_economics": {"values": [[], [], [], primary_row]}},
+            },
             "unit_economics_crosswalk": {
                 "spreadsheet_id": "copy-workbook",
                 "read_at": "2026-11-05T10:00:00+00:00",
@@ -83,9 +100,22 @@ def test_exact_crosswalk_maps_advertised_nm_id_to_copy_workbook_economics(tmp_pa
     assert mapped["profit_rub"] == 333.42
     assert mapped["target_profit_rub"] == 78.29
     assert mapped["unit_economics_decision_ready"] is True
-    assert mapped["unit_economics_mapping_notes"] == ["catalog_display_name_differs_from_linked_unit_name"]
+    assert mapped["unit_economics_mapping_notes"] == [
+        "catalog_display_name_differs_from_linked_unit_name",
+        "missing_copy_fields_filled_from_unique_primary_name",
+    ]
+    assert mapped["unit_economics_fallback_source"] == "primary_unit_economics"
+    assert mapped["unit_economics_fallback_source_row"] == 4
+    assert mapped["unit_economics_fallback_match"] == "exact_name"
     assert out["own_27"]["primary_unit_economics"]["snapshot_date"] == "2026-11-05"
     assert out["own_27"].get("unit_economics_mapping_diagnostics_by_shop", {}) == {}
+
+
+def test_primary_name_key_normalizes_volume_and_pack_notation():
+    service = PortfolioService(Settings(data_dir="/tmp/wb-econ-key-test", wb_api_token=""))
+    assert service._economics_primary_name_key("Бидон 15 л — 1 шт") == service._economics_primary_name_key("Бидон 15")
+    assert service._economics_primary_name_key("Бидон 15 л — 2 шт") == service._economics_primary_name_key("Бидон 15 2")
+    assert service._economics_primary_name_key("Бидон 15 л — 1 шт") != service._economics_primary_name_key("Бидон 15 л — 2 шт")
 
 
 def test_primary_unit_economics_reads_live_table_and_uses_subject_to_resolve_duplicate_names(tmp_path):
