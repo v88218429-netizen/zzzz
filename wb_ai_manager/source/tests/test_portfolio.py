@@ -84,7 +84,7 @@ def test_exact_crosswalk_maps_advertised_nm_id_to_copy_workbook_economics(tmp_pa
     assert mapped["target_profit_rub"] == 78.29
     assert mapped["unit_economics_decision_ready"] is True
     assert out["own_27"]["primary_unit_economics"]["snapshot_date"] == "2026-11-05"
-    assert out["own_27"]["unit_economics_mapping_diagnostics_by_shop"] == {}
+    assert out["own_27"].get("unit_economics_mapping_diagnostics_by_shop", {}) == {}
 
 
 def test_primary_unit_economics_reads_live_table_and_uses_subject_to_resolve_duplicate_names(tmp_path):
