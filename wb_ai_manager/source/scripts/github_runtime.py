@@ -463,7 +463,7 @@ async def run() -> int:
                 "campaign_cache_count": cache["campaign_cache_count"],
                 "campaign_cache_total": cache["campaign_cache_total"],
                 "campaign_cache_complete": cache["campaign_cache_complete"],
-                "scan_errors": deep_scan.get("scan_errors") or [],
+                "scan_errors": cache.get("scan_errors") or [],
             },
         }
     q = query_manager(portfolio_snapshot, cabinet_snapshots.get("sanych") or {})
