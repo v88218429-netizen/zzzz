@@ -297,9 +297,9 @@ def _scan_error_record(campaign_id: int, endpoint: str, value: Any, nm_id: int |
     if not isinstance(value, dict) or not value.get("_error"):
         return None
     message = str(value.get("_error") or "")
-    message = re.sub(r"(?i)bearer\\s+\\S+", "Bearer [REDACTED]", message)
-    message = re.sub(r"(?i)(token|secret|authorization)(\\s*[:=]\\s*)[^\\s,;]+", r"\\1\\2[REDACTED]", message)
-    message = re.sub(r"https?://[^\\s?]+\\?[^\\s]+", "[URL_WITH_QUERY_REDACTED]", message)
+    message = re.sub(r"(?i)bearer\s+\S+", "Bearer [REDACTED]", message)
+    message = re.sub(r"(?i)(token|secret|authorization)(\s*[:=]\s*)[^\s,;]+", r"\1\2[REDACTED]", message)
+    message = re.sub(r"https?://[^\s?]+\?[^\s]+", "[URL_WITH_QUERY_REDACTED]", message)
     return {
         "campaign_id": int(campaign_id),
         "nm_id": int(nm_id) if nm_id is not None else None,
@@ -554,7 +554,7 @@ class AdvertisingOptimizerAgent(BaseAgent):
         for campaign, result in zip(selected_campaigns, results):
             if isinstance(result, BaseException):
                 campaign_id = _campaign_id(campaign)
-                safe_error = re.sub(r"(?i)bearer\\s+\\S+", "Bearer [REDACTED]", str(result))[:320]
+                safe_error = re.sub(r"(?i)bearer\s+\S+", "Bearer [REDACTED]", str(result))[:320]
                 scan_errors = [{
                     "campaign_id": campaign_id,
                     "nm_id": None,
