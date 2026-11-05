@@ -1,3 +1,4 @@
+# Fresh read-only lease and backfill diagnostic for the active GitHub recovery stage.
 name: WB FBS active stage diagnostic
 
 on:
