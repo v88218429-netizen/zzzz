@@ -211,7 +211,19 @@ async def run_cabinet(
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     cab_dir = DATA_ROOT / "cabinets" / slug
     cab_dir.mkdir(parents=True, exist_ok=True)
-    if shared_live_path.exists():
+    if isinstance(portfolio_snapshot, dict) and portfolio_snapshot:
+        cabinet_portfolio = copy.deepcopy(portfolio_snapshot)
+        own = cabinet_portfolio.setdefault("own_27", {})
+        by_shop = own.get("unit_economics_by_shop_nm_id")
+        by_shop = by_shop if isinstance(by_shop, dict) else {}
+        shop_code = {"sanych": "ap", "air": "aa", "hozyushka": "yv"}.get(slug)
+        exact = by_shop.get(shop_code) if shop_code else {}
+        own["advertising_economics_by_nm_id"] = copy.deepcopy(exact) if isinstance(exact, dict) else {}
+        (cab_dir / "portfolio_live.json").write_text(
+            json.dumps(cabinet_portfolio, ensure_ascii=False, indent=2, default=str),
+            encoding="utf-8",
+        )
+    elif shared_live_path.exists():
         shutil.copy2(shared_live_path, cab_dir / "portfolio_live.json")
 
     settings = Settings(
