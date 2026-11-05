@@ -123,6 +123,8 @@ def evaluate_optimizer_acceptance(
         blockers.append("Юнит-экономика не подтверждена как текущая: нужен живой снимок модели с датой не старше 7 дней.")
     products = [p for p in own.get("products", []) if isinstance(p, dict)]
     product_by_shop: dict[str, dict[str, dict[str, Any]]] = {code: {} for code in SHOP_NAMES}
+    exact_by_shop = own.get("unit_economics_by_shop_nm_id") if isinstance(own.get("unit_economics_by_shop_nm_id"), dict) else {}
+    mapping_diagnostics = own.get("unit_economics_mapping_diagnostics_by_shop") if isinstance(own.get("unit_economics_mapping_diagnostics_by_shop"), dict) else {}
     for product in products:
         code = _shop_code(product.get("cabinet") or product.get("store_id") or product.get("shop"))
         sku = str(product.get("sku") or product.get("nm_id") or product.get("nmId") or "").strip()
@@ -148,12 +150,23 @@ def evaluate_optimizer_acceptance(
         ready = 0
         diagnostics: list[dict[str, Any]] = []
         for sku in sorted(campaign_nms, key=int):
-            product = product_by_shop[code].get(sku)
+            exact_product = (exact_by_shop.get(code) or {}).get(sku)
+            product = exact_product if isinstance(exact_product, dict) else product_by_shop[code].get(sku)
             if product is None:
-                diagnostics.append({
-                    "nm_id": sku, "stage": "shop_nm_id_to_portfolio_product",
-                    "reason_codes": ["exact_shop_nm_id_match_missing"],
-                })
+                mapping_issue = (mapping_diagnostics.get(code) or {}).get(sku)
+                mapping_issue = mapping_issue if isinstance(mapping_issue, dict) else {}
+                diagnostic = {
+                    "nm_id": sku,
+                    "stage": "unit_economics_mapping" if mapping_issue else "shop_nm_id_to_portfolio_product",
+                    "seller_article": mapping_issue.get("seller_article"),
+                    "product_name": mapping_issue.get("product_name"),
+                    "source": mapping_issue.get("source"),
+                    "source_row": mapping_issue.get("source_row"),
+                    "audit_source_row": mapping_issue.get("audit_source_row"),
+                    "mapping_key": mapping_issue.get("key"),
+                    "reason_codes": mapping_issue.get("reason_codes") or ["exact_shop_nm_id_match_missing"],
+                }
+                diagnostics.append({key: value for key, value in diagnostic.items() if value is not None})
                 continue
             matched += 1
             cost = _number(product.get("cost_rub"))
@@ -162,6 +175,9 @@ def evaluate_optimizer_acceptance(
             reasons = []
             if product.get("unit_economics_decision_ready") is not True:
                 reasons.append("unit_economics_not_decision_ready")
+            validation_reasons = product.get("unit_economics_validation_reasons")
+            if isinstance(validation_reasons, list):
+                reasons.extend(str(x) for x in validation_reasons if x)
             if cost is None:
                 reasons.append("cost_rub_missing_or_unreadable")
             elif cost <= 0:
@@ -179,7 +195,9 @@ def evaluate_optimizer_acceptance(
                     "product_name": product.get("name"),
                     "source": product.get("unit_economics_source"),
                     "source_row": product.get("unit_economics_source_row") or product.get("source_row"),
-                    "reason_codes": reasons,
+                    "audit_source_row": product.get("audit_source_row"),
+                    "mapping_key": product.get("unit_economics_source_key"),
+                    "reason_codes": list(dict.fromkeys(reasons)),
                 })
             else:
                 ready += 1
@@ -309,6 +327,26 @@ def merge_campaign_cache(
     total = len(active_ids) if catalog_known else int(deep_scan.get("sweep_campaigns_total") or 0)
     cache_complete = bool(catalog_known and len(campaigns) == total and all(row.get("scan_complete") is True for row in campaigns))
     sweep_complete = bool(no_active or (deep_scan.get("sweep_complete") is True and cache_complete))
+    prior_errors = prior.get("scan_errors") if isinstance(prior.get("scan_errors"), list) else []
+    current_errors = deep_scan.get("scan_errors") if isinstance(deep_scan.get("scan_errors"), list) else []
+    error_rows = [
+        row for row in prior_errors + current_errors
+        if isinstance(row, dict) and str(row.get("campaign_id") or "").isdigit()
+    ]
+    latest_errors: dict[tuple[str, str, str], dict[str, Any]] = {}
+    for row in error_rows:
+        cid = str(row.get("campaign_id"))
+        if catalog_known and active_ids and cid not in active_ids:
+            continue
+        key = (cid, str(row.get("nm_id") or ""), str(row.get("endpoint") or ""))
+        previous_error = latest_errors.get(key)
+        if previous_error is None or str(row.get("observed_at") or "") >= str(previous_error.get("observed_at") or ""):
+            latest_errors[key] = row
+    scan_errors = sorted(
+        latest_errors.values(),
+        key=lambda row: str(row.get("observed_at") or ""),
+        reverse=True,
+    )[:100]
     return {
         "campaign_ids": active_ids if catalog_known else old_ids,
         "campaigns": campaigns,
@@ -317,6 +355,7 @@ def merge_campaign_cache(
         "campaign_cache_complete": cache_complete,
         "catalog_complete": catalog_known,
         "sweep_complete": sweep_complete,
+        "scan_errors": scan_errors,
         "sweep": {key: deep_scan.get(key) for key in (
             "sweep_id", "sweep_campaigns_seen", "sweep_campaigns_total",
             "sweep_products_seen", "sweep_products_total", "cursor_before",

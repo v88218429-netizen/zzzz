@@ -565,6 +565,251 @@ class PortfolioService:
         no_plate = True if ("бп" in text or "без плаш" in text) else (False if re.search(r"\bп(?:2|4|6|10)\b", text) or "плашк" in text else None)
         return count, model, no_plate
 
+    @staticmethod
+    def _economics_shop_code(value: Any) -> str:
+        key = PortfolioService._economics_norm(value).replace(" ", "")
+        aliases = {
+            "аа": "aa", "air": "aa", "аир": "aa",
+            "ап": "ap", "ap": "ap", "sanych": "ap", "саныч": "ap", "домсаныча": "ap",
+            "юв": "yv", "yv": "yv", "hozyushka": "yv", "хозяюшка": "yv",
+        }
+        return aliases.get(key, "")
+
+    @staticmethod
+    def _economics_primary_name_key(value: Any) -> str:
+        text = PortfolioService._economics_norm(value)
+        text = re.sub(r"(?<=\d)\s*л\b", "", text)
+        text = re.sub(r"\bpack\s*(\d+)\b", r"\1", text)
+        text = re.sub(r"(?:\s*[-–—]\s*)?1\s*шт\b\.?$", "", text)
+        text = re.sub(r"\s*шт\b\.?$", "", text)
+        return re.sub(r"[^a-zа-я0-9]+", "", text)
+
+    def _parse_unit_economics_crosswalk(
+        self, payload: dict[str, Any],
+    ) -> tuple[dict[str, dict[str, dict[str, Any]]], dict[str, dict[str, dict[str, Any]]]]:
+        source = (payload.get("sources") or {}).get("unit_economics_crosswalk") or {}
+        crosswalk = self._range_values(payload, "unit_economics_crosswalk", "crosswalk")
+        catalog = self._range_values(payload, "unit_economics_crosswalk", "catalog")
+        audit = self._range_values(payload, "unit_economics_crosswalk", "audit")
+        by_shop: dict[str, dict[str, dict[str, Any]]] = {}
+        diagnostics: dict[str, dict[str, dict[str, Any]]] = {}
+        if not crosswalk or not catalog or not audit:
+            return by_shop, diagnostics
+
+        def header_map(row: list[Any]) -> dict[str, list[int]]:
+            positions: dict[str, list[int]] = {}
+            for index, value in enumerate(row):
+                name = str(value or "").strip()
+                if name:
+                    positions.setdefault(name, []).append(index)
+            return positions
+
+        def find_header(values: list[list[Any]], required: set[str]) -> tuple[int, dict[str, list[int]]]:
+            for index, row in enumerate(values[:10]):
+                found = header_map(row)
+                if required.issubset(found):
+                    return index, found
+            return -1, {}
+
+        cross_header_row, cross_headers = find_header(crosswalk, {"Ключ", "Строка юнитки", "Товар в юнитке"})
+        audit_header_row, audit_headers = find_header(audit, {"Артикул WB", "Артикул продавца", "Магазин", "Ключ"})
+        catalog_header_row, catalog_headers = find_header(
+            catalog, {"Технический ключ связки", "Магазин", "Артикул продавца", "Себестоимость до передачи на маркетплейс"}
+        )
+        if min(cross_header_row, audit_header_row, catalog_header_row) < 0:
+            return by_shop, diagnostics
+
+        def cell(row: list[Any], headers: dict[str, list[int]], name: str, occurrence: int = 0) -> Any:
+            indexes = headers.get(name) or []
+            if occurrence >= len(indexes):
+                return None
+            column = indexes[occurrence]
+            return row[column] if column < len(row) else None
+
+        def key_norm(value: Any) -> str:
+            return re.sub(r"\s+", " ", str(value or "").strip().lower().replace("ё", "е"))
+
+        def exact_cell_aliases(value: Any) -> set[str]:
+            text = str(value or "").strip()
+            parts = [text, *re.split(r"\s+/\s+", text)]
+            return {key_norm(part) for part in parts if key_norm(part)}
+
+        cross_by_key: dict[str, list[dict[str, Any]]] = {}
+        for index, row in enumerate(crosswalk[cross_header_row + 1:], start=cross_header_row + 2):
+            key = key_norm(cell(row, cross_headers, "Ключ"))
+            if not key:
+                continue
+            cross_by_key.setdefault(key, []).append({
+                "key": str(cell(row, cross_headers, "Ключ") or "").strip(),
+                "source_row": index,
+                "unit_row": int(self._num(cell(row, cross_headers, "Строка юнитки")) or 0),
+                "unit_name": str(cell(row, cross_headers, "Товар в юнитке") or "").strip(),
+            })
+
+        catalog_by_row: dict[int, dict[str, Any]] = {}
+        for index, row in enumerate(catalog[catalog_header_row + 1:], start=catalog_header_row + 2):
+            record = {name: cell(row, catalog_headers, name) for name in catalog_headers}
+            key = str(cell(row, catalog_headers, "Технический ключ связки") or "").strip()
+            if key:
+                record["_source_row"] = index
+                catalog_by_row[index] = record
+
+        def add_diag(code: str, nm_id: str, item: dict[str, Any], reasons: list[str]) -> None:
+            diagnostics.setdefault(code or "unknown", {})[nm_id] = {
+                "nm_id": nm_id,
+                "seller_article": item.get("seller_article") or "",
+                "product_name": item.get("product_name") or "",
+                "source": "Связка цен / Аудит ассортимента / 📊 WB FBS новая",
+                "source_row": item.get("unit_row") or item.get("audit_source_row"),
+                "audit_source_row": item.get("audit_source_row"),
+                "unit_row": item.get("unit_row"),
+                "key": item.get("key") or "",
+                "reason_codes": list(dict.fromkeys(reasons)),
+            }
+
+        for audit_index, row in enumerate(audit[audit_header_row + 1:], start=audit_header_row + 2):
+            nm_id = str(cell(row, audit_headers, "Артикул WB") or "").strip()
+            if not nm_id.isdigit() or int(nm_id) <= 0:
+                continue
+            code = self._economics_shop_code(cell(row, audit_headers, "Магазин"))
+            seller_article = str(cell(row, audit_headers, "Артикул продавца") or "").strip()
+            product_name = str(cell(row, audit_headers, "Наименование") or "").strip()
+            key = str(cell(row, audit_headers, "Ключ") or "").strip()
+            audit_status = str(cell(row, audit_headers, "Статус связки") or "").strip()
+            unit_row = int(self._num(cell(row, audit_headers, "Строка юнитки")) or 0)
+            audit_unit_name = str(cell(row, audit_headers, "Товар в юнитке") or "").strip()
+            audit_item = {
+                "seller_article": seller_article, "product_name": product_name,
+                "key": key, "unit_row": unit_row, "audit_source_row": audit_index,
+            }
+            reasons: list[str] = []
+            mapping_notes: list[str] = []
+            if not code:
+                reasons.append("shop_code_unknown")
+            if audit_status.strip().casefold() != "есть связка":
+                reasons.append("audit_link_not_confirmed")
+            if not key:
+                reasons.append("audit_key_missing")
+            candidates = cross_by_key.get(key_norm(key), []) if key else []
+            cross = candidates[0] if len(candidates) == 1 else None
+            if not candidates:
+                reasons.append("crosswalk_key_missing")
+            elif len(candidates) > 1:
+                reasons.append("crosswalk_key_ambiguous")
+            if cross and unit_row != cross.get("unit_row"):
+                reasons.append("crosswalk_unit_row_mismatch")
+            catalog_record = catalog_by_row.get(unit_row) if unit_row > 0 else None
+            if not catalog_record:
+                reasons.append("catalog_row_missing")
+            if cross and key_norm(cross.get("key")) != key_norm(key):
+                reasons.append("crosswalk_key_mismatch")
+            catalog_key = str((catalog_record or {}).get("Технический ключ связки") or "").strip()
+            if catalog_record and key_norm(key) not in exact_cell_aliases(catalog_key):
+                reasons.append("catalog_key_mismatch")
+            cross_name = str((cross or {}).get("unit_name") or "").strip()
+            catalog_name = str((catalog_record or {}).get("Товар") or "").strip()
+            if cross and self._economics_norm(cross_name) != self._economics_norm(audit_unit_name):
+                reasons.append("audit_crosswalk_product_name_mismatch")
+            if catalog_record and self._economics_norm(catalog_name) != self._economics_norm(cross_name or audit_unit_name):
+                # Display names can differ for one confirmed unit row (for example,
+                # "Вазон" and "Кашпо"). Exact shop, seller-article, key and row
+                # checks below establish identity; preserve the label difference.
+                mapping_notes.append("catalog_display_name_differs_from_linked_unit_name")
+            catalog_article = str((catalog_record or {}).get("Артикул продавца") or "").strip()
+            if catalog_record and key_norm(seller_article) not in exact_cell_aliases(catalog_article):
+                reasons.append("seller_article_mismatch")
+            catalog_shop_values = str((catalog_record or {}).get("Магазин") or "").strip()
+            catalog_shop_codes = {
+                self._economics_shop_code(part)
+                for part in [catalog_shop_values, *re.split(r"\s+/\s+", catalog_shop_values)]
+                if part.strip()
+            }
+            if catalog_record and code not in catalog_shop_codes:
+                reasons.append("catalog_shop_mismatch")
+            if reasons:
+                add_diag(code, nm_id, audit_item, reasons)
+                continue
+            if not catalog_record or not cross:
+                continue
+
+            cost = self._num(catalog_record.get("Себестоимость до передачи на маркетплейс"))
+            price = self._num(catalog_record.get("Цена после скидки"))
+            price_client = self._num(catalog_record.get("Цена после СПП"))
+            profit = self._num(catalog_record.get("Прибыль, руб"))
+            margin = self._num(catalog_record.get("Маржинальность, %"))
+            roi = self._num(catalog_record.get("Рентабельность (ROI), %"))
+            commission = self._num(catalog_record.get("Комиссия, %"))
+            logistics = self._num(catalog_record.get("Логистика, руб"))
+            tax_total = self._num(catalog_record.get("Налоги всего, руб"))
+            validation: list[str] = []
+            if cost is None:
+                validation.append("cost_rub_missing_or_unreadable")
+            elif cost <= 0:
+                validation.append("cost_rub_not_positive")
+            if price is None:
+                validation.append("price_rub_missing_or_unreadable")
+            elif price <= 0:
+                validation.append("price_rub_not_positive")
+            if profit is None:
+                validation.append("profit_rub_missing_or_unreadable")
+            if margin is None:
+                validation.append("margin_pct_missing_or_unreadable")
+            if commission is None:
+                validation.append("commission_pct_missing_or_unreadable")
+            if logistics is None:
+                validation.append("logistics_total_rub_missing_or_unreadable")
+            if tax_total is None:
+                validation.append("tax_total_rub_missing_or_unreadable")
+
+            item = {
+                "sku": nm_id, "nm_id": nm_id, "shop_code": code, "seller_article": seller_article,
+                "name": cross_name, "product_name": product_name, "group": str(catalog_record.get("Группа товаров") or "").strip(),
+                "source_row": unit_row, "unit_economics_source_row": unit_row,
+                "audit_source_row": audit_index, "crosswalk_source_row": cross.get("source_row"),
+                "unit_economics_source": "Связка цен / Аудит ассортимента / 📊 WB FBS новая",
+                "unit_economics_source_spreadsheet_id": source.get("spreadsheet_id"),
+                "unit_economics_source_key": key, "unit_economics_mapping_validation_ok": True,
+                "unit_economics_mapping_notes": mapping_notes,
+                "unit_economics_decision_ready": not validation,
+                "unit_economics_validation_reasons": validation,
+                "cost_rub": cost, "price_rub": price, "price_client_rub": price_client,
+                "price_after_discount_rub": price, "price_after_spp_rub": price_client,
+                "price_before_discount_rub": self._num(catalog_record.get("Цена продажи до скидки")),
+                "discount_pct": self._num(catalog_record.get("% скидки")),
+                "spp_pct": self._num(catalog_record.get("СПП, %")),
+                "profit_rub": profit, "plan_profit_rub": profit,
+                "margin_pct": margin, "plan_margin_pct": margin,
+                "roi_pct": roi, "plan_roi_pct": roi,
+                "plan_drr_pct": self._num(catalog_record.get("Расходы на продвижение, %")),
+                "commission_pct": commission, "logistics_total_rub": logistics,
+                "acceptance_rub": self._num(catalog_record.get("Платная приемка, руб")),
+                "constructor_pct": self._num(catalog_record.get("Конструктор тарифов, %")),
+                "acquiring_pct": self._num(catalog_record.get("Эквайринг, %")),
+                "acquiring_rub": self._num(catalog_record.get("Эквайринг, руб")),
+                "tax_regime": catalog_record.get("Налоговый режим"),
+                "tax_total_rub": tax_total,
+                "target_profit_rub": self._num(catalog_record.get("План прибыль, руб")),
+                "target_margin_pct": self._num(catalog_record.get("План маржинальность, %")),
+                "target_roi_pct": self._num(catalog_record.get("План ROI, %")),
+                "buyout_plan_pct": self._num(catalog_record.get("Выкуп, %")),
+                "unit_economics_read_at": source.get("read_at"),
+            }
+            existing = by_shop.setdefault(code, {}).get(nm_id)
+            if existing and (
+                existing.get("unit_economics_source_key") != key
+                or existing.get("source_row") != unit_row
+            ):
+                add_diag(code, nm_id, audit_item, ["audit_nm_id_mapping_ambiguous"])
+                by_shop[code].pop(nm_id, None)
+                continue
+            by_shop.setdefault(code, {})[nm_id] = item
+
+        for code, items in list(by_shop.items()):
+            for nm_id, item in list(items.items()):
+                if nm_id in (diagnostics.get(code) or {}):
+                    items.pop(nm_id, None)
+        return by_shop, diagnostics
+
     def _parse_primary_economics_axis(self, payload: dict[str, Any], out: dict[str, Any]) -> None:
         """Overlay the authoritative plan model and an independent factual snapshot.
 
@@ -572,6 +817,7 @@ class PortfolioService:
         Legacy marker rows in Sellmonitor may add independent facts, but they are not
         a substitute for parsing the primary workbook itself.
         """
+        crosswalk_by_shop, crosswalk_diagnostics = self._parse_unit_economics_crosswalk(payload)
         values = self._range_values(payload, "sanych_sellmonitor", "stocks")
         if not values:
             values = []
@@ -642,8 +888,109 @@ class PortfolioService:
             })
         if direct_plans:
             plans = direct_plans
+        crosswalk_plans = [
+            item for shop_items in crosswalk_by_shop.values() for item in shop_items.values()
+        ]
+        if not plans:
+            plans = crosswalk_plans
 
-        source_read_at = str(primary_source.get("read_at") or payload.get("generated_at") or "").strip()
+        if direct_plans and crosswalk_by_shop:
+            direct_by_exact_name: dict[str, list[dict[str, Any]]] = {}
+            direct_by_identity: dict[str, list[dict[str, Any]]] = {}
+            for direct in direct_plans:
+                exact_name = self._economics_norm(direct.get("name"))
+                identity = self._economics_primary_name_key(direct.get("name"))
+                if exact_name:
+                    direct_by_exact_name.setdefault(exact_name, []).append(direct)
+                if identity:
+                    direct_by_identity.setdefault(identity, []).append(direct)
+
+            fallback_fields = {
+                "cost_rub": "cost_rub",
+                "price_rub": "price_after_discount_rub",
+                "price_after_discount_rub": "price_after_discount_rub",
+                "price_client_rub": "price_after_spp_rub",
+                "price_after_spp_rub": "price_after_spp_rub",
+                "profit_rub": "plan_profit_rub",
+                "plan_profit_rub": "plan_profit_rub",
+                "margin_pct": "plan_margin_pct",
+                "plan_margin_pct": "plan_margin_pct",
+                "roi_pct": "plan_roi_pct",
+                "plan_roi_pct": "plan_roi_pct",
+                "commission_pct": "commission_pct",
+                "logistics_total_rub": "logistics_total_rub",
+                "acceptance_rub": "acceptance_rub",
+                "constructor_pct": "constructor_pct",
+                "acquiring_pct": "acquiring_pct",
+                "acquiring_rub": "acquiring_rub",
+                "tax_regime": "tax_regime",
+                "tax_total_rub": "tax_total_rub",
+                "target_profit_rub": "target_profit_rub",
+                "target_margin_pct": "target_margin_pct",
+                "target_roi_pct": "target_roi_pct",
+                "plan_drr_pct": "plan_drr_pct",
+            }
+            for shop_items in crosswalk_by_shop.values():
+                for item in shop_items.values():
+                    exact_name = self._economics_norm(item.get("name"))
+                    candidates = direct_by_exact_name.get(exact_name, []) if exact_name else []
+                    match_kind = "exact_name"
+                    if len(candidates) != 1:
+                        identity = self._economics_primary_name_key(item.get("name"))
+                        candidates = direct_by_identity.get(identity, []) if identity else []
+                        match_kind = "unit_format_normalized_name"
+                    if len(candidates) != 1:
+                        continue
+                    direct = candidates[0]
+                    filled_fields: list[str] = []
+                    for target, source_key in fallback_fields.items():
+                        current_value = item.get(target)
+                        if current_value is not None and str(current_value).strip() != "":
+                            continue
+                        value = direct.get(source_key)
+                        if value is not None and value != "":
+                            item[target] = value
+                            filled_fields.append(target)
+                    if filled_fields:
+                        item["unit_economics_fallback_source"] = "primary_unit_economics"
+                        item["unit_economics_fallback_source_row"] = direct.get("source_row")
+                        item["unit_economics_fallback_match"] = match_kind
+                        item["unit_economics_fallback_fields"] = filled_fields
+                        notes = item.get("unit_economics_mapping_notes")
+                        notes = notes if isinstance(notes, list) else []
+                        notes.append("missing_copy_fields_filled_from_unique_primary_name")
+                        item["unit_economics_mapping_notes"] = list(dict.fromkeys(notes))
+                    validation: list[str] = []
+                    cost = self._num(item.get("cost_rub"))
+                    price = self._num(item.get("price_rub") or item.get("price_client_rub"))
+                    profit = self._num(item.get("profit_rub"))
+                    margin = self._num(item.get("margin_pct"))
+                    commission = self._num(item.get("commission_pct"))
+                    logistics = self._num(item.get("logistics_total_rub"))
+                    tax_total = self._num(item.get("tax_total_rub"))
+                    if cost is None:
+                        validation.append("cost_rub_missing_or_unreadable")
+                    elif cost <= 0:
+                        validation.append("cost_rub_not_positive")
+                    if price is None:
+                        validation.append("price_rub_missing_or_unreadable")
+                    elif price <= 0:
+                        validation.append("price_rub_not_positive")
+                    if profit is None:
+                        validation.append("profit_rub_missing_or_unreadable")
+                    if margin is None:
+                        validation.append("margin_pct_missing_or_unreadable")
+                    if commission is None:
+                        validation.append("commission_pct_missing_or_unreadable")
+                    if logistics is None:
+                        validation.append("logistics_total_rub_missing_or_unreadable")
+                    if tax_total is None:
+                        validation.append("tax_total_rub_missing_or_unreadable")
+                    item["unit_economics_validation_reasons"] = validation
+                    item["unit_economics_decision_ready"] = not validation
+
+        crosswalk_source = (payload.get("sources") or {}).get("unit_economics_crosswalk") or {}
+        source_read_at = str(primary_source.get("read_at") or crosswalk_source.get("read_at") or payload.get("generated_at") or "").strip()
         source_snapshot_date = (marker or {}).get("snapshot_date")
         if not source_snapshot_date and source_read_at:
             # Record retrieval time as the live snapshot date; do not claim it is
@@ -653,6 +1000,10 @@ class PortfolioService:
             return
 
         own = out.setdefault("own_27", {})
+        if crosswalk_by_shop:
+            own["unit_economics_by_shop_nm_id"] = crosswalk_by_shop
+        if crosswalk_diagnostics:
+            own["unit_economics_mapping_diagnostics_by_shop"] = crosswalk_diagnostics
         products = [x for x in own.get("products", []) if isinstance(x, dict)]
         plan_by_name: dict[str, list[dict[str, Any]]] = {}
         for plan in plans:
@@ -686,8 +1037,16 @@ class PortfolioService:
             prod["unit_economics_source"] = "27/Юнитка — только fallback"
 
             plan: dict[str, Any] | None = None
+            shop_code = self._economics_shop_code(prod.get("cabinet") or prod.get("store_id") or prod.get("shop"))
+            plan = (crosswalk_by_shop.get(shop_code) or {}).get(sku) if shop_code else None
+            if plan is None:
+                exact_candidates = [
+                    items[sku] for items in crosswalk_by_shop.values() if sku in items
+                ]
+                if len(exact_candidates) == 1:
+                    plan = exact_candidates[0]
             alias = explicit_plan_by_sku.get(sku)
-            if alias:
+            if alias and plan is None:
                 candidates = plan_by_name.get(self._economics_norm(alias)) or []
                 if len(candidates) == 1:
                     plan = candidates[0]
@@ -830,7 +1189,8 @@ class PortfolioService:
                     "primary_unit_plan_name": plan.get("name"),
                     "primary_unit_group": plan.get("group"),
                     "primary_unit_source_row": plan.get("source_row"),
-                    "unit_economics_source": "Юнит-экономика вб / WB FBS новая",
+                    "unit_economics_source": plan.get("unit_economics_source") or "Юнит-экономика вб / WB FBS новая",
+                    "unit_economics_source_row": plan.get("unit_economics_source_row") or plan.get("source_row"),
                     "unit_economics_role": "primary_plan",
                     "unit_economics_decision_ready": bool(
                         self._num(plan.get("cost_rub")) is not None
@@ -861,13 +1221,14 @@ class PortfolioService:
 
         own["primary_unit_economics"] = {
             "source": "Юнит-экономика вб / WB FBS новая",
-            "source_spreadsheet_id": (marker or {}).get("primary_spreadsheet_id") or (marker or {}).get("source_spreadsheet_id") or primary_source.get("spreadsheet_id"),
+            "source_spreadsheet_id": (marker or {}).get("primary_spreadsheet_id") or (marker or {}).get("source_spreadsheet_id") or primary_source.get("spreadsheet_id") or crosswalk_source.get("spreadsheet_id"),
             "snapshot_date": source_snapshot_date,
             "source_retrieved_at": source_read_at or None,
             "snapshot_basis": "live_source_read" if not (marker or {}).get("snapshot_date") and source_read_at else "source_marker",
             "plan_records": len(plans),
             "fact_records": len(facts),
             "mapped_products": mapped,
+            "exact_crosswalk_mapped_products": sum(len(items) for items in crosswalk_by_shop.values()),
             "unmatched_products": len(unmatched),
             "fact_period": (marker or {}).get("fact_period"),
             "semantics": "plan_model_plus_independent_fact" if facts else "plan_model_only",
@@ -1588,6 +1949,33 @@ class PortfolioService:
         # Refresh source-health timestamps from the bridge without allowing a stale source
         # to silently become authoritative. Trust/usage policy remains local.
         bridge_sources = payload.get("sources") or {}
+        bridge_errors: list[dict[str, str]] = []
+        seen_errors: set[tuple[str, str]] = set()
+
+        def record_bridge_error(source_id: Any, range_id: Any, message: Any) -> None:
+            source_name = str(source_id or "unknown").strip()
+            range_name = str(range_id or "").strip()
+            stage = "portfolio." + source_name + ("." + range_name if range_name else "")
+            safe = str(message or "source read failed")
+            safe = re.sub(r"(?i)bearer\s+\S+", "Bearer [REDACTED]", safe)
+            safe = re.sub(r"(?i)(token|secret|authorization)(\s*[:=]\s*)[^\s,;]+", r"\1\2[REDACTED]", safe)
+            marker = (stage, safe[:500])
+            if marker not in seen_errors:
+                seen_errors.add(marker)
+                bridge_errors.append({"stage": stage, "error": safe[:500]})
+
+        for error in payload.get("errors") or []:
+            if isinstance(error, dict):
+                record_bridge_error(error.get("source"), error.get("range"), error.get("error"))
+        for source_id, source in bridge_sources.items():
+            if not isinstance(source, dict):
+                continue
+            if source.get("error"):
+                record_bridge_error(source_id, "", source.get("error"))
+            for range_id, range_data in (source.get("ranges") or {}).items():
+                if isinstance(range_data, dict) and range_data.get("error"):
+                    record_bridge_error(source_id, range_id, range_data.get("error"))
+        out["bridge_source_errors"] = bridge_errors
         for h in out.get("source_health", []):
             src = bridge_sources.get(h.get("id")) if isinstance(h, dict) else None
             if src and src.get("modified_at"):
