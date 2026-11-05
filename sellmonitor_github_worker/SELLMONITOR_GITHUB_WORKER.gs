@@ -4,7 +4,7 @@
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.84',
+  VERSION: 'github-worker-1.3.85',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -6405,7 +6405,7 @@ function sellmonitorGithubPublishWbInnerPeriods_(onlyStore,requestedPhase){
       var week=sellmonitorGithubWbInnerEnsureSheet_(ss,SMC_WB_INNER_SUMMARY_V1.tabs.week,head);
       var month=sellmonitorGithubWbInnerEnsureSheet_(ss,SMC_WB_INNER_SUMMARY_V1.tabs.month,head);
       var res={
-        store:cfg.name,ok:true,phase:phase,source_parts:sourceIds.length,source_ids:sourceIds,
+        store:cfg.name,ok:true,phase:phase,source_parts:sourceIds.length,source_ids:sourceIds,source_checks:sourceChecks,
         source_rows:built.sourceRows,source_min:built.min,source_max:built.max,
         factual_days:built.factualDays,partial_days:built.partialDays
       };
@@ -6622,7 +6622,7 @@ function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId,onl
       newfin_penalty:'fines_rub',fin_taxpay:'tax_rub',newfin_deductions:'deduction_rub',
       newfin_delivery_sum:'delivery_logistic_rub',newfin_delivery_return_sum:'return_logistic_rub'
     };
-    function sumField(field){var total=0;for(var i=0;i<list.length;i++){var q=metricIx[field],v=q==null?null:list[i][q];if(v===''||v==null||typeof v==='boolean'||!isFinite(Number(v)))return null;total+=Number(v);}return total;}
+    function sumField(field){var total=0,count=0;for(var i=0;i<list.length;i++){var q=metricIx[field],v=q==null?null:list[i][q];if(v===''||v==null||typeof v==='boolean'||!isFinite(Number(v)))continue;total+=Number(v);count++;}return count?total:null;}
     if(directFields[code])return sumField(directFields[code]);
     var n='',d='';
     if(code==='fin_margin'){n='profit_rub';d='revenue_rub';}
@@ -6725,7 +6725,7 @@ function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId,onl
       var col=(positions[period]||[])[0];if(!col)throw new Error('WB_RNP_DATE_AXIS_MISSING:'+spec.name+':'+period);
       var last=matrixLast,current=currentMatrix.map(function(r){return r[col-matrixStartCol];}),next=current.slice();
       var pstat=periodStatus[period]||{partial:false,exact:0,other:0};
-      next[0]=pstat.partial?'🟡 ПРЕДВ.':(pstat.other?'🟠 НЕПОЛНЫЙ':'🟢 ФАКТ');
+      next[0]=pstat.partial?(pstat.exact?'🟡 ЧАСТИЧНО':'🟡 ПРЕДВ.'):(pstat.other?'🟠 НЕПОЛНЫЙ':'🟢 ФАКТ');
       next[1]=date_(period);
       var productMap=periodMap[period],productKeys=Object.keys(productMap).filter(function(n){return n!=='';});
       var all=productKeys.map(function(n){return productMap[n][0];});
