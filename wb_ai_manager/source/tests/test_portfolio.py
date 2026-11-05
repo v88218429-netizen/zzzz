@@ -83,6 +83,11 @@ def test_exact_crosswalk_maps_advertised_nm_id_to_copy_workbook_economics(tmp_pa
                     "audit": {"values": [
                         ["Кабинет", "Артикул WB", "Артикул продавца", "Наименование", "Магазин", "Ключ", "Статус связки", "Строка юнитки", "Товар в юнитке", "Цена юнитки", "Скидка юнитки"],
                         ["2", "273197463", "Ветошь 10кг", "Ветошь обтирочная трикотажная ХБ для уборки и протирки 10кг", "АА", "АА|Ветошь 10кг", "ЕСТЬ СВЯЗКА", "9", "Ветошь 10 кг 40х60", "9261,738642", "70"],
+                        ["2", "273197464", "Ветошь 10кг", "Ветошь обтирочная трикотажная ХБ для уборки и протирки 10кг", "АА", "АА|Ветошь 10кг", "ЕСТЬ СВЯЗКА", "9", "Ветошь 10 кг 40х60", "9261,738642", "70"],
+                    ]},
+                    "verification": {"values": [
+                        ["Код кабинета", "Кабинет", "Артикул WB", "Артикул продавца из остатков", "Ключ Связка цен", "Есть в Связка цен", "Строка юнитки", "Товар в юнитке", "Есть в WB FBS новая"],
+                        ["АА", "AIR", "273197463", "Ветошь 10кг", "АА|Ветошь 10кг", "ДА", "9", "Ветошь 10 кг 40х60", "ДА"],
                     ]},
                     "catalog": {"values": catalog_rows},
                 },
@@ -95,6 +100,10 @@ def test_exact_crosswalk_maps_advertised_nm_id_to_copy_workbook_economics(tmp_pa
 
     mapped = out["own_27"]["unit_economics_by_shop_nm_id"]["aa"]["273197463"]
     assert mapped["source_row"] == 9
+    assert mapped["verification_source_row"] == 2
+    assert mapped["audit_source_row"] is None
+    assert mapped["unit_economics_source"] == "Связка цен / Проверка товаров WB / 📊 WB FBS новая"
+    assert out["own_27"]["unit_economics_by_shop_nm_id"]["aa"]["273197464"]["audit_source_row"] == 3
     assert mapped["cost_rub"] == 1126.88
     assert mapped["price_rub"] == 2778.52
     assert mapped["profit_rub"] == 333.42
@@ -109,6 +118,15 @@ def test_exact_crosswalk_maps_advertised_nm_id_to_copy_workbook_economics(tmp_pa
     assert mapped["unit_economics_fallback_match"] == "exact_name"
     assert out["own_27"]["primary_unit_economics"]["snapshot_date"] == "2026-11-05"
     assert out["own_27"].get("unit_economics_mapping_diagnostics_by_shop", {}) == {}
+
+    # A listed verification row is authoritative: a negative flag must not fall back
+    # to a stale positive mapping in the audit sheet for the same nmID.
+    payload["sources"]["unit_economics_crosswalk"]["ranges"]["verification"]["values"][1][5] = "НЕТ"
+    blocked = {"own_27": {"products": []}}
+    service._parse_primary_economics_axis(payload, blocked)
+    assert "273197463" not in blocked["own_27"]["unit_economics_by_shop_nm_id"]["aa"]
+    reasons = blocked["own_27"]["unit_economics_mapping_diagnostics_by_shop"]["aa"]["273197463"]["reason_codes"]
+    assert "verification_crosswalk_link_not_confirmed" in reasons
 
 
 def test_primary_name_key_normalizes_volume_and_pack_notation():

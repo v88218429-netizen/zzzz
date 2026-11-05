@@ -4970,7 +4970,8 @@ function sellmonitorGithubPortfolioSources_() {
       ranges: {
         crosswalk: crosswalkRange,
         catalog: catalogRange,
-        audit: config.unit_economics_audit_range || 'Аудит ассортимента!A1:K1000'
+        audit: config.unit_economics_audit_range || 'Аудит ассортимента!A1:K1000',
+        verification: config.unit_economics_verification_range || 'Проверка товаров WB!A1:K1000'
       }
     };
   }
