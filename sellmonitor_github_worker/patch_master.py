@@ -773,7 +773,7 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
         worker_text = worker_text.replace(summary_anchor, "    /* " + finance_note_marker + " */\n" + summary_anchor, 1)
         print("OZON_FINANCE_COVERAGE_NOTE=patched")
 
-    version_matches = re.findall(r"VERSION:\\s*'github-worker-(\\d+)\\.(\\d+)\\.(\\d+)'", worker_text)
+    version_matches = re.findall(r"VERSION:\s*'github-worker-(\d+)\.(\d+)\.(\d+)'", worker_text)
     if len(version_matches) != 1:
         raise SystemExit("OZON_FINANCE_WORKER_VERSION_PATTERN_MISMATCH")
     if tuple(int(value) for value in version_matches[0]) < (1, 3, 88):
