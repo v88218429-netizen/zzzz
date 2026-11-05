@@ -1111,7 +1111,7 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
         if worker_text.count(expense_anchor) != 1:
             raise SystemExit("INNER_FINANCE_EXPENSE_METRIC_V7_ANCHOR_MISMATCH")
         worker_text=worker_text.replace(expense_anchor,expense_replacement,1)
-        versions=re.findall(r"VERSION:\\s*'github-worker-(\\d+)\\.(\\d+)\\.(\\d+)'",worker_text)
+        versions=re.findall(r"VERSION:\s*'github-worker-(\d+)\.(\d+)\.(\d+)'",worker_text)
         if len(versions)!=1:
             raise SystemExit("INNER_FINANCE_EXPENSE_METRIC_V7_VERSION_MISMATCH")
         major,minor,patch_no=[int(v) for v in versions[0]]
