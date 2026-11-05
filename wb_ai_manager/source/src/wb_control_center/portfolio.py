@@ -927,7 +927,7 @@ class PortfolioService:
                 if len(exact_candidates) == 1:
                     plan = exact_candidates[0]
             alias = explicit_plan_by_sku.get(sku)
-            if alias:
+            if alias and plan is None:
                 candidates = plan_by_name.get(self._economics_norm(alias)) or []
                 if len(candidates) == 1:
                     plan = candidates[0]
@@ -1838,8 +1838,8 @@ class PortfolioService:
             range_name = str(range_id or "").strip()
             stage = "portfolio." + source_name + ("." + range_name if range_name else "")
             safe = str(message or "source read failed")
-            safe = re.sub(r"(?i)bearer\\s+\\S+", "Bearer [REDACTED]", safe)
-            safe = re.sub(r"(?i)(token|secret|authorization)(\\s*[:=]\\s*)[^\\s,;]+", r"\\1\\2[REDACTED]", safe)
+            safe = re.sub(r"(?i)bearer\s+\S+", "Bearer [REDACTED]", safe)
+            safe = re.sub(r"(?i)(token|secret|authorization)(\s*[:=]\s*)[^\s,;]+", r"\1\2[REDACTED]", safe)
             marker = (stage, safe[:500])
             if marker not in seen_errors:
                 seen_errors.add(marker)
