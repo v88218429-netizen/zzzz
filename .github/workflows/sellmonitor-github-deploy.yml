@@ -239,15 +239,15 @@ jobs:
             if ! node --check "$T" >/tmp/sellmonitor-node-check.log 2>&1; then
               echo "SYNTAX_FILE=${f#/tmp/sellmonitor-gh-worker/}"
               python - <<'PY'
-          import pathlib, re
-          log=pathlib.Path("/tmp/sellmonitor-node-check.log").read_text(encoding="utf-8",errors="replace")
-          for line in log.splitlines():
-              match=re.search(r"\.js:(\d+)$",line)
-              if match:
-                  print("SYNTAX_LINE="+match.group(1))
-              if "SyntaxError:" in line:
-                  print("SYNTAX_REASON="+line.split("SyntaxError:",1)[1].strip())
-          PY
+        import pathlib, re
+        log=pathlib.Path("/tmp/sellmonitor-node-check.log").read_text(encoding="utf-8",errors="replace")
+        for line in log.splitlines():
+            match=re.search(r"\.js:(\d+)$",line)
+            if match:
+                print("SYNTAX_LINE="+match.group(1))
+            if "SyntaxError:" in line:
+                print("SYNTAX_REASON="+line.split("SyntaxError:",1)[1].strip())
+        PY
               exit 1
             fi
             rm -f "$T"
