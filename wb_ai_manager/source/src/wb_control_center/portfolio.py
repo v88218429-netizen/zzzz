@@ -943,7 +943,8 @@ class PortfolioService:
                     direct = candidates[0]
                     filled_fields: list[str] = []
                     for target, source_key in fallback_fields.items():
-                        if self._num(item.get(target)) is not None:
+                        current_value = item.get(target)
+                        if current_value is not None and str(current_value).strip() != "":
                             continue
                         value = direct.get(source_key)
                         if value is not None and value != "":
@@ -953,6 +954,7 @@ class PortfolioService:
                         item["unit_economics_fallback_source"] = "primary_unit_economics"
                         item["unit_economics_fallback_source_row"] = direct.get("source_row")
                         item["unit_economics_fallback_match"] = match_kind
+                        item["unit_economics_fallback_fields"] = filled_fields
                         notes = item.get("unit_economics_mapping_notes")
                         notes = notes if isinstance(notes, list) else []
                         notes.append("missing_copy_fields_filled_from_unique_primary_name")
