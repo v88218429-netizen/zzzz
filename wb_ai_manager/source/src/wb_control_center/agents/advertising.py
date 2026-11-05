@@ -554,14 +554,11 @@ class AdvertisingOptimizerAgent(BaseAgent):
         for campaign, result in zip(selected_campaigns, results):
             if isinstance(result, BaseException):
                 campaign_id = _campaign_id(campaign)
-                safe_error = re.sub(r"(?i)bearer\s+\S+", "Bearer [REDACTED]", str(result))[:320]
-                scan_errors = [{
-                    "campaign_id": campaign_id,
-                    "nm_id": None,
-                    "endpoint": "campaign_scan",
-                    "error": safe_error,
-                    "observed_at": datetime.now(timezone.utc).isoformat(),
-                }] if campaign_id else []
+                scan_error = _scan_error_record(
+                    campaign_id, "campaign_scan", {"_error": str(result)}
+                ) if campaign_id else None
+                safe_error = (scan_error or {}).get("error") or "campaign scan failed"
+                scan_errors = [scan_error] if scan_error else []
                 scanned.append({
                     "campaign": campaign,
                     "campaign_id": campaign_id,
