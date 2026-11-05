@@ -579,6 +579,7 @@ class PortfolioService:
     def _economics_primary_name_key(value: Any) -> str:
         text = PortfolioService._economics_norm(value)
         text = re.sub(r"(?<=\d)\s*л\b", "", text)
+        text = re.sub(r"\bpack\s*(\d+)\b", r"\1", text)
         text = re.sub(r"(?:\s*[-–—]\s*)?1\s*шт\b\.?$", "", text)
         text = re.sub(r"\s*шт\b\.?$", "", text)
         return re.sub(r"[^a-zа-я0-9]+", "", text)
