@@ -155,7 +155,7 @@ def evaluate_optimizer_acceptance(
             if product is None:
                 mapping_issue = (mapping_diagnostics.get(code) or {}).get(sku)
                 mapping_issue = mapping_issue if isinstance(mapping_issue, dict) else {}
-                diagnostics.append({
+                diagnostic = {
                     "nm_id": sku,
                     "stage": "unit_economics_mapping" if mapping_issue else "shop_nm_id_to_portfolio_product",
                     "seller_article": mapping_issue.get("seller_article"),
@@ -165,7 +165,8 @@ def evaluate_optimizer_acceptance(
                     "audit_source_row": mapping_issue.get("audit_source_row"),
                     "mapping_key": mapping_issue.get("key"),
                     "reason_codes": mapping_issue.get("reason_codes") or ["exact_shop_nm_id_match_missing"],
-                })
+                }
+                diagnostics.append({key: value for key, value in diagnostic.items() if value is not None})
                 continue
             matched += 1
             cost = _number(product.get("cost_rub"))
