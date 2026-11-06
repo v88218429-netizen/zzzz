@@ -1227,7 +1227,7 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
             raise SystemExit("WB_RNP_METRIC_COVERAGE_HEADER_ANCHOR_MISMATCH")
         worker_text=worker_text.replace(header_anchor,header_replacement,1)
 
-        coverage_versions=re.findall(r"VERSION:\\s*'github-worker-(\\d+)\\.(\\d+)\\.(\\d+)'",worker_text)
+        coverage_versions=re.findall(r"VERSION:\s*'github-worker-(\d+)\.(\d+)\.(\d+)'",worker_text)
         if len(coverage_versions)!=1:
             raise SystemExit("WB_RNP_METRIC_COVERAGE_VERSION_PATTERN_MISMATCH")
         coverage_major,coverage_minor,coverage_patch=[int(value) for value in coverage_versions[0]]
