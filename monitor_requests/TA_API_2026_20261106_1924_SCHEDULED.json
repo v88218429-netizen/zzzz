@@ -1,0 +1,18 @@
+{
+  "task_id": "TA_API_2026",
+  "query": "официальный API Wildberries поиск/воронка; Wordstat API; Google Trends API; TikTok и Instagram — источники трендов",
+  "extra_queries": [
+    "WB Excel/API лимиты",
+    "Wordstat методы/права",
+    "Google Trends alpha/CSV",
+    "TikTok Creative Center/Research",
+    "Instagram Graph API",
+    "YouTube API квоты"
+  ],
+  "content": "Видео",
+  "limit_video": 3,
+  "limit_shorts": 0,
+  "depth_days": 180,
+  "knowledge_tag": "TREND_API",
+  "language": "ru"
+}
