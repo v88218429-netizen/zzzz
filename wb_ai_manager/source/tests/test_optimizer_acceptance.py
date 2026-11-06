@@ -104,6 +104,57 @@ class OptimizerAcceptanceTests(unittest.TestCase):
             "reason_codes": ["exact_shop_nm_id_match_missing"],
         }])
 
+    def test_unmatched_nm_id_uses_public_product_identity_but_remains_blocked(self):
+        args = fixture()
+        args[0]["shops"]["aa"]["advertised_nm_ids"] = ["999"]
+        args[0]["shops"]["aa"]["public_product_details_by_nm_id"] = {
+            "999": {
+                "name": "Корзина для белья белая с крышкой, 60 л",
+                "brand": "Милих",
+                "source": "wb_public_card",
+                "product_url": "https://www.wildberries.ru/catalog/999/detail.aspx",
+            },
+        }
+
+        result = evaluate_optimizer_acceptance(
+            *args, now=datetime(2026, 11, 2, 8, tzinfo=timezone.utc),
+        )
+
+        diagnostic = result["economics_diagnostics_by_shop"]["aa"][0]
+        self.assertEqual(diagnostic["stage"], "shop_nm_id_to_portfolio_product")
+        self.assertEqual(diagnostic["nm_id"], "999")
+        self.assertEqual(diagnostic["product_name"], "Корзина для белья белая с крышкой, 60 л")
+        self.assertEqual(diagnostic["brand"], "Милих")
+        self.assertEqual(diagnostic["identity_source"], "wb_public_card")
+        self.assertIn("product_url", diagnostic)
+        self.assertIn("юнит-экономика", diagnostic["reason_text"])
+        self.assertFalse(result["ready"])
+
+    def test_unmatched_nm_id_uses_live_seller_article_but_remains_blocked(self):
+        args = fixture()
+        args[0]["shops"]["aa"]["advertised_nm_ids"] = ["999"]
+        args[0]["shops"]["aa"]["live_product_details_by_nm_id"] = {
+            "999": {
+                "seller_article": "test-basket-60l",
+                "product_name": "Test basket with lid",
+                "brand": "Test brand",
+                "subject": "Laundry accessories",
+                "source": "live_wb_cards",
+                "observed_at": "2026-11-06T07:00:00+00:00",
+            }
+        }
+
+        result = evaluate_optimizer_acceptance(*args)
+        diagnostic = result["economics_diagnostics_by_shop"]["aa"][0]
+
+        assert diagnostic["seller_article"] == "test-basket-60l"
+        assert diagnostic["product_name"] == "Test basket with lid"
+        assert diagnostic["identity_source"] == "live_wb_cards"
+        assert "точная связка" in diagnostic["reason_text"]
+        assert result["economics"]["coverage_by_shop"]["aa"]["matched_products"] == 0
+        assert result["economics"]["coverage_by_shop"]["aa"]["decision_ready_products"] == 0
+        assert not result["ready"]
+
     def test_economics_diagnostics_names_missing_fields_for_matched_product(self):
         args = fixture()
         product = args[1]["own_27"]["products"][1]
