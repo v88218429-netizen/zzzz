@@ -1130,6 +1130,116 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
         worker_text=worker_text.replace(version_anchor,"VERSION: 'github-worker-"+next_version+"'",1)
         print("INNER_FINANCE_WORKER_VERSION="+current+"->"+next_version)
         print("INNER_FINANCE_EXPENSE_METRIC_SUMMARY_V7=patched")
+
+    # Do not publish a store total as complete when a sold SKU has a missing metric.
+    coverage_patch_marker = "WB_RNP_METRIC_COVERAGE_V1"
+    if coverage_patch_marker not in worker_text:
+        coverage_anchor = "  function rnpValue(list,code){"
+        coverage_replacement = """  /* WB_RNP_METRIC_COVERAGE_V1 */
+  function metricCoverageMissing_(list,code){
+    var dependencies={
+      fin_Profit:['profit_rub'],
+      fin_margin:['profit_rub','revenue_rub'],
+      fin_roi:['profit_rub','expenses_total_rub'],
+      fin_sales_total_sum:['revenue_rub'],
+      newfin_retail_price_withdisc:['revenue_rub'],
+      fin_avgBillSPP:['customer_revenue_rub'],
+      fin_avgBillnoSPP:['revenue_rub'],
+      fin_SPP_Rate:['marketplace_discount_rub','revenue_rub'],
+      fin_DRR:['ad_rub','revenue_rub'],
+      drr_orders:['ad_rub','orders_revenue_rub'],
+      expAdCosts:['ad_rub'],
+      fin_Costs:['expenses_total_rub'],
+      fin_purchase:['prime_cost_rub'],
+      fin_comis:['commission_rub'],
+      fin_logistics:['logistic_rub'],
+      storage_warehousePrice:['storage_rub'],
+      acceptance_total:['paid_acceptance_rub'],
+      newfin_penalty:['fines_rub'],
+      fin_taxpay:['tax_rub'],
+      newfin_deductions:['deduction_rub'],
+      newfin_delivery_sum:['delivery_logistic_rub'],
+      newfin_delivery_return_sum:['return_logistic_rub']
+    };
+    var required=dependencies[code];
+    if(!required||!list||!list.length)return null;
+    var q=metricIx.net_sales_qty,expected=0,missing=0;
+    if(q==null)return {missing:list.length,expected:list.length,fields:required.slice()};
+    for(var i=0;i<list.length;i++){
+      var qv=list[i][q];
+      if(qv===''||qv==null||typeof qv==='boolean'||!isFinite(Number(qv))||Number(qv)<=0)continue;
+      expected++;
+      for(var j=0;j<required.length;j++){
+        var fi=metricIx[required[j]],v=fi==null?null:list[i][fi];
+        if(fi==null||v===''||v==null||typeof v==='boolean'||!isFinite(Number(v))){missing++;break;}
+      }
+    }
+    return missing?{missing:missing,expected:expected,fields:required.slice()}:null;
+  }
+  function rnpValue(list,code){"""
+        if worker_text.count(coverage_anchor)!=1:
+            raise SystemExit("WB_RNP_METRIC_COVERAGE_HELPER_ANCHOR_MISMATCH")
+        worker_text=worker_text.replace(coverage_anchor,coverage_replacement,1)
+
+        status_anchor = "      var all=productKeys.map(function(n){return productMap[n][0];});"
+        status_replacement = """      var all=productKeys.map(function(n){return productMap[n][0];});
+      var coverageChecks=['fin_sales_total_sum','fin_Profit','fin_avgBillSPP','fin_SPP_Rate','fin_DRR'];
+      var coverageGaps=[];
+      coverageChecks.forEach(function(coverageCode){
+        var coverage=metricCoverageMissing_(all,coverageCode);
+        if(coverage)coverageGaps.push(coverageCode+':'+coverage.missing+'/'+coverage.expected);
+      });
+      if(coverageGaps.length){
+        pstat.partial=true;pstat.partialCoverage=true;
+        next[0]=pstat.preliminary?(pstat.exact?'🟡 ЧАСТИЧНО':'🟡 ПРЕДВ.'):(pstat.exact?'🟡 ЧАСТИЧНО':'🟠 НЕПОЛНЫЙ');
+      }"""
+        if worker_text.count(status_anchor)!=1:
+            raise SystemExit("WB_RNP_METRIC_COVERAGE_STATUS_ANCHOR_MISMATCH")
+        worker_text=worker_text.replace(status_anchor,status_replacement,1)
+
+        store_anchor = """        if(level==='МАГАЗИН'){
+          if(!Object.prototype.hasOwnProperty.call(storeValueCache,code))storeValueCache[code]=rnpValue(all,code);
+          v=storeValueCache[code];
+        }"""
+        store_replacement = """        if(level==='МАГАЗИН'){
+          var metricCoverage=metricCoverageMissing_(all,code);
+          if(metricCoverage){v='';}
+          else{
+            if(!Object.prototype.hasOwnProperty.call(storeValueCache,code))storeValueCache[code]=rnpValue(all,code);
+            v=storeValueCache[code];
+          }
+        }"""
+        if worker_text.count(store_anchor)!=1:
+            raise SystemExit("WB_RNP_METRIC_COVERAGE_STORE_ANCHOR_MISMATCH")
+        worker_text=worker_text.replace(store_anchor,store_replacement,1)
+
+        header_anchor = "    var baseStatus=restoreBase_(spec,sh);"
+        header_replacement = """    var baseStatus=restoreBase_(spec,sh);
+    var oldCoverageHeader=String(sh.getRange(1,11).getDisplayValue()||'').toLowerCase();
+    if(storeId==='sanych_wb'&&oldCoverageHeader.indexOf('фин. отчет полный')>=0){
+      var headerLast=sh.getLastRow();
+      archiveSnapshot(sh,11,'HEADER_K1','Сохранение старой подписи до уточнения полноты метрик',headerLast);
+      sh.getRange(1,11).setValue('Фин. покрытие по метрикам');
+      SpreadsheetApp.flush();
+      if(String(sh.getRange(1,11).getDisplayValue())!=='Фин. покрытие по метрикам')throw new Error('WB_RNP_METRIC_COVERAGE_HEADER_READBACK_FAILED:'+spec.name);
+    }"""
+        if worker_text.count(header_anchor)!=1:
+            raise SystemExit("WB_RNP_METRIC_COVERAGE_HEADER_ANCHOR_MISMATCH")
+        worker_text=worker_text.replace(header_anchor,header_replacement,1)
+
+        coverage_versions=re.findall(r"VERSION:\\s*'github-worker-(\\d+)\\.(\\d+)\\.(\\d+)'",worker_text)
+        if len(coverage_versions)!=1:
+            raise SystemExit("WB_RNP_METRIC_COVERAGE_VERSION_PATTERN_MISMATCH")
+        coverage_major,coverage_minor,coverage_patch=[int(value) for value in coverage_versions[0]]
+        coverage_current=".".join(str(value) for value in (coverage_major,coverage_minor,coverage_patch))
+        coverage_next=".".join(str(value) for value in (coverage_major,coverage_minor,coverage_patch+1))
+        coverage_version_anchor="VERSION: 'github-worker-"+coverage_current+"'"
+        if worker_text.count(coverage_version_anchor)!=1:
+            raise SystemExit("WB_RNP_METRIC_COVERAGE_VERSION_ANCHOR_MISMATCH")
+        worker_text=worker_text.replace(coverage_version_anchor,"VERSION: 'github-worker-"+coverage_next+"'",1)
+        print("INNER_FINANCE_WORKER_VERSION="+coverage_current+"->"+coverage_next)
+        print("WB_RNP_METRIC_COVERAGE=patched")
+
     worker.write_text(worker_text, encoding="utf-8")
     print("WORKER_TRIGGER_REFRESH_V2=patched")
 candidates = []
