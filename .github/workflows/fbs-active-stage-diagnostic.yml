@@ -1,6 +1,4 @@
-# Fresh read-only lease and backfill diagnostic for the active GitHub recovery stage.
-# Grid dimensions are read through the authenticated Apps Script bridge.
-# Keep the push entry point available for protected GitHub-only diagnostics.
+# Lightweight read-only diagnostics through the protected GitHub bridge.
 name: WB FBS active stage diagnostic
 
 on:
@@ -17,109 +15,24 @@ permissions:
 jobs:
   inspect:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
     env:
       BRIDGE_URL: https://script.google.com/macros/s/AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw/exec
       BRIDGE_KEY: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
-      CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
     steps:
-      - name: Read bridge runtime stage and leases (fresh check 30)
+      - name: Read FBS stage and sheet grid through the protected bridge
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
           import json, os, urllib.request
-          payload=json.dumps({"token":os.environ["BRIDGE_KEY"],"action":"health"}).encode()
+          payload=json.dumps({"token":os.environ["BRIDGE_KEY"],"action":"fbs_runtime_diagnostic"}).encode()
           request=urllib.request.Request(os.environ["BRIDGE_URL"],data=payload,
               headers={"Content-Type":"application/json"},method="POST")
-          with urllib.request.urlopen(request,timeout=300) as response:
-              body=json.loads(response.read().decode("utf-8"))
-          result=body.get("result") or {}
-          if body.get("ok") is not True:
-              raise SystemExit("FBS_HEALTH_ACTION_FAILED")
-          print("FBS_STAGE_DIAGNOSTIC="+json.dumps({
-              "version":result.get("version"),
-              "runtime":result.get("runtime"),
-              "trigger_ok":result.get("trigger_ok"),
-              "trigger_count":result.get("trigger_count"),
-              "fbs_supply_stage":result.get("fbs_supply_stage"),
-              "fbs_ingest_stages":result.get("fbs_ingest_stages")
-          },ensure_ascii=False,separators=(",",":")),flush=True)
-          # Read only the AIR supply header and spreadsheet grid dimensions.
-          import urllib.parse
-          cfg=json.loads(os.environ["CLASPRC_JSON"])
-          token_map=cfg.get("tokens") or {}
-          credentials=list(token_map.values()) if isinstance(token_map,dict) else (token_map if isinstance(token_map,list) else [])
-          def find(obj,names):
-              wanted={x.lower().replace("_","") for x in names}
-              if isinstance(obj,dict):
-                  for key,value in obj.items():
-                      if str(key).lower().replace("_","") in wanted and isinstance(value,str) and value:return value
-                  for value in obj.values():
-                      found=find(value,names)
-                      if found:return found
-              elif isinstance(obj,list):
-                  for value in obj:
-                      found=find(value,names)
-                      if found:return found
-              return ""
-          def api_get(url,access):
-              request=urllib.request.Request(url,headers={"Authorization":"Bearer "+access})
-              with urllib.request.urlopen(request,timeout=20) as response:
-                  return json.loads(response.read().decode("utf-8"))
-          sheet_id="1qJvhEOIku7sOMydfrUz0PR5dkcU0sLjv433pa1MFBcM"
-          range_a1="'🚚 Поставки FBS'!A1:I1"
-          range_url="https://sheets.googleapis.com/v4/spreadsheets/"+sheet_id+"/values/"+urllib.parse.quote(range_a1,safe="!")
-          header_url=range_url+"?valueRenderOption=UNFORMATTED_VALUE"
-          meta_url="https://sheets.googleapis.com/v4/spreadsheets/"+sheet_id+"?"+urllib.parse.urlencode({"fields":"spreadsheetId,properties(title),sheets(properties(title,sheetId,gridProperties(rowCount,columnCount)))"})
-          air_header=None; spreadsheet=None
-          for index,cred in enumerate(credentials):
-              if not isinstance(cred,dict): continue
-              access=find(cred,["access_token","accessToken"])
-              refresh=find(cred,["refresh_token","refreshToken"])
-              try:
-                  if access:
-                      try:
-                          air_header=api_get(header_url,access)
-                          spreadsheet=api_get(meta_url,access)
-                      except urllib.error.HTTPError as exc:
-                          if exc.code not in (401,403): raise
-                  if (air_header is None or spreadsheet is None) and refresh:
-                      client_id=find(cred,["client_id","clientId"]) or find(cfg,["client_id","clientId"])
-                      client_secret=find(cred,["client_secret","clientSecret"]) or find(cfg,["client_secret","clientSecret"])
-                      if client_id and client_secret:
-                          form=urllib.parse.urlencode({"client_id":client_id,"client_secret":client_secret,"refresh_token":refresh,"grant_type":"refresh_token"}).encode()
-                          req=urllib.request.Request("https://oauth2.googleapis.com/token",data=form,method="POST")
-                          with urllib.request.urlopen(req,timeout=30) as response: new_access=json.loads(response.read().decode())["access_token"]
-                          air_header=api_get(header_url,new_access)
-                          spreadsheet=api_get(meta_url,new_access)
-                  if air_header is not None and spreadsheet is not None: break
-              except urllib.error.HTTPError as exc:
-                  print("AIR_SHEETS_READ_PROFILE_HTTP="+str(index)+":"+str(exc.code),flush=True)
-                  continue
-          if air_header is None or spreadsheet is None:
-              print("AIR_SHEETS_HEADER_DIAGNOSTIC=unavailable",flush=True)
-          else:
-              print("AIR_SHEETS_HEADER_DIAGNOSTIC=available",flush=True)
-              print("AIR_SUPPLY_HEADER="+json.dumps((air_header.get("values") or [[]])[0],ensure_ascii=False,separators=(",",":")),flush=True)
-              sheets=[x.get("properties") or {} for x in spreadsheet.get("sheets",[])]
-              grid_cells=sum(int((p.get("gridProperties") or {}).get("rowCount") or 0)*int((p.get("gridProperties") or {}).get("columnCount") or 0) for p in sheets)
-              print("AIR_SPREADSHEET_GRID="+json.dumps({"title":(spreadsheet.get("properties") or {}).get("title"),"tabs":len(sheets),"configuredGridCells":grid_cells,"tabDimensions":[{"title":p.get("title"),"rows":(p.get("gridProperties") or {}).get("rowCount"),"columns":(p.get("gridProperties") or {}).get("columnCount")} for p in sheets]},ensure_ascii=False,separators=(",",":")),flush=True)
-          PY
-
-      - name: Compare live FBS order sheets across stores
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          import json, os, urllib.request
-          payload=json.dumps({"token":os.environ["BRIDGE_KEY"],"action":"fbs_targets_health"}).encode()
-          request=urllib.request.Request(os.environ["BRIDGE_URL"],data=payload,
-              headers={"Content-Type":"application/json"},method="POST")
-          with urllib.request.urlopen(request,timeout=300) as response:
+          with urllib.request.urlopen(request,timeout=240) as response:
               body=json.loads(response.read().decode("utf-8"))
           if body.get("ok") is not True:
-              raise SystemExit("FBS_TARGET_HEALTH_ACTION_FAILED")
-          print("FBS_TARGETS_COMPARE="+json.dumps(body.get("result") or {},
+              raise SystemExit("FBS_RUNTIME_DIAGNOSTIC_FAILED")
+          print("FBS_RUNTIME_DIAGNOSTIC="+json.dumps(body.get("result") or {},
               ensure_ascii=False,separators=(",",":")),flush=True)
           PY
