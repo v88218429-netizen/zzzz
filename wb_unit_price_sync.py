@@ -166,7 +166,7 @@ def main():
     if saved.get("ok") is not True or int(saved.get("updated_cells", -1)) != total * 14:
         raise RuntimeError(f"Snapshot write was not confirmed: {saved}")
     verified = post_bridge(bridge, {"key": key, "action": "verify_snapshot"}, access_token)
-    if verified.get("ok") is not True or verified.get("snapshot_at") != snapshot or int(verified.get("rows", -1)) != total:
+    if verified.get("ok") is not True or verified.get("snapshot_at") != snapshot or int(verified.get("total_rows", -1)) != total:
         raise RuntimeError(f"Snapshot reread failed: {verified}")
     print(json.dumps({"ok": True, "snapshot_at": snapshot, "counts": counts, "total": total, "verified": True}, ensure_ascii=False))
 
