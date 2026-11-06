@@ -190,7 +190,7 @@ jobs:
                       retryable = any(marker in details for marker in (
                           "timed out", "timeout", "remote end closed", "connection reset",
                           "connection refused", "temporarily unavailable", "service spreadsheets",
-                          "429", "too many requests", "rate limit", "502", "503", "504", "empty response",
+                          "429", "too many requests", "rate limit", "lock_busy", "502", "503", "504", "empty response",
                       ))
                       if retryable and attempt < 4:
                           delay = min(60, 15 * (2 ** (attempt - 1)))
