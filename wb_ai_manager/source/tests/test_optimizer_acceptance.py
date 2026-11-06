@@ -390,3 +390,52 @@ def test_campaign_cache_retains_latest_endpoint_error_and_ignores_malformed_hist
 
 if __name__ == "__main__":
     unittest.main()
+
+    def test_recent_completed_sweep_remains_valid_during_next_partial_cycle(self):
+        args = fixture()
+        for shop in args[0]["shops"].values():
+            shop["sweep"].update({
+                "sweep_complete": False,
+                "sweep_campaigns_seen": 0,
+                "sweep_products_seen": 0,
+                "sweep_pairs_total": 1,
+                "catalog_fingerprint": "catalog-a",
+                "last_completed_sweep": {
+                    "completed_at": "2026-11-02T07:50:00+00:00",
+                    "campaigns_total": 1,
+                    "products_total": 1,
+                    "pairs_total": 1,
+                    "catalog_fingerprint": "catalog-a",
+                },
+            })
+        result = evaluate_optimizer_acceptance(
+            *args, now=datetime(2026, 11, 2, 8, tzinfo=timezone.utc),
+        )
+        self.assertTrue(result["ready"])
+        self.assertTrue(all(row["acceptance_complete"] for row in result["shops"].values()))
+        self.assertTrue(all(not row["complete"] for row in result["shops"].values()))
+
+    def test_stale_or_changed_catalog_completion_does_not_satisfy_acceptance(self):
+        for completed_at, fingerprint in (
+            ("2026-11-02T05:59:00+00:00", "catalog-a"),
+            ("2026-11-02T07:50:00+00:00", "catalog-old"),
+        ):
+            args = fixture()
+            for shop in args[0]["shops"].values():
+                shop["sweep"].update({
+                    "sweep_complete": False,
+                    "sweep_pairs_total": 1,
+                    "catalog_fingerprint": "catalog-a",
+                    "last_completed_sweep": {
+                        "completed_at": completed_at,
+                        "campaigns_total": 1,
+                        "products_total": 1,
+                        "pairs_total": 1,
+                        "catalog_fingerprint": fingerprint,
+                    },
+                })
+            result = evaluate_optimizer_acceptance(
+                *args, now=datetime(2026, 11, 2, 8, tzinfo=timezone.utc),
+            )
+            self.assertFalse(result["ready"])
+            self.assertTrue(any("подтверждённого полного обхода" in item for item in result["blockers"]))
