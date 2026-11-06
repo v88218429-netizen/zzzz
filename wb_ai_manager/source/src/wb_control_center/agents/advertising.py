@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import json
 import logging
 import re
 from datetime import datetime, timedelta, timezone
@@ -148,6 +150,97 @@ def _completed_sweep_campaign_ids(
     return sorted(completed)
 
 
+def _campaign_catalog_fingerprint(campaign_ids: list[int], campaign_nm_ids: dict[int, list[int]]) -> str:
+    payload = {
+        "campaign_ids": sorted({int(value) for value in campaign_ids}),
+        "campaign_nm_ids": {
+            str(int(cid)): sorted({int(value) for value in values})
+            for cid, values in campaign_nm_ids.items()
+        },
+    }
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _snapshot_datetime(value: Any) -> datetime | None:
+    try:
+        result = datetime.fromisoformat(str(value or "").strip().replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    return result if result.tzinfo else result.replace(tzinfo=timezone.utc)
+
+
+def _recover_last_completed_sweep(
+    db: Any,
+    campaign_ids: list[int],
+    campaign_nm_ids: dict[int, list[int]],
+    catalog_fingerprint: str,
+) -> dict[str, Any] | None:
+    """Recover a recent full pass written before last-completion metadata existed."""
+    expected_campaigns = sorted({int(value) for value in campaign_ids})
+    expected_nm_map = {
+        str(int(cid)): sorted({int(value) for value in values})
+        for cid, values in campaign_nm_ids.items()
+    }
+    unique_products = len({nm for values in campaign_nm_ids.values() for nm in values})
+    pair_total = sum(len(values) for values in campaign_nm_ids.values())
+    scans = db.recent_snapshots("advertising_optimizer", "deep_scan", limit=500)
+    cursors = db.recent_snapshots("advertising_optimizer", "deep_scan_cursor", limit=500)
+    for scan in scans:
+        data = scan.get("data") if isinstance(scan, dict) else None
+        if not isinstance(data, dict) or data.get("sweep_complete") is not True or data.get("catalog_complete") is not True:
+            continue
+        active_ids = sorted({
+            int(value) for value in (data.get("active_campaign_ids") or [])
+            if str(value).strip().isdigit()
+        })
+        if active_ids != expected_campaigns:
+            continue
+        if int(data.get("sweep_campaigns_total") or 0) != len(expected_campaigns):
+            continue
+        if int(data.get("sweep_products_total") or 0) != unique_products:
+            continue
+        if int(data.get("sweep_pairs_total") or 0) != pair_total:
+            continue
+        completed_at = _snapshot_datetime(scan.get("created_at"))
+        if completed_at is None:
+            continue
+        matched_catalog = False
+        for cursor_row in cursors:
+            cursor_at = _snapshot_datetime(cursor_row.get("created_at"))
+            if cursor_at is None or abs((cursor_at - completed_at).total_seconds()) > 10:
+                continue
+            cursor_data = cursor_row.get("data")
+            if not isinstance(cursor_data, dict):
+                continue
+            cursor_campaigns = sorted({
+                int(value) for value in (cursor_data.get("campaign_ids") or [])
+                if str(value).strip().isdigit()
+            })
+            raw_nm_map = cursor_data.get("campaign_nm_ids")
+            normalized_nm_map = {}
+            if isinstance(raw_nm_map, dict):
+                normalized_nm_map = {
+                    str(int(cid)): sorted({int(value) for value in values if str(value).strip().isdigit()})
+                    for cid, values in raw_nm_map.items()
+                    if str(cid).strip().isdigit() and isinstance(values, list)
+                }
+            if cursor_campaigns == expected_campaigns and normalized_nm_map == expected_nm_map:
+                matched_catalog = True
+                break
+        if not matched_catalog:
+            continue
+        return {
+            "sweep_id": int(data.get("sweep_id") or 0),
+            "completed_at": completed_at.astimezone(timezone.utc).isoformat(),
+            "campaigns_total": len(expected_campaigns),
+            "products_total": unique_products,
+            "pairs_total": pair_total,
+            "catalog_fingerprint": catalog_fingerprint,
+        }
+    return None
+
+
 def _scan_cursor(
     previous: Any,
     campaign_ids: list[int],
@@ -234,6 +327,8 @@ def _scan_cursor(
     saved_sweep_id = max(0, int(saved.get("sweep_id") or 0))
     sweep_id = max(1, saved_sweep_id + (1 if catalog_changed and saved_sweep_id else 0))
     next_campaign_id = expected[next_campaign_index] if expected else None
+    saved_completion = saved.get("last_completed_sweep")
+    last_completed_sweep = saved_completion if isinstance(saved_completion, dict) and not catalog_changed else None
     return {
         "campaign_ids": expected,
         "campaign_nm_ids": expected_nms,
@@ -242,6 +337,8 @@ def _scan_cursor(
         "next_nm_index": next_nm_index,
         "sweep_id": sweep_id,
         "catalog_changed": catalog_changed,
+        "catalog_fingerprint": _campaign_catalog_fingerprint(expected, expected_nms),
+        "last_completed_sweep": last_completed_sweep,
         "swept_campaign_ids": swept_campaign_ids,
         "swept_nm_ids": swept_nm_ids,
     }
@@ -446,6 +543,10 @@ class AdvertisingOptimizerAgent(BaseAgent):
             [_campaign_id(c) for c in campaigns if _campaign_id(c)],
             campaign_nm_ids,
         )
+        if not cursor.get("catalog_changed") and not cursor.get("last_completed_sweep"):
+            cursor["last_completed_sweep"] = _recover_last_completed_sweep(
+                self.ctx.db, cursor["campaign_ids"], campaign_nm_ids, cursor["catalog_fingerprint"]
+            )
         semaphore = asyncio.Semaphore(concurrency)
 
         async def limited(tool: str, **kwargs: Any) -> Any:
@@ -596,6 +697,15 @@ class AdvertisingOptimizerAgent(BaseAgent):
                           and all_campaign_pairs_seen
                           and all(isinstance(item, dict) and item.get("scan_complete") is True for item in scanned))
         if sweep_complete:
+            completed_at = datetime.now(timezone.utc).isoformat()
+            cursor["last_completed_sweep"] = {
+                "sweep_id": int(cursor["sweep_id"]),
+                "completed_at": completed_at,
+                "campaigns_total": len(cursor["campaign_ids"]),
+                "products_total": total_product_count,
+                "pairs_total": total_pair_count,
+                "catalog_fingerprint": cursor["catalog_fingerprint"],
+            }
             cursor["sweep_id"] += 1
             cursor["swept_campaign_ids"] = []
             cursor["swept_nm_ids"] = {}
@@ -613,6 +723,9 @@ class AdvertisingOptimizerAgent(BaseAgent):
             "generated_for": {"from": start, "to": end},
             "sweep_id": cursor["sweep_id"],
             "sweep_complete": sweep_complete,
+            "catalog_changed": cursor["catalog_changed"],
+            "catalog_fingerprint": cursor["catalog_fingerprint"],
+            "last_completed_sweep": cursor.get("last_completed_sweep"),
             "sweep_campaigns_seen": swept_campaign_count,
             "sweep_campaigns_total": len(cursor["campaign_ids"]),
             "sweep_products_seen": swept_product_count,
