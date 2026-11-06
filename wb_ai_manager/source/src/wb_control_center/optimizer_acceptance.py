@@ -56,6 +56,47 @@ def _campaign_nms(value: Any) -> set[str]:
     return found
 
 
+SWEEP_FRESHNESS_MINUTES = 120
+
+
+def _sweep_completion_age_minutes(completed: Any, now: datetime) -> float | None:
+    if not isinstance(completed, dict):
+        return None
+    try:
+        observed = datetime.fromisoformat(str(completed.get("completed_at") or "").replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    if observed.tzinfo is None:
+        observed = observed.replace(tzinfo=timezone.utc)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
+    return (now.astimezone(timezone.utc) - observed.astimezone(timezone.utc)).total_seconds() / 60
+
+
+def _recent_completed_sweep_matches(sweep: dict[str, Any], now: datetime) -> tuple[bool, float | None]:
+    completed = sweep.get("last_completed_sweep")
+    age_minutes = _sweep_completion_age_minutes(completed, now)
+    if age_minutes is None or age_minutes < -5 or age_minutes > SWEEP_FRESHNESS_MINUTES:
+        return False, age_minutes
+    if not isinstance(completed, dict):
+        return False, age_minutes
+    if not completed.get("catalog_fingerprint") or completed.get("catalog_fingerprint") != sweep.get("catalog_fingerprint"):
+        return False, age_minutes
+    for completed_key, current_key in (
+        ("campaigns_total", "sweep_campaigns_total"),
+        ("products_total", "sweep_products_total"),
+        ("pairs_total", "sweep_pairs_total"),
+    ):
+        try:
+            completed_total = int(completed.get(completed_key))
+            current_total = int(sweep.get(current_key) or 0)
+        except (TypeError, ValueError):
+            return False, age_minutes
+        if completed_total != current_total:
+            return False, age_minutes
+    return True, age_minutes
+
+
 def evaluate_optimizer_acceptance(
     optimizer_state: dict[str, Any],
     portfolio: dict[str, Any],
@@ -83,8 +124,13 @@ def evaluate_optimizer_acceptance(
         products_seen = int(sweep.get("sweep_products_seen") or 0)
         products_total = int(sweep.get("sweep_products_total") or 0)
         complete = sweep.get("sweep_complete") is True
+        recent_completed, completed_age = _recent_completed_sweep_matches(sweep, now)
+        acceptance_complete = complete or recent_completed
+        last_completed = sweep.get("last_completed_sweep")
         sweep_rows[code] = {
-            "name": name, "complete": complete,
+            "name": name, "complete": complete, "acceptance_complete": acceptance_complete,
+            "last_completed_at": last_completed.get("completed_at") if isinstance(last_completed, dict) else None,
+            "last_completed_age_minutes": completed_age,
             "campaigns_seen": campaigns_seen, "campaigns_total": campaigns_total,
             "products_seen": products_seen, "products_total": products_total,
         }
@@ -92,8 +138,18 @@ def evaluate_optimizer_acceptance(
             blockers.append(f"{name}: подключение кабинета не подтверждено.")
         if not item.get("observed_at"):
             blockers.append(f"{name}: нет времени последнего снимка оптимизатора.")
-        if not complete or (campaigns_total and campaigns_seen < campaigns_total) or (products_total and products_seen < products_total):
-            blockers.append(f"{name}: полный обход рекламы не завершён ({campaigns_seen}/{campaigns_total} кампаний, {products_seen}/{products_total} товаров).")
+        if not acceptance_complete:
+            last_text = (
+                f"; последний полный обход {last_completed.get('completed_at')} "
+                f"({completed_age:.0f} мин. назад)"
+                if isinstance(last_completed, dict) and completed_age is not None
+                else "; подтверждённого недавнего полного обхода нет"
+            )
+            blockers.append(
+                f"{name}: обход рекламы не подтверждён в пределах последних {SWEEP_FRESHNESS_MINUTES} мин. "
+                f"(текущий проход {campaigns_seen}/{campaigns_total} кампаний, "
+                f"{products_seen}/{products_total} товаров{last_text})."
+            )
 
     own = portfolio.get("own_27") if isinstance(portfolio.get("own_27"), dict) else {}
     economics = own.get("primary_unit_economics") if isinstance(own.get("primary_unit_economics"), dict) else {}
@@ -382,9 +438,20 @@ def merge_campaign_cache(
         key=lambda row: str(row.get("observed_at") or ""),
         reverse=True,
     )[:100]
+    last_completed_sweep = prior.get("last_completed_sweep")
+    if deep_scan.get("catalog_changed") is True or (catalog_known and old_ids and old_ids != active_ids):
+        last_completed_sweep = None
+    current_completion = deep_scan.get("last_completed_sweep")
+    if (
+        isinstance(current_completion, dict)
+        and current_completion.get("catalog_fingerprint") == deep_scan.get("catalog_fingerprint")
+    ):
+        last_completed_sweep = current_completion
+
     return {
         "campaign_ids": active_ids if catalog_known else old_ids,
         "campaigns": campaigns,
+        "last_completed_sweep": last_completed_sweep,
         "campaign_cache_count": len(campaigns),
         "campaign_cache_total": total,
         "campaign_cache_complete": cache_complete,
@@ -393,7 +460,8 @@ def merge_campaign_cache(
         "scan_errors": scan_errors,
         "sweep": {key: deep_scan.get(key) for key in (
             "sweep_id", "sweep_campaigns_seen", "sweep_campaigns_total",
-            "sweep_products_seen", "sweep_products_total", "cursor_before",
-            "cursor_after", "eligible_campaigns", "campaigns_scanned",
+            "sweep_products_seen", "sweep_products_total", "sweep_pairs_seen", "sweep_pairs_total",
+            "cursor_before", "cursor_after", "eligible_campaigns", "campaigns_scanned",
+            "catalog_fingerprint", "catalog_changed",
         ) if key in deep_scan},
     }
