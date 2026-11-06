@@ -2,6 +2,7 @@ import json, os, sys, time
 from datetime import datetime, timezone
 from urllib.request import Request, urlopen
 from urllib.parse import urlencode
+from urllib.parse import urlencode as form_urlencode
 from urllib.error import HTTPError, URLError
 
 API = "https://discounts-prices-api.wildberries.ru/api/v2/list/goods/filter"
@@ -95,8 +96,38 @@ def fetch_shop(code, label, secret_name, floor):
         raise RuntimeError(f"{code}: only {len(rows)} products; minimum safe count is {floor}")
     return rows
 
-def post_bridge(url, payload):
-    req = Request(url, data=json.dumps(payload, ensure_ascii=False).encode(), headers={"Content-Type": "application/json"}, method="POST")
+def google_access_token():
+    raw = os.environ.get("CLASPRC_JSON", "")
+    if not raw:
+        raise RuntimeError("Missing Google authorization secret")
+    try:
+        config = json.loads(raw)
+        client = config["oauth2ClientSettings"]
+        refresh = config["token"]["refresh_token"]
+    except (ValueError, KeyError, TypeError):
+        raise RuntimeError("Google authorization secret has an unexpected format")
+    form = form_urlencode({
+        "client_id": client["clientId"],
+        "client_secret": client["clientSecret"],
+        "refresh_token": refresh,
+        "grant_type": "refresh_token",
+    }).encode()
+    req = Request("https://oauth2.googleapis.com/token", data=form,
+                  headers={"Content-Type": "application/x-www-form-urlencoded"})
+    try:
+        with urlopen(req, timeout=30) as res:
+            token_data = json.loads(res.read().decode("utf-8"))
+    except Exception:
+        raise RuntimeError("Google authorization refresh failed")
+    token = token_data.get("access_token")
+    if not token:
+        raise RuntimeError("Google authorization refresh returned no access token")
+    return token
+
+def post_bridge(url, payload, access_token):
+    req = Request(url, data=json.dumps(payload, ensure_ascii=False).encode(),
+                  headers={"Content-Type": "application/json", "Authorization": "Bearer " + access_token},
+                  method="POST")
     try:
         with urlopen(req, timeout=120) as res:
             body = res.read().decode("utf-8")
@@ -115,6 +146,7 @@ def main():
         raise RuntimeError("Invalid bridge URL")
     if not key:
         raise RuntimeError("Missing bridge authorization key")
+    access_token = google_access_token()
     snapshot = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
     rows = []
     counts = {}
@@ -128,10 +160,10 @@ def main():
     if len({(row[1], row[3]) for row in rows}) != total:
         raise RuntimeError("Duplicate store/nmID pair detected")
     data = {"key": key, "action": "replace_snapshot", "snapshot_at": snapshot, "rows": rows}
-    saved = post_bridge(bridge, data)
+    saved = post_bridge(bridge, data, access_token)
     if saved.get("ok") is not True or int(saved.get("updated_cells", -1)) != total * 14:
         raise RuntimeError(f"Snapshot write was not confirmed: {saved}")
-    verified = post_bridge(bridge, {"key": key, "action": "verify_snapshot"})
+    verified = post_bridge(bridge, {"key": key, "action": "verify_snapshot"}, access_token)
     if verified.get("ok") is not True or verified.get("snapshot_at") != snapshot or int(verified.get("rows", -1)) != total:
         raise RuntimeError(f"Snapshot reread failed: {verified}")
     print(json.dumps({"ok": True, "snapshot_at": snapshot, "counts": counts, "total": total, "verified": True}, ensure_ascii=False))
