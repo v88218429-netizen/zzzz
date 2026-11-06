@@ -102,13 +102,15 @@ def google_access_token():
         raise RuntimeError("Missing Google authorization secret")
     try:
         config = json.loads(raw)
-        client = config["oauth2ClientSettings"]
-        refresh = config["token"]["refresh_token"]
+        token_config = config["tokens"]["default"]
+        refresh = token_config["refresh_token"]
+        client_id = token_config["client_id"]
+        client_secret = token_config["client_secret"]
     except (ValueError, KeyError, TypeError):
         raise RuntimeError("Google authorization secret has an unexpected format")
     form = form_urlencode({
-        "client_id": client["clientId"],
-        "client_secret": client["clientSecret"],
+        "client_id": client_id,
+        "client_secret": client_secret,
         "refresh_token": refresh,
         "grant_type": "refresh_token",
     }).encode()
