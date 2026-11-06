@@ -7311,9 +7311,10 @@ function sellmonitorGithubFbsTargetHealthV1_() {
         }
       }
       var latest=latestRow?orders.getRange(latestRow,1,1,6).getDisplayValues()[0]:[];
-      results.push({client:t.client,accessible:true,ordersRows:idCount,
-        latestOrderDate:String(latest[1]||''),hasLatestOrderId:!!latest[0],
-        columns:Number(orders.getMaxColumns()),analyticsExists:!!ss.getSheetByName('📈 Аналитика')});
+      results.push({client:t.client,accessible:true,ordersRows:idCount,lastRow:last,
+        maxRows:Number(orders.getMaxRows()),latestOrderDate:String(latest[1]||''),
+        hasLatestOrderId:!!latest[0],columns:Number(orders.getMaxColumns()),
+        analyticsExists:!!ss.getSheetByName('📈 Аналитика')});
     }catch(e){
       results.push({client:t.client,accessible:false,reason:'SPREADSHEET_ACCESS_OR_SCHEMA_ERROR',
         errorType:String(e&&e.name||'Error')});
