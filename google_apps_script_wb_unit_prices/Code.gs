@@ -15,7 +15,7 @@ function doPost(e) {
     if (p.action !== 'replace_snapshot') throw new Error('Unsupported action');
     const rows = p.rows;
     if (!Array.isArray(rows) || rows.length < 240 || rows.length > PRICE_SYNC.maxRows) throw new Error('Unexpected total row count');
-    if (typeof p.snapshot_at !== 'string' || !/^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2} UTC$/.test(p.snapshot_at)) throw new Error('Invalid snapshot timestamp');
+    if (typeof p.snapshot_at !== 'string' || !/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} UTC$/.test(p.snapshot_at)) throw new Error('Invalid snapshot timestamp');
     const timeMs = Date.parse(p.snapshot_at.replace(' UTC','Z').replace(' ','T'));
     if (!Number.isFinite(timeMs) || Math.abs(Date.now()-timeMs) > 30*60*1000) throw new Error('Snapshot timestamp outside accepted window');
     const counts = {AP:0,AA:0,YV:0};
@@ -26,7 +26,7 @@ function doPost(e) {
       const shop = String(row[1] || '');
       if (!Object.prototype.hasOwnProperty.call(counts, shop)) throw new Error('Unexpected shop');
       const nm = String(row[3] || '').trim();
-      if (!/^\\d+$/.test(nm)) throw new Error('Invalid nmID');
+      if (!/^\d+$/.test(nm)) throw new Error('Invalid nmID');
       if (seen[shop+':'+nm]) throw new Error('Duplicate shop/nmID');
       seen[shop+':'+nm] = true;
       counts[shop]++;
