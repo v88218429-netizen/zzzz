@@ -7342,13 +7342,22 @@ function sellmonitorGithubFbsRuntimeDiagnosticV1_() {
   targets.forEach(function(t){
     try{
       var ss=SpreadsheetApp.openById(t.id);
-      var sheet=ss.getSheetByName('📦 FBS Заказы');
-      if(!sheet)throw new Error('ORDERS_TAB_MISSING');
-      var rows=Number(sheet.getMaxRows()),columns=Number(sheet.getMaxColumns());
-      results.push({client:t.client,accessible:true,lastRow:Number(sheet.getLastRow()),
-        maxRows:rows,maxColumns:columns,gridCells:rows*columns});
+      var tabs=ss.getSheets().map(function(sh){
+        return {name:sh.getName(),lastRow:Number(sh.getLastRow()),
+          lastColumn:Number(sh.getLastColumn()),maxRows:Number(sh.getMaxRows()),
+          maxColumns:Number(sh.getMaxColumns()),hidden:sh.isSheetHidden()};
+      });
+      var orderSheet=ss.getSheetByName('📦 FBS Заказы');
+      var rows=orderSheet?Number(orderSheet.getMaxRows()):0;
+      var columns=orderSheet?Number(orderSheet.getMaxColumns()):0;
+      results.push({client:t.client,spreadsheetId:t.id,spreadsheetName:ss.getName(),
+        spreadsheetUrl:ss.getUrl(),accessible:true,ordersTabExists:!!orderSheet,
+        ordersLastRow:orderSheet?Number(orderSheet.getLastRow()):0,
+        ordersMaxRows:rows,ordersMaxColumns:columns,ordersGridCells:rows*columns,
+        tabCount:tabs.length,tabs:tabs});
     }catch(e){
-      results.push({client:t.client,accessible:false,errorType:String(e&&e.name||'Error')});
+      results.push({client:t.client,spreadsheetId:t.id,accessible:false,
+        errorType:String(e&&e.name||'Error')});
     }
   });
   var stages=sellmonitorGithubFbsStageSnapshot_();
