@@ -6404,6 +6404,13 @@ function sellmonitorGithubWbInnerUpsert_(ss,sh,headers,rows,storeName){
 }
 
 function sellmonitorGithubPublishWbInnerPeriods_(onlyStore,requestedPhase){
+  var publishLock=LockService.getScriptLock();
+  if(!publishLock.tryLock(30000))return {ok:false,action:'publish_wb_inner_periods',phase:String(requestedPhase||'all'),stores:[{store:String(onlyStore||'all'),ok:false,error:'WB_INNER_PUBLISH_LOCK_BUSY'}]};
+  try{return sellmonitorGithubPublishWbInnerPeriodsUnlocked_(onlyStore,requestedPhase);}
+  finally{publishLock.releaseLock();}
+}
+
+function sellmonitorGithubPublishWbInnerPeriodsUnlocked_(onlyStore,requestedPhase){
   var phase=String(requestedPhase||'all').trim()||'all';
   var dayMonthMatch=phase.match(/^rnp_day_(\d{4}_\d{2})$/);
   var dayRangeMatch=phase.match(/^rnp_day_(\d{4})_(\d{2})_(\d{2})_(\d{2})$/);
@@ -6529,7 +6536,12 @@ function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId,onl
   var archive=ss.getSheetByName(archiveName);
   if(!archive){archive=ss.insertSheet(archiveName);archive.getRange(1,1,1,7).setValues([['Архивировано','Магазин','Лист','Период','Начальная строка','Старые значения JSON','Причина']]);archive.setFrozenRows(1);archive.setTabColor('#7F6000');}
   var queuedArchiveRecords=[],archiveSignatures=null;
-  function archiveSignature_(row){return row.map(function(v){return String(v==null?'':v);}).join(String.fromCharCode(31));}
+  function archivePeriodKey_(v){
+    if(v instanceof Date&&!isNaN(v.getTime()))return Utilities.formatDate(v,ss.getSpreadsheetTimeZone(),'yyyy-MM-dd');
+    if(typeof v==='number'&&isFinite(v)&&v>20000)return Utilities.formatDate(new Date(Date.UTC(1899,11,30)+Math.floor(v)*86400000),ss.getSpreadsheetTimeZone(),'yyyy-MM-dd');
+    return String(v==null?'':v).trim();
+  }
+  function archiveSignature_(row){return row.map(function(v,index){return index===2?archivePeriodKey_(v):String(v==null?'':v);}).join(String.fromCharCode(31));}
   function archiveRecordSignature_(row){return archiveSignature_([row[1],row[2],row[3],row[4],row[5],row[6]]);}
   function loadArchiveSignatures_(){
     if(archiveSignatures)return;
@@ -6545,10 +6557,12 @@ function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId,onl
     for(var off=0;off<pending.length;off+=200){
       var part=pending.slice(off,off+200),at=archive.getLastRow()+1,need=at+part.length-1;
       if(need>archive.getMaxRows())archive.insertRowsAfter(archive.getMaxRows(),Math.max(100,need-archive.getMaxRows()));
+      archive.getRange(at,4,part.length,1).setNumberFormat('@');
       archive.getRange(at,1,part.length,7).setValues(part);
+      SpreadsheetApp.flush();
       var rb=archive.getRange(at,1,part.length,7).getValues();
       for(var j=0;j<part.length;j++){
-        if(String(rb[j][5])!==String(part[j][5])||String(rb[j][1])!==String(part[j][1])||String(rb[j][2])!==String(part[j][2])||String(rb[j][3])!==String(part[j][3])||String(rb[j][4])!==String(part[j][4])||String(rb[j][6])!==String(part[j][6]))throw new Error('WB_RNP_ARCHIVE_READBACK_FAILED:'+part[j][2]+':'+part[j][3]+':'+part[j][4]);
+        if(String(rb[j][5])!==String(part[j][5])||String(rb[j][1])!==String(part[j][1])||String(rb[j][2])!==String(part[j][2])||archivePeriodKey_(rb[j][3])!==archivePeriodKey_(part[j][3])||String(rb[j][4])!==String(part[j][4])||String(rb[j][6])!==String(part[j][6]))throw new Error('WB_RNP_ARCHIVE_READBACK_FAILED:'+part[j][2]+':'+part[j][3]+':'+part[j][4]);
         archiveSignatures[archiveRecordSignature_(part[j])]=true;
       }
     }
