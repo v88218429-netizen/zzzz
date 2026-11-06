@@ -211,6 +211,24 @@ class Database:
             return None
         return {"created_at": row["created_at"], "data": json.loads(row["data_json"])}
 
+    def recent_snapshots(self, source: str, key: str, limit: int = 100) -> list[dict[str, Any]]:
+        """Return recent snapshots newest first so durable agents can recover checkpoints."""
+        limit = max(1, min(1000, int(limit)))
+        with self.connect() as con:
+            rows = con.execute(
+                "SELECT data_json,created_at FROM snapshots "
+                "WHERE source=? AND snapshot_key=? ORDER BY id DESC LIMIT ?",
+                (source, key, limit),
+            ).fetchall()
+        out = []
+        for row in rows:
+            try:
+                data = json.loads(row["data_json"])
+            except (TypeError, json.JSONDecodeError):
+                continue
+            out.append({"created_at": row["created_at"], "data": data})
+        return out
+
     def create_action(self, proposal: ActionProposal) -> int:
         with self.connect() as con:
             cur = con.execute(
