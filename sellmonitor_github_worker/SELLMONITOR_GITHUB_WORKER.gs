@@ -6300,16 +6300,34 @@ function sellmonitorGithubWbInnerBuildRows_(sourceRows,headers,storeId,tz,dailyO
   function rollup_(g,grain){
     var days=Object.keys(g.dates).length, expected=(new Date(Date.UTC(Number(g.start.slice(0,4)),Number(g.start.slice(5,7))-1,Number(g.start.slice(8,10)))).getTime());
     var expectedDays=grain==='НЕДЕЛЯ'?7:(new Date(Date.UTC(Number(g.start.slice(0,4)),Number(g.start.slice(5,7)),0)).getUTCDate());
-    var sums=new Array(metricHeaders.length).fill(0),seen=new Array(metricHeaders.length).fill(0),last=g.items.slice().sort(function(a,b){return a.day<b.day?-1:1;}).pop(),anyPartial=false,allExact=true,source='',loaded='';
+    var sums=new Array(metricHeaders.length).fill(0),seen=new Array(metricHeaders.length).fill(0),last=g.items.slice().sort(function(a,b){return a.day<b.day?-1:1;}).pop(),anyPartial=false,allExact=true,source='',loaded='',metricCoverageIncomplete=false;
+    var ix={};metricHeaders.forEach(function(h,i){ix[h]=i;});
+    var requiredNames=['orders_qty','orders_revenue_rub','net_sales_qty','returns_qty','returns_revenue_rub','revenue_rub','customer_revenue_rub','marketplace_discount_rub','prime_cost_rub','commission_rub','logistic_rub','delivery_logistic_rub','return_logistic_rub','storage_rub','ad_rub','fines_rub','paid_acceptance_rub','deduction_rub','tax_rub','expenses_total_rub','profit_rub','payout_rub'];
+    var requiredIndexes={};
+    requiredNames.forEach(function(h){var idx=metricHeaders.indexOf(h);if(idx<0)metricCoverageIncomplete=true;else requiredIndexes[idx]=true;});
+    var salesIx=ix.net_sales_qty,returnsIx=ix.returns_qty;
     g.items.forEach(function(it){
       if(/PARTIAL|PRELIM/.test(it.trust))anyPartial=true;
       if(!/FACTUAL/.test(it.trust))allExact=false;
       if(it.source)source=it.source;
       if(it.loaded&&(!loaded||String(it.loaded)>String(loaded)))loaded=it.loaded;
-      it.metrics.forEach(function(v,i){if(v!==''&&v!=null&&isFinite(Number(v))){sums[i]+=Number(v);seen[i]++;}});
+      var exactRow=/FACTUAL/.test(String(it.trust||''));
+      var salesValue=salesIx==null?'':it.metrics[salesIx],returnsValue=returnsIx==null?'':it.metrics[returnsIx];
+      var noSales=salesValue!==''&&salesValue!=null&&isFinite(Number(salesValue))&&Number(salesValue)===0;
+      var noReturns=returnsValue!==''&&returnsValue!=null&&isFinite(Number(returnsValue))&&Number(returnsValue)===0;
+      it.metrics.forEach(function(v,i){
+        var header=metricHeaders[i];
+        // Sellmonitor leaves sale revenue and SPP blank on exact no-sale/no-return days.
+        // Treat only those structurally empty exact-day fields as zero; partial rows stay unknown.
+        if((v===''||v==null)&&exactRow){
+          if(noSales&&noReturns&&(header==='revenue_rub'||header==='customer_revenue_rub'||header==='marketplace_discount_rub'))v=0;
+          else if(noReturns&&header==='returns_revenue_rub')v=0;
+        }
+        if(requiredIndexes[i]&&(v===''||v==null||typeof v==='boolean'||!isFinite(Number(v))))metricCoverageIncomplete=true;
+        if(v!==''&&v!=null&&typeof v!=='boolean'&&isFinite(Number(v))){sums[i]+=Number(v);seen[i]++;}
+      });
     });
     var vals=metricHeaders.map(function(h,i){return seen[i]===g.items.length?sums[i]:'';});
-    var ix={};metricHeaders.forEach(function(h,i){ix[h]=i;});
     var profit=ix.profit_rub!=null?vals[ix.profit_rub]:'',revenue=ix.revenue_rub!=null?vals[ix.revenue_rub]:'',expenses=ix.expenses_total_rub!=null?vals[ix.expenses_total_rub]:'',sales=ix.net_sales_qty!=null?vals[ix.net_sales_qty]:'';
     if(ix.margin!=null)vals[ix.margin]=typeof profit==='number'&&typeof revenue==='number'&&revenue!==0?profit/revenue:'';
     if(ix.roi!=null)vals[ix.roi]=typeof profit==='number'&&typeof expenses==='number'&&expenses!==0?profit/expenses:'';
