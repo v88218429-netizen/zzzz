@@ -247,7 +247,8 @@ def _scan_cursor(
     campaign_nm_ids: dict[int, list[int]] | None = None,
 ) -> dict[str, Any]:
     """Resume completed campaign-product pairs and only queue changed catalog items."""
-    saved = previous.get("data") if isinstance(previous, dict) else previous
+    wrapped = previous.get("data") if isinstance(previous, dict) else None
+    saved = wrapped if isinstance(wrapped, dict) else previous
     saved = saved if isinstance(saved, dict) else {}
     expected = [int(x) for x in campaign_ids]
     expected_nms = {
