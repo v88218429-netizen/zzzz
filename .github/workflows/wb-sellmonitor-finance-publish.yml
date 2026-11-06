@@ -29,6 +29,10 @@ on:
         options: ["0", "1", "2"]
         default: "0"
         required: true
+  workflow_run:
+    workflows: ["Sellmonitor GitHub worker deploy"]
+    types: [completed]
+    branches: [mainggg]
   push:
     branches: [mainggg]
     paths:
@@ -55,9 +59,9 @@ jobs:
     env:
       WEBAPP_DEPLOYMENT_ID: AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw
       WEBHOOK_SECRET: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
-      PUBLISH_ONLY_STORE: ${{ github.event_name == 'workflow_dispatch' && inputs.store != 'all' && inputs.store || github.event_name == 'push' && contains(github.event.head_commit.message, '[air-only]') && 'air_wb' || github.event_name == 'push' && contains(github.event.head_commit.message, '[hozyayushka-only]') && 'hozyayushka_wb' || github.event_name == 'push' && contains(github.event.head_commit.message, '[sanych-only]') && 'sanych_wb' || '' }}
+      PUBLISH_ONLY_STORE: ${{ github.event_name == 'workflow_dispatch' && inputs.store != 'all' && inputs.store || contains(github.event.head_commit.message || github.event.workflow_run.head_commit.message, '[air-only]') && 'air_wb' || contains(github.event.head_commit.message || github.event.workflow_run.head_commit.message, '[hozyayushka-only]') && 'hozyayushka_wb' || contains(github.event.head_commit.message || github.event.workflow_run.head_commit.message, '[sanych-only]') && 'sanych_wb' || '' }}
       RESUME_ATTEMPT: ${{ github.event_name == 'workflow_dispatch' && inputs.resume_attempt || '0' }}
-      RESUME_PHASE: ${{ github.event_name == 'workflow_dispatch' && inputs.resume_phase || github.event_name == 'push' && format('push:{0}', github.event.head_commit.message) || 'summary' }}
+      RESUME_PHASE: ${{ github.event_name == 'workflow_dispatch' && inputs.resume_phase || github.event_name == 'push' && format('push:{0}', github.event.head_commit.message) || github.event_name == 'workflow_run' && format('push:{0}', github.event.workflow_run.head_commit.message) || 'summary' }}
     steps:
       - name: Check configured authorization
         shell: bash
@@ -242,7 +246,8 @@ jobs:
                               source_day = date.fromisoformat(str(source_max)) if source_max else phase_end
                               expected_latest = min(phase_end, source_day).isoformat()
                       latest_matches = len(matrices) == 1 and (expected_latest is None or matrices[0].get("max") == expected_latest) and (expected_earliest is None or matrices[0].get("min") == expected_earliest)
-                      if rnp.get("ok") is not True or rnp.get("readback") is not True or len(matrices) != 1 or matrices[0].get("sheet") != {"day":"01_Дни","week":"02_Недели","month":"03_Месяцы"}[grain] or not latest_matches:
+                      coverage_matches = len(matrices) == 1 and (matrices[0].get("no_source_data") is True or (matrices[0].get("coverage_verified") is True and matrices[0].get("source_periods") == matrices[0].get("readback_periods")))
+                      if rnp.get("ok") is not True or rnp.get("readback") is not True or len(matrices) != 1 or matrices[0].get("sheet") != {"day":"01_Дни","week":"02_Недели","month":"03_Месяцы"}[grain] or not latest_matches or not coverage_matches:
                           last = "RNP matrix readback mismatch: " + json.dumps(rnp, ensure_ascii=False)[:1200]
                           errors.append("WB finance RNP readback failed for " + store_id + "/" + grain + ": " + last)
                           failed_phases.append((store_id, phase))
