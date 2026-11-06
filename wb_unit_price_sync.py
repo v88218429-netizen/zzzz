@@ -1,6 +1,7 @@
 import json, os, sys, time
 from datetime import datetime, timezone
 from urllib.request import Request, urlopen
+from urllib.parse import urlencode
 from urllib.error import HTTPError, URLError
 
 API = "https://discounts-prices-api.wildberries.ru/api/v2/list/goods/filter"
@@ -13,9 +14,10 @@ MIN_TOTAL = 240
 MAX_TOTAL = 1200
 LIMIT = 1000
 
-def request_json(url, token, payload=None):
-    body = None if payload is None else json.dumps(payload, ensure_ascii=False).encode()
-    req = Request(url, data=body, headers={"Authorization": token, "Content-Type": "application/json"})
+def request_json(url, token, params=None):
+    if params:
+        url = url + "?" + urlencode(params)
+    req = Request(url, headers={"Authorization": token})
     for attempt in range(4):
         try:
             with urlopen(req, timeout=60) as res:
