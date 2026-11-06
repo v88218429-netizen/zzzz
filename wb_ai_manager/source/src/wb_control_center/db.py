@@ -139,6 +139,15 @@ class Database:
         with self.connect() as con:
             con.execute("UPDATE runs SET finished_at=?,status=?,error=? WHERE id=?", (finished_at, status, error, run_id))
 
+    def last_run_started_at(self, agent: str) -> str | None:
+        """Return the start time of the latest attempt, including failures."""
+        with self.connect() as con:
+            row = con.execute(
+                "SELECT started_at FROM runs WHERE agent=? ORDER BY id DESC LIMIT 1",
+                (agent,),
+            ).fetchone()
+        return str(row["started_at"]) if row and row["started_at"] else None
+
     def interrupt_unfinished_runs(self, older_than: str, finished_at: str,
                                   reason: str = "Application restarted before run completion") -> int:
         """Close stale runs left behind by process shutdown or task cancellation."""
