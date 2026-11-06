@@ -1,0 +1,37 @@
+name: WB unit price snapshot
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "7,37 * * * *"
+permissions:
+  contents: read
+concurrency:
+  group: wb-unit-price-snapshot
+  cancel-in-progress: false
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Load deployed bridge address
+        id: bridge
+        run: |
+          python - <<'PY'
+          import json, os
+          with open("google_apps_script_wb_unit_prices/bridge_deployment.json", encoding="utf-8") as f:
+              url = json.load(f)["url"]
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as f:
+              f.write("url=" + url + "\n")
+          PY
+      - name: Read prices from all three WB stores and refresh the sheet
+        env:
+          BRIDGE_URL: ${{ steps.bridge.outputs.url }}
+          WB_UNIT_PRICE_BRIDGE_KEY: ${{ secrets.WB_UNIT_PRICE_BRIDGE_KEY }}
+          WB_API_TOKEN_AP: ${{ secrets.WB_API_TOKEN_AP }}
+          WB_API_TOKEN_AA: ${{ secrets.WB_API_TOKEN_AA }}
+          WB_API_TOKEN_YV: ${{ secrets.WB_API_TOKEN_YV }}
+        run: python wb_unit_price_sync.py
