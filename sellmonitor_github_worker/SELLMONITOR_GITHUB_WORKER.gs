@@ -6404,8 +6404,8 @@ function sellmonitorGithubWbInnerUpsert_(ss,sh,headers,rows,storeName){
 }
 
 function sellmonitorGithubPublishWbInnerPeriods_(onlyStore,requestedPhase){
-  var publishLock=LockService.getScriptLock();
-  if(!publishLock.tryLock(30000))return {ok:false,action:'publish_wb_inner_periods',phase:String(requestedPhase||'all'),stores:[{store:String(onlyStore||'all'),ok:false,error:'WB_INNER_PUBLISH_LOCK_BUSY'}]};
+  var publishLock=LockService.getUserLock();
+  if(!publishLock.tryLock(10000))return {ok:false,action:'publish_wb_inner_periods',phase:String(requestedPhase||'all'),stores:[{store:String(onlyStore||'all'),ok:false,error:'WB_INNER_PUBLISH_LOCK_BUSY'}]};
   try{return sellmonitorGithubPublishWbInnerPeriodsUnlocked_(onlyStore,requestedPhase);}
   finally{publishLock.releaseLock();}
 }
