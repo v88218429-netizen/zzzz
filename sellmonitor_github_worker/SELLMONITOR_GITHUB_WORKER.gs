@@ -7106,6 +7106,11 @@ function doPost(e) {
       return sellmonitorGithubWebJson_({ok:supplyResult.ok===true,action:action,result:supplyResult});
     }
 
+    if (action === 'fbs_runtime_diagnostic') {
+      var runtimeDiagnostic = sellmonitorGithubFbsRuntimeDiagnosticV1_();
+      return sellmonitorGithubWebJson_({ok:runtimeDiagnostic.ok,action:action,result:runtimeDiagnostic});
+    }
+
     if (action === 'fbs_targets_health') {
       return sellmonitorGithubWebJson_({ok:true,action:action,result:sellmonitorGithubFbsTargetHealthV1_()});
     }
@@ -7278,6 +7283,31 @@ function sellmonitorGithubFbsFormulaRepairV1_(body) {
   return {ok:true,client:client,sheet:'🧠 Центр решений',range:'AH1',
     changed:!alreadyFixed,formula:readback,displayValue:display,
     queryHasData:!noMatches,checkedAt:new Date().toISOString()};
+}
+
+/** Lightweight read-only AIR/FBS grid probe; avoids scanning every order or client workbook. */
+function sellmonitorGithubFbsRuntimeDiagnosticV1_() {
+  var targets=[
+    {client:'SANYCH',id:'1v0qt-thJDOw3tLFdZVGhdXJdBM8rDPRz9mHlcHmuuyM'},
+    {client:'AIR',id:'1qJvhEOIku7sOMydfrUz0PR5dkcU0sLjv433pa1MFBcM'},
+    {client:'HOZYAYUSHKA',id:'1f9dxXeZxkDth8h2C9GA7L7WqAr1-Ok-Oi5YtufLYOOk'}
+  ];
+  var results=[];
+  targets.forEach(function(t){
+    try{
+      var ss=SpreadsheetApp.openById(t.id);
+      var sheet=ss.getSheetByName('📦 FBS Заказы');
+      if(!sheet)throw new Error('ORDERS_TAB_MISSING');
+      var rows=Number(sheet.getMaxRows()),columns=Number(sheet.getMaxColumns());
+      results.push({client:t.client,accessible:true,lastRow:Number(sheet.getLastRow()),
+        maxRows:rows,maxColumns:columns,gridCells:rows*columns});
+    }catch(e){
+      results.push({client:t.client,accessible:false,errorType:String(e&&e.name||'Error')});
+    }
+  });
+  var stages=sellmonitorGithubFbsStageSnapshot_();
+  return {ok:results.every(function(x){return x.accessible;}),checkedAt:new Date().toISOString(),
+    results:results,fbs_ingest_stages:stages};
 }
 
 /** Read-only health check over real order IDs and the maximum order timestamp. */
