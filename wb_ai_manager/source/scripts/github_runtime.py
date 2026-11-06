@@ -467,6 +467,56 @@ async def run() -> int:
                 "scan_errors": cache.get("scan_errors") or [],
             },
         }
+    # Reuse the fresh live seller-card catalog to identify advertised nmIDs exactly.
+    # Keep only products in each cabinet's ad set; this data stays in the encrypted optimizer state.
+    for slug, code in shop_codes.items():
+        shop_state = optimizer_state["shops"].get(code) or {}
+        advertised = {str(nm).strip() for nm in shop_state.get("advertised_nm_ids") or []}
+        card_agent_runs = (cabinets.get(slug) or {}).get("runs") or []
+        cards_ran_ok = any(
+            isinstance(row, dict) and row.get("agent") == "cards" and row.get("status") == "ok"
+            for row in card_agent_runs
+        )
+        if not cards_ran_ok or not advertised:
+            continue
+        card_agent = (cabinet_snapshots.get(slug) or {}).get("cards") or {}
+        card_snapshot = card_agent.get("card_catalog") or {}
+        card_data = card_snapshot.get("data") if isinstance(card_snapshot, dict) else None
+        if not isinstance(card_data, dict) or card_data.get("source") != "live_wb_cards":
+            continue
+        try:
+            card_at = datetime.fromisoformat(str(card_snapshot.get("created_at") or "").replace("Z", "+00:00"))
+            run_at = datetime.fromisoformat(generated_at.replace("Z", "+00:00"))
+            if card_at.tzinfo is None:
+                card_at = card_at.replace(tzinfo=timezone.utc)
+            if run_at.tzinfo is None:
+                run_at = run_at.replace(tzinfo=timezone.utc)
+            if (card_at.astimezone(timezone.utc) - run_at.astimezone(timezone.utc)).total_seconds() < -120:
+                continue
+        except (TypeError, ValueError):
+            continue
+        live_details = {}
+        for card in card_data.get("cards") or []:
+            if not isinstance(card, dict):
+                continue
+            nm_id = str(card.get("nmID") or card.get("nmId") or card.get("nm_id") or "").strip()
+            if not nm_id.isdigit() or nm_id not in advertised:
+                continue
+            seller_article = str(card.get("vendorCode") or card.get("supplierArticle") or "").strip()
+            product_name = str(card.get("title") or card.get("name") or card.get("imtName") or "").strip()
+            if not seller_article and not product_name:
+                continue
+            live_details[nm_id] = {
+                "seller_article": seller_article or None,
+                "product_name": product_name or None,
+                "brand": str(card.get("brand") or "").strip() or None,
+                "subject": str(card.get("subjectName") or "").strip() or None,
+                "source": "live_wb_cards",
+                "observed_at": card_snapshot.get("created_at"),
+            }
+        if live_details:
+            shop_state["live_product_details_by_nm_id"] = live_details
+
     q = query_manager(portfolio_snapshot, cabinet_snapshots.get("sanych") or {})
     optimizer_state["query_manager"] = q
     # Enrich unmatched advertised nmIDs with public identity only. This never supplies price,
