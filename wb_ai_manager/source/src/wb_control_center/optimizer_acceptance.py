@@ -146,7 +146,7 @@ def evaluate_optimizer_acceptance(
                 else "; подтверждённого недавнего полного обхода нет"
             )
             blockers.append(
-                f"{name}: нет подтверждённого полного обхода за последние {SWEEP_FRESHNESS_MINUTES} мин. "
+                f"{name}: нет подтверждённого полного обхода рекламы за последние {SWEEP_FRESHNESS_MINUTES} мин. "
                 f"(текущий проход {campaigns_seen}/{campaigns_total} кампаний, "
                 f"{products_seen}/{products_total} товаров{last_text})."
             )
