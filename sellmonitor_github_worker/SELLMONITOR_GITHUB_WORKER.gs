@@ -7409,21 +7409,53 @@ function sellmonitorGithubFbsStatusReadV1_(body) {
   if(String(head[0]||'')!=='ID заказа'||String(head[4]||'')!=='Статус продавца'||String(head[5]||'')!=='Статус WB')
     throw new Error('FBS_COLUMN_SCHEMA_MISMATCH');
 
-  // Read one coherent A:F snapshot and derive both row hints and statuses from it.
-  // This avoids hundreds of small Sheets API ranges and the extra UrlFetch quota.
-  var grid=sheetLastRow>1?sheet.getRange(2,1,sheetLastRow-1,6).getDisplayValues():[];
+  // Cache a per-store order-ID to row index. Read the ID column once on a
+  // cache miss, then fetch only compact ranges containing requested rows.
+  // This avoids rereading six columns across the entire workbook on every batch.
+  function indexMark(stage){console.log('FBS_STATUS_INDEX_'+client+'_'+stage);}
+  var idIndex=sellmonitorGithubFbsLoadIdIndex_(sheet,client,sheetLastRow,indexMark,false);
   var requestedIds=Object.create(null),rowMap=Object.create(null),states=Object.create(null);
-  ids.forEach(function(id){requestedIds[id]=true;});
-  for(var i=0;i<grid.length;i++){
-    var row=grid[i]||[];
-    var foundId=String(row[0]||'').trim();
-    if(requestedIds[foundId]&&!Object.prototype.hasOwnProperty.call(rowMap,foundId)){
-      rowMap[foundId]=i+2;
-      states[foundId]={supplierStatus:String(row[4]||''),wbStatus:String(row[5]||'')};
-    }
+  ids.forEach(function(id){
+    requestedIds[id]=true;
+    var row=Number(idIndex.map[id]||0);
+    if(row>=2&&row<=sheetLastRow)rowMap[id]=row;
+  });
+  function readRequestedRows_(){
+    states=Object.create(null);
+    var items=Object.keys(rowMap).map(function(id){return {id:id,row:Number(rowMap[id])};})
+      .sort(function(a,b){return a.row-b.row;});
+    var groups=[];
+    items.forEach(function(item){
+      var group=groups.length?groups[groups.length-1]:null;
+      if(!group||item.row-group.end>25||item.row-group.start+1>250){
+        group={start:item.row,end:item.row,items:[item]};groups.push(group);
+      }else{group.end=item.row;group.items.push(item);}
+    });
+    var stale=false;
+    groups.forEach(function(group){
+      var values=sheet.getRange(group.start,1,group.end-group.start+1,6).getDisplayValues();
+      group.items.forEach(function(item){
+        var row=values[item.row-group.start]||[];
+        if(String(row[0]||'').trim()!==item.id){stale=true;return;}
+        states[item.id]={supplierStatus:String(row[4]||''),wbStatus:String(row[5]||'')};
+      });
+    });
+    return stale;
   }
-  console.log('FBS_STATUS_READ_SNAPSHOT client='+client+' requested='+ids.length+
-    ' matched='+Object.keys(rowMap).length+' rows='+grid.length+
+  var staleIndex=readRequestedRows_();
+  if(staleIndex){
+    indexMark('STALE_REBUILD_START');
+    idIndex=sellmonitorGithubFbsLoadIdIndex_(sheet,client,sheetLastRow,indexMark,true);
+    rowMap=Object.create(null);
+    ids.forEach(function(id){
+      var row=Number(idIndex.map[id]||0);
+      if(row>=2&&row<=sheetLastRow)rowMap[id]=row;
+    });
+    if(readRequestedRows_())throw new Error('FBS_STATUS_INDEX_STALE_AFTER_REBUILD');
+  }
+  console.log('FBS_STATUS_READ_INDEX client='+client+' requested='+ids.length+
+    ' matched='+Object.keys(states).length+' indexed_rows='+Object.keys(idIndex.map).length+
+    ' sheet_rows='+sheetLastRow+' cache_last_row='+idIndex.lastRow+
     ' elapsed_ms='+(Date.now()-startedAt));
 
   var alternateRowMap={},alternateSheetLastRow=0;
@@ -7544,7 +7576,7 @@ function sellmonitorGithubFbsSaveIdIndex_(cache, prefix, client, lastRow, index)
 }
 
 function sellmonitorGithubFbsLoadIdIndex_(sheet, client, lastRow, mark, forceRebuild) {
-  var cache=CacheService.getScriptCache(),prefix='SMC_FBS_ID_INDEX_V2_',index=null,indexLast=0;
+  var cache=CacheService.getScriptCache(),prefix='SMC_FBS_ID_INDEX_V3_'+client+'_',index=null,indexLast=0;
   if(!forceRebuild){
     try{
       var meta=JSON.parse(cache.get(prefix+'meta')||'null');
