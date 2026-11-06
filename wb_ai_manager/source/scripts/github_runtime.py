@@ -249,7 +249,9 @@ async def run_cabinet(
             wb_connected = True
         except Exception as exc:
             errors.append({"stage": "wb.start", "error": str(exc)})
-        run_results = await center.run_all_once()
+        # Continue the cursor-based ad scan every runtime cycle, while all other
+        # agents follow their persisted policy cadence (prices: 30 min, finance: 6 h, etc.).
+        run_results = await center.run_due_once(interval_overrides={"advertising_optimizer": 10})
         snap = snapshots(center)
         decisions = center.db.current_decisions(limit=500) or center.refresh_decisions()
         events = center.db.recent_events(hours=48, limit=500)
