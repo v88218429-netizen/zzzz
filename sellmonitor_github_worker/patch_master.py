@@ -690,10 +690,15 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
 
     # Keep period-matrix freshness labels tied to the actual verified source and protect the prior cell value.
     freshness_marker = "WB_RNP_FRESHNESS_AND_AXIS_READBACK_V1"
-    freshness_anchor = "    stats.push({sheet:spec.name,target_periods:targets.length,updated_columns:updates.length,archived_segments:archives,written_values:written,duplicates_removed:dupDates.length,min:targets[0]||'',max:targets.length?targets[targets.length-1]:''});"
+    freshness_anchors = [
+        "    stats.push({sheet:spec.name,target_periods:targets.length,updated_columns:updates.length,archived_segments:archives,written_values:written,duplicates_removed:dupDates.length,min:targets[0]||'',max:targets.length?targets[targets.length-1]:''});",
+        "    stats.push({sheet:spec.name,target_periods:targets.length,source_periods:targets,readback_periods:readbackPeriods,coverage_verified:coverageVerified,axis_rebuilt:axisRebuilt,axis_archive_segments:axisArchiveRows,updated_columns:updates.length,archived_segments:archives,written_values:written,duplicates_removed:dupDates.length,min:targets[0]||'',max:targets.length?targets[targets.length-1]:''});",
+    ]
     if freshness_marker not in worker_text:
-        if worker_text.count(freshness_anchor) != 1:
+        freshness_matches = [anchor for anchor in freshness_anchors if worker_text.count(anchor) == 1]
+        if len(freshness_matches) != 1:
             raise SystemExit("WB RNP matrix stats anchor mismatch")
+        freshness_anchor = freshness_matches[0]
         freshness_code = """/* WB_RNP_FRESHNESS_AND_AXIS_READBACK_V1 */
     if(spec.grain==='week'||spec.grain==='month'){
       var freshnessCell=sh.getRange('M1');
