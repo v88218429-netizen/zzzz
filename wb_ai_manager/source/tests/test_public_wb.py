@@ -38,9 +38,9 @@ def test_public_card_lookup_returns_identity_without_economics():
 
         def json(self):
             return {"data": {"products": [{
-                "id": 1994573765,
-                "name": "Корзина для белья белая с крышкой пластиковая в ванную",
-                "brand": "Милих",
+                "id": 999,
+                "name": "Тестовая карточка товара",
+                "brand": "Тестовая марка",
                 "subjectName": "Аксессуары для стирки",
             }]}}
 
@@ -59,14 +59,14 @@ def test_public_card_lookup_returns_identity_without_economics():
     fake = FakeClient()
     client.client = fake
     try:
-        card = asyncio.run(client.product_card_by_nm_id("1994573765"))
+        card = asyncio.run(client.product_card_by_nm_id("999"))
     finally:
         asyncio.run(client.close())
 
     assert fake.request[0] == "https://card.wb.ru/cards/v2/detail"
-    assert fake.request[1]["nm"] == "1994573765"
-    assert card["name"] == "Корзина для белья белая с крышкой пластиковая в ванную"
-    assert card["brand"] == "Милих"
+    assert fake.request[1]["nm"] == "999"
+    assert card["name"] == "Тестовая карточка товара"
+    assert card["brand"] == "Тестовая марка"
     assert card["source"] == "wb_public_card"
     assert "price" not in card and "cost" not in card and "profit" not in card
 
