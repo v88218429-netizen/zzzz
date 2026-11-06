@@ -82,6 +82,7 @@ def optimizer_sweep_progress(optimizer_state: dict[str, Any]) -> dict[str, dict[
             "campaign_product_pairs_seen": sweep.get("sweep_pairs_seen", 0),
             "campaign_product_pairs_total": sweep.get("sweep_pairs_total", 0),
             "scan_error_count": len(sweep.get("scan_errors") or []),
+            "last_completed_at": (sweep.get("last_completed_sweep") or {}).get("completed_at"),
             "complete": sweep.get("sweep_complete") is True,
         }
     return progress
@@ -457,6 +458,7 @@ async def run() -> int:
             "sweep": {
                 **cache["sweep"],
                 "sweep_complete": cache["sweep_complete"],
+                "last_completed_sweep": cache.get("last_completed_sweep"),
                 "sweep_campaigns_seen": deep_scan.get("sweep_campaigns_seen", 0),
                 "sweep_campaigns_total": deep_scan.get("sweep_campaigns_total", len(cache.get("campaign_ids") or [])),
                 "sweep_products_seen": deep_scan.get("sweep_products_seen", 0),
