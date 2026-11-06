@@ -97,12 +97,16 @@ def fetch_shop(code, label, secret_name, floor):
 
 def post_bridge(url, payload):
     req = Request(url, data=json.dumps(payload, ensure_ascii=False).encode(), headers={"Content-Type": "application/json"}, method="POST")
-    with urlopen(req, timeout=120) as res:
-        body = res.read().decode("utf-8")
-        try:
-            return json.loads(body)
-        except json.JSONDecodeError:
-            raise RuntimeError("Bridge returned non-JSON response")
+    try:
+        with urlopen(req, timeout=120) as res:
+            body = res.read().decode("utf-8")
+    except HTTPError as e:
+        detail = e.read(500).decode("utf-8", "replace")
+        raise RuntimeError(f"Bridge HTTP {e.code}: {detail}")
+    try:
+        return json.loads(body)
+    except json.JSONDecodeError:
+        raise RuntimeError("Bridge returned non-JSON response")
 
 def main():
     bridge = os.environ.get("BRIDGE_URL", "").strip()
