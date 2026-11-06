@@ -7554,10 +7554,73 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
     var authToken=ScriptApp.getOAuthToken();
     var apiBase='https://sheets.googleapis.com/v4/spreadsheets/'+encodeURIComponent(spreadsheetId);
     var orderSheet="'📦 FBS Заказы'";
+    // Use the enabled Advanced Sheets service so FBS ingestion does not spend
+    // the Apps Script account's daily UrlFetch quota on Sheets API calls.
     function fetchSheetApi(url,options){
-      var opt=options||{}; opt.headers=opt.headers||{};
-      opt.headers.Authorization='Bearer '+authToken; opt.muteHttpExceptions=true; opt.timeoutSeconds=30;
-      return UrlFetchApp.fetch(url,opt);
+      var opt=options||{},method=String(opt.method||'get').toLowerCase();
+      var path=String(url).slice(apiBase.length),query=path.indexOf('?')>=0?path.slice(path.indexOf('?')+1):'';
+      if(path.indexOf('?')>=0)path=path.slice(0,path.indexOf('?'));
+      function decode_(value){return decodeURIComponent(String(value||'').replace(/\\+/g,'%20'));}
+      function queryValues_(name){
+        var out=[],parts=query?query.split('&'):[];
+        parts.forEach(function(part){
+          var eq=part.indexOf('='),key=decode_(eq<0?part:part.slice(0,eq));
+          if(key===name)out.push(decode_(eq<0?'':part.slice(eq+1)));
+        });
+        return out;
+      }
+      function queryValue_(name){var values=queryValues_(name);return values.length?values[0]:'';}
+      function response_(code,payload){
+        var body=JSON.stringify(payload||{});
+        return {getResponseCode:function(){return code;},getContentText:function(){return body;}};
+      }
+      try{
+        var result={},range='',resource={},args={};
+        if(method==='get'&&path===''||method==='get'&&path.charAt(0)==='?'){
+          args.fields=queryValue_('fields');
+          result=Sheets.Spreadsheets.get(spreadsheetId,args);
+        }else if(method==='post'&&path==='/values:batchUpdate'){
+          resource=JSON.parse(opt.payload||'{}');
+          result=Sheets.Spreadsheets.Values.batchUpdate(resource,spreadsheetId);
+        }else if(method==='get'&&path.indexOf('/values:batchGet')===0){
+          args.ranges=queryValues_('ranges');
+          args.majorDimension=queryValue_('majorDimension')||'ROWS';
+          args.valueRenderOption=queryValue_('valueRenderOption')||'FORMATTED_VALUE';
+          result=Sheets.Spreadsheets.Values.batchGet(spreadsheetId,args);
+        }else if(method==='post'&&path==='/values/'+path.split('/values/')[1]&&path.indexOf(':append')>0){
+          range=decode_(path.slice('/values/'.length,path.indexOf(':append')));
+          resource=JSON.parse(opt.payload||'{}');
+          args.valueInputOption=queryValue_('valueInputOption')||'RAW';
+          args.insertDataOption=queryValue_('insertDataOption')||'INSERT_ROWS';
+          result=Sheets.Spreadsheets.Values.append(resource,spreadsheetId,range,args);
+        }else if(method==='post'&&path===':batchUpdate'){
+          resource=JSON.parse(opt.payload||'{}');
+          result=Sheets.Spreadsheets.batchUpdate(resource,spreadsheetId);
+        }else if(method==='post'&&path.indexOf('/values/')===0){
+          range=decode_(path.slice('/values/'.length));
+          resource=JSON.parse(opt.payload||'{}');
+          args.valueInputOption=queryValue_('valueInputOption')||'RAW';
+          args.includeValuesInResponse=String(queryValue_('includeValuesInResponse')).toLowerCase()==='true';
+          args.responseValueRenderOption=queryValue_('responseValueRenderOption')||'UNFORMATTED_VALUE';
+          result=Sheets.Spreadsheets.Values.update(resource,spreadsheetId,range,args);
+        }else if(method==='get'&&path.indexOf('/values/')===0){
+          range=decode_(path.slice('/values/'.length));
+          args.valueRenderOption=queryValue_('valueRenderOption')||'FORMATTED_VALUE';
+          result=Sheets.Spreadsheets.Values.get(spreadsheetId,range,args);
+        }else{
+          throw new Error('FBS_SHEETS_ADVANCED_ROUTE_UNSUPPORTED');
+        }
+        return response_(200,result);
+      }catch(apiError){
+        var message=String(apiError&&apiError.message||apiError||'Sheets API error');
+        var codeMatch=message.match(/(?:returned code|HTTP|status(?: code)?)\\s*[:=]?\\s*(\\d{3})/i);
+        var code=codeMatch?Number(codeMatch[1]):500;
+        var status=code===403?'PERMISSION_DENIED':code===404?'NOT_FOUND':
+          code===429?'RESOURCE_EXHAUSTED':code>=500?'INTERNAL':'UNKNOWN';
+        console.log('FBS_SHEETS_ADVANCED_ERROR code='+code+' type='+
+          String(apiError&&apiError.name||'Error')+' message='+message.slice(0,240));
+        return response_(code,{error:{code:code,status:status,message:message}});
+      }
     }
     function sheetApiFailure(response){
       try {
