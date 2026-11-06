@@ -31,6 +31,7 @@ jobs:
         env:
           BRIDGE_URL: ${{ steps.bridge.outputs.url }}
           WB_UNIT_PRICE_BRIDGE_KEY: ${{ secrets.WB_UNIT_PRICE_BRIDGE_KEY }}
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
           WB_API_TOKEN_AP: ${{ secrets.WB_API_TOKEN_AP }}
           WB_API_TOKEN_AA: ${{ secrets.WB_API_TOKEN_AA }}
           WB_API_TOKEN_YV: ${{ secrets.WB_API_TOKEN_YV }}
