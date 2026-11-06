@@ -6,6 +6,7 @@ from typing import Any
 import httpx
 
 SEARCH_URL='https://search.wb.ru/exactmatch/ru/common/v9/search'
+PRODUCT_CARD_URL='https://card.wb.ru/cards/v2/detail'
 
 class PublicWBClient:
     """Read-only storefront intelligence. Uses unofficial WB website endpoints.
@@ -36,6 +37,48 @@ class PublicWBClient:
             price=pr.get('product') or pr.get('total')
             out.append({'id':p.get('id'),'name':p.get('name'),'brand':p.get('brand'),'price_rub':price/100 if isinstance(price,(int,float)) else None,'rating':p.get('reviewRating'),'reviews':p.get('feedbacks')})
         return out
+
+    async def product_card_by_nm_id(self, nm_id: str | int) -> dict[str, Any] | None:
+        """Resolve public identity only; never use public card data as unit economics."""
+        try:
+            target = int(str(nm_id).strip())
+        except (TypeError, ValueError):
+            return None
+        if target <= 0:
+            return None
+        async with self._lock:
+            loop = asyncio.get_running_loop()
+            now = loop.time()
+            delay = self.min_interval - (now - self._last)
+            if delay > 0:
+                await asyncio.sleep(delay)
+            params = {
+                "appType": "1", "curr": "rub", "dest": self.dest, "nm": str(target), "spp": "30",
+            }
+            response = await self.client.get(PRODUCT_CARD_URL, params=params)
+            self._last = loop.time()
+        response.raise_for_status()
+        payload = response.json() or {}
+        data = payload.get("data") if isinstance(payload, dict) else {}
+        products = (data or {}).get("products") or payload.get("products") or []
+        card = next((
+            item for item in products
+            if isinstance(item, dict)
+            and str(item.get("id") or item.get("nmId") or "").strip() == str(target)
+        ), None)
+        if not isinstance(card, dict):
+            return None
+        name = str(card.get("name") or "").strip()
+        if not name:
+            return None
+        return {
+            "nm_id": str(target),
+            "name": name,
+            "brand": str(card.get("brand") or "").strip() or None,
+            "subject": str(card.get("subjectName") or "").strip() or None,
+            "source": "wb_public_card",
+            "product_url": f"https://www.wildberries.ru/catalog/{target}/detail.aspx",
+        }
 
     @staticmethod
     def analyze(products:list[dict[str,Any]], own_ids:list[int]) -> dict[str,Any]:
