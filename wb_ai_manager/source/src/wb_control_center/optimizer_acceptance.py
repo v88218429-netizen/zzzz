@@ -166,6 +166,22 @@ def evaluate_optimizer_acceptance(
                     "mapping_key": mapping_issue.get("key"),
                     "reason_codes": mapping_issue.get("reason_codes") or ["exact_shop_nm_id_match_missing"],
                 }
+                public_details_by_nm_id = (shops.get(code) or {}).get("public_product_details_by_nm_id")
+                public_details_by_nm_id = public_details_by_nm_id if isinstance(public_details_by_nm_id, dict) else {}
+                public_details = public_details_by_nm_id.get(sku)
+                if isinstance(public_details, dict):
+                    if public_details.get("name"):
+                        diagnostic["product_name"] = str(public_details["name"])
+                    if public_details.get("brand"):
+                        diagnostic["brand"] = str(public_details["brand"])
+                    if public_details.get("product_url"):
+                        diagnostic["product_url"] = str(public_details["product_url"])
+                    if public_details.get("source"):
+                        diagnostic["identity_source"] = str(public_details["source"])
+                    diagnostic["reason_text"] = (
+                        "Рекламируемый товар отсутствует в списке товаров кабинета; "
+                        "юнит-экономика и числовое решение не подтверждены."
+                    )
                 diagnostics.append({key: value for key, value in diagnostic.items() if value is not None})
                 continue
             matched += 1
