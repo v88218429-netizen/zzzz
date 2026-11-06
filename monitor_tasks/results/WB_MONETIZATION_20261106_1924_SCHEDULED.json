@@ -3,7 +3,7 @@
   "request": "WB_MONETIZATION_20261106_1924_SCHEDULED.json",
   "query": "как монетизировать экспертизу Wildberries кроме ведения кабинетов",
   "knowledge_tag": "WB_MONETIZATION",
-  "generated_at": "2026-11-06T16:30:35.705801+00:00",
+  "generated_at": "2026-11-06T16:32:06.327894+00:00",
   "videos": [],
   "errors": [
     {
@@ -37,10 +37,10 @@
       "error": "youtube_captions: \nCould not retrieve a transcript for the video https://www.youtube.com/watch?v=4muq0yvKrmo! This is most likely caused by:\n\nYouTube is blocking requests from your IP. This usually is due to one of the following reasons:\n- You have done too many requests and your IP has been blocked by YouTube\n- You are doing requests from an IP belonging to a cloud provider (like AWS, Google Cloud Platform, Azure, etc.). Unfortunately, most IPs from cloud providers are blocked by YouTube.\n\nThere are two things you can do to work around this:\n1. Use proxies to hide your IP address, as explained in the \"Working around IP bans\" section of the README (https://github.com/jdepoix/youtube-transcript-api?tab=readme-ov-file#working-around-ip-bans-requestblocked-or-ipblocked-exception).\n2. (NOT REC"
     },
     {
-      "video_id": "Fdcu1uXic0M",
-      "url": "https://www.youtube.com/watch?v=Fdcu1uXic0M",
-      "title": "How to sell through Wildberries from Kyrgyzstan?",
-      "error": "youtube_captions: \nCould not retrieve a transcript for the video https://www.youtube.com/watch?v=Fdcu1uXic0M! This is most likely caused by:\n\nYouTube is blocking requests from your IP. This usually is due to one of the following reasons:\n- You have done too many requests and your IP has been blocked by YouTube\n- You are doing requests from an IP belonging to a cloud provider (like AWS, Google Cloud Platform, Azure, etc.). Unfortunately, most IPs from cloud providers are blocked by YouTube.\n\nThere are two things you can do to work around this:\n1. Use proxies to hide your IP address, as explained in the \"Working around IP bans\" section of the README (https://github.com/jdepoix/youtube-transcript-api?tab=readme-ov-file#working-around-ip-bans-requestblocked-or-ipblocked-exception).\n2. (NOT REC"
+      "video_id": "d18jw-fPQmo",
+      "url": "https://www.youtube.com/watch?v=d18jw-fPQmo",
+      "title": "Сервис по подсчету налогов специально для селлеров WB и Ozon! УСН и АУСН. Проверь бухгалтера и себя!",
+      "error": "youtube_captions: \nCould not retrieve a transcript for the video https://www.youtube.com/watch?v=d18jw-fPQmo! This is most likely caused by:\n\nYouTube is blocking requests from your IP. This usually is due to one of the following reasons:\n- You have done too many requests and your IP has been blocked by YouTube\n- You are doing requests from an IP belonging to a cloud provider (like AWS, Google Cloud Platform, Azure, etc.). Unfortunately, most IPs from cloud providers are blocked by YouTube.\n\nThere are two things you can do to work around this:\n1. Use proxies to hide your IP address, as explained in the \"Working around IP bans\" section of the README (https://github.com/jdepoix/youtube-transcript-api?tab=readme-ov-file#working-around-ip-bans-requestblocked-or-ipblocked-exception).\n2. (NOT REC"
     },
     {
       "video_id": "-A-7MWwb_Y8",
