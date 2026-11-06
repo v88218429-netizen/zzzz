@@ -1,0 +1,65 @@
+name: Deploy WB unit price bridge
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: wb-unit-price-bridge-deployment
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Apps Script CLI
+        run: npm install --global @google/clasp@3.3.0
+      - name: Prepare private Google authorization and bridge files
+        env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+        run: |
+          set -euo pipefail
+          test -n "$CLASPRC_JSON"
+          mkdir -p /tmp/wb_unit_price_bridge /tmp/wb_unit_price_oauth
+          cp google_apps_script_wb_unit_prices/.clasp.json google_apps_script_wb_unit_prices/appsscript.json google_apps_script_wb_unit_prices/Code.gs /tmp/wb_unit_price_bridge/
+          printf '%s' "$CLASPRC_JSON" > /tmp/wb_unit_price_oauth/.clasprc.json
+          chmod 600 /tmp/wb_unit_price_oauth/.clasprc.json
+          echo "BRIDGE_PREPARED=OK"
+      - name: Push source and deploy protected web app
+        run: |
+          set -euo pipefail
+          clasp -A /tmp/wb_unit_price_oauth/.clasprc.json -P /tmp/wb_unit_price_bridge/.clasp.json push --force
+          clasp -A /tmp/wb_unit_price_oauth/.clasprc.json -P /tmp/wb_unit_price_bridge/.clasp.json deploy --description "WB unit price snapshot writer — fixed sheet and tabs" | tee /tmp/wb_unit_price_deploy.log
+          python - <<'PY'
+          import json, re
+          from pathlib import Path
+          raw=Path('/tmp/wb_unit_price_deploy.log').read_text(encoding='utf-8')
+          ids=re.findall(r'AKfy[A-Za-z0-9_-]{18,}',raw)
+          if not ids:
+              raise SystemExit('Apps Script returned no deployment ID')
+          deployment_id=ids[-1]
+          payload={'deploymentId':deployment_id,'url':'https://script.google.com/macros/s/'+deployment_id+'/exec'}
+          Path('google_apps_script_wb_unit_prices/bridge_deployment.json').write_text(json.dumps(payload,indent=2)+'\n',encoding='utf-8')
+          print('BRIDGE_DEPLOYMENT_READY=YES')
+          PY
+      - name: Record deployment address without credentials
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git config user.name "WB price bridge"
+          git config user.email "wb-price-bridge[bot]@users.noreply.github.com"
+          git add google_apps_script_wb_unit_prices/bridge_deployment.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Record WB unit price bridge deployment"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          fi
