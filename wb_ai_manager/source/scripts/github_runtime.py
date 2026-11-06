@@ -18,6 +18,7 @@ from wb_control_center.portfolio import PortfolioService
 from wb_control_center.query_manager import QueryManager, QueryManagerConfig
 from wb_control_center.optimizer_acceptance import evaluate_optimizer_acceptance
 from wb_control_center.optimizer_acceptance import merge_campaign_cache
+from wb_control_center.public_wb import PublicWBClient
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = Path(os.environ.get("GITHUB_RUNTIME_OUTPUT", ROOT / "github_site")).resolve()
@@ -468,6 +469,49 @@ async def run() -> int:
         }
     q = query_manager(portfolio_snapshot, cabinet_snapshots.get("sanych") or {})
     optimizer_state["query_manager"] = q
+    # Enrich unmatched advertised nmIDs with public identity only. This never supplies price,
+    # cost, profit, or any other input to a monetary decision.
+    if shared_settings.enable_public_wb_search:
+        own_portfolio = (portfolio_snapshot or {}).get("own_27") or {}
+        known_nm_ids = {
+            str(product.get("sku") or product.get("nm_id") or product.get("nmId") or "").strip()
+            for product in own_portfolio.get("products") or []
+            if isinstance(product, dict)
+        }
+        exact_by_shop = own_portfolio.get("unit_economics_by_shop_nm_id") or {}
+        if isinstance(exact_by_shop, dict):
+            for mapped in exact_by_shop.values():
+                if isinstance(mapped, dict):
+                    known_nm_ids.update(str(nm).strip() for nm in mapped)
+        missing_by_shop = {}
+        for code, shop in (optimizer_state.get("shops") or {}).items():
+            if not isinstance(shop, dict):
+                continue
+            missing = sorted({
+                str(nm).strip() for nm in shop.get("advertised_nm_ids") or []
+                if str(nm).strip().isdigit() and str(nm).strip() not in known_nm_ids
+            }, key=int)
+            if missing:
+                missing_by_shop[code] = missing
+        unique_missing = sorted({nm for values in missing_by_shop.values() for nm in values}, key=int)
+        if unique_missing:
+            public_client = PublicWBClient(dest=shared_settings.public_wb_dest)
+            try:
+                looked_up = {}
+                for nm_id in unique_missing:
+                    try:
+                        card = await public_client.product_card_by_nm_id(nm_id)
+                    except Exception:
+                        card = None
+                    if isinstance(card, dict):
+                        looked_up[nm_id] = card
+                for code, missing in missing_by_shop.items():
+                    details = {nm_id: looked_up[nm_id] for nm_id in missing if nm_id in looked_up}
+                    if details:
+                        optimizer_state["shops"][code]["public_product_details_by_nm_id"] = details
+            finally:
+                await public_client.close()
+
     acceptance = evaluate_optimizer_acceptance(optimizer_state, portfolio_snapshot, q, cabinets, source_errors)
     optimizer_state["acceptance"] = acceptance
     dump("optimizer-state.json", optimizer_state)
