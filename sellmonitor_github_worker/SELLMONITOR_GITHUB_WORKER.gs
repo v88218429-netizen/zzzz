@@ -7305,7 +7305,7 @@ function sellmonitorGithubFbsTargetHealthV1_() {
         errorType:String(e&&e.name||'Error')});
     }
   });
-  return {ok:results.every(function(x){return x.accessible;}),checkedAt:new Date().toISOString(),results:results};
+  return {ok:results.every(function(x){return x.accessible;}),checkedAt:new Date().toISOString(),results:results,fbs_ingest_stages:sellmonitorGithubFbsStageSnapshot_()};
 }
 
 /** Read only the requested current order states so GitHub can avoid rewriting unchanged rows. */
@@ -7391,8 +7391,21 @@ function sellmonitorGithubFbsIngestBatchV1_(body) {
   }
   var props = PropertiesService.getScriptProperties();
   var traceId = Utilities.getUuid(), startedAt = Date.now();
+  var stageKey = 'GITHUB_FBS_STAGE_' + client;
   function mark(stage) {
-    try { props.setProperty('GITHUB_FBS_STAGE_' + client, JSON.stringify({client:client,trace:traceId,stage:stage,elapsedMs:Date.now()-startedAt,at:new Date().toISOString()})); } catch (e) {}
+    try {
+      var previous = null;
+      try { previous = JSON.parse(props.getProperty(stageKey) || 'null'); } catch (ignored) {}
+      var lastCoreStage = previous && previous.lastCoreStage || '';
+      if (stage === 'CORE_START') lastCoreStage = '';
+      else if (!/^(CORE_ERROR|CORE_DONE|LEASE_RELEASE_START|LEASE_RELEASED)$/.test(stage))
+        lastCoreStage = stage;
+      props.setProperty(stageKey, JSON.stringify({
+        client:client,trace:traceId,stage:stage,lastCoreStage:lastCoreStage,
+        previousStage:previous && previous.stage || '',
+        elapsedMs:Date.now()-startedAt,at:new Date().toISOString()
+      }));
+    } catch (e) {}
   }
   mark('LEASE_CLAIM_START');
   var leaseKey = 'GITHUB_FBS_INGEST_LEASE_' + client;
