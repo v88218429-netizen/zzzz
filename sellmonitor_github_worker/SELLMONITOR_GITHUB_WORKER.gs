@@ -6404,10 +6404,38 @@ function sellmonitorGithubWbInnerUpsert_(ss,sh,headers,rows,storeName){
 }
 
 function sellmonitorGithubPublishWbInnerPeriods_(onlyStore,requestedPhase){
-  var publishLock=LockService.getUserLock();
-  if(!publishLock.tryLock(10000))return {ok:false,action:'publish_wb_inner_periods',phase:String(requestedPhase||'all'),stores:[{store:String(onlyStore||'all'),ok:false,error:'WB_INNER_PUBLISH_LOCK_BUSY'}]};
+  // Keep publisher runs serialized with a private expiring lease. The shared
+  // UserLock is used only to claim/release that lease, never during workbook IO.
+  // FBS ingestion and unrelated store operations can then acquire UserLock
+  // while this long summary publication is reading or writing another workbook.
+  var leaseKey='SMC_WB_INNER_PUBLISH_LEASE_V1';
+  var leaseProps=PropertiesService.getScriptProperties();
+  var leaseToken=Utilities.getUuid();
+  var claimLock=LockService.getUserLock();
+  if(!claimLock.tryLock(5000))return {ok:false,action:'publish_wb_inner_periods',phase:String(requestedPhase||'all'),stores:[{store:String(onlyStore||'all'),ok:false,error:'WB_INNER_PUBLISH_GATE_BUSY'}]};
+  var claimed=false;
+  try{
+    var active=null;
+    try{active=JSON.parse(leaseProps.getProperty(leaseKey)||'null');}catch(ignored){}
+    if(active&&Number(active.expiresAt)>Date.now())
+      return {ok:false,action:'publish_wb_inner_periods',phase:String(requestedPhase||'all'),stores:[{store:String(onlyStore||'all'),ok:false,error:'WB_INNER_PUBLISH_LOCK_BUSY'}]};
+    leaseProps.setProperty(leaseKey,JSON.stringify({token:leaseToken,expiresAt:Date.now()+10*60*1000}));
+    claimed=true;
+  }finally{claimLock.releaseLock();}
   try{return sellmonitorGithubPublishWbInnerPeriodsUnlocked_(onlyStore,requestedPhase);}
-  finally{publishLock.releaseLock();}
+  finally{
+    if(claimed){
+      var releaseLock=LockService.getUserLock();
+      if(releaseLock.tryLock(5000)){
+        try{
+          var current=null;
+          try{current=JSON.parse(leaseProps.getProperty(leaseKey)||'null');}catch(ignored){}
+          if(current&&current.token===leaseToken)leaseProps.deleteProperty(leaseKey);
+        }finally{releaseLock.releaseLock();}
+      }
+      // If the shared gate cannot be acquired here, the finite lease expires.
+    }
+  }
 }
 
 function sellmonitorGithubPublishWbInnerPeriodsUnlocked_(onlyStore,requestedPhase){
