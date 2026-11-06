@@ -166,22 +166,41 @@ def evaluate_optimizer_acceptance(
                     "mapping_key": mapping_issue.get("key"),
                     "reason_codes": mapping_issue.get("reason_codes") or ["exact_shop_nm_id_match_missing"],
                 }
+                live_details_by_nm_id = (shops.get(code) or {}).get("live_product_details_by_nm_id")
+                live_details_by_nm_id = live_details_by_nm_id if isinstance(live_details_by_nm_id, dict) else {}
+                live_details = live_details_by_nm_id.get(sku)
+                if isinstance(live_details, dict):
+                    if live_details.get("seller_article"):
+                        diagnostic["seller_article"] = str(live_details["seller_article"])
+                    if live_details.get("product_name"):
+                        diagnostic["product_name"] = str(live_details["product_name"])
+                    if live_details.get("brand"):
+                        diagnostic["brand"] = str(live_details["brand"])
+                    if live_details.get("subject"):
+                        diagnostic["subject"] = str(live_details["subject"])
+                    diagnostic["identity_source"] = "live_wb_cards"
+                    diagnostic["identity_observed_at"] = live_details.get("observed_at")
+                    diagnostic["reason_text"] = (
+                        "nmID и артикул продавца найдены в живом кабинете, "
+                        "но точная связка этого товара с юнит-экономикой не подтверждена."
+                    )
                 public_details_by_nm_id = (shops.get(code) or {}).get("public_product_details_by_nm_id")
                 public_details_by_nm_id = public_details_by_nm_id if isinstance(public_details_by_nm_id, dict) else {}
                 public_details = public_details_by_nm_id.get(sku)
                 if isinstance(public_details, dict):
-                    if public_details.get("name"):
+                    if not diagnostic.get("product_name") and public_details.get("name"):
                         diagnostic["product_name"] = str(public_details["name"])
-                    if public_details.get("brand"):
+                    if not diagnostic.get("brand") and public_details.get("brand"):
                         diagnostic["brand"] = str(public_details["brand"])
                     if public_details.get("product_url"):
                         diagnostic["product_url"] = str(public_details["product_url"])
-                    if public_details.get("source"):
+                    if not diagnostic.get("identity_source") and public_details.get("source"):
                         diagnostic["identity_source"] = str(public_details["source"])
-                    diagnostic["reason_text"] = (
-                        "Рекламируемый товар отсутствует в списке товаров кабинета; "
-                        "юнит-экономика и числовое решение не подтверждены."
-                    )
+                    if not diagnostic.get("reason_text"):
+                        diagnostic["reason_text"] = (
+                            "Рекламируемый товар отсутствует в списке товаров кабинета; "
+                            "юнит-экономика и числовое решение не подтверждены."
+                        )
                 diagnostics.append({key: value for key, value in diagnostic.items() if value is not None})
                 continue
             matched += 1
