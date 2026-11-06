@@ -6509,7 +6509,7 @@ function sellmonitorGithubPublishWbInnerPeriods_(onlyStore,requestedPhase){
 function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId,onlyGrain,onlyPeriodPrefix,onlyPeriodStart,onlyPeriodEnd){
   var specs=[
     {name:'01_Дни',grain:'day',rows:built.day,min:'2026-09-01',format:'dd.mm.yyyy',startCol:15,baseCols:14,source:'Источник_дни'},
-    {name:'02_Недели',grain:'week',rows:built.week,min:'2026-09-07',format:'dd.mm.yyyy',startCol:14,baseCols:13,source:'Источник_недели'},
+    {name:'02_Недели',grain:'week',rows:built.week,min:'2026-08-31',format:'dd.mm.yyyy',startCol:14,baseCols:13,source:'Источник_недели'},
     {name:'03_Месяцы',grain:'month',rows:built.month,min:'2026-09-01',format:'mmm yyyy',startCol:14,baseCols:13,source:'Источник_месяцы'}
   ];
   if(onlyGrain)specs=specs.filter(function(spec){return spec.grain===onlyGrain;});
@@ -6528,9 +6528,34 @@ function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId,onl
   var archiveName='Архив_RNP_матрицы_до_обновления_20261031';
   var archive=ss.getSheetByName(archiveName);
   if(!archive){archive=ss.insertSheet(archiveName);archive.getRange(1,1,1,7).setValues([['Архивировано','Магазин','Лист','Период','Начальная строка','Старые значения JSON','Причина']]);archive.setFrozenRows(1);archive.setTabColor('#7F6000');}
-  var queuedArchiveRecords=[];
+  var queuedArchiveRecords=[],archiveSignatures=null;
+  function archiveSignature_(row){return row.map(function(v){return String(v==null?'':v);}).join(String.fromCharCode(31));}
+  function archiveRecordSignature_(row){return archiveSignature_([row[1],row[2],row[3],row[4],row[5],row[6]]);}
+  function loadArchiveSignatures_(){
+    if(archiveSignatures)return;
+    archiveSignatures=Object.create(null);
+    var last=archive.getLastRow();
+    if(last>1)archive.getRange(2,2,last-1,6).getValues().forEach(function(r){archiveSignatures[archiveSignature_(r)]=true;});
+  }
+  function archiveWrite_(records){
+    if(!records.length)return 0;
+    loadArchiveSignatures_();
+    var pending=[],local=Object.create(null);
+    records.forEach(function(r){var sig=archiveRecordSignature_(r);if(!archiveSignatures[sig]&&!local[sig]){pending.push(r);local[sig]=true;}});
+    for(var off=0;off<pending.length;off+=200){
+      var part=pending.slice(off,off+200),at=archive.getLastRow()+1,need=at+part.length-1;
+      if(need>archive.getMaxRows())archive.insertRowsAfter(archive.getMaxRows(),Math.max(100,need-archive.getMaxRows()));
+      archive.getRange(at,1,part.length,7).setValues(part);
+      var rb=archive.getRange(at,1,part.length,7).getValues();
+      for(var j=0;j<part.length;j++){
+        if(String(rb[j][5])!==String(part[j][5])||String(rb[j][1])!==String(part[j][1])||String(rb[j][2])!==String(part[j][2])||String(rb[j][3])!==String(part[j][3])||String(rb[j][4])!==String(part[j][4])||String(rb[j][6])!==String(part[j][6]))throw new Error('WB_RNP_ARCHIVE_READBACK_FAILED:'+part[j][2]+':'+part[j][3]+':'+part[j][4]);
+        archiveSignatures[archiveRecordSignature_(part[j])]=true;
+      }
+    }
+    return pending.length;
+  }
   function archiveSnapshot(sh,col,period,reason,last,provided,deferArchive){
-    var before=archive.getLastRow()+1,records=[],v=provided||sh.getRange(1,col,last,1).getValues().map(function(r){return r[0];});
+    var records=[],v=provided||sh.getRange(1,col,last,1).getValues().map(function(r){return r[0];});
     var maxCellChars=40000,segment=[],segmentStart=1;
     function flushSegment_(){
       if(!segment.length)return;
@@ -6546,15 +6571,15 @@ function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId,onl
       segment=candidate;
     }
     flushSegment_();
-    if(deferArchive){queuedArchiveRecords=queuedArchiveRecords.concat(records);return records.length;}
-    for(var off=0;off<records.length;off+=200){
-      var part=records.slice(off,off+200),at=archive.getLastRow()+1,need=at+part.length-1;
-      if(need>archive.getMaxRows())archive.insertRowsAfter(archive.getMaxRows(),Math.max(100,need-archive.getMaxRows()));
-      archive.getRange(at,1,part.length,7).setValues(part);
-      var rb=archive.getRange(at,1,part.length,7).getValues();
-      for(var j=0;j<part.length;j++)if(String(rb[j][5])!==String(part[j][5]))throw new Error('WB_RNP_ARCHIVE_READBACK_FAILED:'+sh.getName()+':'+period+':'+part[j][4]);
+    if(deferArchive){
+      loadArchiveSignatures_();
+      var queued=Object.create(null);
+      queuedArchiveRecords.forEach(function(r){queued[archiveRecordSignature_(r)]=true;});
+      var added=0;
+      records.forEach(function(r){var sig=archiveRecordSignature_(r);if(!archiveSignatures[sig]&&!queued[sig]){queuedArchiveRecords.push(r);queued[sig]=true;added++;}});
+      return added;
     }
-    return archive.getLastRow()-before+1;
+    return archiveWrite_(records);
   }
 
   function restoreBase_(spec,sh){
@@ -6721,8 +6746,8 @@ function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId,onl
       if(period<spec.min||(spec.grain==='day'&&onlyPeriodPrefix&&period.indexOf(onlyPeriodPrefix)!==0)||(spec.grain==='day'&&onlyPeriodStart&&(period<onlyPeriodStart||period>onlyPeriodEnd)))return;
       var g=periodMap[period]||(periodMap[period]={}),arr=g[nm]||(g[nm]=[]);
       arr.push(r);
-      var ss0=periodStatus[period]||(periodStatus[period]={partial:false,exact:0,other:0});
-      if(/PARTIAL|PRELIMINARY/.test(status))ss0.partial=true;else if(/FACTUAL/.test(status))ss0.exact++;else ss0.other++;
+      var ss0=periodStatus[period]||(periodStatus[period]={partial:false,preliminary:false,partialCoverage:false,exact:0,other:0});
+      if(/PRELIMINARY/.test(status)){ss0.partial=true;ss0.preliminary=true;}else if(/PARTIAL_COVERAGE/.test(status)){ss0.partial=true;ss0.partialCoverage=true;}else if(/FACTUAL/.test(status))ss0.exact++;else ss0.other++;
     });
     var targets=Object.keys(periodMap).sort();
     var startCol=spec.startCol,lastCol=Math.max(startCol-1,sh.getLastColumn()),heads=lastCol>=startCol?sh.getRange(2,startCol,1,lastCol-startCol+1).getValues()[0]:[];
@@ -6755,17 +6780,75 @@ function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId,onl
       for(var ci=0;ci<heads.length;ci++){var k=key(heads[ci]);if(k&&periodMap[k]){if(!positions[k])positions[k]=[];positions[k].push(startCol+ci);}}
     }
     refreshHeads();
-    var existedBefore={};Object.keys(positions).forEach(function(k){if(positions[k]&&positions[k].length)existedBefore[k]=true;});
+    var axisRebuilt=false,axisArchiveRows=0;
+    if(storeId==='sanych_wb'&&spec.grain==='week'){
+      var actualAxis=[],existingColumns={};
+      for(var ac=0;ac<heads.length;ac++){
+        var rawHead=heads[ac],headKey=key(rawHead);
+        if(headKey){actualAxis.push({period:headKey,col:startCol+ac});if(!existingColumns[headKey])existingColumns[headKey]=[];existingColumns[headKey].push(startCol+ac);}
+        else if(rawHead!==''&&rawHead!=null)throw new Error('WB_RNP_AXIS_UNPARSEABLE_HEADER:'+spec.name+':'+(startCol+ac)+':'+String(rawHead));
+      }
+      var compactNeeded=false;
+      for(var ax=0;ax<actualAxis.length;ax++)if((ax>0&&actualAxis[ax-1].period>actualAxis[ax].period)||actualAxis[ax].col!==startCol+ax)compactNeeded=true;
+      Object.keys(existingColumns).forEach(function(period){if(existingColumns[period].length>1)throw new Error('WB_RNP_AXIS_DUPLICATE_HEADER:'+spec.name+':'+period);});
+      if(compactNeeded){
+        var currentLast=sh.getLastRow(),blankStart=-1;
+        for(var ac=0;ac<=heads.length;ac++){
+          var blankAxisColumn=ac===heads.length||!key(heads[ac]);
+          if(blankAxisColumn){if(blankStart<0)blankStart=ac;}
+          else if(blankStart>=0){
+            if(!sh.getRange(1,startCol+blankStart,currentLast,ac-blankStart).isBlank())throw new Error('WB_RNP_AXIS_UNMAPPED_COLUMN_NOT_BLANK:'+spec.name+':'+(startCol+blankStart)+':'+(startCol+ac-1));
+            blankStart=-1;
+          }
+        }
+        var preserveColumns={};
+        Object.keys(existingColumns).sort().forEach(function(period){
+          var oldCol=existingColumns[period][0],oldRange=sh.getRange(1,oldCol,currentLast,1),formulas=oldRange.getFormulas();
+          if(formulas.some(function(r){return String(r[0]||'')!=='';}))throw new Error('WB_RNP_AXIS_FORMULA_PRESENT:'+spec.name+':'+period);
+          var oldValues=oldRange.getValues().map(function(r){return r[0];});
+          axisArchiveRows+=archiveSnapshot(sh,oldCol,period,'Сжатие и сортировка оси недель перед заменой',currentLast,oldValues);
+          if(!periodMap[period])preserveColumns[period]=oldValues;
+        });
+        var clearWidth=lastCol-startCol+1;
+        if(clearWidth>0){
+          var axisRange=sh.getRange(1,startCol,currentLast,clearWidth);
+          axisRange.clearContent();
+          SpreadsheetApp.flush();
+          if(!axisRange.isBlank())throw new Error('WB_RNP_AXIS_CLEAR_READBACK_FAILED:'+spec.name);
+        }
+        var axisSet=Object.create(null);
+        targets.forEach(function(period){axisSet[period]=true;});
+        Object.keys(existingColumns).forEach(function(period){axisSet[period]=true;});
+        var orderedAxis=Object.keys(axisSet).sort();
+        if(orderedAxis.length){
+          sh.getRange(2,startCol,1,orderedAxis.length).setValues([orderedAxis.map(date_)]);
+          sh.getRange(2,startCol,1,orderedAxis.length).setNumberFormat(spec.format);
+          Object.keys(preserveColumns).forEach(function(period){
+            var dst=startCol+orderedAxis.indexOf(period),values=preserveColumns[period].map(function(v){return [v];});
+            sh.getRange(1,dst,currentLast,1).setValues(values);
+            var readback=sh.getRange(1,dst,currentLast,1).getValues();
+            for(var rr=0;rr<currentLast;rr++)if(cellKey(readback[rr][0])!==cellKey(values[rr][0]))throw new Error('WB_RNP_AXIS_PRESERVE_READBACK_FAILED:'+spec.name+':'+period+':'+(rr+1));
+          });
+        }
+        SpreadsheetApp.flush();
+        var axisHeaderReadback=orderedAxis.length?sh.getRange(2,startCol,1,orderedAxis.length).getValues()[0].map(key):[];
+        if(JSON.stringify(axisHeaderReadback)!==JSON.stringify(orderedAxis))throw new Error('WB_RNP_AXIS_HEADER_READBACK_FAILED:'+spec.name+':'+JSON.stringify({expected:orderedAxis,actual:axisHeaderReadback}));
+        axisRebuilt=true;
+        refreshHeads();
+      }
+    }
+    var existedBefore={};
+    if(!axisRebuilt)Object.keys(positions).forEach(function(k){if(positions[k]&&positions[k].length)existedBefore[k]=true;});
     var missingByAnchor={};
     targets.forEach(function(period){
       if(positions[period]&&positions[period].length)return;
       var insertAt=lastCol+1;
-      for(var ci=0;ci<heads.length;ci++){var old=key(heads[ci]);if(old&&old<period){insertAt=startCol+ci;break;}}
+      for(var ci=0;ci<heads.length;ci++){var old=key(heads[ci]);if(old&&old>period){insertAt=startCol+ci;break;}}
       if(!missingByAnchor[insertAt])missingByAnchor[insertAt]=[];
       missingByAnchor[insertAt].push(period);
     });
     Object.keys(missingByAnchor).map(Number).sort(function(a,b){return b-a;}).forEach(function(insertAt){
-      var added=missingByAnchor[insertAt].sort().reverse(),count=added.length;
+      var added=missingByAnchor[insertAt].sort(),count=added.length;
       if(insertAt<=lastCol)sh.insertColumnsBefore(insertAt,count);else sh.insertColumnsAfter(Math.max(startCol-1,lastCol),count);
       var styleSource=insertAt>startCol?insertAt-1:(lastCol>=startCol?insertAt+count:0);
       var newHeaders=sh.getRange(2,insertAt,1,count);
@@ -6783,12 +6866,12 @@ function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId,onl
     var matrixStartCol=targetCols.length?Math.min.apply(null,targetCols):startCol;
     var matrixEndCol=targetCols.length?Math.max.apply(null,targetCols):startCol-1;
     var currentMatrix=matrixEndCol>=matrixStartCol?sh.getRange(1,matrixStartCol,matrixLast,matrixEndCol-matrixStartCol+1).getValues():[];
-    var updates=[],written=0,archives=0,periodCount=0;
+    var updates=[],written=0,archives=axisArchiveRows,periodCount=0;
     targets.sort().forEach(function(period){
       var col=(positions[period]||[])[0];if(!col)throw new Error('WB_RNP_DATE_AXIS_MISSING:'+spec.name+':'+period);
       var last=matrixLast,current=currentMatrix.map(function(r){return r[col-matrixStartCol];}),next=current.slice();
-      var pstat=periodStatus[period]||{partial:false,exact:0,other:0};
-      next[0]=pstat.partial?(pstat.exact?'🟡 ЧАСТИЧНО':'🟡 ПРЕДВ.'):(pstat.other?'🟠 НЕПОЛНЫЙ':'🟢 ФАКТ');
+      var pstat=periodStatus[period]||{partial:false,preliminary:false,partialCoverage:false,exact:0,other:0};
+      next[0]=pstat.preliminary?(pstat.exact?'🟡 ЧАСТИЧНО':'🟡 ПРЕДВ.'):pstat.partialCoverage?(pstat.exact?'🟡 ЧАСТИЧНО':'🟠 НЕПОЛНЫЙ'):(pstat.other?'🟠 НЕПОЛНЫЙ':'🟢 ФАКТ');
       next[1]=date_(period);
       var productMap=periodMap[period],productKeys=Object.keys(productMap).filter(function(n){return n!=='';});
       var all=productKeys.map(function(n){return productMap[n][0];});
@@ -6809,18 +6892,9 @@ function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId,onl
         if(v!==''&&v!=null)written++;
       }
       var changed=false;for(var q=0;q<last;q++)if(cellKey(current[q])!==cellKey(next[q])){changed=true;break;}
-      if(changed){if(existedBefore[period])archives+=archiveSnapshot(sh,col,period,'Значения заменены проверенными фактами Sellmonitor Inner',last,current,true);updates.push({col:col,values:next});periodCount++;}
+      if(changed){if(existedBefore[period]&&!axisRebuilt)archives+=archiveSnapshot(sh,col,period,'Значения заменены проверенными фактами Sellmonitor Inner',last,current,true);updates.push({col:col,values:next});periodCount++;}
     });
-    if(queuedArchiveRecords.length){
-      for(var ao=0;ao<queuedArchiveRecords.length;ao+=25){
-        var ap=queuedArchiveRecords.slice(ao,ao+25),aa=archive.getLastRow()+1,aneed=aa+ap.length-1;
-        if(aneed>archive.getMaxRows())archive.insertRowsAfter(archive.getMaxRows(),Math.max(100,aneed-archive.getMaxRows()));
-        archive.getRange(aa,1,ap.length,7).setValues(ap);
-        var arb=archive.getRange(aa,6,ap.length,1).getValues();
-        for(var ari=0;ari<ap.length;ari++)if(String(arb[ari][0])!==String(ap[ari][5]))throw new Error('WB_RNP_ARCHIVE_READBACK_FAILED:'+ap[ari][2]+':'+ap[ari][3]);
-      }
-      queuedArchiveRecords=[];
-    }
+    if(queuedArchiveRecords.length){archiveWrite_(queuedArchiveRecords);queuedArchiveRecords=[];}
     updates.sort(function(a,b){return a.col-b.col;});
     var ui=0,rowChunk=2500;
     while(ui<updates.length){
@@ -6845,7 +6919,10 @@ function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId,onl
         if(String(sh.getRange('H1').getDisplayValue())!==newExact)throw new Error('WB_RNP_METADATA_READBACK_FAILED');
       }
     }
-    stats.push({sheet:spec.name,target_periods:targets.length,updated_columns:updates.length,archived_segments:archives,written_values:written,duplicates_removed:dupDates.length,min:targets[0]||'',max:targets.length?targets[targets.length-1]:''});
+    var readbackPeriods=targets.map(function(period){var cols=positions[period]||[];return cols.length===1?key(sh.getRange(2,cols[0]).getValue()):'';});
+    var coverageVerified=readbackPeriods.length===targets.length&&readbackPeriods.every(function(period,index){return !!period&&period===targets[index]&&(positions[targets[index]]||[]).length===1;});
+    if(!coverageVerified)throw new Error('WB_RNP_PERIOD_COVERAGE_READBACK_FAILED:'+spec.name+':'+JSON.stringify({source:targets,readback:readbackPeriods}));
+    stats.push({sheet:spec.name,target_periods:targets.length,source_periods:targets,readback_periods:readbackPeriods,coverage_verified:coverageVerified,axis_rebuilt:axisRebuilt,axis_archive_segments:axisArchiveRows,updated_columns:updates.length,archived_segments:archives,written_values:written,duplicates_removed:dupDates.length,min:targets[0]||'',max:targets.length?targets[targets.length-1]:''});
   });
   archive.hideSheet();
   var chartTab=ss.getSheetByName('05_Графики_РНП'),charts=chartTab?chartTab.getCharts():[];
