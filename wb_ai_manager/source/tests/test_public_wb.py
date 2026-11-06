@@ -28,3 +28,55 @@ def test_competitor_snapshot_records_search_destination():
     source=(Path(__file__).parents[1]/'src/wb_control_center/agents/competitors.py').read_text(encoding='utf-8')
     assert "'search_dest':client.dest or None" in source
     assert 'PublicWBClient(dest=self.ctx.settings.public_wb_dest)' in source
+
+def test_public_card_lookup_returns_identity_without_economics():
+    import asyncio
+
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"data": {"products": [{
+                "id": 1994573765,
+                "name": "Корзина для белья белая с крышкой пластиковая в ванную",
+                "brand": "Милих",
+                "subjectName": "Аксессуары для стирки",
+            }]}}
+
+    class FakeClient:
+        def __init__(self):
+            self.request = None
+
+        async def get(self, url, params):
+            self.request = (url, params)
+            return Response()
+
+        async def aclose(self):
+            return None
+
+    client = PublicWBClient(dest="-1257786")
+    fake = FakeClient()
+    client.client = fake
+    try:
+        card = asyncio.run(client.product_card_by_nm_id("1994573765"))
+    finally:
+        asyncio.run(client.close())
+
+    assert fake.request[0] == "https://card.wb.ru/cards/v2/detail"
+    assert fake.request[1]["nm"] == "1994573765"
+    assert card["name"] == "Корзина для белья белая с крышкой пластиковая в ванную"
+    assert card["brand"] == "Милих"
+    assert card["source"] == "wb_public_card"
+    assert "price" not in card and "cost" not in card and "profit" not in card
+
+
+def test_public_card_lookup_ignores_invalid_nm_id():
+    import asyncio
+
+    client = PublicWBClient()
+    try:
+        assert asyncio.run(client.product_card_by_nm_id("not-a-number")) is None
+        assert asyncio.run(client.product_card_by_nm_id("0")) is None
+    finally:
+        asyncio.run(client.close())
