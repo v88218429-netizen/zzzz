@@ -73,9 +73,9 @@ def test_optimizer_sweep_progress_contains_aggregate_counts_only():
     }})
     assert result == {
         "ap": {"sweep_id": 2, "campaigns_seen": 8, "campaigns_total": 45,
-               "products_seen": 9, "products_total": 52, "campaign_product_pairs_seen": 0, "campaign_product_pairs_total": 0, "scan_error_count": 0, "complete": False},
+               "products_seen": 9, "products_total": 52, "campaign_product_pairs_seen": 0, "campaign_product_pairs_total": 0, "scan_error_count": 0, "last_completed_at": None, "complete": False},
         "aa": {"sweep_id": 1, "campaigns_seen": 10, "campaigns_total": 10,
-               "products_seen": 10, "products_total": 10, "campaign_product_pairs_seen": 0, "campaign_product_pairs_total": 0, "scan_error_count": 0, "complete": True},
+               "products_seen": 10, "products_total": 10, "campaign_product_pairs_seen": 0, "campaign_product_pairs_total": 0, "scan_error_count": 0, "last_completed_at": None, "complete": True},
     }
 
 
