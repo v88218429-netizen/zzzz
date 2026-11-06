@@ -7947,9 +7947,16 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
         var verifyQuery=verifyPart.map(function(spec){
           return 'ranges='+encodeURIComponent(spec.a1);
         }).join('&');
-        var verifyResponse=fetchSheetApi(apiBase+'/values:batchGet?'+verifyQuery+
-          '&majorDimension=ROWS&valueRenderOption=FORMATTED_VALUE',{method:'get'});
-        var verifyCode=verifyResponse.getResponseCode();
+        var verifyResponse,verifyCode,verifyAttempt=0;
+        for(;verifyAttempt<3;verifyAttempt++){
+          verifyResponse=fetchSheetApi(apiBase+'/values:batchGet?'+verifyQuery+
+            '&majorDimension=ROWS&valueRenderOption=FORMATTED_VALUE',{method:'get'});
+          verifyCode=verifyResponse.getResponseCode();
+          if(verifyCode>=200&&verifyCode<300)break;
+          if([429,500,502,503,504].indexOf(verifyCode)<0||verifyAttempt>=2)break;
+          mark('STATE_VERIFY_RETRY_'+(verifyAttempt+1)+'_HTTP_'+verifyCode);
+          Utilities.sleep(500*(verifyAttempt+1));
+        }
         if(verifyCode<200||verifyCode>=300)
           throw new Error('FBS_PATCH_READBACK_HTTP_'+verifyCode+':'+sheetApiFailure(verifyResponse));
         var verifyPayload;
