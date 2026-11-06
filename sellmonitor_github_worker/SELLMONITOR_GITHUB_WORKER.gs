@@ -7560,7 +7560,7 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
       var opt=options||{},method=String(opt.method||'get').toLowerCase();
       var path=String(url).slice(apiBase.length),query=path.indexOf('?')>=0?path.slice(path.indexOf('?')+1):'';
       if(path.indexOf('?')>=0)path=path.slice(0,path.indexOf('?'));
-      function decode_(value){return decodeURIComponent(String(value||'').replace(/\\+/g,'%20'));}
+      function decode_(value){return decodeURIComponent(String(value||'').replace(/\+/g,'%20'));}
       function queryValues_(name){
         var out=[],parts=query?query.split('&'):[];
         parts.forEach(function(part){
@@ -7587,7 +7587,7 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
           args.majorDimension=queryValue_('majorDimension')||'ROWS';
           args.valueRenderOption=queryValue_('valueRenderOption')||'FORMATTED_VALUE';
           result=Sheets.Spreadsheets.Values.batchGet(spreadsheetId,args);
-        }else if(method==='post'&&path==='/values/'+path.split('/values/')[1]&&path.indexOf(':append')>0){
+        }else if(method==='post'&&path.indexOf('/values/')===0&&path.indexOf(':append')>0){
           range=decode_(path.slice('/values/'.length,path.indexOf(':append')));
           resource=JSON.parse(opt.payload||'{}');
           args.valueInputOption=queryValue_('valueInputOption')||'RAW';
@@ -7613,7 +7613,7 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
         return response_(200,result);
       }catch(apiError){
         var message=String(apiError&&apiError.message||apiError||'Sheets API error');
-        var codeMatch=message.match(/(?:returned code|HTTP|status(?: code)?)\\s*[:=]?\\s*(\\d{3})/i);
+        var codeMatch=message.match(/(?:returned code|HTTP|status(?: code)?)\s*[:=]?\s*(\d{3})/i);
         var code=codeMatch?Number(codeMatch[1]):500;
         var status=code===403?'PERMISSION_DENIED':code===404?'NOT_FOUND':
           code===429?'RESOURCE_EXHAUSTED':code>=500?'INTERNAL':'UNKNOWN';
