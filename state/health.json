@@ -1,0 +1,115 @@
+{
+  "generated_at": "2026-11-07T11:15:10.802083+00:00",
+  "health": "degraded",
+  "acceptance_ready": false,
+  "acceptance_status": "not_ready",
+  "acceptance_blockers": [
+    "Саныч: полный обход рекламы не завершён (9/47 кампаний, 46/93 товаров).",
+    "AIR: полный обход рекламы не завершён (0/10 кампаний, 9/64 товаров).",
+    "Хозяюшка: полный обход рекламы не завершён (19/27 кампаний, 54/64 товаров).",
+    "AIR: юнит-экономика подтверждена для 63/64 рекламируемых товаров по точному nmID и кабинету.",
+    "Хозяюшка: юнит-экономика подтверждена для 62/64 рекламируемых товаров по точному nmID и кабинету."
+  ],
+  "optional_data_warnings": [
+    "Поисковые факты неполные: свежих 1991/2433, заблокировано 442; рекламные решения не используют их как обязательное условие."
+  ],
+  "acceptance_economics": {
+    "snapshot_date": "2026-11-07",
+    "age_days": 0,
+    "coverage_by_shop": {
+      "ap": {
+        "advertised_products": 93,
+        "matched_products": 93,
+        "decision_ready_products": 93
+      },
+      "aa": {
+        "advertised_products": 64,
+        "matched_products": 64,
+        "decision_ready_products": 63
+      },
+      "yv": {
+        "advertised_products": 64,
+        "matched_products": 62,
+        "decision_ready_products": 62
+      }
+    }
+  },
+  "acceptance_query_facts": {
+    "status": "partial_refresh",
+    "rows": 2433,
+    "fresh_rows": 1991,
+    "blocked_rows": 442,
+    "ready_query_actions": 0
+  },
+  "connected_cabinets": 3,
+  "clean_cabinets": 3,
+  "expected_cabinets": 3,
+  "sheets_live": true,
+  "dashboard_published": true,
+  "optimizer_state_shops": 3,
+  "optimizer_sweeps_complete": 0,
+  "optimizer_sweep_progress": {
+    "ap": {
+      "sweep_id": 71,
+      "campaigns_seen": 9,
+      "campaigns_total": 47,
+      "products_seen": 46,
+      "products_total": 93,
+      "campaign_product_pairs_seen": 95,
+      "campaign_product_pairs_total": 339,
+      "scan_error_count": 0,
+      "complete": false
+    },
+    "aa": {
+      "sweep_id": 117,
+      "campaigns_seen": 0,
+      "campaigns_total": 10,
+      "products_seen": 9,
+      "products_total": 64,
+      "campaign_product_pairs_seen": 20,
+      "campaign_product_pairs_total": 195,
+      "scan_error_count": 0,
+      "complete": false
+    },
+    "yv": {
+      "sweep_id": 65,
+      "campaigns_seen": 19,
+      "campaigns_total": 27,
+      "products_seen": 54,
+      "products_total": 64,
+      "campaign_product_pairs_seen": 155,
+      "campaign_product_pairs_total": 204,
+      "scan_error_count": 0,
+      "complete": false
+    }
+  },
+  "optimizer_sweep_error_counts": {
+    "ap": 0,
+    "aa": 0,
+    "yv": 0
+  },
+  "query_status": "ready_guarded",
+  "query_facts_status": "partial_refresh",
+  "query_operational_ready": true,
+  "query_rows": 2433,
+  "fresh_query_rows": 1991,
+  "blocked_query_rows": 442,
+  "ready_query_actions": 0,
+  "search_publish": {
+    "air": {
+      "ok": true,
+      "skipped": true,
+      "reason": "wb_search_no_query_rows",
+      "cabinet": "air",
+      "observed_at": "2026-11-07T11:11:05.236526+00:00"
+    },
+    "hozyushka": {
+      "ok": true,
+      "skipped": true,
+      "reason": "wb_search_no_query_rows",
+      "cabinet": "hozyushka",
+      "observed_at": "2026-11-07T11:11:41.164206+00:00"
+    }
+  },
+  "source_error_stages": []
+}
