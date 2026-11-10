@@ -32,6 +32,24 @@ from .metrics import extract_campaign_ids
 log = logging.getLogger(__name__)
 
 
+def agent_run_due(last_started_at: str | None, interval_minutes: int, now: datetime | None = None) -> bool:
+    """Return whether an agent may run again, using its persisted start time."""
+    if not last_started_at:
+        return True
+    try:
+        last = datetime.fromisoformat(str(last_started_at).strip().replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return True
+    if last.tzinfo is None:
+        last = last.replace(tzinfo=timezone.utc)
+    current = now or datetime.now(timezone.utc)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=timezone.utc)
+    interval_seconds = max(1, int(interval_minutes)) * 60
+    elapsed = (current.astimezone(timezone.utc) - last.astimezone(timezone.utc)).total_seconds()
+    return elapsed >= interval_seconds
+
+
 class ControlCenter:
     def __init__(self, settings: Settings):
         self.settings = settings
@@ -276,6 +294,47 @@ class ControlCenter:
             return [{"system": "run_all", "status": "skipped", "reason": "full audit already running"}]
         async with self._run_all_lock:
             return await self._run_all_once_locked()
+
+    async def run_due_once(self, interval_overrides: dict[str, int] | None = None) -> list[dict[str, Any]]:
+        """Run only agents whose persisted cadence has elapsed.
+
+        GitHub Runtime is invoked more often than several WB endpoints should be
+        polled. Its SQLite state survives between runs, so per-agent cadence can
+        be enforced without a separate scheduler process.
+        """
+        if self._run_all_lock.locked():
+            return [{"system": "run_due", "status": "skipped", "reason": "audit already running"}]
+        async with self._run_all_lock:
+            return await self._run_due_once_locked(interval_overrides or {})
+
+    async def _run_due_once_locked(self, interval_overrides: dict[str, int]) -> list[dict[str, Any]]:
+        order = [
+            "api_health", "cards", "advertising_monitor", "advertising_optimizer",
+            "inventory", "supply", "funnel", "search_positions", "price_margin",
+            "finance", "cost_guard", "reviews_questions", "buyer_chats", "orders_fbs", "returns_quality",
+            "documents", "competitors", "experiments", "portal_news", "seller_services", "supervisor",
+        ]
+        schedules = self.policy.schedules if isinstance(self.policy.schedules, dict) else {}
+        results: list[dict[str, Any]] = []
+        for name in order:
+            if name not in self.agents:
+                continue
+            interval = max(1, int(interval_overrides.get(name, schedules.get(name, 10))))
+            last_started = self.db.last_run_started_at(name)
+            if not agent_run_due(last_started, interval):
+                results.append({
+                    "agent": name,
+                    "status": "skipped",
+                    "reason": "scheduled_interval_not_elapsed",
+                    "last_started_at": last_started,
+                    "interval_minutes": interval,
+                })
+                continue
+            results.append(await self.run_agent(name))
+            await asyncio.sleep(0.5)
+        decisions = self.refresh_decisions()
+        results.append({"system": "decision_engine", "status": "ok", "decisions": len(decisions)})
+        return results
 
     async def _run_all_once_locked(self) -> list[dict[str, Any]]:
         # Run health first, supervisor last. Others sequentially to be kind to WB rate limits.
