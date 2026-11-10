@@ -7442,6 +7442,7 @@ function sellmonitorGithubFbsStatusReadV1_(body) {
   function indexMark(stage){console.log('FBS_STATUS_INDEX_'+client+'_'+stage);}
   var idIndex=sellmonitorGithubFbsLoadIdIndex_(sheet,client,sheetLastRow,indexMark,false);
   var requestedIds=Object.create(null),rowMap=Object.create(null),states=Object.create(null);
+  var rowsRead=0;
   ids.forEach(function(id){
     requestedIds[id]=true;
     var row=Number(idIndex.map[id]||0);
@@ -7459,7 +7460,9 @@ function sellmonitorGithubFbsStatusReadV1_(body) {
       }else{group.end=item.row;group.items.push(item);}
     });
     var stale=false;
+    rowsRead=0;
     groups.forEach(function(group){
+      rowsRead+=group.end-group.start+1;
       var values=sheet.getRange(group.start,1,group.end-group.start+1,6).getDisplayValues();
       group.items.forEach(function(item){
         var row=values[item.row-group.start]||[];
@@ -7499,7 +7502,7 @@ function sellmonitorGithubFbsStatusReadV1_(body) {
     });
   }
   console.log('FBS_STATUS_READ_DONE client='+client+' requested='+ids.length+
-    ' found='+Object.keys(states).length+' rows_read='+grid.length+
+    ' found='+Object.keys(states).length+' rows_read='+rowsRead+
     ' total_ms='+(Date.now()-startedAt));
   return {ok:true,client:client,requested:ids.length,found:Object.keys(states).length,
     statuses:states,rowMap:rowMap,sheetLastRow:sheetLastRow,
