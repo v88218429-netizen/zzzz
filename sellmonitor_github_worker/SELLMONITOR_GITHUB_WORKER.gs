@@ -7626,7 +7626,14 @@ function sellmonitorGithubFbsLoadIdIndex_(sheet, client, lastRow, mark, forceReb
     mark('ID_INDEX_BUILD_START');
     index={};
     if(lastRow>1){
-      var values=sheet.getRange(2,1,lastRow-1,1).getDisplayValues();
+      mark('ID_INDEX_BUILD_SHEETS_API_START_'+lastRow);
+      var spreadsheetId=sheet.getParent().getId();
+      var sheetTitle=String(sheet.getName()).replace(/'/g,"''");
+      var range="'"+sheetTitle+"'!A2:A"+lastRow;
+      var response=Sheets.Spreadsheets.Values.get(spreadsheetId,range,{valueRenderOption:'FORMATTED_VALUE'});
+      var values=response&&Array.isArray(response.values)?response.values:[];
+      if(values.length>lastRow-1)throw new Error('FBS_ID_INDEX_READ_ROW_COUNT_INVALID');
+      mark('ID_INDEX_BUILD_SHEETS_API_DONE_'+values.length);
       for(var r=0;r<values.length;r++){
         var id=String((values[r]||[])[0]||'');
         if(/^[0-9]{6,20}$/.test(id)&&!Object.prototype.hasOwnProperty.call(index,id))index[id]=r+2;
