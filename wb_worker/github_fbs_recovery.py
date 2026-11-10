@@ -249,8 +249,18 @@ def wait_bridge() -> None:
 
 def ingest(client: str, orders: list[dict]) -> dict:
     totals = {"received": 0, "inserted": 0, "existing": 0, "changed": 0, "events": 0}
+    main_sheet_last_row = int(orders[0].get("_fbsSheetLastRow", 0)) if orders else 0
+    if orders and main_sheet_last_row < 1:
+        raise RuntimeError(client + ":FBS_APPEND_CURSOR_MISSING")
+    for order in orders:
+        if int(order.get("_fbsSheetLastRow", 0)) != main_sheet_last_row:
+            raise RuntimeError(client + ":FBS_APPEND_CURSOR_MISMATCH")
     for p in range(0, len(orders), BATCH_SIZE):
-        batch = orders[p:p+BATCH_SIZE]
+        batch = []
+        for original in orders[p:p+BATCH_SIZE]:
+            item = dict(original)
+            item["_fbsSheetLastRow"] = main_sheet_last_row
+            batch.append(item)
         batch_started = time.monotonic()
         print("FBS_INGEST_BATCH_START="+json.dumps({"store":client,"batch":p//BATCH_SIZE+1,"orders":len(batch)}), flush=True)
         payload = {"token": BRIDGE_KEY, "action": "fbs_ingest_batch",
@@ -325,6 +335,11 @@ def ingest(client: str, orders: list[dict]) -> dict:
             time.sleep(min(120, 15 * attempt))
         for field in totals:
             totals[field] += int(result.get(field, 0))
+        inserted_now = int(result.get("inserted", 0))
+        if inserted_now < 0:
+            raise RuntimeError(client + ":FBS_INSERTED_COUNT_INVALID")
+        main_sheet_last_row += inserted_now
+        print("FBS_APPEND_CURSOR=" + json.dumps({"store":client,"batch":p//BATCH_SIZE+1,"main_last_row":main_sheet_last_row}, ensure_ascii=False), flush=True)
         print(json.dumps({"store":client, "batch":p//BATCH_SIZE+1,
               "received":result.get("received"),"inserted":result.get("inserted"),
               "changed":result.get("changed"),"events":result.get("events"),
