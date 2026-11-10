@@ -192,8 +192,23 @@ def wait_bridge() -> None:
 def ingest(client: str, orders: list[dict]) -> dict:
     totals = {"received": 0, "inserted": 0, "existing": 0, "changed": 0, "events": 0}
     attempts = 8  # Fast lock-busy responses get a bounded retry window
+    main_sheet_last_row = int(orders[0].get("_fbsSheetLastRow", 0)) if orders else 0
+    alternate_sheet_last_row = int(orders[0].get("_fbsAltSheetLastRow", 0)) if orders else 0
+    if orders and (main_sheet_last_row < 1 or (client == "SANYCH" and alternate_sheet_last_row < 1)):
+        raise RuntimeError(client + ":FBS_APPEND_CURSOR_MISSING")
+    for order in orders:
+        if int(order.get("_fbsSheetLastRow", 0)) != main_sheet_last_row:
+            raise RuntimeError(client + ":FBS_APPEND_CURSOR_MISMATCH")
+        if client == "SANYCH" and int(order.get("_fbsAltSheetLastRow", 0)) != alternate_sheet_last_row:
+            raise RuntimeError(client + ":FBS_ALTERNATE_APPEND_CURSOR_MISMATCH")
     for p in range(0, len(orders), BATCH_SIZE):
-        batch = orders[p:p+BATCH_SIZE]
+        batch = []
+        for original in orders[p:p+BATCH_SIZE]:
+            item = dict(original)
+            item["_fbsSheetLastRow"] = main_sheet_last_row
+            if client == "SANYCH":
+                item["_fbsAltSheetLastRow"] = alternate_sheet_last_row
+            batch.append(item)
         payload = {"token": BRIDGE_KEY, "action": "fbs_ingest_batch",
                    "client": client, "orders": batch}
         network_failures = 0
@@ -260,6 +275,19 @@ def ingest(client: str, orders: list[dict]) -> dict:
 
         for field in totals:
             totals[field] += int(result.get(field, 0))
+        inserted_now = int(result.get("inserted", 0))
+        if inserted_now < 0:
+            raise RuntimeError(client + ":FBS_INSERTED_COUNT_INVALID")
+        main_sheet_last_row += inserted_now
+        if client == "SANYCH":
+            alternate_copy = result.get("alternateCopy")
+            if not isinstance(alternate_copy, dict) or "inserted" not in alternate_copy:
+                raise RuntimeError("SANYCH:FBS_ALTERNATE_INSERT_COUNT_MISSING")
+            alternate_inserted_now = int(alternate_copy.get("inserted", 0))
+            if alternate_inserted_now < 0:
+                raise RuntimeError("SANYCH:FBS_ALTERNATE_INSERTED_COUNT_INVALID")
+            alternate_sheet_last_row += alternate_inserted_now
+        print("FBS_APPEND_CURSOR=" + json.dumps({"store":client,"batch":p//BATCH_SIZE+1,"main_last_row":main_sheet_last_row,"alternate_last_row":alternate_sheet_last_row}, ensure_ascii=False), flush=True)
         print(json.dumps({"store":client, "batch":p//BATCH_SIZE+1,
               "received":result.get("received"),"inserted":result.get("inserted"),
               "changed":result.get("changed")}, ensure_ascii=False), flush=True)
