@@ -6100,7 +6100,7 @@ function sellmonitorGithubPublishOzonSummaryOrders_(payload) {
       });
       var helperLastFull=lastFullDay||'';
       var helperAdCoverage=adMin&&adMax?adMin+'–'+adMax:'нет подтверждённых строк';
-      var helperNote='Заказы, отправления и позиции — Ozon Seller API; период '+coverageFrom+'–'+coverageTo+'; последняя полная дата '+(helperLastFull||'не подтверждена')+'. Сумма заказов и отмены в этой выгрузке недоступны. Реклама — Ozon Performance API по кампаниям, покрытие '+helperAdCoverage+', без разреза по товарам. Пустое значение означает отсутствие источника, не ноль.';
+      var helperNote=newOrderFreshnessNote;
       var helperSpecsForOrders=[
         {name:'06_Магазин_дни',kind:'day'},
         {name:'07_Магазин_недели',kind:'week'},
