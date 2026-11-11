@@ -1,0 +1,135 @@
+name: WB FBS gap catch-up 2026-11-11
+
+on:
+  push:
+    branches: [mainggg]
+    paths:
+      - ".github/workflows/wb-fbs-gap-catchup.yml"
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: wb-fbs-production-mutations
+  cancel-in-progress: false
+  queue: max
+
+jobs:
+  catchup_sanych:
+    if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[WB-FBS-GAP-CATCHUP-2026-11-11]') }}
+    name: "SANYCH catch-up ${{ matrix.start_date }}–${{ matrix.end_date }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - start_date: "2026-10-31"
+            end_date: "2026-11-02"
+          - start_date: "2026-11-03"
+            end_date: "2026-11-05"
+          - start_date: "2026-11-06"
+            end_date: "2026-11-08"
+          - start_date: "2026-11-09"
+            end_date: "2026-11-11"
+    env:
+      FBS_CLIENT: SANYCH
+      FBS_START_DATE: ${{ matrix.start_date }}
+      FBS_END_DATE: ${{ matrix.end_date }}
+      FBS_INCLUDE_LIVE: "true"
+      FBS_BATCH_SIZE: "10"
+      WB_API_TOKEN_AP: ${{ secrets.WB_API_TOKEN_AP }}
+      GOOGLE_BRIDGE_KEY: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
+      GOOGLE_BRIDGE_URL: https://script.google.com/macros/s/AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw/exec
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate SANYCH recovery prerequisites
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile wb_worker/sanych_fbs_recovery.py
+          test -n "$GOOGLE_BRIDGE_KEY"
+          test -n "$WB_API_TOKEN_AP"
+          test "${#WB_API_TOKEN_AP}" -ge 30
+      - name: Reconcile the SANYCH gap from WB into both books
+        shell: bash
+        run: python wb_worker/sanych_fbs_recovery.py
+
+  catchup_air_hozy:
+    needs: catchup_sanych
+    if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[WB-FBS-GAP-CATCHUP-2026-11-11]') }}
+    name: "${{ matrix.client }} catch-up ${{ matrix.start_date }}–${{ matrix.end_date }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - client: AIR
+            start_date: "2026-10-31"
+            end_date: "2026-11-02"
+          - client: AIR
+            start_date: "2026-11-03"
+            end_date: "2026-11-05"
+          - client: AIR
+            start_date: "2026-11-06"
+            end_date: "2026-11-08"
+          - client: AIR
+            start_date: "2026-11-09"
+            end_date: "2026-11-11"
+          - client: HOZYAYUSHKA
+            start_date: "2026-10-31"
+            end_date: "2026-11-02"
+          - client: HOZYAYUSHKA
+            start_date: "2026-11-03"
+            end_date: "2026-11-05"
+          - client: HOZYAYUSHKA
+            start_date: "2026-11-06"
+            end_date: "2026-11-08"
+          - client: HOZYAYUSHKA
+            start_date: "2026-11-09"
+            end_date: "2026-11-11"
+    env:
+      FBS_CLIENT: ${{ matrix.client }}
+      FBS_START_DATE: ${{ matrix.start_date }}
+      FBS_END_DATE: ${{ matrix.end_date }}
+      FBS_INCLUDE_LIVE: "true"
+      FBS_LOOKBACK_DAYS: "7"
+      FBS_BATCH_SIZE: ${{ matrix.client == 'AIR' && '2' || '10' }}
+      WB_API_TOKEN_AA: ${{ secrets.WB_API_TOKEN_AA }}
+      WB_API_TOKEN_YV: ${{ secrets.WB_API_TOKEN_YV }}
+      GOOGLE_BRIDGE_KEY: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
+      GOOGLE_BRIDGE_URL: https://script.google.com/macros/s/AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw/exec
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate recovery prerequisites
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile wb_worker/github_fbs_recovery.py
+          test -n "$GOOGLE_BRIDGE_KEY"
+          if [[ "$FBS_CLIENT" == "AIR" ]]; then
+            test -n "$WB_API_TOKEN_AA"
+            test "${#WB_API_TOKEN_AA}" -ge 30
+          elif [[ "$FBS_CLIENT" == "HOZYAYUSHKA" ]]; then
+            test -n "$WB_API_TOKEN_YV"
+            test "${#WB_API_TOKEN_YV}" -ge 30
+          else
+            exit 2
+          fi
+      - name: Reconcile ${{ matrix.client }} gap from WB into its FBS book
+        shell: bash
+        run: python wb_worker/github_fbs_recovery.py
