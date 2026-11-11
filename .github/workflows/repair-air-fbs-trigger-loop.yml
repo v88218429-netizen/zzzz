@@ -170,15 +170,7 @@ jobs:
           set -euo pipefail
           node <<'NODE'
           (async () => {
-            const deployments = [
-              "AKfycbwe6RKyfm0Gbr1sccfQRnAIwRUm5PAjfFbIp6t2anc",
-              "AKfycbw91xwMuZ1-XqU2gMjGCj0Nc7bqoB57LLCQKR4tsJrRaJ_zjtHkolUBvYreIRn308BM",
-              "AKfycbx45nZRar0QzaHxlG3iDThVLRU4tdrRE1hWPF-pWIHxQU6Du7zN89SNfG8suB1lr-Hb",
-              process.env.AIR_REPAIR_INGRESS_DEPLOYMENT_ID,
-              "AKfycbxyxnfxFl3GLkTukEDoM-n4gOnlslMv52Ghl2pGho9tQWpnSf6aSXAg7qZZFwtfnrKb",
-              "AKfycbw92e1aJ7yUPkJR50gKqhlctnQC2rUYUH58-l6JgRAAfKSqY9v5sRpFbTo3otcjqP8",
-              "AKfycbwGKBniZxxHrACCDuxQwfd-sAs8FMBxlDKvUbXCEAkZMAqeyynt9eRNpL-1ty3wZluw"
-            ].filter((value,index,array)=>value&&array.indexOf(value)===index);
+            const deployments = [process.env.AIR_REPAIR_INGRESS_DEPLOYMENT_ID];
             const retired = new Set([
               "scheduledFastCheck",
               "scheduledFastCheckContinuationV293_",
@@ -218,10 +210,17 @@ jobs:
                   attempts.push({deployment:deploymentId.slice(0,12),httpStatus:response.status,verified:true});
                   break;
                 }
+                const responseHint = responseText
+                  .replace(/<script[\\s\\S]*?<\\/script>/gi," ")
+                  .replace(/<style[\\s\\S]*?<\\/style>/gi," ")
+                  .replace(/<[^>]*>/g," ")
+                  .replace(/&[a-z0-9#]+;/gi," ")
+                  .replace(/\\s+/g," ").trim().replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/gi,"[email]").slice(0,240);
                 attempts.push({
                   deployment:deploymentId.slice(0,12),
                   httpStatus:response.status,
                   contentType:response.headers.get("content-type")||"",
+                  responseHint,
                   envelopeOk:envelope&&envelope.ok===true,
                   action:state&&state.action||null,
                   verified:false
