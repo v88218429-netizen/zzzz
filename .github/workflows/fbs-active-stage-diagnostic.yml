@@ -52,19 +52,6 @@ jobs:
               "fbs_supply_stage":stage_result.get("fbs_supply_stage")},
               ensure_ascii=False,separators=(",",":")),flush=True)
 
-          runtime=post({"token":token,"action":"fbs_runtime_diagnostic"},60)
-          runtime_result=runtime.get("result") or {}
-          if runtime.get("ok") is not True or runtime_result.get("ok") is not True:
-              raise SystemExit("FBS_RUNTIME_DIAGNOSTIC_FAILED")
-          print("FBS_RUNTIME_DIAGNOSTIC="+json.dumps({
-              "checkedAt":runtime_result.get("checkedAt"),
-              "results":[{k:item.get(k) for k in (
-                  "client","accessible","ordersTabExists","ordersLastRow","ordersMaxRows",
-                  "ordersMaxColumns","ordersGridCells","technicalLogTabExists",
-                  "technicalLogLastRow","technicalLogMaxRows","tabCount","errorType","error")}
-                  for item in runtime_result.get("results",[])]},
-              ensure_ascii=False,separators=(",",":")),flush=True)
-
           air_log=post({"token":token,"action":"fbs_technical_log_read","client":"AIR"},60)
           air_log_result=air_log.get("result") or {}
           if air_log.get("ok") is not True or air_log_result.get("ok") is not True:
