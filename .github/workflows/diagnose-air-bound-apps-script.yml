@@ -38,22 +38,25 @@ jobs:
           python3 - <<'PY'
           import pathlib, re
           root=pathlib.Path('/tmp/air-bound-script')
-          patterns=re.compile(r'continueFastCheckV293_|continueFullSyncContinuationV292_|scheduledFastCheckContinuationV293_|scheduledFullSyncContinuationV292_|repairAutomationV404|newTrigger|deleteTrigger|ScriptApp\.getProjectTriggers|ScriptApp\.newTrigger|trigger',re.I)
-          secret=re.compile(r'(?i)(token|secret|password|authorization|bearer)(\s*[:=]\s*|\s+)[^\s,;]+')
-          found=0
+          names='repairAutomationV404|createTriggers|createMinimalTriggersV301_|deleteOperationalTriggersV292_|ensureOperationalTriggersV361_|continueFastCheckV293_|scheduledFastCheckContinuationV293_|scheduledFullSyncContinuationV292_|scheduledFastCheck|ensureWatchdogTriggerV361_'
+          pattern=re.compile(r'^\\s*function\\s+('+names+r')\\s*\\(',re.M)
+          secret=re.compile(r'(?i)(token|secret|password|authorization|bearer)(\\s*[:=]\\s*|\\s+)[^\\s,;]+')
+          count=0
           for path in sorted(p for p in root.rglob('*') if p.suffix in ('.gs','.js')):
               lines=path.read_text(encoding='utf-8',errors='replace').splitlines()
-              hits=[i for i,line in enumerate(lines) if patterns.search(line)]
-              if not hits: continue
-              print('SOURCE_FILE='+path.name)
-              for i in hits[:100]:
-                  lo=max(0,i-4); hi=min(len(lines),i+7)
-                  print('SOURCE_CONTEXT line='+str(i+1))
-                  for n in range(lo,hi):
-                      line=secret.sub(r'\1=[redacted]',lines[n])
-                      line=re.sub(r'[A-Za-z0-9_-]{40,}','[opaque]',line)
-                      print('CODE '+str(n+1)+':'+line[:260])
-                  found+=1
-          print('TRIGGER_LIFECYCLE_MATCHES='+str(found))
-          if found==0: raise SystemExit('AIR_TRIGGER_LIFECYCLE_SOURCE_NOT_FOUND')
+              for i,line in enumerate(lines):
+                  match=pattern.search(line)
+                  if not match: continue
+                  end=min(len(lines),i+55)
+                  for j in range(i+1,min(len(lines),i+500)):
+                      if re.match(r'^\\s*function\\s+[A-Za-z0-9_$]+\\s*\\(',lines[j]):
+                          end=min(end,j); break
+                  print('SOURCE_FILE='+path.name+' FUNCTION='+match.group(1)+' LINE='+str(i+1))
+                  for n in range(i,end):
+                      safe=secret.sub(r'\\1=[redacted]',lines[n])
+                      safe=re.sub(r'[A-Za-z0-9_-]{40,}','[opaque]',safe)
+                      print('CODE '+str(n+1)+':'+safe[:260])
+                  count+=1
+          print('TRIGGER_FUNCTIONS_FOUND='+str(count))
+          if count==0: raise SystemExit('AIR_TRIGGER_FUNCTIONS_NOT_FOUND')
           PY
