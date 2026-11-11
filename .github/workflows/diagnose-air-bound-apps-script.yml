@@ -87,6 +87,67 @@ jobs:
           },ensure_ascii=False,sort_keys=True))
           PY
 
+      - name: Report Apps Script API deployment entry points
+        env:
+          AIR_SCRIPT_ID: 1snEntW5W9KZ_zKHP5bT4D-fmr-sbDdjV4-izjRxf46l8HWcrt3GJqU9V
+          AIR_DEPLOYMENT_ID: AKfycbxyxnfxFl3GLkTukEDoM-n4gOnlslMv52Ghl2pGho9tQWpnSf6aSXAg7qZZFwtfnrKb
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, os, time, urllib.error, urllib.parse, urllib.request
+          creds=json.load(open(os.path.expanduser('~/.clasprc.json'),encoding='utf-8'))
+          credential=(creds.get('tokens') or {}).get('default') or {}
+          if not credential and isinstance(creds.get('token'),dict):
+              credential=dict(creds['token'])
+              settings=creds.get('oauth2ClientSettings') or {}
+              credential.setdefault('client_id',settings.get('clientId'))
+              credential.setdefault('client_secret',settings.get('clientSecret'))
+          access=credential.get('access_token')
+          expiry=float(credential.get('expiry_date') or 0)/1000
+          if not access or expiry < time.time()+60:
+              form=urllib.parse.urlencode({
+                  'client_id':credential.get('client_id') or '',
+                  'client_secret':credential.get('client_secret') or '',
+                  'refresh_token':credential.get('refresh_token') or '',
+                  'grant_type':'refresh_token'
+              }).encode()
+              request=urllib.request.Request('https://oauth2.googleapis.com/token',data=form,
+                  headers={'Content-Type':'application/x-www-form-urlencoded'},method='POST')
+              with urllib.request.urlopen(request,timeout=30) as response:
+                  access=json.load(response).get('access_token')
+          if not access:
+              raise SystemExit('AIR_SCRIPT_API_ACCESS_TOKEN_UNAVAILABLE')
+          base='https://script.googleapis.com/v1/projects/'+urllib.parse.quote(os.environ['AIR_SCRIPT_ID'],safe='')+'/deployments'
+          deployments=[]
+          page=''
+          while True:
+              url=base+'?pageSize=100'+('&pageToken='+urllib.parse.quote(page,safe='') if page else '')
+              request=urllib.request.Request(url,headers={'Authorization':'Bearer '+access,'Accept':'application/json'})
+              with urllib.request.urlopen(request,timeout=30) as response:
+                  data=json.load(response)
+              deployments.extend(data.get('deployments') or [])
+              page=data.get('nextPageToken') or ''
+              if not page: break
+          types={}
+          target=None
+          for deployment in deployments:
+              for entry in deployment.get('entryPoints') or []:
+                  kind=entry.get('entryPointType') or 'unknown'
+                  types[kind]=types.get(kind,0)+1
+              if deployment.get('deploymentId')==os.environ['AIR_DEPLOYMENT_ID']:
+                  target=deployment
+          safe_target=[]
+          if target:
+              for entry in target.get('entryPoints') or []:
+                  kind=entry.get('entryPointType') or 'unknown'
+                  config=entry.get({'WEB_APP':'webApp','EXECUTION_API':'executionApi'}.get(kind,'') or '',{})
+                  safe_target.append({'type':kind,'access':config.get('access'),'executeAs':config.get('executeAs')})
+          print('AIR_SCRIPT_DEPLOYMENT_COUNT='+str(len(deployments)))
+          print('AIR_SCRIPT_ENTRY_POINT_COUNTS='+json.dumps(types,sort_keys=True))
+          print('AIR_TARGET_DEPLOYMENT_PRESENT='+str(target is not None).lower())
+          print('AIR_TARGET_ENTRY_POINTS='+json.dumps(safe_target,sort_keys=True))
+          PY
+
       - name: Report trigger lifecycle code
         shell: bash
         run: |
