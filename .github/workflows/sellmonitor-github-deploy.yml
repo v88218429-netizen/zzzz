@@ -184,6 +184,31 @@ jobs:
           print("LIVE_WORKER_VERSION="+live_version.group(1))
           print("GITHUB_WORKER_VERSION="+repo_version.group(1))
           print("LIVE_WORKER_SOURCE_MATCHES_GITHUB="+str(normalize(live_source)==normalize(repo_source)).lower())
+          import difflib
+          def function_block(source,name):
+              match=re.search(r"(?m)^function "+re.escape(name)+r"\\b",source)
+              if not match:return None
+              end=re.search(r"(?m)^function ",source[match.end():])
+              stop=match.end()+end.start() if end else len(source)
+              return source[match.start():stop].rstrip().splitlines()
+          for function_name in (
+              "sellmonitorGithubFbsStatusReadV1_",
+              "sellmonitorGithubFbsIngestBatchV1_",
+              "sellmonitorGithubFbsIngestBatchV1Core_",
+              "sellmonitorGithubFbsAcceptanceAuditV1_",
+          ):
+              live_block=function_block(live_source,function_name)
+              repo_block=function_block(repo_source,function_name)
+              if live_block is None or repo_block is None:
+                  print("FBS_FUNCTION_SOURCE name="+function_name+" live="+str(live_block is not None)+" github="+str(repo_block is not None))
+                  continue
+              diff=list(difflib.unified_diff(repo_block,live_block,fromfile="github/"+function_name,tofile="live/"+function_name,lineterm=""))
+              print("FBS_FUNCTION_DIFF name="+function_name+" github_lines="+str(len(repo_block))+" live_lines="+str(len(live_block))+" diff_lines="+str(len(diff)))
+              for line in diff[:100]:
+                  if line.startswith(("---","+++","@@")):
+                      print("FBS_DIFF_HUNK "+line[:240])
+                  elif line.startswith(("+","-")):
+                      print("FBS_DIFF "+line[:300])
           pattern=re.compile(r"getChartType|fbs_acceptance_audit|AcceptanceAudit|acceptanceAudit",re.I)
           hits=0
           for path in files:
