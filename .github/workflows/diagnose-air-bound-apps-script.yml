@@ -38,7 +38,7 @@ jobs:
           python3 - <<'PY'
           import pathlib, re
           root=pathlib.Path('/tmp/air-bound-script')
-          names='doPost|repairAutomationV404|createTriggers|createMinimalTriggersV301_|deleteOperationalTriggersV292_|ensureOperationalTriggersV361_|continueFastCheckV293_|scheduledFastCheckContinuationV293_|scheduledFullSyncContinuationV292_|scheduledFastCheck|ensureWatchdogTriggerV361_|clearFastCheckStateV293_|clearFullSyncStateV292_|isFastCheckPendingV293_|isFullSyncPendingV292_|clearFullSync|clearFastCheck|scheduledDailyMaintenance|runLiveCycleV320_|requestFastCheckV293_|githubTokenIngress|handleGithub|verifyGithub|validateGithub'
+          names='doPost|continueFullSyncV292_|repairAutomationV404|createTriggers|createMinimalTriggersV301_|deleteOperationalTriggersV292_|ensureOperationalTriggersV361_|continueFastCheckV293_|scheduledFastCheckContinuationV293_|scheduledFullSyncContinuationV292_|scheduledFastCheck|ensureWatchdogTriggerV361_|clearFastCheckStateV293_|clearFullSyncStateV292_|isFastCheckPendingV293_|isFullSyncPendingV292_|clearFullSync|clearFastCheck|scheduledDailyMaintenance|runLiveCycleV320_|requestFastCheckV293_|githubTokenIngress|handleGithub|verifyGithub|validateGithub'
           pattern=re.compile(r'^\s*function\s+('+names+r')\s*\(',re.M)
           secret=re.compile(r'(?i)(token|secret|password|authorization|bearer)(\s*[:=]\s*|\s+)[^\s,;]+')
           count=0
@@ -47,7 +47,7 @@ jobs:
               for i,line in enumerate(lines):
                   match=pattern.search(line)
                   if not match: continue
-                  end=min(len(lines),i+55)
+                  end=min(len(lines),i+(120 if match.group(1) in ('continueFastCheckV293_','continueFullSyncV292_','scheduledDailyMaintenance') else 55))
                   for j in range(i+1,min(len(lines),i+500)):
                       if re.match(r'^\s*function\s+[A-Za-z0-9_$]+\s*\(',lines[j]):
                           end=min(end,j); break
