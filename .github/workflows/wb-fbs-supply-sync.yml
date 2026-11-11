@@ -7,6 +7,7 @@ on:
     branches: [mainggg]
     paths:
       - "wb_os/apps_script/WB_FBS_SUPPLY_DIRECT.gs"
+      - ".github/workflows/wb-fbs-supply-sync.yml"
   schedule:
     - cron: "57 */3 * * *"
   workflow_dispatch:
