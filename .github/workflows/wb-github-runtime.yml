@@ -111,6 +111,7 @@ jobs:
         working-directory: wb_ai_manager/source
         env:
           DATA_DIR: data/github-runtime
+          OPTIMIZER_SWEEP_CONTINUATION_DEPTH: ${{ github.event.inputs.optimizer_sweep_continuation_depth || '0' }}
           WB_API_TOKEN_AP: ${{ secrets.WB_API_TOKEN_AP }}
           WB_API_TOKEN_AA: ${{ secrets.WB_API_TOKEN_AA }}
           WB_API_TOKEN_YV: ${{ secrets.WB_API_TOKEN_YV }}
@@ -231,7 +232,7 @@ jobs:
           except ValueError:
               depth = 0
           progress = current.get("optimizer_sweep_progress") or {}
-          limit = optimizer_sweep_continuation_limit(progress)
+          limit = optimizer_sweep_continuation_limit(progress, continuation_depth=depth)
           if should_continue_optimizer_sweep(previous, current, continuation_depth=depth):
               print(f"Incomplete sweep advanced at continuation depth {depth}/{limit}; dispatching one bounded continuation.")
               result = subprocess.run(

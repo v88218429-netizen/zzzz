@@ -2,9 +2,9 @@
   "schema": 1,
   "channels": {
     "stable": {
-      "version": "1.1.54",
+      "version": "1.1.55",
       "channel": "stable",
-      "notes": "Версия 1.1.54: числовая ставка и лимит рекламных расходов блокируются без свежей подтверждённой юнит-экономики по точному кабинету и nmID; текущая ставка остаётся только фактом.",
+      "notes": "Версия 1.1.55: рекламный обход учитывает фактический прогресс по парам кампания×товар; дочерние запуски используют короткий интервал и продолжаются только при подтверждённом прогрессе. Числовая ставка без свежей точной юнит-экономики остаётся заблокированной.",
       "minimum_current_version": "1.0.0",
       "files": [
         {
@@ -35,17 +35,17 @@
         {
           "path": "plugin.json",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/plugin.json",
-          "sha256": "37fc712bf7c5902c3005a5ad3b0fb6bcad7d017531e4f8f03635e0e4f6b0441e"
+          "sha256": "da5c7cdf7507691a59b33ac822ba31de164ff2d6a4ced6d8b003c671faff8156"
         },
         {
           "path": "pyproject.toml",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/pyproject.toml",
-          "sha256": "a00dc7062dc0d763b830c7bdbdd19d131bd96c05d89548ed08daf9ce0391d464"
+          "sha256": "5bb95134721abcb409c169609a0e46c97dd90587b60b5f4164debed80265c63e"
         },
         {
           "path": "RELEASE_NOTES.md",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/RELEASE_NOTES.md",
-          "sha256": "98a12785bc1d91de9065d9150d559534b994d1679cf3971794577bf2eeaeb091"
+          "sha256": "7fb81b39b30e869b5d047f5364573b9a95c7a607df3fafa3e13971dcbd0b58c5"
         },
         {
           "path": "scripts/auto_refresh_sheets.py",
@@ -62,7 +62,7 @@
         {
           "path": "scripts/github_runtime.py",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/scripts/github_runtime.py",
-          "sha256": "026a7e6de75a989c36e52f0a1168d05128761d3d5d73ea9c8d9a7756b5252b22"
+          "sha256": "f42c72a1aa2e2ee579f69529904e1dcf730d61eb0d030d2012b80fe8511b8f5e"
         },
         {
           "path": "scripts/install_launchd.sh",
@@ -131,7 +131,7 @@
         {
           "path": "src/wb_control_center/__init__.py",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/src/wb_control_center/__init__.py",
-          "sha256": "dfa6c0c720e5319fcfb1ad70d58eac9d48f0b87555bc6452d633c94ad84e9433"
+          "sha256": "8084b1573ea9db4d7b38456a2801454f8919ef167913562c6b35a75ec6e40ce0"
         },
         {
           "path": "src/wb_control_center/__main__.py",
@@ -381,7 +381,7 @@
         {
           "path": "src/wb_control_center/optimizer_acceptance.py",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/src/wb_control_center/optimizer_acceptance.py",
-          "sha256": "071d5423df21f45f262d4bc58c466fe5ef29d4e5a45c2f9176d8a8a20ea733b6"
+          "sha256": "bbf4119300dc4613204212bd24c646b6ee76ccf842127e8f629659a23d9971e0"
         },
         {
           "path": "src/wb_control_center/outcome_evaluator.py",
@@ -406,7 +406,7 @@
         {
           "path": "src/wb_control_center/portfolio.py",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/src/wb_control_center/portfolio.py",
-          "sha256": "968e3fcbe524c6dc1ea69f628316cf3d4d7c9fe94945eff4075a22893eb83317"
+          "sha256": "86d9b2809ba97c6721c4c87bca0f506329bb5e913ef21a7561614cadd1207404"
         },
         {
           "path": "src/wb_control_center/public_wb.py",
@@ -487,7 +487,7 @@
         {
           "path": "VERSION",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/VERSION",
-          "sha256": "93f3438cebf8f5737b4d7b6ca710da08f751e390da2c179a5531387f09131657"
+          "sha256": "d175cfa39a9ded74e849236694c48ca2131d13d01b1f5adae8e3bbe402b92685"
         }
       ]
     }

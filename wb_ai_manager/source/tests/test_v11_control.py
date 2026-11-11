@@ -64,7 +64,17 @@ def test_multisku_campaign_uses_exact_sku_stats_and_separate_keys():
 
 
 def test_multisku_without_exact_stats_freezes_bid():
-    p={"source_health":[],"stores":[],"own_27":{"products":[{"sku":"111","name":"A","price_rub":1000,"profit_rub":200,"drr_pct":5,"safe_stock":300,"orders_per_day":10}]}}
+    from datetime import datetime, timezone
+
+    p={"source_health":[],"stores":[],"own_27":{
+        "products":[{"sku":"111","name":"A","price_rub":1000,"profit_rub":200,"drr_pct":5,"safe_stock":300,"orders_per_day":10}],
+        "advertising_economics_by_nm_id":{"111":{
+            "seller_article":"A","cost_rub":500,"price_rub":1000,"profit_rub":200,
+            "unit_economics_mapping_validation_ok":True,
+            "unit_economics_decision_ready":True,
+            "unit_economics_read_at":datetime.now(timezone.utc).isoformat(),
+        }},
+    }}
     deep={"campaigns":[{
         "campaign_id":10,"campaign":{"advertId":10,"name":"multi","nmIds":[111,222],"bidKopecks":5000},
         "nm_ids":[111,222],"stats":{"advertId":10,"sum":1000,"orders":20,"sum_price":20000},"stats_by_nm":{},"recommendations":{},"budget":{},

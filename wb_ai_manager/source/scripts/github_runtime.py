@@ -81,6 +81,13 @@ def optimizer_sweep_progress(optimizer_state: dict[str, Any]) -> dict[str, dict[
             "products_total": sweep.get("sweep_products_total", 0),
             "campaign_product_pairs_seen": sweep.get("sweep_pairs_seen", 0),
             "campaign_product_pairs_total": sweep.get("sweep_pairs_total", 0),
+            "campaign_product_pairs_scanned": sum(
+                len(scanned_ids)
+                for campaign in (sweep.get("campaigns") or [])
+                if isinstance(campaign, dict)
+                for scanned_ids in [campaign.get("recommendation_nm_ids_scanned")]
+                if isinstance(scanned_ids, list)
+            ),
             "cursor_before": sweep.get("cursor_before"),
             "cursor_after": sweep.get("cursor_after"),
             "eligible_campaigns": sweep.get("eligible_campaigns", 0),
@@ -92,22 +99,48 @@ def optimizer_sweep_progress(optimizer_state: dict[str, Any]) -> dict[str, dict[
     return progress
 
 
-def optimizer_sweep_continuation_limit(progress: dict[str, Any], maximum: int = 16) -> int:
-    """Derive a bounded continuation budget from campaign count and scan window size."""
+def optimizer_run_interval_minutes(continuation_depth: Any = 0) -> int:
+    """Use the normal ten-minute cadence, but let a progressing continuation run promptly."""
+    try:
+        depth = max(0, int(continuation_depth))
+    except (TypeError, ValueError):
+        depth = 0
+    return 1 if depth > 0 else 10
+
+
+def optimizer_sweep_continuation_limit(
+    progress: dict[str, Any], maximum: int = 16, continuation_depth: int = 0
+) -> int:
+    """Estimate sweep windows from campaigns and campaign-product pairs with a hard ceiling."""
+    cap = max(1, min(16, int(maximum)))
+    incomplete = [
+        row for row in progress.values()
+        if isinstance(row, dict) and row.get("complete") is not True
+    ]
+    if not incomplete:
+        return 0
     budgets: list[int] = []
-    for row in progress.values():
-        if not isinstance(row, dict) or row.get("complete") is True:
-            continue
+    for row in incomplete:
         try:
-            total = max(0, int(row.get("campaigns_total") or 0))
-            scanned = max(0, int(row.get("campaigns_scanned") or 0))
+            campaign_total = max(0, int(row.get("campaigns_total") or 0))
+            campaigns_scanned = max(0, int(row.get("campaigns_scanned") or 0))
+            pair_total = max(0, int(row.get("campaign_product_pairs_total") or 0))
+            pairs_scanned = max(0, int(row.get("campaign_product_pairs_scanned") or 0))
         except (TypeError, ValueError):
             continue
-        if total > 0 and scanned > 0:
-            budgets.append(max(0, (total + scanned - 1) // scanned - 1))
-    if not budgets:
-        return max(1, min(16, int(maximum)))
-    return max(0, min(max(1, int(maximum)), max(budgets)))
+        if campaign_total > 0 and campaigns_scanned > 0:
+            budgets.append(max(0, (campaign_total + campaigns_scanned - 1) // campaigns_scanned - 1))
+        if pair_total > 0 and pairs_scanned > 0:
+            budgets.append(max(0, (pair_total + pairs_scanned - 1) // pairs_scanned - 1))
+    try:
+        depth = max(0, int(continuation_depth))
+    except (TypeError, ValueError):
+        depth = 0
+    # The estimate can shrink as different campaign sizes are reached. Keep one
+    # more allowed step for an incomplete, progressing sweep; the fixed ceiling
+    # prevents an unbounded dispatch chain and the scheduled run resumes checkpoints.
+    estimated = max(budgets) if budgets else cap
+    return max(0, min(cap, max(estimated, depth + 1)))
 
 
 def should_continue_optimizer_sweep(
@@ -131,7 +164,7 @@ def should_continue_optimizer_sweep(
         depth = max(0, int(continuation_depth))
     except (TypeError, ValueError):
         depth = 0
-    if depth >= optimizer_sweep_continuation_limit(current):
+    if depth >= optimizer_sweep_continuation_limit(current, continuation_depth=depth):
         return False
 
     for code, row in current.items():
@@ -290,7 +323,12 @@ async def run_cabinet(
             errors.append({"stage": "wb.start", "error": str(exc)})
         # Continue the cursor-based ad scan every runtime cycle, while all other
         # agents follow their persisted policy cadence (prices: 30 min, finance: 6 h, etc.).
-        run_results = await center.run_due_once(interval_overrides={"advertising_optimizer": 10})
+        continuation_depth = os.environ.get("OPTIMIZER_SWEEP_CONTINUATION_DEPTH", "0")
+        run_results = await center.run_due_once(
+            interval_overrides={
+                "advertising_optimizer": optimizer_run_interval_minutes(continuation_depth)
+            }
+        )
         snap = snapshots(center)
         decisions = center.db.current_decisions(limit=500) or center.refresh_decisions()
         events = center.db.recent_events(hours=48, limit=500)

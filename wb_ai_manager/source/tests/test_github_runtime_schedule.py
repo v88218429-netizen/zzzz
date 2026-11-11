@@ -9,6 +9,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from wb_control_center.engine import agent_run_due
 from scripts.github_runtime import (
+    optimizer_run_interval_minutes,
     optimizer_sweep_continuation_limit,
     optimizer_sweep_progress,
     should_continue_optimizer_sweep,
@@ -137,7 +138,7 @@ class OptimizerSweepContinuationTests(unittest.TestCase):
         health = {"optimizer_sweep_progress": progress}
         self.assertFalse(should_continue_optimizer_sweep(health, health))
 
-    def test_continuation_budget_stops_at_depth_limit(self):
+    def test_continuation_budget_stops_at_hard_depth_limit(self):
         previous = {"optimizer_sweep_progress": {"aa": {
             "sweep_id": 4, "complete": False, "campaigns_total": 47,
             "campaigns_seen": 6, "products_seen": 34, "campaign_product_pairs_seen": 34,
@@ -149,7 +150,21 @@ class OptimizerSweepContinuationTests(unittest.TestCase):
             "cursor_before": 6, "cursor_after": 12, "campaigns_scanned": 6,
         }}}
 
-        self.assertFalse(should_continue_optimizer_sweep(previous, current, continuation_depth=7))
+        self.assertTrue(should_continue_optimizer_sweep(previous, current, continuation_depth=7))
+        self.assertFalse(should_continue_optimizer_sweep(previous, current, continuation_depth=16))
+
+    def test_pair_window_size_controls_sweep_budget(self):
+        progress = {"aa": {
+            "complete": False, "campaigns_total": 47, "campaigns_scanned": 12,
+            "campaign_product_pairs_total": 329, "campaign_product_pairs_seen": 68,
+            "campaign_product_pairs_scanned": 54,
+        }}
+        self.assertEqual(optimizer_sweep_continuation_limit(progress), 6)
+
+    def test_continuation_interval_is_shorter_than_scheduled_interval(self):
+        self.assertEqual(optimizer_run_interval_minutes(0), 10)
+        self.assertEqual(optimizer_run_interval_minutes("1"), 1)
+        self.assertEqual(optimizer_run_interval_minutes("bad"), 10)
 
     def test_progress_publishes_cursor_and_scan_window_without_identifiers(self):
         progress = optimizer_sweep_progress({"shops": {"aa": {"sweep": {
