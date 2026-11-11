@@ -19,6 +19,8 @@ on:
       - "wb_ai_manager/source/tests/test_release_integrity.py"
       - "wb_ai_manager/source/tests/test_run_recovery.py"
       - "wb_ai_manager/source/scripts/launch/auto_readonly.command"
+      - "wb_ai_manager/source/RELEASE_NOTES.md"
+      - "wb_ai_manager/update-manifest.json"
       - ".github/workflows/wb-optimizer-acceptance-ci.yml"
   push:
     branches:
@@ -40,6 +42,8 @@ on:
       - "wb_ai_manager/source/tests/test_release_integrity.py"
       - "wb_ai_manager/source/tests/test_run_recovery.py"
       - "wb_ai_manager/source/scripts/launch/auto_readonly.command"
+      - "wb_ai_manager/source/RELEASE_NOTES.md"
+      - "wb_ai_manager/update-manifest.json"
       - ".github/workflows/wb-optimizer-acceptance-ci.yml"
 
 permissions:

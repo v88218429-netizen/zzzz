@@ -45,7 +45,7 @@
         {
           "path": "RELEASE_NOTES.md",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/47c84046524efa010581cd2258bc6ad56256239b/wb_ai_manager/source/RELEASE_NOTES.md",
-          "sha256": "e40a406d1b4b9cc724ce5ea1206fe3bd88a825e26e17efc554730fb4e20b7b99"
+          "sha256": "820e8608a242d5dd8b1d1d8deb2d487f28b8fc54064717d1f6cb25a400f69f5a"
         },
         {
           "path": "scripts/auto_refresh_sheets.py",
