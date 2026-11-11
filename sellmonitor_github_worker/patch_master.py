@@ -509,7 +509,8 @@ function sellmonitorGithubFbsAcceptanceAuditV1_(body) {
         if(expectedDays>400)throw new Error('WB_RNP_STORE_PERIOD_GUARD:'+grain+':'+period);
       }
     }
-    var status=expectedDays===0?'🟡 ПРЕДВ.':(exactDays.length===expectedDays?'🟢 ФАКТ':(exactDays.length?'🟡 ЧАСТИЧНО':'🟠 НЕПОЛНЫЙ'));
+    var periodOpen=end>closedThrough;
+    var status=expectedDays===0?'🟡 ПРЕДВ.':(exactDays.length===expectedDays?(periodOpen?'🟡 ЧАСТИЧНО':'🟢 ФАКТ'):(exactDays.length?'🟡 ЧАСТИЧНО':'🟠 НЕПОЛНЫЙ'));
     var result={rows:rows,exact_days:exactDays.length,expected_days:expectedDays,status:status};
     storePeriodCache_[cacheKey]=result;
     return result;
@@ -546,7 +547,7 @@ function sellmonitorGithubFbsAcceptanceAuditV1_(body) {
   }""" + "\n" + helper_anchor, 1)
         worker_text = worker_text.replace(exact_old, exact_new, 1)
         worker_text = worker_text.replace(status_old, status_new, 1)
-        worker_text = worker_text.replace(store_branch_old, store_branch_new, 1)
+        # Leave the store branch for the later coverage patch to wrap.
         print("WB_RNP_STORE_EXACT_DAILY_AGG=patched")
     elif not all(marker in worker_text for marker in (
         "WB_RNP_EXACT_DAY_REQUIRES_ALL_STORE_ROWS_V1",
@@ -1330,7 +1331,7 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
       });
       if(coverageGaps.length){
         pstat.partial=true;pstat.partialCoverage=true;
-        next[0]=pstat.preliminary?(pstat.exact?'🟡 ЧАСТИЧНО':'🟡 ПРЕДВ.'):(pstat.exact?'🟡 ЧАСТИЧНО':'🟠 НЕПОЛНЫЙ');
+        next[0]=storePeriodFacts.status==='🟢 ФАКТ'?'🟡 ЧАСТИЧНО':storePeriodFacts.status;
       }"""
         if worker_text.count(status_anchor)!=1:
             raise SystemExit("WB_RNP_METRIC_COVERAGE_STATUS_ANCHOR_MISMATCH")
@@ -1341,11 +1342,17 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
           v=storeValueCache[code];
         }"""
         store_replacement = """        if(level==='МАГАЗИН'){
-          var metricCoverage=metricCoverageMissing_(all,code);
-          if(metricCoverage){v='';}
-          else{
-            if(!Object.prototype.hasOwnProperty.call(storeValueCache,code))storeValueCache[code]=rnpValue(all,code);
+          var aggregateStoreMetric=storeAggregateCode_(code);
+          if(aggregateStoreMetric&&(spec.grain!=='day'||storePeriodFacts.rows.length)){
+            if(!Object.prototype.hasOwnProperty.call(storeValueCache,code))storeValueCache[code]=storeAggregateValue_(storePeriodFacts.rows,code);
             v=storeValueCache[code];
+          }else{
+            var metricCoverage=metricCoverageMissing_(all,code);
+            if(metricCoverage){v='';}
+            else{
+              if(!Object.prototype.hasOwnProperty.call(storeValueCache,code))storeValueCache[code]=rnpValue(all,code);
+              v=storeValueCache[code];
+            }
           }
         }"""
         if worker_text.count(store_anchor)!=1:
