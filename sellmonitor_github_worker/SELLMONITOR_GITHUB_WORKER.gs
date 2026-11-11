@@ -7338,7 +7338,7 @@ function sellmonitorGithubFbsFormulaRepairV1_(body) {
     queryHasData:!noMatches,checkedAt:new Date().toISOString()};
 }
 
-/** Lightweight read-only AIR/FBS grid probe; avoids scanning every order or client workbook. */
+/** Lightweight read-only AIR/FBS grid probe using one metadata request per book. */
 function sellmonitorGithubFbsRuntimeDiagnosticV1_() {
   var targets=[
     {client:'SANYCH',id:'1v0qt-thJDOw3tLFdZVGhdXJdBM8rDPRz9mHlcHmuuyM'},
@@ -7348,23 +7348,37 @@ function sellmonitorGithubFbsRuntimeDiagnosticV1_() {
   var results=[];
   targets.forEach(function(t){
     try{
-      var ss=SpreadsheetApp.openById(t.id);
-      var tabs=ss.getSheets().map(function(sh){
-        return {name:sh.getName(),lastRow:Number(sh.getLastRow()),
-          lastColumn:Number(sh.getLastColumn()),maxRows:Number(sh.getMaxRows()),
-          maxColumns:Number(sh.getMaxColumns()),hidden:sh.isSheetHidden()};
+      var metadata=Sheets.Spreadsheets.get(t.id,{
+        fields:'properties(title),sheets(properties(sheetId,title,index,hidden,gridProperties(rowCount,columnCount)))'
       });
+      var tabs=(metadata.sheets||[]).map(function(item){
+        var p=item.properties||{},grid=p.gridProperties||{};
+        return {sheetId:Number(p.sheetId||0),name:String(p.title||''),
+          index:Number(p.index||0),lastRow:null,lastColumn:null,
+          maxRows:Number(grid.rowCount||0),maxColumns:Number(grid.columnCount||0),
+          hidden:p.hidden===true};
+      });
+      var orderMeta=null,logMeta=null;
+      tabs.forEach(function(tab){
+        if(tab.name==='📦 FBS Заказы')orderMeta=tab;
+        if(tab.name==='🛠 Технический лог')logMeta=tab;
+      });
+      var ss=SpreadsheetApp.openById(t.id);
       var orderSheet=ss.getSheetByName('📦 FBS Заказы');
-      var rows=orderSheet?Number(orderSheet.getMaxRows()):0;
-      var columns=orderSheet?Number(orderSheet.getMaxColumns()):0;
-      results.push({client:t.client,spreadsheetId:t.id,spreadsheetName:ss.getName(),
-        spreadsheetUrl:ss.getUrl(),accessible:true,ordersTabExists:!!orderSheet,
+      var logSheet=ss.getSheetByName('🛠 Технический лог');
+      var rows=orderMeta?orderMeta.maxRows:0,columns=orderMeta?orderMeta.maxColumns:0;
+      results.push({client:t.client,spreadsheetId:t.id,spreadsheetName:String(metadata.properties&&metadata.properties.title||''),
+        spreadsheetUrl:'https://docs.google.com/spreadsheets/d/'+t.id+'/edit',
+        accessible:true,ordersTabExists:!!orderMeta,
         ordersLastRow:orderSheet?Number(orderSheet.getLastRow()):0,
         ordersMaxRows:rows,ordersMaxColumns:columns,ordersGridCells:rows*columns,
+        technicalLogTabExists:!!logMeta,
+        technicalLogLastRow:logSheet?Number(logSheet.getLastRow()):0,
+        technicalLogMaxRows:logMeta?logMeta.maxRows:0,
         tabCount:tabs.length,tabs:tabs});
     }catch(e){
       results.push({client:t.client,spreadsheetId:t.id,accessible:false,
-        errorType:String(e&&e.name||'Error')});
+        errorType:String(e&&e.name||'Error'),error:String(e&&e.message||e).slice(0,240)});
     }
   });
   var stages=sellmonitorGithubFbsStageSnapshot_();
@@ -7373,6 +7387,7 @@ function sellmonitorGithubFbsRuntimeDiagnosticV1_() {
 }
 
 /** Read-only, bounded AIR technical-log inspection for GitHub production diagnosis. */
+
 function sellmonitorGithubFbsTechnicalLogReadV1_(body) {
   var client=String(body&&body.client||'').trim().toUpperCase();
   if(client!=='AIR')throw new Error('FBS_TECH_LOG_CLIENT_NOT_ALLOWED');
