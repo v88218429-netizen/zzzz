@@ -30,6 +30,7 @@ on:
     branches: [mainggg]
     paths:
       - "wb_worker/github_fbs_recovery.py"
+      - ".github/workflows/wb-fbs-github-recovery.yml"
 
 permissions:
   actions: read
@@ -53,7 +54,7 @@ jobs:
         include:
         - client: AIR
           start_date: "2026-10-28"
-          end_date: "2026-10-29"
+          end_date: "2026-10-30"
         - client: AIR
           start_date: "2026-10-22"
           end_date: "2026-10-27"
@@ -95,7 +96,7 @@ jobs:
           end_date: "2026-08-05"
         - client: HOZYAYUSHKA
           start_date: "2026-10-28"
-          end_date: "2026-10-29"
+          end_date: "2026-10-30"
         - client: HOZYAYUSHKA
           start_date: "2026-10-22"
           end_date: "2026-10-27"
