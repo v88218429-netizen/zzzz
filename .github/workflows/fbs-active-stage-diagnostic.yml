@@ -9,6 +9,7 @@ name: WB FBS active stage diagnostic
 # Snapshot tick 5.
 # Snapshot tick 6.
 # Snapshot tick 7.
+# Snapshot tick 8.
 on:
   workflow_dispatch:
   push:
