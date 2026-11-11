@@ -35,8 +35,7 @@ def replace_function(text: str, name: str, replacement: str) -> str:
 # Disable the obsolete five-minute local WB poller and keep its handler harmless
 # in case a previously queued Apps Script event still starts after deletion.
 code=replace_function(code,"scheduledFastCheck",'''function scheduledFastCheck() {
-  // AIR FBS polling is owned by GitHub Actions; this legacy timer is retired.
-  return;
+  return wbFbsCleanupLegacyFbsTriggersFromTimerV1_();
 }''')
 code=replace_once(
     code,
@@ -69,12 +68,10 @@ code=replace_once(
     "DISABLE_AUTOMATION_REQUEUE"
 )
 code=replace_function(code,"scheduledFastCheckContinuationV293_",'''function scheduledFastCheckContinuationV293_() {
-  // Retired: FBS polling and recovery are scheduled by GitHub Actions.
-  return;
+  return wbFbsCleanupLegacyFbsTriggersFromTimerV1_();
 }''')
 code=replace_function(code,"scheduledFullSyncContinuationV292_",'''function scheduledFullSyncContinuationV292_() {
-  // Retired: historical FBS recovery is scheduled by GitHub Actions.
-  return;
+  return wbFbsCleanupLegacyFbsTriggersFromTimerV1_();
 }''')
 code=replace_function(code,"requestFastCheckV293_",'''function requestFastCheckV293_(manualStart) {
   if (manualStart) {
@@ -177,6 +174,27 @@ function wbFbsStopLegacyFbsTriggersV1_() {
 '''
 if "/* AIR_FBS_GITHUB_TRIGGER_REPAIR_V1 */" not in ingress:
     ingress=helper+ingress
+timer_wrapper='''/* AIR_FBS_GITHUB_TRIGGER_TIMER_CLEANUP_V1 */
+function wbFbsCleanupLegacyFbsTriggersFromTimerV1_() {
+  var lock=LockService.getScriptLock();
+  if(!lock.tryLock(5000))return {ok:false,error:'SCRIPT_LOCK_BUSY'};
+  var result;
+  try {
+    result=wbFbsStopLegacyFbsTriggersV1_();
+  } finally {
+    lock.releaseLock();
+  }
+  try {
+    log_('SUCCESS','AIR_FBS_TRIGGER_REPAIR','Старые локальные циклы ФБС отключены',result);
+  } catch (error) {
+    console.log(error);
+  }
+  return result;
+}
+
+'''
+if "AIR_FBS_GITHUB_TRIGGER_TIMER_CLEANUP_V1" not in code:
+    code=code.rstrip()+"\\n\\n"+timer_wrapper
 code_path.write_text(code,encoding="utf-8")
 ingress_path.write_text(ingress,encoding="utf-8")
 for path in (code_path,ingress_path):
