@@ -2,6 +2,7 @@
 name: WB FBS active stage diagnostic
 # Read-only stage snapshots may run during production writes; they do not take the data lock. Refreshable by a GitHub commit.
 # Refresh stage snapshot after the 90-day recovery queue started.
+# Snapshot tick 1.
 on:
   workflow_dispatch:
   push:
