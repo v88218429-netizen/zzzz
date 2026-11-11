@@ -11,6 +11,14 @@ code_path=root/"Код.js"
 ingress_path=root/"GithubTokenIngress.js"
 code=code_path.read_text(encoding="utf-8")
 ingress=ingress_path.read_text(encoding="utf-8")
+manifest_path=root/"appsscript.json"
+manifest=json.loads(manifest_path.read_text(encoding="utf-8"))
+webapp=dict(manifest.get("webapp") or {})
+access_before=str(webapp.get("access") or "")
+execute_as_before=str(webapp.get("executeAs") or "")
+webapp["access"]="ANYONE_ANONYMOUS"
+webapp["executeAs"]="USER_DEPLOYING"
+manifest["webapp"]=webapp
 
 def replace_once(text: str, old: str, new: str, label: str) -> str:
     count=text.count(old)
@@ -186,7 +194,11 @@ if "AIR_FBS_GITHUB_TRIGGER_TIMER_CLEANUP_V1" not in code:
     code=code.rstrip()+"\n\n"+timer_wrapper
 code_path.write_text(code,encoding="utf-8")
 ingress_path.write_text(ingress,encoding="utf-8")
-for path in (code_path,ingress_path):
+manifest_path.write_text(json.dumps(manifest,ensure_ascii=False,indent=2)+"\\n",encoding="utf-8")
+print("AIR_WEBAPP_ACCESS_BEFORE="+access_before)
+print("AIR_WEBAPP_ACCESS_AFTER="+str(webapp.get("access")))
+print("AIR_WEBAPP_EXECUTE_AS_AFTER="+str(webapp.get("executeAs")))
+for path in (code_path,ingress_path,manifest_path):
     print("PATCHED_FILE="+path.name)
     print("SHA256="+hashlib.sha256(path.read_bytes()).hexdigest())
 print("AIR_FBS_GITHUB_ONLY_PATCH=ok")
