@@ -1,0 +1,55 @@
+name: Diagnose AIR Apps Script through GitHub
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Install clasp
+        run: npm install -g @google/clasp
+
+      - name: Pull AIR Apps Script source read-only
+        env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+          AIR_SCRIPT_ID: 1snEntW5W9KZ_zKHP5bT4D-fmr-sbDdjV4-izjRxf46l8HWcrt3GJqU9V
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          printf '%s' "$CLASPRC_JSON" > "$HOME/.clasprc.json"
+          mkdir -p /tmp/air-bound-script
+          printf '{"scriptId":"%s","rootDir":"."}\\n' "$AIR_SCRIPT_ID" > /tmp/air-bound-script/.clasp.json
+          cd /tmp/air-bound-script
+          clasp pull
+
+      - name: Report trigger lifecycle code
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import pathlib, re
+          root=pathlib.Path('/tmp/air-bound-script')
+          patterns=re.compile(r'continueFastCheckV293_|continueFullSyncContinuationV292_|scheduledFastCheckContinuationV293_|scheduledFullSyncContinuationV292_|repairAutomationV404|newTrigger|deleteTrigger|ScriptApp\.getProjectTriggers|ScriptApp\.newTrigger|trigger',re.I)
+          secret=re.compile(r'(?i)(token|secret|password|authorization|bearer)(\\s*[:=]\\s*|\\s+)[^\\s,;]+')
+          found=0
+          for path in sorted(root.rglob('*.gs')):
+              lines=path.read_text(encoding='utf-8',errors='replace').splitlines()
+              hits=[i for i,line in enumerate(lines) if patterns.search(line)]
+              if not hits: continue
+              print('SOURCE_FILE='+path.name)
+              for i in hits[:100]:
+                  lo=max(0,i-4); hi=min(len(lines),i+7)
+                  print('SOURCE_CONTEXT line='+str(i+1))
+                  for n in range(lo,hi):
+                      line=secret.sub(r'\\1=[redacted]',lines[n])
+                      line=re.sub(r'[A-Za-z0-9_-]{40,}','[opaque]',line)
+                      print('CODE '+str(n+1)+':'+line[:260])
+                  found+=1
+          print('TRIGGER_LIFECYCLE_MATCHES='+str(found))
+          if found==0: raise SystemExit('AIR_TRIGGER_LIFECYCLE_SOURCE_NOT_FOUND')
+          PY
