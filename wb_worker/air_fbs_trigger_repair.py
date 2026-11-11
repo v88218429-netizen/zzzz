@@ -2,6 +2,7 @@
 """Patch AIR's bound Apps Script so scheduled FBS reads run through GitHub only."""
 from __future__ import annotations
 import hashlib
+import json
 from pathlib import Path
 import re
 import sys
@@ -194,7 +195,7 @@ if "AIR_FBS_GITHUB_TRIGGER_TIMER_CLEANUP_V1" not in code:
     code=code.rstrip()+"\n\n"+timer_wrapper
 code_path.write_text(code,encoding="utf-8")
 ingress_path.write_text(ingress,encoding="utf-8")
-manifest_path.write_text(json.dumps(manifest,ensure_ascii=False,indent=2)+"\\n",encoding="utf-8")
+manifest_path.write_text(json.dumps(manifest,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
 print("AIR_WEBAPP_ACCESS_BEFORE="+access_before)
 print("AIR_WEBAPP_ACCESS_AFTER="+str(webapp.get("access")))
 print("AIR_WEBAPP_EXECUTE_AS_AFTER="+str(webapp.get("executeAs")))
