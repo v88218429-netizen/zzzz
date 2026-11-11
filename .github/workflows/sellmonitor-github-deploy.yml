@@ -709,7 +709,8 @@ jobs:
         shell: bash
         run: |
           python - <<'PY'
-          import json, os, urllib.request
+          import json, os, re, time, urllib.request
+          started=time.monotonic()
           url='https://script.google.com/macros/s/'+os.environ['WEBAPP_DEPLOYMENT_ID']+'/exec'
           payload={'token':os.environ['WEBHOOK_SECRET'],'action':'fbs_technical_log_read','client':'AIR'}
           request=urllib.request.Request(url,data=json.dumps(payload).encode('utf-8'),
@@ -718,6 +719,7 @@ jobs:
               result=json.loads(response.read().decode('utf-8'))
           body=result.get('result') or {}
           print('AIR_TECH_LOG_BRIDGE_OK='+str(result.get('ok') is True and body.get('ok') is True))
+          print('AIR_TECH_LOG_ELAPSED_SECONDS='+str(round(time.monotonic()-started,2)))
           print('AIR_TECH_LOG_LAST_ROW='+str(body.get('lastRow')))
           print('AIR_TECH_LOG_SCANNED_ROWS='+str(body.get('scannedRows')))
           matches=body.get('matches') or []
@@ -725,6 +727,12 @@ jobs:
           for item in matches:
               print('AIR_TECH_LOG_MATCH='+json.dumps(item,ensure_ascii=False)[:700])
           if result.get('ok') is not True or body.get('ok') is not True:
+              error=body.get('error') or result.get('error') or body.get('message') or result.get('message') or 'unknown'
+              safe=json.dumps(error,ensure_ascii=False)
+              safe=re.sub(r'(?i)(token|secret|api[_-]?key)(\s*[:=]\s*|\s+)[^\s,;|]+',r'\1=[redacted]',safe)
+              safe=re.sub(r'Bearer\s+[A-Za-z0-9._-]+','Bearer [redacted]',safe)
+              safe=re.sub(r'\b[0-9]{7,}\b','[id]',safe)
+              print('AIR_TECH_LOG_ERROR='+safe[:700])
               raise SystemExit('AIR_TECH_LOG_BRIDGE_READ_FAILED')
           PY
 
