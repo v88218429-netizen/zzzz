@@ -262,8 +262,24 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          export NODE_PATH="$(npm root -g)"
           node <<'NODE'
+          const fs = require("node:fs");
+          const os = require("node:os");
+          const path = require("node:path");
+          const { GoogleAuth } = require("google-auth-library");
+
           (async () => {
+            const store = JSON.parse(fs.readFileSync(path.join(os.homedir(), ".clasprc.json"), "utf8"));
+            let creds = store.tokens && store.tokens.default;
+            if (!creds && store.token && store.oauth2ClientSettings) {
+              creds = {type:"authorized_user",...store.token,client_id:store.oauth2ClientSettings.clientId,client_secret:store.oauth2ClientSettings.clientSecret};
+            }
+            if (!creds || !creds.refresh_token) throw new Error("CLASP_AUTH_CREDENTIALS_NOT_FOUND");
+            const authClient = new GoogleAuth().fromJSON(creds);
+            const tokenResult = await authClient.getAccessToken();
+            const googleAccessToken = typeof tokenResult === "string" ? tokenResult : tokenResult && tokenResult.token;
+            if (!googleAccessToken) throw new Error("APPS_SCRIPT_ACCESS_TOKEN_UNAVAILABLE");
             const deployments = [process.env.AIR_REPAIR_INGRESS_DEPLOYMENT_ID];
             const retired = new Set([
               "scheduledFastCheck",
@@ -277,7 +293,11 @@ jobs:
                 const response = await fetch("https://script.google.com/macros/s/" +
                   deploymentId + "/exec", {
                     method: "POST",
-                    headers: {"content-type":"application/json","cache-control":"no-store"},
+                    headers: {
+                      "content-type":"application/json",
+                      "cache-control":"no-store",
+                      "authorization":"Bearer " + googleAccessToken
+                    },
                     body: JSON.stringify({
                       store:"AIR",
                       operation:"stop_legacy_fbs_triggers",
