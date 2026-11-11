@@ -113,7 +113,8 @@ jobs:
               env.write('SHEETS_ACCESS_TOKEN='+access+chr(10))
           print('DIRECT_SHEETS_READ=ok')
           print('DIRECT_SHEETS_TITLE='+str((result.get('properties') or {}).get('title','')))
-          if os.environ.get('GITHUB_EVENT_NAME') == 'push' and os.environ.get('GITHUB_EVENT_HEAD_COMMIT_MESSAGE') == 'Inspect FBS audit source via GitHub':
+          event=json.load(open(os.environ['GITHUB_EVENT_PATH'],encoding='utf-8'))
+          if event.get('head_commit',{}).get('message') == 'Inspect FBS audit source via GitHub':
               sheet='1qJvhEOIku7sOMydfrUz0PR5dkcU0sLjv433pa1MFBcM'
               a1="'🛠 Технический лог'!A1:E5019"
               values_url='https://sheets.googleapis.com/v4/spreadsheets/'+sheet+'/values/'+urllib.parse.quote(a1,safe='')+'?majorDimension=ROWS&valueRenderOption=FORMATTED_VALUE'
