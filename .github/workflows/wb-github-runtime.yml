@@ -83,6 +83,7 @@ jobs:
         working-directory: wb_ai_manager/source
         run: |
           python -m unittest discover -s tests -p "test_optimizer_acceptance.py"
+          python -m unittest discover -s tests -p "test_runtime_state_compaction.py"
           python - <<'PY'
           import importlib.util
           from pathlib import Path
@@ -120,6 +121,10 @@ jobs:
           AUTO_UPDATE_ENABLED: "false"
           GITHUB_RUNTIME_OUTPUT: github_site
         run: python scripts/github_runtime.py
+
+      - name: Compact rolling runtime databases
+        working-directory: wb_ai_manager/source
+        run: python scripts/compact_github_runtime_state.py --data-dir data/github-runtime
 
       - name: Encrypt full runtime state
         shell: bash
