@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta, timezone
 from wb_control_center.config import load_policy
 from wb_control_center.decision_engine import DecisionEngine
 
@@ -254,3 +255,90 @@ def test_store_ad_card_contains_resolved_buckets_not_analysis_chore():
     assert "цемент" in text and "гипс" in text
     assert "ветошь" in text
     assert "отделить" not in text and "разобрать" not in text
+
+
+
+def test_stale_portfolio_keeps_only_fresh_exact_unit_economics_for_ad_control():
+    now = datetime.now(timezone.utc)
+    economics = {
+        "sku": "123", "nm_id": "123", "shop_code": "ap",
+        "seller_article": "TEST-123", "name": "Test product",
+        "cost_rub": 400, "price_rub": 1000, "price_client_rub": 1000, "profit_rub": 200,
+        "unit_economics_source": "Google Sheets / exact shop + nmID crosswalk",
+        "unit_economics_mapping_validation_ok": True,
+        "unit_economics_decision_ready": True,
+        "unit_economics_read_at": now.isoformat(),
+        "safe_stock": 9000,
+    }
+    portfolio = {
+        "current_data": False,
+        "data_origin": "live_google_sheets",
+        "stale_reason": "WB stock snapshot is old",
+        "own_27": {
+            "products": [{"sku": "123", "safe_stock": 9000, "orders_per_day": 20}],
+            "advertising_economics_by_nm_id": {"123": economics},
+        },
+    }
+    stats = {
+        "advertId": 77, "sum": 700, "orders": 14, "sum_price": 14000,
+        "clicks": 420, "views": 9000,
+    }
+    snapshots = {
+        "advertising_optimizer": {
+            "deep_scan": {
+                "campaigns": [{
+                    "shop": "ap",
+                    "campaign_id": "77",
+                    "nm_ids": [123],
+                    "campaign": {"advertId": 77, "nmIds": [123], "bidKopecks": 5000},
+                    "stats": stats,
+                }]
+            }
+        }
+    }
+
+    cards = DecisionEngine(load_policy()).build(portfolio, snapshots)
+    card = by_key(cards, "advert:77:123:numeric_control")
+
+    assert card is not None
+    assert not any("юнитке" in blocker.lower() for blocker in card.blockers)
+    assert not any("юнит-эконом" in blocker.lower() for blocker in card.blockers)
+    evidence = {item["metric"]: item["value"] for item in card.evidence}
+    assert evidence["max_ad_cost_per_order_rub"] is not None
+    assert evidence["exact_economic_cap_eligible"] is True
+    assert evidence["unit_economics_read_at"] == now.isoformat()
+    assert evidence["stock_days_forecast"] is None
+    assert card.recommended_actions[0]["value"]["target_bid_rub"] == card.recommended_actions[0]["value"]["current_bid_rub"]
+
+
+def test_stale_unit_economics_is_not_restored_to_ad_decisions():
+    old_read = (datetime.now(timezone.utc) - timedelta(hours=25)).isoformat()
+    economics = {
+        "cost_rub": 400, "price_rub": 1000, "price_client_rub": 1000, "profit_rub": 200,
+        "unit_economics_mapping_validation_ok": True,
+        "unit_economics_decision_ready": True,
+        "unit_economics_read_at": old_read,
+    }
+    portfolio = {
+        "current_data": False, "data_origin": "live_google_sheets",
+        "own_27": {"advertising_economics_by_nm_id": {"123": economics}},
+    }
+    snapshots = {
+        "advertising_optimizer": {
+            "deep_scan": {
+                "campaigns": [{
+                    "campaign_id": "77", "nm_ids": [123],
+                    "campaign": {"advertId": 77, "nmIds": [123], "bidKopecks": 5000},
+                    "stats": {"advertId": 77, "sum": 700, "orders": 14, "sum_price": 14000, "clicks": 420, "views": 9000},
+                }]
+            }
+        }
+    }
+
+    cards = DecisionEngine(load_policy()).build(portfolio, snapshots)
+    card = by_key(cards, "advert:77:123:numeric_control")
+
+    assert card is not None
+    assert any("nmID отсутствует" in blocker for blocker in card.blockers)
+    evidence = {item["metric"]: item["value"] for item in card.evidence}
+    assert evidence["exact_economic_cap_eligible"] is False

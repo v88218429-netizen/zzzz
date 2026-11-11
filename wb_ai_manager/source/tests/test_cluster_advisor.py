@@ -365,3 +365,31 @@ def test_conflicting_fresh_caps_for_same_exact_identity_are_not_selected_arbitra
     assert row["max_cpa_rub"] is None
     assert row["target_bid_rub"] is None
     assert any("допустимый расход" in blocker for blocker in row["blockers"])
+
+
+
+def test_fresh_exact_economics_cap_can_survive_unrelated_campaign_blockers():
+    card = decisions()[0]
+    card["blockers"] = ["Отдельные данные кампании отсутствуют."]
+    card["confidence"] = "low"
+    card["evidence"].append({"metric": "exact_economic_cap_eligible", "value": True})
+    result = analyze_cluster_rows(
+        [source_row()], settings(), [card], now=NOW,
+        economics_observed_at={"yv": "2026-10-29T11:00:00+03:00"},
+        cluster_data_observed_at="2026-10-29T11:00:00+03:00",
+    )
+    assert result["rows"][0]["target_bid_rub"] == 8.5
+    assert result["rows"][0]["action"] == "ТЕСТОВО СНИЗИТЬ СТАВКУ"
+
+
+def test_campaign_blockers_still_block_caps_without_explicit_exact_economics_evidence():
+    card = decisions()[0]
+    card["blockers"] = ["Связь товара не подтверждена."]
+    card["confidence"] = "high"
+    result = analyze_cluster_rows(
+        [source_row()], settings(), [card], now=NOW,
+        economics_observed_at={"yv": "2026-10-29T11:00:00+03:00"},
+        cluster_data_observed_at="2026-10-29T11:00:00+03:00",
+    )
+    assert result["rows"][0]["target_bid_rub"] is None
+    assert result["rows"][0]["action"] == "СОВЕТ ПО СТАВКЕ ЗАБЛОКИРОВАН"

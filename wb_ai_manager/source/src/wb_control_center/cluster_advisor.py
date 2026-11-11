@@ -46,7 +46,13 @@ def _decision_caps(
     conflicted: set[tuple[str, str, str]] = set()
     seller_key_to_shop = {"sanych": "ap", "air": "aa", "hozyushka": "yv"}
     for card in decisions:
-        if card.get("blockers") or str(card.get("confidence") or "").lower() == "low":
+        exact_economics_eligible = any(
+            isinstance(item, dict)
+            and item.get("metric") == "exact_economic_cap_eligible"
+            and item.get("value") is True
+            for item in (card.get("evidence") or [])
+        )
+        if (card.get("blockers") or str(card.get("confidence") or "").lower() == "low") and not exact_economics_eligible:
             continue
         key = [part.strip() for part in str(card.get("decision_key") or "").split(":")]
         key_shop = None

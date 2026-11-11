@@ -93,6 +93,9 @@ class Settings(BaseSettings):
     mcp_start_timeout_seconds: float = 45.0
     mcp_call_timeout_seconds: float = 90.0
     agent_run_timeout_seconds: float = 300.0
+    # The bounded WB campaign scan needs more than one generic agent timeout to
+    # finish its selected cursor window and persist progress.
+    advertising_optimizer_run_timeout_seconds: float = 360.0
     startup_audit_enabled: bool = True
 
     @property

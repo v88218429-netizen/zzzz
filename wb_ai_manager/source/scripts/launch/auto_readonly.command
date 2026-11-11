@@ -24,7 +24,7 @@ from pathlib import Path
 p=Path('.env'); d={}
 for line in p.read_text().splitlines():
     if '=' in line and not line.lstrip().startswith('#'): d[line.split('=',1)[0]]=line.split('=',1)[1]
-d.update(WB_MODE='live',LLM_PROVIDER='rules',OPERATION_MODE='shadow',FORCE_READ_ONLY='true',AUTO_ACTIONS='false',ENABLE_PUBLIC_WB_SEARCH='true',DATA_DIR='./data',APP_HOST='127.0.0.1',APP_PORT='8787')
+d.update(WB_MODE='live',LLM_PROVIDER='rules',OPERATION_MODE='shadow',FORCE_READ_ONLY='true',AUTO_ACTIONS='false',ENABLE_PUBLIC_WB_SEARCH='true',DATA_DIR='./data',APP_HOST='127.0.0.1',APP_PORT='8787',DASHBOARD_AUTH_REQUIRED='false',DASHBOARD_AUTH_USER='',DASHBOARD_AUTH_PASSWORD='')
 p.write_text('\n'.join(f'{k}={v}' for k,v in d.items())+'\n', encoding='utf-8'); p.chmod(0o600)
 PYENV
 echo 'Автоагент источников: обновляю 27 / Юнитку / сводки через текущую Google-сессию…'

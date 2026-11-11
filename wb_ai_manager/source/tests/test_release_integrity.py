@@ -50,6 +50,10 @@ def test_auto_launcher_resets_live_state_and_never_sources_dotenv():
     assert "DATA_DIR='./data'" in text
     assert "WB_MODE='live'" in text
     assert "source .env" not in text
+    assert "APP_HOST='127.0.0.1'" in text
+    assert "DASHBOARD_AUTH_REQUIRED='false'" in text
+    assert "DASHBOARD_AUTH_USER=''" in text
+    assert "DASHBOARD_AUTH_PASSWORD=''" in text
     assert "p.chmod(0o600)" in text
 
 

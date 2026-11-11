@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from math import ceil
+from datetime import datetime, timezone
+from math import ceil, isfinite
 from typing import Any
 
 from .models import DecisionCard
@@ -17,6 +18,116 @@ def _n(v: Any) -> float | None:
         return float(v)
     except Exception:
         return None
+
+
+def _finite_number(value: Any) -> float | None:
+    if isinstance(value, bool):
+        return None
+    number = _n(value)
+    return number if number is not None and isfinite(number) else None
+
+
+def _trusted_advertising_economics(
+    raw_map: Any, now: datetime | None = None, freshness_hours: float = 24.0,
+) -> dict[str, dict[str, Any]]:
+    """Keep only exact, validated, recently read unit-economics rows.
+
+    The returned records intentionally omit stock and demand fields: an up-to-date
+    Google Sheets read does not make an older WB stock snapshot current.
+    """
+    now = now or datetime.now(timezone.utc)
+    if not isinstance(raw_map, dict):
+        return {}
+    allowed = (
+        "seller_article", "name", "product_name", "group", "shop_code",
+        "cost_rub", "price_rub", "price_client_rub", "price_after_discount_rub",
+        "price_after_spp_rub", "profit_rub", "plan_profit_rub", "margin_pct",
+        "plan_margin_pct", "roi_pct", "plan_roi_pct", "target_profit_rub",
+        "target_margin_pct", "target_roi_pct", "plan_drr_pct", "commission_pct",
+        "logistics_total_rub", "tax_total_rub", "unit_economics_source",
+        "unit_economics_read_at", "unit_economics_mapping_validation_ok",
+        "unit_economics_decision_ready",
+    )
+    result: dict[str, dict[str, Any]] = {}
+    for nm_id, item in raw_map.items():
+        nm = str(nm_id or "").strip()
+        if not nm.isdigit() or not isinstance(item, dict):
+            continue
+        if item.get("unit_economics_mapping_validation_ok") is not True:
+            continue
+        if item.get("unit_economics_decision_ready") is not True:
+            continue
+        read_at = item.get("unit_economics_read_at")
+        try:
+            observed = datetime.fromisoformat(str(read_at).replace("Z", "+00:00"))
+        except (TypeError, ValueError):
+            continue
+        if observed.tzinfo is None:
+            observed = observed.replace(tzinfo=timezone.utc)
+        age_seconds = (now - observed.astimezone(timezone.utc)).total_seconds()
+        if age_seconds < -300 or age_seconds > freshness_hours * 3600:
+            continue
+        cost = _finite_number(item.get("cost_rub"))
+        price = _finite_number(item.get("price_rub"))
+        if price is None:
+            price = _finite_number(item.get("price_after_discount_rub"))
+        profit = _finite_number(item.get("profit_rub"))
+        if profit is None:
+            profit = _finite_number(item.get("plan_profit_rub"))
+        if cost is None or cost <= 0 or price is None or price <= 0 or profit is None:
+            continue
+        record = {key: item[key] for key in allowed if key in item and item[key] is not None}
+        record.update({
+            "sku": nm,
+            "nm_id": nm,
+            "cost_rub": cost,
+            "price_rub": price,
+            "profit_rub": profit,
+            "unit_economics_read_at": observed.astimezone(timezone.utc).isoformat(),
+            "_trusted_exact_unit_economics": True,
+        })
+        if record.get("price_client_rub") is None:
+            buyer_price = _finite_number(item.get("price_after_spp_rub"))
+            if buyer_price is not None and buyer_price > 0:
+                record["price_client_rub"] = buyer_price
+        result[nm] = record
+    return result
+
+
+def _shop_code(value: Any) -> str | None:
+    key = " ".join(str(value or "").casefold().split())
+    return {
+        "ap": "ap", "sanych": "ap", "саныч": "ap",
+        "aa": "aa", "air": "aa", "аир": "aa",
+        "yv": "yv", "hozyushka": "yv", "хозяюшка": "yv",
+    }.get(key)
+
+
+def _trusted_advertising_maps(own: dict[str, Any], now: datetime | None = None):
+    direct = _trusted_advertising_economics(
+        own.get("advertising_economics_by_nm_id"), now,
+    )
+    by_shop: dict[str, dict[str, dict[str, Any]]] = {}
+    raw_by_shop = own.get("unit_economics_by_shop_nm_id")
+    if isinstance(raw_by_shop, dict):
+        for raw_code, raw_map in raw_by_shop.items():
+            code = _shop_code(raw_code)
+            exact = _trusted_advertising_economics(raw_map, now)
+            if code and exact:
+                by_shop[code] = exact
+    return direct, by_shop
+
+
+def _safe_advertising_own(own: Any) -> dict[str, Any]:
+    if not isinstance(own, dict):
+        return {}
+    direct, by_shop = _trusted_advertising_maps(own)
+    result: dict[str, Any] = {}
+    if direct:
+        result["advertising_economics_by_nm_id"] = direct
+    if by_shop:
+        result["unit_economics_by_shop_nm_id"] = by_shop
+    return result
 
 
 def _ev(source: str, metric: str, value: Any, note: str = "") -> dict[str, Any]:
@@ -283,7 +394,9 @@ class DecisionEngine:
             "current_data": False,
             "source_health": portfolio.get("source_health") or [],
             "stores": [],
-            "own_27": {},
+            # Fresh verified unit economics may support ad math; stale stock and
+            # every other portfolio field stay excluded from current decisions.
+            "own_27": _safe_advertising_own(portfolio.get("own_27")),
             "portfolio": {},
         }
         out += self._source_quality(portfolio)
@@ -1016,18 +1129,27 @@ class DecisionEngine:
         group_overrides = runtime.get("group_overrides") if isinstance(runtime.get("group_overrides"), dict) else {}
         sku_overrides = runtime.get("sku_overrides") if isinstance(runtime.get("sku_overrides"), dict) else {}
         own = p.get("own_27") or {}
-        products = {str(x.get("sku")): x for x in own.get("products", []) if isinstance(x, dict) and x.get("sku")}
-        # GitHub scopes this exact nmID map to the cabinet being processed. Keep
-        # it separate from the inventory catalogue and use it only for ad decisions.
-        advertising_economics = own.get("advertising_economics_by_nm_id")
-        if isinstance(advertising_economics, dict):
-            for nm_id, exact in advertising_economics.items():
-                if not str(nm_id).isdigit() or not isinstance(exact, dict):
-                    continue
-                merged = dict(products.get(str(nm_id)) or {})
-                merged.update(exact)
-                merged["sku"] = str(nm_id)
-                products[str(nm_id)] = merged
+        product_rows: dict[str, list[dict[str, Any]]] = {}
+        products_by_shop: dict[str, dict[str, dict[str, Any]]] = {}
+        for item in own.get("products", []):
+            if not isinstance(item, dict):
+                continue
+            sku = str(item.get("sku") or item.get("nm_id") or item.get("nmId") or "").strip()
+            if not sku.isdigit():
+                continue
+            product_rows.setdefault(sku, []).append(item)
+            product_shop = _shop_code(item.get("shop_code") or item.get("cabinet") or item.get("store_id") or item.get("shop"))
+            if product_shop:
+                products_by_shop.setdefault(product_shop, {}).setdefault(sku, item)
+        # Do not choose a catalog row when the same nmID is present in more than one
+        # cabinet. A cabinet-scoped exact map below can still resolve it safely.
+        products = {sku: rows[0] for sku, rows in product_rows.items() if len(rows) == 1}
+        direct_economics, economics_by_shop = _trusted_advertising_maps(own)
+        for nm_id, exact in direct_economics.items():
+            merged = dict(products.get(nm_id) or {})
+            merged.update(exact)
+            products[nm_id] = merged
+        now = datetime.now(timezone.utc)
         live_economics = _live_economics_fact_index(snapshots)
 
         deep = _snap(snapshots, "advertising_optimizer", "deep_scan")
@@ -1061,7 +1183,53 @@ class DecisionEngine:
             # manufacture a SKU association.
             targets: list[int | None] = nm_ids if nm_ids else [None]
             for nm in targets:
-                product = products.get(str(nm)) if nm is not None else None
+                nm_key = str(nm) if nm is not None else ""
+                row_shop = _shop_code(
+                    row.get("shop") or row.get("store_id") or row.get("shop_code")
+                    or campaign.get("shop") or campaign.get("store_id") or campaign.get("shop_code")
+                    or p.get("shop") or p.get("store_id") or p.get("shop_code")
+                )
+                exact = None
+                exact_shop = row_shop
+                ambiguous_shop_map = False
+                if nm_key:
+                    if row_shop:
+                        exact = economics_by_shop.get(row_shop, {}).get(nm_key)
+                    else:
+                        candidates = [
+                            (code, shop_map[nm_key])
+                            for code, shop_map in economics_by_shop.items()
+                            if nm_key in shop_map
+                        ]
+                        if len(candidates) == 1:
+                            exact_shop, exact = candidates[0]
+                        elif len(candidates) > 1:
+                            ambiguous_shop_map = True
+                    direct = direct_economics.get(nm_key)
+                    direct_shop = _shop_code((direct or {}).get("shop_code"))
+                    if direct and (not row_shop or not direct_shop or row_shop == direct_shop):
+                        exact = direct
+                        exact_shop = direct_shop or row_shop
+                product = None
+                if nm_key and exact:
+                    base = products_by_shop.get(exact_shop or row_shop, {}).get(nm_key)
+                    if base is None and not ambiguous_shop_map:
+                        base = products.get(nm_key)
+                    product = dict(base or {})
+                    product.update(exact)
+                    product["_trusted_exact_unit_economics"] = True
+                elif nm_key and not ambiguous_shop_map:
+                    product = products.get(nm_key)
+                    if row_shop:
+                        base_shop = _shop_code((product or {}).get("shop_code") or (product or {}).get("cabinet") or (product or {}).get("store_id") or (product or {}).get("shop"))
+                        if base_shop and base_shop != row_shop:
+                            product = products_by_shop.get(row_shop, {}).get(nm_key)
+                    if product is not None:
+                        product = dict(product)
+                        trusted = _trusted_advertising_economics({nm_key: product}, now).get(nm_key)
+                        if trusted:
+                            product.update(trusted)
+                            product["_trusted_exact_unit_economics"] = True
                 if product is not None:
                     product = dict(product)
                     live_fact = live_economics.get(str(nm)) or {}
@@ -1158,6 +1326,8 @@ class DecisionEngine:
                     _ev("расчёт", "max_spend_next_24h_rub", plan.max_spend_next_24h_rub),
                     _ev("расчёт", "target_drr_pct", plan.target_drr_pct),
                     _ev("расчёт", "max_ad_cost_per_order_rub", plan.max_ad_cost_per_order_rub),
+                    _ev("Юнит-экономика", "exact_economic_cap_eligible", bool(product and product.get("_trusted_exact_unit_economics") is True)),
+                    _ev("Юнит-экономика", "unit_economics_read_at", product.get("unit_economics_read_at") if product and product.get("_trusted_exact_unit_economics") is True else None),
                     _ev("расчёт", "economic_max_drr_pct", plan.economic_max_drr_pct),
                     _ev("бизнес-факт SKU", "business_drr_pct", plan.business_drr_pct),
                     _ev("бизнес-факт SKU", "business_ad_spend_rub", plan.business_ad_spend_rub),

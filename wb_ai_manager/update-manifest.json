@@ -2,7 +2,7 @@
   "schema": 1,
   "channels": {
     "stable": {
-      "version": "1.1.51",
+      "version": "1.1.52",
       "channel": "stable",
       "notes": "Версия 1.1.51: GitHub Runtime соблюдает интервалы агентов; приёмка рекламы сохраняет подтверждение последнего полного обхода и блокирует устаревший или изменившийся каталог.",
       "minimum_current_version": "1.0.0",
@@ -35,12 +35,12 @@
         {
           "path": "plugin.json",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/101f539ef7f1be9447e6d53b548075a605c5574a/wb_ai_manager/source/plugin.json",
-          "sha256": "6d6724f4dfb5f28cd149fd9df79c04c9d918db5a0126f9cfc53a10cb37edebab"
+          "sha256": "87ebdff0c06778c8ed661ebaecb7364364f087b524793ea8a0d0dbe043bbb152"
         },
         {
           "path": "pyproject.toml",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/101f539ef7f1be9447e6d53b548075a605c5574a/wb_ai_manager/source/pyproject.toml",
-          "sha256": "b21e2295e960b82b74456aaf5bd514f4844405e63290b093db72bf0a9d4e94da"
+          "sha256": "08ad168deb5d7b6bc9acbfb98f1a014bee9560e5901f63cd798efd97734736cd"
         },
         {
           "path": "RELEASE_NOTES.md",
@@ -73,7 +73,7 @@
         {
           "path": "scripts/launch/auto_readonly.command",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/47c84046524efa010581cd2258bc6ad56256239b/wb_ai_manager/source/scripts/launch/auto_readonly.command",
-          "sha256": "9cd8b19613c3e50fe584150ce9470bcf728bba4ff8e3e35fb3c8d2f78020918c",
+          "sha256": "2d1f9f69fdfdd47d3371a846a84fc328fcc5221e348486791c6b888eb498eb1e",
           "executable": true
         },
         {
@@ -131,7 +131,7 @@
         {
           "path": "src/wb_control_center/__init__.py",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/101f539ef7f1be9447e6d53b548075a605c5574a/wb_ai_manager/source/src/wb_control_center/__init__.py",
-          "sha256": "759c6c6d2a236e996f04a4b13b6f8ecb8433c2988e29681665aa68ba690deb21"
+          "sha256": "30e502168d29273cfd736e70b113060e8c9f1b890971c8c46556f377662a8dec"
         },
         {
           "path": "src/wb_control_center/__main__.py",
@@ -141,7 +141,7 @@
         {
           "path": "src/wb_control_center/advertising_controller.py",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/47c84046524efa010581cd2258bc6ad56256239b/wb_ai_manager/source/src/wb_control_center/advertising_controller.py",
-          "sha256": "fbe0969d2d8ceada303140208fd5e65c7ae7bfdc4c67abfaddfa907d9b07f570"
+          "sha256": "af5f47d8e127af9cee46f3a8c7964962494d5eb182db7bd3b22b539ac2093ede"
         },
         {
           "path": "src/wb_control_center/agents/__init__.py",
@@ -281,7 +281,7 @@
         {
           "path": "src/wb_control_center/cluster_advisor.py",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/58d0597f97366a1740f7b5ebff5712cb3444fd38/wb_ai_manager/source/src/wb_control_center/cluster_advisor.py",
-          "sha256": "daeb2378c374d6c8e3746b7b61d137d094253fb5ec95bd3a8b521688bed0fae1"
+          "sha256": "38124b664003606bf71b19ff4ad56b4cf1d6862f44b4c9c2539b337ff3d11167"
         },
         {
           "path": "src/wb_control_center/cohort.py",
@@ -291,7 +291,7 @@
         {
           "path": "src/wb_control_center/config.py",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/47c84046524efa010581cd2258bc6ad56256239b/wb_ai_manager/source/src/wb_control_center/config.py",
-          "sha256": "0e9437da8264aa4509c878408b243b4120e79be4c8d8f74d03a4f5d7ab4c7ca0"
+          "sha256": "45b80996c04ee8dab2cd2d4d28beab55ae86f537056f84a405ea8abc9dc75c75"
         },
         {
           "path": "src/wb_control_center/dashboard_auth.py",
@@ -306,7 +306,7 @@
         {
           "path": "src/wb_control_center/decision_engine.py",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/47c84046524efa010581cd2258bc6ad56256239b/wb_ai_manager/source/src/wb_control_center/decision_engine.py",
-          "sha256": "da886bc542a4961332d865fd16fc4d9188806ed115127cbf502fff6a72367a82"
+          "sha256": "ff7354326992ad716af5e7358424d6fe591dd0e88282c2e603508e7f4ab954d7"
         },
         {
           "path": "src/wb_control_center/decision_groups.py",
@@ -336,7 +336,7 @@
         {
           "path": "src/wb_control_center/engine.py",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/101f539ef7f1be9447e6d53b548075a605c5574a/wb_ai_manager/source/src/wb_control_center/engine.py",
-          "sha256": "4d19a98c25c2be246d3cf131069f6efbb703e109fa210d59a92a77ab6f8368b2"
+          "sha256": "40eb5598f1894dbd4ccd5b6d1332bbc132818ff75be34ba0b2a64a66da143d78"
         },
         {
           "path": "src/wb_control_center/investigation.py",
@@ -487,7 +487,7 @@
         {
           "path": "VERSION",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/571b5d80101d13b7f56a52e4e1259f9bcce9a583/wb_ai_manager/source/VERSION",
-          "sha256": "ac717510a5926d09e63fe7bff2cfef6607678452164223ffec7ef28a85d827a4"
+          "sha256": "d451ee7c88d93dbb27b9de4d2ac7ff40a27b0a444dd3af202767bd048e6a0394"
         }
       ]
     }

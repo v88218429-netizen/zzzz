@@ -187,15 +187,21 @@ class ControlCenter:
             agent_task: asyncio.Task | None = None
             try:
                 agent_task = asyncio.create_task(self.agents[name].run(), name=f"agent:{name}:{run_id}")
+                agent_timeout = max(1.0, float(self.settings.agent_run_timeout_seconds))
+                if name == "advertising_optimizer":
+                    agent_timeout = max(
+                        agent_timeout,
+                        float(getattr(self.settings, "advertising_optimizer_run_timeout_seconds", agent_timeout)),
+                    )
                 done, _ = await asyncio.wait(
                     {agent_task},
-                    timeout=max(1.0, float(self.settings.agent_run_timeout_seconds)),
+                    timeout=agent_timeout,
                 )
                 if not done:
                     agent_task.cancel()
                     self._track_orphaned_agent_task(name, agent_task)
                     raise TimeoutError(
-                        f"agent {name} exceeded {self.settings.agent_run_timeout_seconds:g}s runtime limit"
+                        f"agent {name} exceeded {agent_timeout:g}s runtime limit"
                     )
                 result = agent_task.result()
                 # Save snapshots before events so later agents can compare immediately.
@@ -438,6 +444,11 @@ class ControlCenter:
         started = datetime.now(timezone.utc).isoformat()
         try:
             agent_timeout = max(1.0, float(self.settings.agent_run_timeout_seconds))
+            if name == "advertising_optimizer":
+                agent_timeout = max(
+                    agent_timeout,
+                    float(getattr(self.settings, "advertising_optimizer_run_timeout_seconds", agent_timeout)),
+                )
             if name == "finance":
                 # WB limits detailed realization reports to one request per minute.
                 agent_timeout = max(agent_timeout, 540.0)

@@ -6,7 +6,19 @@ on:
       - "wb_ai_manager/source/src/wb_control_center/optimizer_acceptance.py"
       - "wb_ai_manager/source/tests/test_optimizer_acceptance.py"
       - "wb_ai_manager/source/src/wb_control_center/agents/advertising.py"
+      - "wb_ai_manager/source/src/wb_control_center/decision_engine.py"
+      - "wb_ai_manager/source/src/wb_control_center/engine.py"
+      - "wb_ai_manager/source/src/wb_control_center/config.py"
+      - ".github/workflows/wb-github-runtime.yml"
+      - "wb_ai_manager/source/src/wb_control_center/advertising_controller.py"
+      - "wb_ai_manager/source/src/wb_control_center/cluster_advisor.py"
       - "wb_ai_manager/source/tests/test_optimizer_resilience.py"
+      - "wb_ai_manager/source/tests/test_decision_engine.py"
+      - "wb_ai_manager/source/tests/test_advertising_controller.py"
+      - "wb_ai_manager/source/tests/test_cluster_advisor.py"
+      - "wb_ai_manager/source/tests/test_release_integrity.py"
+      - "wb_ai_manager/source/tests/test_run_recovery.py"
+      - "wb_ai_manager/source/scripts/launch/auto_readonly.command"
       - ".github/workflows/wb-optimizer-acceptance-ci.yml"
   push:
     branches:
@@ -15,7 +27,19 @@ on:
       - "wb_ai_manager/source/src/wb_control_center/optimizer_acceptance.py"
       - "wb_ai_manager/source/tests/test_optimizer_acceptance.py"
       - "wb_ai_manager/source/src/wb_control_center/agents/advertising.py"
+      - "wb_ai_manager/source/src/wb_control_center/decision_engine.py"
+      - "wb_ai_manager/source/src/wb_control_center/engine.py"
+      - "wb_ai_manager/source/src/wb_control_center/config.py"
+      - ".github/workflows/wb-github-runtime.yml"
+      - "wb_ai_manager/source/src/wb_control_center/advertising_controller.py"
+      - "wb_ai_manager/source/src/wb_control_center/cluster_advisor.py"
       - "wb_ai_manager/source/tests/test_optimizer_resilience.py"
+      - "wb_ai_manager/source/tests/test_decision_engine.py"
+      - "wb_ai_manager/source/tests/test_advertising_controller.py"
+      - "wb_ai_manager/source/tests/test_cluster_advisor.py"
+      - "wb_ai_manager/source/tests/test_release_integrity.py"
+      - "wb_ai_manager/source/tests/test_run_recovery.py"
+      - "wb_ai_manager/source/scripts/launch/auto_readonly.command"
       - ".github/workflows/wb-optimizer-acceptance-ci.yml"
 
 permissions:
@@ -36,4 +60,5 @@ jobs:
         run: |
           python -m pip install -e . pytest pytest-asyncio
           python -m unittest discover -s tests -p "test_optimizer_acceptance.py"
+          python -m pytest -q tests/test_decision_engine.py tests/test_advertising_controller.py tests/test_cluster_advisor.py tests/test_release_integrity.py
           python -m pytest -q tests/test_optimizer_resilience.py tests/test_advertising_controller.py

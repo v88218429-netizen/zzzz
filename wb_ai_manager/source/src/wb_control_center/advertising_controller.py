@@ -523,8 +523,11 @@ class AdvertisingController:
 
         enough_data = clicks >= min_clicks and orders >= min_orders and nm is not None and product is not None and break_even_drr is not None and control_drr is not None
         profitable = profit is not None and profit >= min_profit
-        stock_ok = stock_days_forecast is None or stock_days_forecast >= stock_scale
+        stock_ok = stock_days_forecast is not None and stock_days_forecast >= stock_scale
         drr_ok = control_drr is None or control_drr <= effective_target_drr
+        if stock_days_forecast is None:
+            blockers.append("Нет свежего доверенного остатка и прогноза покрытия; повышение ставки заблокировано.")
+            reasons.append("Запас неизвестен по свежим данным WB, поэтому масштабирование рекламы запрещено до обновления остатков.")
 
         if orders <= 0 and spend >= emergency_spend:
             decision, label = "PAUSE_REVIEW", "Кампанию остановить на разбор"

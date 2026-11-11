@@ -272,3 +272,20 @@ def test_exact_current_bid_keeps_numeric_decision_available():
 
     assert plan.current_bid_rub == 50
     assert plan.decision != "NEEDS_DATA"
+
+
+
+def test_unknown_stock_holds_bid_instead_of_scaling_up():
+    c = AdvertisingController(cfg(organic_growth_hold_threshold_pct=99))
+    campaign = {"advertId": 99, "nmIds": [999], "bidKopecks": 5000}
+    stats = {
+        "advertId": 99, "sum": 700, "orders": 14, "sum_price": 14000,
+        "clicks": 420, "views": 9000, "days": daily([2, 2, 2, 2, 2, 2, 2]),
+    }
+    product = {"sku": "999", "price_client_rub": 1000, "profit_rub": 200, "orders_per_day": 20}
+    plan = c.build_plan(campaign, stats, product, {"base": {"competitiveBid": {"bidKopecks": 5500}}})
+
+    assert plan.stock_days_forecast is None
+    assert plan.decision == "HOLD"
+    assert plan.target_bid_rub == plan.current_bid_rub == 50
+    assert any("остат" in blocker.lower() for blocker in plan.blockers)

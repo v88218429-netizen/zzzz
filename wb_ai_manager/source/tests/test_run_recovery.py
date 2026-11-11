@@ -99,3 +99,36 @@ async def test_agent_timeout_closes_run_even_when_agent_suppresses_cancellation(
     await asyncio.sleep(0)
     assert "probe" not in center._orphaned_agent_tasks
     assert center.db.recent_runs(hours=24, limit=1)[0]["status"] == "error"
+
+
+
+@pytest.mark.asyncio
+async def test_advertising_optimizer_uses_its_own_bounded_timeout(tmp_path, monkeypatch):
+    import wb_control_center.engine as engine_module
+
+    class FastAgent:
+        async def run(self):
+            return SimpleNamespace(snapshots=[], events=[], actions=[])
+
+    center = object.__new__(ControlCenter)
+    center.db = Database(tmp_path / "ad-timeout.sqlite3")
+    center.agents = {"advertising_optimizer": FastAgent()}
+    center._agent_locks = {"advertising_optimizer": asyncio.Lock()}
+    center.settings = SimpleNamespace(
+        agent_run_timeout_seconds=180,
+        advertising_optimizer_run_timeout_seconds=360,
+    )
+    center._orphaned_agent_tasks = {}
+    center.policy_engine = SimpleNamespace(validate_action=lambda _proposal: (True, ""))
+    seen = []
+    original_wait = asyncio.wait
+
+    async def capture_wait(tasks, *, timeout=None, return_when=asyncio.ALL_COMPLETED):
+        seen.append(timeout)
+        return await original_wait(tasks, timeout=timeout, return_when=return_when)
+
+    monkeypatch.setattr(engine_module.asyncio, "wait", capture_wait)
+    result = await center.run_agent("advertising_optimizer")
+
+    assert result["status"] == "ok"
+    assert seen == [360]
