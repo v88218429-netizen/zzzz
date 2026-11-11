@@ -12,11 +12,7 @@ permissions:
   actions: read
   contents: read
 
-concurrency:
-  group: wb-fbs-production-mutations
-  cancel-in-progress: false
-  queue: max
-
+# This repair changes only AIR script code, triggers and queue properties; it never writes order data.
 jobs:
   repair:
     runs-on: ubuntu-latest
