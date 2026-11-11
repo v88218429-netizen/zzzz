@@ -705,7 +705,7 @@ jobs:
           PY
 
       - name: Read AIR FBS technical log via protected GitHub bridge
-        if: ${{ github.event_name == 'push' && github.event.head_commit.message == 'Repair AIR FBS technical log read via GitHub' }}
+        if: ${{ github.event_name == 'push' && github.event.head_commit.message == 'Repair AIR FBS log inspection through GitHub' }}
         shell: bash
         run: |
           python - <<'PY'
