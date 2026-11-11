@@ -41,7 +41,7 @@ jobs:
           python3 - <<'PY'
           import json, pathlib
           data=json.loads(pathlib.Path('/tmp/air-deployments.json').read_text())
-          items=data.get('deployments', data if isinstance(data,list) else [])
+          items=data.get('deployments',[]) if isinstance(data,dict) else data
           target='AKfycbw92e1aJ7yUPkJR50gKqhlctnQC2rUYUH58-l6JgRAAfKSqY9v5sRpFbTo3otcjqP8'
           for item in items:
               if item.get('deploymentId')!=target: continue
