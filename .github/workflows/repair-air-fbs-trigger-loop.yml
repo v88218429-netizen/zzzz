@@ -143,22 +143,119 @@ jobs:
           grep -Fq "$AIR_REPAIR_INGRESS_DEPLOYMENT_ID" /tmp/air-deployments.txt
           echo "AIR_REPAIR_INGRESS_DEPLOYMENT=verified"
 
-      - name: Redeploy AIR repair endpoint once with guarded anonymous access
+      - name: Update guarded AIR web endpoint access through Apps Script API
         shell: bash
         run: |
           set -euo pipefail
-          cd /tmp/air-bound-script
-          description="AIR GitHub-only FBS trigger repair anonymous 2026-11-11"
-          clasp deployments > /tmp/air-deployments-before-update.txt
-          if grep -F "$AIR_REPAIR_INGRESS_DEPLOYMENT_ID" /tmp/air-deployments-before-update.txt |
-             grep -Fq "$description"; then
-            echo "AIR_REPAIR_INGRESS_REDEPLOYMENT=already-current"
-          else
-            clasp update-deployment "$AIR_REPAIR_INGRESS_DEPLOYMENT_ID" --description "$description"
-            clasp deployments > /tmp/air-deployments-after-update.txt
-            grep -F "$AIR_REPAIR_INGRESS_DEPLOYMENT_ID" /tmp/air-deployments-after-update.txt | grep -F "$description"
-            echo "AIR_REPAIR_INGRESS_REDEPLOYMENT=verified"
-          fi
+          npm install -g google-auth-library
+          export NODE_PATH="$(npm root -g)"
+          node <<'NODE'
+          const fs = require("node:fs");
+          const os = require("node:os");
+          const path = require("node:path");
+          const { GoogleAuth } = require("google-auth-library");
+
+          (async () => {
+            const store = JSON.parse(fs.readFileSync(path.join(os.homedir(), ".clasprc.json"), "utf8"));
+            let creds = store.tokens && store.tokens.default;
+            if (!creds && store.token && store.oauth2ClientSettings) {
+              creds = {
+                type: "authorized_user",
+                ...store.token,
+                client_id: store.oauth2ClientSettings.clientId,
+                client_secret: store.oauth2ClientSettings.clientSecret
+              };
+            }
+            if (!creds || !creds.refresh_token) throw new Error("CLASP_AUTH_CREDENTIALS_NOT_FOUND");
+            const scopes = String(creds.scope || "");
+            for (const scope of [
+              "https://www.googleapis.com/auth/script.deployments",
+              "https://www.googleapis.com/auth/script.projects"
+            ]) {
+              if (!scopes.includes(scope)) throw new Error("CLASP_AUTH_SCOPE_MISSING:" + scope.split("/").pop());
+            }
+            const auth = new GoogleAuth();
+            const client = auth.fromJSON(creds);
+            const tokenResult = await client.getAccessToken();
+            const accessToken = typeof tokenResult === "string" ? tokenResult : tokenResult && tokenResult.token;
+            if (!accessToken) throw new Error("APPS_SCRIPT_ACCESS_TOKEN_UNAVAILABLE");
+
+            const scriptId = process.env.AIR_SCRIPT_ID;
+            const deploymentId = process.env.AIR_REPAIR_INGRESS_DEPLOYMENT_ID;
+            const api = "https://script.googleapis.com/v1/projects/" +
+              encodeURIComponent(scriptId) + "/deployments/" + encodeURIComponent(deploymentId);
+            const request = async (url, method, body) => {
+              const response = await fetch(url, {
+                method,
+                headers: {
+                  authorization: "Bearer " + accessToken,
+                  "content-type": "application/json"
+                },
+                body: body ? JSON.stringify(body) : undefined,
+                signal: AbortSignal.timeout(30000)
+              });
+              const text = await response.text();
+              let json;
+              try { json = JSON.parse(text); } catch {}
+              if (!response.ok) {
+                const detail = json && json.error && json.error.message || text.replace(/<[^>]*>/g," ").replace(/\s+/g," ").trim().slice(0,500);
+                throw new Error("APPS_SCRIPT_API_" + response.status + ":" + detail);
+              }
+              if (!json) throw new Error("APPS_SCRIPT_API_NON_JSON_RESPONSE");
+              return json;
+            };
+
+            const current = await request(api, "GET");
+            const webEntries = (current.entryPoints || []).filter(entry => entry.entryPointType === "WEB_APP" && entry.webApp);
+            if (webEntries.length !== 1) throw new Error("AIR_WEB_APP_ENTRYPOINT_COUNT:" + webEntries.length);
+            const config = webEntries[0].webApp.entryPointConfig || {};
+            console.log("AIR_DEPLOYMENT_ACCESS_BEFORE=" + String(config.access || "UNKNOWN"));
+            console.log("AIR_DEPLOYMENT_EXECUTE_AS_BEFORE=" + String(config.executeAs || "UNKNOWN"));
+
+            if (config.access !== "ANYONE_ANONYMOUS" || config.executeAs !== "USER_DEPLOYING") {
+              const version = await request(
+                "https://script.googleapis.com/v1/projects/" + encodeURIComponent(scriptId) + "/versions",
+                "POST",
+                {description:"AIR guarded GitHub trigger repair endpoint"}
+              );
+              if (!Number.isInteger(version.versionNumber)) throw new Error("APPS_SCRIPT_VERSION_CREATE_FAILED");
+              const updatedEntryPoints = (current.entryPoints || []).map(entry => {
+                if (entry.entryPointType !== "WEB_APP" || !entry.webApp) return entry;
+                return {
+                  entryPointType:"WEB_APP",
+                  webApp:{
+                    entryPointConfig:{
+                      access:"ANYONE_ANONYMOUS",
+                      executeAs:"USER_DEPLOYING"
+                    }
+                  }
+                };
+              });
+              await request(api, "PUT", {
+                deploymentConfig:{
+                  scriptId,
+                  versionNumber:version.versionNumber,
+                  manifestFileName:current.deploymentConfig && current.deploymentConfig.manifestFileName || "appsscript",
+                  description:"AIR GitHub-only FBS trigger repair anonymous 2026-11-11"
+                },
+                entryPoints:updatedEntryPoints
+              });
+            }
+
+            const verified = await request(api, "GET");
+            const entry = (verified.entryPoints || []).find(item => item.entryPointType === "WEB_APP" && item.webApp);
+            const finalConfig = entry && entry.webApp.entryPointConfig || {};
+            console.log("AIR_DEPLOYMENT_ACCESS_AFTER=" + String(finalConfig.access || "UNKNOWN"));
+            console.log("AIR_DEPLOYMENT_EXECUTE_AS_AFTER=" + String(finalConfig.executeAs || "UNKNOWN"));
+            console.log("AIR_DEPLOYMENT_VERSION=" + String(verified.deploymentConfig && verified.deploymentConfig.versionNumber));
+            if (finalConfig.access !== "ANYONE_ANONYMOUS" || finalConfig.executeAs !== "USER_DEPLOYING") {
+              throw new Error("AIR_WEB_APP_ACCESS_CONFIG_NOT_VERIFIED");
+            }
+          })().catch(error => {
+            console.error(error && error.message || "AIR_DEPLOYMENT_UPDATE_FAILED");
+            process.exit(1);
+          });
+          NODE
 
       - name: Stop retired AIR FBS triggers through the first working GitHub ingress
         env:
