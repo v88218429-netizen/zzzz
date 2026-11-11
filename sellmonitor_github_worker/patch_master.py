@@ -1582,7 +1582,7 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
         worker_text = worker_text.replace(raw_key, "SMC_INNER_MCP_RAW_REPORT_PROBE_V8_LAST_MS", 1)
         worker_text = worker_text.replace(expense_key, "SMC_INNER_MCP_EXPENSES_PROBE_V8_LAST_MS", 1)
 
-        versions = re.findall(r"VERSION:\\s*'github-worker-(\\d+)\\.(\\d+)\\.(\\d+)'", worker_text)
+        versions = re.findall(r"VERSION:\s*'github-worker-(\d+)\.(\d+)\.(\d+)'", worker_text)
         if len(versions) != 1:
             raise SystemExit("INNER_FINANCE_RAW_REPORT_FIELD_SHAPE_VERSION_PATTERN_MISMATCH")
         major, minor, patch_no = [int(value) for value in versions[0]]
