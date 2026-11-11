@@ -39,8 +39,8 @@ jobs:
           import pathlib, re
           root=pathlib.Path('/tmp/air-bound-script')
           names='repairAutomationV404|createTriggers|createMinimalTriggersV301_|deleteOperationalTriggersV292_|ensureOperationalTriggersV361_|continueFastCheckV293_|scheduledFastCheckContinuationV293_|scheduledFullSyncContinuationV292_|scheduledFastCheck|ensureWatchdogTriggerV361_'
-          pattern=re.compile(r'^\\s*function\\s+('+names+r')\\s*\\(',re.M)
-          secret=re.compile(r'(?i)(token|secret|password|authorization|bearer)(\\s*[:=]\\s*|\\s+)[^\\s,;]+')
+          pattern=re.compile(r'^\s*function\s+('+names+r')\s*\(',re.M)
+          secret=re.compile(r'(?i)(token|secret|password|authorization|bearer)(\s*[:=]\s*|\s+)[^\s,;]+')
           count=0
           for path in sorted(p for p in root.rglob('*') if p.suffix in ('.gs','.js')):
               lines=path.read_text(encoding='utf-8',errors='replace').splitlines()
@@ -49,11 +49,11 @@ jobs:
                   if not match: continue
                   end=min(len(lines),i+55)
                   for j in range(i+1,min(len(lines),i+500)):
-                      if re.match(r'^\\s*function\\s+[A-Za-z0-9_$]+\\s*\\(',lines[j]):
+                      if re.match(r'^\s*function\s+[A-Za-z0-9_$]+\s*\(',lines[j]):
                           end=min(end,j); break
                   print('SOURCE_FILE='+path.name+' FUNCTION='+match.group(1)+' LINE='+str(i+1))
                   for n in range(i,end):
-                      safe=secret.sub(r'\\1=[redacted]',lines[n])
+                      safe=secret.sub(r'\1=[redacted]',lines[n])
                       safe=re.sub(r'[A-Za-z0-9_-]{40,}','[opaque]',safe)
                       print('CODE '+str(n+1)+':'+safe[:260])
                   count+=1
