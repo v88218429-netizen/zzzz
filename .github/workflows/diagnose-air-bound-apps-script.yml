@@ -28,7 +28,7 @@ jobs:
           umask 077
           printf '%s' "$CLASPRC_JSON" > "$HOME/.clasprc.json"
           mkdir -p /tmp/air-bound-script
-          printf '{"scriptId":"%s","rootDir":"."}\\n' "$AIR_SCRIPT_ID" > /tmp/air-bound-script/.clasp.json
+          printf '{"scriptId":"%s","rootDir":"."}\n' "$AIR_SCRIPT_ID" > /tmp/air-bound-script/.clasp.json
           cd /tmp/air-bound-script
           clasp pull
 
