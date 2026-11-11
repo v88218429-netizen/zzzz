@@ -113,6 +113,31 @@ jobs:
               env.write('SHEETS_ACCESS_TOKEN='+access+chr(10))
           print('DIRECT_SHEETS_READ=ok')
           print('DIRECT_SHEETS_TITLE='+str((result.get('properties') or {}).get('title','')))
+          if os.environ.get('GITHUB_EVENT_NAME') == 'push' and os.environ.get('GITHUB_EVENT_HEAD_COMMIT_MESSAGE') == 'Inspect FBS audit source via GitHub':
+              sheet='1qJvhEOIku7sOMydfrUz0PR5dkcU0sLjv433pa1MFBcM'
+              a1="'🛠 Технический лог'!A1:E5019"
+              values_url='https://sheets.googleapis.com/v4/spreadsheets/'+sheet+'/values/'+urllib.parse.quote(a1,safe='')+'?majorDimension=ROWS&valueRenderOption=FORMATTED_VALUE'
+              values_req=urllib.request.Request(values_url,headers={'Authorization':'Bearer '+access})
+              try:
+                  with urllib.request.urlopen(values_req,timeout=45) as response:
+                      rows=json.loads(response.read().decode('utf-8')).get('values') or []
+                  print('AIR_TECH_LOG_ROWS_READ='+str(len(rows)))
+                  hits=[]
+                  for row_number,row in enumerate(rows,start=1):
+                      value=' | '.join(str(cell) for cell in row)
+                      if not __import__('re').search(r'(?i)AIR|FBS|fast.?check|BUS|error|fail|timeout|limit|quota|auth|lock',value):
+                          continue
+                      value=__import__('re').sub(r'(?i)(authorization|bearer|token|secret|api[_-]?key)(\s*[:=]\s*|\s+)[^\s,;|]+',r'\1=[redacted]',value)
+                      value=__import__('re').sub(r'[A-Za-z0-9_-]{32,}','[opaque]',value)
+                      value=__import__('re').sub(r'\b[0-9]{7,}\b','[id]',value)
+                      hits.append((row_number,value[:450]))
+                  print('AIR_TECH_LOG_MATCH_COUNT='+str(len(hits)))
+                  for row_number,value in hits[-100:]:
+                      print('AIR_TECH_LOG_ROW='+str(row_number)+':'+value)
+              except urllib.error.HTTPError as exc:
+                  print('AIR_TECH_LOG_READ=failed_http_'+str(exc.code))
+              except Exception as exc:
+                  print('AIR_TECH_LOG_READ=failed_'+type(exc).__name__)
           PY
 
       - name: Install clasp and auth
