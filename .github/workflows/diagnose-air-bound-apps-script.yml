@@ -43,14 +43,22 @@ jobs:
           data=json.loads(pathlib.Path('/tmp/air-deployments.json').read_text())
           items=data.get('deployments',[]) if isinstance(data,dict) else data
           target='AKfycbxyxnfxFl3GLkTukEDoM-n4gOnlslMv52Ghl2pGho9tQWpnSf6aSXAg7qZZFwtfnrKb'
+          api_count=0
+          api_access=[]
           for item in items:
-              if item.get('deploymentId')!=target: continue
               entry=item.get('entryPoints',[])
-              web=[x.get('webApp',{}) for x in entry if x.get('entryPointType')=='WEB_APP']
-              print('DEPLOYMENT_DETAIL='+json.dumps(item,sort_keys=True,ensure_ascii=False))
-              break
-          else:
-              print('AIR_WEB_DEPLOYMENT_CONFIG_NOT_RETURNED')
+              executable=[x.get('executionApi',{}) for x in entry if x.get('entryPointType')=='EXECUTION_API']
+              api_count+=len(executable)
+              api_access.extend(x.get('access') for x in executable if x.get('access'))
+              if item.get('deploymentId')==target:
+                  web=[x.get('webApp',{}) for x in entry if x.get('entryPointType')=='WEB_APP']
+                  print('AIR_WEB_DEPLOYMENT_ACCESS='+str((web[0] or {}).get('access','unknown')))
+          config=json.loads(pathlib.Path('/tmp/air-bound-script/appsscript.json').read_text(encoding='utf-8'))
+          clasp=json.loads(pathlib.Path('/tmp/air-bound-script/.clasp.json').read_text(encoding='utf-8'))
+          print('AIR_API_EXECUTABLE_DEPLOYMENTS='+str(api_count))
+          print('AIR_API_EXECUTABLE_ACCESS='+','.join(api_access or ['none']))
+          print('AIR_MANIFEST_EXECUTION_API_ACCESS='+str((config.get('executionApi') or {}).get('access','unset')))
+          print('AIR_CLASP_PROJECT_ID_PRESENT='+str(bool(clasp.get('projectId'))).lower())
           PY
 
       - name: Report deployment access configuration
