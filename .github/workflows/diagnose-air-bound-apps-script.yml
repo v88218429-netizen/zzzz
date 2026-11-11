@@ -45,15 +45,26 @@ jobs:
           target='AKfycbxyxnfxFl3GLkTukEDoM-n4gOnlslMv52Ghl2pGho9tQWpnSf6aSXAg7qZZFwtfnrKb'
           api_count=0
           api_access=[]
+          entry_types=[]
+          target_found=False
           for item in items:
               entry=item.get('entryPoints',[])
+              entry_types.extend(str(x.get('entryPointType','unknown')) for x in entry)
               executable=[x.get('executionApi',{}) for x in entry if x.get('entryPointType')=='EXECUTION_API']
               api_count+=len(executable)
               api_access.extend(x.get('access') for x in executable if x.get('access'))
               if item.get('deploymentId')==target:
+                  target_found=True
                   web=[x.get('webApp',{}) for x in entry if x.get('entryPointType')=='WEB_APP']
                   access=(web[0] or {}).get('access','unknown') if web else 'no_web_app_entry_point'
+                  print('AIR_TARGET_DEPLOYMENT_KEYS='+','.join(sorted(item.keys())))
+                  print('AIR_TARGET_ENTRY_POINT_COUNT='+str(len(entry)))
+                  print('AIR_TARGET_ENTRY_POINT_TYPES='+','.join(str(x.get('entryPointType','unknown')) for x in entry))
+                  print('AIR_TARGET_HAS_WEBAPP_FIELD='+str(bool(item.get('webApp'))).lower())
+                  print('AIR_TARGET_HAS_EXECUTIONAPI_FIELD='+str(bool(item.get('executionApi'))).lower())
                   print('AIR_WEB_DEPLOYMENT_ACCESS='+str(access))
+          print('AIR_TARGET_DEPLOYMENT_FOUND='+str(target_found).lower())
+          print('AIR_ALL_DEPLOYMENT_ENTRY_TYPES='+','.join(entry_types or ['none']))
           config=json.loads(pathlib.Path('/tmp/air-bound-script/appsscript.json').read_text(encoding='utf-8'))
           clasp=json.loads(pathlib.Path('/tmp/air-bound-script/.clasp.json').read_text(encoding='utf-8'))
           print('AIR_API_EXECUTABLE_DEPLOYMENTS='+str(api_count))
