@@ -21,7 +21,7 @@ jobs:
       BRIDGE_URL: https://script.google.com/macros/s/AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw/exec
       BRIDGE_KEY: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
     steps:
-      - name: Read FBS stage and AIR log through the protected bridge
+      - name: Read only the active FBS stage through the protected bridge
         shell: bash
         run: |
           set -euo pipefail
@@ -34,7 +34,7 @@ jobs:
               with urllib.request.urlopen(request,timeout=timeout) as response:
                   return json.loads(response.read().decode("utf-8"))
           token=os.environ["BRIDGE_KEY"]
-          stage=post({"token":token,"action":"fbs_stage_snapshot"},30)
+          stage=post({"token":token,"action":"fbs_stage_snapshot"},15)
           stage_result=stage.get("result") or {}
           stages=stage_result.get("fbs_ingest_stages") or {}
           if stage.get("ok") is not True or set(stages)-{"SANYCH","AIR","HOZYAYUSHKA"}:
@@ -44,35 +44,5 @@ jobs:
               "fbs_ingest_stages":stages,
               "fbs_supply_stage":stage_result.get("fbs_supply_stage")},
               ensure_ascii=False,separators=(",",":")),flush=True)
-          logs=post({"token":token,"action":"fbs_technical_log_read","client":"AIR"},60)
-          log_result=logs.get("result") or {}
-          if logs.get("ok") is not True or log_result.get("ok") is not True:
-              raise SystemExit("AIR_FBS_TECHNICAL_LOG_READ_FAILED")
-          matches=log_result.get("matches") or []
-          def classify(message):
-              if re.search(r"urlfetch|вызвана слишком много раз за день",message,re.I):
-                  return "URLFETCH_DAILY_QUOTA"
-              if re.search(r"scriptlock|основным fbs-процессом",message,re.I):
-                  return "FBS_LOCK_CONTENTION"
-              if re.search(r"timeout|тайм.?аут",message,re.I):
-                  return "TIMEOUT"
-              if re.search(r"bus|бус",message,re.I):
-                  return "BUS_LOG"
-              return "OTHER"
-          events=[]
-          for item in matches:
-              cells=item.get("cells") or []
-              values=[str(x or "") for x in cells]
-              events.append({
-                  "row":item.get("row"),
-                  "at":values[0] if len(values)>0 else "",
-                  "level":values[1] if len(values)>1 else "",
-                  "function":values[2] if len(values)>2 else "",
-                  "category":classify(values[3] if len(values)>3 else "")
-              })
-          print("AIR_FBS_TECHNICAL_LOG="+json.dumps({
-              "lastRow":log_result.get("lastRow"),
-              "scannedRows":log_result.get("scannedRows"),
-              "matchCount":len(matches),
-              "events":events},ensure_ascii=False,separators=(",",":")),flush=True)
+
           PY
