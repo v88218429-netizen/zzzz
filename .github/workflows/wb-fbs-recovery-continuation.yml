@@ -39,7 +39,22 @@ jobs:
           import re
           import time
           import urllib.error
+          import urllib.parse
           import urllib.request
+
+          class StripAuthRedirectHandler(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self, req, fp, code, msg, hdrs, newurl):
+                  redirected = super().redirect_request(req, fp, code, msg, hdrs, newurl)
+                  if redirected is not None:
+                      source_host = urllib.parse.urlsplit(req.full_url).netloc.lower()
+                      target_host = urllib.parse.urlsplit(newurl).netloc.lower()
+                      if source_host != target_host:
+                          redirected.remove_header("Authorization")
+                          redirected.remove_header("Proxy-Authorization")
+                          redirected.remove_header("Cookie")
+                  return redirected
+
+          logs_opener = urllib.request.build_opener(StripAuthRedirectHandler())
 
           repository = os.environ["REPOSITORY"]
           source_run_id = int(os.environ["SOURCE_RUN_ID"])
@@ -103,7 +118,7 @@ jobs:
               for job in failed_jobs:
                   logs_url = "https://api.github.com/repos/" + repository + "/actions/jobs/" + str(job["id"]) + "/logs"
                   logs_request = urllib.request.Request(logs_url, headers=headers)
-                  with urllib.request.urlopen(logs_request, timeout=60) as response:
+                  with logs_opener.open(logs_request, timeout=60) as response:
                       archive = zipfile.ZipFile(io.BytesIO(response.read()))
                   for log_name in archive.namelist():
                       if b"FBS_PRODUCTION_ACCEPTANCE_FAILED:QUALITY_GATE" in archive.read(log_name):
