@@ -15,6 +15,9 @@ on:
       - WB FBS Sanych targeted recovery
       - WB FBS Sanych failed-window recovery
       - WB FBS gap catch-up 2026-11-11
+      - WB FBS automatic freshness repair
+      - WB FBS repair Sanych decision formula (encrypted)
+      - Repair AIR legacy FBS trigger loop
       - WB FBS supply sync via GitHub
     types: [completed]
     branches: [mainggg]
@@ -53,12 +56,18 @@ jobs:
                  "WB FBS GitHub recovery","WB FBS automatic freshness repair",
                  "WB FBS Sanych targeted recovery","WB FBS Sanych failed-window recovery",
                  "WB FBS gap catch-up 2026-11-11",
+                 "WB FBS repair Sanych decision formula (encrypted)",
+                 "Repair AIR legacy FBS trigger loop",
                  "WB FBS retry failed recovery windows","WB FBS supply sync via GitHub",
                  "WB Sellmonitor finance summaries"}
           writer_paths={".github/workflows/wb-fbs-github-recovery.yml",
                         ".github/workflows/wb-fbs-sanych-targeted-recovery.yml",
                         ".github/workflows/wb-fbs-sanych-lock-retry.yml",
                         ".github/workflows/wb-fbs-gap-catchup.yml",
+                        ".github/workflows/repair-air-fbs-trigger-loop.yml",
+                        ".github/workflows/wb-fbs-formula-repair.yml",
+                        ".github/workflows/wb-fbs-client-token-seed.yml",
+                        ".github/workflows/wb-fbs-recovery-continuation.yml",
                         ".github/workflows/wb-fbs-auto-retry.yml",
                         ".github/workflows/wb-fbs-automatic-freshness-repair.yml",
                         ".github/workflows/wb-fbs-supply-sync.yml",
