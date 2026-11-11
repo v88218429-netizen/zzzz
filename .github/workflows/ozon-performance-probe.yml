@@ -3,14 +3,24 @@ on:
   push:
     branches: [mainggg]
     paths:
+      - ".github/workflows/ozon-performance-probe.yml"
       - "ozon_performance_radar/**"
   workflow_dispatch:
+  workflow_run:
+    workflows: ["Sellmonitor GitHub worker deploy"]
+    types: [completed]
+    branches: [mainggg]
   schedule:
     - cron: "17 */4 * * *"
+concurrency:
+  group: ozon-summary-orders-bounded
+  cancel-in-progress: false
+  queue: max
 permissions:
   contents: read
 jobs:
   probe:
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     strategy:
       fail-fast: false
       matrix:
