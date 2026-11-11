@@ -7378,7 +7378,7 @@ function sellmonitorGithubFbsTechnicalLogReadV1_(body) {
   var sheet=ss.getSheetByName('🛠 Технический лог');
   if(!sheet)throw new Error('FBS_TECH_LOG_TAB_NOT_FOUND');
   var last=Number(sheet.getLastRow()||0);
-  var start=Math.max(1,last-1999);
+  var start=Math.max(1,last-99);
   var count=Math.max(0,last-start+1);
   if(!count)return {ok:true,client:client,lastRow:last,scannedRows:0,matches:[]};
   var values=sheet.getRange(start,1,count,Math.min(5,Math.max(1,sheet.getLastColumn()))).getDisplayValues();
