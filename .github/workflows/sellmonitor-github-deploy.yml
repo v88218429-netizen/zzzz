@@ -186,11 +186,14 @@ jobs:
           print("LIVE_WORKER_SOURCE_MATCHES_GITHUB="+str(normalize(live_source)==normalize(repo_source)).lower())
           import difflib
           def function_block(source,name):
-              match=re.search(r"(?m)^function "+re.escape(name)+r"\\b",source)
-              if not match:return None
-              end=re.search(r"(?m)^function ",source[match.end():])
-              stop=match.end()+end.start() if end else len(source)
-              return source[match.start():stop].rstrip().splitlines()
+              marker="function "+name+"("
+              start=source.find(marker)
+              if start<0:return None
+              line_start=source.rfind("\\n",0,start)+1
+              if source[line_start:start].strip():return None
+              end=re.search(r"(?m)^function ",source[start+len(marker):])
+              stop=start+len(marker)+end.start() if end else len(source)
+              return source[line_start:stop].rstrip().splitlines()
           for function_name in (
               "sellmonitorGithubFbsStatusReadV1_",
               "sellmonitorGithubFbsIngestBatchV1_",
