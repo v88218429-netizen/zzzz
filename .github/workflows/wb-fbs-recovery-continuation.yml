@@ -116,19 +116,35 @@ jobs:
                   failed_jobs = [job for job in json.load(response).get("jobs", [])
                                  if job.get("conclusion") == "failure"]
               quality_gate_failed = False
+              writers_not_quiescent = False
+              unreadable_logs = []
               for job in failed_jobs:
                   logs_url = "https://api.github.com/repos/" + repository + "/actions/jobs/" + str(job["id"]) + "/logs"
                   logs_request = urllib.request.Request(logs_url, headers=headers)
-                  with logs_opener.open(logs_request, timeout=60) as response:
-                      archive = zipfile.ZipFile(io.BytesIO(response.read()))
-                  for log_name in archive.namelist():
-                      if b"FBS_PRODUCTION_ACCEPTANCE_FAILED:QUALITY_GATE" in archive.read(log_name):
-                          quality_gate_failed = True
-                          break
-                  if quality_gate_failed:
-                      break
+                  try:
+                      with logs_opener.open(logs_request, timeout=60) as response:
+                          raw_logs = response.read()
+                      if zipfile.is_zipfile(io.BytesIO(raw_logs)):
+                          with zipfile.ZipFile(io.BytesIO(raw_logs)) as archive:
+                              log_chunks = [archive.read(log_name) for log_name in archive.namelist()]
+                      else:
+                          log_chunks = [raw_logs]
+                      for chunk in log_chunks:
+                          if b"FBS_PRODUCTION_ACCEPTANCE_FAILED:QUALITY_GATE" in chunk:
+                              quality_gate_failed = True
+                          if b"FBS_PRODUCTION_WRITERS_DID_NOT_QUIESCE" in chunk:
+                              writers_not_quiescent = True
+                  except (OSError, zipfile.BadZipFile, urllib.error.URLError) as error:
+                      unreadable_logs.append(str(job["id"]) + ":" + type(error).__name__)
+              if unreadable_logs:
+                  print("FBS_ACCEPTANCE_LOGS_UNREADABLE_NOT_RERUN run=" + str(source_run_id) +
+                        " jobs=" + ",".join(unreadable_logs), flush=True)
+                  raise SystemExit(0)
               if quality_gate_failed:
                   print("FBS_QUALITY_GATE_FAILURE_NOT_RERUN run=" + str(source_run_id), flush=True)
+                  raise SystemExit(0)
+              if writers_not_quiescent:
+                  print("FBS_WRITERS_NOT_QUIESCENT_NOT_RERUN run=" + str(source_run_id), flush=True)
                   raise SystemExit(0)
           elif source_path == ".github/workflows/wb-fbs-supply-sync.yml" and os.environ.get("SOURCE_CONCLUSION") == "cancelled":
               print("FBS_CANCELLED_SUPPLY_NOT_RERUN run=" + str(source_run_id), flush=True)
