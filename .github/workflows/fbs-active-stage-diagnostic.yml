@@ -10,6 +10,7 @@ name: WB FBS active stage diagnostic
 # Snapshot tick 6.
 # Snapshot tick 7.
 # Snapshot tick 8.
+# Snapshot tick 9: read AIR technical log without changing data.
 on:
   workflow_dispatch:
   push:
@@ -53,4 +54,16 @@ jobs:
               "fbs_supply_stage":stage_result.get("fbs_supply_stage")},
               ensure_ascii=False,separators=(",",":")),flush=True)
 
+          try:
+              log=post({"token":token,"action":"fbs_technical_log_read","client":"AIR"},45)
+              log_result=log.get("result") or {}
+              print("AIR_TECH_LOG_SNAPSHOT="+json.dumps({
+                  "ok":log.get("ok"),
+                  "lastRow":log_result.get("lastRow"),
+                  "scannedRows":log_result.get("scannedRows"),
+                  "matchCount":log_result.get("matchCount"),
+                  "matches":(log_result.get("matches") or [])[-25:]},
+                  ensure_ascii=False,separators=(",",":")),flush=True)
+          except Exception as error:
+              print("AIR_TECH_LOG_READ_ERROR="+type(error).__name__,flush=True)
           PY
