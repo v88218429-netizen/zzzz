@@ -184,34 +184,34 @@ jobs:
           python3 - <<'PY'
           import pathlib, re
           root = pathlib.Path('/tmp/air-bound-script')
-          secret = re.compile(r'(?i)(token|secret|password|authorization|bearer)(\\s*[:=]\\s*|\\s+)[^\\s,;]+')
+          secret = re.compile(r'(?i)(token|secret|password|authorization|bearer)(\s*[:=]\s*|\s+)[^\s,;]+')
           opaque = re.compile(r'[A-Za-z0-9_-]{40,}')
           matches = 0
           for path in sorted(p for p in root.rglob('*') if p.suffix in ('.gs', '.js')):
               lines = path.read_text(encoding='utf-8', errors='replace').splitlines()
-              starts = list(re.finditer(r'^\\s*function\\s+([A-Za-z0-9_$]+)\\s*\\(', '\\n'.join(lines), re.M))
-              joined = '\\n'.join(lines)
+              starts = list(re.finditer(r'^\s*function\s+([A-Za-z0-9_$]+)\s*\(', '\n'.join(lines), re.M))
+              joined = '\n'.join(lines)
               for match in re.finditer(r'Технический лог|TECHNICAL_LOG|technicalLog|logSheet', joined, re.I):
                   if matches >= 30: break
-                  line = joined.count('\\n', 0, match.start()) + 1
+                  line = joined.count('\n', 0, match.start()) + 1
                   lo, hi = max(1, line-5), min(len(lines), line+14)
                   print('LOG_REFERENCE_FILE='+path.name+' LINE='+str(line))
                   for n in range(lo-1, hi):
-                      safe=opaque.sub('[opaque]', secret.sub(r'\\1=[redacted]', lines[n]))
+                      safe=opaque.sub('[opaque]', secret.sub(r'\1=[redacted]', lines[n]))
                       print('CODE '+str(n+1)+':'+safe[:260])
                   matches += 1
               for i, match in enumerate(starts):
-                  start = joined.count('\\n', 0, match.start())
-                  end = joined.count('\\n', 0, starts[i+1].start()) if i+1 < len(starts) else len(lines)
+                  start = joined.count('\n', 0, match.start())
+                  end = joined.count('\n', 0, starts[i+1].start()) if i+1 < len(starts) else len(lines)
                   name = match.group(1)
-                  body = '\\n'.join(lines[start:end])
+                  body = '\n'.join(lines[start:end])
                   if not re.search(r'appendRow|insertRow|setValues|deleteRows|clearContent', body, re.I):
                       continue
                   if not re.search(r'log|audit|technical|техническ|LOG_REFERENCE', name+' '+body, re.I):
                       continue
                   print('LOG_WRITER_FUNCTION='+path.name+':'+name+':'+str(start+1)+'-'+str(min(end,start+120)))
                   for n in range(start, min(end,start+120)):
-                      safe=opaque.sub('[opaque]', secret.sub(r'\\1=[redacted]', lines[n]))
+                      safe=opaque.sub('[opaque]', secret.sub(r'\1=[redacted]', lines[n]))
                       print('CODE '+str(n+1)+':'+safe[:260])
                   matches += 1
           print('AIR_LOG_CODE_MATCHES='+str(matches))
