@@ -43,18 +43,36 @@ def _decision_caps(
     decisions: list[dict[str, Any]], economics_observed_at: Any, now: datetime, freshness_hours: float,
 ) -> dict[tuple[str, str, str], float]:
     caps: dict[tuple[str, str, str], float] = {}
+    conflicted: set[tuple[str, str, str]] = set()
+    seller_key_to_shop = {"sanych": "ap", "air": "aa", "hozyushka": "yv"}
     for card in decisions:
         if card.get("blockers") or str(card.get("confidence") or "").lower() == "low":
             continue
-        key = str(card.get("decision_key") or "").split(":")
-        if len(key) < 4 or key[0] != "advert" or not key[1].isdigit() or not key[2].isdigit():
+        key = [part.strip() for part in str(card.get("decision_key") or "").split(":")]
+        key_shop = None
+        if len(key) >= 3 and key[0].lower() == "advert" and key[1].isdigit() and key[2].isdigit():
+            advert, nm = key[1], key[2]
+        elif (
+            len(key) >= 5 and not key[1] and key[2].lower() == "advert"
+            and key[3].isdigit() and key[4].isdigit()
+        ):
+            # Live seller decisions use <seller>::advert:<campaign>:<nmID>:<reason>.
+            # The seller prefix is the source's cabinet scope when shop/store_id is omitted.
+            key_shop = seller_key_to_shop.get(key[0].casefold())
+            if key_shop is None:
+                continue
+            advert, nm = key[3], key[4]
+        else:
             continue
-        explicit_shop = str(card.get("shop") or card.get("store_id") or "").lower()
-        # Economics must carry the cabinet identity at the source. A unique
-        # campaign×SKU match is not proof of which seller token produced it.
-        if explicit_shop not in STORE_NAMES:
+        explicit_shop = str(card.get("shop") or card.get("store_id") or "").strip().lower()
+        if explicit_shop and explicit_shop not in STORE_NAMES:
             continue
-        observed_value = economics_observed_at.get(explicit_shop) if isinstance(economics_observed_at, dict) else economics_observed_at
+        if key_shop and explicit_shop and explicit_shop != key_shop:
+            continue
+        shop = explicit_shop or key_shop
+        if shop not in STORE_NAMES:
+            continue
+        observed_value = economics_observed_at.get(shop) if isinstance(economics_observed_at, dict) else economics_observed_at
         observed = _time(observed_value)
         age = (now - observed).total_seconds() if observed else None
         if age is None or age < 0 or age > freshness_hours * 3600:
@@ -64,8 +82,19 @@ def _decision_caps(
             if isinstance(item, dict) and item.get("metric") == "max_ad_cost_per_order_rub":
                 cap = _num(item.get("value"))
                 break
-        if cap is not None and cap >= 0:
-            caps[(explicit_shop, key[1], key[2])] = cap
+        if cap is None or cap < 0:
+            continue
+        identity = (shop, advert, nm)
+        if identity in conflicted:
+            continue
+        previous = caps.get(identity)
+        if previous is None:
+            caps[identity] = cap
+        elif abs(previous - cap) > 0.005:
+            # Conflicting eligible economics for the same exact seller/campaign/SKU
+            # cannot be resolved safely; require the source to remove the ambiguity.
+            caps.pop(identity, None)
+            conflicted.add(identity)
     return caps
 
 
