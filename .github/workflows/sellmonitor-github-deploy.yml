@@ -226,6 +226,19 @@ jobs:
                   for n in range(start,end):
                       print(str(n+1)+":"+lines[n][:400])
           print("FBS_AUDIT_SOURCE_HITS="+str(hits))
+          legacy_pattern=re.compile(r"continueFastCheckV293_|logBus|LogBus|LOG_BUS|BUS_LOG|busLog|FBS[^\\n]{0,30}BUS|BUS[^\\n]{0,30}FBS",re.I)
+          legacy_hits=0
+          for path in files:
+              source_lines=path.read_text(encoding="utf-8",errors="replace").splitlines()
+              found=[i for i,line in enumerate(source_lines) if legacy_pattern.search(line)]
+              if not found:continue
+              print("AIR_LEGACY_LOG_SOURCE_FILE="+str(path.relative_to(root)))
+              for i in found[:20]:
+                  legacy_hits+=1
+                  print("AIR_LEGACY_LOG_CONTEXT line="+str(i+1))
+                  for n in range(max(0,i-3),min(len(source_lines),i+5)):
+                      print("AIR_SOURCE "+str(n+1)+":"+source_lines[n][:300])
+          print("AIR_LEGACY_LOG_SOURCE_HITS="+str(legacy_hits))
           if hits==0: raise SystemExit("FBS_AUDIT_SOURCE_NOT_FOUND")
           PY
 
