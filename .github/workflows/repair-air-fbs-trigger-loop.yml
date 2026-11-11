@@ -1,0 +1,189 @@
+name: Repair AIR legacy FBS trigger loop
+
+on:
+  push:
+    branches: [mainggg]
+    paths:
+      - ".github/workflows/repair-air-fbs-trigger-loop.yml"
+      - "wb_worker/air_fbs_trigger_repair.py"
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: wb-fbs-production-mutations
+  cancel-in-progress: false
+  queue: max
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+      AIR_SCRIPT_ID: 1snEntW5W9KZ_zKHP5bT4D-fmr-sbDdjV4-izjRxf46l8HWcrt3GJqU9V
+      AIR_INGRESS_DEPLOYMENT_ID: AKfycbw92e1aJ7yUPkJR50gKqhlctnQC2rUYUH58-l6JgRAAfKSqY9v5sRpFbTo3otcjqP8
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Validate clasp access
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$CLASPRC_JSON"
+          umask 077
+          printf '%s' "$CLASPRC_JSON" > "$HOME/.clasprc.json"
+          python - <<'PY'
+          import json, pathlib
+          p=pathlib.Path.home()/'.clasprc.json'
+          obj=json.loads(p.read_text())
+          if not isinstance(obj,dict) or not obj:
+              raise SystemExit('invalid CLASPRC_JSON')
+          print('AIR_CLASP_AUTH=valid')
+          PY
+
+      - name: Install clasp and pull exact AIR project
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install -g @google/clasp
+          rm -rf /tmp/air-bound-script
+          mkdir -p /tmp/air-bound-script
+          printf '{"scriptId":"%s","rootDir":"."}\n' "$AIR_SCRIPT_ID" > /tmp/air-bound-script/.clasp.json
+          cd /tmp/air-bound-script
+          clasp pull
+          test -f 'Код.js'
+          test -f GithubTokenIngress.js
+          test -f appsscript.json
+          echo "AIR_LIVE_SOURCE_PULL=ok"
+
+      - name: Save pre-change recovery copy
+        uses: actions/upload-artifact@v4
+        with:
+          name: air-apps-script-before-repair-${{ github.run_id }}
+          path: /tmp/air-bound-script/
+          include-hidden-files: true
+          retention-days: 30
+
+      - name: Apply the guarded AIR-only source patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python wb_worker/air_fbs_trigger_repair.py /tmp/air-bound-script
+          grep -q 'AIR_FBS_GITHUB_ONLY_LEGACY_FASTCHECK_DISABLED_V1' '/tmp/air-bound-script/Код.js'
+          grep -q 'AIR_FBS_GITHUB_TRIGGER_REPAIR_V1' /tmp/air-bound-script/GithubTokenIngress.js
+          grep -q 'repair-air-fbs-trigger-loop.yml' /tmp/air-bound-script/GithubTokenIngress.js
+          echo "AIR_PATCH_MARKERS=verified"
+
+      - name: Check syntax of every AIR script file
+        shell: bash
+        run: |
+          set -euo pipefail
+          count=0
+          while IFS= read -r -d '' file; do
+            tmp="$(mktemp --suffix=.js)"
+            cp "$file" "$tmp"
+            node --check "$tmp"
+            rm -f "$tmp"
+            count=$((count+1))
+          done < <(find /tmp/air-bound-script -type f \( -name '*.js' -o -name '*.gs' \) -print0)
+          test "$count" -gt 0
+          echo "AIR_SYNTAX_OK=$count"
+
+      - name: Verify stable ingress deployment before replacing it
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/air-bound-script
+          clasp deployments > /tmp/air-deployments.txt
+          if ! grep -Fq "$AIR_INGRESS_DEPLOYMENT_ID" /tmp/air-deployments.txt; then
+            echo "AIR_INGRESS_DEPLOYMENT_NOT_FOUND"
+            exit 1
+          fi
+          echo "AIR_STABLE_INGRESS_DEPLOYMENT=found"
+
+      - name: Push and update the existing AIR ingress deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/air-bound-script
+          clasp push -f
+          clasp deploy -i "$AIR_INGRESS_DEPLOYMENT_ID" -d "AIR GitHub-only FBS trigger repair"
+          echo "AIR_SOURCE_PUSH_AND_STABLE_DEPLOYMENT=ok"
+
+      - name: Stop only retired AIR FBS triggers and verify live state
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const url = "https://script.google.com/macros/s/" +
+            process.env.AIR_INGRESS_DEPLOYMENT_ID + "/exec";
+          const body = {
+            store: "AIR",
+            operation: "stop_legacy_fbs_triggers",
+            github_token: process.env.GITHUB_TOKEN,
+            run_id: process.env.GITHUB_RUN_ID,
+            run_attempt: process.env.GITHUB_RUN_ATTEMPT
+          };
+          const response = await fetch(url, {
+            method: "POST",
+            headers: {"content-type":"application/json","cache-control":"no-store"},
+            body: JSON.stringify(body),
+            signal: AbortSignal.timeout(60000)
+          });
+          let result;
+          try { result = await response.json(); }
+          catch { throw new Error("AIR trigger repair returned non-JSON HTTP " + response.status); }
+          const state = result && (result.state || result.data || result);
+          const after = state && state.after;
+          const handlers = after && after.handlers;
+          const retired = new Set([
+            "scheduledFastCheck",
+            "scheduledFastCheckContinuationV293_",
+            "scheduledFullSyncContinuationV292_"
+          ]);
+          const ok = response.ok &&
+            state && state.ok === true &&
+            state.action === "stop_legacy_fbs_triggers" &&
+            Array.isArray(handlers) &&
+            handlers.every(handler => !retired.has(handler)) &&
+            after.fastQueuePending === false &&
+            after.fullSyncQueuePending === false &&
+            state.retainedMaintenanceTrigger === true &&
+            state.dataSheetsChanged === false;
+          console.log(JSON.stringify({
+            httpStatus: response.status,
+            verified: Boolean(ok),
+            action: state && state.action || null,
+            removed: state && state.removed || null,
+            remainingLegacyHandlers: state && state.remainingLegacyHandlers || null,
+            retainedMaintenanceTrigger: state && state.retainedMaintenanceTrigger === true,
+            queuesCleared: Boolean(after && after.fastQueuePending === false &&
+              after.fullSyncQueuePending === false),
+            dataSheetsChanged: state && state.dataSheetsChanged
+          }));
+          if (!ok) process.exit(1);
+          NODE
+
+      - name: Read back deployed AIR source
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/air-bound-script
+          clasp pull
+          grep -q 'AIR_FBS_GITHUB_ONLY_LEGACY_FASTCHECK_DISABLED_V1' '/tmp/air-bound-script/Код.js'
+          grep -q 'AIR_FBS_GITHUB_TRIGGER_REPAIR_V1' /tmp/air-bound-script/GithubTokenIngress.js
+          echo "AIR_DEPLOYED_SOURCE_READBACK=verified"
