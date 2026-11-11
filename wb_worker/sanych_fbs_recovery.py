@@ -245,6 +245,25 @@ def ingest(client: str, orders: list[dict]) -> dict:
                     "FBS_INSERT_WRITE_TIMEOUT", "FBS_INSERT_WRITE_EXCEPTION"
                 )
             )
+            if "GITHUB_FBS_LOCK_BUSY" in details:
+                if attempt == attempts:
+                    raise RuntimeError("INGEST_REJECTED:GITHUB_FBS_LOCK_BUSY")
+                retry_wait_seconds = 430  # The Apps Script lease is seven minutes; the execution ceiling is six.
+                print("FBS_INGEST_RETRY=" + str(attempt) +
+                      ":GITHUB_FBS_LOCK_BUSY:WAIT_SECONDS=" + str(retry_wait_seconds) +
+                      ":REFRESH_ROW_HINTS=yes", flush=True)
+                time.sleep(retry_wait_seconds)
+                _, refreshed = read_current_states(client, batch)
+                main_sheet_last_row = int(refreshed["sheetLastRow"])
+                alternate_sheet_last_row = int(refreshed["alternateSheetLastRow"])
+                for item in batch:
+                    oid = str(item.get("id") or "")
+                    item["_fbsRowHint"] = int(refreshed["rowMap"].get(oid, 0))
+                    item["_fbsSheetLastRow"] = main_sheet_last_row
+                    item["_fbsAltRowHint"] = int(refreshed["alternateRowMap"].get(oid, 0))
+                    item["_fbsAltSheetLastRow"] = alternate_sheet_last_row
+                payload["orders"] = batch
+                continue
             if not retryable or attempt == attempts:
                 candidates = [
                     "FBS_BATCH_SIZE_INVALID", "FBS_ROW_COUNT_UNEXPECTED",
