@@ -79,13 +79,20 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          before="$(find /tmp/air-bound-script -type f \( -name '*.js' -o -name '*.gs' \) -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1)"
-          python wb_worker/air_fbs_trigger_repair.py /tmp/air-bound-script
-          after="$(find /tmp/air-bound-script -type f \( -name '*.js' -o -name '*.gs' \) -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1)"
-          if [[ "$before" == "$after" ]]; then echo "changed=false" >> "$GITHUB_OUTPUT"; else echo "changed=true" >> "$GITHUB_OUTPUT"; fi
-          grep -q 'AIR_FBS_GITHUB_ONLY_LEGACY_FASTCHECK_DISABLED_V1' '/tmp/air-bound-script/Код.js'
-          grep -q 'AIR_FBS_GITHUB_TRIGGER_REPAIR_V1' /tmp/air-bound-script/GithubTokenIngress.js
-          grep -q 'repair-air-fbs-trigger-loop.yml' /tmp/air-bound-script/GithubTokenIngress.js
+          code='/tmp/air-bound-script/Код.js'
+          ingress='/tmp/air-bound-script/GithubTokenIngress.js'
+          if grep -q 'AIR_FBS_GITHUB_ONLY_LEGACY_FASTCHECK_DISABLED_V1' "$code" &&
+             grep -q 'AIR_FBS_GITHUB_TRIGGER_REPAIR_V1' "$ingress" &&
+             grep -q 'repair-air-fbs-trigger-loop.yml' "$ingress"; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "AIR_PATCH_ALREADY_PRESENT=yes"
+          else
+            python wb_worker/air_fbs_trigger_repair.py /tmp/air-bound-script
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+          grep -q 'AIR_FBS_GITHUB_ONLY_LEGACY_FASTCHECK_DISABLED_V1' "$code"
+          grep -q 'AIR_FBS_GITHUB_TRIGGER_REPAIR_V1' "$ingress"
+          grep -q 'repair-air-fbs-trigger-loop.yml' "$ingress"
           echo "AIR_PATCH_MARKERS=verified"
 
       - name: Check syntax of every AIR script file
@@ -115,18 +122,31 @@ jobs:
           fi
           echo "AIR_STABLE_INGRESS_DEPLOYMENT=found"
 
-      - name: Push and update the existing AIR ingress deployment
-        if: steps.patch.outputs.changed == 'true'
+      - name: Publish or update the anonymous AIR ingress
+        id: deploy
         shell: bash
         run: |
           set -euo pipefail
           cd /tmp/air-bound-script
-          clasp push -f
-          clasp deploy -i "$AIR_INGRESS_DEPLOYMENT_ID" -d "AIR GitHub-only FBS trigger repair"
-          echo "AIR_SOURCE_PUSH_AND_STABLE_DEPLOYMENT=ok"
+          if [[ "$AIR_INGRESS_DEPLOYMENT_ID" == "AKfycbw92e1aJ7yUPkJR50gKqhlctnQC2rUYUH58-l6JgRAAfKSqY9v5sRpFbTo3otcjqP8" ]]; then
+            if [[ "${{ steps.patch.outputs.changed }}" == "true" ]]; then clasp push -f; fi
+            output="$(clasp create-deployment -d "AIR GitHub-only FBS trigger repair")"
+          else
+            if [[ "${{ steps.patch.outputs.changed }}" == "true" ]]; then clasp push -f; fi
+            output="$(clasp deploy -i "$AIR_INGRESS_DEPLOYMENT_ID" -d "AIR GitHub-only FBS trigger repair")"
+          fi
+          printf '%s\n' "$output"
+          deployment_id="$(printf '%s\n' "$output" | awk '$1=="Deployed"{print $2}' | tail -n 1)"
+          if [[ ! "$deployment_id" =~ ^AKfy ]]; then
+            echo "AIR_INGRESS_DEPLOYMENT_ID_PARSE_FAILED"
+            exit 1
+          fi
+          echo "deployment_id=$deployment_id" >> "$GITHUB_OUTPUT"
+          echo "AIR_INGRESS_DEPLOYMENT_READY=yes"
 
       - name: Stop only retired AIR FBS triggers and verify live state
         env:
+          AIR_INGRESS_DEPLOYMENT_ID: ${{ steps.deploy.outputs.deployment_id }}
           GITHUB_TOKEN: ${{ github.token }}
           GITHUB_RUN_ID: ${{ github.run_id }}
           GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
