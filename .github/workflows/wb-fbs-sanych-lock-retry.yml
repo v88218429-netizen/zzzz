@@ -1,0 +1,62 @@
+name: WB FBS Sanych failed-window recovery
+
+on:
+  push:
+    branches: [mainggg]
+    paths:
+      - ".github/workflows/wb-fbs-sanych-lock-retry.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wb-fbs-production-mutations
+  cancel-in-progress: false
+  queue: max
+
+jobs:
+  recover:
+    if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[SANYCH-LOCK-RETRY-2026-11-11]') }}
+    name: "Reconcile SANYCH ${{ matrix.start_date }}–${{ matrix.end_date }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - start_date: "2026-10-14"
+            end_date: "2026-10-20"
+          - start_date: "2026-10-21"
+            end_date: "2026-10-27"
+          - start_date: "2026-10-28"
+            end_date: "2026-10-30"
+          - start_date: "2026-10-31"
+            end_date: "2026-11-02"
+    env:
+      FBS_CLIENT: SANYCH
+      FBS_START_DATE: ${{ matrix.start_date }}
+      FBS_END_DATE: ${{ matrix.end_date }}
+      FBS_INCLUDE_LIVE: "false"
+      FBS_BATCH_SIZE: "5"
+      WB_API_TOKEN_AP: ${{ secrets.WB_API_TOKEN_AP }}
+      GOOGLE_BRIDGE_KEY: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
+      GOOGLE_BRIDGE_URL: https://script.google.com/macros/s/AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw/exec
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate SANYCH recovery prerequisites
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile wb_worker/sanych_fbs_recovery.py
+          test -n "$GOOGLE_BRIDGE_KEY"
+          test -n "$WB_API_TOKEN_AP"
+          test "${#WB_API_TOKEN_AP}" -ge 30
+      - name: Reconcile failed SANYCH window from WB into both books
+        shell: bash
+        run: python wb_worker/sanych_fbs_recovery.py
