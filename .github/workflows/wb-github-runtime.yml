@@ -79,9 +79,27 @@ jobs:
           python -m pip install -r requirements.txt
           python -m pip install -e . --no-deps
 
-      - name: Verify optimizer acceptance rules
+      - name: Verify optimizer and cluster recommendation rules
         working-directory: wb_ai_manager/source
-        run: python -m unittest discover -s tests -p "test_optimizer_acceptance.py"
+        run: |
+          python -m unittest discover -s tests -p "test_optimizer_acceptance.py"
+          python - <<'PY'
+          import importlib.util
+          from pathlib import Path
+
+          path = Path("tests/test_cluster_advisor.py")
+          spec = importlib.util.spec_from_file_location("test_cluster_advisor", path)
+          module = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(module)
+          cases = [
+              getattr(module, name)
+              for name in dir(module)
+              if name.startswith("test_") and callable(getattr(module, name))
+          ]
+          for case in cases:
+              case()
+          print(f"Passed {len(cases)} cluster recommendation checks.")
+          PY
 
       - name: Run three-cabinet WB audit and publish owner brief
         working-directory: wb_ai_manager/source

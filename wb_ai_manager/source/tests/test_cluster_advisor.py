@@ -310,3 +310,58 @@ def test_exact_live_cluster_bid_requires_matching_rub_currency_and_fresh_timesta
     assert result["rows"][0]["current_bid_rub"] is None
 
 
+
+
+
+def seller_decision(seller, cap=200, **overrides):
+    card = {
+        "decision_key": f"{seller}::advert:15:123:actual_ads_negative",
+        "evidence": [{"metric": "max_ad_cost_per_order_rub", "value": cap}],
+    }
+    card.update(overrides)
+    return card
+
+
+def test_live_seller_prefixed_campaign_economics_join_exactly_for_all_three_stores():
+    for seller, shop in (("sanych", "ap"), ("air", "aa"), ("hozyushka", "yv")):
+        result = analyze_cluster_rows(
+            [source_row(shop=shop)], settings(shop=shop), [seller_decision(seller)], now=NOW,
+            economics_observed_at={shop: "2026-10-29T11:00:00+03:00"},
+            cluster_data_observed_at={shop: "2026-10-29T11:00:00+03:00"},
+        )
+        row = result["rows"][0]
+        assert row["max_cpa_rub"] == 200
+        assert row["target_bid_rub"] is not None
+        assert row["action"] == "ТЕСТОВО СНИЗИТЬ СТАВКУ"
+
+
+def test_seller_key_scope_mismatch_stale_economics_and_blocked_cards_fail_closed():
+    stamp = "2026-10-29T11:00:00+03:00"
+    mismatch = analyze_cluster_rows(
+        [source_row(shop="ap")], settings(shop="ap"), [seller_decision("sanych", store_id="aa")], now=NOW,
+        economics_observed_at={"ap": stamp, "aa": stamp}, cluster_data_observed_at={"ap": stamp},
+    )
+    assert mismatch["rows"][0]["max_cpa_rub"] is None
+    stale = analyze_cluster_rows(
+        [source_row(shop="ap")], settings(shop="ap"), [seller_decision("sanych")], now=NOW,
+        economics_observed_at={"ap": "2026-10-25T11:00:00+03:00"}, cluster_data_observed_at={"ap": stamp},
+    )
+    assert stale["rows"][0]["max_cpa_rub"] is None
+    blocked = analyze_cluster_rows(
+        [source_row(shop="ap")], settings(shop="ap"), [seller_decision("sanych", blockers=["missing input"])], now=NOW,
+        economics_observed_at={"ap": stamp}, cluster_data_observed_at={"ap": stamp},
+    )
+    assert blocked["rows"][0]["max_cpa_rub"] is None
+
+
+def test_conflicting_fresh_caps_for_same_exact_identity_are_not_selected_arbitrarily():
+    stamp = "2026-10-29T11:00:00+03:00"
+    result = analyze_cluster_rows(
+        [source_row(shop="ap")], settings(shop="ap"),
+        [seller_decision("sanych", 200), seller_decision("sanych", 250)], now=NOW,
+        economics_observed_at={"ap": stamp}, cluster_data_observed_at={"ap": stamp},
+    )
+    row = result["rows"][0]
+    assert row["max_cpa_rub"] is None
+    assert row["target_bid_rub"] is None
+    assert any("допустимый расход" in blocker for blocker in row["blockers"])
