@@ -52,15 +52,4 @@ jobs:
               "fbs_supply_stage":stage_result.get("fbs_supply_stage")},
               ensure_ascii=False,separators=(",",":")),flush=True)
 
-          air_log=post({"token":token,"action":"fbs_technical_log_read","client":"AIR"},60)
-          air_log_result=air_log.get("result") or {}
-          if air_log.get("ok") is not True or air_log_result.get("ok") is not True:
-              raise SystemExit("FBS_AIR_TECHNICAL_LOG_READ_FAILED")
-          print("FBS_AIR_TECHNICAL_LOG="+json.dumps({
-              "lastRow":air_log_result.get("lastRow"),
-              "scannedRows":air_log_result.get("scannedRows"),
-              "matchCount":air_log_result.get("matchCount"),
-              "matches":(air_log_result.get("matches") or [])[-20:]},
-              ensure_ascii=False,separators=(",",":")),flush=True)
-
           PY
