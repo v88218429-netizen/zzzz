@@ -704,6 +704,30 @@ jobs:
               print("CLIENT=" + str(client.get("store_id")) + ",status=" + str(client.get("status")) + ",last_seen=" + str(client.get("last_seen")))
           PY
 
+      - name: Read AIR FBS technical log via protected GitHub bridge
+        if: ${{ github.event_name == 'push' && github.event.head_commit.message == 'Repair AIR FBS technical log read via GitHub' }}
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, os, urllib.request
+          url='https://script.google.com/macros/s/'+os.environ['WEBAPP_DEPLOYMENT_ID']+'/exec'
+          payload={'token':os.environ['WEBHOOK_SECRET'],'action':'fbs_technical_log_read','client':'AIR'}
+          request=urllib.request.Request(url,data=json.dumps(payload).encode('utf-8'),
+              headers={'Content-Type':'application/json'},method='POST')
+          with urllib.request.urlopen(request,timeout=90) as response:
+              result=json.loads(response.read().decode('utf-8'))
+          body=result.get('result') or {}
+          print('AIR_TECH_LOG_BRIDGE_OK='+str(result.get('ok') is True and body.get('ok') is True))
+          print('AIR_TECH_LOG_LAST_ROW='+str(body.get('lastRow')))
+          print('AIR_TECH_LOG_SCANNED_ROWS='+str(body.get('scannedRows')))
+          matches=body.get('matches') or []
+          print('AIR_TECH_LOG_MATCH_COUNT='+str(len(matches)))
+          for item in matches:
+              print('AIR_TECH_LOG_MATCH='+json.dumps(item,ensure_ascii=False)[:700])
+          if result.get('ok') is not True or body.get('ok') is not True:
+              raise SystemExit('AIR_TECH_LOG_BRIDGE_READ_FAILED')
+          PY
+
       - name: Seed client WB tokens from GitHub Secrets
         if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[seed-tokens]') }}
         shell: bash
