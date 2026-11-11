@@ -286,6 +286,22 @@ def ingest(client: str, orders: list[dict]) -> dict:
                         "FBS_SHEET_RANGE_READ_RETRY_EXHAUSTED_"
                     )
                 )
+                if "GITHUB_FBS_LOCK_BUSY" in details:
+                    if attempt == INGEST_ATTEMPTS:
+                        raise RuntimeError("INGEST_REJECTED:GITHUB_FBS_LOCK_BUSY")
+                    retry_wait_seconds = 430  # Lease is seven minutes; Apps Script executions end by six.
+                    print("FBS_INGEST_RETRY=" + str(attempt) +
+                          ":GITHUB_FBS_LOCK_BUSY:WAIT_SECONDS=" + str(retry_wait_seconds) +
+                          ":REFRESH_ROW_HINTS=yes", flush=True)
+                    time.sleep(retry_wait_seconds)
+                    _, refreshed = read_current_states(client, batch)
+                    main_sheet_last_row = int(refreshed["sheetLastRow"])
+                    for item in batch:
+                        oid = str(item.get("id") or "")
+                        item["_fbsRowHint"] = int(refreshed["rowMap"].get(oid, 0))
+                        item["_fbsSheetLastRow"] = main_sheet_last_row
+                    payload["orders"] = batch
+                    continue
                 if not retryable and details:
                     print("FBS_BRIDGE_ERROR_DETAIL=" + safe_bridge_detail(details), flush=True)
                 if not retryable:
