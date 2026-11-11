@@ -7501,10 +7501,10 @@ function sellmonitorGithubFbsTechnicalLogReadV1_(body) {
     if(!/(?:AIR|FBS|fast.?check|BUS|timeout|timed.?out|error|fail|quota|limit|lock|ошиб|тайм.?аут|лимит)/i.test(joined))continue;
     var safe=original.map(function(value){
       return value
-        .replace(/Bearer\\s+[A-Za-z0-9._-]+/gi,'Bearer [redacted]')
-        .replace(/(token|secret|api[_-]?key)(\\s*[:=]\\s*)[^\\s,;|]+/gi,'$1=[redacted]')
+        .replace(/Bearer\s+[A-Za-z0-9._-]+/gi,'Bearer [redacted]')
+        .replace(/(token|secret|api[_-]?key)(\s*[:=]\s*)[^\s,;|]+/gi,'$1=[redacted]')
         .replace(/[A-Za-z0-9_-]{40,}/g,'[opaque]')
-        .replace(/\\b[0-9]{7,}\\b/g,'[id]')
+        .replace(/\b[0-9]{7,}\b/g,'[id]')
         .slice(0,220);
     });
     matches.push({row:start+i,cells:safe});
