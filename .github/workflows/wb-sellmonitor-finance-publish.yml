@@ -26,7 +26,7 @@ on:
       resume_attempt:
         description: Число автоматических повторов
         type: choice
-        options: ["0", "1", "2", "3", "4", "5"]
+        options: ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]
         default: "0"
         required: true
   workflow_run:
@@ -363,7 +363,7 @@ jobs:
 
   recover:
     needs: publish
-    if: ${{ always() && (needs.publish.result == 'failure' || needs.publish.result == 'cancelled') && (github.event_name != 'workflow_dispatch' || inputs.resume_attempt != '5') }}
+    if: ${{ always() && (needs.publish.result == 'failure' || needs.publish.result == 'cancelled') && (github.event_name != 'workflow_dispatch' || inputs.resume_attempt != '10') }}
     runs-on: ubuntu-latest
     permissions:
       actions: write
@@ -409,7 +409,7 @@ jobs:
                   if m == 13:
                       y, m = y + 1, 1
               return ["summary", *daily, "rnp_week", "rnp_month", "dashboard"]
-          if phase == "summary":
+          if store == "all" or phase == "summary":
               try:
                   jobs_payload = json.loads(api_get("https://api.github.com/repos/"+repo+"/actions/runs/"+os.environ["RECOVERY_RUN_ID"]+"/jobs?per_page=100"))
                   publish_job = next((j for j in jobs_payload.get("jobs", []) if j.get("name") == "publish"), None)
@@ -426,6 +426,8 @@ jobs:
                           if result: events.append(("result", result.group(1), result.group(2), result.group(3)))
                           if resume: events.append(("resume", resume.group(1), resume.group(2)))
                       if events:
+                          scope_match = re.search(r"PUBLISH_SCOPE=([a-z_]+)", log_text)
+                          publish_scope = scope_match.group(1) if scope_match else "all_stores"
                           last = events[-1]
                           if last[0] == "start":
                               store, phase = last[1], last[2]
@@ -437,8 +439,9 @@ jobs:
                                   phase = last[2]
                               elif idx + 1 < len(order):
                                   phase = order[idx + 1]
-                              elif store != "sanych_wb":
-                                  phase = "dashboard"
+                              elif publish_scope == "all_stores" and store in ("air_wb", "hozyayushka_wb"):
+                                  store = "hozyayushka_wb" if store == "air_wb" else "sanych_wb"
+                                  phase = "summary"
                               else:
                                   phase = "dashboard"
                           elif last[0] == "resume":
@@ -448,7 +451,7 @@ jobs:
           print("WB_RECOVERY_CHECKPOINT=store:"+store+";phase:"+phase, flush=True)
           payload = {
               "ref": os.environ["RECOVERY_REF"],
-              "inputs": {"store": store, "resume_phase": phase, "resume_attempt": str(min(5, int(os.environ.get("RECOVERY_ATTEMPT", "0")) + 1))},
+              "inputs": {"store": store, "resume_phase": phase, "resume_attempt": str(min(10, int(os.environ.get("RECOVERY_ATTEMPT", "0")) + 1))},
           }
           url = "https://api.github.com/repos/" + os.environ["GITHUB_REPOSITORY"] + "/actions/workflows/wb-sellmonitor-finance-publish.yml/dispatches"
           req = urllib.request.Request(
