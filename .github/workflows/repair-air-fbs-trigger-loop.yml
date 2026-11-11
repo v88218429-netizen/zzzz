@@ -78,7 +78,7 @@ jobs:
           code='/tmp/air-bound-script/Код.js'
           ingress='/tmp/air-bound-script/GithubTokenIngress.js'
           manifest='/tmp/air-bound-script/appsscript.json'
-          if grep -q 'AIR_FBS_GITHUB_TRIGGER_TIMER_CLEANUP_V1' "$code" &&
+          if grep -q 'AIR_FBS_LEGACY_TIMERS_NEUTRALIZED_V1' "$code" &&
              grep -q 'AIR_FBS_GITHUB_TRIGGER_REPAIR_V1' "$ingress" &&
              grep -q 'repair-air-fbs-trigger-loop.yml' "$ingress" &&
              grep -q '"access": "ANYONE_ANONYMOUS"' "$manifest" &&
@@ -89,7 +89,7 @@ jobs:
             python wb_worker/air_fbs_trigger_repair.py /tmp/air-bound-script
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
-          grep -q 'AIR_FBS_GITHUB_TRIGGER_TIMER_CLEANUP_V1' "$code"
+          grep -q 'AIR_FBS_LEGACY_TIMERS_NEUTRALIZED_V1' "$code"
           grep -q 'AIR_FBS_GITHUB_TRIGGER_REPAIR_V1' "$ingress"
           grep -q 'repair-air-fbs-trigger-loop.yml' "$ingress"
           echo "AIR_PATCH_MARKERS=verified"
@@ -126,10 +126,10 @@ jobs:
           set -euo pipefail
           cd /tmp/air-bound-script
           clasp pull
-          grep -q 'AIR_FBS_GITHUB_TRIGGER_TIMER_CLEANUP_V1' '/tmp/air-bound-script/Код.js'
-          grep -A2 'function scheduledFastCheck()' '/tmp/air-bound-script/Код.js' | grep -q 'wbFbsCleanupLegacyFbsTriggersFromTimerV1_'
-          grep -A2 'function scheduledFastCheckContinuationV293_()' '/tmp/air-bound-script/Код.js' | grep -q 'wbFbsCleanupLegacyFbsTriggersFromTimerV1_'
-          grep -A2 'function scheduledFullSyncContinuationV292_()' '/tmp/air-bound-script/Код.js' | grep -q 'wbFbsCleanupLegacyFbsTriggersFromTimerV1_'
+          grep -q 'AIR_FBS_LEGACY_TIMERS_NEUTRALIZED_V1' '/tmp/air-bound-script/Код.js'
+          grep -A4 'function scheduledFastCheck()' '/tmp/air-bound-script/Код.js' | grep -q 'AIR_FBS_LEGACY_TIMERS_NEUTRALIZED_V1'
+          grep -A4 'function scheduledFastCheckContinuationV293_()' '/tmp/air-bound-script/Код.js' | grep -q 'AIR_FBS_LEGACY_TIMERS_NEUTRALIZED_V1'
+          grep -A4 'function scheduledFullSyncContinuationV292_()' '/tmp/air-bound-script/Код.js' | grep -q 'AIR_FBS_LEGACY_TIMERS_NEUTRALIZED_V1'
           grep -q 'AIR_FBS_GITHUB_TRIGGER_REPAIR_V1' /tmp/air-bound-script/GithubTokenIngress.js
           echo "AIR_DEPLOYED_SOURCE_READBACK=verified"
 
@@ -254,7 +254,7 @@ jobs:
           });
           NODE
 
-      - name: Stop retired AIR FBS triggers through the first working GitHub ingress
+      - name: Remove AIR FBS triggers or verify retired handlers are inert
         env:
           GITHUB_TOKEN: ${{ github.token }}
           GITHUB_RUN_ID: ${{ github.run_id }}
@@ -354,6 +354,14 @@ jobs:
               queuesCleared:Boolean(after.fastQueuePending===false&&after.fullSyncQueuePending===false),
               dataSheetsChanged:verifiedState&&verifiedState.dataSheetsChanged
             }));
-            if(!verifiedState)throw new Error("AIR_TRIGGER_REPAIR_NOT_VERIFIED");
+            if(!verifiedState){
+              const consentRequired=attempts.some(item=>/authorization needed|needs your permission|review permissions/i.test(item.responseHint||""));
+              if(consentRequired){
+                console.log("AIR_LEGACY_TRIGGER_HANDLERS=NEUTRALIZED");
+                console.log("AIR_TRIGGER_DELETION=WAITING_FOR_GOOGLE_OWNER_CONSENT");
+                return;
+              }
+              throw new Error("AIR_TRIGGER_REPAIR_NOT_VERIFIED");
+            }
           })().catch(error=>{console.error(error.message);process.exit(1);});
           NODE
