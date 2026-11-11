@@ -101,31 +101,39 @@ code=replace_once(
 
 # Add a GitHub-run-authenticated operation to the existing AIR token ingress.
 validation_pattern=re.compile(r"^\s*if\(body\.store!==c\.store\|\|.*BAD_CREDENTIALS.*$",re.M)
-validation,validation_count=validation_pattern.subn(
+validation_line=(
     '    var stopLegacyTriggers = body.operation === "stop_legacy_fbs_triggers";\n'
-    '    if(body.store!==c.store||! /^[0-9]{1,20}$/.test(runId)||!Number.isInteger(runAttempt)||runAttempt<1||!/^ghs_/.test(githubToken)||githubToken.length<20||githubToken.length>512||(!stopLegacyTriggers&&(wbToken.length<30||wbToken.length>4096))||(stopLegacyTriggers&&wbToken.length>0)) return wbFbsIngressRejectV1_("BAD_CREDENTIALS");',
-    ingress
+    '    if(body.store!==c.store||! /^[0-9]{1,20}$/.test(runId)||!Number.isInteger(runAttempt)||runAttempt<1||!/^ghs_/.test(githubToken)||githubToken.length<20||githubToken.length>512||(!stopLegacyTriggers&&(wbToken.length<30||wbToken.length>4096))||(stopLegacyTriggers&&wbToken.length>0)) return wbFbsIngressRejectV1_("BAD_CREDENTIALS");'
 )
-if validation_count != 1:
-    raise SystemExit("AIR_PATCH_EXPECTED_ONE_INGRESS_CREDENTIAL_GUARD_FOUND_"+str(validation_count))
-ingress=validation
-ingress=replace_once(
-    ingress,
-    "run.path!==c.workflowPath||run.head_branch!==\"mainggg\"",
-    '(run.path!==c.workflowPath&&run.path!==".github/workflows/repair-air-fbs-trigger-loop.yml")||run.head_branch!=="mainggg"',
-    "ALLOW_GITHUB_TRIGGER_REPAIR_WORKFLOW"
-)
-ingress=replace_once(
-    ingress,
-    '    var props=PropertiesService.getScriptProperties(),runKey=runId+":"+runAttempt,last=props.getProperty("WB_FBS_GITHUB_INGRESS_LAST_RUN_V1");',
+validation,validation_count=validation_pattern.subn(validation_line,ingress)
+if validation_count == 1:
+    ingress=validation
+elif validation_count == 0 and 'var stopLegacyTriggers = body.operation === "stop_legacy_fbs_triggers";' in ingress:
+    pass
+else:
+    raise SystemExit("AIR_PATCH_INGRESS_CREDENTIAL_GUARD_UNEXPECTED_"+str(validation_count))
+
+old_path='run.path!==c.workflowPath||run.head_branch!=="mainggg"'
+new_path='(run.path!==c.workflowPath&&run.path!==".github/workflows/repair-air-fbs-trigger-loop.yml")||run.head_branch!=="mainggg"'
+if old_path in ingress:
+    ingress=replace_once(ingress,old_path,new_path,"ALLOW_GITHUB_TRIGGER_REPAIR_WORKFLOW")
+elif new_path not in ingress:
+    raise SystemExit("AIR_PATCH_INGRESS_WORKFLOW_PATH_GUARD_MISSING")
+
+old_dispatch='    var props=PropertiesService.getScriptProperties(),runKey=runId+":"+runAttempt,last=props.getProperty("WB_FBS_GITHUB_INGRESS_LAST_RUN_V1");'
+new_dispatch=(
     '    if(stopLegacyTriggers){\n'
     '      if(run.path!==".github/workflows/repair-air-fbs-trigger-loop.yml") return wbFbsIngressRejectV1_("GITHUB_RUN_MISMATCH");\n'
     '      return wbFbsIngressJsonV1_(wbFbsStopLegacyFbsTriggersV1_());\n'
     '    }\n'
     '    if(body.operation) return wbFbsIngressRejectV1_("BAD_OPERATION");\n'
-    '    var props=PropertiesService.getScriptProperties(),runKey=runId+":"+runAttempt,last=props.getProperty("WB_FBS_GITHUB_INGRESS_LAST_RUN_V1");',
-    "ADD_GITHUB_TRIGGER_REPAIR_OPERATION"
+    + old_dispatch
 )
+if old_dispatch in ingress:
+    ingress=replace_once(ingress,old_dispatch,new_dispatch,"ADD_GITHUB_TRIGGER_REPAIR_OPERATION")
+elif 'return wbFbsIngressJsonV1_(wbFbsStopLegacyFbsTriggersV1_());' not in ingress:
+    raise SystemExit("AIR_PATCH_INGRESS_DISPATCH_ANCHOR_MISSING")
+
 helper='''/* AIR_FBS_GITHUB_TRIGGER_REPAIR_V1 */
 function wbFbsStopLegacyFbsTriggersV1_() {
   var before=ScriptApp.getProjectTriggers();
