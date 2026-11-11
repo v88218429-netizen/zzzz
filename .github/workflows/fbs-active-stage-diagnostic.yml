@@ -4,6 +4,7 @@ name: WB FBS active stage diagnostic
 # Refresh stage snapshot after the 90-day recovery queue started.
 # Snapshot tick 1.
 # Snapshot tick 2.
+# Snapshot tick 3.
 on:
   workflow_dispatch:
   push:
