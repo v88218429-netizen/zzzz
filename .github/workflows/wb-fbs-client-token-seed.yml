@@ -12,6 +12,11 @@ permissions:
   actions: read
   contents: read
 
+concurrency:
+  group: wb-fbs-production-mutations
+  cancel-in-progress: false
+  queue: max
+
 jobs:
   seed:
     runs-on: ubuntu-latest
