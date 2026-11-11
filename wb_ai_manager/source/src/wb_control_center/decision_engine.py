@@ -1265,6 +1265,15 @@ class DecisionEngine:
                     extra_blockers.append("WB не дал отдельную статистику этого nmID внутри многотоварной кампании; общие цифры кампании к товару не приписываются")
                 if nm is not None and product is None:
                     extra_blockers.append("nmID отсутствует в доверенной юнитке/товарном реестре")
+                economics_missing = bool(
+                    nm is not None
+                    and not (product and product.get("_trusted_exact_unit_economics") is True)
+                )
+                if economics_missing:
+                    extra_blockers.append(
+                        "нет свежей подтверждённой юнит-экономики по точным кабинету и nmID; "
+                        "числовая ставка и лимит расхода заблокированы"
+                    )
                 extra_blockers = list(dict.fromkeys(x for x in extra_blockers if x))
 
                 # A multi-SKU card without exact stats is diagnostic only. Never surface
@@ -1273,7 +1282,20 @@ class DecisionEngine:
                 tgt = plan.target_bid_rub
                 action_text = plan.action_text
                 confidence = plan.confidence
-                if len(nm_ids) > 1 and exact_stats is None:
+                observation_rule = plan.observation_rule
+                if economics_missing:
+                    tgt = None
+                    action_text = (
+                        "Числовое решение по ставке и лимиту расхода заблокировано: "
+                        "нет свежей подтверждённой юнит-экономики по точным кабинету и nmID. "
+                        "Текущую ставку не менять."
+                    )
+                    confidence = "low"
+                    observation_rule = (
+                        "После появления свежей подтверждённой юнит-экономики пересчитать "
+                        "ставку и дневной лимит по актуальным данным кампании."
+                    )
+                elif len(nm_ids) > 1 and exact_stats is None:
                     tgt = cur
                     action_text = "Ставку этого товара не менять до получения отдельной статистики nmID внутри кампании."
                     confidence = "low"
@@ -1282,11 +1304,17 @@ class DecisionEngine:
                     "step": 1,
                     "action": action_text + " Текущая версия ничего в кабинете WB не меняет.",
                     "mode": "numeric_ad_plan",
-                    "value": {"current_bid_rub": cur, "target_bid_rub": tgt, "change_pct": (0.0 if tgt == cur and cur is not None else plan.bid_change_pct), "current_spend_24h_rub": plan.current_spend_24h_rub, "max_spend_24h_rub": plan.max_spend_next_24h_rub},
+                    "value": {
+                        "current_bid_rub": cur,
+                        "target_bid_rub": tgt,
+                        "change_pct": None if economics_missing else (0.0 if tgt == cur and cur is not None else plan.bid_change_pct),
+                        "current_spend_24h_rub": plan.current_spend_24h_rub,
+                        "max_spend_24h_rub": None if economics_missing else plan.max_spend_next_24h_rub,
+                    },
                 }]
-                if plan.reasons:
+                if plan.reasons and not economics_missing:
                     actions.append({"step":2,"action":"Основание: " + " ".join(plan.reasons[:3]),"mode":"reasoning"})
-                actions.append({"step":3,"action":plan.observation_rule,"mode":"recheck_rule"})
+                actions.append({"step":3,"action":observation_rule,"mode":"recheck_rule"})
                 if extra_blockers:
                     actions.append({"step":4,"action":"Для точного решения не хватает: " + " ".join(extra_blockers),"mode":"data_guard"})
 
@@ -1294,12 +1322,15 @@ class DecisionEngine:
                 seller_article = str((product or {}).get("seller_article") or (product or {}).get("name") or "").strip()
                 sku_label = f" · nmID {nm}" if nm is not None else ""
                 diagnosis_bits = [plan.decision_label]
-                if len(nm_ids) > 1 and exact_stats is None:
+                if economics_missing:
+                    diagnosis_bits = ["нет свежей подтверждённой юнит-экономики — числовое решение по ставке и лимиту расхода заблокировано"]
+                elif len(nm_ids) > 1 and exact_stats is None:
                     diagnosis_bits = ["нет подтверждённой SKU-статистики — денежное решение заблокировано"]
-                if plan.business_drr_pct is not None:
-                    diagnosis_bits.append(f"бизнес-ДРР {plan.business_drr_pct:.1f}% при допустимом потолке ≤{plan.target_drr_pct:.1f}%")
-                elif plan.observed_drr_pct is not None:
-                    diagnosis_bits.append(f"атрибуционный ДРР {plan.observed_drr_pct:.1f}% при допустимом потолке ≤{plan.target_drr_pct:.1f}%")
+                if not economics_missing:
+                    if plan.business_drr_pct is not None:
+                        diagnosis_bits.append(f"бизнес-ДРР {plan.business_drr_pct:.1f}% при допустимом потолке ≤{plan.target_drr_pct:.1f}%")
+                    elif plan.observed_drr_pct is not None:
+                        diagnosis_bits.append(f"атрибуционный ДРР {plan.observed_drr_pct:.1f}% при допустимом потолке ≤{plan.target_drr_pct:.1f}%")
                 if plan.wb_attributed_drr_pct is not None and plan.business_drr_pct is not None:
                     diagnosis_bits.append(f"WB-атрибуция кампании {plan.wb_attributed_drr_pct:.1f}%")
                 if plan.incremental_capture_pct is not None:
@@ -1310,10 +1341,10 @@ class DecisionEngine:
                 if plan.traffic_trend_pct is not None: diagnosis_bits.append(f"тренд трафика {plan.traffic_trend_pct:+.1f}%")
                 if plan.stock_days_forecast is not None: diagnosis_bits.append(f"прогноз покрытия {plan.stock_days_forecast:.1f} дн.")
                 if plan.cohort_maturity_pct is not None: diagnosis_bits.append(f"свежая когорта созрела примерно на {plan.cohort_maturity_pct:.0f}%")
-                if plan.economic_max_drr_pct is not None: diagnosis_bits.append(f"экономический потолок ДРР ≈{plan.economic_max_drr_pct:.1f}%")
+                if not economics_missing and plan.economic_max_drr_pct is not None: diagnosis_bits.append(f"экономический потолок ДРР ≈{plan.economic_max_drr_pct:.1f}%")
 
                 priority = "critical" if plan.decision == "PAUSE_REVIEW" else ("high" if plan.decision in {"SCALE_DOWN","CAP_DEMAND"} else "medium")
-                if extra_blockers and confidence == "low" and plan.decision != "PAUSE_REVIEW":
+                if (extra_blockers or economics_missing) and confidence == "low" and plan.decision != "PAUSE_REVIEW":
                     priority = "medium"
                 evidence = [
                     _ev("WB Promotion", "campaign_id", cid, name),
@@ -1324,11 +1355,11 @@ class DecisionEngine:
                     _ev("расчёт", "target_bid_rub", tgt),
                     _ev("WB Promotion", "current_spend_24h_rub", plan.current_spend_24h_rub),
                     _ev("расчёт", "max_spend_next_24h_rub", plan.max_spend_next_24h_rub),
-                    _ev("расчёт", "target_drr_pct", plan.target_drr_pct),
-                    _ev("расчёт", "max_ad_cost_per_order_rub", plan.max_ad_cost_per_order_rub),
+                    _ev("расчёт", "target_drr_pct", None if economics_missing else plan.target_drr_pct),
+                    _ev("расчёт", "max_ad_cost_per_order_rub", None if economics_missing else plan.max_ad_cost_per_order_rub),
                     _ev("Юнит-экономика", "exact_economic_cap_eligible", bool(product and product.get("_trusted_exact_unit_economics") is True)),
                     _ev("Юнит-экономика", "unit_economics_read_at", product.get("unit_economics_read_at") if product and product.get("_trusted_exact_unit_economics") is True else None),
-                    _ev("расчёт", "economic_max_drr_pct", plan.economic_max_drr_pct),
+                    _ev("расчёт", "economic_max_drr_pct", None if economics_missing else plan.economic_max_drr_pct),
                     _ev("бизнес-факт SKU", "business_drr_pct", plan.business_drr_pct),
                     _ev("бизнес-факт SKU", "business_ad_spend_rub", plan.business_ad_spend_rub),
                     _ev("бизнес-факт SKU", "business_revenue_rub", plan.business_revenue_rub),
@@ -1337,9 +1368,9 @@ class DecisionEngine:
                     _ev("приростность", "incremental_capture_pct", plan.incremental_capture_pct),
                     _ev("приростность", "paid_order_share_pct", plan.paid_order_share_pct),
                     _ev("приростность", "cannibalization_risk", plan.cannibalization_risk),
-                    _ev("экономика трафика", "max_cpc_rub", plan.max_cpc_rub),
+                    _ev("экономика трафика", "max_cpc_rub", None if economics_missing else plan.max_cpc_rub),
                     _ev("экономика трафика", "conversion_rate_pct", plan.conversion_rate_pct),
-                    _ev("план трафика", "required_clicks_24h", plan.required_clicks_24h),
+                    _ev("план трафика", "required_clicks_24h", None if economics_missing else plan.required_clicks_24h),
                     _ev("режим", "operating_mode", plan.operating_mode),
                     _ev("trend", "orders_trend_pct", plan.orders_trend_pct),
                     _ev("trend", "traffic_trend_pct", plan.traffic_trend_pct),
@@ -1371,7 +1402,7 @@ class DecisionEngine:
                     recommended_actions=actions,
                     evidence=evidence,
                     blockers=extra_blockers,
-                    follow_up=plan.observation_rule,
+                    follow_up=observation_rule,
                 ))
         return out
 

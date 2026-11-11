@@ -342,3 +342,60 @@ def test_stale_unit_economics_is_not_restored_to_ad_decisions():
     assert any("nmID отсутствует" in blocker for blocker in card.blockers)
     evidence = {item["metric"]: item["value"] for item in card.evidence}
     assert evidence["exact_economic_cap_eligible"] is False
+
+
+
+def test_ad_bid_and_spend_limit_are_blocked_without_trusted_unit_economics():
+    portfolio = {
+        "current_data": True,
+        "data_origin": "live_google_sheets",
+        "own_27": {
+            "products": [{
+                "sku": "123",
+                "nm_id": "123",
+                "shop_code": "ap",
+                "seller_article": "TEST-123",
+                "name": "Тестовый товар",
+                "cost_rub": 400,
+            }]
+        },
+    }
+    snapshots = {
+        "advertising_optimizer": {
+            "deep_scan": {
+                "campaigns": [{
+                    "shop": "ap",
+                    "campaign_id": "77",
+                    "nm_ids": [123],
+                    "campaign": {"advertId": 77, "nmIds": [123], "bidKopecks": 5000},
+                    "stats": {
+                        "advertId": 77,
+                        "sum": 700,
+                        "orders": 14,
+                        "sum_price": 14000,
+                        "clicks": 420,
+                        "views": 9000,
+                    },
+                }]
+            }
+        }
+    }
+
+    cards = DecisionEngine(load_policy()).build(portfolio, snapshots)
+    card = by_key(cards, "advert:77:123:numeric_control")
+
+    assert card is not None
+    assert any("нет свежей подтверждённой юнит-экономики" in blocker for blocker in card.blockers)
+    evidence = {item["metric"]: item["value"] for item in card.evidence}
+    assert evidence["exact_economic_cap_eligible"] is False
+    assert evidence["target_bid_rub"] is None
+    assert evidence["target_drr_pct"] is None
+    assert evidence["max_ad_cost_per_order_rub"] is None
+    values = card.recommended_actions[0]["value"]
+    assert values["current_bid_rub"] == 50
+    assert values["target_bid_rub"] is None
+    assert values["change_pct"] is None
+    assert values["current_spend_24h_rub"] == 700
+    assert values["max_spend_24h_rub"] is None
+    assert "заблокировано" in card.recommended_actions[0]["action"].lower()
+    assert card.confidence == "low"
