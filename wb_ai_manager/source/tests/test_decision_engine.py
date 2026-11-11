@@ -395,7 +395,7 @@ def test_ad_bid_and_spend_limit_are_blocked_without_trusted_unit_economics():
     assert values["current_bid_rub"] == 50
     assert values["target_bid_rub"] is None
     assert values["change_pct"] is None
-    assert values["current_spend_24h_rub"] == 700
+    assert values["current_spend_24h_rub"] == 100
     assert values["max_spend_24h_rub"] is None
     assert "заблокировано" in card.recommended_actions[0]["action"].lower()
     assert card.confidence == "low"

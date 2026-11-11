@@ -62,7 +62,7 @@
         {
           "path": "scripts/github_runtime.py",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/scripts/github_runtime.py",
-          "sha256": "f82e2aa34c6714211a6468db6fb061cdb76167f97c4697de38538068841bc29f"
+          "sha256": "026a7e6de75a989c36e52f0a1168d05128761d3d5d73ea9c8d9a7756b5252b22"
         },
         {
           "path": "scripts/install_launchd.sh",
