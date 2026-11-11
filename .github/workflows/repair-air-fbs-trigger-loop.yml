@@ -24,7 +24,7 @@ jobs:
     env:
       CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
       AIR_SCRIPT_ID: 1snEntW5W9KZ_zKHP5bT4D-fmr-sbDdjV4-izjRxf46l8HWcrt3GJqU9V
-      AIR_INGRESS_DEPLOYMENT_ID: AKfycbw92e1aJ7yUPkJR50gKqhlctnQC2rUYUH58-l6JgRAAfKSqY9v5sRpFbTo3otcjqP8
+      AIR_INGRESS_DEPLOYMENT_ID: AKfycbxyxnfxFl3GLkTukEDoM-n4gOnlslMv52Ghl2pGho9tQWpnSf6aSXAg7qZZFwtfnrKb
 
     steps:
       - uses: actions/checkout@v4
@@ -128,7 +128,7 @@ jobs:
         run: |
           set -euo pipefail
           cd /tmp/air-bound-script
-          if [[ "$AIR_INGRESS_DEPLOYMENT_ID" == "AKfycbw92e1aJ7yUPkJR50gKqhlctnQC2rUYUH58-l6JgRAAfKSqY9v5sRpFbTo3otcjqP8" ]]; then
+          if [[ "$AIR_INGRESS_DEPLOYMENT_ID" == "AKfycbxyxnfxFl3GLkTukEDoM-n4gOnlslMv52Ghl2pGho9tQWpnSf6aSXAg7qZZFwtfnrKb" ]]; then
             if [[ "${{ steps.patch.outputs.changed }}" == "true" ]]; then clasp push -f; fi
             output="$(clasp create-deployment -d "AIR GitHub-only FBS trigger repair")"
           else
@@ -144,7 +144,27 @@ jobs:
           echo "deployment_id=$deployment_id" >> "$GITHUB_OUTPUT"
           echo "AIR_INGRESS_DEPLOYMENT_READY=yes"
 
+      - name: Execute trigger repair with clasp
+        id: direct
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/air-bound-script
+          set +e
+          clasp run-function wbFbsStopLegacyFbsTriggersV1_ --json > /tmp/air-trigger-repair-result.json 2>&1
+          result_status=$?
+          set -e
+          sed -E 's/(ya29\\.[A-Za-z0-9._-]{12,}|ghs_[A-Za-z0-9._-]{12,})/[redacted]/g' /tmp/air-trigger-repair-result.json | head -c 4000
+          if [[ "$result_status" -eq 0 ]]; then
+            echo "executed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "executed=false" >> "$GITHUB_OUTPUT"
+            exit "$result_status"
+          fi
+
       - name: Stop only retired AIR FBS triggers and verify live state
+        if: steps.direct.outcome != 'success'
         env:
           AIR_INGRESS_DEPLOYMENT_ID: ${{ steps.deploy.outputs.deployment_id }}
           GITHUB_TOKEN: ${{ github.token }}
