@@ -38,7 +38,7 @@ jobs:
           python3 - <<'PY'
           import pathlib, re
           root=pathlib.Path('/tmp/air-bound-script')
-          names='doPost|repairAutomationV404|createTriggers|createMinimalTriggersV301_|deleteOperationalTriggersV292_|ensureOperationalTriggersV361_|continueFastCheckV293_|scheduledFastCheckContinuationV293_|scheduledFullSyncContinuationV292_|scheduledFastCheck|ensureWatchdogTriggerV361_|githubTokenIngress|handleGithub|verifyGithub|validateGithub'
+          names='doPost|repairAutomationV404|createTriggers|createMinimalTriggersV301_|deleteOperationalTriggersV292_|ensureOperationalTriggersV361_|continueFastCheckV293_|scheduledFastCheckContinuationV293_|scheduledFullSyncContinuationV292_|scheduledFastCheck|ensureWatchdogTriggerV361_|clearFastCheckStateV293_|clearFullSyncStateV292_|isFastCheckPendingV293_|isFullSyncPendingV292_|clearFullSync|clearFastCheck|githubTokenIngress|handleGithub|verifyGithub|validateGithub'
           pattern=re.compile(r'^\s*function\s+('+names+r')\s*\(',re.M)
           secret=re.compile(r'(?i)(token|secret|password|authorization|bearer)(\s*[:=]\s*|\s+)[^\s,;]+')
           count=0
