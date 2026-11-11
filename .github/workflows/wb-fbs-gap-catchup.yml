@@ -64,7 +64,7 @@ jobs:
 
   catchup_air_hozy:
     needs: catchup_sanych
-    if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[WB-FBS-GAP-CATCHUP-2026-11-11]') }}
+    if: ${{ always() && github.event_name == 'push' && contains(github.event.head_commit.message, '[WB-FBS-GAP-CATCHUP-2026-11-11]') }}
     name: "${{ matrix.client }} catch-up ${{ matrix.start_date }}–${{ matrix.end_date }}"
     runs-on: ubuntu-latest
     timeout-minutes: 360
