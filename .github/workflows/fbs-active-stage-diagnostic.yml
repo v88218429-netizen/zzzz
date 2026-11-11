@@ -1,6 +1,7 @@
 # Lightweight read-only diagnostics through the protected GitHub bridge; inspect active recovery stage.
 name: WB FBS active stage diagnostic
 # Read-only stage snapshots may run during production writes; they do not take the data lock. Refreshable by a GitHub commit.
+# Refresh stage snapshot after the 90-day recovery queue started.
 on:
   workflow_dispatch:
   push:
