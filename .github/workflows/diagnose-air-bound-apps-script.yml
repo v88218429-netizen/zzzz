@@ -32,6 +32,20 @@ jobs:
           cd /tmp/air-bound-script
           clasp pull
 
+      - name: Report deployment access configuration
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, pathlib
+          p=pathlib.Path('/tmp/air-bound-script/appsscript.json')
+          data=json.loads(p.read_text(encoding='utf-8'))
+          print(json.dumps({
+            'webapp': data.get('webapp'),
+            'executionApi': data.get('executionApi'),
+            'oauthScopes': data.get('oauthScopes',[])
+          },ensure_ascii=False,sort_keys=True))
+          PY
+
       - name: Report trigger lifecycle code
         shell: bash
         run: |
