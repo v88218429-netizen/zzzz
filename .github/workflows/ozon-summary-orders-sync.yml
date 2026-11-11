@@ -125,7 +125,7 @@ jobs:
               for item in files:
                   name = str(item.get("filename") or "")
                   patch = str(item.get("patch") or "")
-                  if name.endswith("sellmonitor_github_worker/patch_master.py") and any(k in patch for k in ("OZON_FINANCE", "OZON_SUMMARY", "OZON_COVERAGE")):
+                  if name.endswith("sellmonitor_github_worker/patch_master.py") and any(k in patch for k in ("OZON_FINANCE", "OZON_SUMMARY", "OZON_COVERAGE", "OZON_GRAPH_LABEL")):
                       phase = "finance"
                       touched.append(name)
                   if name.endswith("sellmonitor_github_worker/SELLMONITOR_GITHUB_WORKER.gs") and any(k in patch for k in ("SMC_OZON_SUMMARY", "sellmonitorGithubPublishOzon", "publish_ozon_summary_orders", "publish_ozon_api_finance")):
