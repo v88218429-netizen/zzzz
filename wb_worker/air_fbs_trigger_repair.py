@@ -165,12 +165,8 @@ function wbFbsStopLegacyFbsTriggersV1_() {
 }
 
 '''
-ingress=replace_once(
-    ingress,
-    "function wbFbsIngressRejectV1_(code) {",
-    helper+"function wbFbsIngressRejectV1_(code) {",
-    "ADD_TRIGGER_REPAIR_HELPER"
-)
+if "/* AIR_FBS_GITHUB_TRIGGER_REPAIR_V1 */" not in ingress:
+    ingress=helper+ingress
 code_path.write_text(code,encoding="utf-8")
 ingress_path.write_text(ingress,encoding="utf-8")
 for path in (code_path,ingress_path):
