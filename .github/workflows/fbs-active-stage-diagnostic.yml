@@ -1,7 +1,6 @@
 # Lightweight read-only diagnostics through the protected GitHub bridge; inspect active recovery stage.
 name: WB FBS active stage diagnostic
-# This read-only probe can report stalled writers without taking their production lock.
-
+# Read-only stage snapshots may run during production writes; they do not take the data lock.
 on:
   workflow_dispatch:
   push:
@@ -26,7 +25,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 - <<'PY'
-          import json, os, re, urllib.request
+          import json, os, urllib.request
           def post(payload,timeout):
               data=json.dumps(payload).encode()
               request=urllib.request.Request(os.environ["BRIDGE_URL"],data=data,
