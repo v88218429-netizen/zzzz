@@ -211,11 +211,10 @@ jobs:
                   break;
                 }
                 const responseHint = responseText
-                  .replace(/<script[\\s\\S]*?<\\/script>/gi," ")
-                  .replace(/<style[\\s\\S]*?<\\/style>/gi," ")
                   .replace(/<[^>]*>/g," ")
-                  .replace(/&[a-z0-9#]+;/gi," ")
-                  .replace(/\\s+/g," ").trim().replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/gi,"[email]").slice(0,240);
+                  .replace(/\\s+/g," ").trim()
+                  .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/gi,"[email]")
+                  .slice(0,240);
                 attempts.push({
                   deployment:deploymentId.slice(0,12),
                   httpStatus:response.status,
