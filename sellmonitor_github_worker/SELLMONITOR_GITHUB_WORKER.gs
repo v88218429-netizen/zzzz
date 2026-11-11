@@ -1,6 +1,6 @@
 /**
  * Sellmonitor GitHub Central Worker v1.3.82
- * FBS audit live-source inspection trigger: read-only; no deployment or business writes.
+ * FBS live-source inspection marker (read only).
  * GitHub is source-of-truth/scheduler. This Apps Script project is only
  * the authorized Google adapter. Make is not part of the execution path.
  */
