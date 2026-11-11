@@ -39,9 +39,9 @@ jobs:
           import pathlib, re
           root=pathlib.Path('/tmp/air-bound-script')
           patterns=re.compile(r'continueFastCheckV293_|continueFullSyncContinuationV292_|scheduledFastCheckContinuationV293_|scheduledFullSyncContinuationV292_|repairAutomationV404|newTrigger|deleteTrigger|ScriptApp\.getProjectTriggers|ScriptApp\.newTrigger|trigger',re.I)
-          secret=re.compile(r'(?i)(token|secret|password|authorization|bearer)(\\s*[:=]\\s*|\\s+)[^\\s,;]+')
+          secret=re.compile(r'(?i)(token|secret|password|authorization|bearer)(\s*[:=]\s*|\s+)[^\s,;]+')
           found=0
-          for path in sorted(root.rglob('*.gs')):
+          for path in sorted(p for p in root.rglob('*') if p.suffix in ('.gs','.js')):
               lines=path.read_text(encoding='utf-8',errors='replace').splitlines()
               hits=[i for i,line in enumerate(lines) if patterns.search(line)]
               if not hits: continue
@@ -50,7 +50,7 @@ jobs:
                   lo=max(0,i-4); hi=min(len(lines),i+7)
                   print('SOURCE_CONTEXT line='+str(i+1))
                   for n in range(lo,hi):
-                      line=secret.sub(r'\\1=[redacted]',lines[n])
+                      line=secret.sub(r'\1=[redacted]',lines[n])
                       line=re.sub(r'[A-Za-z0-9_-]{40,}','[opaque]',line)
                       print('CODE '+str(n+1)+':'+line[:260])
                   found+=1
