@@ -1,4 +1,4 @@
-# Lightweight read-only diagnostics through the protected GitHub bridge; invoke after FBS recovery runs.
+# Lightweight read-only diagnostics through the protected GitHub bridge; inspect active recovery stage.
 name: WB FBS active stage diagnostic
 
 on:
