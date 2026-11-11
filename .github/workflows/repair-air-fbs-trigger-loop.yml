@@ -137,62 +137,54 @@ jobs:
           grep -Fq "$AIR_REPAIR_INGRESS_DEPLOYMENT_ID" /tmp/air-deployments.txt
           echo "AIR_REPAIR_INGRESS_DEPLOYMENT=verified"
 
-      - name: Stop only retired AIR FBS triggers and verify live state
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          GITHUB_RUN_ID: ${{ github.run_id }}
-          GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
+      - name: Stop retired AIR FBS triggers and verify live state via Apps Script API
         shell: bash
         run: |
           set -euo pipefail
-          node <<'NODE'
-          (async () => {
-            const url = "https://script.google.com/macros/s/" +
-              process.env.AIR_REPAIR_INGRESS_DEPLOYMENT_ID + "/exec";
-            const body = {
-              store: "AIR",
-              operation: "stop_legacy_fbs_triggers",
-              githubToken: process.env.GITHUB_TOKEN,
-              runId: process.env.GITHUB_RUN_ID,
-              runAttempt: process.env.GITHUB_RUN_ATTEMPT,
-              wbToken: ""
-            };
-            const response = await fetch(url, {
-              method: "POST",
-              headers: {"content-type":"application/json","cache-control":"no-store"},
-              body: JSON.stringify(body),
-              signal: AbortSignal.timeout(60000)
-            });
-            const responseText = await response.text();
-            let envelope = null;
-            try { envelope = JSON.parse(responseText); } catch {}
-            const state = envelope && (envelope.state || envelope.data || envelope.result || envelope);
-            const after = state && state.after;
-            const handlers = after && after.handlers;
-            const retired = new Set([
-              "scheduledFastCheck",
-              "scheduledFastCheckContinuationV293_",
-              "scheduledFullSyncContinuationV292_"
-            ]);
-            const verified = response.ok && envelope && envelope.ok === true &&
-              state && state.ok === true && state.action === "stop_legacy_fbs_triggers" &&
-              Array.isArray(handlers) && handlers.every(handler => !retired.has(handler)) &&
-              after.fastQueuePending === false && after.fullSyncQueuePending === false &&
-              state.retainedMaintenanceTrigger === true && state.dataSheetsChanged === false;
-            console.log(JSON.stringify({
-              httpStatus: response.status,
-              verified: Boolean(verified),
-              removed: state && state.removed || null,
-              remainingLegacyHandlers: state && state.remainingLegacyHandlers || null,
-              retainedMaintenanceTrigger: state && state.retainedMaintenanceTrigger === true,
-              queuesCleared: Boolean(after && after.fastQueuePending === false &&
-                after.fullSyncQueuePending === false),
-              dataSheetsChanged: state && state.dataSheetsChanged
-            }));
-            if (!verified) {
-              const safeError = envelope && (envelope.error || envelope.message) ||
-                responseText.slice(0, 240).replace(/<[^>]*>/g, " ");
-              throw new Error("AIR_TRIGGER_REPAIR_NOT_VERIFIED: " + String(safeError).slice(0, 240));
-            }
-          })().catch(error => { console.error(error.message); process.exit(1); });
-          NODE
+          cd /tmp/air-bound-script
+          echo "AIR_APPS_SCRIPT_MANIFEST_BEGIN"
+          cat appsscript.json
+          echo "AIR_APPS_SCRIPT_MANIFEST_END"
+          clasp run scheduledFastCheck > /tmp/air-trigger-repair-result.txt
+          python - <<'PY'
+          import json, pathlib, sys
+          raw=pathlib.Path('/tmp/air-trigger-repair-result.txt').read_text(errors='replace')
+          print('AIR_TRIGGER_REPAIR_EXECUTION_OUTPUT_BEGIN')
+          print(raw[-5000:])
+          print('AIR_TRIGGER_REPAIR_EXECUTION_OUTPUT_END')
+          candidates=[]
+          for line in raw.splitlines():
+              line=line.strip()
+              for offset,char in enumerate(line):
+                  if char!='{': continue
+                  try:
+                      obj=json.loads(line[offset:])
+                  except Exception:
+                      continue
+                  stack=[obj]
+                  while stack:
+                      current=stack.pop()
+                      if isinstance(current,dict):
+                          if current.get('action')=='stop_legacy_fbs_triggers':
+                              candidates.append(current)
+                          stack.extend(current.values())
+                      elif isinstance(current,list):
+                          stack.extend(current)
+          state=next((item for item in reversed(candidates) if item.get('ok') is True),None)
+          after=(state or {}).get('after') or {}
+          handlers=after.get('handlers') or []
+          retired={'scheduledFastCheck','scheduledFastCheckContinuationV293_','scheduledFullSyncContinuationV292_'}
+          verified=bool(state and not retired.intersection(handlers) and
+              after.get('fastQueuePending') is False and after.get('fullSyncQueuePending') is False and
+              state.get('retainedMaintenanceTrigger') is True and state.get('dataSheetsChanged') is False)
+          print(json.dumps({
+              'verified':verified,
+              'removed':(state or {}).get('removed'),
+              'remainingLegacyHandlers':(state or {}).get('remainingLegacyHandlers'),
+              'retainedMaintenanceTrigger':(state or {}).get('retainedMaintenanceTrigger'),
+              'queuesCleared':after.get('fastQueuePending') is False and after.get('fullSyncQueuePending') is False,
+              'dataSheetsChanged':(state or {}).get('dataSheetsChanged')
+          },ensure_ascii=False))
+          if not verified:
+              raise SystemExit('AIR_TRIGGER_REPAIR_NOT_VERIFIED')
+          PY
