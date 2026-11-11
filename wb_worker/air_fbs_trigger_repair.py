@@ -14,6 +14,8 @@ ingress=ingress_path.read_text(encoding="utf-8")
 
 def replace_once(text: str, old: str, new: str, label: str) -> str:
     count=text.count(old)
+    if count == 0 and new in text:
+        return text
     if count != 1:
         raise SystemExit(f"AIR_PATCH_EXPECTED_ONE_{label}_FOUND_{count}")
     return text.replace(old,new,1)
