@@ -5,6 +5,7 @@ Reads WB Marketplace API; writes only via the authenticated GitHub Google adapte
 No credentials or individual order records are printed or committed.
 """
 # SANYCH FBS reconciliation; historical windows are supplied explicitly.
+# A bounded [FBS-90D-SLICED] GitHub replay writes confirmed WB rows to both Sanych books.
 
 from __future__ import annotations
 import datetime as dt
