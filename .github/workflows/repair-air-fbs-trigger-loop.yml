@@ -143,6 +143,23 @@ jobs:
           grep -Fq "$AIR_REPAIR_INGRESS_DEPLOYMENT_ID" /tmp/air-deployments.txt
           echo "AIR_REPAIR_INGRESS_DEPLOYMENT=verified"
 
+      - name: Redeploy AIR repair endpoint once with guarded anonymous access
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/air-bound-script
+          description="AIR GitHub-only FBS trigger repair anonymous 2026-11-11"
+          clasp deployments > /tmp/air-deployments-before-update.txt
+          if grep -F "$AIR_REPAIR_INGRESS_DEPLOYMENT_ID" /tmp/air-deployments-before-update.txt |
+             grep -Fq "$description"; then
+            echo "AIR_REPAIR_INGRESS_REDEPLOYMENT=already-current"
+          else
+            clasp update-deployment "$AIR_REPAIR_INGRESS_DEPLOYMENT_ID" --description "$description"
+            clasp deployments > /tmp/air-deployments-after-update.txt
+            grep -F "$AIR_REPAIR_INGRESS_DEPLOYMENT_ID" /tmp/air-deployments-after-update.txt | grep -F "$description"
+            echo "AIR_REPAIR_INGRESS_REDEPLOYMENT=verified"
+          fi
+
       - name: Stop retired AIR FBS triggers through the first working GitHub ingress
         env:
           GITHUB_TOKEN: ${{ github.token }}
