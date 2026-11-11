@@ -1,6 +1,10 @@
 name: Diagnose AIR Apps Script through GitHub
 
 on:
+  push:
+    branches: [mainggg]
+    paths:
+      - ".github/workflows/diagnose-air-bound-apps-script.yml"
   workflow_dispatch:
 
 permissions:
