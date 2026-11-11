@@ -7154,6 +7154,18 @@ function doPost(e) {
       return sellmonitorGithubWebJson_({ok:supplyResult.ok===true,action:action,result:supplyResult});
     }
 
+    if (action === 'fbs_stage_snapshot') {
+      return sellmonitorGithubWebJson_({
+        ok:true,
+        action:action,
+        result:{
+          checkedAt:new Date().toISOString(),
+          fbs_ingest_stages:sellmonitorGithubFbsStageSnapshot_(),
+          fbs_supply_stage:sellmonitorGithubFbsSupplyStageSnapshot_()
+        }
+      });
+    }
+
     if (action === 'fbs_runtime_diagnostic') {
       var runtimeDiagnostic = sellmonitorGithubFbsRuntimeDiagnosticV1_();
       return sellmonitorGithubWebJson_({ok:runtimeDiagnostic.ok,action:action,result:runtimeDiagnostic});
