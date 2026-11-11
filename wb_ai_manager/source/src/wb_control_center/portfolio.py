@@ -881,6 +881,103 @@ class PortfolioService:
                     items.pop(nm_id, None)
         return by_shop, diagnostics
 
+    def _parse_shop_stock_products(self, payload: dict[str, Any], out: dict[str, Any]) -> None:
+        """Index exact product identity from each cabinet's live Sellmonitor stock table."""
+        source_shops = (
+            ("sanych_sellmonitor", "ap"),
+            ("air_sellmonitor", "aa"),
+            ("hozyushka_sellmonitor", "yv"),
+        )
+        by_shop: dict[str, dict[str, dict[str, Any]]] = {}
+        conflicts: set[tuple[str, str]] = set()
+
+        def header_key(value: Any) -> str:
+            return re.sub(
+                r"[^a-zа-я0-9]+", "", str(value or "").strip().casefold().replace("ё", "е")
+            )
+
+        def cell_value(row: list[Any], column: int | None) -> Any:
+            return row[column] if column is not None and column < len(row) else None
+
+        for source_id, code in source_shops:
+            values = self._range_values(payload, source_id, "stocks")
+            if not values:
+                continue
+            header_row_index = next(
+                (
+                    index for index, row in enumerate(values[:5])
+                    if isinstance(row, list)
+                    and any(header_key(value) in {"артикулwb", "nmid", "nm_id"} for value in row)
+                ),
+                None,
+            )
+            if header_row_index is None:
+                continue
+            headers = values[header_row_index]
+            positions = {header_key(value): index for index, value in enumerate(headers) if str(value or "").strip()}
+
+            def find_column(*aliases: str) -> int | None:
+                for alias in aliases:
+                    if header_key(alias) in positions:
+                        return positions[header_key(alias)]
+                return None
+
+            nm_column = find_column("Артикул WB", "nmId", "nm_id")
+            name_column = find_column("Название товара", "Наименование товара", "Наименование")
+            brand_column = find_column("Бренд")
+            seller_column = find_column("Артикул продавца", "Артикул продавца WB", "vendorCode")
+            if nm_column is None:
+                continue
+            source = (payload.get("sources") or {}).get(source_id) or {}
+            shop_products = by_shop.setdefault(code, {})
+            for sheet_row, row in enumerate(values[header_row_index + 1:], start=header_row_index + 2):
+                if not isinstance(row, list):
+                    continue
+                numeric_nm_id = self._num(cell_value(row, nm_column))
+                if numeric_nm_id is None or numeric_nm_id <= 0 or not numeric_nm_id.is_integer():
+                    continue
+                nm_id = str(int(numeric_nm_id))
+                name = str(cell_value(row, name_column) or "").strip()
+                brand = str(cell_value(row, brand_column) or "").strip()
+                seller_article = str(cell_value(row, seller_column) or "").strip()
+                details = {
+                    "nm_id": nm_id,
+                    "product_name": name,
+                    "brand": brand,
+                    "seller_article": seller_article,
+                    "identity_source": "sellmonitor_shop_stocks",
+                    "source": f"{source_id}.stocks",
+                    "source_row": sheet_row,
+                    "observed_at": source.get("read_at"),
+                }
+                if (code, nm_id) in conflicts:
+                    continue
+                previous = shop_products.get(nm_id)
+                if previous:
+                    name_conflict = (
+                        previous.get("product_name") and name
+                        and self._economics_norm(previous["product_name"]) != self._economics_norm(name)
+                    )
+                    article_conflict = (
+                        previous.get("seller_article") and seller_article
+                        and str(previous["seller_article"]).strip().casefold() != seller_article.casefold()
+                    )
+                    if name_conflict or article_conflict:
+                        shop_products.pop(nm_id, None)
+                        conflicts.add((code, nm_id))
+                        continue
+                    for field in ("product_name", "brand", "seller_article"):
+                        if not previous.get(field) and details.get(field):
+                            previous[field] = details[field]
+                    continue
+                shop_products[nm_id] = details
+
+        own = out.setdefault("own_27", {})
+        own["shop_products_by_shop_nm_id"] = by_shop
+        own["shop_stock_identity_conflicts"] = [
+            {"shop_code": code, "nm_id": nm_id} for code, nm_id in sorted(conflicts)
+        ]
+
     def _parse_primary_economics_axis(self, payload: dict[str, Any], out: dict[str, Any]) -> None:
         """Overlay the authoritative plan model and an independent factual snapshot.
 
@@ -921,6 +1018,25 @@ class PortfolioService:
         # Keep the actual spreadsheet row for traceable mapping evidence.
         primary_source = (payload.get("sources") or {}).get("primary_unit_economics") or {}
         primary_values = self._range_values(payload, "primary_unit_economics", "unit_economics")
+        primary_header = primary_values[1] if len(primary_values) > 1 and isinstance(primary_values[1], list) else []
+        primary_subheader = primary_values[2] if len(primary_values) > 2 and isinstance(primary_values[2], list) else []
+        logistics_column = 12  # Legacy tables without subheaders expose only the base rate.
+        for parent_col, value in enumerate(primary_header):
+            if "логист" not in str(value or "").strip().casefold():
+                continue
+            next_parent = next(
+                (col for col in range(parent_col + 1, len(primary_header)) if str(primary_header[col] or "").strip()),
+                len(primary_subheader),
+            )
+            for col in range(parent_col, min(next_parent, len(primary_subheader))):
+                subheader_key = re.sub(
+                    r"[^a-zа-я0-9]+", "", str(primary_subheader[col] or "").strip().casefold().replace("ё", "е")
+                )
+                if subheader_key in {"итогоруб", "итого"}:
+                    logistics_column = col
+                    break
+            break
+
         direct_plans: list[dict[str, Any]] = []
         current_group = ""
         for index, row in enumerate(primary_values[3:], start=4):
@@ -942,7 +1058,7 @@ class PortfolioService:
                 "price_after_discount_rub": self._num(cell(8)),
                 "price_after_spp_rub": self._num(cell(10)),
                 "commission_pct": self._num(cell(11)),
-                "logistics_total_rub": self._num(cell(12)),
+                "logistics_total_rub": self._num(cell(logistics_column)),
                 "acceptance_rub": self._num(cell(15)),
                 "plan_drr_pct": self._num(cell(16)),
                 "constructor_pct": self._num(cell(17)),
@@ -1004,8 +1120,19 @@ class PortfolioService:
             for shop_items in crosswalk_by_shop.values():
                 for item in shop_items.values():
                     exact_name = self._economics_norm(item.get("name"))
-                    candidates = direct_by_exact_name.get(exact_name, []) if exact_name else []
-                    match_kind = "exact_name"
+                    requested_source_row = self._num(
+                        item.get("unit_economics_source_row") or item.get("source_row")
+                    )
+                    candidates = [
+                        direct for direct in direct_plans
+                        if requested_source_row is not None
+                        and int(direct.get("source_row") or 0) == int(requested_source_row)
+                        and self._economics_norm(direct.get("name")) == exact_name
+                    ] if exact_name else []
+                    match_kind = "exact_source_row_and_name"
+                    if len(candidates) != 1:
+                        candidates = direct_by_exact_name.get(exact_name, []) if exact_name else []
+                        match_kind = "exact_name"
                     if len(candidates) != 1:
                         identity = self._economics_primary_name_key(item.get("name"))
                         candidates = direct_by_identity.get(identity, []) if identity else []
@@ -1029,7 +1156,11 @@ class PortfolioService:
                         item["unit_economics_fallback_fields"] = filled_fields
                         notes = item.get("unit_economics_mapping_notes")
                         notes = notes if isinstance(notes, list) else []
-                        notes.append("missing_copy_fields_filled_from_unique_primary_name")
+                        notes.append(
+                            "missing_copy_fields_filled_from_primary_source_row_and_exact_name"
+                            if match_kind == "exact_source_row_and_name"
+                            else "missing_copy_fields_filled_from_unique_primary_name"
+                        )
                         item["unit_economics_mapping_notes"] = list(dict.fromkeys(notes))
                     validation: list[str] = []
                     cost = self._num(item.get("cost_rub"))
@@ -2008,6 +2139,7 @@ class PortfolioService:
         seed = self._read_json(self.seed_path) or {}
         out = self._parse_weekly(payload, seed)
         self._parse_own_27(payload, out)
+        self._parse_shop_stock_products(payload, out)
         self._parse_primary_economics_axis(payload, out)
         self._parse_ozon_operating(payload, out)
         self._link_products_to_weekly_groups(out)

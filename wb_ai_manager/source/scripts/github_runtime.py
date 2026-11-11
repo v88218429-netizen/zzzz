@@ -81,6 +81,10 @@ def optimizer_sweep_progress(optimizer_state: dict[str, Any]) -> dict[str, dict[
             "products_total": sweep.get("sweep_products_total", 0),
             "campaign_product_pairs_seen": sweep.get("sweep_pairs_seen", 0),
             "campaign_product_pairs_total": sweep.get("sweep_pairs_total", 0),
+            "cursor_before": sweep.get("cursor_before"),
+            "cursor_after": sweep.get("cursor_after"),
+            "eligible_campaigns": sweep.get("eligible_campaigns", 0),
+            "campaigns_scanned": sweep.get("campaigns_scanned", 0),
             "scan_error_count": len(sweep.get("scan_errors") or []),
             "last_completed_at": (sweep.get("last_completed_sweep") or {}).get("completed_at"),
             "complete": sweep.get("sweep_complete") is True,
@@ -88,8 +92,30 @@ def optimizer_sweep_progress(optimizer_state: dict[str, Any]) -> dict[str, dict[
     return progress
 
 
-def should_continue_optimizer_sweep(previous_health: dict[str, Any], current_health: dict[str, Any]) -> bool:
-    """Continue a bounded sweep only when the latest run made measurable progress."""
+def optimizer_sweep_continuation_limit(progress: dict[str, Any], maximum: int = 16) -> int:
+    """Derive a bounded continuation budget from campaign count and scan window size."""
+    budgets: list[int] = []
+    for row in progress.values():
+        if not isinstance(row, dict) or row.get("complete") is True:
+            continue
+        try:
+            total = max(0, int(row.get("campaigns_total") or 0))
+            scanned = max(0, int(row.get("campaigns_scanned") or 0))
+        except (TypeError, ValueError):
+            continue
+        if total > 0 and scanned > 0:
+            budgets.append(max(0, (total + scanned - 1) // scanned - 1))
+    if not budgets:
+        return max(1, min(16, int(maximum)))
+    return max(0, min(max(1, int(maximum)), max(budgets)))
+
+
+def should_continue_optimizer_sweep(
+    previous_health: dict[str, Any],
+    current_health: dict[str, Any],
+    continuation_depth: int = 0,
+) -> bool:
+    """Continue an incomplete sweep on measurable cursor or coverage progress, within its budget."""
     current = current_health.get("optimizer_sweep_progress")
     if not isinstance(current, dict) or not current:
         return False
@@ -101,18 +127,30 @@ def should_continue_optimizer_sweep(previous_health: dict[str, Any], current_hea
     )
     if not incomplete:
         return False
+    try:
+        depth = max(0, int(continuation_depth))
+    except (TypeError, ValueError):
+        depth = 0
+    if depth >= optimizer_sweep_continuation_limit(current):
+        return False
 
     for code, row in current.items():
         if not isinstance(row, dict):
             continue
         old = previous.get(code) if isinstance(previous.get(code), dict) else {}
+        if row.get("complete") is True:
+            if old.get("complete") is not True:
+                return True
+            continue
         if not old and any(int(row.get(key) or 0) > 0 for key in (
             "campaigns_seen", "products_seen", "campaign_product_pairs_seen"
         )):
             return True
-        if row.get("complete") is True and old.get("complete") is not True:
-            return True
         if row.get("sweep_id") is not None and row.get("sweep_id") != old.get("sweep_id"):
+            return True
+        before = row.get("cursor_before")
+        after = row.get("cursor_after")
+        if after is not None and after != before and after != old.get("cursor_after"):
             return True
         for key in ("campaigns_seen", "products_seen", "campaign_product_pairs_seen"):
             if int(row.get(key) or 0) > int(old.get(key) or 0):

@@ -104,6 +104,40 @@ class OptimizerAcceptanceTests(unittest.TestCase):
             "reason_codes": ["exact_shop_nm_id_match_missing"],
         }])
 
+    def test_unmatched_nm_id_uses_shop_stock_identity_but_remains_blocked(self):
+        args = fixture()
+        args[0]["shops"]["yv"]["advertised_nm_ids"] = ["999"]
+        args[1]["own_27"]["shop_products_by_shop_nm_id"] = {
+            "yv": {
+                "999": {
+                    "nm_id": "999",
+                    "product_name": "Корзина для белья белая с крышкой",
+                    "brand": "Милих",
+                    "seller_article": "",
+                    "identity_source": "sellmonitor_shop_stocks",
+                    "source": "hozyushka_sellmonitor.stocks",
+                    "source_row": 47,
+                    "observed_at": "2026-11-11T13:00:00+00:00",
+                },
+            },
+        }
+
+        result = evaluate_optimizer_acceptance(
+            *args, now=datetime(2026, 11, 11, 14, tzinfo=timezone.utc),
+        )
+
+        diagnostic = result["economics_diagnostics_by_shop"]["yv"][0]
+        self.assertEqual(diagnostic["stage"], "unit_economics_mapping")
+        self.assertEqual(diagnostic["nm_id"], "999")
+        self.assertEqual(diagnostic["product_name"], "Корзина для белья белая с крышкой")
+        self.assertEqual(diagnostic["brand"], "Милих")
+        self.assertEqual(diagnostic["identity_source"], "sellmonitor_shop_stocks")
+        self.assertEqual(diagnostic["identity_source_row"], 47)
+        self.assertEqual(diagnostic["reason_codes"], ["exact_unit_economics_mapping_missing"])
+        self.assertIn("строка 47", diagnostic["reason_text"])
+        self.assertEqual(result["economics"]["coverage_by_shop"]["yv"]["matched_products"], 0)
+        self.assertFalse(result["ready"])
+
     def test_unmatched_nm_id_uses_public_product_identity_but_remains_blocked(self):
         args = fixture()
         args[0]["shops"]["aa"]["advertised_nm_ids"] = ["999"]

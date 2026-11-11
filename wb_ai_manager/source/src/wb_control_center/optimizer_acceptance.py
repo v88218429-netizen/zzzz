@@ -211,17 +211,37 @@ def evaluate_optimizer_acceptance(
             if product is None:
                 mapping_issue = (mapping_diagnostics.get(code) or {}).get(sku)
                 mapping_issue = mapping_issue if isinstance(mapping_issue, dict) else {}
+                stock_by_shop = own.get("shop_products_by_shop_nm_id")
+                stock_by_shop = stock_by_shop if isinstance(stock_by_shop, dict) else {}
+                stock_details = (stock_by_shop.get(code) or {}).get(sku)
+                stock_details = stock_details if isinstance(stock_details, dict) else {}
+                has_identity = bool(mapping_issue or stock_details)
                 diagnostic = {
                     "nm_id": sku,
-                    "stage": "unit_economics_mapping" if mapping_issue else "shop_nm_id_to_portfolio_product",
-                    "seller_article": mapping_issue.get("seller_article"),
-                    "product_name": mapping_issue.get("product_name"),
+                    "stage": "unit_economics_mapping" if has_identity else "shop_nm_id_to_portfolio_product",
+                    "seller_article": mapping_issue.get("seller_article") or stock_details.get("seller_article"),
+                    "product_name": mapping_issue.get("product_name") or stock_details.get("product_name"),
                     "source": mapping_issue.get("source"),
                     "source_row": mapping_issue.get("source_row"),
                     "audit_source_row": mapping_issue.get("audit_source_row"),
                     "mapping_key": mapping_issue.get("key"),
-                    "reason_codes": mapping_issue.get("reason_codes") or ["exact_shop_nm_id_match_missing"],
+                    "reason_codes": mapping_issue.get("reason_codes") or (
+                        ["exact_unit_economics_mapping_missing"] if stock_details
+                        else ["exact_shop_nm_id_match_missing"]
+                    ),
                 }
+                if stock_details:
+                    if stock_details.get("brand"):
+                        diagnostic["brand"] = str(stock_details["brand"])
+                    diagnostic["identity_source"] = stock_details.get("identity_source") or "sellmonitor_shop_stocks"
+                    diagnostic["identity_source_range"] = stock_details.get("source")
+                    diagnostic["identity_source_row"] = stock_details.get("source_row")
+                    diagnostic["identity_observed_at"] = stock_details.get("observed_at")
+                    diagnostic["reason_text"] = (
+                        f"Товар найден в живой таблице остатков ({stock_details.get('source')}, "
+                        f"строка {stock_details.get('source_row')}), но его точная связка "
+                        "с юнит-экономикой по nmID не подтверждена."
+                    )
                 live_details_by_nm_id = (shops.get(code) or {}).get("live_product_details_by_nm_id")
                 live_details_by_nm_id = live_details_by_nm_id if isinstance(live_details_by_nm_id, dict) else {}
                 live_details = live_details_by_nm_id.get(sku)

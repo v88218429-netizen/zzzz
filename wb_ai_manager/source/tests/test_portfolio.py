@@ -44,7 +44,7 @@ def test_exact_crosswalk_maps_advertised_nm_id_to_copy_workbook_economics(tmp_pa
         3: "АА", 4: "Ветошь 10кг / Ветошь ХПП 10кг", 8: None,
         9: "р.9 261,74", 10: "70,00%", 11: "р.2 778,52",
         12: "р.2 421,00", 13: "26,31%", 14: "р.2 047,49",
-        15: "33,00%", 16: "р.38,00", 19: "р.5,00", 21: "2,50%",
+        15: "33,00%", 16: None, 19: "р.5,00", 21: "2,50%",
         23: "2,31%", 24: "р.64,27", 25: "УСН 6% + НДС 5%",
         27: "р.220,35", 28: None, 29: None,
         30: "29,59%", 32: "р.78,29", 36: "12,00%", 40: "31,00%",
@@ -56,7 +56,7 @@ def test_exact_crosswalk_maps_advertised_nm_id_to_copy_workbook_economics(tmp_pa
     primary_row_values = {
         0: "Ветошь", 1: "Ветошь 10 кг 40х60",
         5: "р.1 126,88", 8: "р.2 778,52", 10: "р.2 047,49",
-        11: "33,00%", 12: "р.38,00", 15: "р.5,00",
+        11: "33,00%", 12: "р.38,00", 14: "р.44,71", 15: "р.5,00",
         17: "2,50%", 19: "2,31%", 20: "р.64,27",
         21: "УСН 6% + НДС 5%", 23: "р.220,35",
         24: "р.333,42", 25: "12,00%", 26: "29,59%",
@@ -64,13 +64,25 @@ def test_exact_crosswalk_maps_advertised_nm_id_to_copy_workbook_economics(tmp_pa
     }
     for column, value in primary_row_values.items():
         primary_row[column] = value
+    primary_header = [None] * 42
+    primary_header[0], primary_header[1] = "Группа товаров", "Товар"
+    primary_header[12], primary_header[15] = "Логистика, руб", "Платная приемка, руб"
+    primary_subheader = [None] * 42
+    primary_subheader[12], primary_subheader[13], primary_subheader[14] = "Базовая ставка", "Выкуп, %", "Итого, руб"
+    duplicate_primary_row = primary_row.copy()
+    duplicate_primary_row[5] = "р.1 227,88"
+    duplicate_primary_row[24] = "р.444,42"
+    duplicate_primary_row[14] = "р.44,71"
     payload = {
         "generated_at": "2026-11-05T10:00:00+00:00",
         "sources": {
             "primary_unit_economics": {
                 "spreadsheet_id": "primary-workbook",
                 "read_at": "2026-11-05T10:00:00+00:00",
-                "ranges": {"unit_economics": {"values": [[], [], [], primary_row]}},
+                "ranges": {"unit_economics": {"values": [
+                    ["Данные о товарах"], primary_header, primary_subheader, primary_row,
+                    [], [], [], [], duplicate_primary_row,
+                ]}},
             },
             "unit_economics_crosswalk": {
                 "spreadsheet_id": "copy-workbook",
@@ -104,19 +116,20 @@ def test_exact_crosswalk_maps_advertised_nm_id_to_copy_workbook_economics(tmp_pa
     assert mapped["audit_source_row"] is None
     assert mapped["unit_economics_source"] == "Связка цен / Проверка товаров WB / 📊 WB FBS новая"
     assert out["own_27"]["unit_economics_by_shop_nm_id"]["aa"]["273197464"]["audit_source_row"] == 3
-    assert mapped["cost_rub"] == 1126.88
+    assert mapped["cost_rub"] == 1227.88
     assert mapped["price_rub"] == 2778.52
-    assert mapped["profit_rub"] == 333.42
+    assert mapped["profit_rub"] == 444.42
+    assert mapped["logistics_total_rub"] == 44.71
     assert mapped["target_profit_rub"] == 78.29
     assert mapped["unit_economics_decision_ready"] is True
     assert mapped["unit_economics_mapping_notes"] == [
         "verification_catalog_display_flag_false_exact_identity_checked",
         "catalog_display_name_differs_from_linked_unit_name",
-        "missing_copy_fields_filled_from_unique_primary_name",
+        "missing_copy_fields_filled_from_primary_source_row_and_exact_name",
     ]
     assert mapped["unit_economics_fallback_source"] == "primary_unit_economics"
-    assert mapped["unit_economics_fallback_source_row"] == 4
-    assert mapped["unit_economics_fallback_match"] == "exact_name"
+    assert mapped["unit_economics_fallback_source_row"] == 9
+    assert mapped["unit_economics_fallback_match"] == "exact_source_row_and_name"
     assert out["own_27"]["primary_unit_economics"]["snapshot_date"] == "2026-11-05"
     assert out["own_27"].get("unit_economics_mapping_diagnostics_by_shop", {}) == {}
 
@@ -128,6 +141,34 @@ def test_exact_crosswalk_maps_advertised_nm_id_to_copy_workbook_economics(tmp_pa
     assert "273197463" not in blocked["own_27"]["unit_economics_by_shop_nm_id"]["aa"]
     reasons = blocked["own_27"]["unit_economics_mapping_diagnostics_by_shop"]["aa"]["273197463"]["reason_codes"]
     assert "verification_crosswalk_link_not_confirmed" in reasons
+
+
+def test_shop_stock_products_are_indexed_by_exact_cabinet_and_nm_id(tmp_path):
+    service = PortfolioService(Settings(data_dir=str(tmp_path), wb_api_token=""))
+    payload = {
+        "sources": {
+            "hozyushka_sellmonitor": {
+                "read_at": "2026-11-11T13:00:00+00:00",
+                "ranges": {
+                    "stocks": {"values": [
+                        ["Артикул WB", "Название товара", "Бренд", "Артикул продавца"],
+                        [1994573765, "Корзина для белья белая с крышкой", "Милих", ""],
+                        ["not-an-nm-id", "Не связывать по названию", "Милих", "article"],
+                    ]},
+                },
+            },
+        },
+    }
+    out = {"own_27": {}}
+
+    service._parse_shop_stock_products(payload, out)
+
+    details = out["own_27"]["shop_products_by_shop_nm_id"]["yv"]["1994573765"]
+    assert details["product_name"] == "Корзина для белья белая с крышкой"
+    assert details["brand"] == "Милих"
+    assert details["source_row"] == 2
+    assert details["observed_at"] == "2026-11-11T13:00:00+00:00"
+    assert "not-an-nm-id" not in out["own_27"]["shop_products_by_shop_nm_id"]["yv"]
 
 
 def test_primary_name_key_normalizes_volume_and_pack_notation():

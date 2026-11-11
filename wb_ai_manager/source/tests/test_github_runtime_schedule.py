@@ -2,6 +2,11 @@ from datetime import datetime, timezone
 import unittest
 
 from wb_control_center.engine import agent_run_due
+from scripts.github_runtime import (
+    optimizer_sweep_continuation_limit,
+    optimizer_sweep_progress,
+    should_continue_optimizer_sweep,
+)
 
 
 class AgentRunDueTests(unittest.TestCase):
@@ -100,3 +105,52 @@ class AgentRunDueTests(unittest.TestCase):
             **partial, "catalog_changed": True, "catalog_fingerprint": "catalog-b",
         }, "2026-11-06T08:10:00+00:00")
         self.assertIsNone(changed["last_completed_sweep"])
+
+class OptimizerSweepContinuationTests(unittest.TestCase):
+    def test_cursor_advance_continues_when_campaign_coverage_does_not_increase(self):
+        previous = {"optimizer_sweep_progress": {"aa": {
+            "sweep_id": 4, "complete": False, "campaigns_total": 47,
+            "campaigns_seen": 6, "products_seen": 34, "campaign_product_pairs_seen": 34,
+            "cursor_before": 0, "cursor_after": 6, "campaigns_scanned": 6,
+        }}}
+        current = {"optimizer_sweep_progress": {"aa": {
+            "sweep_id": 4, "complete": False, "campaigns_total": 47,
+            "campaigns_seen": 6, "products_seen": 34, "campaign_product_pairs_seen": 34,
+            "cursor_before": 6, "cursor_after": 12, "campaigns_scanned": 6,
+        }}}
+
+        self.assertTrue(should_continue_optimizer_sweep(previous, current))
+        self.assertEqual(optimizer_sweep_continuation_limit(current["optimizer_sweep_progress"]), 7)
+
+    def test_unchanged_cursor_does_not_dispatch_again(self):
+        progress = {"aa": {
+            "sweep_id": 4, "complete": False, "campaigns_total": 47,
+            "campaigns_seen": 6, "products_seen": 34, "campaign_product_pairs_seen": 34,
+            "cursor_before": 6, "cursor_after": 6, "campaigns_scanned": 6,
+        }}
+        health = {"optimizer_sweep_progress": progress}
+        self.assertFalse(should_continue_optimizer_sweep(health, health))
+
+    def test_continuation_budget_stops_at_depth_limit(self):
+        previous = {"optimizer_sweep_progress": {"aa": {
+            "sweep_id": 4, "complete": False, "campaigns_total": 47,
+            "campaigns_seen": 6, "products_seen": 34, "campaign_product_pairs_seen": 34,
+            "cursor_before": 0, "cursor_after": 6, "campaigns_scanned": 6,
+        }}}
+        current = {"optimizer_sweep_progress": {"aa": {
+            "sweep_id": 4, "complete": False, "campaigns_total": 47,
+            "campaigns_seen": 6, "products_seen": 34, "campaign_product_pairs_seen": 34,
+            "cursor_before": 6, "cursor_after": 12, "campaigns_scanned": 6,
+        }}}
+
+        self.assertFalse(should_continue_optimizer_sweep(previous, current, continuation_depth=7))
+
+    def test_progress_publishes_cursor_and_scan_window_without_identifiers(self):
+        progress = optimizer_sweep_progress({"shops": {"aa": {"sweep": {
+            "cursor_before": 6, "cursor_after": 12, "campaigns_scanned": 6,
+            "eligible_campaigns": 47, "sweep_campaigns_total": 47, "sweep_complete": False,
+        }}}})
+
+        self.assertEqual(progress["aa"]["cursor_before"], 6)
+        self.assertEqual(progress["aa"]["cursor_after"], 12)
+        self.assertEqual(progress["aa"]["campaigns_scanned"], 6)

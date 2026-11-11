@@ -2,6 +2,11 @@ name: WB GitHub Runtime
 
 on:
   workflow_dispatch:
+    inputs:
+      optimizer_sweep_continuation_depth:
+        description: "Текущая глубина продолжения рекламного обхода"
+        required: false
+        default: "0"
   schedule:
     # Publish fresh encrypted cabinet and query snapshots every ten minutes.
     - cron: "3,13,23,33,43,53 * * * *"
@@ -208,6 +213,7 @@ jobs:
         working-directory: wb_ai_manager/source
         env:
           GH_TOKEN: ${{ github.token }}
+          OPTIMIZER_SWEEP_CONTINUATION_DEPTH: ${{ github.event.inputs.optimizer_sweep_continuation_depth || '0' }}
         run: |
           set -euo pipefail
           PYTHONPATH=.:scripts python - <<'PY'
@@ -215,22 +221,31 @@ jobs:
           import os
           import pathlib
           import subprocess
-          from github_runtime import should_continue_optimizer_sweep
+          from github_runtime import optimizer_sweep_continuation_limit, should_continue_optimizer_sweep
 
           current = json.loads(pathlib.Path("github_site/data/health.json").read_text(encoding="utf-8"))
           previous_path = pathlib.Path(os.environ["RUNNER_TEMP"]) / "previous-health.json"
           previous = json.loads(previous_path.read_text(encoding="utf-8")) if previous_path.exists() else {}
-          if should_continue_optimizer_sweep(previous, current):
-              print("Incomplete sweep advanced; dispatching exactly one continuation run.")
+          try:
+              depth = max(0, int(os.environ.get("OPTIMIZER_SWEEP_CONTINUATION_DEPTH", "0")))
+          except ValueError:
+              depth = 0
+          progress = current.get("optimizer_sweep_progress") or {}
+          limit = optimizer_sweep_continuation_limit(progress)
+          if should_continue_optimizer_sweep(previous, current, continuation_depth=depth):
+              print(f"Incomplete sweep advanced at continuation depth {depth}/{limit}; dispatching one bounded continuation.")
               result = subprocess.run(
-                  ["gh", "workflow", "run", "wb-github-runtime.yml", "--ref", "mainggg"],
+                  [
+                      "gh", "workflow", "run", "wb-github-runtime.yml", "--ref", "mainggg",
+                      "-f", f"optimizer_sweep_continuation_depth={depth + 1}",
+                  ],
                   check=False, capture_output=True, text=True,
               )
               if result.returncode:
                   print("::warning::Continuation dispatch failed; the saved checkpoint will resume on the next schedule.")
                   print(result.stderr.strip())
           else:
-              print("No incomplete sweep made progress; waiting for the next scheduled retry.")
+              print(f"No allowed continuation at depth {depth}/{limit}; next scheduled retry will use the saved checkpoint.")
           PY
 
       - name: Replace runtime branch with encrypted state only
