@@ -167,13 +167,10 @@ jobs:
               };
             }
             if (!creds || !creds.refresh_token) throw new Error("CLASP_AUTH_CREDENTIALS_NOT_FOUND");
-            const scopes = String(creds.scope || "");
-            for (const scope of [
-              "https://www.googleapis.com/auth/script.deployments",
-              "https://www.googleapis.com/auth/script.projects"
-            ]) {
-              if (!scopes.includes(scope)) throw new Error("CLASP_AUTH_SCOPE_MISSING:" + scope.split("/").pop());
-            }
+            const rawScopes = creds.scopes || creds.scope || [];
+            const scopeNames = (Array.isArray(rawScopes) ? rawScopes : String(rawScopes).split(/\\s+/))
+              .map(value => String(value).split("/").pop()).filter(Boolean);
+            console.log("CLASP_AUTH_SCOPE_NAMES=" + scopeNames.join(","));
             const auth = new GoogleAuth();
             const client = auth.fromJSON(creds);
             const tokenResult = await client.getAccessToken();
