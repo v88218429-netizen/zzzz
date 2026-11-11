@@ -173,13 +173,13 @@ jobs:
               raise SystemExit("LIVE_WORKER_VERSION_DIAGNOSTIC_FILE_COUNT="+str(len(live_workers)))
           live_source=live_workers[0].read_text(encoding="utf-8",errors="replace")
           repo_source=pathlib.Path("sellmonitor_github_worker/SELLMONITOR_GITHUB_WORKER.gs").read_text(encoding="utf-8")
-          version_pattern=re.compile(r"VERSION:\\s*'([^']+)'")
+          version_pattern=re.compile(r"VERSION:\s*'([^']+)'")
           live_version=version_pattern.search(live_source)
           repo_version=version_pattern.search(repo_source)
           if not live_version or not repo_version:
               raise SystemExit("LIVE_WORKER_VERSION_DIAGNOSTIC_PARSE_FAILED")
           def normalize(source):
-              return re.sub(r"(WEBHOOK_SECRET_SHA256:\\s*')[^']*(')",
+              return re.sub(r"(WEBHOOK_SECRET_SHA256:\s*')[^']*(')",
                             lambda match:match.group(1)+"<secret-hash>"+match.group(2),source)
           print("LIVE_WORKER_VERSION="+live_version.group(1))
           print("GITHUB_WORKER_VERSION="+repo_version.group(1))
