@@ -44,6 +44,8 @@ jobs:
           node --check /tmp/wb_fbs_supply_direct.js
       - name: FBS recovery Python syntax
         run: python -m py_compile wb_worker/github_fbs_recovery.py wb_worker/sanych_fbs_recovery.py
+      - name: FBS status read Sheets API fixture
+        run: node sellmonitor_github_worker/test_fbs_status_read.mjs
       - name: Paused-client worker slot regression
         run: node sellmonitor_github_worker/test_worker_capacity.mjs
       - name: WB traffic publisher fixture
