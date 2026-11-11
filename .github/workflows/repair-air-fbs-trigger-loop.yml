@@ -212,8 +212,8 @@ jobs:
                 }
                 const responseHint = responseText
                   .replace(/<[^>]*>/g," ")
-                  .replace(/\\s+/g," ").trim()
-                  .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/gi,"[email]")
+                  .replace(/\s+/g," ").trim()
+                  .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi,"[email]")
                   .slice(0,240);
                 attempts.push({
                   deployment:deploymentId.slice(0,12),
