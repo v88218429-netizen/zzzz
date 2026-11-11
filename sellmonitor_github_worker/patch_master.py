@@ -416,6 +416,145 @@ function sellmonitorGithubFbsAcceptanceAuditV1_(body) {
         print("WB_INNER_DATE_READBACK=patched")
     elif date_readback_marker not in worker_text and "WB_INNER_READBACK_MISMATCH" in worker_text:
         raise SystemExit("WB inner readback comparison anchor changed")
+
+    # Build store-level RNP periods from the same exact daily Sellmonitor facts used by 01_Дни.
+    # This keeps weekly/monthly shop totals available when SKU-level period coverage is partial.
+    wb_store_aggregate_marker = "WB_RNP_STORE_EXACT_DAILY_AGG_V1"
+    if wb_store_aggregate_marker not in worker_text:
+        helper_anchor = "  var exactMax='';"
+        exact_old = """  var exactMax='';
+  built.day.forEach(function(r){var dayKey=String(r[1]||'');if(onlyPeriodStart&&(dayKey<onlyPeriodStart||dayKey>onlyPeriodEnd))return;if(onlyPeriodPrefix&&dayKey.indexOf(onlyPeriodPrefix)!==0)return;if(String(r[10+built.metricHeaders.length]||'')==='FACTUAL_INNER_ANALYTICS'&&dayKey>exactMax)exactMax=dayKey;});"""
+        exact_new = """  /* WB_RNP_EXACT_DAY_REQUIRES_ALL_STORE_ROWS_V1 */
+  var exactMax='';
+  Object.keys(storeDayGroups_).forEach(function(dayKey){
+    if(onlyPeriodStart&&(dayKey<onlyPeriodStart||dayKey>onlyPeriodEnd))return;
+    if(onlyPeriodPrefix&&dayKey.indexOf(onlyPeriodPrefix)!==0)return;
+    if(storeDayGroups_[dayKey].exact&&dayKey>exactMax)exactMax=dayKey;
+  });"""
+        status_old = """      next[0]=pstat.preliminary?(pstat.exact?'🟡 ЧАСТИЧНО':'🟡 ПРЕДВ.'):pstat.partialCoverage?(pstat.exact?'🟡 ЧАСТИЧНО':'🟠 НЕПОЛНЫЙ'):(pstat.other?'🟠 НЕПОЛНЫЙ':'🟢 ФАКТ');"""
+        status_new = """      next[0]=pstat.preliminary?(pstat.exact?'🟡 ЧАСТИЧНО':'🟡 ПРЕДВ.'):pstat.partialCoverage?(pstat.exact?'🟡 ЧАСТИЧНО':'🟠 НЕПОЛНЫЙ'):(pstat.other?'🟠 НЕПОЛНЫЙ':'🟢 ФАКТ');
+      /* WB_RNP_STORE_STATUS_FROM_EXACT_DAYS_V1 */
+      var storePeriodFacts=storePeriodFacts_(period,spec.grain);
+      next[0]=storePeriodFacts.status;"""
+        store_branch_old = """        if(level==='МАГАЗИН'){
+          if(!Object.prototype.hasOwnProperty.call(storeValueCache,code))storeValueCache[code]=rnpValue(all,code);
+          v=storeValueCache[code];"""
+        store_branch_new = """        if(level==='МАГАЗИН'){
+          /* WB_RNP_STORE_VALUE_FROM_EXACT_DAYS_V1 */
+          if(!Object.prototype.hasOwnProperty.call(storeValueCache,code)){
+            storeValueCache[code]=storeAggregateCode_(code)?storeAggregateValue_(storePeriodFacts.rows,code):rnpValue(all,code);
+          }
+          v=storeValueCache[code];"""
+        for label, anchor in (
+            ("helper", helper_anchor),
+            ("exact-day", exact_old),
+            ("status", status_old),
+            ("store-value", store_branch_old),
+        ):
+            if worker_text.count(anchor) != 1:
+                raise SystemExit("WB exact-day store aggregate anchor mismatch: " + label)
+        worker_text = worker_text.replace(helper_anchor, """  /* WB_RNP_STORE_EXACT_DAILY_AGG_V1 */
+  var storeAggregateDirectFields_={
+    fin_Profit:'profit_rub',pcs_ordersCount:'orders_qty',pcs_ordersSumRub:'orders_revenue_rub',
+    fin_sales_total_sum:'revenue_rub',fin_sales_total_qnt:'net_sales_qty',newfin_sales_qnt:'net_sales_qty',
+    newfin_retail_price_withdisc:'revenue_rub',newfin_return_qnt:'returns_qty',
+    newfin_retail_price_withdisc_return:'returns_revenue_rub',expAdCosts:'ad_rub',
+    fin_Costs:'expenses_total_rub',fin_purchase:'prime_cost_rub',fin_comis:'commission_rub',
+    fin_logistics:'logistic_rub',storage_warehousePrice:'storage_rub',acceptance_total:'paid_acceptance_rub',
+    newfin_penalty:'fines_rub',fin_taxpay:'tax_rub',newfin_deductions:'deduction_rub',
+    newfin_delivery_sum:'delivery_logistic_rub',newfin_delivery_return_sum:'return_logistic_rub'
+  };
+  var storeAggregateRatioFields_={
+    fin_margin:['profit_rub','revenue_rub'],fin_roi:['profit_rub','expenses_total_rub'],
+    reductOrdToSale:['orders_qty','net_sales_qty'],fin_avgBillSPP:['customer_revenue_rub','net_sales_qty'],
+    fin_avgBillnoSPP:['revenue_rub','net_sales_qty'],fin_SPP_Rate:['marketplace_discount_rub','revenue_rub'],
+    drr_orders:['ad_rub','orders_revenue_rub'],fin_DRR:['ad_rub','revenue_rub'],
+    expCostsByUnit:['expenses_total_rub','net_sales_qty'],ext_purchase_unit:['prime_cost_rub','net_sales_qty'],
+    fin_logisticsByUnit:['logistic_rub','net_sales_qty'],fin_storagesByUnit:['storage_rub','net_sales_qty'],
+    cr_sale_order:['paid_order_qty','orders_qty']
+  };
+  var storeDayGroups_=Object.create(null),storeSourceMin_='',storePeriodCache_=Object.create(null);
+  var storeTrustIx_=10+built.metricHeaders.length;
+  built.day.forEach(function(r){
+    var day=key(r[1]);
+    if(!day||String(r[5]||'')!==String(storeId))return;
+    var g=storeDayGroups_[day]||(storeDayGroups_[day]={rows:[],exact:true});
+    g.rows.push(r);
+    if(String(r[storeTrustIx_]||'')!=='FACTUAL_INNER_ANALYTICS')g.exact=false;
+    if(!storeSourceMin_||day<storeSourceMin_)storeSourceMin_=day;
+  });
+  function storeAddDay_(s,n){
+    var p=s.split('-').map(Number),d=new Date(Date.UTC(p[0],p[1]-1,p[2]+n,12,0,0));
+    return Utilities.formatDate(d,'UTC','yyyy-MM-dd');
+  }
+  function storePeriodFacts_(period,grain){
+    var cacheKey=grain+'|'+period;
+    if(storePeriodCache_[cacheKey])return storePeriodCache_[cacheKey];
+    var start=period,end=period;
+    if(grain==='week')end=storeAddDay_(period,6);
+    else if(grain==='month'){
+      var p=period.split('-').map(Number);
+      end=Utilities.formatDate(new Date(Date.UTC(p[0],p[1],0,12,0,0)),'UTC','yyyy-MM-dd');
+    }
+    var today=Utilities.formatDate(new Date(),ss.getSpreadsheetTimeZone(),'yyyy-MM-dd');
+    var closedThrough=storeAddDay_(today,-1);
+    var first=storeSourceMin_&&storeSourceMin_>start?storeSourceMin_:start;
+    var last=end<closedThrough?end:closedThrough;
+    var expectedDays=0,exactDays=[],rows=[];
+    if(first<=last){
+      for(var d=first;d<=last;d=storeAddDay_(d,1)){
+        expectedDays++;
+        var daily=storeDayGroups_[d];
+        if(daily&&daily.exact){exactDays.push(d);rows=rows.concat(daily.rows);}
+        if(expectedDays>400)throw new Error('WB_RNP_STORE_PERIOD_GUARD:'+grain+':'+period);
+      }
+    }
+    var status=expectedDays===0?'🟡 ПРЕДВ.':(exactDays.length===expectedDays?'🟢 ФАКТ':(exactDays.length?'🟡 ЧАСТИЧНО':'🟠 НЕПОЛНЫЙ'));
+    var result={rows:rows,exact_days:exactDays.length,expected_days:expectedDays,status:status};
+    storePeriodCache_[cacheKey]=result;
+    return result;
+  }
+  function storeStrictSum_(rows,field){
+    var idx=metricIx[field];
+    if(idx==null||!rows||!rows.length)return null;
+    var salesIx=metricIx.net_sales_qty,returnsIx=metricIx.returns_qty,total=0;
+    for(var i=0;i<rows.length;i++){
+      var raw=rows[i][idx];
+      if(raw===''||raw==null||typeof raw==='boolean'||!isFinite(Number(raw))){
+        var sold=salesIx==null?null:Number(rows[i][salesIx]);
+        var returned=returnsIx==null?null:Number(rows[i][returnsIx]);
+        if((field==='revenue_rub'||field==='customer_revenue_rub'||field==='marketplace_discount_rub')&&sold===0&&returned===0)raw=0;
+        else if(field==='returns_revenue_rub'&&returned===0)raw=0;
+        else return null;
+      }
+      total+=Number(raw);
+    }
+    return total;
+  }
+  function storeAggregateCode_(code){
+    return Object.prototype.hasOwnProperty.call(storeAggregateDirectFields_,String(code||''))||
+      Object.prototype.hasOwnProperty.call(storeAggregateRatioFields_,String(code||''));
+  }
+  function storeAggregateValue_(rows,code){
+    code=String(code||'');
+    var direct=storeAggregateDirectFields_[code];
+    if(direct){var total=storeStrictSum_(rows,direct);return total==null?'':total;}
+    var ratio=storeAggregateRatioFields_[code];
+    if(!ratio)return '';
+    var n=storeStrictSum_(rows,ratio[0]),d=storeStrictSum_(rows,ratio[1]);
+    return n==null||d==null||d===0?'':n/d;
+  }""" + "\n" + helper_anchor, 1)
+        worker_text = worker_text.replace(exact_old, exact_new, 1)
+        worker_text = worker_text.replace(status_old, status_new, 1)
+        worker_text = worker_text.replace(store_branch_old, store_branch_new, 1)
+        print("WB_RNP_STORE_EXACT_DAILY_AGG=patched")
+    elif not all(marker in worker_text for marker in (
+        "WB_RNP_EXACT_DAY_REQUIRES_ALL_STORE_ROWS_V1",
+        "WB_RNP_STORE_STATUS_FROM_EXACT_DAYS_V1",
+        "WB_RNP_STORE_VALUE_FROM_EXACT_DAYS_V1",
+    )):
+        raise SystemExit("WB exact-day store aggregate patch incomplete")
+
     # Include the exporter state in the publisher's fail-closed response.
     # The GitHub schedule can then diagnose the trigger without direct Sheets API access.
     ozon_diag_marker = "SELLMONITOR_OZON_EXPORT_DIAGNOSTIC_RESPONSE_V1"
