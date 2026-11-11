@@ -1478,6 +1478,123 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
     elif "graphCaptionWrites" not in worker_text or "graphCaptionReadback" not in worker_text or "sellerGraphCaptionChanges" not in worker_text:
         raise SystemExit("OZON_GRAPH_LABEL_FRESHNESS_PATCH_PARTIAL")
 
+
+    # Read-only shape check for the existing WB raw report and expense APIs.
+    # It records units and per-operation totals without item identifiers or raw rows.
+    finance_shape_marker = "INNER_FINANCE_RAW_REPORT_FIELD_SHAPE_V8"
+    if finance_shape_marker not in worker_text:
+        raw_anchor = "            first_row_keys:rawFirst && typeof rawFirst==='object' ? Object.keys(rawFirst).slice(0,40) : []"
+        raw_replacement = """            first_row_keys:rawFirst && typeof rawFirst==='object' ? Object.keys(rawFirst).slice(0,40) : [],
+            response_meta:(function() {
+              /* INNER_FINANCE_RAW_REPORT_FIELD_SHAPE_V8 */
+              var envelope=rawReportData && rawReportData.data && typeof rawReportData.data==='object' ? rawReportData.data : {};
+              return {
+                source:String(rawReportData && rawReportData.source || ''),
+                marketplace:String(rawReportData && rawReportData.marketplace || ''),
+                partial:rawReportData && rawReportData.partial===true,
+                live_fallback_used:rawReportData && rawReportData.liveFallbackUsed===true,
+                persisted:rawReportData && rawReportData.persisted===true,
+                money_unit:envelope.moneyUnit || '',
+                monetary_fields:envelope.monetaryFields || [],
+                date_field:envelope.dateField || '',
+                time_window:envelope.timeWindow || {},
+                deduplication:envelope.deduplication || {},
+                warnings_count:Array.isArray(rawReportData && rawReportData.warnings) ? rawReportData.warnings.length : 0
+              };
+            })(),
+            rows_by_doc_type:(function() {
+              var sums={}, fields=['quantity','retailAmount','returnAmount','forPay','ppvzForPay','ppvzSalesCommission','deliveryAmount','deliveryRub','retailPriceWithDiscRub'];
+              function number_(v) {
+                if (typeof v==='number') return isFinite(v)?v:null;
+                if (typeof v!=='string' || !v.trim()) return null;
+                var n=Number(v.trim().replace(/[\\s\\u00A0]/g,'').replace(',','.'));
+                return isFinite(n)?n:null;
+              }
+              rawReportRows.forEach(function(row) {
+                row=row && typeof row==='object'?row:{};
+                var kind=String(row.docTypeName || row.supplierOperName || 'UNKNOWN').slice(0,80);
+                var b=sums[kind] || (sums[kind]={rows:0,fields:{}});
+                b.rows++;
+                fields.forEach(function(field) {
+                  var item=b.fields[field] || (b.fields[field]={sum:0,numeric_rows:0,missing_rows:0});
+                  var value=number_(row[field]);
+                  if(value===null)item.missing_rows++;
+                  else {item.sum+=value;item.numeric_rows++;}
+                });
+              });
+              return Object.keys(sums).sort().slice(0,24).map(function(kind) {
+                var b=sums[kind], fieldsOut={};
+                Object.keys(b.fields).forEach(function(field) {
+                  var item=b.fields[field];
+                  fieldsOut[field]={
+                    sum:Math.round(item.sum*10000)/10000,
+                    numeric_rows:item.numeric_rows,
+                    missing_rows:item.missing_rows
+                  };
+                });
+                return {doc_type:kind,rows:b.rows,fields:fieldsOut};
+              });
+            })()"""
+        if worker_text.count(raw_anchor) != 1:
+            raise SystemExit("INNER_FINANCE_RAW_REPORT_FIELD_SHAPE_RAW_ANCHOR_MISMATCH")
+        worker_text = worker_text.replace(raw_anchor, raw_replacement, 1)
+
+        expense_anchor = """            first_row_keys:expenseRows.length && expenseRows[0] && typeof expenseRows[0]==='object'
+              ? Object.keys(expenseRows[0]).slice(0,32) : []"""
+        expense_replacement = """            response_meta:(function() {
+              /* INNER_FINANCE_RAW_REPORT_FIELD_SHAPE_V8 */
+              return {
+                source:String(expenseData && expenseData.source || ''),
+                marketplace:String(expenseData && expenseData.marketplace || ''),
+                partial:expenseData && expenseData.partial===true,
+                live_fallback_used:expenseData && expenseData.liveFallbackUsed===true,
+                persisted:expenseData && expenseData.persisted===true,
+                money_unit:expenseEnvelope && expenseEnvelope.moneyUnit || '',
+                monetary_fields:expenseEnvelope && expenseEnvelope.monetaryFields || [],
+                date_field:expenseEnvelope && expenseEnvelope.dateField || '',
+                time_window:expenseEnvelope && expenseEnvelope.timeWindow || {},
+                warnings_count:Array.isArray(expenseData && expenseData.warnings) ? expenseData.warnings.length : 0
+              };
+            })(),
+            safe_sample:expenseRows.length ? (function() {
+              var row=expenseRows[0] && typeof expenseRows[0]==='object'?expenseRows[0]:{};
+              return {
+                type:String(row.type || ''),group:String(row.group || ''),
+                metric:String(row.dashboardMetric || ''),
+                role:String(row.dashboardFormulaRole || ''),
+                cost:row.cost==null?'':row.cost,
+                rows_count:row.rowsCount==null?'':row.rowsCount,
+                reliable:row.reliableForAnalysis===true,
+                used_in_dashboard:row.usedInDashboard===true,
+                contributes_to_dashboard_total:row.contributesToDashboardTotal===true
+              };
+            })() : null,
+            first_row_keys:expenseRows.length && expenseRows[0] && typeof expenseRows[0]==='object'
+              ? Object.keys(expenseRows[0]).slice(0,32) : []"""
+        if worker_text.count(expense_anchor) != 1:
+            raise SystemExit("INNER_FINANCE_RAW_REPORT_FIELD_SHAPE_EXPENSE_ANCHOR_MISMATCH")
+        worker_text = worker_text.replace(expense_anchor, expense_replacement, 1)
+
+        raw_key = "SMC_INNER_MCP_RAW_REPORT_PROBE_V2_LAST_MS"
+        expense_key = "SMC_INNER_MCP_EXPENSES_PROBE_V6_LAST_MS"
+        if worker_text.count(raw_key) != 1 or worker_text.count(expense_key) != 1:
+            raise SystemExit("INNER_FINANCE_RAW_REPORT_FIELD_SHAPE_COOLDOWN_KEY_MISMATCH")
+        worker_text = worker_text.replace(raw_key, "SMC_INNER_MCP_RAW_REPORT_PROBE_V8_LAST_MS", 1)
+        worker_text = worker_text.replace(expense_key, "SMC_INNER_MCP_EXPENSES_PROBE_V8_LAST_MS", 1)
+
+        versions = re.findall(r"VERSION:\\s*'github-worker-(\\d+)\\.(\\d+)\\.(\\d+)'", worker_text)
+        if len(versions) != 1:
+            raise SystemExit("INNER_FINANCE_RAW_REPORT_FIELD_SHAPE_VERSION_PATTERN_MISMATCH")
+        major, minor, patch_no = [int(value) for value in versions[0]]
+        current = ".".join(str(value) for value in (major, minor, patch_no))
+        next_version = ".".join(str(value) for value in (major, minor, patch_no + 1))
+        version_anchor = "VERSION: 'github-worker-" + current + "'"
+        if worker_text.count(version_anchor) != 1:
+            raise SystemExit("INNER_FINANCE_RAW_REPORT_FIELD_SHAPE_VERSION_ANCHOR_MISMATCH")
+        worker_text = worker_text.replace(version_anchor, "VERSION: 'github-worker-" + next_version + "'", 1)
+        print("INNER_FINANCE_WORKER_VERSION=" + current + "->" + next_version)
+        print("INNER_FINANCE_RAW_REPORT_FIELD_SHAPE_V8=patched")
+
     worker.write_text(worker_text, encoding="utf-8")
     print("WORKER_TRIGGER_REFRESH_V2=patched")
 candidates = []
