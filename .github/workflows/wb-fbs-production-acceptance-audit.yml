@@ -13,6 +13,8 @@ on:
       - WB FBS retry failed recovery windows
       - WB FBS GitHub recovery
       - WB FBS Sanych targeted recovery
+      - WB FBS Sanych failed-window recovery
+      - WB FBS gap catch-up 2026-11-11
       - WB FBS supply sync via GitHub
     types: [completed]
     branches: [mainggg]
@@ -49,11 +51,14 @@ jobs:
                    "X-GitHub-Api-Version":"2022-11-28"}
           names={"WB FBS recovery pass 1","WB FBS recovery pass 2","WB FBS recovery pass 3",
                  "WB FBS GitHub recovery","WB FBS automatic freshness repair",
-                 "WB FBS Sanych targeted recovery",
+                 "WB FBS Sanych targeted recovery","WB FBS Sanych failed-window recovery",
+                 "WB FBS gap catch-up 2026-11-11",
                  "WB FBS retry failed recovery windows","WB FBS supply sync via GitHub",
                  "WB Sellmonitor finance summaries"}
           writer_paths={".github/workflows/wb-fbs-github-recovery.yml",
                         ".github/workflows/wb-fbs-sanych-targeted-recovery.yml",
+                        ".github/workflows/wb-fbs-sanych-lock-retry.yml",
+                        ".github/workflows/wb-fbs-gap-catchup.yml",
                         ".github/workflows/wb-fbs-auto-retry.yml",
                         ".github/workflows/wb-fbs-automatic-freshness-repair.yml",
                         ".github/workflows/wb-fbs-supply-sync.yml",
