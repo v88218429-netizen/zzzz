@@ -153,13 +153,17 @@ jobs:
           let result = null;
           try { result = JSON.parse(responseText); } catch {}
           if (!result) {
-            const safeBody = responseText.replace(/<script[^>]*>[\\s\\S]*?<\\/script>/gi," ")
-              .replace(/<style[^>]*>[\\s\\S]*?<\\/style>/gi," ")
-              .replace(/<[^>]+>/g," ").replace(/\\s+/g," ").trim()
-              .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/gi,"[email]")
-              .replace(/(?:ya29\\.|ghs_|AIza)[A-Za-z0-9._-]{12,}/g,"[redacted]")
-              .slice(0,500);
-            console.log(JSON.stringify({httpStatus:response.status,contentType:response.headers.get("content-type"),bodySnippet:safeBody}));
+            const titleStart = responseText.toLowerCase().indexOf("<title");
+            let safeBody = "";
+            if (titleStart >= 0) {
+              const contentStart = responseText.indexOf(">", titleStart) + 1;
+              const contentEnd = responseText.toLowerCase().indexOf("</title>", contentStart);
+              if (contentStart > 0 && contentEnd > contentStart) {
+                safeBody = responseText.slice(contentStart, contentEnd)
+                  .replaceAll("<", " ").replaceAll(">", " ").trim().slice(0,180);
+              }
+            }
+            console.log(JSON.stringify({httpStatus:response.status,contentType:response.headers.get("content-type"),bodyTitle:safeBody||"no_title"}));
             throw new Error("AIR trigger repair endpoint denied request with HTTP " + response.status);
           }
           const state = result && (result.state || result.data || result);
