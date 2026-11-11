@@ -242,6 +242,36 @@ jobs:
           if hits==0: raise SystemExit("FBS_AUDIT_SOURCE_NOT_FOUND")
           PY
 
+      - name: Read AIR FBS technical log through GitHub
+        if: github.event_name == 'push' && github.event.head_commit.message == 'Inspect FBS audit source via GitHub'
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, os, re, urllib.error, urllib.parse, urllib.request
+          access=os.environ.get("SHEETS_ACCESS_TOKEN","")
+          if not access:
+              print("AIR_TECH_LOG_READ=unavailable_no_sheets_token")
+              raise SystemExit(0)
+          sheet="1qJvhEOIku7sOMydfrUz0PR5dkcU0sLjv433pa1MFBcM"
+          a1="'🛠 Технический лог'!A4990:E5019"
+          url="https://sheets.googleapis.com/v4/spreadsheets/"+sheet+"/values/"+urllib.parse.quote(a1,safe="")+"?majorDimension=ROWS&valueRenderOption=FORMATTED_VALUE"
+          request=urllib.request.Request(url,headers={"Authorization":"Bearer "+access})
+          try:
+              with urllib.request.urlopen(request,timeout=20) as response:
+                  rows=json.loads(response.read().decode("utf-8")).get("values") or []
+          except urllib.error.HTTPError as error:
+              print("AIR_TECH_LOG_READ=failed_http_"+str(error.code))
+              raise SystemExit(0)
+          print("AIR_TECH_LOG_ROWS_READ="+str(len(rows)))
+          for offset,row in enumerate(rows[-30:],start=max(1,len(rows)-29)):
+              value=" | ".join(str(cell) for cell in row)
+              value=re.sub(r"(?i)(authorization|bearer|token|secret|api[_-]?key)(\\s*[:=]\\s*|\\s+)[^\\s,;|]+",r"\\1=[redacted]",value)
+              value=re.sub(r"[A-Za-z0-9_-]{32,}","[opaque]",value)
+              value=re.sub(r"\\b[0-9]{7,}\\b","[id]",value)
+              if re.search(r"(?i)fbs|fast.?check|bus|error|fail|timeout|limit|quota|auth|lock",value):
+                  print("AIR_TECH_LOG_ROW="+str(offset)+":"+value[:500])
+          PY
+
       - name: Install worker and master hook
         shell: bash
         run: |
