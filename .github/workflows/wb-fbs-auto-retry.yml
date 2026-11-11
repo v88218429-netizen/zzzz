@@ -227,10 +227,17 @@ jobs:
           for fallback in 5 2 1; do
             if [[ "$fallback" -lt "$FBS_BATCH_SIZE" ]]; then batch_candidates+=("$fallback"); fi
           done
+          attempt_index=0
           for batch_size in "${batch_candidates[@]}"; do
-            echo "FBS_RETRY_ATTEMPT_START client=$FBS_CLIENT from=$FBS_START_DATE to=$FBS_END_DATE batch=$batch_size"
+            attempt_index=$((attempt_index+1))
+            case "$attempt_index" in
+              1) attempt_timeout="40m" ;;
+              2) attempt_timeout="25m" ;;
+              *) attempt_timeout="15m" ;;
+            esac
+            echo "FBS_RETRY_ATTEMPT_START client=$FBS_CLIENT from=$FBS_START_DATE to=$FBS_END_DATE batch=$batch_size timeout=$attempt_timeout"
             set +e
-            FBS_BATCH_SIZE="$batch_size" timeout --signal=TERM --kill-after=30s 20m python wb_worker/github_fbs_recovery.py
+            FBS_BATCH_SIZE="$batch_size" timeout --signal=TERM --kill-after=30s "$attempt_timeout" python wb_worker/github_fbs_recovery.py
             result=$?
             set -e
             if [[ "$result" -eq 0 ]]; then
@@ -339,10 +346,17 @@ jobs:
           for fallback in 5 2 1; do
             if [[ "$fallback" -lt "$FBS_BATCH_SIZE" ]]; then batch_candidates+=("$fallback"); fi
           done
+          attempt_index=0
           for batch_size in "${batch_candidates[@]}"; do
-            echo "FBS_RETRY_ATTEMPT_START client=$FBS_CLIENT from=$FBS_START_DATE to=$FBS_END_DATE batch=$batch_size"
+            attempt_index=$((attempt_index+1))
+            case "$attempt_index" in
+              1) attempt_timeout="40m" ;;
+              2) attempt_timeout="25m" ;;
+              *) attempt_timeout="15m" ;;
+            esac
+            echo "FBS_RETRY_ATTEMPT_START client=$FBS_CLIENT from=$FBS_START_DATE to=$FBS_END_DATE batch=$batch_size timeout=$attempt_timeout"
             set +e
-            FBS_BATCH_SIZE="$batch_size" timeout --signal=TERM --kill-after=30s 20m python wb_worker/sanych_fbs_recovery.py
+            FBS_BATCH_SIZE="$batch_size" timeout --signal=TERM --kill-after=30s "$attempt_timeout" python wb_worker/sanych_fbs_recovery.py
             result=$?
             set -e
             if [[ "$result" -eq 0 ]]; then
