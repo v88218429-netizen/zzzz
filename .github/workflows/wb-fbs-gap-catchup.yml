@@ -20,7 +20,7 @@ jobs:
     if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[WB-FBS-GAP-CATCHUP-2026-11-11]') }}
     name: "SANYCH catch-up ${{ matrix.start_date }}–${{ matrix.end_date }}"
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 360
     strategy:
       fail-fast: false
       max-parallel: 1
@@ -67,7 +67,7 @@ jobs:
     if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[WB-FBS-GAP-CATCHUP-2026-11-11]') }}
     name: "${{ matrix.client }} catch-up ${{ matrix.start_date }}–${{ matrix.end_date }}"
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 360
     strategy:
       fail-fast: false
       max-parallel: 1
