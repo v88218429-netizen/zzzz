@@ -19,7 +19,7 @@ function colNumber(letters) {
   return letters.split('').reduce((value, letter) => value * 26 + letter.charCodeAt(0) - 64, 0);
 }
 function parseRange(a1) {
-  const match = String(a1).match(/^'((?:[^']|'')*)'!([A-Z]+)(\\d+):([A-Z]+)(\\d+)$/);
+  const match = String(a1).match(/^'((?:[^']|'')*)'!([A-Z]+)([0-9]+):([A-Z]+)([0-9]+)$/);
   assert.ok(match, 'unexpected Sheets API range: ' + a1);
   return {
     sheet: match[1].replace(/''/g, "'"),
@@ -60,15 +60,15 @@ function topLevelFunction(name) {
   const marker = 'function ' + name + '(';
   const at = source.indexOf(marker);
   assert.notEqual(at, -1, 'function not found: ' + name);
-  const start = source.lastIndexOf('\\n', at) + 1;
-  const next = source.indexOf('\\nfunction ', at + 1);
+  const start = source.lastIndexOf('\n', at) + 1;
+  const next = source.indexOf('\nfunction ', at + 1);
   return source.slice(start, next < 0 ? source.length : next + 1);
 }
 vm.runInContext([
   topLevelFunction('sellmonitorGithubFbsSaveIdIndex_'),
   topLevelFunction('sellmonitorGithubFbsLoadIdIndex_'),
   topLevelFunction('sellmonitorGithubFbsStatusReadV1_')
-].join('\\n'), sandbox);
+].join('\n'), sandbox);
 
 const first = sandbox.sellmonitorGithubFbsStatusReadV1_({
   client: 'AIR', orderIds: ['11111111', '22222222']
