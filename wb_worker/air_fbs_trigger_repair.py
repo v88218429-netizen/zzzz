@@ -87,17 +87,6 @@ code=replace_function(code,"requestFastCheckV293_",'''function requestFastCheckV
   }
   return false;
 }''')
-code=replace_once(
-    code,
-    "function scheduledFastCheck() {\n  // AIR FBS polling is owned by GitHub Actions; this legacy timer is retired.\n  return;\n}",
-    "/* AIR_FBS_GITHUB_ONLY_LEGACY_FASTCHECK_DISABLED_V1 */\n"
-    "function scheduledFastCheck() {\n"
-    "  // AIR FBS polling is owned by GitHub Actions; this legacy timer is retired.\n"
-    "  return;\n"
-    "}",
-    "FASTCHECK_GITHUB_ONLY_MARKER"
-)
-
 # Add a GitHub-run-authenticated operation to the existing AIR token ingress.
 validation_pattern=re.compile(r"^\s*if\(body\.store!==c\.store\|\|.*BAD_CREDENTIALS.*$",re.M)
 validation_line=(
@@ -194,7 +183,7 @@ function wbFbsCleanupLegacyFbsTriggersFromTimerV1_() {
 
 '''
 if "AIR_FBS_GITHUB_TRIGGER_TIMER_CLEANUP_V1" not in code:
-    code=code.rstrip()+"\\n\\n"+timer_wrapper
+    code=code.rstrip()+"\n\n"+timer_wrapper
 code_path.write_text(code,encoding="utf-8")
 ingress_path.write_text(ingress,encoding="utf-8")
 for path in (code_path,ingress_path):
