@@ -42,17 +42,12 @@ jobs:
           import json, pathlib
           data=json.loads(pathlib.Path('/tmp/air-deployments.json').read_text())
           items=data.get('deployments',[]) if isinstance(data,dict) else data
-          target='AKfycbw92e1aJ7yUPkJR50gKqhlctnQC2rUYUH58-l6JgRAAfKSqY9v5sRpFbTo3otcjqP8'
+          target='AKfycbxyxnfxFl3GLkTukEDoM-n4gOnlslMv52Ghl2pGho9tQWpnSf6aSXAg7qZZFwtfnrKb'
           for item in items:
               if item.get('deploymentId')!=target: continue
               entry=item.get('entryPoints',[])
               web=[x.get('webApp',{}) for x in entry if x.get('entryPointType')=='WEB_APP']
-              print(json.dumps({
-                'deploymentIdMatched':True,
-                'versionNumber':item.get('deploymentConfig',{}).get('versionNumber'),
-                'webAppAccess':[x.get('entryPointConfig',{}).get('access') for x in web],
-                'executeAs':[x.get('entryPointConfig',{}).get('executeAs') for x in web]
-              },sort_keys=True))
+              print('DEPLOYMENT_DETAIL='+json.dumps(item,sort_keys=True,ensure_ascii=False))
               break
           else:
               print('AIR_WEB_DEPLOYMENT_CONFIG_NOT_RETURNED')
