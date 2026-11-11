@@ -4,7 +4,7 @@
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.98',
+  VERSION: 'github-worker-1.3.99',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -6335,7 +6335,7 @@ function sellmonitorGithubWbInnerBuildRows_(sourceRows,headers,storeId,tz,dailyO
     if(ix.avg_profit_per_unit_rub!=null)vals[ix.avg_profit_per_unit_rub]=typeof profit==='number'&&typeof sales==='number'&&sales!==0?profit/sales:'';
     if(ix.stock_qty_snapshot!=null)vals[ix.stock_qty_snapshot]=last?last.metrics[ix.stock_qty_snapshot]:'';
     if(ix.stock_prime_cost_snapshot_rub!=null)vals[ix.stock_prime_cost_snapshot_rub]=last?last.metrics[ix.stock_prime_cost_snapshot_rub]:'';
-    var status=allExact&&days===expectedDays?'FACTUAL_COMPLETE':(anyPartial?'PRELIMINARY':'PARTIAL_COVERAGE');
+    var status=anyPartial?'PRELIMINARY':(allExact&&days===expectedDays&&!metricCoverageIncomplete?'FACTUAL_COMPLETE':'PARTIAL_COVERAGE');
     return [grain,g.start,g.end,days,expectedDays,g.store,g.nm,g.article,g.group,g.subgroup].concat(vals,[status,source,loaded,sellmonitorGithubWbInnerRowKey_(grain==='НЕДЕЛЯ'?'W':'M',g.start,g.store,g.nm)]);
   }
   var weekRows=dailyOnly?[]:Object.keys(weekGroups).map(function(k){return rollup_(weekGroups[k],'НЕДЕЛЯ');});
@@ -6430,13 +6430,15 @@ function sellmonitorGithubPublishWbInnerPeriods_(onlyStore,requestedPhase){
   var leaseProps=PropertiesService.getScriptProperties();
   var leaseToken=Utilities.getUuid();
   var claimLock=LockService.getUserLock();
-  if(!claimLock.tryLock(5000))return {ok:false,action:'publish_wb_inner_periods',phase:String(requestedPhase||'all'),stores:[{store:String(onlyStore||'all'),ok:false,error:'WB_INNER_PUBLISH_GATE_BUSY'}]};
+  if(!claimLock.tryLock(5000))return {ok:false,action:'publish_wb_inner_periods',phase:String(requestedPhase||'all'),stores:[{store:String(onlyStore||'all'),ok:false,error:'WB_INNER_PUBLISH_GATE_BUSY',retry_after_seconds:10}]};
   var claimed=false;
   try{
     var active=null;
     try{active=JSON.parse(leaseProps.getProperty(leaseKey)||'null');}catch(ignored){}
-    if(active&&Number(active.expiresAt)>Date.now())
-      return {ok:false,action:'publish_wb_inner_periods',phase:String(requestedPhase||'all'),stores:[{store:String(onlyStore||'all'),ok:false,error:'WB_INNER_PUBLISH_LOCK_BUSY'}]};
+    if(active&&Number(active.expiresAt)>Date.now()){
+      var retryAfter=Math.max(1,Math.ceil((Number(active.expiresAt)-Date.now())/1000)+2);
+      return {ok:false,action:'publish_wb_inner_periods',phase:String(requestedPhase||'all'),stores:[{store:String(onlyStore||'all'),ok:false,error:'WB_INNER_PUBLISH_LOCK_BUSY',retry_after_seconds:Math.min(600,retryAfter)}]};
+    }
     leaseProps.setProperty(leaseKey,JSON.stringify({token:leaseToken,expiresAt:Date.now()+10*60*1000}));
     claimed=true;
   }finally{claimLock.releaseLock();}
