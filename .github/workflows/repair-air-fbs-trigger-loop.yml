@@ -24,6 +24,7 @@ jobs:
     env:
       CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
       AIR_SCRIPT_ID: 1snEntW5W9KZ_zKHP5bT4D-fmr-sbDdjV4-izjRxf46l8HWcrt3GJqU9V
+      AIR_REPAIR_INGRESS_DEPLOYMENT_ID: AKfycbwU2bwpVsKrwD1ir_vRCCoGwQKB0pqRvl3r0q7Hr5Vro86EoCY40fx36kAQbVB5nTxx
 
     steps:
       - uses: actions/checkout@v4
@@ -130,3 +131,72 @@ jobs:
           grep -A2 'function scheduledFullSyncContinuationV292_()' '/tmp/air-bound-script/Код.js' | grep -q 'wbFbsCleanupLegacyFbsTriggersFromTimerV1_'
           grep -q 'AIR_FBS_GITHUB_TRIGGER_REPAIR_V1' /tmp/air-bound-script/GithubTokenIngress.js
           echo "AIR_DEPLOYED_SOURCE_READBACK=verified"
+
+      - name: Verify protected AIR repair deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/air-bound-script
+          clasp deployments > /tmp/air-deployments.txt
+          grep -Fq "$AIR_REPAIR_INGRESS_DEPLOYMENT_ID" /tmp/air-deployments.txt
+          echo "AIR_REPAIR_INGRESS_DEPLOYMENT=verified"
+
+      - name: Stop only retired AIR FBS triggers and verify live state
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          (async () => {
+            const url = "https://script.google.com/macros/s/" +
+              process.env.AIR_REPAIR_INGRESS_DEPLOYMENT_ID + "/exec";
+            const body = {
+              store: "AIR",
+              operation: "stop_legacy_fbs_triggers",
+              githubToken: process.env.GITHUB_TOKEN,
+              runId: process.env.GITHUB_RUN_ID,
+              runAttempt: process.env.GITHUB_RUN_ATTEMPT,
+              wbToken: ""
+            };
+            const response = await fetch(url, {
+              method: "POST",
+              headers: {"content-type":"application/json","cache-control":"no-store"},
+              body: JSON.stringify(body),
+              signal: AbortSignal.timeout(60000)
+            });
+            const responseText = await response.text();
+            let envelope = null;
+            try { envelope = JSON.parse(responseText); } catch {}
+            const state = envelope && (envelope.state || envelope.data || envelope.result || envelope);
+            const after = state && state.after;
+            const handlers = after && after.handlers;
+            const retired = new Set([
+              "scheduledFastCheck",
+              "scheduledFastCheckContinuationV293_",
+              "scheduledFullSyncContinuationV292_"
+            ]);
+            const verified = response.ok && envelope && envelope.ok === true &&
+              state && state.ok === true && state.action === "stop_legacy_fbs_triggers" &&
+              Array.isArray(handlers) && handlers.every(handler => !retired.has(handler)) &&
+              after.fastQueuePending === false && after.fullSyncQueuePending === false &&
+              state.retainedMaintenanceTrigger === true && state.dataSheetsChanged === false;
+            console.log(JSON.stringify({
+              httpStatus: response.status,
+              verified: Boolean(verified),
+              removed: state && state.removed || null,
+              remainingLegacyHandlers: state && state.remainingLegacyHandlers || null,
+              retainedMaintenanceTrigger: state && state.retainedMaintenanceTrigger === true,
+              queuesCleared: Boolean(after && after.fastQueuePending === false &&
+                after.fullSyncQueuePending === false),
+              dataSheetsChanged: state && state.dataSheetsChanged
+            }));
+            if (!verified) {
+              const safeError = envelope && (envelope.error || envelope.message) ||
+                responseText.slice(0, 240).replace(/<[^>]*>/g, " ");
+              throw new Error("AIR_TRIGGER_REPAIR_NOT_VERIFIED: " + String(safeError).slice(0, 240));
+            }
+          })().catch(error => { console.error(error.message); process.exit(1); });
+          NODE
