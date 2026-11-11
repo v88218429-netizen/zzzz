@@ -1,5 +1,6 @@
 # Lightweight read-only diagnostics through the protected GitHub bridge; inspect active recovery stage.
 name: WB FBS active stage diagnostic
+# This read-only probe can report stalled writers without taking their production lock.
 
 on:
   workflow_dispatch:
