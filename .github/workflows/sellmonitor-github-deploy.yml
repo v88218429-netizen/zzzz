@@ -714,7 +714,7 @@ jobs:
           payload={'token':os.environ['WEBHOOK_SECRET'],'action':'fbs_technical_log_read','client':'AIR'}
           request=urllib.request.Request(url,data=json.dumps(payload).encode('utf-8'),
               headers={'Content-Type':'application/json'},method='POST')
-          with urllib.request.urlopen(request,timeout=90) as response:
+          with urllib.request.urlopen(request,timeout=240) as response:
               result=json.loads(response.read().decode('utf-8'))
           body=result.get('result') or {}
           print('AIR_TECH_LOG_BRIDGE_OK='+str(result.get('ok') is True and body.get('ok') is True))
