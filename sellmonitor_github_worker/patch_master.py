@@ -1386,6 +1386,98 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
         print("INNER_FINANCE_WORKER_VERSION="+coverage_current+"->"+coverage_next)
         print("WB_RNP_METRIC_COVERAGE=patched")
 
+    # Keep Ozon graph captions tied to the source window, archive old labels, and verify them after write.
+    graph_label_marker = "OZON_GRAPH_LABEL_FRESHNESS_V1"
+    if graph_label_marker not in worker_text:
+        performance_anchor = "  if(chartSheet){\n    var oldChartNote=chartSheet.getRange('A2').getValue();"
+        performance_replacement = """  var graphCaptionWrites=[];
+  if(chartSheet){
+    /* OZON_GRAPH_LABEL_FRESHNESS_V1 */
+    [
+      {cell:'A21',value:'ДНЕВНАЯ РЕКЛАМА · только кампании; покрытие '+coverageFrom+'–'+coverageTo},
+      {cell:'A57',value:'НЕДЕЛЬНАЯ РЕКЛАМА · только кампании; источник '+coverageFrom+'–'+coverageTo+'; крайние недели могут быть неполными'},
+      {cell:'A93',value:'МЕСЯЧНАЯ РЕКЛАМА · только кампании; источник '+coverageFrom+'–'+coverageTo+'; крайние месяцы могут быть неполными'}
+    ].forEach(function(spec){
+      var oldValue=String(chartSheet.getRange(spec.cell).getValue()||'');
+      if(oldValue!==spec.value)helperArchive.push({sheet:'10_Графики_магазина',range:spec.cell,values:[oldValue]});
+      graphCaptionWrites.push({cell:spec.cell,value:spec.value});
+    });
+    var oldChartNote=chartSheet.getRange('A2').getValue();"""
+        if worker_text.count(performance_anchor) != 1:
+            raise SystemExit("OZON_GRAPH_LABEL_PERFORMANCE_ANCHOR_MISMATCH")
+        worker_text = worker_text.replace(performance_anchor, performance_replacement, 1)
+        performance_write_anchor = "  dailySheet.getRange('A1').setValue(dailySheetTitle);"
+        if worker_text.count(performance_write_anchor) != 1:
+            raise SystemExit("OZON_GRAPH_LABEL_PERFORMANCE_WRITE_ANCHOR_MISMATCH")
+        worker_text = worker_text.replace(performance_write_anchor,
+            "  graphCaptionWrites.forEach(function(x){chartSheet.getRange(x.cell).setValue(x.value);});\n" + performance_write_anchor, 1)
+        performance_readback_anchor = "  if(!dailyOk||!periodOk||!aggregatesOk||!axesOk||!rnpNoteReadback||!chartRangesOk)throw new Error('OZON_PERF_READBACK_FAILED:'+cfg.name+':'+dailyOk+':'+periodOk+':'+aggregatesOk+':'+axesOk+':'+rnpNoteReadback+':'+chartRangesOk);"
+        if worker_text.count(performance_readback_anchor) != 1:
+            raise SystemExit("OZON_GRAPH_LABEL_PERFORMANCE_READBACK_ANCHOR_MISMATCH")
+        performance_readback = """  var graphCaptionsOk=graphCaptionWrites.every(function(x){return String(chartSheet.getRange(x.cell).getValue()||'')===x.value;});
+  if(!dailyOk||!periodOk||!aggregatesOk||!axesOk||!rnpNoteReadback||!chartRangesOk||!graphCaptionsOk)throw new Error('OZON_PERF_READBACK_FAILED:'+cfg.name+':'+dailyOk+':'+periodOk+':'+aggregatesOk+':'+axesOk+':'+rnpNoteReadback+':'+chartRangesOk+':captions='+graphCaptionsOk);"""
+        worker_text = worker_text.replace(performance_readback_anchor, performance_readback, 1)
+        performance_result_anchor = "chart_ranges_readback:chartRangesOk,charts:charts,"
+        if worker_text.count(performance_result_anchor) != 1:
+            raise SystemExit("OZON_GRAPH_LABEL_PERFORMANCE_RESULT_ANCHOR_MISMATCH")
+        worker_text = worker_text.replace(performance_result_anchor,
+            "chart_ranges_readback:chartRangesOk,graph_captions_readback:graphCaptionsOk,charts:charts,", 1)
+
+        order_anchor = "    var dailyOrderChartMatches=0,dailyOrderChartUpdated=false;"
+        order_code = """    /* OZON_GRAPH_LABEL_FRESHNESS_V1 */
+    var sellerGraphCaptionSpecs=[
+      {cell:'A3',value:'ДНЕВНАЯ ДИНАМИКА · SELLER API · '+(firstDayLabel||'нет начала')+'–'+(lastFullDayLabel||'нет полной даты')+' · только полные дни'},
+      {cell:'A39',value:'НЕДЕЛЬНАЯ ДИНАМИКА · Seller API · источник '+agg.minDay+'–'+agg.maxDay+'; крайние недели отмечены в заголовке графика'},
+      {cell:'A75',value:'МЕСЯЧНАЯ ДИНАМИКА · Seller API · источник '+agg.minDay+'–'+agg.maxDay+'; крайние месяцы отмечены в заголовке графика'}
+    ];
+    var sellerGraphCaptionChanges=sellerGraphCaptionSpecs.map(function(spec){
+      return {cell:spec.cell,old:String(graphSheet.getRange(spec.cell).getValue()||''),value:spec.value};
+    });
+"""
+        if worker_text.count(order_anchor) != 1:
+            raise SystemExit("OZON_GRAPH_LABEL_ORDER_ANCHOR_MISMATCH")
+        worker_text = worker_text.replace(order_anchor, order_code + order_anchor, 1)
+        order_archive_anchor = "    if(!sameGraphNote)archived+=sellmonitorGithubOzonArchive_(archive,'10_Графики_магазина','A2',[[oldGraphNote]],sourceUpdated,archiveId);"
+        if worker_text.count(order_archive_anchor) != 1:
+            raise SystemExit("OZON_GRAPH_LABEL_ORDER_ARCHIVE_ANCHOR_MISMATCH")
+        worker_text = worker_text.replace(order_archive_anchor,
+            order_archive_anchor + "\n    sellerGraphCaptionChanges.forEach(function(x){if(x.old!==x.value)archived+=sellmonitorGithubOzonArchive_(archive,'10_Графики_магазина',x.cell,[[x.old]],sourceUpdated,archiveId);});", 1)
+        order_write_anchor = "    if(!sameGraphNote)graphSheet.getRange('A2').setValue(newGraphNote);"
+        if worker_text.count(order_write_anchor) != 1:
+            raise SystemExit("OZON_GRAPH_LABEL_ORDER_WRITE_ANCHOR_MISMATCH")
+        worker_text = worker_text.replace(order_write_anchor,
+            order_write_anchor + "\n    sellerGraphCaptionChanges.forEach(function(x){graphSheet.getRange(x.cell).setValue(x.value);});", 1)
+        order_readback_anchor = "    var graphNoteReadback=String(graphSheet.getRange('A2').getValue()||'')===newGraphNote;"
+        if worker_text.count(order_readback_anchor) != 1:
+            raise SystemExit("OZON_GRAPH_LABEL_ORDER_READBACK_ANCHOR_MISMATCH")
+        worker_text = worker_text.replace(order_readback_anchor,
+            order_readback_anchor + "\n    var graphCaptionReadback=sellerGraphCaptionChanges.every(function(x){return String(graphSheet.getRange(x.cell).getValue()||'')===x.value;});", 1)
+        order_gate_anchor = "    if(!graphNoteReadback||!dailyOrderChartReadback||(lastFullDay&&dailyOrderChartMatches!==1))"
+        if worker_text.count(order_gate_anchor) != 1:
+            raise SystemExit("OZON_GRAPH_LABEL_ORDER_GATE_ANCHOR_MISMATCH")
+        worker_text = worker_text.replace(order_gate_anchor,
+            "    if(!graphNoteReadback||!graphCaptionReadback||!dailyOrderChartReadback||(lastFullDay&&dailyOrderChartMatches!==1))", 1)
+        order_result_anchor = "graph_note_readback:graphNoteReadback,"
+        if worker_text.count(order_result_anchor) != 1:
+            raise SystemExit("OZON_GRAPH_LABEL_ORDER_RESULT_ANCHOR_MISMATCH")
+        worker_text = worker_text.replace(order_result_anchor,
+            "graph_note_readback:graphNoteReadback,graph_caption_readback:graphCaptionReadback,", 1)
+
+        graph_versions = re.findall(r"VERSION:\s*'github-worker-(\d+)\.(\d+)\.(\d+)'", worker_text)
+        if len(graph_versions) != 1:
+            raise SystemExit("OZON_GRAPH_LABEL_VERSION_PATTERN_MISMATCH")
+        graph_major,graph_minor,graph_patch = [int(value) for value in graph_versions[0]]
+        graph_current = ".".join(str(value) for value in (graph_major,graph_minor,graph_patch))
+        graph_next = ".".join(str(value) for value in (graph_major,graph_minor,graph_patch+1))
+        graph_version_anchor = "VERSION: 'github-worker-" + graph_current + "'"
+        if worker_text.count(graph_version_anchor) != 1:
+            raise SystemExit("OZON_GRAPH_LABEL_VERSION_ANCHOR_MISMATCH")
+        worker_text = worker_text.replace(graph_version_anchor,"VERSION: 'github-worker-" + graph_next + "'",1)
+        print("OZON_GRAPH_LABEL_WORKER_VERSION="+graph_current+"->"+graph_next)
+        print("OZON_GRAPH_LABEL_FRESHNESS=patched")
+    elif "graphCaptionWrites" not in worker_text or "graphCaptionReadback" not in worker_text or "sellerGraphCaptionChanges" not in worker_text:
+        raise SystemExit("OZON_GRAPH_LABEL_FRESHNESS_PATCH_PARTIAL")
+
     worker.write_text(worker_text, encoding="utf-8")
     print("WORKER_TRIGGER_REFRESH_V2=patched")
 candidates = []
