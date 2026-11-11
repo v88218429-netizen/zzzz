@@ -33,6 +33,7 @@ jobs:
           SOURCE_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
         run: |
           python - <<'PY'
+          import io
           import json
           import os
           import re
@@ -92,6 +93,27 @@ jobs:
                     " source=" + str(source_root_id) + " retry_source_run=" + str(source_run_id), flush=True)
           elif source_path == ".github/workflows/wb-fbs-production-acceptance-audit.yml" and os.environ.get("SOURCE_CONCLUSION") == "cancelled":
               print("FBS_CANCELLED_ACCEPTANCE_NOT_RERUN run=" + str(source_run_id), flush=True)
+          elif source_path == ".github/workflows/wb-fbs-production-acceptance-audit.yml" and os.environ.get("SOURCE_CONCLUSION") == "failure":
+              jobs_url = "https://api.github.com/repos/" + repository + "/actions/runs/" + str(source_run_id) + "/jobs?per_page=100"
+              jobs_request = urllib.request.Request(jobs_url, headers=headers)
+              with urllib.request.urlopen(jobs_request, timeout=30) as response:
+                  failed_jobs = [job for job in json.load(response).get("jobs", [])
+                                 if job.get("conclusion") == "failure"]
+              quality_gate_failed = False
+              for job in failed_jobs:
+                  logs_url = "https://api.github.com/repos/" + repository + "/actions/jobs/" + str(job["id"]) + "/logs"
+                  logs_request = urllib.request.Request(logs_url, headers=headers)
+                  with urllib.request.urlopen(logs_request, timeout=60) as response:
+                      archive = zipfile.ZipFile(io.BytesIO(response.read()))
+                  for log_name in archive.namelist():
+                      if b"FBS_PRODUCTION_ACCEPTANCE_FAILED:QUALITY_GATE" in archive.read(log_name):
+                          quality_gate_failed = True
+                          break
+                  if quality_gate_failed:
+                      break
+              if quality_gate_failed:
+                  print("FBS_QUALITY_GATE_FAILURE_NOT_RERUN run=" + str(source_run_id), flush=True)
+                  raise SystemExit(0)
           elif source_path == ".github/workflows/wb-fbs-supply-sync.yml" and os.environ.get("SOURCE_CONCLUSION") == "cancelled":
               print("FBS_CANCELLED_SUPPLY_NOT_RERUN run=" + str(source_run_id), flush=True)
           elif source_path in {".github/workflows/wb-fbs-production-acceptance-audit.yml",
