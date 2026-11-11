@@ -134,6 +134,7 @@ jobs:
           set -euo pipefail
           cd /tmp/air-bound-script
           clasp deployments > /tmp/air-deployments.txt
+          cat /tmp/air-deployments.txt
           grep -Fq "$AIR_REPAIR_INGRESS_DEPLOYMENT_ID" /tmp/air-deployments.txt
           echo "AIR_REPAIR_INGRESS_DEPLOYMENT=verified"
 
@@ -145,7 +146,13 @@ jobs:
           echo "AIR_APPS_SCRIPT_MANIFEST_BEGIN"
           cat appsscript.json
           echo "AIR_APPS_SCRIPT_MANIFEST_END"
-          clasp run scheduledFastCheck > /tmp/air-trigger-repair-result.txt
+          set +e
+          clasp run-function scheduledFastCheck --json > /tmp/air-trigger-repair-result.txt 2>&1
+          clasp_status=$?
+          set -e
+          echo "AIR_CLASP_RUN_EXIT=$clasp_status"
+          cat /tmp/air-trigger-repair-result.txt
+          test "$clasp_status" -eq 0
           python - <<'PY'
           import json, pathlib, sys
           raw=pathlib.Path('/tmp/air-trigger-repair-result.txt').read_text(errors='replace')
