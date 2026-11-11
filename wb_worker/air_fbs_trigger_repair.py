@@ -44,7 +44,8 @@ def replace_function(text: str, name: str, replacement: str) -> str:
 # Disable the obsolete five-minute local WB poller and keep its handler harmless
 # in case a previously queued Apps Script event still starts after deletion.
 code=replace_function(code,"scheduledFastCheck",'''function scheduledFastCheck() {
-  return wbFbsCleanupLegacyFbsTriggersFromTimerV1_();
+  // AIR_FBS_LEGACY_TIMERS_NEUTRALIZED_V1
+  return false;
 }''')
 code=replace_once(
     code,
@@ -77,10 +78,12 @@ code=replace_once(
     "DISABLE_AUTOMATION_REQUEUE"
 )
 code=replace_function(code,"scheduledFastCheckContinuationV293_",'''function scheduledFastCheckContinuationV293_() {
-  return wbFbsCleanupLegacyFbsTriggersFromTimerV1_();
+  // AIR_FBS_LEGACY_TIMERS_NEUTRALIZED_V1
+  return false;
 }''')
 code=replace_function(code,"scheduledFullSyncContinuationV292_",'''function scheduledFullSyncContinuationV292_() {
-  return wbFbsCleanupLegacyFbsTriggersFromTimerV1_();
+  // AIR_FBS_LEGACY_TIMERS_NEUTRALIZED_V1
+  return false;
 }''')
 code=replace_function(code,"requestFastCheckV293_",'''function requestFastCheckV293_(manualStart) {
   if (manualStart) {
