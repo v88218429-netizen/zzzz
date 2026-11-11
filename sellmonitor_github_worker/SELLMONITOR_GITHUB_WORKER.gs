@@ -7157,6 +7157,11 @@ function doPost(e) {
       return sellmonitorGithubWebJson_({ok:runtimeDiagnostic.ok,action:action,result:runtimeDiagnostic});
     }
 
+    if (action === 'fbs_technical_log_read') {
+      var logRead = sellmonitorGithubFbsTechnicalLogReadV1_(body);
+      return sellmonitorGithubWebJson_({ok:logRead.ok===true,action:action,result:logRead});
+    }
+
     if (action === 'fbs_targets_health') {
       return sellmonitorGithubWebJson_({ok:true,action:action,result:sellmonitorGithubFbsTargetHealthV1_()});
     }
@@ -7363,6 +7368,37 @@ function sellmonitorGithubFbsRuntimeDiagnosticV1_() {
   var stages=sellmonitorGithubFbsStageSnapshot_();
   return {ok:results.every(function(x){return x.accessible;}),checkedAt:new Date().toISOString(),
     results:results,fbs_ingest_stages:stages};
+}
+
+/** Read-only, bounded AIR technical-log inspection for GitHub production diagnosis. */
+function sellmonitorGithubFbsTechnicalLogReadV1_(body) {
+  var client=String(body&&body.client||'').trim().toUpperCase();
+  if(client!=='AIR')throw new Error('FBS_TECH_LOG_CLIENT_NOT_ALLOWED');
+  var ss=SpreadsheetApp.openById('1qJvhEOIku7sOMydfrUz0PR5dkcU0sLjv433pa1MFBcM');
+  var sheet=ss.getSheetByName('🛠 Технический лог');
+  if(!sheet)throw new Error('FBS_TECH_LOG_TAB_NOT_FOUND');
+  var last=Number(sheet.getLastRow()||0);
+  var start=Math.max(1,last-1999);
+  var count=Math.max(0,last-start+1);
+  if(!count)return {ok:true,client:client,lastRow:last,scannedRows:0,matches:[]};
+  var values=sheet.getRange(start,1,count,Math.min(5,Math.max(1,sheet.getLastColumn()))).getDisplayValues();
+  var matches=[];
+  for(var i=0;i<values.length;i++){
+    var original=values[i].map(function(value){return String(value||'');});
+    var joined=original.join(' | ');
+    if(!/(?:AIR|FBS|fast.?check|BUS|timeout|timed.?out|error|fail|quota|limit|lock|ошиб|тайм.?аут|лимит)/i.test(joined))continue;
+    var safe=original.map(function(value){
+      return value
+        .replace(/Bearer\s+[A-Za-z0-9._-]+/gi,'Bearer [redacted]')
+        .replace(/(token|secret|api[_-]?key)(\s*[:=]\s*)[^\s,;|]+/gi,'$1=[redacted]')
+        .replace(/[A-Za-z0-9_-]{40,}/g,'[opaque]')
+        .replace(/\b[0-9]{7,}\b/g,'[id]')
+        .slice(0,220);
+    });
+    matches.push({row:start+i,cells:safe});
+  }
+  return {ok:true,client:client,lastRow:last,scannedRows:count,matchCount:matches.length,
+    matches:matches.slice(-100)};
 }
 
 /** Read-only health check over real order IDs and the maximum order timestamp. */
