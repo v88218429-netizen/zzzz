@@ -189,7 +189,7 @@ jobs:
               marker="function "+name+"("
               start=source.find(marker)
               if start<0:return None
-              line_start=source.rfind("\\n",0,start)+1
+              line_start=source.rfind(chr(10),0,start)+1
               if source[line_start:start].strip():return None
               end=re.search(r"(?m)^function ",source[start+len(marker):])
               stop=start+len(marker)+end.start() if end else len(source)
