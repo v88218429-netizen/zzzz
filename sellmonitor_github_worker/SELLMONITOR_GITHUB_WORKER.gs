@@ -7479,14 +7479,21 @@ function sellmonitorGithubFbsRuntimeDiagnosticV1_() {
 function sellmonitorGithubFbsTechnicalLogReadV1_(body) {
   var client=String(body&&body.client||'').trim().toUpperCase();
   if(client!=='AIR')throw new Error('FBS_TECH_LOG_CLIENT_NOT_ALLOWED');
-  var ss=SpreadsheetApp.openById('1qJvhEOIku7sOMydfrUz0PR5dkcU0sLjv433pa1MFBcM');
-  var sheet=ss.getSheetByName('🛠 Технический лог');
-  if(!sheet)throw new Error('FBS_TECH_LOG_TAB_NOT_FOUND');
-  var last=Number(sheet.getLastRow()||0);
+  var spreadsheetId='1qJvhEOIku7sOMydfrUz0PR5dkcU0sLjv433pa1MFBcM';
+  var sheetTitle='🛠 Технический лог';
+  var metadata=Sheets.Spreadsheets.get(spreadsheetId,{fields:'sheets(properties(title))'});
+  var sheets=metadata.sheets||[];
+  if(!sheets.some(function(item){return item.properties&&item.properties.title===sheetTitle;}))
+    throw new Error('FBS_TECH_LOG_TAB_NOT_FOUND');
+  // Read the bounded log with the Sheets API; SpreadsheetApp.openById/getLastRow/getRange
+  // stalls on AIR's large workbook even when only the last 100 log rows are needed.
+  var response=Sheets.Spreadsheets.Values.get(spreadsheetId,"'🛠 Технический лог'!A1:E5019",{
+    majorDimension:'ROWS',valueRenderOption:'FORMATTED_VALUE'
+  });
+  var allRows=response.values||[];
+  var last=allRows.length;
   var start=Math.max(1,last-99);
-  var count=Math.max(0,last-start+1);
-  if(!count)return {ok:true,client:client,lastRow:last,scannedRows:0,matches:[]};
-  var values=sheet.getRange(start,1,count,Math.min(5,Math.max(1,sheet.getLastColumn()))).getDisplayValues();
+  var values=allRows.slice(start-1);
   var matches=[];
   for(var i=0;i<values.length;i++){
     var original=values[i].map(function(value){return String(value||'');});
@@ -7494,16 +7501,16 @@ function sellmonitorGithubFbsTechnicalLogReadV1_(body) {
     if(!/(?:AIR|FBS|fast.?check|BUS|timeout|timed.?out|error|fail|quota|limit|lock|ошиб|тайм.?аут|лимит)/i.test(joined))continue;
     var safe=original.map(function(value){
       return value
-        .replace(/Bearer\s+[A-Za-z0-9._-]+/gi,'Bearer [redacted]')
-        .replace(/(token|secret|api[_-]?key)(\s*[:=]\s*)[^\s,;|]+/gi,'$1=[redacted]')
+        .replace(/Bearer\\s+[A-Za-z0-9._-]+/gi,'Bearer [redacted]')
+        .replace(/(token|secret|api[_-]?key)(\\s*[:=]\\s*)[^\\s,;|]+/gi,'$1=[redacted]')
         .replace(/[A-Za-z0-9_-]{40,}/g,'[opaque]')
-        .replace(/\b[0-9]{7,}\b/g,'[id]')
+        .replace(/\\b[0-9]{7,}\\b/g,'[id]')
         .slice(0,220);
     });
     matches.push({row:start+i,cells:safe});
   }
-  return {ok:true,client:client,lastRow:last,scannedRows:count,matchCount:matches.length,
-    matches:matches.slice(-100)};
+  return {ok:true,client:client,lastRow:last,scannedRows:values.length,
+    truncated:allRows.length>=5019,matchCount:matches.length,matches:matches.slice(-100)};
 }
 
 /** Read-only health check over real order IDs and the maximum order timestamp. */
