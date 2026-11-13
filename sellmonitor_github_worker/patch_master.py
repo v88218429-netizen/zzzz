@@ -1654,6 +1654,46 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
         )
         print("INNER_FRESHNESS_ACCOUNT_VALUE_DIAGNOSTIC=patched")
 
+
+    retry_marker = "INNER_MCP_BOUNDED_RETRY_V1"
+    if retry_marker not in worker_text:
+        retry_anchor = """    var response = UrlFetchApp.fetch(endpoint, {
+      method:'post',contentType:'application/json',payload:JSON.stringify(body),
+      headers:headers,muteHttpExceptions:true
+    });"""
+        retry_replacement = """    /* INNER_MCP_BOUNDED_RETRY_V1 */
+    var response = null;
+    for (var attempt=0; attempt<4; attempt++) {
+      try {
+        response = UrlFetchApp.fetch(endpoint, {
+          method:'post',contentType:'application/json',payload:JSON.stringify(body),
+          headers:headers,muteHttpExceptions:true
+        });
+      } catch (fetchError) {
+        if (attempt>=3) throw new Error('INNER_MCP_TRANSPORT_' + (fetchError && fetchError.name ? fetchError.name : 'ERROR'));
+        Utilities.sleep(Math.min(1000*Math.pow(2,attempt),8000));
+        continue;
+      }
+      var responseCode=response.getResponseCode();
+      if ((responseCode===408||responseCode===425||responseCode===429||responseCode>=500) && attempt<3) {
+        Utilities.sleep(Math.min(1000*Math.pow(2,attempt),8000));
+        continue;
+      }
+      break;
+    }
+    if (!response) throw new Error('INNER_MCP_TRANSPORT_NO_RESPONSE');"""
+        if retry_anchor not in worker_text:
+            raise SystemExit("Inner MCP retry anchor changed")
+        worker_text = worker_text.replace(retry_anchor,retry_replacement,1)
+        version_match = re.search(r"VERSION:\s*'github-worker-(\\d+)\\.(\\d+)\\.(\\d+)'",worker_text)
+        if not version_match:
+            raise SystemExit("Inner MCP retry worker version missing")
+        major,minor,patch_no=[int(x) for x in version_match.groups()]
+        old_version=version_match.group(0)
+        new_version="VERSION: 'github-worker-"+str(major)+"."+str(minor)+"."+str(patch_no+1)+"'"
+        worker_text=worker_text.replace(old_version,new_version,1)
+        print("INNER_MCP_BOUNDED_RETRY=patched")
+
     worker.write_text(worker_text, encoding="utf-8")
     print("WORKER_TRIGGER_REFRESH_V2=patched")
 candidates = []
