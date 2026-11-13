@@ -272,7 +272,11 @@ def ingest(client: str, orders: list[dict]) -> dict:
                 if obj.get("ok") and obj.get("action") == "fbs_ingest_batch" and result.get("ok"):
                     break
                 details = str(obj.get("error") or result.get("error") or "")
-                retryable = result.get("retryable") or any(
+                state_batch_http = re.search(r"FBS_STATE_BATCH_READ_HTTP_(\\d{3})", details)
+                state_batch_transient = bool(
+                    state_batch_http and int(state_batch_http.group(1)) in (408, 425, 429, 500, 502, 503, 504)
+                )
+                retryable = result.get("retryable") or state_batch_transient or any(
                     marker in details for marker in (
                         "GITHUB_FBS_LOCK_BUSY", "Service invoked too many times",
                         "Service Spreadsheets failed", "Exceeded maximum execution",
@@ -305,7 +309,10 @@ def ingest(client: str, orders: list[dict]) -> dict:
                     print("FBS_BRIDGE_ERROR_DETAIL=" + safe_bridge_detail(details), flush=True)
                 if not retryable:
                     candidates = [
-                        "FBS_SHEET_READ_HTTP_403", "FBS_STATE_BATCH_READ_HTTP_403", "PERMISSION_DENIED",
+                        "FBS_SHEET_READ_HTTP_403", "FBS_STATE_BATCH_READ_HTTP_400",
+                        "FBS_STATE_BATCH_READ_HTTP_401", "FBS_STATE_BATCH_READ_HTTP_403",
+                        "FBS_STATE_BATCH_READ_HTTP_404", "FBS_STATE_BATCH_READ_HTTP_405",
+                        "PERMISSION_DENIED",
                         "FBS_BATCH_SIZE_INVALID", "FBS_ROW_COUNT_UNEXPECTED",
                         "FBS_DATE_OUTSIDE_RECOVERY_WINDOW", "FBS_ID_INVALID",
                         "FBS_MISSING_CONFIRMED_STATUS", "FBS_DATE_INVALID",
