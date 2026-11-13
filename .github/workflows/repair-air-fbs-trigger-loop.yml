@@ -13,6 +13,7 @@ permissions:
   contents: read
 
 # This repair changes only AIR script code, triggers and queue properties; it never writes order data.
+# Execute the already-authorized retirement of the legacy AIR timers through GitHub.
 jobs:
   repair:
     runs-on: ubuntu-latest
