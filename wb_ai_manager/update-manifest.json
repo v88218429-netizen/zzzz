@@ -2,9 +2,9 @@
   "schema": 1,
   "channels": {
     "stable": {
-      "version": "1.1.57",
+      "version": "1.1.58",
       "channel": "stable",
-      "notes": "Версия 1.1.57: полная таблица цен и скидок по размерам; даты и статус участия в акциях; значения характеристик карточки с разделением пустых и не переданных полей. Денежные действия в кабинет WB не отправляются.",
+      "notes": "Версия 1.1.58: подтверждение полноты обхода карточек, календарь кампаний отдельно от решений по товарам, сводка оценок отзывов по nmID с явной границей выборки. Ответы и изменения в WB не выполняются автоматически.",
       "minimum_current_version": "1.0.0",
       "files": [
         {
@@ -40,12 +40,12 @@
         {
           "path": "pyproject.toml",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/pyproject.toml",
-          "sha256": "2c10313e2341fa917e68f194d1fa6cb22ab227b1581ee1bea6a490dbdb478657"
+          "sha256": "f739f78c8272929983860ce0b73f238f43ef57091a5a59fbdbed07c7422a0860"
         },
         {
           "path": "RELEASE_NOTES.md",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/RELEASE_NOTES.md",
-          "sha256": "7cffd7a7f0a7622e76a91cfd74c2c4be55b1933d65981154eee734026e4bc0c3"
+          "sha256": "28846080346bfba046f7ddf06cf0ae6a77ccaf4032da3dc6c3e1d40a0225a6a9"
         },
         {
           "path": "scripts/auto_refresh_sheets.py",
@@ -171,7 +171,7 @@
         {
           "path": "src/wb_control_center/agents/cards.py",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/src/wb_control_center/agents/cards.py",
-          "sha256": "3c32a9a9e622d73f0998e886ccdadf9bcccd007118576e2342491a08ff8d005d"
+          "sha256": "0096f38b44efda6890f87ee5d6e6ad203356d07409baa4adbd256db855cacb92"
         },
         {
           "path": "src/wb_control_center/agents/competitors.py",
@@ -451,12 +451,12 @@
         {
           "path": "src/wb_control_center/ui/dashboard.html",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/src/wb_control_center/ui/dashboard.html",
-          "sha256": "c39c5cd169e545314f20b03e509b9d07794c699bfdbaef06cea03d782c744ffa"
+          "sha256": "23a965e04547778ad8280e31e474d3db9c2426b4febfc9c457324473c5f96dee"
         },
         {
           "path": "src/wb_control_center/ui/dashboard.js",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/src/wb_control_center/ui/dashboard.js",
-          "sha256": "1d91c57fcf84d645dd02826cdf10350e62cdd0225e04eff78586749b0cc8dc8d"
+          "sha256": "f8d224cfdbde85e82685b169ca5d5fd4e353f08191eb12e6f88d48aac2907b62"
         },
         {
           "path": "src/wb_control_center/updater.py",
@@ -466,7 +466,7 @@
         {
           "path": "src/wb_control_center/video_workbench.py",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/src/wb_control_center/video_workbench.py",
-          "sha256": "670a4ee57ee8a1c0375c49bfdf82f0c179d6dd62e258079063a623c34d7490db"
+          "sha256": "d8cebb261851749c0433a49c600c0b34dc34a8dbcf5ed61afc012142185287c8"
         },
         {
           "path": "src/wb_control_center/wb_mcp_runner.py",
@@ -492,7 +492,7 @@
         {
           "path": "VERSION",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/VERSION",
-          "sha256": "7268fce8d2e3d2606072949d9e5b557fcfa8fef70958eeedd6ec8172512cf0d0"
+          "sha256": "c567609a76b1c8c11867da58a0c21f05700069be5246d38b8875ebec58bc2e78"
         }
       ]
     }
