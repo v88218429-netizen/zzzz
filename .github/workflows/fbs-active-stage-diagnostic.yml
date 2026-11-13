@@ -10,7 +10,7 @@ name: WB FBS active stage diagnostic
 # Snapshot tick 6.
 # Snapshot tick 7.
 # Snapshot tick 8.
-# Snapshot tick 9: read AIR technical log without changing data.
+# Snapshot tick 10: locate the current AIR recovery call stage.
 on:
   workflow_dispatch:
   push:
