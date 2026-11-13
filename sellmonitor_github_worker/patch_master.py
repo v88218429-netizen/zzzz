@@ -1724,6 +1724,66 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
         print("OZON_PERF_DATE_VALUE_IDEMPOTENCY=patched")
 
 
+
+    # Normalize the actual Sellmonitor account-level freshness contract without marking incomplete finance as fresh.
+    freshness_marker = "INNER_FINANCE_ACCOUNT_FRESHNESS_NORMALIZER_V1"
+    if freshness_marker not in worker_text:
+        old_function = "function sellmonitorGithubInnerFreshness_(data) {"
+        function_start = worker_text.find(old_function)
+        function_end = worker_text.find("\nfunction sellmonitorGithubInnerCategoryFresh_", function_start)
+        if function_start < 0 or function_end < 0:
+            raise SystemExit("Sellmonitor account freshness function anchor changed")
+        normalized_function = """function sellmonitorGithubInnerFreshness_(data, requestedDate, requestedAccountId) {
+  var candidates = [
+    data && data.freshness, data && data.sourceFreshness, data && data.source_freshness,
+    data && data.data && data.data.freshness, data && data.data && data.data.sourceFreshness,
+    data && data.data && data.data.source_freshness
+  ];
+  for (var i=0;i<candidates.length;i++) {
+    var value=candidates[i];
+    if (!value) continue;
+    if (typeof value==='string') { try { value=JSON.parse(value); } catch (ignored) { continue; } }
+    if (!value || typeof value!=='object') continue;
+    if (value.categories && typeof value.categories==='object') return value.categories;
+    if (value.orders || value.products || value.stocks || value.financial_report_rows) return value;
+    if (!Array.isArray(value.accounts)) continue;
+    var accounts=value.accounts;
+    var matches=accounts.filter(function(account) {
+      return account && String(account.marketplaceAccountId || '')===String(requestedAccountId || '');
+    });
+    if (!matches.length && accounts.length===1) matches=accounts;
+    if (matches.length!==1) return {};
+    var account=matches[0], incomplete=account.incompleteCategories || {};
+    if (typeof incomplete==='string') { try { incomplete=JSON.parse(incomplete); } catch (ignored) { incomplete={}; } }
+    if (!incomplete || typeof incomplete!=='object') incomplete={};
+    var requested=String(requestedDate || '').slice(0,10);
+    function covered(upTo) {
+      var day=String(upTo || '').slice(0,10);
+      return /^\\\\d{4}-\\\\d{2}-\\\\d{2}$/.test(day) && (!requested || day>=requested);
+    }
+    function category(name, upTo) {
+      return {covered:covered(upTo) && !Object.prototype.hasOwnProperty.call(incomplete,name),stale:!covered(upTo) || Object.prototype.hasOwnProperty.call(incomplete,name)};
+    }
+    var out={};
+    ['products','orders','postaggregated_orders','stocks'].forEach(function(name) {
+      out[name]=category(name,account.dataIsUpTo);
+    });
+    ['financial_operations','financial_report_rows','wb_expenses','postaggregated_expenses'].forEach(function(name) {
+      out[name]=category(name,account.financialReportsUpTo || account.dataIsUpTo);
+    });
+    return out;
+  }
+  return {};
+}"""
+        worker_text = worker_text[:function_start] + normalized_function + worker_text[function_end:]
+        old_call = "var freshness = sellmonitorGithubInnerFreshness_(data);"
+        new_call = "var freshness = sellmonitorGithubInnerFreshness_(data,dateKey,cfg.accountId);"
+        if old_call not in worker_text:
+            raise SystemExit("Sellmonitor account freshness call anchor changed")
+        worker_text = worker_text.replace(old_call,new_call,1)
+        print("INNER_FINANCE_ACCOUNT_FRESHNESS_NORMALIZER=patched")
+
+
     worker.write_text(worker_text, encoding="utf-8")
     print("WORKER_TRIGGER_REFRESH_V2=patched")
 candidates = []
