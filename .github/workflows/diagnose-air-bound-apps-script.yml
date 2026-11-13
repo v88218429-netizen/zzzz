@@ -9,6 +9,7 @@ on:
   workflow_dispatch:
 
 permissions:
+  actions: write
   contents: read
 
 jobs:
@@ -16,6 +17,77 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+
+      - name: Drain stale FBS workflow queue via GitHub
+        if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[FBS-UNSTICK-2026-11-13]') }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, time, urllib.request
+          repo=os.environ['REPOSITORY']; token=os.environ['GH_TOKEN']
+          headers={'Authorization':'Bearer '+token,'Accept':'application/vnd.github+json',
+                   'X-GitHub-Api-Version':'2022-11-28'}
+          base='https://api.github.com/repos/'+repo
+          paths={'.github/workflows/wb-fbs-github-recovery.yml',
+                 '.github/workflows/wb-fbs-sanych-targeted-recovery.yml',
+                 '.github/workflows/wb-fbs-auto-retry.yml',
+                 '.github/workflows/wb-fbs-supply-sync.yml',
+                 '.github/workflows/wb-fbs-github-bridge-health.yml',
+                 '.github/workflows/wb-fbs-gap-catchup.yml',
+                 '.github/workflows/wb-fbs-recovery-continuation.yml',
+                 '.github/workflows/wb-fbs-production-acceptance-audit.yml'}
+          names={'WB FBS GitHub recovery','WB FBS Sanych targeted recovery',
+                 'WB FBS retry failed recovery windows','WB FBS supply sync via GitHub',
+                 'WB FBS GitHub bridge health','WB FBS gap catch-up 2026-11-11',
+                 'WB FBS recovery continuation','WB FBS production acceptance audit'}
+          runs=[]
+          for page in range(1,6):
+              req=urllib.request.Request(base+'/actions/runs?per_page=100&page='+str(page),headers=headers)
+              with urllib.request.urlopen(req,timeout=30) as response: batch=json.load(response).get('workflow_runs',[])
+              runs.extend(batch)
+              if len(batch)<100: break
+          candidates=[run for run in runs if (run.get('path') in paths or run.get('name') in names)
+                      and run.get('status') in {'queued','pending','waiting','requested'}]
+          newest={}
+          for run in candidates:
+              key=run.get('path') or run.get('name')
+              if key not in newest or run.get('created_at','')>newest[key].get('created_at',''):
+                  newest[key]=run
+          cutoff=time.time()-4*3600
+          canceled=[]; stuck=[]
+          for run in candidates:
+              rid=str(run.get('id')); created=run.get('created_at','')
+              age=0
+              try:
+                  from datetime import datetime
+                  age=(time.time()-datetime.fromisoformat(created.replace('Z','+00:00')).timestamp())/3600
+              except Exception: pass
+              # The Nov 11 catch-up has every matrix job completed but the parent is still queued.
+              if rid=='43015129891':
+                  req=urllib.request.Request(base+'/actions/runs/'+rid+'/jobs?per_page=100',headers=headers)
+                  with urllib.request.urlopen(req,timeout=30) as response: jobs=json.load(response).get('jobs',[])
+                  if jobs and all(job.get('status')=='completed' for job in jobs): stuck.append(run)
+              # Keep the newest pending run of each FBS workflow; older runs are obsolete scheduled backlog.
+              if run is newest.get(run.get('path') or run.get('name')): continue
+              if age>=4: canceled.append(run)
+          ids={str(x.get('id')) for x in stuck}
+          ids.update(str(x.get('id')) for x in canceled)
+          for rid in sorted(ids,key=int):
+              request=urllib.request.Request(base+'/actions/runs/'+rid+'/cancel',headers=headers,method='POST')
+              try:
+                  with urllib.request.urlopen(request,timeout=30) as response: status=response.status
+              except urllib.error.HTTPError as error:
+                  if error.code not in (202,409,422): raise
+                  status=error.code
+              print('FBS_STALE_RUN_CANCEL_REQUESTED id='+rid+' http='+str(status),flush=True)
+          print('FBS_QUEUE_DRAIN candidates='+str(len(candidates))+' retained_latest='+str(len(newest))+
+                ' cancel_requested='+str(len(ids))+' completed_jobs_stuck='+str(len(stuck)),flush=True)
+          PY
+
       - name: Install clasp
         run: npm install -g @google/clasp
 
