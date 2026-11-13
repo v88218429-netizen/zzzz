@@ -200,6 +200,80 @@ def _profit_scenario(product: dict[str, Any], promo_price: float) -> tuple[float
     return profit, floor, None
 
 
+
+def _price_table(snapshots: dict[str, Any], portfolio: dict[str, Any]) -> dict[str, Any]:
+    """Expose only fields explicitly returned by WB's price snapshot."""
+    data, observed_at = _snapshot_data(snapshots, "price_margin", "prices")
+    if data is None:
+        return {
+            "status": "missing", "observed_at": None, "row_count": 0, "rows": [],
+            "note": "Снимок цен и скидок WB отсутствует.",
+        }
+
+    products = _products(portfolio)
+    goods_rows = _record_list(data)
+    output: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, str]] = set()
+
+    def pick(size: dict[str, Any] | None, good: dict[str, Any], keys: tuple[str, ...]) -> Any:
+        size_value = _first(size, keys) if size else None
+        return size_value if size_value is not None else _first(good, keys)
+
+    for good in goods_rows:
+        nm = _nm_id(good)
+        if not nm:
+            continue
+        shop, product = _product_for_promo(good, products)
+        sizes = good.get("sizes")
+        variants = [x for x in sizes if isinstance(x, dict)] if isinstance(sizes, list) else []
+        if not variants:
+            variants = [{}]
+        for size in variants:
+            size_name = str(_first(size, ("techSizeName", "sizeName", "name")) or "").strip()
+            size_id = str(_first(size, ("sizeID", "chrtID", "chrtId")) or "").strip()
+            key = (shop or "", nm, size_id or size_name)
+            if key in seen:
+                continue
+            seen.add(key)
+            output.append({
+                "nm_id": nm,
+                "shop_code": shop,
+                "product_name": (
+                    (product.get("name") or product.get("product_name") or product.get("seller_article"))
+                    if product else str(_first(good, ("vendorCode", "supplierArticle", "name")) or "")
+                ),
+                "vendor_code": str(_first(good, ("vendorCode", "supplierArticle", "vendor_code")) or ""),
+                "size_name": size_name,
+                "size_id": size_id,
+                "currency": str(_first(good, ("currencyIsoCode4217", "currency", "currencyCode")) or "RUB"),
+                "seller_price_rub": _number(pick(size, good, ("price", "sellerPrice", "seller_price"))),
+                "seller_discount_pct": _number(pick(size, good, ("discount", "sellerDiscount", "discountPercent", "seller_discount_pct"))),
+                "discounted_price_rub": _number(pick(size, good, ("discountedPrice", "priceWithDiscount", "priceWithDisc", "discounted_price", "salePrice"))),
+                "club_discount_pct": _number(pick(size, good, ("clubDiscount", "wbClubDiscount", "club_discount_pct"))),
+                "club_price_rub": _number(pick(size, good, ("clubDiscountedPrice", "priceWithClubDiscount", "club_price"))),
+                "business_discount_pct": _number(pick(size, good, ("b2bDiscount", "businessDiscount", "optDiscount", "business_discount_pct"))),
+                "promotion_price_rub": _number(pick(size, good, ("planPrice", "priceAfterPromotion", "priceForPromotion", "promoPrice", "promotion_price"))),
+                "price_index": pick(size, good, ("priceIndex", "price_index")),
+                "min_auto_promo_price_rub": _number(pick(size, good, ("minPriceForPromo", "minPriceForAutoPromo", "autoPromoMinPrice", "min_auto_promo_price"))),
+                "labels": pick(size, good, ("tags", "labels")),
+                "color": pick(size, good, ("color", "colorName")),
+                "unit_economics_decision_ready": bool(product.get("unit_economics_decision_ready", False)) if product else False,
+                "observed_at": observed_at,
+            })
+
+    return {
+        "status": "available" if output else "empty",
+        "observed_at": observed_at,
+        "row_count": len(output),
+        "rows": output,
+        "note": (
+            "Поля цены, скидки продавца, WB Клуба и для бизнеса читаются из снимка WB. "
+            "Индекс цены, акционная цена и минимальная граница показываются только если их передал источник; "
+            "прочерк означает отсутствие поля в снимке, а не нулевое значение."
+        ),
+    }
+
+
 def _promotion_recommendations(snapshots: dict[str, Any], portfolio: dict[str, Any]) -> dict[str, Any]:
     data, observed_at = _snapshot_data(snapshots, "price_margin", "promotions")
     products = _products(portfolio)
@@ -216,6 +290,12 @@ def _promotion_recommendations(snapshots: dict[str, Any], portfolio: dict[str, A
                 if product else None
             ),
             "promotion": label, "promo_price_rub": promo_price, "observed_at": observed_at,
+            "start_at": _first(promo, ("startDateTime", "startDate", "start_date", "dateFrom", "date_start")),
+            "end_at": _first(promo, ("endDateTime", "endDate", "end_date", "dateTo", "date_end")),
+            "promotion_status": _first(promo, ("status", "state", "inAction", "participating")),
+            "is_auto": _first(promo, ("isAuto", "auto", "is_auto", "autoAction")),
+            "eligible_products": _number(_first(promo, ("eligibleProducts", "eligibleCount", "productsCount", "nomenclaturesCount"))),
+            "participating": _number(_first(promo, ("participatingProducts", "participatingCount", "inActionCount"))),
             "recommendation": "blocked", "reason": None,
             "estimated_profit_rub": None, "target_profit_rub": None,
         }
@@ -416,6 +496,24 @@ def _card_catalog(snapshots: dict[str, Any], portfolio: dict[str, Any]) -> dict[
         if not barcodes and isinstance(direct_barcodes, list):
             barcodes = [str(x) for x in direct_barcodes if x]
         product = products.get((shop, nm)) if shop else None
+        characteristic_values = []
+        if characteristics is not None:
+            for characteristic in characteristics[:100]:
+                if not isinstance(characteristic, dict):
+                    continue
+                name = str(_first(characteristic, ("name", "charcName", "characteristicName", "title")) or "").strip()
+                raw_value = _first(characteristic, ("value", "values", "charcValue"))
+                if isinstance(raw_value, (list, tuple)):
+                    value = ", ".join(str(part).strip() for part in raw_value if part is not None and str(part).strip())
+                elif isinstance(raw_value, dict):
+                    value = str(_first(raw_value, ("name", "value", "title")) or "")
+                else:
+                    value = str(raw_value or "").strip()
+                characteristic_values.append({
+                    "name": name or "Характеристика без названия",
+                    "value": value[:240],
+                    "state": "present" if value else "empty",
+                })
         output.append({
             "nm_id": nm,
             "shop_code": shop,
@@ -433,6 +531,7 @@ def _card_catalog(snapshots: dict[str, Any], portfolio: dict[str, Any]) -> dict[
                 key: dimensions.get(key) for key in ("length", "width", "height", "weightBrutto")
                 if key in dimensions
             },
+            "characteristic_values": characteristic_values,
             "field_visibility": {
                 "photos": "present" if photos else ("empty" if photos == [] else "not_returned"),
                 "sizes": "present" if sizes else ("empty" if sizes == [] else "not_returned"),
@@ -667,11 +766,13 @@ def build_video_workbench(
     chats = _chat_queue(snapshots)
     reviews = _review_candidates(snapshots)
     promotions = _promotion_recommendations(snapshots, portfolio)
+    prices = _price_table(snapshots, portfolio)
     cards = _card_catalog(snapshots, portfolio)
     return {
         "generated_at": generated_at,
         "products": product_choices(portfolio),
         "card_catalog": cards,
+        "prices": prices,
         "promotions": promotions,
         "reviews": reviews,
         "chats": chats,
