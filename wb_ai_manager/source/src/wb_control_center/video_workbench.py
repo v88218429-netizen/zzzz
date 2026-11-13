@@ -383,14 +383,22 @@ def _pin_status(value: Any) -> str:
     return "unknown"
 
 
+def _ai_summary(snapshots: dict[str, Any], source_key: str) -> dict[str, Any]:
+    raw, observed_at = _snapshot_data(snapshots, source_key.split(":", 1)[0], source_key.split(":", 1)[1]) if ":" in source_key else (None, None)
+    if not isinstance(raw, dict):
+        return {"status": "missing", "summary": None, "observed_at": observed_at, "note": "Снимок ИИ-разбора отсутствует."}
+    return {**raw, "observed_at": observed_at}
+
+
 def _review_insights(snapshots: dict[str, Any]) -> dict[str, Any]:
     """Summarize only review rows actually returned by the connected source."""
     answered, observed_at = _snapshot_data(snapshots, "reviews_questions", "answered_feedbacks")
+    ai_summary = _ai_summary(snapshots, "reviews_questions:answered_feedback_insights")
     if answered is None:
-        return {"status": "missing", "observed_at": observed_at, "rows": [], "source_rows": 0,
+        return {"status": "missing", "observed_at": observed_at, "rows": [], "source_rows": 0, "ai_summary": ai_summary,
                 "note": "Нет снимка отзывов. Ноль не означает отсутствие отзывов."}
     if isinstance(answered, dict) and answered.get("source_status") == "unavailable":
-        return {"status": "unavailable", "observed_at": observed_at, "rows": [], "source_rows": 0,
+        return {"status": "unavailable", "observed_at": observed_at, "rows": [], "source_rows": 0, "ai_summary": ai_summary,
                 "note": str(answered.get("reason") or "Источник отзывов недоступен.")}
     reviews = _record_list(answered)
     groups: dict[tuple[str, str], dict[str, Any]] = {}
@@ -433,6 +441,7 @@ def _review_insights(snapshots: dict[str, Any]) -> dict[str, Any]:
     return {
         "status": "available" if reviews else "empty", "observed_at": observed_at,
         "source_rows": len(reviews), "unmapped_or_unrated_rows": unmapped, "rows": output,
+        "ai_summary": ai_summary,
         "note": "Доли рассчитаны по оценкам в строках, фактически пришедших из answered_feedbacks. Это выборка отвеченных отзывов, не все отзывы товара и не нейросетевой анализ текста.",
     }
 
@@ -544,6 +553,7 @@ def _chat_queue(snapshots: dict[str, Any]) -> dict[str, Any]:
         "source_rows": len(rows),
         "displayed_rows": len(output),
         "truncated": len(rows) > len(output),
+        "ai_summary": _ai_summary(snapshots, "buyer_chats:chat_triage"),
         "automatic_replies": False,
         "note": "Показаны только события из снимка, полная история диалога не подтверждена. Черновики формируются по простым правилам и не отправляются. Юридические и спорные случаи требуют человека.",
     }

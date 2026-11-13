@@ -265,6 +265,20 @@ class CustomerAndCatalogTests(unittest.TestCase):
         self.assertEqual(result["source_rows"], 3)
         self.assertIn("не нейросетевой", result["note"])
 
+    def test_ai_review_and_chat_summaries_are_shown_only_when_source_provided_them(self):
+        review = _review_insights({"reviews_questions": {
+            "answered_feedbacks": {"created_at": "review-time", "data": [{"productDetails": {"nmId": 111}, "productValuation": 5}]},
+            "answered_feedback_insights": {"created_at": "ai-time", "data": {"status": "available", "source_count": 1, "summary": "По одному отзыву выводы ограничены."}},
+        }})
+        chat = _chat_queue({"buyer_chats": {
+            "chat_events": {"created_at": "chat-time", "data": [{"chatId": "c1", "text": "Вопрос о размере"}]},
+            "chat_triage": {"created_at": "triage-time", "data": {"status": "not_configured", "source_count": 1, "note": "Модель не подключена."}},
+        }})
+        self.assertEqual(review["ai_summary"]["summary"], "По одному отзыву выводы ограничены.")
+        self.assertEqual(review["ai_summary"]["observed_at"], "ai-time")
+        self.assertEqual(chat["ai_summary"]["status"], "not_configured")
+        self.assertEqual(chat["ai_summary"]["observed_at"], "triage-time")
+
     def test_chat_drafts_are_never_sent_and_legal_cases_have_no_template(self):
         snapshots = {"buyer_chats": {"chat_events": {"data": [
             {"chatId": "c1", "text": "Где мой заказ, когда привезут?"},

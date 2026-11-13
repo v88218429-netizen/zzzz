@@ -4,7 +4,7 @@
     "stable": {
       "version": "1.1.58",
       "channel": "stable",
-      "notes": "Версия 1.1.58: подтверждение полноты обхода карточек, календарь кампаний отдельно от решений по товарам, сводка оценок отзывов по nmID с явной границей выборки. Ответы и изменения в WB не выполняются автоматически.",
+      "notes": "Версия 1.1.58: подтверждение полноты обхода карточек, календарь кампаний отдельно от решений по товарам, доли оценок по nmID и разбор тем отзывов/чатов языковой моделью только при её подключении. Источники и границы выборки показываются в панели; записи в WB не выполняются автоматически.",
       "minimum_current_version": "1.0.0",
       "files": [
         {
@@ -45,7 +45,7 @@
         {
           "path": "RELEASE_NOTES.md",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/RELEASE_NOTES.md",
-          "sha256": "28846080346bfba046f7ddf06cf0ae6a77ccaf4032da3dc6c3e1d40a0225a6a9"
+          "sha256": "60e8fa3dcccb706b9331453f03853135081c034e3320781902c38984f2439aee"
         },
         {
           "path": "scripts/auto_refresh_sheets.py",
@@ -166,7 +166,7 @@
         {
           "path": "src/wb_control_center/agents/buyer_chats.py",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/src/wb_control_center/agents/buyer_chats.py",
-          "sha256": "fcfc8b7e8f39e0cc0f0474c6d7a6c3abcc716fd2f4b876c14fba1c908a3288b3"
+          "sha256": "3426c9effc09edd579b229f02f3d9882c6f6369d49f521eeee19f3d43c397b26"
         },
         {
           "path": "src/wb_control_center/agents/cards.py",
@@ -231,7 +231,7 @@
         {
           "path": "src/wb_control_center/agents/reviews.py",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/src/wb_control_center/agents/reviews.py",
-          "sha256": "93388db1eb59918af8114d9127613a5a96b1595294dc3b57a277cc7b16fa2197"
+          "sha256": "9ca21273139d76804a5fbc225cfec804321c302ecd07565f9ee898412484becf"
         },
         {
           "path": "src/wb_control_center/agents/search_positions.py",
@@ -451,12 +451,12 @@
         {
           "path": "src/wb_control_center/ui/dashboard.html",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/src/wb_control_center/ui/dashboard.html",
-          "sha256": "23a965e04547778ad8280e31e474d3db9c2426b4febfc9c457324473c5f96dee"
+          "sha256": "3d81d2ec4343645278e019144e4fedf966e6ec947201f2651588b352b1e01fa0"
         },
         {
           "path": "src/wb_control_center/ui/dashboard.js",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/src/wb_control_center/ui/dashboard.js",
-          "sha256": "f8d224cfdbde85e82685b169ca5d5fd4e353f08191eb12e6f88d48aac2907b62"
+          "sha256": "2d5afdb61589bcb420c4a0c43479013fd824f967b417cec4db62f5299f68e306"
         },
         {
           "path": "src/wb_control_center/updater.py",
@@ -466,7 +466,7 @@
         {
           "path": "src/wb_control_center/video_workbench.py",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/src/wb_control_center/video_workbench.py",
-          "sha256": "d8cebb261851749c0433a49c600c0b34dc34a8dbcf5ed61afc012142185287c8"
+          "sha256": "bb28706368d3affc5514b021fb5de1adbbfa280d415ce933dcedb43aa3ced87d"
         },
         {
           "path": "src/wb_control_center/wb_mcp_runner.py",
