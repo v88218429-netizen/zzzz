@@ -1596,6 +1596,64 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
         print("INNER_FINANCE_WORKER_VERSION=" + current + "->" + next_version)
         print("INNER_FINANCE_RAW_REPORT_FIELD_SHAPE_V8=patched")
 
+
+    # Emit bounded freshness values, not product rows or account identifiers.
+    diagnostic_marker = "INNER_FRESHNESS_ACCOUNT_VALUE_DIAGNOSTIC_V1"
+    if diagnostic_marker not in worker_text:
+        shape_start = worker_text.find("function sellmonitorGithubInnerDiagnosticShape_(data) {")
+        shape_end = worker_text.find("\nfunction ", shape_start + 10)
+        if shape_start < 0 or shape_end < 0:
+            raise SystemExit("inner freshness diagnostic function anchor missing")
+        shape = worker_text[shape_start:shape_end]
+        schema_start = shape.find("    sample_account_schema:(function(){")
+        products_anchor = "    products_count:Array.isArray(products) ? products.length : 0"
+        schema_end = shape.find(products_anchor, schema_start)
+        if schema_start < 0 or schema_end < 0:
+            raise SystemExit("inner freshness account schema anchor changed")
+        value_block = """    sample_account_freshness:(function(){
+      var accounts=Array.isArray(freshness.accounts)?freshness.accounts:
+        (freshness.accounts&&typeof freshness.accounts==='object'?Object.keys(freshness.accounts).slice(0,2).map(function(k){return freshness.accounts[k];}):[]);
+      function safeDate(value) {
+        var s=String(value||'');
+        return /^\\d{4}-\\d{2}-\\d{2}(?:[T ][0-9:.+Z-]*)?$/.test(s) ? s.slice(0,32) : (s ? '[non-date]' : '');
+      }
+      function safeStatus(value) {
+        if (value===null || typeof value==='boolean' || typeof value==='number') return value;
+        if (typeof value==='string') return /^(?:true|false|fresh|stale|partial|complete|incomplete|available|missing|unknown|yes|no)$/i.test(value) ? value : '[text]';
+        if (Array.isArray(value)) return {type:'array',count:value.length};
+        if (value && typeof value==='object') {
+          var out={};
+          Object.keys(value).slice(0,20).forEach(function(k) {
+            if (!/^[A-Za-z_][A-Za-z0-9_]{0,39}$/.test(k)) return;
+            var v=value[k];
+            out[k]=v===null || typeof v==='boolean' || typeof v==='number' ? v :
+              (typeof v==='string' && /^(?:true|false|fresh|stale|partial|complete|incomplete|available|missing|unknown|yes|no)$/i.test(v) ? v :
+              (Array.isArray(v) ? {type:'array',count:v.length} : (v && typeof v==='object' ? {type:'object',keys:keys(v)} : '[text]')));
+          });
+          return out;
+        }
+        return typeof value;
+      }
+      return accounts.slice(0,2).map(function(account) {
+        account=account||{};
+        return {
+          dataIsUpTo:safeDate(account.dataIsUpTo),
+          financialReportsUpTo:safeDate(account.financialReportsUpTo),
+          firstSyncedDataAt:safeDate(account.firstSyncedDataAt),
+          incompleteCategories:safeStatus(account.incompleteCategories)
+        };
+      });
+    })(),
+"""
+        shape = shape[:schema_start] + value_block + shape[schema_end:]
+        worker_text = worker_text[:shape_start] + shape + worker_text[shape_end:]
+        worker_text = worker_text.replace(
+            "function sellmonitorGithubInnerDiagnosticShape_(data) {",
+            "function sellmonitorGithubInnerDiagnosticShape_(data) {\\n  /* " + diagnostic_marker + " */",
+            1,
+        )
+        print("INNER_FRESHNESS_ACCOUNT_VALUE_DIAGNOSTIC=patched")
+
     worker.write_text(worker_text, encoding="utf-8")
     print("WORKER_TRIGGER_REFRESH_V2=patched")
 candidates = []
