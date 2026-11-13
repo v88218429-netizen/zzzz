@@ -4,17 +4,6 @@ on:
   schedule:
     - cron: "*/30 * * * *"
   workflow_dispatch:
-  push:
-    branches: [mainggg]
-    paths:
-      - ".github/workflows/wb-fbs-github-bridge-health.yml"
-  workflow_run:
-    workflows:
-      - WB FBS GitHub recovery
-      - WB FBS Sanych targeted recovery
-      - WB FBS retry failed recovery windows
-      - WB FBS supply sync via GitHub
-    types: [completed]
 
 permissions:
   actions: read
