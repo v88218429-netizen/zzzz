@@ -141,6 +141,44 @@ def _promo_rows(value: Any) -> list[dict[str, Any]]:
     return out
 
 
+def _promotion_calendar(value: Any, observed_at: str | None) -> dict[str, Any]:
+    """Collapse product-level rows into distinct campaigns without inventing counts."""
+    grouped: dict[tuple[str, str, str, str], dict[str, Any]] = {}
+    for row in _record_list(value):
+        shop = _shop_code(_first(row, ("shop_code", "cabinet", "store", "store_name", "shop")))
+        campaign_id = str(_first(row, ("id", "promoID", "promoId", "promo_id", "actionId", "action_id")) or "").strip()
+        title = str(_first(row, PROMO_LABEL_KEYS) or campaign_id or "Акция WB").strip()
+        start = _first(row, ("startDateTime", "startDate", "start_date", "dateFrom", "date_start"))
+        end = _first(row, ("endDateTime", "endDate", "end_date", "dateTo", "date_end"))
+        status = _first(row, ("status", "state", "inAction", "participating"))
+        marker = (shop or "unknown", campaign_id or title, str(start or ""), str(end or ""))
+        entry = grouped.setdefault(marker, {
+            "shop_code": shop, "campaign_id": campaign_id or None, "title": title, "start_at": start, "end_at": end,
+            "status_values": [], "is_auto": _first(row, ("isAuto", "auto", "is_auto", "autoAction")),
+            "eligible_products": _number(_first(row, ("eligibleProducts", "eligibleCount", "productsCount", "nomenclaturesCount"))),
+            "participating_products": _number(_first(row, ("participatingProducts", "participatingCount", "inActionCount"))),
+            "product_ids": set(), "source_rows": 0, "observed_at": observed_at,
+        })
+        entry["source_rows"] += 1
+        if status is not None and status not in entry["status_values"]:
+            entry["status_values"].append(status)
+        nm = _nm_id(row)
+        if nm:
+            entry["product_ids"].add(nm)
+    events = []
+    for entry in grouped.values():
+        entry["product_count"] = len(entry.pop("product_ids"))
+        statuses = entry.pop("status_values")
+        entry["status"] = statuses[0] if len(statuses) == 1 else ("mixed" if statuses else None)
+        events.append(entry)
+    events.sort(key=lambda item: (str(item.get("start_at") or ""), item["title"], str(item.get("campaign_id") or "")))
+    return {
+        "status": "available" if value is not None else "missing", "observed_at": observed_at,
+        "row_count": len(events), "rows": events,
+        "note": "Кампании свёрнуты из строк снимка. Даты и счётчики показаны только если их передал источник.",
+    }
+
+
 def _product_for_promo(row: dict[str, Any], products: dict[tuple[str, str], dict[str, Any]]) -> tuple[str | None, dict[str, Any] | None]:
     nm = _nm_id(row)
     if not nm:
@@ -326,8 +364,76 @@ def _promotion_recommendations(snapshots: dict[str, Any], portfolio: dict[str, A
         "observed_at": observed_at,
         "row_count": len(rows),
         "rows": rows,
+        "calendar": _promotion_calendar(data, observed_at),
         "automatic_entry": False,
         "note": "Решение только рекомендательное. Вступление в акцию не выполняется.",
+    }
+
+
+def _pin_status(value: Any) -> str:
+    if value is True:
+        return "pinned"
+    if value is False:
+        return "not_pinned"
+    text = str(value or "").strip().casefold()
+    if text in {"true", "1", "да", "pinned", "закреплен", "закреплён", "закреплено"}:
+        return "pinned"
+    if text in {"false", "0", "нет", "not_pinned", "unpinned", "не закреплен", "не закреплён", "не закреплено"}:
+        return "not_pinned"
+    return "unknown"
+
+
+def _review_insights(snapshots: dict[str, Any]) -> dict[str, Any]:
+    """Summarize only review rows actually returned by the connected source."""
+    answered, observed_at = _snapshot_data(snapshots, "reviews_questions", "answered_feedbacks")
+    if answered is None:
+        return {"status": "missing", "observed_at": observed_at, "rows": [], "source_rows": 0,
+                "note": "Нет снимка отзывов. Ноль не означает отсутствие отзывов."}
+    if isinstance(answered, dict) and answered.get("source_status") == "unavailable":
+        return {"status": "unavailable", "observed_at": observed_at, "rows": [], "source_rows": 0,
+                "note": str(answered.get("reason") or "Источник отзывов недоступен.")}
+    reviews = _record_list(answered)
+    groups: dict[tuple[str, str], dict[str, Any]] = {}
+    unmapped = 0
+    for row in reviews:
+        details = _first(row, ("productDetails", "product_details"))
+        details = details if isinstance(details, dict) else {}
+        nm = _nm_id(details) or _nm_id(row)
+        shop = _shop_code(_first(row, ("shop_code", "cabinet", "store", "shop")))
+        rating = _number(_first(row, ("productValuation", "valuation", "rating", "stars")))
+        if not nm or rating is None or rating < 1 or rating > 5:
+            unmapped += 1
+            continue
+        group = groups.setdefault((shop or "unknown", nm), {
+            "shop_code": shop, "nm_id": nm, "count": 0, "rating_sum": 0.0,
+            "positive_count": 0, "neutral_count": 0, "negative_count": 0,
+            "examples": [], "observed_at": observed_at,
+        })
+        group["count"] += 1
+        group["rating_sum"] += rating
+        if rating >= 4:
+            group["positive_count"] += 1
+        elif rating <= 2:
+            group["negative_count"] += 1
+        else:
+            group["neutral_count"] += 1
+        text = str(_first(row, ("text", "textReview", "pros", "cons", "comment")) or "").strip()
+        if text and len(group["examples"]) < 6:
+            group["examples"].append({"rating": rating, "text": text[:400], "pin_status": _pin_status(_first(row, ("isPinned", "is_pinned", "pinned", "pinStatus", "pin_status")))})
+    output = []
+    for group in groups.values():
+        count = group["count"]
+        group["average_rating"] = round(group.pop("rating_sum") / count, 2) if count else None
+        group["positive_share_pct"] = round(group["positive_count"] * 100 / count, 1) if count else None
+        group["neutral_share_pct"] = round(group["neutral_count"] * 100 / count, 1) if count else None
+        group["negative_share_pct"] = round(group["negative_count"] * 100 / count, 1) if count else None
+        group["examples"].sort(key=lambda item: (item["rating"], -len(item["text"])))
+        output.append(group)
+    output.sort(key=lambda item: (item["negative_count"], item["count"]), reverse=True)
+    return {
+        "status": "available" if reviews else "empty", "observed_at": observed_at,
+        "source_rows": len(reviews), "unmapped_or_unrated_rows": unmapped, "rows": output,
+        "note": "Доли рассчитаны по оценкам в строках, фактически пришедших из answered_feedbacks. Это выборка отвеченных отзывов, не все отзывы товара и не нейросетевой анализ текста.",
     }
 
 
@@ -353,9 +459,8 @@ def _review_candidates(snapshots: dict[str, Any]) -> dict[str, Any]:
         if len(text) < 20:
             continue
         pinned_raw = _first(row, ("isPinned", "is_pinned", "pinned", "pinStatus", "pin_status"))
-        pinned_text = str(pinned_raw or "").strip().casefold()
-        is_pinned = pinned_raw is True or pinned_text in {"true", "1", "да", "pinned", "закреплен", "закреплено"}
-        if is_pinned:
+        pin_status = _pin_status(pinned_raw)
+        if pin_status == "pinned":
             continue
         details = _first(row, ("productDetails", "product_details"))
         details = details if isinstance(details, dict) else {}
@@ -371,7 +476,7 @@ def _review_candidates(snapshots: dict[str, Any]) -> dict[str, Any]:
             "text": text[:700],
             "score": score,
             "has_media": has_media,
-            "pin_status": "unknown" if pinned_raw is None else "not_pinned",
+            "pin_status": pin_status,
             "observed_at": observed_at,
             "reason": "Отвеченный отзыв с высокой оценкой и содержательным текстом" + ("; есть фото/видео" if has_media else ""),
         })
@@ -380,7 +485,7 @@ def _review_candidates(snapshots: dict[str, Any]) -> dict[str, Any]:
         "status": "available" if rows else "empty",
         "observed_at": observed_at,
         "rows": candidates[:30],
-        "note": "Кандидаты для ручной проверки. Если источник не передал состояние закрепления, оно показано как неизвестное.",
+        "note": "Кандидаты выбраны по оценке и длине текста, не ИИ. Закрепление неизвестно, если источник не передал поле; такие отзывы не считаются незакреплёнными.",
     }
 
 
@@ -436,8 +541,11 @@ def _chat_queue(snapshots: dict[str, Any]) -> dict[str, Any]:
         "status": "available" if data is not None else "missing",
         "observed_at": observed_at,
         "rows": output,
+        "source_rows": len(rows),
+        "displayed_rows": len(output),
+        "truncated": len(rows) > len(output),
         "automatic_replies": False,
-        "note": "Черновики формируются по простым правилам и не отправляются. Юридические и спорные случаи требуют человека.",
+        "note": "Показаны только события из снимка, полная история диалога не подтверждена. Черновики формируются по простым правилам и не отправляются. Юридические и спорные случаи требуют человека.",
     }
 
 def product_choices(portfolio: dict[str, Any]) -> list[dict[str, Any]]:
@@ -545,11 +653,17 @@ def _card_catalog(snapshots: dict[str, Any], portfolio: dict[str, Any]) -> dict[
         "observed_at": observed_at,
         "count": len(cards),
         "complete": complete,
+        "scan_reason": data.get("scan_reason") if isinstance(data, dict) else None,
+        "pages_scanned": data.get("pages_scanned") if isinstance(data, dict) else None,
+        "source_rows": data.get("source_rows") if isinstance(data, dict) else None,
+        "rows_without_nm_id": data.get("rows_without_nm_id") if isinstance(data, dict) else None,
         "rows": output,
         "note": (
-            "Показаны только поля из снимка каталога. Пустое значение отмечается как пустое лишь когда это явно передал источник; отсутствие поля не считается ошибкой карточки."
+            "Показаны только поля из снимка каталога. Пустое значение отмечается как пустое лишь когда это явно передал источник; отсутствие поля не считается ошибкой карточки. "
+            + str(data.get("scan_note") or "")
             if complete is not False else
-            "Обход каталога помечен источником как неполный; строки нельзя считать полным списком товаров."
+            "Обход каталога помечен источником как неполный; строки нельзя считать полным списком товаров. "
+            + str(data.get("scan_note") or "")
         ),
     }
 
@@ -765,6 +879,7 @@ def build_video_workbench(
     generated_at = datetime.now(timezone.utc).isoformat()
     chats = _chat_queue(snapshots)
     reviews = _review_candidates(snapshots)
+    review_insights = _review_insights(snapshots)
     promotions = _promotion_recommendations(snapshots, portfolio)
     prices = _price_table(snapshots, portfolio)
     cards = _card_catalog(snapshots, portfolio)
@@ -775,6 +890,7 @@ def build_video_workbench(
         "prices": prices,
         "promotions": promotions,
         "reviews": reviews,
+        "review_insights": review_insights,
         "chats": chats,
         "experiments": experiments if isinstance(experiments, list) else [],
         "vibes": {
