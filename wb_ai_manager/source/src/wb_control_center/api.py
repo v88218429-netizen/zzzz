@@ -12,6 +12,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse, Response
@@ -33,6 +34,7 @@ from .query_manager import QueryManager, QueryManagerConfig
 from .cluster_advisor import analyze_cluster_rows
 from .updater import UpdateManager, current_version
 from .policy import MANUAL_APPROVAL_TOOLS
+from .video_workbench import build_video_workbench, evaluate_experiment_results, known_product_ids, validate_experiment_payload
 
 settings = Settings()
 center = ControlCenter(settings)
@@ -515,6 +517,26 @@ async def stage_card_recovery(nm_id: int):
     return {"status": "staged", "change_id": action_id, "nm_id": nm_id, "note": "Карточка не восстановлена. Подтверди отдельное действие в разделе «Решения»."}
 
 
+VIDEO_EXPERIMENTS_KV_KEY = "video_workbench.experiments.v2"
+VIDEO_EXPERIMENTS_LIMIT = 200
+
+
+def _read_video_experiment_records() -> tuple[list[dict[str, Any]], str | None]:
+    raw = center.db.get_kv(VIDEO_EXPERIMENTS_KV_KEY, "[]") or "[]"
+    try:
+        value = json.loads(raw)
+    except (TypeError, ValueError):
+        return [], "Хранилище планов фото-тестов повреждено; исходная запись сохранена без перезаписи."
+    if not isinstance(value, list):
+        return [], "Хранилище планов фото-тестов имеет неверный формат; исходная запись сохранена без перезаписи."
+    rows = [dict(item) for item in value if isinstance(item, dict)]
+    return rows[:VIDEO_EXPERIMENTS_LIMIT], None
+
+
+def _write_video_experiment_records(rows: list[dict[str, Any]]) -> None:
+    center.db.set_kv(VIDEO_EXPERIMENTS_KV_KEY, json.dumps(rows[:VIDEO_EXPERIMENTS_LIMIT], ensure_ascii=False, separators=(",", ":")))
+
+
 SNAPSHOT_SPEC: dict[str, list[str]] = {
     "api_health": ["shops", "token_info", "degradations", "worker_source_health"],
     "cards": ["card_errors", "banned_products", "price_quarantine", "card_catalog"],
@@ -527,7 +549,8 @@ SNAPSHOT_SPEC: dict[str, list[str]] = {
     "price_margin": ["prices", "promotions"],
     "finance": ["balance", "report_7d", "worker_finance"],
     "cost_guard": ["paid_storage", "measurement_penalties", "deductions", "paid_acceptance", "worker_penalty_evidence"],
-    "reviews_questions": ["seller_rating", "flags", "feedbacks", "questions"],
+    "reviews_questions": ["seller_rating", "flags", "feedbacks", "questions", "answered_feedbacks"],
+    "experiments": ["workbench_experiments"],
     "buyer_chats": ["chat_events"],
     "orders_fbs": ["new_orders", "reshipment", "worker_fbs"],
     "returns_quality": ["open_claims"],
@@ -958,6 +981,8 @@ async def dashboard_data(days: int = 7, from_date: str | None = None, to_date: s
         except Exception as exc:
             optimizer_read_error = exc
     portfolio_snapshot = portfolio.snapshot()
+    video_snapshots = _dashboard_snapshots()
+    video_experiments, video_experiments_error = _read_video_experiment_records()
     audit_finished = _iso_dt(audit.get("finished_at"))
     portfolio_generated = _iso_dt(portfolio_snapshot.get("generated_at"))
     audit_stale = bool(
@@ -1204,10 +1229,70 @@ async def dashboard_data(days: int = 7, from_date: str | None = None, to_date: s
         "policy_safety": {"hard_max_bid_change_pct": center.policy.safety.get("limits",{}).get("max_bid_change_pct"), "absolute_bid_cap_rub": center.policy.safety.get("limits",{}).get("absolute_bid_cap_rub")},
         "portfolio": portfolio_snapshot,
         "connections": portfolio.connections(),
+        "video_workbench": {
+            **build_video_workbench(video_snapshots, portfolio_snapshot, video_experiments),
+            "experiments_store_status": "invalid" if video_experiments_error else "available",
+            "experiments_store_warning": video_experiments_error,
+        },
     }
 
 
 
+
+
+@app.post("/api/video-workbench/experiments")
+async def create_video_workbench_experiment(payload: dict[str, Any]) -> dict[str, Any]:
+    snapshots = _dashboard_snapshots()
+    portfolio_snapshot = portfolio.snapshot()
+    known = known_product_ids(portfolio_snapshot, snapshots)
+    experiment_id = uuid4().hex
+    try:
+        experiment = validate_experiment_payload(
+            payload, experiment_id=experiment_id, created_at=datetime.now(timezone.utc).isoformat()
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    if (experiment["shop_code"], experiment["nm_id"]) not in known:
+        raise HTTPException(409, detail="Товар с таким nmID не найден в подтверждённых данных выбранного магазина.")
+    records, read_error = _read_video_experiment_records()
+    if read_error:
+        raise HTTPException(503, detail=read_error)
+    if len(records) >= VIDEO_EXPERIMENTS_LIMIT:
+        raise HTTPException(409, detail=f"Достигнут предел в {VIDEO_EXPERIMENTS_LIMIT} сохранённых планов.")
+    records.insert(0, experiment)
+    try:
+        _write_video_experiment_records(records)
+    except Exception:
+        log.exception("failed to save video workbench experiment")
+        raise HTTPException(500, detail="Не удалось сохранить план в локальную базу панели.")
+    return {"status": "saved", "experiment": experiment, "write_to_wb": False}
+
+
+@app.post("/api/video-workbench/experiments/{experiment_id}/results")
+async def save_video_workbench_experiment_results(
+    experiment_id: str, payload: dict[str, Any]
+) -> dict[str, Any]:
+    records, read_error = _read_video_experiment_records()
+    if read_error:
+        raise HTTPException(503, detail=read_error)
+    experiment = next((item for item in records if str(item.get("id")) == experiment_id), None)
+    if experiment is None:
+        raise HTTPException(404, detail="План фото-теста не найден.")
+    result_input = payload.get("audience_metrics") if experiment.get("experiment_type") == "audience_photo" else payload.get("variants")
+    try:
+        evaluation = evaluate_experiment_results(experiment, result_input)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    experiment["results"] = evaluation.get("counts") if experiment.get("experiment_type") == "audience_photo" else evaluation.get("variants")
+    experiment["evaluation"] = evaluation
+    experiment["status"] = "results_recorded"
+    experiment["updated_at"] = datetime.now(timezone.utc).isoformat()
+    try:
+        _write_video_experiment_records(records)
+    except Exception:
+        log.exception("failed to save video workbench experiment results")
+        raise HTTPException(500, detail="Не удалось сохранить результаты в локальную базу панели.")
+    return {"status": "saved", "experiment": experiment, "write_to_wb": False}
 
 
 @app.get("/api/period-audit")

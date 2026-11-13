@@ -76,6 +76,10 @@
           <svg viewBox="0 0 24 24"><path d="M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm0 2v14h14V5H5Zm2 2h10v2H7V7Zm0 4h10v2H7v-2Zm0 4h7v2H7v-2Z"/></svg>
           <span>Новости WB</span><span class="nav-badge" id="nav-news">0</span>
         </button>
+<button class="nav-item" data-page="video-tools">
+          <svg viewBox="0 0 24 24"><path d="M4 4h16v16H4zM8 8h8v2H8zm0 4h8v2H8zm0 4h5v2H8z"/></svg>
+          <span>Инструменты из видео</span>
+        </button>
 <button class="nav-item" data-page="services">
           <svg viewBox="0 0 24 24"><path d="M4 5h16v3H4V5Zm1 5h14v10H5V10Zm3 2v2h8v-2H8Zm0 4v2h5v-2H8Z"/></svg>
           <span>Джем и опции</span>
@@ -387,7 +391,69 @@
         </div>
       </section>
 
-      <section class="page" data-page-panel="news">
+      <section class="page" data-page-panel="video-tools">
+        <div class="section-intro">
+          <div><span class="section-label">ИНСТРУМЕНТЫ ИЗ ВИДЕО WB PARTNERS</span><h2>Товар, акция, фото и покупатель</h2>
+            <p>Отдельный обзор всех магазинов или одного кабинета. Деньги и показатели берутся из снимков WB и таблиц. Любое действие в кабинете остаётся под контролем человека.</p>
+            <div class="quick-actions">
+              <button class="button secondary" type="button" data-go-page="advertising">Реклама и ставки</button>
+              <button class="button secondary" type="button" data-go-page="funnel">Воронка продаж</button>
+              <button class="button secondary" type="button" data-go-page="price">Цена и скидка</button>
+              <button class="button secondary" type="button" data-go-page="search">Поиск и карточки</button>
+            </div>
+          </div>
+          <label class="traffic-store-picker">Магазин<select id="video-store-select"><option value="all">Все магазины</option><option value="sanych">Саныч</option><option value="air">AIR</option><option value="hozyushka">Хозяюшка</option></select></label>
+        </div>
+        <div class="metric-grid four">
+          <article class="metric-card"><span class="metric-icon blue">%</span><div><span>Строки акций</span><strong id="video-promo-count">—</strong><small>цена сверяется с экономикой</small></div></article>
+          <article class="metric-card"><span class="metric-icon warning">!</span><div><span>Без надёжного решения</span><strong id="video-promo-blocked">—</strong><small>причина показана по товару</small></div></article>
+          <article class="metric-card"><span class="metric-icon green">★</span><div><span>Отзывы-кандидаты</span><strong id="video-review-count">—</strong><small>проверить перед закреплением</small></div></article>
+          <article class="metric-card"><span class="metric-icon purple">A/B</span><div><span>Планы фото-инструментов</span><strong id="video-experiment-count">—</strong><small>не означают активный тест WB</small></div></article>
+        </div>
+        <article class="card wide-card"><div class="card-head"><div><span class="section-label">АКЦИИ И АВТОСКИДКИ</span><h3>Экономика участия по товарам</h3><p>Расчёт требует точного nmID, цены из источника и подтверждённой юнит-экономики. Он оценивает прибыль; дополнительный трафик акции не обещает.</p></div></div>
+          <div class="data-truth-banner" id="video-promo-status">Снимок акций загружается.</div>
+          <div class="table-wrap"><table class="data-table"><thead><tr><th>Магазин · товар</th><th>Акция</th><th>Цена участия</th><th>Расчётная прибыль</th><th>Целевой минимум</th><th>Решение</th><th>Почему</th></tr></thead><tbody id="video-promo-table"></tbody></table></div></article>
+        <article class="card wide-card"><div class="card-head"><div><span class="section-label">ТАБЛИЦА ТОВАРОВ</span><h3>Карточки и переданные поля</h3></div></div>
+          <div class="data-truth-banner" id="video-card-status">Снимок карточек загружается.</div>
+          <div class="section-intro"><label class="search-input">Найти товар<input id="video-card-search" type="search" placeholder="Название, артикул продавца или nmID"></label><div><button class="button secondary" id="video-card-prev" type="button">Назад</button> <span id="video-card-page">—</span> <button class="button secondary" id="video-card-next" type="button">Дальше</button></div></div>
+          <div class="table-wrap"><table class="data-table"><thead><tr><th>Магазин · товар</th><th>Артикул продавца</th><th>Фото</th><th>Варианты</th><th>Штрихкоды</th><th>Характеристики</th><th>Габариты · вес</th></tr></thead><tbody id="video-card-table"></tbody></table></div>
+          <p class="source-note">Отсутствующее поле помечается ошибкой только когда WB явно передал пустое значение. Если поле не пришло в снимке, панель не объявляет его незаполненным.</p></article>
+        <div class="content-grid half">
+          <article class="card"><div class="card-head"><div><span class="section-label">ФОТО · ДВА РАЗНЫХ ИНСТРУМЕНТА</span><h3>Сохранить план и проверить файл</h3></div><span class="pill safe">БЕЗ ЗАПИСИ В WB</span></div>
+            <p class="source-note">А/Б-тест делит аудиторию примерно пополам и сравнивает два главных фото. «Фото для целевой аудитории» показывает отдельное фото выбранному сегменту и не является А/Б-тестом. Панель проверяет формат, размер и разрешение файла локально; изображение не загружается на сервер.</p>
+            <form id="video-experiment-form" class="price-inputs">
+              <label class="price-field"><span>Вид работы</span><div><select id="video-exp-type"><option value="ab_photo_test">А/Б-тест главного фото</option><option value="audience_photo">Фото для целевой аудитории</option></select></div></label>
+              <label class="price-field"><span>Магазин</span><div><select id="video-exp-shop"><option value="ap">Саныч</option><option value="aa">AIR</option><option value="yv">Хозяюшка</option></select></div></label>
+              <label class="price-field"><span>Товар</span><div><select id="video-exp-product"><option value="">Нет подтверждённых товаров</option></select></div></label>
+              <label class="price-field"><span>Название плана</span><div><input id="video-exp-title" maxlength="120" required placeholder="Фото кашпо: основное изображение"></div></label>
+              <div class="video-kind-panel" data-video-kind-panel="ab_photo_test">
+                <label class="price-field"><span>Срок, дней (от 7 до 60)</span><div><input id="video-exp-duration" type="number" min="7" max="60" value="14" required></div></label>
+                <label class="price-field"><span>Главный показатель</span><div><select id="video-exp-metric"><option value="ctr">Переходы от показов</option><option value="cart_from_click">Корзины от переходов</option><option value="order_from_click">Заказы от переходов</option><option value="orders_per_view">Заказы от показов</option></select></div></label>
+                <label class="price-field"><span>Вариант А · текущее фото</span><div><input id="video-exp-a-name" maxlength="60" required value="Текущее фото"></div></label>
+                <label class="price-field"><span>Вариант Б · новое фото</span><div><input id="video-exp-b-name" maxlength="60" required value="Новое фото"></div></label>
+                <label class="price-field"><span>Файл нового фото Б</span><div><input id="video-exp-ab-file" type="file" accept="image/jpeg,image/png,image/webp"></div></label>
+                <div class="source-note" id="video-photo-check-ab">Выбери JPG, PNG или WEBP до 10 МБ и не меньше 700 × 900 пикселей. Сжатие и содержание изображения проверь вручную.</div><img id="video-photo-preview-ab" alt="Локальное превью нового фото Б" hidden style="max-width:160px;max-height:160px;object-fit:contain">
+              </div>
+              <div class="video-kind-panel" data-video-kind-panel="audience_photo" hidden>
+                <p class="source-note">Чтобы опубликовать фото в кабинете WB, заполни все четыре поля аудитории и дождись модерации. Изменение фото или аудитории сбрасывает накопленную статистику.</p>
+                <label class="price-field"><span>Пол</span><div><select id="video-exp-gender" required><option value="">Выбрать</option><option>Женский</option><option>Мужской</option></select></div></label>
+                <label class="price-field"><span>Возраст</span><div><select id="video-exp-age" required><option value="">Выбрать</option><option>18–24</option><option>25–34</option><option>35–44</option><option>45–54</option><option>55+</option></select></div></label>
+                <label class="price-field"><span>Семейное положение</span><div><input id="video-exp-family" maxlength="60" required placeholder="Укажи выбранное значение WB"></div></label>
+                <label class="price-field"><span>Регион</span><div><input id="video-exp-region" maxlength="80" required placeholder="Укажи выбранный регион"></div></label>
+                <label class="price-field"><span>Дополнительное фото для сегмента</span><div><input id="video-exp-audience-photo" type="file" accept="image/jpeg,image/png,image/webp"></div></label>
+                <div class="source-note" id="video-photo-check-audience">JPG, PNG или WEBP до 10 МБ; разрешение не меньше 700 × 933 пикселей. Само изображение не отправляется.</div><img id="video-photo-preview-audience" alt="Локальное превью дополнительного фото" hidden style="max-width:160px;max-height:160px;object-fit:contain">
+              </div>
+              <button class="button primary" type="submit">Сохранить план</button></form>
+            <div id="video-experiment-list" class="signal-stack"></div></article>
+          <article class="card"><div class="card-head"><div><span class="section-label">ОТЗЫВЫ И ВАЙБЫ</span><h3>Кандидаты для закрепления</h3></div></div>
+            <div class="data-truth-banner" id="video-review-status">Проверяю доступность отвеченных отзывов.</div><div id="video-review-list" class="signal-stack"></div>
+            <div class="source-note">Кандидаты отбираются из отвеченных отзывов. Состояние закрепления отмечается только при наличии поля источника; команда закрепления из панели не отправляется.</div><hr>
+            <div class="card-head"><div><span class="section-label">ВИДЕО</span><h3>Закреплённые вайбы</h3></div></div><div class="data-truth-banner" id="video-vibes-status">Проверяю источник данных.</div></article>
+        </div>
+        <article class="card"><div class="card-head"><div><span class="section-label">ЧАТЫ ПОКУПАТЕЛЕЙ</span><h3>Очередь сообщений на разбор</h3><p>Текст и категория берутся из снимка чатов. Черновик требует проверки всего диалога; автоматической отправки нет.</p></div></div>
+          <div id="video-chat-status" class="data-truth-banner"></div><div id="video-chat-list" class="signal-stack"></div></article>
+      </section>
+<section class="page" data-page-panel="news">
         <div class="section-intro"><div><span class="section-label">ПЕРВОИСТОЧНИК WB</span><h2>Новости портала продавца</h2><p>Новости забираются автоматически раз в 5 минут. Содержание и отметка времени сохраняются вместе с источником. Операционные изменения остаются рекомендациями.</p></div><span class="pill safe">ТОЛЬКО ЧТЕНИЕ</span></div>
         <article class="card wide-card hidden" id="portal-news-summary-card"><div class="card-head"><div><span class="section-label">КРАТКО О НОВЫХ ЗАПИСЯХ</span><h3>Что изменилось</h3></div><span class="muted" id="portal-news-analysis-mode"></span></div><p id="portal-news-summary"></p></article>
         <article class="card wide-card"><div class="card-head"><div><span class="section-label">ПОСЛЕДНЯЯ ВЫГРУЗКА</span><h3 id="portal-news-status">Ожидание первой проверки</h3></div><span class="muted" id="portal-news-source"></span></div><div id="portal-news-feed" class="signal-stack"></div></article>

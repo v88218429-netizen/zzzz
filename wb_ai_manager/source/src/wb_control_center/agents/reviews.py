@@ -22,6 +22,14 @@ class ReviewsQuestionsAgent(BaseAgent):
         questions = await self.call("wb_questions_list", is_answered=False, take=100)
         out.snapshots.append(("feedbacks", feedbacks if isinstance(feedbacks, dict) else {"data": feedbacks}))
         out.snapshots.append(("questions", questions if isinstance(questions, dict) else {"data": questions}))
+        try:
+            answered = await self.call("wb_feedbacks_list", is_answered=True, take=100)
+            out.snapshots.append(("answered_feedbacks", answered if isinstance(answered, dict) else {"data": answered}))
+        except Exception as exc:
+            out.snapshots.append(("answered_feedbacks", {
+                "source_status": "unavailable",
+                "reason": "WB API не вернул список отвеченных отзывов (" + type(exc).__name__ + ").",
+            }))
         n_feedback = count_records(feedbacks)
         n_questions = count_records(questions)
         warn = int(cfg.get("unanswered_warn", 5))
