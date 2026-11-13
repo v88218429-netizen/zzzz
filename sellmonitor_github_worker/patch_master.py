@@ -1759,7 +1759,7 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
     var requested=String(requestedDate || '').slice(0,10);
     function covered(upTo) {
       var day=String(upTo || '').slice(0,10);
-      return /^\\\\d{4}-\\\\d{2}-\\\\d{2}$/.test(day) && (!requested || day>=requested);
+      return /^\\d{4}-\\d{2}-\\d{2}$/.test(day) && (!requested || day>=requested);
     }
     function category(name, upTo) {
       return {covered:covered(upTo) && !Object.prototype.hasOwnProperty.call(incomplete,name),stale:!covered(upTo) || Object.prototype.hasOwnProperty.call(incomplete,name)};
