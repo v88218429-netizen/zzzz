@@ -1,5 +1,5 @@
 # Read-only refresh: compare the live client AIR FBS automation with GitHub recovery.
-# One-time guarded FBS queue recovery marker.
+# Repeated FBS queue reset guard.
 name: Diagnose AIR Apps Script through GitHub
 
 on:
@@ -20,7 +20,7 @@ jobs:
     steps:
 
       - name: Reset stale FBS queue and dispatch fresh GitHub syncs
-        if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[FBS-QUEUE-RESET-2026-11-13]') }}
+        if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[FBS-QUEUE-RESET-RETRY]') }}
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
@@ -51,42 +51,37 @@ jobs:
           def get(path):
               req=urllib.request.Request(base+path,headers=headers)
               with urllib.request.urlopen(req,timeout=30) as response: return json.load(response)
-          def runs():
-              result=[]
+          def pending_runs():
+              found=[]
               for page in range(1,6):
                   batch=get('/actions/runs?per_page=100&page='+str(page)).get('workflow_runs',[])
-                  result.extend(batch)
+                  found.extend(batch)
                   if len(batch)<100: break
-              return result
-          candidates=[run for run in runs() if str(run.get('id'))!=os.environ['CURRENT_RUN_ID']
+              return [run for run in found if str(run.get('id'))!=os.environ['CURRENT_RUN_ID']
                       and (run.get('path') in paths or run.get('name') in names)
                       and run.get('status') in {'queued','pending','waiting','requested'}]
-          print('FBS_QUEUE_RESET_CANDIDATES='+str(len(candidates)),flush=True)
+          deadline=time.time()+180
           canceled=0
-          for run in candidates:
-              rid=str(run['id'])
-              request=urllib.request.Request(base+'/actions/runs/'+rid+'/cancel',headers=headers,method='POST')
-              try:
-                  with urllib.request.urlopen(request,timeout=30) as response: status=response.status
-              except urllib.error.HTTPError as error:
-                  if error.code not in (202,409,422): raise
-                  status=error.code
-              print('FBS_QUEUE_CANCEL_REQUESTED id='+rid+' status='+str(status),flush=True)
-              canceled+=1
-          deadline=time.time()+240
-          remaining=[]
-          while time.time()<deadline:
-              remaining=[run for run in runs() if str(run.get('id'))!=os.environ['CURRENT_RUN_ID']
-                         and (run.get('path') in paths or run.get('name') in names)
-                         and run.get('status') in {'queued','pending','waiting','requested'}]
-              if not remaining: break
-              print('FBS_QUEUE_RESET_WAITING='+str(len(remaining)),flush=True)
-              time.sleep(10)
-          if remaining:
-              print('FBS_QUEUE_RESET_NOT_EMPTY='+json.dumps(
-                  [{'id':x.get('id'),'name':x.get('name'),'status':x.get('status')} for x in remaining],
-                  ensure_ascii=False),flush=True)
-              raise SystemExit('FBS_QUEUE_RESET_FAILED')
+          while True:
+              pending=pending_runs()
+              if not pending: break
+              print('FBS_QUEUE_RESET_PENDING='+str(len(pending)),flush=True)
+              for run in pending:
+                  rid=str(run['id'])
+                  request=urllib.request.Request(base+'/actions/runs/'+rid+'/cancel',headers=headers,method='POST')
+                  try:
+                      with urllib.request.urlopen(request,timeout=30) as response: status=response.status
+                  except urllib.error.HTTPError as error:
+                      if error.code not in (202,409,422): raise
+                      status=error.code
+                  if status==202: canceled+=1
+              if time.time()>=deadline:
+                  remaining=pending_runs()
+                  print('FBS_QUEUE_RESET_NOT_EMPTY='+json.dumps(
+                      [{'id':x.get('id'),'name':x.get('name'),'status':x.get('status')} for x in remaining],
+                      ensure_ascii=False),flush=True)
+                  raise SystemExit('FBS_QUEUE_RESET_FAILED')
+              time.sleep(5)
           print('FBS_QUEUE_RESET_EMPTY=yes canceled='+str(canceled),flush=True)
           dispatches=[
               ('wb-fbs-github-recovery.yml',{'lookback_days':'3','client':'AIR','start_date':'','end_date':''}),
