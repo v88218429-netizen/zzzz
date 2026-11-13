@@ -145,7 +145,7 @@ jobs:
       GOOGLE_BRIDGE_KEY: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
       GOOGLE_BRIDGE_URL: https://script.google.com/macros/s/AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw/exec
       FBS_LOOKBACK_DAYS: "7"
-      FBS_BATCH_SIZE: ${{ matrix.client == 'AIR' && '2' || '10' }}
+      FBS_BATCH_SIZE: ${{ matrix.client == 'AIR' && '5' || '10' }}
       FBS_START_DATE: ${{ matrix.start_date }}
       FBS_END_DATE: ${{ matrix.end_date }}
     steps:
@@ -183,7 +183,7 @@ jobs:
       GOOGLE_BRIDGE_KEY: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
       GOOGLE_BRIDGE_URL: https://script.google.com/macros/s/AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw/exec
       FBS_LOOKBACK_DAYS: ${{ inputs.lookback_days }}
-      FBS_BATCH_SIZE: ${{ inputs.client == 'AIR' && '2' || '10' }}
+      FBS_BATCH_SIZE: ${{ inputs.client == 'AIR' && '5' || '10' }}
       FBS_START_DATE: ${{ inputs.start_date }}
       FBS_END_DATE: ${{ inputs.end_date }}
     steps:
@@ -227,7 +227,7 @@ jobs:
       GOOGLE_BRIDGE_KEY: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
       GOOGLE_BRIDGE_URL: https://script.google.com/macros/s/AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw/exec
       FBS_LOOKBACK_DAYS: "3"
-      FBS_BATCH_SIZE: ${{ matrix.client == 'AIR' && '2' || '10' }}
+      FBS_BATCH_SIZE: ${{ matrix.client == 'AIR' && '5' || '10' }}
     steps:
       - name: Skip stale or superseded scheduled refresh
         id: schedule_guard
@@ -305,7 +305,7 @@ jobs:
       GOOGLE_BRIDGE_KEY: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
       GOOGLE_BRIDGE_URL: https://script.google.com/macros/s/AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw/exec
       FBS_LOOKBACK_DAYS: "1"
-      FBS_BATCH_SIZE: "2"
+      FBS_BATCH_SIZE: "5"
       FBS_START_DATE: "2026-11-05"
       FBS_END_DATE: "2026-11-05"
     steps:
