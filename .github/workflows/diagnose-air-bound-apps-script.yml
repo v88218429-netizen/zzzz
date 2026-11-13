@@ -1,5 +1,5 @@
 # Read-only refresh: compare the live client AIR FBS automation with GitHub recovery.
-# Read-only live stage sampling; no queue or production mutations.
+# One bounded source and stage inspection after the confirmed AIR repair.
 name: Diagnose AIR Apps Script through GitHub
 
 on:
@@ -28,7 +28,7 @@ jobs:
           set -euo pipefail
           python3 - <<'PY'
           import json, os, time, urllib.request
-          for sample in range(1, 9):
+          for sample in range(1, 2):
               payload=json.dumps({'token':os.environ['BRIDGE_KEY'],'action':'fbs_stage_snapshot'}).encode()
               request=urllib.request.Request(os.environ['BRIDGE_URL'],data=payload,
                   headers={'Content-Type':'application/json'},method='POST')
@@ -42,7 +42,7 @@ jobs:
                                 ('client','stage','lastCoreStage','previousStage','elapsedMs','at')}
               print('FBS_LIVE_STAGE_SAMPLE='+json.dumps({'sample':sample,'snapshot':safe},
                   ensure_ascii=False,separators=(',',':')),flush=True)
-              if sample < 8: time.sleep(30)
+              if sample < 1: time.sleep(30)
           PY
 
       - name: Install clasp
