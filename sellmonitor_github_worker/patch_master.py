@@ -1685,7 +1685,7 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
         if retry_anchor not in worker_text:
             raise SystemExit("Inner MCP retry anchor changed")
         worker_text = worker_text.replace(retry_anchor,retry_replacement,1)
-        version_match = re.search(r"VERSION:\s*'github-worker-(\\d+)\\.(\\d+)\\.(\\d+)'",worker_text)
+        version_match = re.search(r"VERSION:\s*'github-worker-(\d+)\.(\d+)\.(\d+)'",worker_text)
         if not version_match:
             raise SystemExit("Inner MCP retry worker version missing")
         major,minor,patch_no=[int(x) for x in version_match.groups()]
