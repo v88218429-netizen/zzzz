@@ -451,12 +451,12 @@
         {
           "path": "src/wb_control_center/ui/dashboard.html",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/src/wb_control_center/ui/dashboard.html",
-          "sha256": "6fa95342bc66e0f1040bde6b6ca174fdedf1574f8c7bc2c1652185a46ff5dceb"
+          "sha256": "a9e077711c494c64ede074ddd758f303b4e9fafbfcd5b3dfa25611bd997eddd1"
         },
         {
           "path": "src/wb_control_center/ui/dashboard.js",
           "url": "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb_ai_manager/source/src/wb_control_center/ui/dashboard.js",
-          "sha256": "541924b0fddaa7dcac1f2832630fd0239d607099b97b85be1bba3c306c7a3916"
+          "sha256": "d4436d87ea752e28697c8e0f9deb227b2f72efdb030dea907492751e1bc28e19"
         },
         {
           "path": "src/wb_control_center/updater.py",

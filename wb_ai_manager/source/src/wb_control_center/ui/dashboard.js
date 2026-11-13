@@ -1201,7 +1201,7 @@ function videoMetricLabel(metric){return ({ctr:'Переходы от показ
 function videoRecommendationLabel(value){return ({consider:'Можно рассматривать',decline:'Не входить',blocked:'Нет надёжного расчёта',needs_target:'Не задан целевой уровень'})[value]||'Не определено';}
 function renderVideoExperimentFields(){
  const kind=$('video-exp-type')?.value||'ab_photo_test';
- qa('[data-video-kind-panel]').forEach(panel=>{panel.hidden=panel.dataset.videoKindPanel!==kind;});
+ qa('[data-video-kind-panel]').forEach(panel=>{panel.hidden=panel.dataset.videoKindPanel!==kind;panel.querySelectorAll('input,select,textarea').forEach(control=>{control.disabled=panel.hidden;});});
 }
 const videoPhotoMeta={};
 const videoPhotoObjectUrls={};
