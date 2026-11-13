@@ -1,16 +1,5 @@
-# Lightweight read-only diagnostics through the protected GitHub bridge; inspect active recovery stage.
+# Read-only stage samples through the protected GitHub bridge.
 name: WB FBS active stage diagnostic
-# Read-only stage snapshots may run during production writes; they do not take the data lock. Refreshable by a GitHub commit.
-# Refresh stage snapshot after the 90-day recovery queue started.
-# Snapshot tick 1.
-# Snapshot tick 2.
-# Snapshot tick 3.
-# Snapshot tick 4.
-# Snapshot tick 5.
-# Snapshot tick 6.
-# Snapshot tick 7.
-# Snapshot tick 8.
-# Snapshot tick 13: observe AIR state patch after gateway optimization.
 on:
   workflow_dispatch:
   push:
@@ -18,10 +7,8 @@ on:
     paths:
       - ".github/workflows/fbs-active-stage-diagnostic.yml"
       - "wb_worker/github_fbs_recovery.py"
-
 permissions:
   contents: read
-
 jobs:
   inspect:
     runs-on: ubuntu-latest
@@ -30,40 +17,29 @@ jobs:
       BRIDGE_URL: https://script.google.com/macros/s/AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw/exec
       BRIDGE_KEY: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
     steps:
-      - name: Read only the active FBS stage through the protected bridge
+      - name: Sample only the active FBS stage
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
-          import json, os, urllib.request
-          def post(payload,timeout):
-              data=json.dumps(payload).encode()
-              request=urllib.request.Request(os.environ["BRIDGE_URL"],data=data,
-                  headers={"Content-Type":"application/json"},method="POST")
-              with urllib.request.urlopen(request,timeout=timeout) as response:
-                  return json.loads(response.read().decode("utf-8"))
+          import json, os, time, urllib.request
           token=os.environ["BRIDGE_KEY"]
-          stage=post({"token":token,"action":"fbs_stage_snapshot"},15)
-          stage_result=stage.get("result") or {}
-          stages=stage_result.get("fbs_ingest_stages") or {}
-          if stage.get("ok") is not True or set(stages)-{"SANYCH","AIR","HOZYAYUSHKA"}:
-              raise SystemExit("FBS_STAGE_SNAPSHOT_FAILED")
-          print("FBS_STAGE_SNAPSHOT="+json.dumps({
-              "checkedAt":stage_result.get("checkedAt"),
-              "fbs_ingest_stages":stages,
-              "fbs_supply_stage":stage_result.get("fbs_supply_stage")},
-              ensure_ascii=False,separators=(",",":")),flush=True)
-
-          try:
-              log=post({"token":token,"action":"fbs_technical_log_read","client":"AIR"},45)
-              log_result=log.get("result") or {}
-              print("AIR_TECH_LOG_SNAPSHOT="+json.dumps({
-                  "ok":log.get("ok"),
-                  "lastRow":log_result.get("lastRow"),
-                  "scannedRows":log_result.get("scannedRows"),
-                  "matchCount":log_result.get("matchCount"),
-                  "matches":(log_result.get("matches") or [])[-25:]},
+          for sample in range(1,11):
+              payload=json.dumps({"token":token,"action":"fbs_stage_snapshot"}).encode()
+              request=urllib.request.Request(os.environ["BRIDGE_URL"],data=payload,
+                  headers={"Content-Type":"application/json"},method="POST")
+              with urllib.request.urlopen(request,timeout=20) as response:
+                  data=json.loads(response.read().decode("utf-8"))
+              result=data.get("result") or {}
+              stages=result.get("fbs_ingest_stages") or {}
+              if data.get("ok") is not True or set(stages)-{"SANYCH","AIR","HOZYAYUSHKA"}:
+                  raise SystemExit("FBS_STAGE_SNAPSHOT_FAILED")
+              safe={}
+              for client,stage in stages.items():
+                  safe[client]={key:stage.get(key) for key in
+                      ("client","stage","lastCoreStage","previousStage","elapsedMs","at")}
+              print("FBS_LIVE_STAGE_SAMPLE="+json.dumps({
+                  "sample":sample,"checkedAt":result.get("checkedAt"),"stages":safe},
                   ensure_ascii=False,separators=(",",":")),flush=True)
-          except Exception as error:
-              print("AIR_TECH_LOG_READ_ERROR="+type(error).__name__,flush=True)
+              if sample<10: time.sleep(20)
           PY
