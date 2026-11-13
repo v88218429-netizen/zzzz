@@ -454,7 +454,7 @@ def read_current_states(client: str, orders: list[dict]) -> tuple[dict[str, dict
             transient = bool(result.get("retryable")) or any(
                 marker.lower() in last_detail.lower() for marker in transient_markers
             )
-            if not transient or attempt == 4:
+            if not transient or attempt == 2:
                 detail = re.sub(r"\s+", " ", last_detail)[:240]
                 print(client + "_FBS_STATUS_READ_REJECT=" + detail, flush=True)
                 raise RuntimeError(client + ":FBS_STATUS_READ_REJECTED") from None
