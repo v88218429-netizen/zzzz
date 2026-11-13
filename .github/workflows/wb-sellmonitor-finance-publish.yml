@@ -1,4 +1,5 @@
 # Retry Sanych with header-first, one-call date formatting from worker 1.3.77
+# Re-publish all three WB summaries after Sellmonitor partial refresh (2026-11-13)
 # Queue AIR publication after the Sanych recovery check [air-only] [no-token-seed]
 # Queue Hozyayushka publication after AIR [hozyayushka-only] [no-token-seed]
 # Retry Sanych after source-month filtering and bulk date-axis insertion
