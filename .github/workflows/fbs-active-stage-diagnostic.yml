@@ -10,7 +10,7 @@ name: WB FBS active stage diagnostic
 # Snapshot tick 6.
 # Snapshot tick 7.
 # Snapshot tick 8.
-# Snapshot tick 12: verify the first AIR write-response recovery call.
+# Snapshot tick 13: observe AIR state patch after gateway optimization.
 on:
   workflow_dispatch:
   push:
