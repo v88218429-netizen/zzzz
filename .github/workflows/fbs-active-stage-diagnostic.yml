@@ -10,7 +10,7 @@ name: WB FBS active stage diagnostic
 # Snapshot tick 6.
 # Snapshot tick 7.
 # Snapshot tick 8.
-# Snapshot tick 10: locate the current AIR recovery call stage.
+# Snapshot tick 11: inspect AIR recovery after the central gateway redeploy.
 on:
   workflow_dispatch:
   push:
