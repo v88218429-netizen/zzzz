@@ -7505,15 +7505,24 @@ function sellmonitorGithubFbsTechnicalLogReadV1_(body) {
   var sheets=metadata.sheets||[];
   if(!sheets.some(function(item){return item.properties&&item.properties.title===sheetTitle;}))
     throw new Error('FBS_TECH_LOG_TAB_NOT_FOUND');
-  // Read the bounded log with the Sheets API; SpreadsheetApp.openById/getLastRow/getRange
-  // stalls on AIR's large workbook even when only the last 100 log rows are needed.
-  var response=Sheets.Spreadsheets.Values.get(spreadsheetId,"'🛠 Технический лог'!A1:E5019",{
-    majorDimension:'ROWS',valueRenderOption:'FORMATTED_VALUE'
-  });
-  var allRows=response.values||[];
-  var last=allRows.length;
-  var start=Math.max(1,last-99);
-  var values=allRows.slice(start-1);
+  // Read backwards in 500-row windows. A1:E5019 on AIR can stall for over
+  // a minute; only the newest 100 log rows are needed for diagnosis.
+  var allRows=[],last=0,windowStart=0;
+  for(var windowEnd=5019;windowEnd>=1;windowEnd-=500){
+    windowStart=Math.max(1,windowEnd-499);
+    var response=Sheets.Spreadsheets.Values.get(spreadsheetId,
+      "'🛠 Технический лог'!A"+windowStart+":E"+windowEnd,{
+        majorDimension:'ROWS',valueRenderOption:'FORMATTED_VALUE'
+      });
+    allRows=response.values||[];
+    if(allRows.length){
+      last=windowStart+allRows.length-1;
+      break;
+    }
+  }
+  var start=Math.max(windowStart,last-99);
+  var values=allRows.slice(Math.max(0,allRows.length-100));
+  start=last-values.length+1;
   var matches=[];
   for(var i=0;i<values.length;i++){
     var original=values[i].map(function(value){return String(value||'');});
@@ -7530,7 +7539,7 @@ function sellmonitorGithubFbsTechnicalLogReadV1_(body) {
     matches.push({row:start+i,cells:safe});
   }
   return {ok:true,client:client,lastRow:last,scannedRows:values.length,
-    truncated:allRows.length>=5019,matchCount:matches.length,matches:matches.slice(-100)};
+    truncated:start>1,matchCount:matches.length,matches:matches.slice(-100)};
 }
 
 /** Read-only health check over real order IDs and the maximum order timestamp. */
