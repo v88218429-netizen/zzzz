@@ -2582,8 +2582,24 @@ function sellmonitorGithubInnerDiagnosticShape_(data) {
     freshness_keys:keys(data && (data.freshness || data.sourceFreshness || data.source_freshness)),
     nested_freshness_keys:keys(payload && (payload.freshness || payload.sourceFreshness || payload.source_freshness)),
     category_keys:keys(freshness.categories || freshness),
-    products_count:Array.isArray(products) ? products.length : 0,
-    sample_product_keys:Array.isArray(products) ? products.slice(0,2).map(keys) : []
+    accounts_type:Array.isArray(freshness.accounts) ? 'array' : typeof freshness.accounts,
+    accounts_count:Array.isArray(freshness.accounts) ? freshness.accounts.length : (freshness.accounts && typeof freshness.accounts === 'object' ? Object.keys(freshness.accounts).length : 0),
+    sample_account_schema:(function(){
+      var accounts=Array.isArray(freshness.accounts)?freshness.accounts:
+        (freshness.accounts&&typeof freshness.accounts==='object'?Object.keys(freshness.accounts).slice(0,2).map(function(k){return freshness.accounts[k];}):[]);
+      return accounts.slice(0,2).map(function(account){
+        var result={keys:keys(account),types:{}};
+        if(account&&typeof account==='object')Object.keys(account).slice(0,20).forEach(function(k){
+          var v=account[k];
+          result.types[k]=Array.isArray(v)?'array':(v===null?'null':typeof v);
+        });
+        ['categories','freshness','sources','datasets'].forEach(function(k){
+          if(account&&account[k]&&typeof account[k]==='object')result[k+'_keys']=keys(account[k]);
+        });
+        return result;
+      });
+    })(),
+    products_count:Array.isArray(products) ? products.length : 0
   };
 }
 
