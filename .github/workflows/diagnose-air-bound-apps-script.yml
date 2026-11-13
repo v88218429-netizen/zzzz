@@ -137,6 +137,30 @@ jobs:
               with urllib.request.urlopen(request,timeout=30) as response: status=response.status
               print('FBS_FRESH_DISPATCH workflow='+workflow+' status='+str(status),flush=True)
           PY
+      - name: Read live FBS bridge stages read-only
+        if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[FBS-STAGE-READ]') }}
+        env:
+          BRIDGE_KEY: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
+          BRIDGE_URL: https://script.google.com/macros/s/AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw/exec
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, urllib.request
+          payload=json.dumps({'token':os.environ['BRIDGE_KEY'],'action':'fbs_stage_snapshot'}).encode()
+          request=urllib.request.Request(os.environ['BRIDGE_URL'],data=payload,
+              headers={'Content-Type':'application/json'},method='POST')
+          with urllib.request.urlopen(request,timeout=120) as response: data=json.load(response)
+          if data.get('ok') is not True or (data.get('result') or {}).get('ok') is not True:
+              raise SystemExit('FBS_STAGE_SNAPSHOT_FAILED')
+          stages=data['result'].get('fbs_ingest_stages') or {}
+          safe={}
+          for client,stage in stages.items():
+              safe[client]={key:stage.get(key) for key in
+                            ('client','stage','lastCoreStage','previousStage','elapsedMs','at')}
+          print('FBS_LIVE_STAGE_SNAPSHOT='+json.dumps(safe,ensure_ascii=False,separators=(',',':')),flush=True)
+          PY
+
       - name: Install clasp
         run: npm install -g @google/clasp
 
