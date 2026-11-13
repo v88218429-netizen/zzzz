@@ -382,24 +382,32 @@ def read_current_states(client: str, orders: list[dict]) -> tuple[dict[str, dict
         batch_ids = ids[offset:offset + 1000]
         last_detail = "FBS_STATUS_READ_INVALID_RESPONSE"
         print("FBS_STATUS_READ_START="+json.dumps({"store":client,"chunk":offset//1000+1,"requested":len(batch_ids)}),flush=True)
-        for attempt in range(1, 5):
+        # Apps Script reads can keep running after a client socket timeout. A
+        # 120-second retry starts a second full ID-index rebuild while the first
+        # is still executing, compounding AIR workbook latency. Wait for the
+        # Apps Script execution window before retrying an ambiguous read.
+        for attempt in range(1, 3):
             try:
                 read_started = time.monotonic()
                 reply = request(
                     BRIDGE_URL,
                     body={"token": BRIDGE_KEY, "action": "fbs_status_read",
-                          "client": client, "orderIds": batch_ids}, 
+                          "client": client, "orderIds": batch_ids},
                     max_attempts=1,
-                    timeout=120,
+                    timeout=BRIDGE_INGEST_TIMEOUT,
                 )
             except RuntimeError as ex:
                 last_detail = str(ex)
                 transient = any(marker.lower() in last_detail.lower() for marker in transient_markers)
-                if not transient or attempt == 4:
+                if not transient or attempt == 2:
                     detail = safe_bridge_detail(last_detail) if "safe_bridge_detail" in globals() else re.sub(r"\s+", " ", last_detail)[:240]
                     print(client + "_FBS_STATUS_READ_REJECT=" + detail, flush=True)
                     raise RuntimeError(client + ":FBS_STATUS_READ_REJECTED") from None
-                wait_seconds = min(30, 10 * attempt)
+                ambiguous_timeout = last_detail in {
+                    "NETWORK_RETRY_EXHAUSTED",
+                    "INVALID_JSON_RESPONSE_RETRY_EXHAUSTED",
+                }
+                wait_seconds = 370 if ambiguous_timeout else min(30, 10 * attempt)
                 print(client + "_FBS_STATUS_READ_RETRY=" + str(attempt) +
                       ":SAME_READ_ONLY_REQUEST:WAIT_SECONDS=" + str(wait_seconds), flush=True)
                 time.sleep(wait_seconds)
