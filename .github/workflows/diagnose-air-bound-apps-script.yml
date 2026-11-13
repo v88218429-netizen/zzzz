@@ -1,5 +1,5 @@
 # Read-only refresh: compare the live client AIR FBS automation with GitHub recovery.
-# Force-cancel guard for stuck completed FBS parent.
+# Read-only live stage sampling; no queue or production mutations.
 name: Diagnose AIR Apps Script through GitHub
 
 on:
@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  actions: write
+  actions: read
   contents: read
 
 jobs:
@@ -19,126 +19,7 @@ jobs:
     timeout-minutes: 10
     steps:
 
-      - name: Force-cancel the stuck completed Nov 11 FBS parent
-        if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[FBS-QUEUE-FORCE-430151]') }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPOSITORY: ${{ github.repository }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          import json, os, time, urllib.error, urllib.request
-          base='https://api.github.com/repos/'+os.environ['REPOSITORY']
-          headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],
-                   'Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'}
-          rid='43015129891'
-          def get(path):
-              request=urllib.request.Request(base+path,headers=headers)
-              with urllib.request.urlopen(request,timeout=30) as response: return json.load(response)
-          run=get('/actions/runs/'+rid)
-          if run.get('name')!='WB FBS gap catch-up 2026-11-11' or run.get('status')!='queued':
-              raise SystemExit('STUCK_PARENT_IDENTITY_OR_STATE_CHANGED')
-          jobs=get('/actions/runs/'+rid+'/jobs?per_page=100').get('jobs',[])
-          if not jobs or not all(job.get('status')=='completed' and job.get('conclusion')=='success' for job in jobs):
-              raise SystemExit('STUCK_PARENT_CHILD_JOBS_NOT_ALL_SUCCESSFUL')
-          request=urllib.request.Request(base+'/actions/runs/'+rid+'/force-cancel',headers=headers,method='POST')
-          try:
-              with urllib.request.urlopen(request,timeout=30) as response: status=response.status
-          except urllib.error.HTTPError as error:
-              if error.code not in (202,409,422): raise
-              status=error.code
-          print('FBS_FORCE_CANCEL_REQUESTED id='+rid+' status='+str(status)+
-                ' completed_success_jobs='+str(len(jobs)),flush=True)
-          for _ in range(12):
-              time.sleep(5)
-              run=get('/actions/runs/'+rid)
-              if run.get('status')=='completed':
-                  print('FBS_STUCK_PARENT_FINAL conclusion='+str(run.get('conclusion')),flush=True)
-                  if run.get('conclusion')!='cancelled':
-                      raise SystemExit('STUCK_PARENT_NOT_CANCELLED')
-                  break
-          else:
-              raise SystemExit('STUCK_PARENT_FORCE_CANCEL_NOT_CONFIRMED')
-          PY
-      - name: Reset stale FBS queue and dispatch fresh GitHub syncs
-        if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[FBS-QUEUE-RESET-RETRY-2]') }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPOSITORY: ${{ github.repository }}
-          CURRENT_RUN_ID: ${{ github.run_id }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          import json, os, time, urllib.error, urllib.request
-          repo=os.environ['REPOSITORY']; token=os.environ['GH_TOKEN']
-          base='https://api.github.com/repos/'+repo
-          headers={'Authorization':'Bearer '+token,'Accept':'application/vnd.github+json',
-                   'X-GitHub-Api-Version':'2022-11-28'}
-          paths={'.github/workflows/wb-fbs-github-recovery.yml',
-                 '.github/workflows/wb-fbs-sanych-targeted-recovery.yml',
-                 '.github/workflows/wb-fbs-auto-retry.yml',
-                 '.github/workflows/wb-fbs-supply-sync.yml',
-                 '.github/workflows/wb-fbs-github-bridge-health.yml',
-                 '.github/workflows/wb-fbs-gap-catchup.yml',
-                 '.github/workflows/wb-fbs-recovery-continuation.yml',
-                 '.github/workflows/wb-fbs-automatic-freshness-repair.yml',
-                 '.github/workflows/wb-fbs-production-acceptance-audit.yml'}
-          names={'WB FBS GitHub recovery','WB FBS Sanych targeted recovery',
-                 'WB FBS retry failed recovery windows','WB FBS supply sync via GitHub',
-                 'WB FBS GitHub bridge health','WB FBS gap catch-up 2026-11-11',
-                 'WB FBS recovery continuation','WB FBS automatic freshness repair',
-                 'WB FBS production acceptance audit'}
-          def get(path):
-              req=urllib.request.Request(base+path,headers=headers)
-              with urllib.request.urlopen(req,timeout=30) as response: return json.load(response)
-          def pending_runs():
-              found=[]
-              for page in range(1,6):
-                  batch=get('/actions/runs?per_page=100&page='+str(page)).get('workflow_runs',[])
-                  found.extend(batch)
-                  if len(batch)<100: break
-              return [run for run in found if str(run.get('id'))!=os.environ['CURRENT_RUN_ID']
-                      and (run.get('path') in paths or run.get('name') in names)
-                      and run.get('status') in {'queued','pending','waiting','requested'}]
-          deadline=time.time()+180
-          canceled=0
-          while True:
-              pending=pending_runs()
-              if not pending: break
-              print('FBS_QUEUE_RESET_PENDING='+str(len(pending)),flush=True)
-              for run in pending:
-                  rid=str(run['id'])
-                  request=urllib.request.Request(base+'/actions/runs/'+rid+'/cancel',headers=headers,method='POST')
-                  try:
-                      with urllib.request.urlopen(request,timeout=30) as response: status=response.status
-                  except urllib.error.HTTPError as error:
-                      if error.code not in (202,409,422): raise
-                      status=error.code
-                  if status==202: canceled+=1
-              if time.time()>=deadline:
-                  remaining=pending_runs()
-                  print('FBS_QUEUE_RESET_NOT_EMPTY='+json.dumps(
-                      [{'id':x.get('id'),'name':x.get('name'),'status':x.get('status')} for x in remaining],
-                      ensure_ascii=False),flush=True)
-                  raise SystemExit('FBS_QUEUE_RESET_FAILED')
-              time.sleep(5)
-          print('FBS_QUEUE_RESET_EMPTY=yes canceled='+str(canceled),flush=True)
-          dispatches=[
-              ('wb-fbs-github-recovery.yml',{'lookback_days':'7','client':'AIR','start_date':'','end_date':''}),
-              ('wb-fbs-sanych-targeted-recovery.yml',{'start_date':'2026-11-11','end_date':'2026-11-13','include_live':'true'}),
-              ('wb-fbs-supply-sync.yml',{})
-          ]
-          for workflow,inputs in dispatches:
-              body=json.dumps({'ref':'mainggg','inputs':inputs}).encode()
-              request=urllib.request.Request(base+'/actions/workflows/'+workflow+'/dispatches',
-                  data=body,headers={**headers,'Content-Type':'application/json'},method='POST')
-              with urllib.request.urlopen(request,timeout=30) as response: status=response.status
-              print('FBS_FRESH_DISPATCH workflow='+workflow+' status='+str(status),flush=True)
-          PY
       - name: Read live FBS bridge stages read-only
-        if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[FBS-STAGE-READ-RETRY]') }}
         env:
           BRIDGE_KEY: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
           BRIDGE_URL: https://script.google.com/macros/s/AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw/exec
