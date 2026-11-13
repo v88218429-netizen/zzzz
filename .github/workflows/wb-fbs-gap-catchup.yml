@@ -116,7 +116,7 @@ jobs:
 
   catchup_air_hozy:
     needs: catchup_sanych
-    if: ${{ always() && github.event_name == 'push' && contains(github.event.head_commit.message, '[WB-FBS-GAP-CATCHUP-2026-11-11]') }}
+    if: ${{ always() && github.event_name == 'push' && (contains(github.event.head_commit.message, '[WB-FBS-GAP-CATCHUP-2026-11-11]') || contains(github.event.head_commit.message, '[WB-FBS-GAP-CATCHUP-2026-11-13]')) }}
     name: "${{ matrix.client }} catch-up ${{ matrix.start_date }}–${{ matrix.end_date }}"
     runs-on: ubuntu-latest
     timeout-minutes: 360
@@ -126,80 +126,11 @@ jobs:
       matrix:
         include:
           - client: AIR
-            start_date: "2026-08-14"
-            end_date: "2026-08-16"
-          - client: AIR
-            start_date: "2026-08-17"
-            end_date: "2026-08-19"
-          - client: AIR
-            start_date: "2026-08-20"
-            end_date: "2026-08-22"
-          - client: AIR
-            start_date: "2026-08-23"
-            end_date: "2026-08-25"
-          - client: AIR
-            start_date: "2026-08-26"
-            end_date: "2026-08-28"
-          - client: AIR
-            start_date: "2026-08-29"
-            end_date: "2026-08-31"
-          - client: AIR
-            start_date: "2026-09-01"
-            end_date: "2026-09-03"
-          - client: AIR
-            start_date: "2026-09-04"
-            end_date: "2026-09-06"
-          - client: AIR
-            start_date: "2026-09-07"
-            end_date: "2026-09-09"
-          - client: AIR
-            start_date: "2026-09-10"
-            end_date: "2026-09-12"
-          - client: AIR
-            start_date: "2026-09-13"
-            end_date: "2026-09-15"
-          - client: AIR
-            start_date: "2026-09-16"
-            end_date: "2026-09-18"
-          - client: AIR
-            start_date: "2026-09-19"
-            end_date: "2026-09-21"
-          - client: AIR
-            start_date: "2026-09-22"
-            end_date: "2026-09-24"
-          - client: AIR
-            start_date: "2026-09-25"
-            end_date: "2026-09-27"
-          - client: AIR
-            start_date: "2026-09-28"
-            end_date: "2026-09-30"
-          - client: AIR
-            start_date: "2026-10-01"
-            end_date: "2026-10-03"
-          - client: AIR
-            start_date: "2026-10-04"
-            end_date: "2026-10-06"
-          - client: AIR
-            start_date: "2026-10-07"
-            end_date: "2026-10-09"
-          - client: AIR
-            start_date: "2026-10-10"
-            end_date: "2026-10-12"
-          - client: AIR
-            start_date: "2026-10-13"
-            end_date: "2026-10-15"
-          - client: AIR
             start_date: "2026-10-16"
             end_date: "2026-10-18"
           - client: AIR
-            start_date: "2026-10-19"
-            end_date: "2026-10-21"
-          - client: AIR
             start_date: "2026-10-22"
             end_date: "2026-10-24"
-          - client: AIR
-            start_date: "2026-10-25"
-            end_date: "2026-10-27"
           - client: AIR
             start_date: "2026-10-28"
             end_date: "2026-10-30"
