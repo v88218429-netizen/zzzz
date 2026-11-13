@@ -441,7 +441,7 @@ function renderAll(){
   const ad=adSummary(); $('metric-ad-spend').textContent=ad.error&&!ad.rows.length?'—':rub(ad.spend); const ratingVal=sellerRating(); $('metric-rating').textContent=ratingVal==null?'Недоступен':num(ratingVal,2);
   renderPeriodAudit();
   if($('metric-ad-period')) $('metric-ad-period').textContent=d.period_audit?.ready?(d.period?.label||'за выбранный период'):'ожидает расчёта периода';
-  renderExecutive(); renderEvents(); renderRecommendations(); renderDecisions(); renderDecisionControl(); renderDomains(); renderPortfolio(); renderConnections(); renderAdvertising(); renderTraffic(); renderFunnel(); if(state.page==='price'&&!document.activeElement.closest('#price-inputs'))renderPriceCalculator(); renderPolicyStudio(); renderInventory(); renderSearch(); renderFinance(); renderCustomers(); renderPortalNews(); renderSellerServices(); renderKnowledge(); renderAgents();
+  renderExecutive(); renderEvents(); renderRecommendations(); renderDecisions(); renderDecisionControl(); renderDomains(); renderPortfolio(); renderConnections(); renderAdvertising(); renderTraffic(); renderFunnel(); if(state.page==='price'&&!document.activeElement.closest('#price-inputs'))renderPriceCalculator(); renderPolicyStudio(); renderInventory(); renderSearch(); renderFinance(); renderCustomers(); renderPortalNews(); renderSellerServices(); renderVideoTools(); renderKnowledge(); renderAgents();
 }
 function snap(source,key){ return state.data?.snapshots?.[source]?.[key] || null; }
 function sellerRating(){
@@ -1194,6 +1194,143 @@ function renderCustomers(){
 
 function signalHtml(e){ const scope=eventScopeText(e), ent=eventEntity(e); const title=ent?`${ent.name} · ${e.title}`:e.title; return `<button type="button" class="signal ${esc(e.severity)} interactive-card" data-event-id="${esc(e.id)}"><strong>${esc(humanizeText(title))}</strong><p>${esc(humanizeText(e.message))}</p><span class="source">${esc(agentNames[e.agent]||e.agent)} · ${scope?esc(scope)+' · ':''}${time(e.created_at)} · открыть подробности</span></button>`; }
 
+function videoShopLabel(code){return ({ap:'Саныч',aa:'AIR',yv:'Хозяюшка'})[String(code||'')]||'Магазин не сопоставлен';}
+function videoStoreCode(value){return ({sanych:'ap',air:'aa',hozyushka:'yv'})[String(value||'all')]||null;}
+function videoRowsForStore(rows){const code=videoStoreCode(state.selectedStore);return (rows||[]).filter(row=>!code||row.shop_code===code);}
+function videoMetricLabel(metric){return ({ctr:'Переходы от показов',cart_from_click:'Корзины от переходов',order_from_click:'Заказы от переходов',orders_per_view:'Заказы от показов'})[metric]||metric||'Показатель';}
+function videoRecommendationLabel(value){return ({consider:'Можно рассматривать',decline:'Не входить',blocked:'Нет надёжного расчёта',needs_target:'Не задан целевой уровень'})[value]||'Не определено';}
+function renderVideoExperimentFields(){
+ const kind=$('video-exp-type')?.value||'ab_photo_test';
+ qa('[data-video-kind-panel]').forEach(panel=>{panel.hidden=panel.dataset.videoKindPanel!==kind;});
+}
+const videoPhotoMeta={};
+const videoPhotoObjectUrls={};
+async function handleVideoPhotoFile(inputId,kind){
+ const input=$(inputId),file=input?.files?.[0],isAudience=kind==='audience_photo';
+ const status=$(isAudience?'video-photo-check-audience':'video-photo-check-ab');
+ const preview=$(isAudience?'video-photo-preview-audience':'video-photo-preview-ab');
+ if(!file){delete videoPhotoMeta[kind];if(preview){preview.hidden=true;preview.removeAttribute('src');}return;}
+ delete videoPhotoMeta[kind];
+ if(!['image/jpeg','image/png','image/webp'].includes(file.type)){status.textContent='Формат не подходит. Выбери JPG, PNG или WEBP.';return;}
+ if(file.size<=0||file.size>10*1024*1024){status.textContent='Размер файла должен быть до 10 МБ.';return;}
+ const old=videoPhotoObjectUrls[kind];if(old)URL.revokeObjectURL(old);
+ const url=URL.createObjectURL(file);videoPhotoObjectUrls[kind]=url;
+ const image=new Image(),minHeight=isAudience?933:900;
+ image.onload=()=>{
+   if(image.naturalWidth<700||image.naturalHeight<minHeight){status.textContent='Недостаточное разрешение: '+image.naturalWidth+'×'+image.naturalHeight+'; нужно не меньше 700×'+minHeight+'.';if(preview)preview.hidden=true;return;}
+   videoPhotoMeta[kind]={name:file.name,mime:file.type,width:image.naturalWidth,height:image.naturalHeight,size_bytes:file.size};
+   status.textContent='Проверено локально: '+image.naturalWidth+'×'+image.naturalHeight+', '+(file.size/1048576).toFixed(2)+' МБ. Само изображение не отправлено; содержание и сжатие проверь вручную.';
+   if(preview){preview.src=url;preview.hidden=false;}
+ };
+ image.onerror=()=>{status.textContent='Браузер не смог прочитать файл изображения.';if(preview)preview.hidden=true;};
+ image.src=url;
+}
+function videoExperimentCard(exp){
+ const kind=exp.experiment_type==='audience_photo'?'audience_photo':'ab_photo_test';
+ const saved=exp.results||null,ev=exp.evaluation||{},photo=exp.photo_validation||{};
+ const title=esc(exp.title||'Фото-инструмент'),shop=esc(videoShopLabel(exp.shop_code)),nm=esc(exp.nm_id);
+ const status=esc(exp.status==='results_recorded'?'результаты сохранены':'план сохранён');
+ const photoLine=photo.name?'Фото: '+esc(photo.name)+' · '+num(photo.width)+'×'+num(photo.height)+' · '+(Number(photo.size_bytes||0)/1048576).toFixed(2)+' МБ; файл не отправлен.':'';
+ let out='<article class="signal info" data-video-experiment-card="'+esc(exp.id)+'"><strong>'+title+' · '+shop+' · '+nm+'</strong><p>'+esc(kind==='ab_photo_test'?'А/Б-тест главного фото':'Фото для целевой аудитории')+' · '+status+'</p><div class="source-note">'+esc(exp.guidance||'')+'<br>'+photoLine+'</div>';
+ if(kind==='audience_photo'){
+   const audience=Object.entries(exp.audience||{}).map(([key,value])=>(({gender:'Пол',age:'Возраст',family_status:'Семейное положение',region:'Регион'})[key]||key)+': '+value).join(' · ');
+   const counts=ev.counts||saved||{},rates=ev.rates_pct||{};
+   const fields=[['impressions','Показы'],['clicks','Переходы'],['carts','Корзины'],['orders','Заказы']];
+   const inputs=fields.map(([key,label])=>'<label>'+label+'<input type="number" min="0" step="1" data-video-audience-result="'+key+'" value="'+esc(counts[key]??'')+'"></label>').join('');
+   if(ev.sample_note)out+='<p>Сегмент: '+esc(audience)+'<br>'+esc(ev.sample_note)+' Переходы от показов: '+(rates.clicks_from_impressions_pct==null?'—':num(rates.clicks_from_impressions_pct,2)+'%')+' · корзины от переходов: '+(rates.carts_from_clicks_pct==null?'—':num(rates.carts_from_clicks_pct,2)+'%')+' · заказы от корзин: '+(rates.orders_from_carts_pct==null?'—':num(rates.orders_from_carts_pct,2)+'%')+'.</p>';
+   else out+='<p>Сегмент: '+esc(audience)+'</p>';
+   out+='<details><summary>Внести агрегированные числа из отчёта WB</summary><div class="video-result-inputs">'+inputs+'</div><button class="button secondary" type="button" data-video-results-save="'+esc(exp.id)+'">Сохранить показатели</button><small>Сегментное фото не является А/Б-тестом; контрольная группа не сравнивается.</small></details></article>';
+   return out;
+ }
+ const prior=Array.isArray(saved)?saved:(Array.isArray(ev.variants)?ev.variants:[]),byName=new Map(prior.map(row=>[row.name,row]));
+ const variants=(exp.variants||[]).map(v=>{const r=byName.get(v.name)||{};return '<tr><td>'+esc(v.name)+(v.role==='current'?' · текущее':'')+'</td>'+['impressions','clicks','carts','orders'].map(key=>'<td><input type="number" min="0" step="1" data-video-result="'+key+'" data-variant-name="'+esc(v.name)+'" value="'+esc(r[key]??'')+'"></td>').join('')+'</tr>';}).join('');
+ const leader=ev.descriptive_leader?' · описательный лидер: '+esc(ev.descriptive_leader):'',spread=ev.difference_percentage_points==null?'—':num(ev.difference_percentage_points,2)+' п.п.';
+ if(ev.variants?.length)out+='<p>'+esc(videoMetricLabel(ev.metric))+leader+' · разница '+spread+'. '+esc(ev.warning||'')+'</p>';
+ out+='<p>Срок в плане: '+num(exp.duration_days)+' дней · показатель: '+esc(videoMetricLabel(exp.metric))+'. Проверь остатки и не меняй фото во время теста.</p><details><summary>Внести числа по двум вариантам из отчёта WB</summary><div class="table-wrap"><table class="data-table"><thead><tr><th>Вариант</th><th>Показы</th><th>Переходы</th><th>Корзины</th><th>Заказы</th></tr></thead><tbody>'+variants+'</tbody></table></div><button class="button secondary" type="button" data-video-results-save="'+esc(exp.id)+'">Сохранить результаты</button><small>Панель не вычисляет значимость и не назначает победителя.</small></details></article>';
+ return out;
+}
+function renderVideoTools(){
+ if(!$('video-promo-table'))return;
+ const v=state.data?.video_workbench||{},promo=v.promotions||{},rows=videoRowsForStore(promo.rows||[]);
+ $('video-promo-count').textContent=num(rows.length);
+ $('video-promo-blocked').textContent=num(rows.filter(x=>['blocked','needs_target'].includes(x.recommendation)).length);
+ $('video-promo-status').textContent=promo.status==='missing'?'Снимок акций отсутствует.':num(rows.length)+' строк · источник '+time(promo.observed_at)+' · '+(promo.note||'');
+ $('video-promo-table').innerHTML=rows.length?rows.map(x=>'<tr><td>'+esc(videoShopLabel(x.shop_code))+' · '+esc(x.product_name||x.nm_id||'Товар не сопоставлен')+'</td><td>'+esc(x.promotion||'Акция WB')+'</td><td>'+rub(x.promo_price_rub)+'</td><td>'+rub(x.estimated_profit_rub)+'</td><td>'+rub(x.target_profit_rub)+'</td><td>'+esc(videoRecommendationLabel(x.recommendation))+'</td><td>'+esc(x.reason||'')+'</td></tr>').join(''):'<tr><td colspan="7">'+esc(promo.status==='missing'?'Нет снимка акций.':'В выбранном магазине нет строк акций из последнего снимка.')+'</td></tr>';
+
+ const catalog=v.card_catalog||{},allCardRows=videoRowsForStore(catalog.rows||[]),query=String($('video-card-search')?.value||'').trim().toLocaleLowerCase('ru');
+ const filteredCardRows=allCardRows.filter(x=>!query||[x.product_name,x.vendor_code,x.nm_id].some(value=>String(value||'').toLocaleLowerCase('ru').includes(query)));
+ const pageSize=100,pageCount=Math.max(1,Math.ceil(filteredCardRows.length/pageSize));if(!Number.isInteger(state.videoCatalogPage))state.videoCatalogPage=0;state.videoCatalogPage=Math.max(0,Math.min(pageCount-1,state.videoCatalogPage));const cardRows=filteredCardRows.slice(state.videoCatalogPage*pageSize,(state.videoCatalogPage+1)*pageSize);
+ const scanLabel=catalog.complete===false?'неполный':catalog.complete===true?'полный':'неизвестно';
+ $('video-card-status').textContent=catalog.status==='missing'?'Снимок каталога WB отсутствует.':num(filteredCardRows.length)+' из '+num(allCardRows.length)+' строк в выбранном охвате · обход '+scanLabel+' · '+time(catalog.observed_at)+'. '+(catalog.note||'');
+ if($('video-card-page'))$('video-card-page').textContent=(filteredCardRows.length?state.videoCatalogPage+1:0)+' / '+(filteredCardRows.length?pageCount:0);
+ if($('video-card-prev'))$('video-card-prev').disabled=state.videoCatalogPage<=0;
+ if($('video-card-next'))$('video-card-next').disabled=state.videoCatalogPage>=pageCount-1;
+ $('video-card-table').innerHTML=cardRows.length?cardRows.map(x=>{
+   const d=x.dimensions||{},dims=['length','width','height','weightBrutto'].filter(k=>d[k]!=null).map(k=>({length:'Д',width:'Ш',height:'В',weightBrutto:'Вес'}[k])+' '+esc(d[k])).join(' · ')||'нет в снимке';
+   const count=(value,field)=>value==null?'не передано':value===0?'0 · пусто в API: '+esc(field):num(value);
+   return '<tr><td>'+esc(videoShopLabel(x.shop_code))+' · '+esc(x.product_name)+'<small>'+esc(x.nm_id)+'</small></td><td>'+esc(x.vendor_code||'не передан')+'</td><td>'+count(x.photo_count,'фото')+'</td><td>'+count(x.size_count,'варианты')+'</td><td>'+count(x.barcode_count,'штрихкоды')+'</td><td>'+count(x.characteristic_count,'характеристики')+'</td><td>'+dims+'</td></tr>';
+ }).join(''):'<tr><td colspan="7">Нет карточек для показа в выбранном магазине.</td></tr>';
+
+ const review=v.reviews||{},reviewRows=videoRowsForStore(review.rows||[]);
+ $('video-review-count').textContent=num(reviewRows.length);
+ $('video-review-status').textContent=review.status==='missing'?'Снимок отвеченных отзывов не получен.':review.status==='unavailable'?review.note:num(reviewRows.length)+' кандидатов · '+time(review.observed_at)+' · '+(review.note||'');
+ $('video-review-list').innerHTML=reviewRows.length?reviewRows.map(x=>'<article class="signal info"><strong>'+esc(videoShopLabel(x.shop_code))+' · '+esc(x.nm_id||'товар')+' · '+num(x.rating,1)+' ★ · '+esc(x.pin_status==='unknown'?'закрепление неизвестно':'не закреплён по источнику')+'</strong><p>'+esc(x.text)+'</p><span class="source">'+esc(x.reason)+' · приоритет '+num(x.score)+'/100</span></article>').join(''):empty(review.status==='unavailable'?review.note:'Нет кандидатов в переданном списке отвеченных отзывов.');
+ $('video-vibes-status').textContent=v.vibes?.note||'Источник вайбов и статуса закрепления не подтверждён.';
+ const chats=v.chats||{},chatRows=videoRowsForStore(chats.rows||[]);
+ $('video-chat-status').textContent=chats.status==='missing'?'Снимок событий чатов не получен.':'Событий: '+num(chatRows.length)+' · '+time(chats.observed_at)+' · '+(chats.note||'');
+ $('video-chat-list').innerHTML=chatRows.length?chatRows.map(x=>'<article class="signal info"><strong>'+esc(videoShopLabel(x.shop_code))+' · '+esc(x.category||x.event_type||'Событие чата')+' · '+esc(x.chat_id||'чат без ID')+'</strong><p>'+esc(x.text||'Источник не передал текст сообщения.')+'</p>'+(x.draft?'<div class="source-note"><b>Черновик · не отправлен:</b> '+esc(x.draft)+'</div>':'')+'<span class="source">'+esc(x.classification_basis||x.state||'требуется проверка')+' · '+time(x.observed_at)+' · ответ не отправлен</span></article>').join(''):empty('В выбранном магазине нет событий чатов в снимке.');
+
+ const shopSelect=$('video-exp-shop'),productSelect=$('video-exp-product');
+ if(shopSelect){if(!state.videoExpStore)state.videoExpStore=shopSelect.value||'ap';shopSelect.value=state.videoExpStore;}
+ const formProducts=(v.products||[]).filter(x=>x.shop_code===state.videoExpStore),previous=state.videoExpProduct||productSelect?.value||'';
+ if(productSelect){productSelect.innerHTML='<option value="">Выбери товар с точным nmID</option>'+formProducts.map(x=>'<option value="'+esc(x.shop_code)+'|'+esc(x.nm_id)+'">'+esc(x.name)+' · '+esc(x.nm_id)+(x.unit_economics_decision_ready?' · экономика связана':' · экономика не подтверждена')+'</option>').join('');productSelect.value=formProducts.some(x=>x.shop_code+'|'+x.nm_id===previous)?previous:'';}
+ const experiments=videoRowsForStore(v.experiments||[]);
+ $('video-experiment-count').textContent=num(experiments.length);
+ $('video-experiment-list').innerHTML=experiments.length?experiments.map(videoExperimentCard).join(''):empty('Планов фото-инструментов нет.');
+ if(v.experiments_store_status==='invalid')$('video-experiment-list').insertAdjacentHTML('afterbegin','<div class="data-truth-banner">'+esc(v.experiments_store_warning||'Хранилище фото-планов не читается; оно не перезаписано.')+'</div>');
+ renderVideoExperimentFields();
+}
+async function submitVideoExperiment(event){
+ event.preventDefault();
+ const kind=$('video-exp-type').value,product=$('video-exp-product').value||'',parts=product.split('|'),shop_code=parts[0],nm_id=parts[1];
+ if(!shop_code||!nm_id){showToast('Сначала выбери товар из подтверждённых данных магазина.','error');return;}
+ const photo_validation=videoPhotoMeta[kind];
+ if(!photo_validation){showToast('Сначала выбери файл нового фото и дождись локальной проверки.','error');return;}
+ const payload={experiment_type:kind,title:$('video-exp-title').value,shop_code,nm_id,photo_validation};
+ if(kind==='ab_photo_test'){
+   payload.duration_days=Number($('video-exp-duration').value);payload.metric=$('video-exp-metric').value;
+   payload.variants=[{name:$('video-exp-a-name').value},{name:$('video-exp-b-name').value}];
+ }else{
+   payload.photo_name=photo_validation.name;
+   payload.audience={gender:$('video-exp-gender').value,age:$('video-exp-age').value,family_status:$('video-exp-family').value,region:$('video-exp-region').value};
+ }
+ try{
+   const r=await fetch('/api/video-workbench/experiments',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}),body=await r.json();
+   if(!r.ok)throw new Error(body.detail||('HTTP '+r.status));
+   state.videoExpStore=shop_code;state.videoExpProduct=product;$('video-exp-title').value='';
+   delete videoPhotoMeta[kind];
+   const preview=$(kind==='audience_photo'?'video-photo-preview-audience':'video-photo-preview-ab');if(preview){preview.hidden=true;preview.removeAttribute('src');}
+   const fileInput=$(kind==='audience_photo'?'video-exp-audience-photo':'video-exp-ab-file');if(fileInput)fileInput.value='';
+   showToast('План сохранён в панели. В WB он не запускался.','success');await fetchData();
+ }catch(e){showToast('Не удалось сохранить план: '+e.message,'error');}
+}
+async function saveVideoExperimentResults(button){
+ const card=button.closest('[data-video-experiment-card]'),id=button.dataset.videoResultsSave;
+ let resultPayload;
+ if(card.querySelector('[data-video-audience-result]')){
+   const audience_metrics={};qa('[data-video-audience-result]',card).forEach(input=>{audience_metrics[input.dataset.videoAudienceResult]=input.value===''?0:Number(input.value);});
+   resultPayload={audience_metrics};
+ }else{
+   const grouped={};qa('[data-video-result]',card).forEach(input=>{const name=input.dataset.variantName;(grouped[name]||(grouped[name]={name}))[input.dataset.videoResult]=input.value===''?0:Number(input.value);});
+   resultPayload={variants:Object.values(grouped)};
+ }
+ try{
+   const r=await fetch('/api/video-workbench/experiments/'+encodeURIComponent(id)+'/results',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(resultPayload)}),body=await r.json();
+   if(!r.ok)throw new Error(body.detail||('HTTP '+r.status));
+   showToast('Показатели сохранены. Панель не объявляет победителя и не меняет кабинет WB.','success');await fetchData();
+ }catch(e){showToast('Не удалось сохранить показатели: '+e.message,'error');}
+}
+
 function renderKnowledge(){
   const v=state.data?.knowledge?.policy_version; if($('policy-version')) $('policy-version').textContent=v?`ПРАВИЛА v${v}`:'ПРАВИЛА';
   const agenda=state.data?.research_agenda||{}, programs=agenda.programs||[], discoveries=agenda.discoveries||[];
@@ -1218,6 +1355,16 @@ function renderAgents(){
   $('agents-table').innerHTML=ordered.map(name=>{const r=runs[name], int=agents[name].interval_minutes, st=status(r); return `<tr><td><strong>${esc(agentNames[name]||name)}</strong></td><td><span class="status-tag ${st[0]}">${st[1].toLowerCase()}</span></td><td>${r?.finished_at?time(r.finished_at):'ещё не завершался'}</td><td>${int?`${int} мин`:'ручной'}</td></tr>`;}).join('');
 }
 
+$('video-experiment-form')?.addEventListener('submit',submitVideoExperiment);
+if($('video-exp-shop')) $('video-exp-shop').addEventListener('change',e=>{state.videoExpStore=e.target.value;state.videoExpProduct='';renderVideoTools();});
+if($('video-exp-product')) $('video-exp-product').addEventListener('change',e=>{state.videoExpProduct=e.target.value;});
+if($('video-exp-type')) $('video-exp-type').addEventListener('change',renderVideoExperimentFields);
+if($('video-card-search')) $('video-card-search').addEventListener('input',()=>{state.videoCatalogPage=0;renderVideoTools();});
+if($('video-card-prev')) $('video-card-prev').addEventListener('click',()=>{state.videoCatalogPage=Math.max(0,(state.videoCatalogPage||0)-1);renderVideoTools();});
+if($('video-card-next')) $('video-card-next').addEventListener('click',()=>{state.videoCatalogPage=(state.videoCatalogPage||0)+1;renderVideoTools();});
+if($('video-exp-ab-file')) $('video-exp-ab-file').addEventListener('change',()=>handleVideoPhotoFile('video-exp-ab-file','ab_photo_test'));
+if($('video-exp-audience-photo')) $('video-exp-audience-photo').addEventListener('change',()=>handleVideoPhotoFile('video-exp-audience-photo','audience_photo'));
+document.addEventListener('click',e=>{const button=e.target.closest('[data-video-results-save]');if(button)saveVideoExperimentResults(button);});
 $('refresh-data').addEventListener('click',()=>fetchData(true));
 if($('refresh-cards-trash')) $('refresh-cards-trash').addEventListener('click',refreshCardsTrash);
 if($('save-policy')) $('save-policy').addEventListener('click',savePolicy);

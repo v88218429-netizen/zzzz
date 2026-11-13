@@ -75,7 +75,7 @@ jobs:
           import { chromium } from 'playwright';
 
           const base=process.env.BASE_URL.replace(/\/$/,'');
-          const pages=['overview','stores','decisions','control','advertising','policy','inventory','search','finance','customers','connections','knowledge','agents'];
+          const pages=['overview','stores','decisions','control','advertising','policy','inventory','search','finance','customers','video-tools','connections','knowledge','agents'];
           const modes=[
             {name:'desktop', viewport:{width:1440,height:1000}},
             {name:'mobile', viewport:{width:390,height:844}},
