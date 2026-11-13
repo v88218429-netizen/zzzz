@@ -18,11 +18,10 @@ BASE = "https://marketplace-api.wildberries.ru"
 BRIDGE_URL = os.environ["GOOGLE_BRIDGE_URL"]
 BRIDGE_KEY = os.environ["GOOGLE_BRIDGE_KEY"]
 LOOKBACK_DAYS = max(1, min(90, int(os.environ.get("FBS_LOOKBACK_DAYS", "7"))))
-# AIR needs smaller writes: sparse status changes otherwise exceed Apps Script execution time.
+# AIR workbook writes are latency-bound; production recovery uses five-order batches.
+# The writer skips its redundant header read only after this script's status preflight passes.
+# Smaller fallback batches remain available for any future AIR window that times out.
 # Ordinary pushes are harmless; recovery jobs require an explicit guarded commit marker.
-# AIR's 2026-11-05 retry is queued through the GitHub recovery workflow with two-order batches.
-# Keep AIR gateway calls small enough to finish within the Apps Script runtime ceiling.
-# New recovery runs replace the stalled legacy matrix; upserts remain safe to resume.
 # Batch identity searches on the live gateway are bounded to the IDs in each idempotent batch.
 # Recovery matrix includes the current UTC day so recent WB orders are reconciled too.
 # Current-day bounds are clamped to now before calling the official WB API.
