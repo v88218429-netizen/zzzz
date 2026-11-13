@@ -272,7 +272,7 @@ def ingest(client: str, orders: list[dict]) -> dict:
                 if obj.get("ok") and obj.get("action") == "fbs_ingest_batch" and result.get("ok"):
                     break
                 details = str(obj.get("error") or result.get("error") or "")
-                state_batch_http = re.search(r"FBS_STATE_BATCH_READ_HTTP_(\\d{3})", details)
+                state_batch_http = re.search(r"FBS_STATE_BATCH_READ_HTTP_(\d{3})", details)
                 state_batch_transient = bool(
                     state_batch_http and int(state_batch_http.group(1)) in (408, 425, 429, 500, 502, 503, 504)
                 )
