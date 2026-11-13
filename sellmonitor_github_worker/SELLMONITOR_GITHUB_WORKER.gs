@@ -7005,6 +7005,9 @@ function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId,onl
     var matrixEndCol=targetCols.length?Math.max.apply(null,targetCols):startCol-1;
     var currentMatrix=matrixEndCol>=matrixStartCol?sh.getRange(1,matrixStartCol,matrixLast,matrixEndCol-matrixStartCol+1).getValues():[];
     var updates=[],written=0,archives=axisArchiveRows,periodCount=0;
+    var storeSummaryWrites=[],storeSummaryRows=0;
+    while(storeSummaryRows<meta.length&&String(meta[storeSummaryRows][0]||'')==='МАГАЗИН')storeSummaryRows++;
+    if(!storeSummaryRows)throw new Error('WB_RNP_STORE_SUMMARY_BLOCK_MISSING:'+spec.name);
     targets.sort().forEach(function(period){
       var col=(positions[period]||[])[0];if(!col)throw new Error('WB_RNP_DATE_AXIS_MISSING:'+spec.name+':'+period);
       var last=matrixLast,current=currentMatrix.map(function(r){return r[col-matrixStartCol];}),next=current.slice();
@@ -7030,6 +7033,10 @@ function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId,onl
         if(v!==''&&v!=null)written++;
       }
       var changed=false;for(var q=0;q<last;q++)if(cellKey(current[q])!==cellKey(next[q])){changed=true;break;}
+      var storeSummaryChanged=false;
+      for(var sRow=0;sRow<storeSummaryRows;sRow++)if(cellKey(current[sRow+2])!==cellKey(next[sRow+2])){storeSummaryChanged=true;break;}
+      if(storeSummaryChanged&&!changed)archives+=archiveSnapshot(sh,col,period,'Архив строки магазина перед обязательной публикацией фактов',last,current,true);
+      storeSummaryWrites.push({col:col,period:period,values:next.slice(0,storeSummaryRows+2)});
       if(changed){if(existedBefore[period]&&!axisRebuilt)archives+=archiveSnapshot(sh,col,period,'Значения заменены проверенными фактами Sellmonitor Inner',last,current,true);updates.push({col:col,values:next});periodCount++;}
     });
     if(queuedArchiveRecords.length){archiveWrite_(queuedArchiveRecords);queuedArchiveRecords=[];}
@@ -7047,6 +7054,19 @@ function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId,onl
       }
       ui=uj;
     }
+    var storeSummaryReadbackCells=0;
+    storeSummaryWrites.forEach(function(item){
+      var target=sh.getRange(1,item.col,item.values.length,1);
+      target.setValues(item.values.map(function(v){return [v];}));
+    });
+    SpreadsheetApp.flush();
+    storeSummaryWrites.forEach(function(item){
+      var rb=sh.getRange(1,item.col,item.values.length,1).getValues();
+      for(var vr=0;vr<item.values.length;vr++){
+        if(cellKey(rb[vr][0])!==cellKey(item.values[vr]))throw new Error('WB_RNP_STORE_SUMMARY_READBACK_MISMATCH:'+spec.name+':'+item.period+':'+(vr+1));
+        storeSummaryReadbackCells++;
+      }
+    });
     if(spec.name==='01_Дни'&&exactMax){
       var oldExactValue=sh.getRange('H1').getValue(),oldExactKey=key(oldExactValue),newExact=Utilities.formatDate(date_(exactMax),ss.getSpreadsheetTimeZone(),'dd.MM.yyyy');
       if(!oldExactKey||exactMax>oldExactKey){
@@ -7060,7 +7080,7 @@ function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId,onl
     var readbackPeriods=targets.map(function(period){var cols=positions[period]||[];return cols.length===1?key(sh.getRange(2,cols[0]).getValue()):'';});
     var coverageVerified=readbackPeriods.length===targets.length&&readbackPeriods.every(function(period,index){return !!period&&period===targets[index]&&(positions[targets[index]]||[]).length===1;});
     if(!coverageVerified)throw new Error('WB_RNP_PERIOD_COVERAGE_READBACK_FAILED:'+spec.name+':'+JSON.stringify({source:targets,readback:readbackPeriods}));
-    stats.push({sheet:spec.name,target_periods:targets.length,source_periods:targets,readback_periods:readbackPeriods,coverage_verified:coverageVerified,axis_rebuilt:axisRebuilt,axis_archive_segments:axisArchiveRows,updated_columns:updates.length,archived_segments:archives,written_values:written,duplicates_removed:dupDates.length,min:targets[0]||'',max:targets.length?targets[targets.length-1]:''});
+    stats.push({sheet:spec.name,target_periods:targets.length,source_periods:targets,readback_periods:readbackPeriods,coverage_verified:coverageVerified,axis_rebuilt:axisRebuilt,axis_archive_segments:axisArchiveRows,updated_columns:updates.length,store_summary_columns:storeSummaryWrites.length,store_summary_rows_verified:storeSummaryReadbackCells,store_summary_readback:true,archived_segments:archives,written_values:written,duplicates_removed:dupDates.length,min:targets[0]||'',max:targets.length?targets[targets.length-1]:''});
   });
   archive.hideSheet();
   var chartTab=ss.getSheetByName('05_Графики_РНП'),charts=chartTab?chartTab.getCharts():[];
