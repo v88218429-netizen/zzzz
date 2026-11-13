@@ -138,7 +138,7 @@ jobs:
               print('FBS_FRESH_DISPATCH workflow='+workflow+' status='+str(status),flush=True)
           PY
       - name: Read live FBS bridge stages read-only
-        if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[FBS-STAGE-READ]') }}
+        if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[FBS-STAGE-READ-RETRY]') }}
         env:
           BRIDGE_KEY: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
           BRIDGE_URL: https://script.google.com/macros/s/AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw/exec
