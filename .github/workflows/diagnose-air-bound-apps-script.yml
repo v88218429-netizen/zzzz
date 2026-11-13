@@ -20,7 +20,7 @@ jobs:
     steps:
 
       - name: Reset stale FBS queue and dispatch fresh GitHub syncs
-        if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[FBS-QUEUE-RESET-RETRY]') }}
+        if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[FBS-QUEUE-RESET-RETRY-2]') }}
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
@@ -84,7 +84,7 @@ jobs:
               time.sleep(5)
           print('FBS_QUEUE_RESET_EMPTY=yes canceled='+str(canceled),flush=True)
           dispatches=[
-              ('wb-fbs-github-recovery.yml',{'lookback_days':'3','client':'AIR','start_date':'','end_date':''}),
+              ('wb-fbs-github-recovery.yml',{'lookback_days':'7','client':'AIR','start_date':'','end_date':''}),
               ('wb-fbs-sanych-targeted-recovery.yml',{'start_date':'2026-11-11','end_date':'2026-11-13','include_live':'true'}),
               ('wb-fbs-supply-sync.yml',{})
           ]
