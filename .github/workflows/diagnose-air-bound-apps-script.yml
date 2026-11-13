@@ -216,23 +216,26 @@ jobs:
           root=pathlib.Path('/tmp/air-bound-script')
           secret=re.compile(r'(?i)(token|secret|password|authorization|bearer)(\s*[:=]\s*|\s+)[^\s,;]+')
           opaque=re.compile(r'[A-Za-z0-9_-]{40,}')
-          keywords=('ingest','status','index','history','stage')
+          function_re=re.compile(r'function\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*\(')
           total=0
           for path in sorted(p for p in root.rglob('*') if p.suffix in ('.gs','.js')):
-              lines=path.read_text(encoding='utf-8',errors='replace').splitlines()
-              starts=[i for i,line in enumerate(lines) if re.match(r'^\s*function\s+[A-Za-z0-9_$]+\s*\(',line)]
-              for pos,start_line in enumerate(starts):
-                  name=re.search(r'function\s+([A-Za-z0-9_$]+)',lines[start_line]).group(1)
+              source=path.read_text(encoding='utf-8',errors='replace')
+              matches=list(function_re.finditer(source))
+              for index,match in enumerate(matches):
+                  name=match.group(1)
                   lower=name.lower()
-                  if not ('githubfbs' in lower or 'fbs' in lower) or not any(k in lower for k in keywords): continue
-                  end=starts[pos+1] if pos+1<len(starts) else len(lines)
-                  print('AIR_FBS_FUNCTION='+path.name+':'+name+':'+str(start_line+1)+'-'+str(end))
-                  for n in range(start_line,min(end,start_line+240)):
-                      safe=opaque.sub('[opaque]',secret.sub(r'\1=[redacted]',lines[n]))
-                      print('CODE '+str(n+1)+':'+safe[:260])
+                  if not any(k in lower for k in ('fbs','ingest','github','state','history')): continue
+                  start=match.start()
+                  end=matches[index+1].start() if index+1<len(matches) else len(source)
+                  body=source[start:end]
+                  if not any(k in body.lower() for k in ('setvalues','batchupdate','appendrow','fbs_ingest','state_write','getrange')): continue
+                  first=source.count('\n',0,start)+1
+                  print('AIR_FBS_FUNCTION='+path.name+':'+name+':'+str(first))
+                  for offset,line in enumerate(body.splitlines()[:240]):
+                      safe=opaque.sub('[opaque]',secret.sub(r'\1=[redacted]',line))
+                      print('CODE '+str(first+offset)+':'+safe[:260])
                   total+=1
           print('AIR_FBS_FUNCTION_COUNT='+str(total))
-          if total==0: raise SystemExit('AIR_FBS_INGEST_FUNCTIONS_NOT_FOUND')
           PY
 
       - name: Inspect AIR technical-log writer code read-only
