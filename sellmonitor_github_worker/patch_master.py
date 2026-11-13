@@ -1649,7 +1649,7 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
         worker_text = worker_text[:shape_start] + shape + worker_text[shape_end:]
         worker_text = worker_text.replace(
             "function sellmonitorGithubInnerDiagnosticShape_(data) {",
-            "function sellmonitorGithubInnerDiagnosticShape_(data) {\\n  /* " + diagnostic_marker + " */",
+            "function sellmonitorGithubInnerDiagnosticShape_(data) {\n  /* " + diagnostic_marker + " */",
             1,
         )
         print("INNER_FRESHNESS_ACCOUNT_VALUE_DIAGNOSTIC=patched")
