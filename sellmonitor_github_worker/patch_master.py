@@ -833,6 +833,7 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
     freshness_anchors = [
         "    stats.push({sheet:spec.name,target_periods:targets.length,updated_columns:updates.length,archived_segments:archives,written_values:written,duplicates_removed:dupDates.length,min:targets[0]||'',max:targets.length?targets[targets.length-1]:''});",
         "    stats.push({sheet:spec.name,target_periods:targets.length,source_periods:targets,readback_periods:readbackPeriods,coverage_verified:coverageVerified,axis_rebuilt:axisRebuilt,axis_archive_segments:axisArchiveRows,updated_columns:updates.length,archived_segments:archives,written_values:written,duplicates_removed:dupDates.length,min:targets[0]||'',max:targets.length?targets[targets.length-1]:''});",
+        "    stats.push({sheet:spec.name,target_periods:targets.length,source_periods:targets,readback_periods:readbackPeriods,coverage_verified:coverageVerified,axis_rebuilt:axisRebuilt,axis_archive_segments:axisArchiveRows,updated_columns:updates.length,store_summary_columns:storeSummaryWrites.length,store_summary_rows_verified:storeSummaryReadbackCells,store_summary_readback:true,archived_segments:archives,written_values:written,duplicates_removed:dupDates.length,min:targets[0]||'',max:targets.length?targets[targets.length-1]:''});",
     ]
     if freshness_marker not in worker_text:
         freshness_matches = [anchor for anchor in freshness_anchors if worker_text.count(anchor) == 1]
