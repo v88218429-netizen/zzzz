@@ -480,6 +480,7 @@ def select_changed_orders(client: str, orders: list[dict]) -> tuple[list[dict], 
             enriched = dict(order)
             enriched["_fbsRowHint"] = int(row_map.get(oid, 0))
             enriched["_fbsSheetLastRow"] = int(metadata["sheetLastRow"])
+            enriched["_fbsSchemaValidated"] = True
             changed.append(enriched)
     unchanged=len(orders)-len(changed)
     print("FBS_CHANGE_FILTER_DONE="+json.dumps({"store":client,"orders":len(orders),

@@ -8099,9 +8099,18 @@ function sellmonitorGithubFbsIngestBatchV1Core_(body, mark) {
       mark('ID_ROW_HINTS_DONE_'+Object.keys(rowMap).length);
       return rowMap;
     }
-    mark('HEADER_READ_START');
-    var head=readDisplayGrid_(1,1,1,7)[0]||[];
-    mark('HEADER_READ_DONE');
+    // AIR's authenticated status-read preflight already validates this exact header.
+    // The value below was unused, and this repeated Sheets API read stalls for minutes.
+    var schemaPreflightValid=client==='AIR' && parsed.length>0 && parsed.every(function(item){
+      return item.source._fbsSchemaValidated===true;
+    });
+    if(schemaPreflightValid){
+      mark('HEADER_READ_SKIPPED_STATUS_PREFLIGHT');
+    }else{
+      mark('HEADER_READ_START');
+      readDisplayGrid_(1,1,1,7);
+      mark('HEADER_READ_DONE');
+    }
     mark('SHEET_READ_DONE_SHEETS_API');
     var orderSheetNative={
       getLastRow:function(){return last;},
