@@ -1,5 +1,5 @@
 # Read-only refresh: compare the live client AIR FBS automation with GitHub recovery.
-# Repeated FBS queue reset guard.
+# Force-cancel guard for stuck completed FBS parent.
 name: Diagnose AIR Apps Script through GitHub
 
 on:
@@ -19,6 +19,48 @@ jobs:
     timeout-minutes: 10
     steps:
 
+      - name: Force-cancel the stuck completed Nov 11 FBS parent
+        if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[FBS-QUEUE-FORCE-430151]') }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, time, urllib.error, urllib.request
+          base='https://api.github.com/repos/'+os.environ['REPOSITORY']
+          headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],
+                   'Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'}
+          rid='43015129891'
+          def get(path):
+              request=urllib.request.Request(base+path,headers=headers)
+              with urllib.request.urlopen(request,timeout=30) as response: return json.load(response)
+          run=get('/actions/runs/'+rid)
+          if run.get('name')!='WB FBS gap catch-up 2026-11-11' or run.get('status')!='queued':
+              raise SystemExit('STUCK_PARENT_IDENTITY_OR_STATE_CHANGED')
+          jobs=get('/actions/runs/'+rid+'/jobs?per_page=100').get('jobs',[])
+          if not jobs or not all(job.get('status')=='completed' and job.get('conclusion')=='success' for job in jobs):
+              raise SystemExit('STUCK_PARENT_CHILD_JOBS_NOT_ALL_SUCCESSFUL')
+          request=urllib.request.Request(base+'/actions/runs/'+rid+'/force-cancel',headers=headers,method='POST')
+          try:
+              with urllib.request.urlopen(request,timeout=30) as response: status=response.status
+          except urllib.error.HTTPError as error:
+              if error.code not in (202,409,422): raise
+              status=error.code
+          print('FBS_FORCE_CANCEL_REQUESTED id='+rid+' status='+str(status)+
+                ' completed_success_jobs='+str(len(jobs)),flush=True)
+          for _ in range(12):
+              time.sleep(5)
+              run=get('/actions/runs/'+rid)
+              if run.get('status')=='completed':
+                  print('FBS_STUCK_PARENT_FINAL conclusion='+str(run.get('conclusion')),flush=True)
+                  if run.get('conclusion')!='cancelled':
+                      raise SystemExit('STUCK_PARENT_NOT_CANCELLED')
+                  break
+          else:
+              raise SystemExit('STUCK_PARENT_FORCE_CANCEL_NOT_CONFIRMED')
+          PY
       - name: Reset stale FBS queue and dispatch fresh GitHub syncs
         if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[FBS-QUEUE-RESET-RETRY-2]') }}
         env:
