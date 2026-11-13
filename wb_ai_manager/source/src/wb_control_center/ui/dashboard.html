@@ -413,8 +413,10 @@
         <article class="card wide-card"><div class="card-head"><div><span class="section-label">ЦЕНЫ И СКИДКИ</span><h3>Таблица цен товаров из видео</h3><p>Показываем цены продавца, скидки продавца, WB Клуба и бизнеса по вариантам товара. Индекс и минимальная цена акции отображаются только при наличии в снимке.</p></div><span class="pill safe">ТОЛЬКО ЧТЕНИЕ</span></div>
           <div class="data-truth-banner" id="video-price-status">Снимок цен и скидок загружается.</div>
           <div class="table-wrap"><table class="data-table"><thead><tr><th>Магазин · товар</th><th>Артикул · размер</th><th>Цена продавца</th><th>Скидка продавца</th><th>Цена со скидкой</th><th>Скидка WB Клуба</th><th>Цена с WB Клубом</th><th>Оптовая скидка</th><th>Цена акции</th><th>Индекс цены</th><th>Минимум для автоакции</th><th>Ярлыки · цвет</th></tr></thead><tbody id="video-price-table"></tbody></table></div></article>
-        <article class="card wide-card"><div class="card-head"><div><span class="section-label">АКЦИИ И АВТОСКИДКИ</span><h3>Экономика участия по товарам</h3><p>Расчёт требует точного nmID, цены из источника и подтверждённой юнит-экономики. Он оценивает прибыль; дополнительный трафик акции не обещает.</p></div></div>
+        <article class="card wide-card"><div class="card-head"><div><span class="section-label">АКЦИИ И АВТОСКИДКИ</span><h3>Календарь кампаний и экономика товаров</h3><p>Календарь объединяет товары в кампании; ниже отдельно показано решение по каждому товару. Расчёт требует точного nmID, цены и подтверждённой юнит-экономики. Вступление в акцию не выполняется.</p></div></div>
           <div class="data-truth-banner" id="video-promo-status">Снимок акций загружается.</div>
+          <h4>Календарь кампаний</h4><div class="table-wrap"><table class="data-table"><thead><tr><th>Магазин · кампания</th><th>Начало</th><th>Окончание</th><th>Вид · статус</th><th>Товаров в снимке</th><th>Допуск · участие по источнику</th></tr></thead><tbody id="video-promo-calendar"></tbody></table></div>
+          <h4>Решение по товарам</h4>
           <div class="table-wrap"><table class="data-table"><thead><tr><th>Магазин · товар</th><th>Акция</th><th>Начало</th><th>Окончание</th><th>Вид · участие</th><th>Цена участия</th><th>Расчётная прибыль</th><th>Целевой минимум</th><th>Решение</th><th>Почему</th></tr></thead><tbody id="video-promo-table"></tbody></table></div></article>
         <article class="card wide-card"><div class="card-head"><div><span class="section-label">ТАБЛИЦА ТОВАРОВ</span><h3>Карточки и переданные поля</h3></div></div>
           <div class="data-truth-banner" id="video-card-status">Снимок карточек загружается.</div>
@@ -451,6 +453,8 @@
           <article class="card"><div class="card-head"><div><span class="section-label">ОТЗЫВЫ И ВАЙБЫ</span><h3>Кандидаты для закрепления</h3></div></div>
             <div class="data-truth-banner" id="video-review-status">Проверяю доступность отвеченных отзывов.</div><div id="video-review-list" class="signal-stack"></div>
             <div class="source-note">Кандидаты отбираются из отвеченных отзывов. Состояние закрепления отмечается только при наличии поля источника; команда закрепления из панели не отправляется.</div><hr>
+            <h4>Оценки по товару в полученной выборке</h4><div class="data-truth-banner" id="video-review-insights-status">Ожидание снимка отзывов.</div>
+            <div class="table-wrap"><table class="data-table"><thead><tr><th>Магазин · nmID</th><th>Отзывы в снимке</th><th>Средняя оценка</th><th>Положительные ≥4</th><th>Нейтральные 3</th><th>Низкие ≤2</th><th>Примеры текста</th></tr></thead><tbody id="video-review-insights"></tbody></table></div>
             <div class="card-head"><div><span class="section-label">ВИДЕО</span><h3>Закреплённые вайбы</h3></div></div><div class="data-truth-banner" id="video-vibes-status">Проверяю источник данных.</div></article>
         </div>
         <article class="card"><div class="card-head"><div><span class="section-label">ЧАТЫ ПОКУПАТЕЛЕЙ</span><h3>Очередь сообщений на разбор</h3><p>Текст и категория берутся из снимка чатов. Черновик требует проверки всего диалога; автоматической отправки нет.</p></div></div>
@@ -528,6 +532,6 @@
     </div>
   </div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="/assets/dashboard.js?v=20261030-wb-bid-scope-1124"></script>
+  <script src="/assets/dashboard.js?v=20261113-video-tools-1158"></script>
 </body>
 </html>
