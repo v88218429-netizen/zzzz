@@ -8,6 +8,7 @@ on:
       - WB FBS Sanych targeted recovery
       - WB FBS production acceptance audit
       - WB FBS supply sync via GitHub
+      - WB FBS gap catch-up 2026-11-11
     types:
       - completed
     branches:
@@ -149,8 +150,10 @@ jobs:
           elif source_path == ".github/workflows/wb-fbs-supply-sync.yml" and os.environ.get("SOURCE_CONCLUSION") == "cancelled":
               print("FBS_CANCELLED_SUPPLY_NOT_RERUN run=" + str(source_run_id), flush=True)
           elif source_path in {".github/workflows/wb-fbs-production-acceptance-audit.yml",
-                               ".github/workflows/wb-fbs-supply-sync.yml"} or source_name in {"WB FBS production acceptance audit",
-                               "WB FBS supply sync via GitHub"}:
+                               ".github/workflows/wb-fbs-supply-sync.yml",
+                               ".github/workflows/wb-fbs-gap-catchup.yml"} or source_name in {"WB FBS production acceptance audit",
+                               "WB FBS supply sync via GitHub",
+                               "WB FBS gap catch-up 2026-11-11"}:
               if source_attempt >= 3:
                   print("FBS_TRANSIENT_RETRY_LIMIT_REACHED run=" + str(source_run_id) +
                         " attempts=" + str(source_attempt), flush=True)
