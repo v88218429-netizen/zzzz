@@ -17,6 +17,11 @@ jobs:
       BRIDGE_URL: https://script.google.com/macros/s/AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw/exec
       BRIDGE_KEY: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
     steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+      - name: Validate FBS recovery Python syntax
+        run: python3 -m py_compile wb_worker/github_fbs_recovery.py
       - name: Sample only the active FBS stage
         shell: bash
         run: |
