@@ -37,9 +37,9 @@ permissions:
   contents: read
 
 concurrency:
-  # Ordinary code pushes can create a skipped recovery run. Give those runs
-  # unique groups so they cannot occupy or replace the production mutation queue.
-  group: ${{ github.event_name == 'push' && (contains(github.event.head_commit.message, '[FBS-90D-SLICED]') || contains(github.event.head_commit.message, '[FBS-AIR-RETRY-2026-11-05]')) && 'wb-fbs-production-mutations' || github.event_name != 'push' && 'wb-fbs-production-mutations' || format('wb-fbs-noop-{0}', github.run_id) }}
+  # Keep current-window recovery independent from long historical catch-up.
+  # The Apps Script per-client lease still serializes writes to the same book.
+  group: ${{ (github.event_name != 'push' || contains(github.event.head_commit.message, '[FBS-LIVE-PRIORITY-2026-11-13]') || contains(github.event.head_commit.message, '[FBS-90D-SLICED]') || contains(github.event.head_commit.message, '[FBS-AIR-RETRY-2026-11-05]')) && 'wb-fbs-live-production' || format('wb-fbs-noop-{0}', github.run_id) }}
   cancel-in-progress: false
   queue: max
 
@@ -207,6 +207,37 @@ jobs:
             exit 2
           fi
       - name: Reconcile AIR and HOZYAYUSHKA manual range
+        shell: bash
+        run: python wb_worker/github_fbs_recovery.py
+
+  recover_priority_push:
+    if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[FBS-LIVE-PRIORITY-2026-11-13]') }}
+    name: "Priority live FBS refresh AIR"
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      FBS_CLIENT: AIR
+      WB_API_TOKEN_AA: ${{ secrets.WB_API_TOKEN_AA }}
+      GOOGLE_BRIDGE_KEY: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
+      GOOGLE_BRIDGE_URL: https://script.google.com/macros/s/AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw/exec
+      FBS_LOOKBACK_DAYS: "3"
+      FBS_BATCH_SIZE: "5"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate AIR live-refresh prerequisites
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile wb_worker/github_fbs_recovery.py
+          test -n "$GOOGLE_BRIDGE_KEY"
+          test -n "$WB_API_TOKEN_AA"
+          test "${#WB_API_TOKEN_AA}" -ge 30
+      - name: Refresh AIR current FBS orders and statuses
         shell: bash
         run: python wb_worker/github_fbs_recovery.py
 
