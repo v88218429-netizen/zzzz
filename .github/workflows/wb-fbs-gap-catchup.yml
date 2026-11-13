@@ -11,7 +11,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: wb-fbs-production-mutations
+  # Historical catch-up has its own queue; it must never hold the live-refresh queue.
+  group: wb-fbs-historical-catchup
   cancel-in-progress: false
   queue: max
 
