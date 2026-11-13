@@ -1,4 +1,4 @@
-# Read-only stage samples through the protected GitHub bridge; AIR header preflight acceptance.
+# Read-only stage samples through the protected GitHub bridge, including supply sync lease state.
 name: WB FBS active stage diagnostic
 on:
   workflow_dispatch:
@@ -32,14 +32,18 @@ jobs:
                   data=json.loads(response.read().decode("utf-8"))
               result=data.get("result") or {}
               stages=result.get("fbs_ingest_stages") or {}
+              supply=result.get("fbs_supply_stage") or {}
               if data.get("ok") is not True or set(stages)-{"SANYCH","AIR","HOZYAYUSHKA"}:
                   raise SystemExit("FBS_STAGE_SNAPSHOT_FAILED")
               safe={}
               for client,stage in stages.items():
                   safe[client]={key:stage.get(key) for key in
                       ("client","stage","lastCoreStage","previousStage","elapsedMs","at")}
+              safe_supply={key:supply.get(key) for key in
+                  ("leaseActive","leaseRemainingMs","currentClient","backfillRowsRemaining","stage","stageAt")}
               print("FBS_LIVE_STAGE_SAMPLE="+json.dumps({
-                  "sample":sample,"checkedAt":result.get("checkedAt"),"stages":safe},
+                  "sample":sample,"checkedAt":result.get("checkedAt"),"stages":safe,
+                  "supply":safe_supply},
                   ensure_ascii=False,separators=(",",":")),flush=True)
               if sample<10: time.sleep(20)
           PY
