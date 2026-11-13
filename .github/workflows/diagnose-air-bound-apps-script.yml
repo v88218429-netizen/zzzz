@@ -1,3 +1,4 @@
+# Read-only refresh: compare the live client AIR FBS automation with GitHub recovery.
 name: Diagnose AIR Apps Script through GitHub
 
 on:
