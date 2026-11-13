@@ -4,6 +4,7 @@ import unittest
 
 from wb_control_center.video_workbench import (
     _promotion_recommendations,
+    _price_table,
     _review_candidates,
     _chat_queue,
     build_video_workbench,
@@ -52,6 +53,43 @@ def portfolio(*, ready: bool = True, target: float | None = 50) -> dict:
     return item
 
 
+class PriceTableTests(unittest.TestCase):
+    def test_price_snapshot_is_flattened_by_size_without_inventing_missing_columns(self):
+        result = _price_table(
+            {"price_margin": {"prices": {"created_at": "2026-11-13T10:00:00Z", "data": {
+                "listGoods": [{
+                    "nmID": 12345678, "vendorCode": "sku-1", "discount": 20,
+                    "clubDiscount": 5, "sizes": [
+                        {"sizeID": 11, "techSizeName": "S", "price": 1000, "discountedPrice": 800,
+                         "clubDiscountedPrice": 760},
+                        {"sizeID": 12, "techSizeName": "M", "price": 1200, "discountedPrice": 960,
+                         "clubDiscountedPrice": 912},
+                    ],
+                }]
+            }}}},
+            portfolio(),
+        )
+        self.assertEqual(result["status"], "available")
+        self.assertEqual(result["row_count"], 2)
+        first, second = result["rows"]
+        self.assertEqual(first["shop_code"], "ap")
+        self.assertEqual(first["size_name"], "S")
+        self.assertEqual(first["seller_price_rub"], 1000)
+        self.assertEqual(first["seller_discount_pct"], 20)
+        self.assertEqual(first["discounted_price_rub"], 800)
+        self.assertEqual(first["club_discount_pct"], 5)
+        self.assertEqual(first["club_price_rub"], 760)
+        self.assertIsNone(first["price_index"])
+        self.assertIsNone(first["min_auto_promo_price_rub"])
+        self.assertEqual(second["size_name"], "M")
+
+    def test_missing_price_snapshot_is_not_reported_as_zero_rows(self):
+        result = _price_table({}, portfolio())
+        self.assertEqual(result["status"], "missing")
+        self.assertIsNone(result["observed_at"])
+        self.assertEqual(result["rows"], [])
+
+
 class PromotionTests(unittest.TestCase):
     def test_promotion_uses_exact_product_price_and_unit_economics(self):
         result = _promotion_recommendations(promotion_snapshot(950), portfolio())
@@ -78,6 +116,18 @@ class PromotionTests(unittest.TestCase):
     def test_promotion_needs_target_instead_of_guessing(self):
         result = _promotion_recommendations(promotion_snapshot(950), portfolio(target=None))
         self.assertEqual(result["rows"][0]["recommendation"], "needs_target")
+
+    def test_promotion_calendar_dates_and_status_are_passed_through(self):
+        snapshots = {"price_margin": {"promotions": {"created_at": "now", "data": [{
+            "nmID": 12345678, "actionName": "Осенняя акция", "planPrice": 950,
+            "startDateTime": "2026-11-20T00:00:00Z", "endDateTime": "2026-11-30T23:59:00Z",
+            "isAuto": True, "inAction": False,
+        }]}}}
+        row = _promotion_recommendations(snapshots, portfolio())["rows"][0]
+        self.assertEqual(row["start_at"], "2026-11-20T00:00:00Z")
+        self.assertEqual(row["end_at"], "2026-11-30T23:59:00Z")
+        self.assertIs(row["is_auto"], True)
+        self.assertIs(row["promotion_status"], False)
 
 
 class PhotoExperimentTests(unittest.TestCase):
@@ -190,7 +240,11 @@ class CustomerAndCatalogTests(unittest.TestCase):
         result = build_video_workbench(
             {"cards": {"card_catalog": {"created_at": "now", "data": {
                 "complete": False,
-                "cards": [{"nmID": 12345678, "vendorCode": "sku-1", "photos": [], "sizes": []}],
+                "cards": [{"nmID": 12345678, "vendorCode": "sku-1", "photos": [], "sizes": [],
+                           "characteristics": [
+                               {"name": "Материал", "value": ["Полипропилен"]},
+                               {"name": "Автополив", "value": ""},
+                           ]}],
             }}}},
             portfolio(),
             [],
@@ -199,6 +253,8 @@ class CustomerAndCatalogTests(unittest.TestCase):
         self.assertEqual(result["card_catalog"]["complete"], False)
         self.assertEqual(card["field_visibility"]["photos"], "empty")
         self.assertEqual(card["field_visibility"]["dimensions"], "not_returned")
+        self.assertEqual(card["characteristic_values"][0]["value"], "Полипропилен")
+        self.assertEqual(card["characteristic_values"][1]["state"], "empty")
         self.assertIn("неполный", result["card_catalog"]["note"])
 
 
