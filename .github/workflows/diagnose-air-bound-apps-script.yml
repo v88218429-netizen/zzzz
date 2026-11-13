@@ -1,4 +1,5 @@
 # Read-only refresh: compare the live client AIR FBS automation with GitHub recovery.
+# One-time guarded FBS queue recovery marker.
 name: Diagnose AIR Apps Script through GitHub
 
 on:
