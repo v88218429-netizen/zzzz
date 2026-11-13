@@ -214,21 +214,21 @@ jobs:
           python3 - <<'PY'
           import pathlib, re
           root=pathlib.Path('/tmp/air-bound-script')
-          names=re.compile(r'(?i)(GithubFbs.*(Ingest|Status|Index|History|Stage)|Fbs.*(Ingest|Status|Index|History|Stage))')
-          secret=re.compile(r'(?i)(token|secret|password|authorization|bearer)(\\s*[:=]\\s*|\\s+)[^\\s,;]+')
+          secret=re.compile(r'(?i)(token|secret|password|authorization|bearer)(\s*[:=]\s*|\s+)[^\s,;]+')
           opaque=re.compile(r'[A-Za-z0-9_-]{40,}')
+          keywords=('ingest','status','index','history','stage')
           total=0
           for path in sorted(p for p in root.rglob('*') if p.suffix in ('.gs','.js')):
               lines=path.read_text(encoding='utf-8',errors='replace').splitlines()
-              starts=list(re.finditer(r'^\\s*function\\s+([A-Za-z0-9_$]+)\\s*\\(', '\\n'.join(lines), re.M))
-              for i,m in enumerate(starts):
-                  name=m.group(1)
-                  if not names.search(name): continue
-                  start='\\n'.join(lines).count('\\n',0,m.start())
-                  end='\\n'.join(lines).count('\\n',0,starts[i+1].start()) if i+1<len(starts) else len(lines)
-                  print('AIR_FBS_FUNCTION='+path.name+':'+name+':'+str(start+1)+'-'+str(end))
-                  for n in range(start,min(end,start+240)):
-                      safe=opaque.sub('[opaque]',secret.sub(r'\\1=[redacted]',lines[n]))
+              starts=[i for i,line in enumerate(lines) if re.match(r'^\s*function\s+[A-Za-z0-9_$]+\s*\(',line)]
+              for pos,start_line in enumerate(starts):
+                  name=re.search(r'function\s+([A-Za-z0-9_$]+)',lines[start_line]).group(1)
+                  lower=name.lower()
+                  if not ('githubfbs' in lower or 'fbs' in lower) or not any(k in lower for k in keywords): continue
+                  end=starts[pos+1] if pos+1<len(starts) else len(lines)
+                  print('AIR_FBS_FUNCTION='+path.name+':'+name+':'+str(start_line+1)+'-'+str(end))
+                  for n in range(start_line,min(end,start_line+240)):
+                      safe=opaque.sub('[opaque]',secret.sub(r'\1=[redacted]',lines[n]))
                       print('CODE '+str(n+1)+':'+safe[:260])
                   total+=1
           print('AIR_FBS_FUNCTION_COUNT='+str(total))
