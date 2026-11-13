@@ -1,4 +1,4 @@
-# Read-only stage samples through the protected GitHub bridge.
+# Read-only stage samples through the protected GitHub bridge; AIR header preflight acceptance.
 name: WB FBS active stage diagnostic
 on:
   workflow_dispatch:
