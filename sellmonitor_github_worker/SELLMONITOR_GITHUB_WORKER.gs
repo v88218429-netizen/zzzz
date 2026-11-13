@@ -2527,13 +2527,64 @@ function sellmonitorGithubMcpData_(response) {
   if (item && item.error) throw new Error('INNER_MCP_RPC_ERROR');
   var result = item && item.result ? item.result : {};
   if (Array.isArray(result.content)) {
+    var primary = null, primarySet = false;
+    var metadataKeys = ['freshness','sourceFreshness','source_freshness','partial','coverage','source_updated','source_status'];
+    function mergeKnownMetadata_(target, source) {
+      if (!target || !source || typeof target !== 'object' || typeof source !== 'object') return;
+      metadataKeys.forEach(function(key) {
+        if (!Object.prototype.hasOwnProperty.call(source,key)) return;
+        if (!Object.prototype.hasOwnProperty.call(target,key) || target[key] == null) {
+          target[key] = source[key];
+        } else if (key.toLowerCase().indexOf('freshness') >= 0 &&
+                   target[key] && source[key] &&
+                   typeof target[key] === 'object' && typeof source[key] === 'object') {
+          Object.keys(source[key]).forEach(function(category) {
+            if (!Object.prototype.hasOwnProperty.call(target[key],category)) target[key][category] = source[key][category];
+          });
+        }
+      });
+      if (target.data && source.data && typeof target.data === 'object' && typeof source.data === 'object') {
+        mergeKnownMetadata_(target.data,source.data);
+      }
+    }
     for (var i = 0; i < result.content.length; i++) {
       var part = result.content[i];
       if (!part || part.type !== 'text' || !part.text) continue;
-      try { return JSON.parse(part.text); } catch (ignored) { throw new Error('INNER_MCP_RESPONSE_NOT_JSON'); }
+      var parsed;
+      try { parsed = JSON.parse(part.text); }
+      catch (ignored) {
+        if (!primarySet) throw new Error('INNER_MCP_RESPONSE_NOT_JSON');
+        continue;
+      }
+      if (!primarySet) { primary = parsed; primarySet = true; }
+      else mergeKnownMetadata_(primary,parsed);
     }
+    if (primarySet) return primary;
   }
   return result.structuredContent || result;
+}
+function sellmonitorGithubInnerDiagnosticShape_(data) {
+  function keys(value) {
+    return value && typeof value === 'object' ? Object.keys(value).slice(0,40) : [];
+  }
+  var payload = data && data.data;
+  var products = [];
+  try { products = sellmonitorGithubInnerProducts_(data); } catch (ignored) {}
+  var freshnessCandidates = [
+    data && data.freshness, data && data.sourceFreshness, data && data.source_freshness,
+    payload && payload.freshness, payload && payload.sourceFreshness, payload && payload.source_freshness
+  ];
+  var freshness = freshnessCandidates.filter(function(x) { return x && typeof x === 'object'; })[0] || {};
+  return {
+    top_keys:keys(data),
+    data_type:Array.isArray(payload) ? 'array' : typeof payload,
+    data_keys:keys(payload),
+    freshness_keys:keys(data && (data.freshness || data.sourceFreshness || data.source_freshness)),
+    nested_freshness_keys:keys(payload && (payload.freshness || payload.sourceFreshness || payload.source_freshness)),
+    category_keys:keys(freshness.categories || freshness),
+    products_count:Array.isArray(products) ? products.length : 0,
+    sample_product_keys:Array.isArray(products) ? products.slice(0,2).map(keys) : []
+  };
 }
 
 function sellmonitorGithubStartInnerFinanceOAuth_(cfg) {
@@ -3537,7 +3588,7 @@ function sellmonitorGithubMaybeSyncInnerFinance_(cfg,cc) {
     var minimum = Number(cfg.minProductCount || 50);
     if (products.length < minimum) throw new Error('INNER_FINANCE_SOURCE_COVERAGE_LOW:' + products.length + '<' + minimum);
     if (partial) {
-      if (!Object.keys(freshness).length) throw new Error('INNER_FINANCE_PARTIAL_FRESHNESS_MISSING');
+      if (!Object.keys(freshness).length) throw new Error('INNER_FINANCE_PARTIAL_FRESHNESS_MISSING:' + JSON.stringify(sellmonitorGithubInnerDiagnosticShape_(data)));
       if (!sellmonitorGithubInnerCategoryFresh_(freshness,'products')) throw new Error('INNER_FINANCE_PARTIAL_PRODUCTS_STALE');
       var hasFreshFactCategory =
         sellmonitorGithubInnerCategoryFresh_(freshness,'orders') ||
