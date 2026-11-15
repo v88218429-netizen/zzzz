@@ -3,8 +3,81 @@
   "request": "WB_MONETIZATION_20261106_1924_SCHEDULED.json",
   "query": "как монетизировать экспертизу Wildberries кроме ведения кабинетов",
   "knowledge_tag": "WB_MONETIZATION",
-  "generated_at": "2026-11-08T16:42:52.572862+00:00",
-  "videos": [],
+  "generated_at": "2026-11-15T16:44:43.853086+00:00",
+  "videos": [
+    {
+      "video_id": "4muq0yvKrmo",
+      "url": "https://www.youtube.com/watch?v=4muq0yvKrmo",
+      "title": "СЕРВИСЫ ДЛЯ МАРКЕТПЛЕЙСОВ Wildberries и OZON",
+      "channel": "PROCVETAEV",
+      "duration": 308,
+      "timestamp": null,
+      "query": "сервис для селлеров Wildberries бизнес",
+      "kind": "video",
+      "transcript": "transcripts/2026-11-15_WB_MONETIZATION_video_4muq0yvKrmo.md",
+      "method": "verified GitHub transcript cache"
+    },
+    {
+      "video_id": "VG2I784mUXQ",
+      "url": "https://www.youtube.com/watch?v=VG2I784mUXQ",
+      "title": "Самовыкупы и продвижение на Wildberries и OZON — полный обзор сервиса для селлеров",
+      "channel": "Асриев | Продажи на озон",
+      "duration": 737,
+      "timestamp": null,
+      "query": "сервис для селлеров Wildberries бизнес",
+      "kind": "video",
+      "transcript": "transcripts/2026-11-15_WB_MONETIZATION_video_VG2I784mUXQ.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "VSKFZPxblds",
+      "url": "https://www.youtube.com/watch?v=VSKFZPxblds",
+      "title": "СТРАТЕГИЯ РОСТА НА WILDBERRIES Сео продвижение контент",
+      "channel": "Нина Нино",
+      "duration": 1057,
+      "timestamp": null,
+      "query": "сервис для селлеров Wildberries бизнес",
+      "kind": "video",
+      "transcript": "transcripts/2026-11-15_WB_MONETIZATION_video_VSKFZPxblds.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "Fdcu1uXic0M",
+      "url": "https://www.youtube.com/watch?v=Fdcu1uXic0M",
+      "title": "How to sell through Wildberries from Kyrgyzstan?",
+      "channel": "НОМАД",
+      "duration": 173,
+      "timestamp": null,
+      "query": "продукт для продавцов WB",
+      "kind": "short",
+      "transcript": "transcripts/2026-11-15_WB_MONETIZATION_short_Fdcu1uXic0M.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "tZa2XTc1LnY",
+      "url": "https://www.youtube.com/watch?v=tZa2XTc1LnY",
+      "title": "Как на wildberries продавать свой товар что делать ⚫ Обучение на вайлдберриз как продавать 🚫",
+      "channel": "Кто не подписан",
+      "duration": 168,
+      "timestamp": null,
+      "query": "продукт для продавцов WB",
+      "kind": "short",
+      "transcript": "transcripts/2026-11-15_WB_MONETIZATION_short_tZa2XTc1LnY.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "QrXqqoIq2f0",
+      "url": "https://www.youtube.com/watch?v=QrXqqoIq2f0",
+      "title": "🔵 КАК ПРОДАВАТЬ НА WILDBERRIES СВОИ ТОВАРЫ РК 👌 РАБОТА НА ВАЛБЕРИС ОНЛАЙН 🔔",
+      "channel": "Отдельно поговорим",
+      "duration": 169,
+      "timestamp": null,
+      "query": "продукт для продавцов WB",
+      "kind": "short",
+      "transcript": "transcripts/2026-11-15_WB_MONETIZATION_short_QrXqqoIq2f0.md",
+      "method": "FreeTranscriptAPI"
+    }
+  ],
   "errors": [
     {
       "video_id": "",
@@ -17,42 +90,6 @@
       "url": "",
       "title": "как монетизировать экспертизу Wildberries кроме ведения кабинетов shorts",
       "error": "no results"
-    },
-    {
-      "video_id": "ghuxp9lw1Vg",
-      "url": "https://www.youtube.com/watch?v=ghuxp9lw1Vg",
-      "title": "Сервис аналитики маркетплейсов Wildberries и Ozon",
-      "error": "youtube_captions: \nCould not retrieve a transcript for the video https://www.youtube.com/watch?v=ghuxp9lw1Vg! This is most likely caused by:\n\nYouTube is blocking requests from your IP. This usually is due to one of the following reasons:\n- You have done too many requests and your IP has been blocked by YouTube\n- You are doing requests from an IP belonging to a cloud provider (like AWS, Google Cloud Platform, Azure, etc.). Unfortunately, most IPs from cloud providers are blocked by YouTube.\n\nThere are two things you can do to work around this:\n1. Use proxies to hide your IP address, as explained in the \"Working around IP bans\" section of the README (https://github.com/jdepoix/youtube-transcript-api?tab=readme-ov-file#working-around-ip-bans-requestblocked-or-ipblocked-exception).\n2. (NOT REC"
-    },
-    {
-      "video_id": "nHxS3XVfF2I",
-      "url": "https://www.youtube.com/watch?v=nHxS3XVfF2I",
-      "title": "Бухгалтерия Для Селлеров / Это сэкономит вам деньги На WB / Сервис МоеДело",
-      "error": "youtube_captions: \nCould not retrieve a transcript for the video https://www.youtube.com/watch?v=nHxS3XVfF2I! This is most likely caused by:\n\nYouTube is blocking requests from your IP. This usually is due to one of the following reasons:\n- You have done too many requests and your IP has been blocked by YouTube\n- You are doing requests from an IP belonging to a cloud provider (like AWS, Google Cloud Platform, Azure, etc.). Unfortunately, most IPs from cloud providers are blocked by YouTube.\n\nThere are two things you can do to work around this:\n1. Use proxies to hide your IP address, as explained in the \"Working around IP bans\" section of the README (https://github.com/jdepoix/youtube-transcript-api?tab=readme-ov-file#working-around-ip-bans-requestblocked-or-ipblocked-exception).\n2. (NOT REC"
-    },
-    {
-      "video_id": "4muq0yvKrmo",
-      "url": "https://www.youtube.com/watch?v=4muq0yvKrmo",
-      "title": "СЕРВИСЫ ДЛЯ МАРКЕТПЛЕЙСОВ Wildberries и OZON",
-      "error": "youtube_captions: \nCould not retrieve a transcript for the video https://www.youtube.com/watch?v=4muq0yvKrmo! This is most likely caused by:\n\nYouTube is blocking requests from your IP. This usually is due to one of the following reasons:\n- You have done too many requests and your IP has been blocked by YouTube\n- You are doing requests from an IP belonging to a cloud provider (like AWS, Google Cloud Platform, Azure, etc.). Unfortunately, most IPs from cloud providers are blocked by YouTube.\n\nThere are two things you can do to work around this:\n1. Use proxies to hide your IP address, as explained in the \"Working around IP bans\" section of the README (https://github.com/jdepoix/youtube-transcript-api?tab=readme-ov-file#working-around-ip-bans-requestblocked-or-ipblocked-exception).\n2. (NOT REC"
-    },
-    {
-      "video_id": "d18jw-fPQmo",
-      "url": "https://www.youtube.com/watch?v=d18jw-fPQmo",
-      "title": "Сервис по подсчету налогов специально для селлеров WB и Ozon! УСН и АУСН. Проверь бухгалтера и себя!",
-      "error": "youtube_captions: \nCould not retrieve a transcript for the video https://www.youtube.com/watch?v=d18jw-fPQmo! This is most likely caused by:\n\nYouTube is blocking requests from your IP. This usually is due to one of the following reasons:\n- You have done too many requests and your IP has been blocked by YouTube\n- You are doing requests from an IP belonging to a cloud provider (like AWS, Google Cloud Platform, Azure, etc.). Unfortunately, most IPs from cloud providers are blocked by YouTube.\n\nThere are two things you can do to work around this:\n1. Use proxies to hide your IP address, as explained in the \"Working around IP bans\" section of the README (https://github.com/jdepoix/youtube-transcript-api?tab=readme-ov-file#working-around-ip-bans-requestblocked-or-ipblocked-exception).\n2. (NOT REC"
-    },
-    {
-      "video_id": "Fdcu1uXic0M",
-      "url": "https://www.youtube.com/watch?v=Fdcu1uXic0M",
-      "title": "How to sell through Wildberries from Kyrgyzstan?",
-      "error": "youtube_captions: \nCould not retrieve a transcript for the video https://www.youtube.com/watch?v=Fdcu1uXic0M! This is most likely caused by:\n\nYouTube is blocking requests from your IP. This usually is due to one of the following reasons:\n- You have done too many requests and your IP has been blocked by YouTube\n- You are doing requests from an IP belonging to a cloud provider (like AWS, Google Cloud Platform, Azure, etc.). Unfortunately, most IPs from cloud providers are blocked by YouTube.\n\nThere are two things you can do to work around this:\n1. Use proxies to hide your IP address, as explained in the \"Working around IP bans\" section of the README (https://github.com/jdepoix/youtube-transcript-api?tab=readme-ov-file#working-around-ip-bans-requestblocked-or-ipblocked-exception).\n2. (NOT REC"
-    },
-    {
-      "video_id": "lvTNRZSWAlQ",
-      "url": "https://www.youtube.com/watch?v=lvTNRZSWAlQ",
-      "title": "How to See 18+ Items on Wildberries - Secret Setting",
-      "error": "youtube_captions: \nCould not retrieve a transcript for the video https://www.youtube.com/watch?v=lvTNRZSWAlQ! This is most likely caused by:\n\nYouTube is blocking requests from your IP. This usually is due to one of the following reasons:\n- You have done too many requests and your IP has been blocked by YouTube\n- You are doing requests from an IP belonging to a cloud provider (like AWS, Google Cloud Platform, Azure, etc.). Unfortunately, most IPs from cloud providers are blocked by YouTube.\n\nThere are two things you can do to work around this:\n1. Use proxies to hide your IP address, as explained in the \"Working around IP bans\" section of the README (https://github.com/jdepoix/youtube-transcript-api?tab=readme-ov-file#working-around-ip-bans-requestblocked-or-ipblocked-exception).\n2. (NOT REC"
     }
   ]
 }

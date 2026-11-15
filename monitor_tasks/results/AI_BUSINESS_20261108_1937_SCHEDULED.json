@@ -3,32 +3,56 @@
   "request": "AI_BUSINESS_20261108_1937_SCHEDULED.json",
   "query": "AI автоматизация бизнеса маркетплейсы кейсы 2026",
   "knowledge_tag": "AI_BUSINESS",
-  "generated_at": "2026-11-08T16:41:31.680639+00:00",
-  "videos": [],
-  "errors": [
+  "generated_at": "2026-11-15T16:43:26.354605+00:00",
+  "videos": [
     {
       "video_id": "tLqjPUShZh8",
       "url": "https://www.youtube.com/watch?v=tLqjPUShZh8",
       "title": "AI-система для бизнеса, о которой не знают 99% людей | Гайд 2026",
-      "error": "youtube_captions: \nCould not retrieve a transcript for the video https://www.youtube.com/watch?v=tLqjPUShZh8! This is most likely caused by:\n\nYouTube is blocking requests from your IP. This usually is due to one of the following reasons:\n- You have done too many requests and your IP has been blocked by YouTube\n- You are doing requests from an IP belonging to a cloud provider (like AWS, Google Cloud Platform, Azure, etc.). Unfortunately, most IPs from cloud providers are blocked by YouTube.\n\nThere are two things you can do to work around this:\n1. Use proxies to hide your IP address, as explained in the \"Working around IP bans\" section of the README (https://github.com/jdepoix/youtube-transcript-api?tab=readme-ov-file#working-around-ip-bans-requestblocked-or-ipblocked-exception).\n2. (NOT REC"
+      "channel": "Дмитрий Попов | COMANDOS AI – Элитные AI команды",
+      "duration": 2552,
+      "timestamp": null,
+      "query": "AI автоматизация бизнеса маркетплейсы кейсы 2026",
+      "kind": "video",
+      "transcript": "transcripts/2026-11-15_AI_BUSINESS_video_tLqjPUShZh8.md",
+      "method": "verified GitHub transcript cache"
     },
     {
-      "video_id": "uS6mJ8upu8I",
-      "url": "https://www.youtube.com/watch?v=uS6mJ8upu8I",
-      "title": "Как Продавать AI-Автоматизации СИСТЕМНО в 2026 году",
-      "error": "youtube_captions: \nCould not retrieve a transcript for the video https://www.youtube.com/watch?v=uS6mJ8upu8I! This is most likely caused by:\n\nYouTube is blocking requests from your IP. This usually is due to one of the following reasons:\n- You have done too many requests and your IP has been blocked by YouTube\n- You are doing requests from an IP belonging to a cloud provider (like AWS, Google Cloud Platform, Azure, etc.). Unfortunately, most IPs from cloud providers are blocked by YouTube.\n\nThere are two things you can do to work around this:\n1. Use proxies to hide your IP address, as explained in the \"Working around IP bans\" section of the README (https://github.com/jdepoix/youtube-transcript-api?tab=readme-ov-file#working-around-ip-bans-requestblocked-or-ipblocked-exception).\n2. (NOT REC"
+      "video_id": "m2XxP7eTTy8",
+      "url": "https://www.youtube.com/watch?v=m2XxP7eTTy8",
+      "title": "Как внедрить ИИ в бизнес в 2026? Полная схема от AI разработчика за 15 минут (RAG)",
+      "channel": "Игнат Егоров | AppBusters",
+      "duration": 975,
+      "timestamp": null,
+      "query": "AI автоматизация бизнеса маркетплейсы кейсы 2026",
+      "kind": "video",
+      "transcript": "transcripts/2026-11-15_AI_BUSINESS_video_m2XxP7eTTy8.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "WlDrAIhThdY",
+      "url": "https://www.youtube.com/watch?v=WlDrAIhThdY",
+      "title": "Как подключить Wildberries к Claude бесплатно через MarketAut",
+      "channel": "MarketAut",
+      "duration": 65,
+      "timestamp": null,
+      "query": "AI агент Wildberries автоматизация shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-11-15_AI_BUSINESS_short_WlDrAIhThdY.md",
+      "method": "FreeTranscriptAPI"
     },
     {
       "video_id": "bEosr26yMxU",
       "url": "https://www.youtube.com/watch?v=bEosr26yMxU",
       "title": "Stop Rewriting Listings for eBay, Amazon, Etsy & Vinted | AI Automation",
-      "error": "youtube_captions: \nCould not retrieve a transcript for the video https://www.youtube.com/watch?v=bEosr26yMxU! This is most likely caused by:\n\nYouTube is blocking requests from your IP. This usually is due to one of the following reasons:\n- You have done too many requests and your IP has been blocked by YouTube\n- You are doing requests from an IP belonging to a cloud provider (like AWS, Google Cloud Platform, Azure, etc.). Unfortunately, most IPs from cloud providers are blocked by YouTube.\n\nThere are two things you can do to work around this:\n1. Use proxies to hide your IP address, as explained in the \"Working around IP bans\" section of the README (https://github.com/jdepoix/youtube-transcript-api?tab=readme-ov-file#working-around-ip-bans-requestblocked-or-ipblocked-exception).\n2. (NOT REC"
-    },
-    {
-      "video_id": "a4Q5nG4Yv1U",
-      "url": "https://www.youtube.com/watch?v=a4Q5nG4Yv1U",
-      "title": "Best marketplaces to buy & sell your Micro SaaS startup!",
-      "error": "youtube_captions: \nCould not retrieve a transcript for the video https://www.youtube.com/watch?v=a4Q5nG4Yv1U! This is most likely caused by:\n\nYouTube is blocking requests from your IP. This usually is due to one of the following reasons:\n- You have done too many requests and your IP has been blocked by YouTube\n- You are doing requests from an IP belonging to a cloud provider (like AWS, Google Cloud Platform, Azure, etc.). Unfortunately, most IPs from cloud providers are blocked by YouTube.\n\nThere are two things you can do to work around this:\n1. Use proxies to hide your IP address, as explained in the \"Working around IP bans\" section of the README (https://github.com/jdepoix/youtube-transcript-api?tab=readme-ov-file#working-around-ip-bans-requestblocked-or-ipblocked-exception).\n2. (NOT REC"
+      "channel": "BuiDroid Tv",
+      "duration": 31,
+      "timestamp": null,
+      "query": "AI SaaS для маркетплейсов shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-11-15_AI_BUSINESS_short_bEosr26yMxU.md",
+      "method": "FreeTranscriptAPI"
     }
-  ]
+  ],
+  "errors": []
 }
