@@ -7,6 +7,10 @@ on:
       - 'video_task_monitor.py'
       - '.github/workflows/video_task_monitor.yml'
   workflow_dispatch:
+  schedule:
+    # Retry requests that remain pending after partial search/transcript failures.
+    # 19:15 Moscow (UTC+3), independent of the user's devices.
+    - cron: '15 16 * * *'
 
 permissions:
   contents: write
