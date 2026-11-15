@@ -122,6 +122,18 @@ def youtube_captions(vid, lang="ru"):
     return "\n".join(lines), "youtube-transcript-api"
 
 def get_transcript(vid, lang="ru"):
+    # Reuse a saved timestamped transcript before making another YouTube request.
+    # A cache hit must contain the worker's transcript section and enough timed text.
+    for cached in sorted(OUT.glob(f"*_{vid}.md")):
+        if not cached.is_file():
+            continue
+        saved = cached.read_text(encoding="utf-8", errors="replace")
+        if "Transcript method:" not in saved or "## Transcript" not in saved:
+            continue
+        body = saved.split("## Transcript", 1)[1].strip()
+        if len(body) >= 250 and re.search(r"\\[\\d{1,2}:\\d{2}(?::\\d{2})?\\]", body):
+            print(f"TRANSCRIPT_CACHE_HIT vid={vid} file={cached.name}")
+            return body, "verified GitHub transcript cache"
     errs=[]
     for fn in (youtube_captions, transcript_ai, free_api):
         try: return fn(vid, lang)
@@ -234,9 +246,11 @@ def process_request(path):
     }
     out=RES/f"{path.stem}.json"
     out.write_text(json.dumps(payload,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
-    if results or not errors:
+    # Keep requests with any unresolved search/transcript errors pending.
+    # Successful video IDs are already stored in state and will be skipped on retry.
+    if not errors:
         marker.write_text(json.dumps({"result":str(out.relative_to(ROOT)),"processed_at":datetime.now(timezone.utc).isoformat()},ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
-    return bool(results or not errors)
+    return not errors
 
 def main():
     files=sorted(REQ.glob("*.json"))
