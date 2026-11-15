@@ -113,6 +113,46 @@ class Sheets:
             "valueInputOption": "RAW", "data": data,
         })
 
+    def verify(self, blocks):
+        # Read back every written range. The Apps Script bridge accepts at most
+        # 12 ranges per request, so verify in bounded chunks.
+        def normalize(matrix):
+            rows = [[("" if value is None else str(value)) for value in row]
+                    for row in (matrix or [])]
+            for row in rows:
+                while row and row[-1] == "":
+                    row.pop()
+            while rows and not rows[-1]:
+                rows.pop()
+            return rows
+
+        for offset in range(0, len(blocks), 12):
+            chunk = blocks[offset:offset + 12]
+            ranges = [f"'{name}'!{cell}" for name, cell, _ in chunk]
+            if getattr(self, "bridge_url", ""):
+                actual_ranges = self.bridge({"op": "read", "ranges": ranges}).get("values", [])
+            else:
+                response = SESSION.get(
+                    self.root + "/values:batchGet",
+                    headers=self.headers,
+                    params=[("ranges", value) for value in ranges],
+                    timeout=TIMEOUT,
+                )
+                if not response.ok:
+                    fail("Sheets readback HTTP " + str(response.status_code))
+                actual_ranges = [
+                    item.get("values", [])
+                    for item in response.json().get("valueRanges", [])
+                ]
+            if len(actual_ranges) != len(chunk):
+                fail("Sheets readback range count mismatch")
+            for (name, cell_range, expected), actual in zip(chunk, actual_ranges):
+                expected_matrix = [expected] if isinstance(expected, list) else [[expected]]
+                if normalize(actual) != normalize(expected_matrix):
+                    fail(f"Sheets readback mismatch: {name}!{cell_range}")
+        print(f"GOOGLE_SHEETS_READBACK=OK ranges={len(blocks)}")
+
+
 
 def cell(row, index):
     return row[index] if index < len(row) else ""
@@ -585,6 +625,7 @@ def run(args):
                 blocks.append(("Задания", f"{col}{rownum}", value))
             # Append only rows with validated source and grounded AI. Retry errors next schedule.
             sh.batch(blocks)
+            sh.verify(blocks)
             history.append(hr)
             videos.extend(newvid)
             knowledge.extend(newkb)
@@ -603,7 +644,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--force-task", default="")
-    parser.add_argument("--max-tasks", type=int, default=8)
+    parser.add_argument("--max-tasks", type=int, default=3)
     parser.add_argument("--videos-per-task", type=int, default=2)
     parser.add_argument("--search-limit", type=int, default=14)
     parser.add_argument("--fail-fast", action="store_true")
