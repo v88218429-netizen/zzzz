@@ -69,6 +69,7 @@ class WorkerTests(unittest.TestCase):
                 raise RuntimeError("temporarily blocked")
             with patch.object(worker, "REQ", req), \
                  patch.object(worker, "OUT", out), \
+                 patch.object(worker, "ROOT", root), \
                  patch.object(worker, "BASE", base), \
                  patch.object(worker, "RES", res), \
                  patch.object(worker, "STATE", state), \
