@@ -80,6 +80,25 @@ class MonitorTests(unittest.TestCase):
         self.assertEqual(seen["data"][1]["values"], [[2]])
         self.assertEqual(seen["data"][2]["values"], [["run", "AI_BUSINESS", "2026-10-14"]])
 
+    def test_sheets_write_ranges_are_read_back(self):
+        sh = object.__new__(vm.Sheets)
+        sh.bridge_url = "https://example.invalid/bridge"
+        sh.bridge_key = "unit-test-token"
+        returned = {"values": [
+            [["2026-11-15 19:00"]],
+            [["2"]],
+            [["run", "AI_BUSINESS"]],
+        ]}
+        blocks = [
+            ("Задания", "Q2", "2026-11-15 19:00"),
+            ("Задания", "T2", 2),
+            ("История", "A20:C20", ["run", "AI_BUSINESS", ""]),
+        ]
+        with patch.object(sh, "bridge", return_value=returned) as bridge:
+            sh.verify(blocks)
+        self.assertEqual(bridge.call_args.args[0]["op"], "read")
+        self.assertEqual(len(bridge.call_args.args[0]["ranges"]), 3)
+
     def test_ai_evidence_index_maps_to_real_transcript_quote(self):
         transcript = ("[0:03] Сначала проверяйте устойчивый спрос на маленькой партии "
                       "и сравнивайте прибыль с полными затратами на логистику, налог и рекламу.")
