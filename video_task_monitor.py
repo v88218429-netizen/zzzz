@@ -131,7 +131,7 @@ def get_transcript(vid, lang="ru"):
         if "Transcript method:" not in saved or "## Transcript" not in saved:
             continue
         body = saved.split("## Transcript", 1)[1].strip()
-        if len(body) >= 250 and re.search(r"\\[\\d{1,2}:\\d{2}(?::\\d{2})?\\]", body):
+        if len(body) >= 250 and re.search(r"\[\d{1,2}:\d{2}(?::\d{2})?\]", body):
             print(f"TRANSCRIPT_CACHE_HIT vid={vid} file={cached.name}")
             return body, "verified GitHub transcript cache"
     errs=[]
