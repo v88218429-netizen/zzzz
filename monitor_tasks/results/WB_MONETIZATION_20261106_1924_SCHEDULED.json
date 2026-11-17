@@ -3,54 +3,42 @@
   "request": "WB_MONETIZATION_20261106_1924_SCHEDULED.json",
   "query": "как монетизировать экспертизу Wildberries кроме ведения кабинетов",
   "knowledge_tag": "WB_MONETIZATION",
-  "generated_at": "2026-11-17T00:14:02.152981+00:00",
+  "generated_at": "2026-11-17T23:29:56.536307+00:00",
   "videos": [
     {
-      "video_id": "tYcg8WhvS5Y",
-      "url": "https://www.youtube.com/watch?v=tYcg8WhvS5Y",
-      "title": "ТОП ЛУЧШИХ СЕРВИСОВ АНАЛИТИКИ WILDBERRIES! Полезные ресурсы для работы менеджера маркетплейсов",
-      "channel": "Про OZON и WILDBERRIES",
-      "duration": 391,
+      "video_id": "F60zoI1hosg",
+      "url": "https://www.youtube.com/watch?v=F60zoI1hosg",
+      "title": "Одна SEO-настройка Wildberries и Ozon увеличила продажи в 17 раз! ЧАСТЬ 1",
+      "channel": "Нина Нино",
+      "duration": 883,
       "timestamp": null,
-      "query": "сервис для селлеров Wildberries бизнес",
+      "query": "сервис для селлеров Wildberries бизнес shorts",
       "kind": "video",
-      "transcript": "transcripts/2026-11-17_WB_MONETIZATION_video_tYcg8WhvS5Y.md",
+      "transcript": "transcripts/2026-11-17_WB_MONETIZATION_video_F60zoI1hosg.md",
       "method": "FreeTranscriptAPI"
     },
     {
-      "video_id": "Tc3ZuhzsdfA",
-      "url": "https://www.youtube.com/watch?v=Tc3ZuhzsdfA",
-      "title": "СЕКРЕТЫ МАСШТАБИРОВАНИЯ бизнеса на Wildberries — Галина Ворожбит х МаркетГуру",
-      "channel": "MarketGuru - Сервис аналитики Wildberries",
-      "duration": 1682,
+      "video_id": "l-WNQm-ASpQ",
+      "url": "https://www.youtube.com/watch?v=l-WNQm-ASpQ",
+      "title": "Одна SEO-настройка Wildberries и Ozon увеличила продажи в 170 раз! ЧАСТЬ 1",
+      "channel": "Нина Нино",
+      "duration": 536,
       "timestamp": null,
-      "query": "сервис для селлеров Wildberries бизнес",
+      "query": "сервис для селлеров Wildberries бизнес shorts",
       "kind": "video",
-      "transcript": "transcripts/2026-11-17_WB_MONETIZATION_video_Tc3ZuhzsdfA.md",
+      "transcript": "transcripts/2026-11-17_WB_MONETIZATION_video_l-WNQm-ASpQ.md",
       "method": "FreeTranscriptAPI"
     },
     {
-      "video_id": "mRPdadTpeVA",
-      "url": "https://www.youtube.com/watch?v=mRPdadTpeVA",
-      "title": "Хватит считать прибыль в Excel: вся аналитика WB и Ozon в одном сервисе",
-      "channel": "MP_Pulse",
-      "duration": 43,
+      "video_id": "Plc4jItITHs",
+      "url": "https://www.youtube.com/watch?v=Plc4jItITHs",
+      "title": "SEO за 5 минут увеличило продажи на Wildberries и Ozon в 17 раз! БОЛЬШОЙ ВЫПУСК",
+      "channel": "Нина Нино",
+      "duration": 1656,
       "timestamp": null,
-      "query": "сервис для селлеров Wildberries бизнес",
-      "kind": "short",
-      "transcript": "transcripts/2026-11-17_WB_MONETIZATION_short_mRPdadTpeVA.md",
-      "method": "FreeTranscriptAPI"
-    },
-    {
-      "video_id": "Jnu6QuFtlwQ",
-      "url": "https://www.youtube.com/watch?v=Jnu6QuFtlwQ",
-      "title": "ПОШАГОВАЯ ИНСТРУКЦИЯ по заработку на Wildberries. Выход на маркетплейс. Товарный бизнес",
-      "channel": "Stat4Market",
-      "duration": 971,
-      "timestamp": null,
-      "query": "сервис для селлеров Wildberries бизнес",
+      "query": "сервис для селлеров Wildberries бизнес shorts",
       "kind": "video",
-      "transcript": "transcripts/2026-11-17_WB_MONETIZATION_video_Jnu6QuFtlwQ.md",
+      "transcript": "transcripts/2026-11-17_WB_MONETIZATION_video_Plc4jItITHs.md",
       "method": "FreeTranscriptAPI"
     }
   ],
@@ -71,13 +59,19 @@
       "video_id": "XqLpruJ7Ggk",
       "url": "https://www.youtube.com/watch?v=XqLpruJ7Ggk",
       "title": "Как работает креатин 2 Часть 1 #Креатин #Здоровье #Shorts",
-      "error": "youtube_captions: \nCould not retrieve a transcript for the video https://www.youtube.com/watch?v=XqLpruJ7Ggk! This is most likely caused by:\n\nYouTube is blocking requests from your IP. This usually is due to one of the following reasons:\n- You have done too many requests and your IP has been blocked by YouTube\n- You are doing requests from an IP belonging to a cloud provider (like AWS, Google Cloud Platform, Azure, etc.). Unfortunately, most IPs from cloud providers are blocked by YouTube.\n\nWays to work around this are explained in the \"Working around IP bans\" section of the README (https://github.com/jdepoix/youtube-transcript-api?tab=readme-ov-file#working-around-ip-bans-requestblocked-or-ipblocked-exception).\n\n\nIf you are sure that the described cause is not responsible for this error a"
+      "error": "youtube_captions: \nCould not retrieve a transcript for the video https://www.youtube.com/watch?v=XqLpruJ7Ggk! This is most likely caused by:\n\nYouTube is blocking requests from your IP. This usually is due to one of the following reasons:\n- You have done too many requests and your IP has been blocked by YouTube\n- You are doing requests from an IP belonging to a cloud provider (like AWS, Google Cloud Platform, Azure, etc.). Unfortunately, most IPs from cloud providers are blocked by YouTube.\n\nThere are two things you can do to work around this:\n1. Use proxies to hide your IP address, as explained in the \"Working around IP bans\" section of the README (https://github.com/jdepoix/youtube-transcript-api?tab=readme-ov-file#working-around-ip-bans-requestblocked-or-ipblocked-exception).\n2. (NOT REC"
     },
     {
       "video_id": "DTc-_0t67Co",
       "url": "https://www.youtube.com/watch?v=DTc-_0t67Co",
       "title": "Набор для спортсмена — распаковка 4 #Спортпит #Здоровье #Shorts",
-      "error": "youtube_captions: \nCould not retrieve a transcript for the video https://www.youtube.com/watch?v=DTc-_0t67Co! This is most likely caused by:\n\nYouTube is blocking requests from your IP. This usually is due to one of the following reasons:\n- You have done too many requests and your IP has been blocked by YouTube\n- You are doing requests from an IP belonging to a cloud provider (like AWS, Google Cloud Platform, Azure, etc.). Unfortunately, most IPs from cloud providers are blocked by YouTube.\n\nWays to work around this are explained in the \"Working around IP bans\" section of the README (https://github.com/jdepoix/youtube-transcript-api?tab=readme-ov-file#working-around-ip-bans-requestblocked-or-ipblocked-exception).\n\n\nIf you are sure that the described cause is not responsible for this error a"
+      "error": "youtube_captions: \nCould not retrieve a transcript for the video https://www.youtube.com/watch?v=DTc-_0t67Co! This is most likely caused by:\n\nYouTube is blocking requests from your IP. This usually is due to one of the following reasons:\n- You have done too many requests and your IP has been blocked by YouTube\n- You are doing requests from an IP belonging to a cloud provider (like AWS, Google Cloud Platform, Azure, etc.). Unfortunately, most IPs from cloud providers are blocked by YouTube.\n\nThere are two things you can do to work around this:\n1. Use proxies to hide your IP address, as explained in the \"Working around IP bans\" section of the README (https://github.com/jdepoix/youtube-transcript-api?tab=readme-ov-file#working-around-ip-bans-requestblocked-or-ipblocked-exception).\n2. (NOT REC"
+    },
+    {
+      "video_id": "JyE9LPSHEJ0",
+      "url": "https://www.youtube.com/watch?v=JyE9LPSHEJ0",
+      "title": "Шоколадный вкус — нравится или нет 2 #Качалка #Shorts",
+      "error": "youtube_captions: \nCould not retrieve a transcript for the video https://www.youtube.com/watch?v=JyE9LPSHEJ0! This is most likely caused by:\n\nYouTube is blocking requests from your IP. This usually is due to one of the following reasons:\n- You have done too many requests and your IP has been blocked by YouTube\n- You are doing requests from an IP belonging to a cloud provider (like AWS, Google Cloud Platform, Azure, etc.). Unfortunately, most IPs from cloud providers are blocked by YouTube.\n\nThere are two things you can do to work around this:\n1. Use proxies to hide your IP address, as explained in the \"Working around IP bans\" section of the README (https://github.com/jdepoix/youtube-transcript-api?tab=readme-ov-file#working-around-ip-bans-requestblocked-or-ipblocked-exception).\n2. (NOT REC"
     }
   ]
 }

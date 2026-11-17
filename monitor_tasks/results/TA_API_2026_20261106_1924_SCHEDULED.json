@@ -3,42 +3,30 @@
   "request": "TA_API_2026_20261106_1924_SCHEDULED.json",
   "query": "официальный API Wildberries поиск/воронка; Wordstat API; Google Trends API; TikTok и Instagram — источники трендов",
   "knowledge_tag": "TREND_API",
-  "generated_at": "2026-11-17T00:13:14.749193+00:00",
+  "generated_at": "2026-11-17T23:29:09.330539+00:00",
   "videos": [
     {
-      "video_id": "9oJySubZRSA",
-      "url": "https://www.youtube.com/watch?v=9oJySubZRSA",
-      "title": "The Ultimate Beginner’s Guide to Claude AI",
-      "channel": "Metics Media",
-      "duration": 3649,
+      "video_id": "RdUhso3iAJU",
+      "url": "https://www.youtube.com/watch?v=RdUhso3iAJU",
+      "title": "НОВАЯ РЕКЛАМА на Wildberries 2026 | Как настроить, ПОШАГОВАЯ ИНСТРУКЦИЯ продвижения товаров на WB",
+      "channel": "Дмитрий Москаленко | Деньги на нейросетях",
+      "duration": 782,
       "timestamp": null,
       "query": "WB Excel/API лимиты",
       "kind": "video",
-      "transcript": "transcripts/2026-11-17_TA_API_2026_video_9oJySubZRSA.md",
-      "method": "FreeTranscriptAPI"
+      "transcript": "transcripts/2026-11-17_TA_API_2026_video_RdUhso3iAJU.md",
+      "method": "verified GitHub transcript cache"
     },
     {
-      "video_id": "e1k754hjeEE",
-      "url": "https://www.youtube.com/watch?v=e1k754hjeEE",
-      "title": "Never Pay For Claude Upgrades Again",
-      "channel": "AI Edge",
-      "duration": 1024,
+      "video_id": "MsUBtGrYxOs",
+      "url": "https://www.youtube.com/watch?v=MsUBtGrYxOs",
+      "title": "Как ХАКНУТЬ рекламу на Вайлдберриз с помощью Claude — гайд wildberries",
+      "channel": "Андрей Пекинский • Реклама на Вайлдберриз и Озон",
+      "duration": 776,
       "timestamp": null,
       "query": "WB Excel/API лимиты",
       "kind": "video",
-      "transcript": "transcripts/2026-11-17_TA_API_2026_video_e1k754hjeEE.md",
-      "method": "FreeTranscriptAPI"
-    },
-    {
-      "video_id": "J04REnA4VFQ",
-      "url": "https://www.youtube.com/watch?v=J04REnA4VFQ",
-      "title": "How to NEVER hit rate limits | Claude and Codex",
-      "channel": "Матвей Шульга",
-      "duration": 1669,
-      "timestamp": null,
-      "query": "WB Excel/API лимиты",
-      "kind": "video",
-      "transcript": "transcripts/2026-11-17_TA_API_2026_video_J04REnA4VFQ.md",
+      "transcript": "transcripts/2026-11-17_TA_API_2026_video_MsUBtGrYxOs.md",
       "method": "FreeTranscriptAPI"
     }
   ],
@@ -48,6 +36,12 @@
       "url": "",
       "title": "официальный API Wildberries поиск/воронка; Wordstat API; Google Trends API; TikTok и Instagram — источники трендов",
       "error": "no results"
+    },
+    {
+      "video_id": "Uzj5WWgD9kc",
+      "url": "https://www.youtube.com/watch?v=Uzj5WWgD9kc",
+      "title": "Как установить минимальную цену на вайлдберриз и заблокировать автоакции",
+      "error": "youtube_captions: \nCould not retrieve a transcript for the video https://www.youtube.com/watch?v=Uzj5WWgD9kc! This is most likely caused by:\n\nYouTube is blocking requests from your IP. This usually is due to one of the following reasons:\n- You have done too many requests and your IP has been blocked by YouTube\n- You are doing requests from an IP belonging to a cloud provider (like AWS, Google Cloud Platform, Azure, etc.). Unfortunately, most IPs from cloud providers are blocked by YouTube.\n\nThere are two things you can do to work around this:\n1. Use proxies to hide your IP address, as explained in the \"Working around IP bans\" section of the README (https://github.com/jdepoix/youtube-transcript-api?tab=readme-ov-file#working-around-ip-bans-requestblocked-or-ipblocked-exception).\n2. (NOT REC"
     }
   ]
 }
