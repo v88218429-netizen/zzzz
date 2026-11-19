@@ -117,11 +117,17 @@ def main() -> None:
     payload = result.get("result") if isinstance(result.get("result"), dict) else result
     if result.get("ok") is not True or payload.get("readback") != "pass":
         # Emit only a strict machine error code; never log card data or secrets.
-        error_code = result.get("error") or payload.get("error")
-        if isinstance(error_code, str) and re.fullmatch(r"WB_CONTENT_MANAGER_[A-Z0-9_]{1,80}", error_code):
-            print("BRIDGE_ERROR_CODE=" + error_code)
+        error_fields = [result.get("error"), payload.get("error"), result.get("message"), payload.get("message")]
+        safe_codes: list[str] = []
+        for field in error_fields:
+            if isinstance(field, str):
+                safe_codes.extend(re.findall(r"WB_CONTENT_MANAGER_[A-Z0-9_]{1,80}", field))
+        if safe_codes:
+            print("BRIDGE_ERROR_CODE=" + safe_codes[0])
         print("BRIDGE_ACTION=" + str(result.get("action") or "unknown"))
         print("BRIDGE_OK=" + str(result.get("ok") is True).lower())
+        print("BRIDGE_RESPONSE_KEYS=" + ",".join(sorted(str(key) for key in result.keys())))
+        print("BRIDGE_PAYLOAD_KEYS=" + ",".join(sorted(str(key) for key in payload.keys())))
         raise SyncError("Authenticated Apps Script bridge did not confirm a matching readback")
     print(
         "SYNC_OK"
