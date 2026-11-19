@@ -28,6 +28,7 @@ function sellmonitorGithubPublishContentManagerSnapshot_(body) {
   var massSh = ss.getSheetByName("Массовая правка");
   var startSh = ss.getSheetByName("Старт");
   if (!cardsSh || !attrsSh || !docsSh || !rawViewSh || !rawSh || !massSh || !startSh) throw new Error("WB_CONTENT_MANAGER_REQUIRED_TAB_MISSING");
+  var previewTrigger = smcmRunStage_("preview_trigger_setup", function() { return smcmEnsureContentManagerPreviewTrigger_(ss); });
 
   var existingCardRows = smcmReadBody_(cardsSh, 17);
   var oldIds = {};
@@ -121,6 +122,8 @@ function sellmonitorGithubPublishContentManagerSnapshot_(body) {
     matched_existing: overlap,
     existing_cards: oldCount,
     selected: preview.selected,
+    preview_trigger_ready: previewTrigger && previewTrigger.ready === true,
+    preview_trigger_created: previewTrigger && previewTrigger.created === true,
     preview_ready: preview.good,
     preview_needs_review: preview.bad,
     snapshot: snapshot,
@@ -131,7 +134,9 @@ function sellmonitorGithubPublishContentManagerSnapshot_(body) {
 function smcmRunStage_(stage, fn) {
   try { return fn(); }
   catch (error) {
-    var message = String(error && error.message || error || "").toLowerCase();
+    var rawMessage = String(error && error.message || error || "");
+    if (rawMessage.indexOf("WB_CONTENT_MANAGER_PREVIEW_STEP_") === 0) throw error;
+    var message = rawMessage.toLowerCase();
     var code = "UNKNOWN";
     if (/raw_cell_size_limit|50,?000|maximum.*character|cell.*character limit|exceeds.*characters|too many characters/.test(message)) code = "CELL_SIZE_LIMIT";
     else if (/raw_row_shape|number of columns|column count|columns in the data|row.*shape/.test(message)) code = "DATA_SHAPE";
@@ -244,10 +249,9 @@ function smcmBuildCards_(cards, snapshot, selections) {
       if (size && Array.isArray(size.skus)) size.skus.forEach(function(sku) { barcodes.push(sku); });
     });
     var dimensions = card.dimensions || {};
-    var photos = Array.isArray(card.photos) ? card.photos : [];
-    var photo = photos.length ? (photos[0] || {}) : {};
-    var image = photo.c246x328 || photo.big || photo.hq || photo.square || "";
-    formulas.push([image ? '=IMAGE("' + String(image).replace(/"/g, '""') + '";4;100;75)' : ""]);
+    var image = String(card._smcm_image_url || "");
+    if (!/^https:\/\/raw\.githubusercontent\.com\/v88218429-netizen\/zzzz\/mainggg\/wb-content-manager-images\/AP\/[0-9]+\.jpg$/.test(image)) image = "";
+    formulas.push([image ? '=IMAGE("' + image.replace(/"/g, '""') + '";4;100;75)' : ""]);
     rows.push([
       selections[nm] === true, "", "Текущий кабинет по API-ключу", nm,
       smcmText_(card.vendorCode), smcmText_(card.title),
@@ -331,6 +335,67 @@ function smcmBuildRaw_(cards, snapshot) {
   });
 }
 
+
+function smcmEnsureContentManagerPreviewTrigger_(ss) {
+  var handler = "smcmContentManagerPreviewOnEdit_";
+  var triggers = ScriptApp.getProjectTriggers();
+  for (var i = 0; i < triggers.length; i++) {
+    if (triggers[i].getHandlerFunction() === handler) return {ready: true, created: false};
+  }
+  ScriptApp.newTrigger(handler).forSpreadsheet(ss).onEdit().create();
+  return {ready: true, created: true};
+}
+
+function smcmContentManagerPreviewOnEdit_(e) {
+  if (!e || !e.range) return;
+  var edited = e.range;
+  var sheet = edited.getSheet();
+  var name = sheet.getName();
+  var startRow = edited.getRow(), endRow = edited.getLastRow();
+  var startColumn = edited.getColumn(), endColumn = edited.getLastColumn();
+  var cardSelectionEdit = name === "Карточки WB" && startColumn <= 1 && endColumn >= 1 && endRow >= 2;
+  var massControlEdit = name === "Массовая правка" && startColumn <= 2 && endColumn >= 2 && startRow <= 17 && endRow >= 6;
+  if (!cardSelectionEdit && !massControlEdit) return;
+
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(5000)) return;
+  try {
+    var ss = e.source || sheet.getParent();
+    var cardsSheet = ss.getSheetByName("Карточки WB");
+    var attrsSheet = ss.getSheetByName("Характеристики");
+    var docsSheet = ss.getSheetByName("Документы");
+    var massSheet = ss.getSheetByName("Массовая правка");
+    if (!cardsSheet || !attrsSheet || !docsSheet || !massSheet) return;
+    smcmUpdatePreview_(
+      massSheet,
+      smcmReadBody_(cardsSheet, 17),
+      smcmReadBody_(attrsSheet, 11),
+      smcmReadBody_(docsSheet, 20)
+    );
+    SpreadsheetApp.flush();
+  } catch (error) {
+    var type = String(error && error.name || "ERROR").replace(/[^A-Za-z0-9]/g, "_").toUpperCase().slice(0, 24);
+    Logger.log("WB_CONTENT_MANAGER_PREVIEW_ONEDIT_FAILED_" + type);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function smcmRunPreviewStep_(stage, fn) {
+  try { return fn(); }
+  catch (error) {
+    var message = String(error && error.message || error || "").toLowerCase();
+    var code = "UNKNOWN";
+    if (/protected|permission|not allowed|not authorized|cannot edit|do not have permission/.test(message)) code = "PROTECTED_RANGE";
+    else if (/data validation|violates data validation/.test(message)) code = "DATA_VALIDATION";
+    else if (/merged/.test(message)) code = "MERGED_CELLS";
+    else if (/grid|range|dimension|bounds|outside/.test(message)) code = "RANGE";
+    else if (/timed out|timeout|service.*failed|internal error|try again later/.test(message)) code = "SHEETS_SERVICE";
+    var type = String(error && error.name || "ERROR").replace(/[^A-Za-z0-9]/g, "_").toUpperCase().slice(0, 24);
+    throw new Error("WB_CONTENT_MANAGER_PREVIEW_STEP_" + stage + "_" + code + "_" + type);
+  }
+}
+
 function smcmUpdatePreview_(mass, cards, attrs, docs) {
   var params = mass.getRange("B6:B17").getDisplayValues().map(function(row) { return String(row[0] || "").trim(); });
   var shopFilter = params[0] || "", categoryFilter = params[1] || "";
@@ -372,12 +437,12 @@ function smcmUpdatePreview_(mass, cards, attrs, docs) {
     output.push([shop, nm, (vendor ? vendor + " · " : "") + title, category, field, before, after, result, "НЕТ — запись в WB отключена"]);
     if (reason) bad++; else good++;
   });
-  mass.getRange("B18").setFormula("=COUNTIF('Карточки WB'!A2:A3000;TRUE)");
-  mass.getRange("B19:B20").setValues([[good], [bad]]);
-  mass.getRange("B21").setValue(selected.length ? "Предпросмотр обновлён. Отправка в WB отключена." : "Отметь карточки на листе «Карточки WB».");
+  smcmRunPreviewStep_("B18_FORMULA", function() { mass.getRange("B18").setFormula("=COUNTIF('Карточки WB'!A2:A3000;TRUE)"); });
+  smcmRunPreviewStep_("COUNTERS", function() { mass.getRange("B19:B20").setValues([[good], [bad]]); });
+  smcmRunPreviewStep_("STATUS", function() { mass.getRange("B21").setValue(selected.length ? "Предпросмотр обновлён. Отправка в WB отключена." : "Отметь карточки на листе «Карточки WB»."); });
   var last = Math.max(mass.getLastRow(), 24);
-  mass.getRange(24, 1, last - 23, 9).clearContent();
-  if (output.length) mass.getRange(24, 1, output.length, 9).setValues(output);
-  else mass.getRange("I24").setValue("Нет выбранных карточек");
+  smcmRunPreviewStep_("CLEAR_OUTPUT", function() { mass.getRange(24, 1, last - 23, 9).clearContent(); });
+  if (output.length) smcmRunPreviewStep_("WRITE_OUTPUT", function() { mass.getRange(24, 1, output.length, 9).setValues(output); });
+  else smcmRunPreviewStep_("EMPTY_OUTPUT", function() { mass.getRange("I24").setValue("Нет выбранных карточек"); });
   return { selected: selected.length, good: good, bad: bad };
 }
