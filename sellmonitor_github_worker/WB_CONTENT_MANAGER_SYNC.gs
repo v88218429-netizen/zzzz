@@ -405,14 +405,25 @@ function smcmRunPreviewStep_(stage, fn) {
   }
 }
 
-function smcmUpdatePreview_(mass, cards, attrs, docs) {
+
+function smcmReadMassPreviewControls_(mass) {
+  var spreadsheetId = mass.getParent().getId();
+  var response = Sheets.Spreadsheets.Values.get(
+    spreadsheetId,
+    "'Массовая правка'!B6:B16",
+    {majorDimension: "ROWS", valueRenderOption: "FORMATTED_VALUE"}
+  );
+  var rows = response && Array.isArray(response.values) ? response.values : [];
   var params = [];
-  var timeZone = mass.getParent().getSpreadsheetTimeZone();
-  for (var controlRow = 6; controlRow <= 16; controlRow++) {
-    var controlValue = smcmRunPreviewStep_("CONTROL_CELL_" + controlRow, function() { return mass.getRange(controlRow, 2).getValue(); });
-    if (controlValue instanceof Date && (controlRow === 14 || controlRow === 15)) controlValue = Utilities.formatDate(controlValue, timeZone, "yyyy-MM-dd");
-    params.push(String(controlValue || "").trim());
+  for (var i = 0; i < 11; i++) {
+    var row = rows[i] || [];
+    params.push(String(row[0] || "").trim());
   }
+  return params;
+}
+
+function smcmUpdatePreview_(mass, cards, attrs, docs) {
+  var params = smcmRunPreviewStep_("READ_CONTROLS", function() { return smcmReadMassPreviewControls_(mass); });
   var shopFilter = params[0] || "", categoryFilter = params[1] || "";
   var operation = params[2] || "Характеристика";
   var attrId = params[3] || "", attrName = params[4] || "", newValue = params[5] || "";
