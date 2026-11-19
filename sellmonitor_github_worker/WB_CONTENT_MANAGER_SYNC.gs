@@ -82,6 +82,7 @@ function sellmonitorGithubPublishContentManagerSnapshot_(body) {
   var rawBlankRow = [];
   for (var rawColumn = 0; rawColumn < 20; rawColumn++) rawBlankRow.push("");
   while (rawWriteRows.length < previousRawRows) rawWriteRows.push(rawBlankRow.slice());
+  if (rawWriteRows.length) smcmRunStage_("raw_api_clear_validations", function() { rawSh.getRange(2, 1, rawWriteRows.length, 20).clearDataValidations(); });
   for (var rawOffset = 0; rawOffset < rawWriteRows.length; rawOffset += 10) {
     var rawChunk = rawWriteRows.slice(rawOffset, rawOffset + 10);
     var rawChunkStart = rawOffset;
