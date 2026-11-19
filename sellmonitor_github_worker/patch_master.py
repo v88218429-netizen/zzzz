@@ -1695,10 +1695,10 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
         print("INNER_MCP_BOUNDED_RETRY=patched")
 
 
-    # Normalize Google Sheets date values before comparing Ozon Performance rows.
-    ozon_idempotency_marker = "OZON_PERF_DATE_VALUE_IDEMPOTENCY_V5"
+    # Normalize dates, blank cells, and campaign IDs before comparing Ozon Performance rows.
+    ozon_idempotency_marker = "OZON_PERF_DATE_VALUE_IDEMPOTENCY_V6"
     if ozon_idempotency_marker not in worker_text:
-        new_daily = """  /* OZON_PERF_DATE_VALUE_IDEMPOTENCY_V5 */
+        new_daily = """  /* OZON_PERF_DATE_VALUE_IDEMPOTENCY_V6 */
   function comparableDateValue_(value) {
     if (value instanceof Date && isFinite(value.getTime())) return sellmonitorGithubOzonPerfDate_(value);
     if (typeof value === 'number' && isFinite(value) && value > 0) {
@@ -1715,16 +1715,18 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
     }
     return value;
   }
-  function comparableDateRow_(values, dateIndexes) {
+  function comparableDateRow_(values, dateIndexes, stringIndexes) {
     return values.map(function(value,index) {
       if (value==null) return '';
-      return dateIndexes.indexOf(index)>=0 ? comparableDateValue_(value) : value;
+      if (dateIndexes.indexOf(index)>=0) return comparableDateValue_(value);
+      if (stringIndexes.indexOf(index)>=0) return String(value).trim();
+      return value;
     });
   }
   var dailyChanges=[],dailyAdds=[],periodChanges=[],periodAdds=[];
   var dailyMismatchSample=[],periodMismatchSample=[];
-  function mismatchSample_(oldValues,newValues,dateIndexes,key) {
-    var oldRow=comparableDateRow_(oldValues,dateIndexes),newRow=comparableDateRow_(newValues,dateIndexes),differences=[];
+  function mismatchSample_(oldValues,newValues,dateIndexes,stringIndexes,key) {
+    var oldRow=comparableDateRow_(oldValues,dateIndexes,stringIndexes),newRow=comparableDateRow_(newValues,dateIndexes,stringIndexes),differences=[];
     for(var i=0;i<Math.min(oldRow.length,newRow.length);i++){
       if(JSON.stringify(oldRow[i])!==JSON.stringify(newRow[i])){
         differences.push({column:i+1,old_type:oldRow[i]===null?'null':typeof oldRow[i],new_type:newRow[i]===null?'null':typeof newRow[i],old_value:oldRow[i],new_value:newRow[i]});
@@ -1736,19 +1738,22 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
   dailyKeys.sort().forEach(function(k){
     var old=oldDaily.map[k],row=dailyMap[k];
     if(!old)dailyAdds.push(row);
-    else if(JSON.stringify(comparableDateRow_(old.values,[1]))!==JSON.stringify(comparableDateRow_(row,[1]))){
+    else if(JSON.stringify(comparableDateRow_(old.values,[1],[3]))!==JSON.stringify(comparableDateRow_(row,[1],[3]))){
       dailyChanges.push({row:old.row,old:old.values,next:row});
-      if(dailyMismatchSample.length<3)dailyMismatchSample.push(mismatchSample_(old.values,row,[1],k));
+      if(dailyMismatchSample.length<3)dailyMismatchSample.push(mismatchSample_(old.values,row,[1],[3],k));
     }
   });
   periodKeys.sort().forEach(function(k){
     var old=oldPeriods.map[k],row=periodMap[k];
     if(!old)periodAdds.push(row);
-    else if(JSON.stringify(comparableDateRow_(old.values,[1,2]))!==JSON.stringify(comparableDateRow_(row,[1,2]))){
+    else if(JSON.stringify(comparableDateRow_(old.values,[1,2],[4]))!==JSON.stringify(comparableDateRow_(row,[1,2],[4]))){
       periodChanges.push({row:old.row,old:old.values,next:row});
-      if(periodMismatchSample.length<3)periodMismatchSample.push(mismatchSample_(old.values,row,[1,2],k));
+      if(periodMismatchSample.length<3)periodMismatchSample.push(mismatchSample_(old.values,row,[1,2],[4],k));
     }
   });"""
+        v5_marker = "  /* OZON_PERF_DATE_VALUE_IDEMPOTENCY_V5 */"
+        v5_start = worker_text.find(v5_marker)
+        v5_end = worker_text.find(helper_anchor, v5_start) if v5_start >= 0 else -1
         v4_marker = "  /* OZON_PERF_DATE_VALUE_IDEMPOTENCY_V4 */"
         v4_start = worker_text.find(v4_marker)
         v3_marker = "  /* OZON_PERF_DATE_VALUE_IDEMPOTENCY_V3 */"
@@ -1762,7 +1767,9 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
         v3_end = worker_text.find(helper_anchor, v3_start) if v3_start >= 0 else -1
         v2_end = worker_text.find(helper_anchor, v2_start) if v2_start >= 0 else -1
         v1_end = worker_text.find(helper_anchor, v1_start) if v1_start >= 0 else -1
-        if v4_start >= 0 and v4_end > v4_start:
+        if v5_start >= 0 and v5_end > v5_start:
+            worker_text = worker_text[:v5_start] + new_daily + worker_text[v5_end:]
+        elif v4_start >= 0 and v4_end > v4_start:
             worker_text = worker_text[:v4_start] + new_daily + worker_text[v4_end:]
         elif v3_start >= 0 and v3_end > v3_start:
             worker_text = worker_text[:v3_start] + new_daily + worker_text[v3_end:]

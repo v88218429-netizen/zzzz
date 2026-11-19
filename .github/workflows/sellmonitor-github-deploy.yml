@@ -906,9 +906,9 @@ jobs:
           grep -Rqs "SELLMONITOR_OZON_EXPORT_DIAGNOSTIC_RESPONSE_V1" .
           grep -Rqs "function sellmonitorGithubEnsureTrigger_()" .
           grep -RqsF "$EXPECTED_WORKER_VERSION" .
-          grep -RqsF "OZON_PERF_DATE_VALUE_IDEMPOTENCY_V5" .
-          grep -RqsF "comparableDateRow_(row,[1])" .
-          grep -RqsF "comparableDateRow_(row,[1,2])" .
+          grep -RqsF "OZON_PERF_DATE_VALUE_IDEMPOTENCY_V6" .
+          grep -RqsF "comparableDateRow_(row,[1],[3])" .
+          grep -RqsF "comparableDateRow_(row,[1,2],[4])" .
           python - <<'PY'
           import pathlib, re
           files=[p for p in pathlib.Path('.').rglob('SELLMONITOR_GITHUB_WORKER.*') if p.is_file()]
@@ -921,17 +921,18 @@ jobs:
           end=source.find('\nfunction ',start+len(name))
           body=source[start:end if end>=0 else len(source)]
           checks={
-              'marker':'OZON_PERF_DATE_VALUE_IDEMPOTENCY_V5' in body,
-              'daily':'comparableDateRow_(old.values,[1]))!==JSON.stringify(comparableDateRow_(row,[1]))' in body,
-              'period':'comparableDateRow_(old.values,[1,2]))!==JSON.stringify(comparableDateRow_(row,[1,2]))' in body,
+              'marker':'OZON_PERF_DATE_VALUE_IDEMPOTENCY_V6' in body,
+              'daily':'comparableDateRow_(old.values,[1],[3]))!==JSON.stringify(comparableDateRow_(row,[1],[3]))' in body,
+              'period':'comparableDateRow_(old.values,[1,2],[4]))!==JSON.stringify(comparableDateRow_(row,[1,2],[4]))' in body,
               'blank':'if (value==null) return' in body,
+              'campaign_id_type':'stringIndexes.indexOf(index)>=0' in body,
               'sample':'comparison_sample:{daily:dailyMismatchSample,period:periodMismatchSample}' in body,
           }
           print('OZON_PERF_FUNCTION_READBACK='+str(checks))
           if not all(checks.values()): raise SystemExit('OZON_PERF_FUNCTION_READBACK_FAILED')
-          print('OZON_PERF_COMPARE_V5_FUNCTION_READBACK=yes')
+          print('OZON_PERF_COMPARE_V6_FUNCTION_READBACK=yes')
           PY
-          echo "OZON_PERF_COMPARE_V5_READBACK=yes"
+          echo "OZON_PERF_COMPARE_V6_READBACK=yes"
           grep -RqsF 'oldRnpNote.match(/Реклама доступна[^.]*\./)' .
           grep -Rqs "SELLMONITOR_WEBHOOK_HASH_NOT_COMPILED" .
           python - <<'PY'
