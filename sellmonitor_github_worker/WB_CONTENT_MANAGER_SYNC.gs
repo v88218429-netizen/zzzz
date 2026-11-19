@@ -75,8 +75,7 @@ function sellmonitorGithubPublishContentManagerSnapshot_(body) {
     docsSh.getRange(2, 20, 2999, 1).clearDataValidations();
     smcmReplaceBody_(docsSh, 20, docData);
   });
-  smcmRunStage_("raw_api_write", function() {
-    
+  var writeRows = smcmRunStage_("raw_api_prepare", function() {
     if (rawSh.getMaxColumns() < 20) throw new Error("WB_CONTENT_MANAGER_RAW_GRID_TOO_NARROW");
     rawData.forEach(function(row) {
       if (!Array.isArray(row) || row.length !== 20) throw new Error("WB_CONTENT_MANAGER_RAW_ROW_SHAPE");
@@ -85,11 +84,18 @@ function sellmonitorGithubPublishContentManagerSnapshot_(body) {
       });
     });
     var rawLast = Math.min(rawSh.getLastRow(), 3000);
-    var writeRows = rawData.slice();
+    var prepared = rawData.slice();
     var existingRows = Math.max(0, rawLast - 1);
-    while (writeRows.length < existingRows) writeRows.push(new Array(20).fill(""));
-    if (writeRows.length) rawSh.getRange(2, 1, writeRows.length, 20).setValues(writeRows);
+    while (prepared.length < existingRows) prepared.push(new Array(20).fill(""));
+    return prepared;
   });
+  for (var rawOffset = 0; rawOffset < writeRows.length; rawOffset += 10) {
+    var rawChunk = writeRows.slice(rawOffset, rawOffset + 10);
+    var rawChunkStart = rawOffset;
+    smcmRunStage_("raw_api_write_chunk_" + (Math.floor(rawOffset / 10) + 1), function() {
+      rawSh.getRange(2 + rawChunkStart, 1, rawChunk.length, 20).setValues(rawChunk);
+    });
+  }
 
   var preview = smcmRunStage_("mass_preview", function() { return smcmUpdatePreview_(massSh, cardData.rows, attrData, docData); });
   var statusB = "Свежие данные: " + cardData.rows.length + " карточек · " + attrData.length + " характеристик · " + docData.length + " строк документов";
@@ -138,7 +144,7 @@ function smcmRunStage_(stage, fn) {
     else if (/timed out|timeout|service spreadsheets|service.*failed|accessing document|internal error|try again later|operation could not be completed/.test(message)) code = "SHEETS_SERVICE";
     else if (/invalid argument|parameters.*signature|invalid range/.test(message)) code = "INVALID_ARGUMENT";
     else if (/null|undefined|not a function|cannot read|cannot set|array/.test(message)) code = "TYPE_OR_SHAPE";
-    if (code === "UNKNOWN" && stage.toLowerCase() === "raw_api_write") {
+    if (code === "UNKNOWN" && stage.toLowerCase().indexOf("raw_api_write") === 0) {
       try {
         var diagnosticSheet = SpreadsheetApp.openById("1--8PzvW7quVjolA5FmMS9tBNHA-IXGtFJyadWbt3eSA").getSheetByName("Полный API — данные");
         var sheetLocks = diagnosticSheet.getProtections(SpreadsheetApp.ProtectionType.SHEET);
