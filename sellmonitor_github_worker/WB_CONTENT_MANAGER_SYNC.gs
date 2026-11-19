@@ -1,5 +1,6 @@
 /* WB_CONTENT_MANAGER_SYNC_V1 */
 function sellmonitorGithubPublishContentManagerSnapshot_(body) {
+  try {
   var targetId = "1--8PzvW7quVjolA5FmMS9tBNHA-IXGtFJyadWbt3eSA";
   if (String(body.spreadsheet_id || "") !== targetId) throw new Error("WB_CONTENT_MANAGER_TARGET_REJECTED");
   if (String(body.cabinet || "") !== "AP") throw new Error("WB_CONTENT_MANAGER_CABINET_REJECTED");
@@ -94,7 +95,7 @@ function sellmonitorGithubPublishContentManagerSnapshot_(body) {
       rawSh.getRange(2 + rawChunkStart, 1, rawChunk.length, 20).setValues(rawChunk);
     });
   }
-  PropertiesService.getScriptProperties().setProperty("WB_CONTENT_MANAGER_RAW_ROW_COUNT_AP", String(rawData.length));
+  smcmRunStage_("raw_count_save", function() { PropertiesService.getScriptProperties().setProperty("WB_CONTENT_MANAGER_RAW_ROW_COUNT_AP", String(rawData.length)); });
 
   var preview = smcmRunStage_("mass_preview", function() { return smcmUpdatePreview_(massSh, cardData.rows, attrData, docData); });
   var statusB = "Свежие данные: " + cardData.rows.length + " карточек · " + attrData.length + " характеристик · " + docData.length + " строк документов";
@@ -106,11 +107,11 @@ function sellmonitorGithubPublishContentManagerSnapshot_(body) {
     startSh.getRange("C5").setValue("Автоматическое обновление каждые 6 часов");
   });
 
-  SpreadsheetApp.flush();
+  smcmRunStage_("flush", function() { SpreadsheetApp.flush(); });
   var readback = smcmRunStage_("readback", function() { return cardsSh.getRange(2, 4, cardData.rows.length, 1).getDisplayValues(); });
-  var matches = readback.filter(function(row, index) {
+  var matches = smcmRunStage_("readback_compare", function() { return readback.filter(function(row, index) {
     return smcmId_(row[0]) === smcmId_(cards[index].nmID || cards[index].nmId);
-  }).length;
+  }).length; });
   if (matches !== cardData.rows.length) throw new Error("WB_CONTENT_MANAGER_CARD_READBACK_MISMATCH");
 
   return {
@@ -129,6 +130,13 @@ function sellmonitorGithubPublishContentManagerSnapshot_(body) {
     snapshot: snapshot,
     readback: "pass"
   };
+  } catch (error) {
+    var rawMessage = String(error && error.message || error || "");
+    var match = rawMessage.match(/WB_CONTENT_MANAGER_[A-Z0-9_]{1,80}/);
+    var code = match ? match[0] : "WB_CONTENT_MANAGER_SYNC_UNKNOWN";
+    Logger.log("WB_CONTENT_MANAGER_SYNC_FAILED_" + code);
+    return {ok: false, error: code};
+  }
 }
 
 function smcmRunStage_(stage, fn) {
@@ -399,7 +407,7 @@ function smcmRunPreviewStep_(stage, fn) {
     }
     var type = String(error && error.name || "ERROR").replace(/[^A-Za-z0-9]/g, "_").toUpperCase().slice(0, 24);
     var stack = String(error && error.stack || "");
-    var lineMatch = stack.match(/:(\\d+):\\d+/);
+    var lineMatch = stack.match(/:(\d+):\d+/);
     var line = lineMatch ? "_LINE_" + lineMatch[1] : "";
     throw new Error("WB_CONTENT_MANAGER_PREVIEW_STEP_" + stage + "_" + code + "_" + type + line);
   }
