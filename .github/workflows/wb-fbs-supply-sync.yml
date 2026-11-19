@@ -1,6 +1,7 @@
 name: WB FBS supply sync via GitHub
 
 # Strict production supply and timing readback revalidation after matching worker deploy
+# Manual refresh requested for current FBS supply scans; no Apps Script source changed.
 
 on:
   push:
@@ -102,7 +103,6 @@ jobs:
           print("FBS_PUSH_GUARD skip="+str(skip).lower()+
                 " reason="+("source_superseded" if skip else "source_current"),flush=True)
           PY
-
       - name: Wait for the matching Apps Script deployment
         if: ${{ github.event_name == 'push' && steps.push_guard.outputs.skip != 'true' && (contains(github.event.head_commit.modified, 'wb_os/apps_script/WB_FBS_SUPPLY_DIRECT.gs') || contains(github.event.head_commit.modified, 'sellmonitor_github_worker/SELLMONITOR_GITHUB_WORKER.gs') || contains(github.event.head_commit.modified, 'sellmonitor_github_worker/patch_master.py')) }}
         env:
