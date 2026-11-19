@@ -18,7 +18,7 @@ on:
       - completed
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: wb-content-manager-sync
@@ -35,9 +35,13 @@ jobs:
       WEBAPP_DEPLOYMENT_ID: "AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw"
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: mainggg
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Install image converter
+        run: python -m pip install --disable-pip-version-check "Pillow>=10,<13"
       - name: Check configured credentials
         shell: bash
         run: |
