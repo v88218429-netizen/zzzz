@@ -39,10 +39,14 @@ def request_json(url: str, method: str, headers: dict[str, str], payload: Any | 
         request_headers["Content-Type"] = "application/json"
     retryable_statuses = {408, 429, 500, 502, 503, 504}
     raw = ""
+    response_status = "unknown"
+    response_content_type = "unknown"
     for attempt in range(retries + 1):
         request = urllib.request.Request(url, data=body, headers=request_headers, method=method)
         try:
             with urllib.request.urlopen(request, timeout=timeout) as response:
+                response_status = str(response.status)
+                response_content_type = response.headers.get("Content-Type", "unknown").split(";")[0]
                 raw = response.read().decode("utf-8")
             break
         except urllib.error.HTTPError as exc:
@@ -58,10 +62,29 @@ def request_json(url: str, method: str, headers: dict[str, str], payload: Any | 
             raise SyncError(f"{method} {urllib.parse.urlsplit(url).path} network error ({type(reason).__name__})") from None
     if not raw:
         return {}
+    raw = raw.lstrip("\\ufeff\\r\\n\\t ")
     try:
         value = json.loads(raw)
     except json.JSONDecodeError:
-        raise SyncError(f"{method} {urllib.parse.urlsplit(url).path} returned invalid JSON") from None
+        plain = re.sub(r"<[^>]*>", " ", raw).lower()
+        if "authorization is required" in plain or "sign in" in plain:
+            category = "AUTH_REQUIRED"
+        elif "script function not found" in plain:
+            category = "ENTRYPOINT_NOT_FOUND"
+        elif "service invoked too many times" in plain or "quota" in plain:
+            category = "GOOGLE_QUOTA_OR_RATE_LIMIT"
+        elif "maximum execution time" in plain or "timed out" in plain:
+            category = "SCRIPT_TIMEOUT"
+        elif "service unavailable" in plain or "internal error" in plain:
+            category = "GOOGLE_SERVICE_ERROR"
+        elif raw.lstrip().startswith("<"):
+            category = "HTML_RESPONSE"
+        else:
+            category = "NON_JSON_BODY"
+        raise SyncError(
+            f"{method} {urllib.parse.urlsplit(url).path} returned invalid JSON "
+            f"(status={response_status}; content_type={response_content_type}; category={category})"
+        ) from None
     if not isinstance(value, dict):
         raise SyncError(f"{method} {urllib.parse.urlsplit(url).path} returned a non-object response")
     return value
