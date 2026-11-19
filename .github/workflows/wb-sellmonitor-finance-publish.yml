@@ -47,7 +47,6 @@ permissions:
 concurrency:
   group: wb-bridge-production-mutations
   cancel-in-progress: false
-  queue: max
 
 jobs:
   publish:

@@ -15,12 +15,11 @@ on:
 concurrency:
   group: ozon-summary-orders-bounded
   cancel-in-progress: false
-  queue: max
 permissions:
   contents: read
 jobs:
   probe:
-    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' && !(github.event_name == 'push' && contains(github.event.head_commit.message, '[skip-ozon-performance-probe]')) }}
     strategy:
       fail-fast: false
       matrix:
