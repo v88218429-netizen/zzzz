@@ -141,22 +141,36 @@ if "OZON_TYPED_NORMALIZER_CALL_SITES_V1" not in source:
     for old, new, count in calls:
         source = replace_exact(source, old, new, count, "Ozon typed comparison call")
 if "SELLMONITOR_INNER_TYPED_METRIC_V1" not in source:
-    start = source.find("function sellmonitorGithubInnerMetric_(")
-    end = source.find("\\nfunction ", start + 1) if start >= 0 else -1
-    if start < 0 or end < 0:
-        raise SystemExit("Sellmonitor Inner numeric metric function missing")
-    body = source[start:end]
-    pattern = re.compile(r"(?m)^([ \\t]*)var\\s+number\\s*=\\s*Number\\([^;\\n]*\\)\\s*;\\s*\\n[ \\t]*return\\s+isFinite\\(number\\)\\s*\\?\\s*number\\s*/\\s*\\(divisor\\s*\\|\\|\\s*1\\)\\s*:\\s*''\\s*;")
-    replacement = "  /* SELLMONITOR_INNER_TYPED_METRIC_V1 */\\n  var number = sellmonitorGithubCanonicalValue_(value,'number','UTC');\\n  return typeof number === 'number' ? number / (divisor || 1) : '';"
-    body, changed = pattern.subn(lambda match: replacement, body, count=1)
+    function_start = source.find("function sellmonitorGithubInnerMetric_(")
+    function_end = source.find("\nfunction ", function_start + 1) if function_start >= 0 else -1
+    if function_start < 0 or function_end < 0:
+        raise SystemExit("Sellmonitor Inner numeric metric function boundary missing")
+    function_body = source[function_start:function_end]
+    metric_pattern = re.compile(r"(?m)^([ \t]*)var\s+number\s*=\s*Number\([^;\n]*\)\s*;\s*\n[ \t]*return\s+isFinite\(number\)\s*\?\s*number\s*/\s*\(divisor\s*\|\|\s*1\)\s*:\s*''\s*;")
+    def metric_replacement(match):
+        indent = match.group(1)
+        return indent + "/* SELLMONITOR_INNER_TYPED_METRIC_V1 */\n" + indent + "var number = sellmonitorGithubCanonicalValue_(value,'number','UTC');\n" + indent + "return typeof number === 'number' ? number / (divisor || 1) : '';"
+    function_body, changed = metric_pattern.subn(metric_replacement, function_body, count=1)
     if changed != 1:
-        safe_lines = [line.strip() for line in body.splitlines() if "Number(" in line or ("number" in line.lower() and "return" in line.lower())]
+        safe_lines = [line.strip() for line in function_body.splitlines() if "Number(" in line or ("number" in line.lower() and "return" in line.lower())]
         raise SystemExit("Sellmonitor Inner numeric metric shape mismatch:" + "|".join(safe_lines[:4]))
-    source = source[:start] + body + source[end:]
+    source = source[:function_start] + function_body + source[function_end:]
+    inner_version = re.search(r"VERSION:\s*'github-worker-(\d+)\.(\d+)\.(\d+)'", source)
+    if not inner_version:
+        raise SystemExit("worker version missing for Sellmonitor Inner typed release")
+    major, minor, patch = map(int, inner_version.groups())
+    next_version = "github-worker-" + str(major) + "." + str(minor) + "." + str(patch + 1)
+    source = source[:inner_version.start()] + "VERSION: '" + next_version + "'" + source[inner_version.end():]
+
 
 if "SELLMONITOR_INNER_TYPED_ID_WRITE_V1" not in source:
-    old = "  if (merged.length) sheet.getRange(2,1,merged.length,width).setValues(merged);"
-    new = """  /* SELLMONITOR_INNER_TYPED_ID_WRITE_V1 */
+    function_start = source.find("function sellmonitorGithubWriteInnerFinancePart_(")
+    function_end = source.find("\nfunction ", function_start + 1) if function_start >= 0 else -1
+    if function_start < 0 or function_end < 0:
+        raise SystemExit("Sellmonitor Inner ID writer function boundary missing")
+    function_body = source[function_start:function_end]
+    writer_pattern = re.compile(r"(?m)^([ \t]*)if\s*\(merged\.length\)\s*sheet\.getRange\(2,\s*1,\s*merged\.length,\s*width\)\.setValues\(merged\);")
+    writer_replacement = """  /* SELLMONITOR_INNER_TYPED_ID_WRITE_V1 */
   if (merged.length) {
     merged.forEach(function(row) {
       [0,1,6,7,44,45].forEach(function(index) {
@@ -168,7 +182,12 @@ if "SELLMONITOR_INNER_TYPED_ID_WRITE_V1" not in source:
     sheet.getRange(2,45,merged.length,2).setNumberFormat('@');
     sheet.getRange(2,1,merged.length,width).setValues(merged);
   }"""
-    source = replace_exact(source, old, new, label="Sellmonitor Inner text ID write")
+    function_body, changed = writer_pattern.subn(lambda match: writer_replacement, function_body, count=1)
+    if changed != 1:
+        safe_lines = [line.strip() for line in function_body.splitlines() if "merged.length" in line or "setValues(merged)" in line]
+        raise SystemExit("Sellmonitor Inner ID writer shape mismatch:" + "|".join(safe_lines[:4]))
+    source = source[:function_start] + function_body + source[function_end:]
+
 
 if "OZON_PERF_TYPED_IDEMPOTENCY_V7" not in source:
     new_daily = r"""  /* OZON_PERF_TYPED_IDEMPOTENCY_V7 */
