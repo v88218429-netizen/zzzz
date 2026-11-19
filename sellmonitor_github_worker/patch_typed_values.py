@@ -141,8 +141,8 @@ if "OZON_TYPED_NORMALIZER_CALL_SITES_V1" not in source:
     for old, new, count in calls:
         source = replace_exact(source, old, new, count, "Ozon typed comparison call")
 if "SELLMONITOR_INNER_TYPED_METRIC_V1" not in source:
-    old = "  var number = Number(value);\\n  return isFinite(number) ? number / (divisor || 1) : '';"
-    new = "  /* SELLMONITOR_INNER_TYPED_METRIC_V1 */\\n  var number = sellmonitorGithubCanonicalValue_(value,'number','UTC');\\n  return typeof number === 'number' ? number / (divisor || 1) : '';"
+    old = "  var number = Number(value);\n  return isFinite(number) ? number / (divisor || 1) : '';"
+    new = "  /* SELLMONITOR_INNER_TYPED_METRIC_V1 */\n  var number = sellmonitorGithubCanonicalValue_(value,'number','UTC');\n  return typeof number === 'number' ? number / (divisor || 1) : '';"
     source = replace_exact(source, old, new, label="Sellmonitor Inner numeric metric")
 
 if "SELLMONITOR_INNER_TYPED_ID_WRITE_V1" not in source:
