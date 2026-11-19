@@ -130,7 +130,7 @@ def main() -> None:
                 hint = re.sub(r"(?i)(token|secret|authorization|api[_-]?key)(\\s*[:=]\\s*|\\s+)[^\\s,;|]+", r"\\1=[redacted]", hint)
                 hint = re.sub(r"[A-Za-z0-9_-]{40,}", "[opaque]", hint)
                 hint = re.sub(r"\\b[0-9]{6,}\\b", "[number]", hint)
-                hint = re.sub(r"[^A-Za-z0-9_ :./()!?=-]", "?", hint)[:180]
+                hint = re.sub(r"[^\\w\\s:./()!?=-]", "?", hint)[:180]
                 print("BRIDGE_ERROR_HINT=" + hint)
                 break
         print("BRIDGE_ACTION=" + str(result.get("action") or "unknown"))
