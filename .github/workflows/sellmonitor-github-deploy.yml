@@ -910,6 +910,8 @@ jobs:
           grep -RqsF "$EXPECTED_WORKER_VERSION" .
           grep -RqsF "OZON_PERF_TYPED_IDEMPOTENCY_V7" .
           grep -RqsF "OZON_TYPED_NORMALIZER_CALL_SITES_V1" .
+          grep -RqsF "SELLMONITOR_INNER_TYPED_METRIC_V1" .
+          grep -RqsF "SELLMONITOR_INNER_TYPED_ID_WRITE_V1" .
           python - <<'PY'
           import pathlib, re
           files=[p for p in pathlib.Path('.').rglob('SELLMONITOR_GITHUB_WORKER.*') if p.is_file()]
@@ -931,6 +933,8 @@ jobs:
               'seller_qty_parser':'OZON_SELLER_QTY_SHARED_CANONICALIZER_V1' in source,
               'ozon_summary_schema':'OZON_TYPED_NORMALIZER_CALL_SITES_V1' in source,
               'wb_rnp_schema':'WB_RNP_TYPED_COMPARISON_V1' in source,
+              'inner_metric_parser':'SELLMONITOR_INNER_TYPED_METRIC_V1' in source and "sellmonitorGithubCanonicalValue_(value,'number','UTC')" in source,
+              'inner_id_text_writer':'SELLMONITOR_INNER_TYPED_ID_WRITE_V1' in source and "setNumberFormat('@')" in source,
               'daily_schema':"var ozonDailySchema={1:'date',2:'date',3:'number',4:'number',5:'number',6:'number',7:'number',8:'number'};" in source,
               'sku_schema':"var ozonSkuSchema={1:'date',2:'date',3:'id',4:'id',6:'number',7:'number',8:'number',9:'number'};" in source,
               'daily_readback':"sellmonitorGithubOzonNormalizeRows_(newDaily,null,ozonDailySchema)" in source,
