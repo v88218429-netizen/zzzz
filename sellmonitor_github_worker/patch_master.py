@@ -1749,7 +1749,7 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
             if old_daily not in worker_text:
                 raise SystemExit("Ozon daily idempotency comparison anchor changed")
             worker_text = worker_text.replace(old_daily,new_daily,1)
-        version_match = re.search(r"VERSION:\\s*'github-worker-(\\d+)\\.(\\d+)\\.(\\d+)'",worker_text)
+        version_match = re.search(r"VERSION:\s*'github-worker-(\d+)\.(\d+)\.(\d+)'",worker_text)
         if not version_match:
             raise SystemExit("Ozon date idempotency worker version missing")
         major,minor,patch_no=[int(x) for x in version_match.groups()]
