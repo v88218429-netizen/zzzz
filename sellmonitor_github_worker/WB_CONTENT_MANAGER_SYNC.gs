@@ -21,10 +21,13 @@ function sellmonitorGithubPublishContentManagerSnapshot_(body) {
   var cardsSh = ss.getSheetByName("Карточки WB");
   var attrsSh = ss.getSheetByName("Характеристики");
   var docsSh = ss.getSheetByName("Документы");
-  var rawSh = ss.getSheetByName("Полный API");
+  var rawViewSh = ss.getSheetByName("Полный API");
+  var rawSh = ss.getSheetByName("Полный API — данные");
+  if (!rawSh) rawSh = ss.insertSheet("Полный API — данные");
+  if (!rawSh.isSheetHidden()) rawSh.hideSheet();
   var massSh = ss.getSheetByName("Массовая правка");
   var startSh = ss.getSheetByName("Старт");
-  if (!cardsSh || !attrsSh || !docsSh || !rawSh || !massSh || !startSh) throw new Error("WB_CONTENT_MANAGER_REQUIRED_TAB_MISSING");
+  if (!cardsSh || !attrsSh || !docsSh || !rawViewSh || !rawSh || !massSh || !startSh) throw new Error("WB_CONTENT_MANAGER_REQUIRED_TAB_MISSING");
 
   var existingCardRows = smcmReadBody_(cardsSh, 17);
   var oldIds = {};
@@ -73,7 +76,7 @@ function sellmonitorGithubPublishContentManagerSnapshot_(body) {
     smcmReplaceBody_(docsSh, 20, docData);
   });
   smcmRunStage_("raw_api_write", function() {
-    smcmEnsureRawWriter_(rawSh, ss);
+    
     if (rawSh.getMaxColumns() < 20) throw new Error("WB_CONTENT_MANAGER_RAW_GRID_TOO_NARROW");
     rawData.forEach(function(row) {
       if (!Array.isArray(row) || row.length !== 20) throw new Error("WB_CONTENT_MANAGER_RAW_ROW_SHAPE");
@@ -121,21 +124,6 @@ function sellmonitorGithubPublishContentManagerSnapshot_(body) {
   };
 }
 
-function smcmEnsureRawWriter_(sheet, spreadsheet) {
-  var owner = spreadsheet.getOwner();
-  if (!owner) throw new Error("WB_CONTENT_MANAGER_RAW_SPREADSHEET_OWNER_UNAVAILABLE");
-  function allowOwner_(protection) {
-    if (!protection.canEdit()) protection.addEditor(owner);
-  }
-  sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET).forEach(allowOwner_);
-  sheet.getProtections(SpreadsheetApp.ProtectionType.RANGE).forEach(function(protection) {
-    var range = protection.getRange();
-    var top = range.getRow(), bottom = top + range.getNumRows() - 1;
-    var left = range.getColumn(), right = left + range.getNumColumns() - 1;
-    if (bottom < 2 || top > 3000 || right < 1 || left > 20) return;
-    allowOwner_(protection);
-  });
-}
 function smcmRunStage_(stage, fn) {
   try { return fn(); }
   catch (error) {
@@ -152,7 +140,7 @@ function smcmRunStage_(stage, fn) {
     else if (/null|undefined|not a function|cannot read|cannot set|array/.test(message)) code = "TYPE_OR_SHAPE";
     if (code === "UNKNOWN" && stage.toLowerCase() === "raw_api_write") {
       try {
-        var diagnosticSheet = SpreadsheetApp.openById("1--8PzvW7quVjolA5FmMS9tBNHA-IXGtFJyadWbt3eSA").getSheetByName("Полный API");
+        var diagnosticSheet = SpreadsheetApp.openById("1--8PzvW7quVjolA5FmMS9tBNHA-IXGtFJyadWbt3eSA").getSheetByName("Полный API — данные");
         var sheetLocks = diagnosticSheet.getProtections(SpreadsheetApp.ProtectionType.SHEET);
         var rangeLocks = diagnosticSheet.getProtections(SpreadsheetApp.ProtectionType.RANGE);
         code = sheetLocks.length || rangeLocks.length ? "PROTECTION_PRESENT" : "SETVALUES_FAILURE";
