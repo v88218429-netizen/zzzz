@@ -140,6 +140,27 @@ if "OZON_TYPED_NORMALIZER_CALL_SITES_V1" not in source:
     ]
     for old, new, count in calls:
         source = replace_exact(source, old, new, count, "Ozon typed comparison call")
+if "SELLMONITOR_INNER_TYPED_METRIC_V1" not in source:
+    old = "  var number = Number(value);\\n  return isFinite(number) ? number / (divisor || 1) : '';"
+    new = "  /* SELLMONITOR_INNER_TYPED_METRIC_V1 */\\n  var number = sellmonitorGithubCanonicalValue_(value,'number','UTC');\\n  return typeof number === 'number' ? number / (divisor || 1) : '';"
+    source = replace_exact(source, old, new, label="Sellmonitor Inner numeric metric")
+
+if "SELLMONITOR_INNER_TYPED_ID_WRITE_V1" not in source:
+    old = "  if (merged.length) sheet.getRange(2,1,merged.length,width).setValues(merged);"
+    new = """  /* SELLMONITOR_INNER_TYPED_ID_WRITE_V1 */
+  if (merged.length) {
+    merged.forEach(function(row) {
+      [0,1,6,7,44,45].forEach(function(index) {
+        row[index] = row[index] == null ? '' : String(row[index]);
+      });
+    });
+    sheet.getRange(2,1,merged.length,2).setNumberFormat('@');
+    sheet.getRange(2,7,merged.length,2).setNumberFormat('@');
+    sheet.getRange(2,45,merged.length,2).setNumberFormat('@');
+    sheet.getRange(2,1,merged.length,width).setValues(merged);
+  }"""
+    source = replace_exact(source, old, new, label="Sellmonitor Inner text ID write")
+
 if "OZON_PERF_TYPED_IDEMPOTENCY_V7" not in source:
     new_daily = r"""  /* OZON_PERF_TYPED_IDEMPOTENCY_V7 */
   var dailyCompareSchema={1:'date',3:'id',8:'number',9:'number',10:'number',11:'number',12:'number',13:'number',14:'number',15:'number',16:'number'};
@@ -199,6 +220,7 @@ required = [
     "OZON_TYPED_NORMALIZER_CALL_SITES_V1", "OZON_PERF_SHARED_NUMBER_CANONICALIZER_V1",
     "OZON_SELLER_QTY_SHARED_CANONICALIZER_V1", "WB_RNP_TYPED_COMPARISON_V1",
     "OZON_PERF_TYPED_IDEMPOTENCY_V7", "comparison_sample:{daily:dailyMismatchSample,period:periodMismatchSample}",
+    "SELLMONITOR_INNER_TYPED_METRIC_V1", "SELLMONITOR_INNER_TYPED_ID_WRITE_V1",
 ]
 missing = [x for x in required if x not in source]
 if missing:
@@ -207,3 +229,5 @@ path.write_text(source, encoding="utf-8")
 print("TYPED_VALUE_NORMALIZATION=patched")
 print("TYPED_WORKER_VERSION=" + re.search(r"VERSION:\s*'([^']+)'", source).group(1))
 print("TYPED_VALUE_READBACK=source_markers_verified")
+print("SELLMONITOR_INNER_TYPED_METRIC=verified")
+print("SELLMONITOR_INNER_TYPED_IDS=verified")
