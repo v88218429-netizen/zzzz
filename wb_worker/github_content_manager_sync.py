@@ -66,24 +66,34 @@ def request_json(url: str, method: str, headers: dict[str, str], payload: Any | 
     try:
         value = json.loads(raw)
     except json.JSONDecodeError:
-        plain = re.sub(r"<[^>]*>", " ", raw).lower()
-        if "authorization is required" in plain or "sign in" in plain:
+        plain = re.sub(r"(?is)<(script|style).*?</\\1>", " ", raw)
+        plain = re.sub(r"<[^>]*>", " ", plain)
+        lowered = plain.lower()
+        if "authorization is required" in lowered or "sign in" in lowered:
             category = "AUTH_REQUIRED"
-        elif "script function not found" in plain:
+        elif "script function not found" in lowered:
             category = "ENTRYPOINT_NOT_FOUND"
-        elif "service invoked too many times" in plain or "quota" in plain:
+        elif "service invoked too many times" in lowered or "quota" in lowered:
             category = "GOOGLE_QUOTA_OR_RATE_LIMIT"
-        elif "maximum execution time" in plain or "timed out" in plain:
+        elif "maximum execution time" in lowered or "timed out" in lowered:
             category = "SCRIPT_TIMEOUT"
-        elif "service unavailable" in plain or "internal error" in plain:
+        elif "service unavailable" in lowered or "internal error" in lowered:
             category = "GOOGLE_SERVICE_ERROR"
         elif raw.lstrip().startswith("<"):
             category = "HTML_RESPONSE"
         else:
             category = "NON_JSON_BODY"
+        title_match = re.search(r"(?is)<title[^>]*>(.*?)</title>", raw)
+        summary = title_match.group(1) if title_match else plain
+        summary = re.sub(r"<[^>]*>", " ", summary)
+        summary = re.sub(r"https?://\\S+", "[url]", summary)
+        summary = re.sub(r"\\b[A-Za-z0-9_+/=-]{28,}\\b", "[redacted]", summary)
+        summary = re.sub(r"\\b\\d{7,}\\b", "[number]", summary)
+        summary = re.sub(r"\\b[\\w.+-]+@[\\w.-]+\\.[A-Za-z]{2,}\\b", "[email]", summary)
+        summary = re.sub(r"\\s+", " ", summary).strip()[:180]
         raise SyncError(
             f"{method} {urllib.parse.urlsplit(url).path} returned invalid JSON "
-            f"(status={response_status}; content_type={response_content_type}; category={category})"
+            f"(status={response_status}; content_type={response_content_type}; category={category}; summary={summary or 'empty'})"
         ) from None
     if not isinstance(value, dict):
         raise SyncError(f"{method} {urllib.parse.urlsplit(url).path} returned a non-object response")
