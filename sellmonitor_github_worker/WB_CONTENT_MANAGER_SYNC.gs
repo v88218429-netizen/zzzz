@@ -107,7 +107,10 @@ function sellmonitorGithubPublishContentManagerSnapshot_(body) {
     startSh.getRange("C5").setValue("Автоматическое обновление каждые 6 часов");
   });
 
-  var readback = smcmRunStage_("readback", function() { return cardsSh.getRange(2, 4, cardData.rows.length, 1).getDisplayValues(); });
+  var readbackResponse = smcmRunStage_("readback", function() {
+    return Sheets.Spreadsheets.Values.get(ss.getId(), "'Карточки WB'!D2:D" + (cardData.rows.length + 1), {majorDimension: "ROWS", valueRenderOption: "FORMATTED_VALUE"});
+  });
+  var readback = readbackResponse && Array.isArray(readbackResponse.values) ? readbackResponse.values : [];
   var matches = smcmRunStage_("readback_compare", function() { return readback.filter(function(row, index) {
     return smcmId_(row[0]) === smcmId_(cards[index].nmID || cards[index].nmId);
   }).length; });
