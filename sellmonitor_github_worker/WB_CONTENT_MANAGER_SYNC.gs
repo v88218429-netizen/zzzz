@@ -397,19 +397,19 @@ function smcmRunPreviewStep_(stage, fn) {
 }
 
 function smcmUpdatePreview_(mass, cards, attrs, docs) {
-  var params = mass.getRange("B6:B17").getDisplayValues().map(function(row) { return String(row[0] || "").trim(); });
+  var params = smcmRunPreviewStep_("READ_CONTROLS", function() { return mass.getRange("B6:B17").getDisplayValues().map(function(row) { return String(row[0] || "").trim(); }); });
   var shopFilter = params[0] || "", categoryFilter = params[1] || "";
   var operation = params[2] || "Характеристика";
   var attrId = params[3] || "", attrName = params[4] || "", newValue = params[5] || "";
   var docType = params[6] || "", docNumber = params[7] || "", docStart = params[8] || "", docEnd = params[9] || "", docAction = params[10] || "";
-  var selected = cards.filter(function(row) {
+  var selected = smcmRunPreviewStep_("SELECT_CARDS", function() { return cards.filter(function(row) {
     if (row[0] !== true) return false;
     if (shopFilter && shopFilter !== "Все магазины" && String(row[2]) !== shopFilter) return false;
     if (categoryFilter && categoryFilter !== "Все категории" && String(row[6]) !== categoryFilter) return false;
     return true;
-  });
+  }); });
   var output = [], good = 0, bad = 0;
-  selected.forEach(function(card) {
+  smcmRunPreviewStep_("BUILD_ROWS", function() { selected.forEach(function(card) {
     var nm = smcmId_(card[3]), shop = String(card[2] || ""), vendor = String(card[4] || ""), title = String(card[5] || ""), category = String(card[6] || "");
     var field = "", before = "", after = "", reason = "";
     if (operation.toLowerCase().indexOf("характер") >= 0) {
@@ -436,11 +436,11 @@ function smcmUpdatePreview_(mass, cards, attrs, docs) {
     var result = reason || "Подходит для предпросмотра; запись в WB отключена";
     output.push([shop, nm, (vendor ? vendor + " · " : "") + title, category, field, before, after, result, "НЕТ — запись в WB отключена"]);
     if (reason) bad++; else good++;
-  });
+  }); });
   smcmRunPreviewStep_("B18_FORMULA", function() { mass.getRange("B18").setFormula("=COUNTIF('Карточки WB'!A2:A3000;TRUE)"); });
   smcmRunPreviewStep_("COUNTERS", function() { mass.getRange("B19:B20").setValues([[good], [bad]]); });
   smcmRunPreviewStep_("STATUS", function() { mass.getRange("B21").setValue(selected.length ? "Предпросмотр обновлён. Отправка в WB отключена." : "Отметь карточки на листе «Карточки WB»."); });
-  var last = Math.max(mass.getLastRow(), 24);
+  var last = smcmRunPreviewStep_("GET_LAST_ROW", function() { return Math.max(mass.getLastRow(), 24); });
   smcmRunPreviewStep_("CLEAR_OUTPUT", function() { mass.getRange(24, 1, last - 23, 9).clearContent(); });
   if (output.length) smcmRunPreviewStep_("WRITE_OUTPUT", function() { mass.getRange(24, 1, output.length, 9).setValues(output); });
   else smcmRunPreviewStep_("EMPTY_OUTPUT", function() { mass.getRange("I24").setValue("Нет выбранных карточек"); });
