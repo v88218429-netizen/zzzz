@@ -67,16 +67,18 @@ function sellmonitorGithubPublishContentManagerSnapshot_(body) {
   smcmReplaceBody_(docsSh, 20, docData);
   smcmReplaceBody_(rawSh, 20, rawData);
 
-  var preview = smcmUpdatePreview_(massSh, cardData.rows, attrData, docData);
+  var preview = smcmRunStage_("mass_preview", function() { return smcmUpdatePreview_(massSh, cardData.rows, attrData, docData); });
   var statusB = "Свежие данные: " + cardData.rows.length + " карточек · " + attrData.length + " характеристик · " + docData.length + " строк документов";
-  startSh.getRange("B4").setValue(statusB);
-  startSh.getRange("C4").setValue("WB Content API, только чтение · Дом Саныча (AP) · " + snapshot);
-  startSh.getRange("A5").setValue("Ручное обновление");
-  startSh.getRange("B5").setFormula('=HYPERLINK("https://github.com/v88218429-netizen/zzzz/actions/workflows/wb-content-manager-sync.yml";"Открыть GitHub Actions")');
-  startSh.getRange("C5").setValue("Автоматическое обновление каждые 6 часов");
+  smcmRunStage_("start_status", function() {
+    startSh.getRange("B4").setValue(statusB);
+    startSh.getRange("C4").setValue("WB Content API, только чтение · Дом Саныча (AP) · " + snapshot);
+    startSh.getRange("A5").setValue("Ручное обновление");
+    startSh.getRange("B5").setFormula('=HYPERLINK("https://github.com/v88218429-netizen/zzzz/actions/workflows/wb-content-manager-sync.yml";"Открыть GitHub Actions")');
+    startSh.getRange("C5").setValue("Автоматическое обновление каждые 6 часов");
+  });
 
   SpreadsheetApp.flush();
-  var readback = cardsSh.getRange(2, 4, cardData.rows.length, 1).getDisplayValues();
+  var readback = smcmRunStage_("readback", function() { return cardsSh.getRange(2, 4, cardData.rows.length, 1).getDisplayValues(); });
   var matches = readback.filter(function(row, index) {
     return smcmId_(row[0]) === smcmId_(cards[index].nmID || cards[index].nmId);
   }).length;
@@ -96,6 +98,11 @@ function sellmonitorGithubPublishContentManagerSnapshot_(body) {
     snapshot: snapshot,
     readback: "pass"
   };
+}
+
+function smcmRunStage_(stage, fn) {
+  try { return fn(); }
+  catch (ignored) { throw new Error("WB_CONTENT_MANAGER_STAGE_" + stage.toUpperCase()); }
 }
 
 function smcmReadBody_(sheet, width) {
