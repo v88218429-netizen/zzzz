@@ -1696,9 +1696,9 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
 
 
     # Normalize Google Sheets date values before comparing Ozon Performance rows.
-    ozon_idempotency_marker = "OZON_PERF_DATE_VALUE_IDEMPOTENCY_V2"
+    ozon_idempotency_marker = "OZON_PERF_DATE_VALUE_IDEMPOTENCY_V3"
     if ozon_idempotency_marker not in worker_text:
-        new_daily = """  /* OZON_PERF_DATE_VALUE_IDEMPOTENCY_V2 */
+        new_daily = """  /* OZON_PERF_DATE_VALUE_IDEMPOTENCY_V3 */
   function comparableDateValue_(value) {
     if (value instanceof Date && isFinite(value.getTime())) return sellmonitorGithubOzonPerfDate_(value);
     if (typeof value === 'number' && isFinite(value) && value > 0) {
@@ -1724,18 +1724,23 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
   dailyKeys.sort().forEach(function(k){
     var old=oldDaily.map[k],row=dailyMap[k];
     if(!old)dailyAdds.push(row);
-    else if(JSON.stringify(comparableDateRow_(old.values,[1]))!==JSON.stringify(row))dailyChanges.push({row:old.row,old:old.values,next:row});
+    else if(JSON.stringify(comparableDateRow_(old.values,[1]))!==JSON.stringify(comparableDateRow_(row,[1])))dailyChanges.push({row:old.row,old:old.values,next:row});
   });
   periodKeys.sort().forEach(function(k){
     var old=oldPeriods.map[k],row=periodMap[k];
     if(!old)periodAdds.push(row);
-    else if(JSON.stringify(comparableDateRow_(old.values,[1,2]))!==JSON.stringify(row))periodChanges.push({row:old.row,old:old.values,next:row});
+    else if(JSON.stringify(comparableDateRow_(old.values,[1,2]))!==JSON.stringify(comparableDateRow_(row,[1,2])))periodChanges.push({row:old.row,old:old.values,next:row});
   });"""
+        v2_marker = "  /* OZON_PERF_DATE_VALUE_IDEMPOTENCY_V2 */"
+        v2_start = worker_text.find(v2_marker)
         v1_marker = "  /* OZON_PERF_DATE_VALUE_IDEMPOTENCY_V1 */"
         v1_start = worker_text.find(v1_marker)
         helper_anchor = "\n\n  var helperSpecs=["
+        v2_end = worker_text.find(helper_anchor, v2_start) if v2_start >= 0 else -1
         v1_end = worker_text.find(helper_anchor, v1_start) if v1_start >= 0 else -1
-        if v1_start >= 0 and v1_end > v1_start:
+        if v2_start >= 0 and v2_end > v2_start:
+            worker_text = worker_text[:v2_start] + new_daily + worker_text[v2_end:]
+        elif v1_start >= 0 and v1_end > v1_start:
             worker_text = worker_text[:v1_start] + new_daily + worker_text[v1_end:]
         else:
             old_daily = """  var dailyChanges=[],dailyAdds=[],periodChanges=[],periodAdds=[];
