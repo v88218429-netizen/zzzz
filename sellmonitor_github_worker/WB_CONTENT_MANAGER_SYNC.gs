@@ -73,7 +73,7 @@ function sellmonitorGithubPublishContentManagerSnapshot_(body) {
     smcmReplaceBody_(docsSh, 20, docData);
   });
   smcmRunStage_("raw_api_write", function() {
-    smcmEnsureRawWriter_(rawSh);
+    smcmEnsureRawWriter_(rawSh, ss);
     if (rawSh.getMaxColumns() < 20) throw new Error("WB_CONTENT_MANAGER_RAW_GRID_TOO_NARROW");
     rawData.forEach(function(row) {
       if (!Array.isArray(row) || row.length !== 20) throw new Error("WB_CONTENT_MANAGER_RAW_ROW_SHAPE");
@@ -121,26 +121,21 @@ function sellmonitorGithubPublishContentManagerSnapshot_(body) {
   };
 }
 
-function smcmEnsureRawWriter_(sheet) {
-  var email = String(Session.getEffectiveUser().getEmail() || "").trim();
-  if (!email) throw new Error("WB_CONTENT_MANAGER_RAW_WRITER_EMAIL_UNAVAILABLE");
-  var normalizedEmail = email.toLowerCase();
-  function addCurrentWriter_(protection) {
-    var editors = protection.getEditors().map(function(user) {
-      return String(user.getEmail() || "").toLowerCase();
-    });
-    if (editors.indexOf(normalizedEmail) < 0) protection.addEditor(email);
+function smcmEnsureRawWriter_(sheet, spreadsheet) {
+  var owner = spreadsheet.getOwner();
+  if (!owner) throw new Error("WB_CONTENT_MANAGER_RAW_SPREADSHEET_OWNER_UNAVAILABLE");
+  function allowOwner_(protection) {
+    if (!protection.canEdit()) protection.addEditor(owner);
   }
-  sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET).forEach(addCurrentWriter_);
+  sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET).forEach(allowOwner_);
   sheet.getProtections(SpreadsheetApp.ProtectionType.RANGE).forEach(function(protection) {
     var range = protection.getRange();
     var top = range.getRow(), bottom = top + range.getNumRows() - 1;
     var left = range.getColumn(), right = left + range.getNumColumns() - 1;
     if (bottom < 2 || top > 3000 || right < 1 || left > 20) return;
-    addCurrentWriter_(protection);
+    allowOwner_(protection);
   });
 }
-
 function smcmRunStage_(stage, fn) {
   try { return fn(); }
   catch (error) {
