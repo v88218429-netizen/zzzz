@@ -64,8 +64,9 @@ function sellmonitorGithubPublishContentManagerSnapshot_(body) {
     cardsSh.setRowHeights(2, cardData.formulas.length, 106);
   }
   smcmReplaceBody_(attrsSh, 11, attrData);
-  // WB returns numeric current document type IDs; keep the dropdown only on the editable "new type" column.
+  // Imported WB values can be numeric IDs/JSON; keep dropdowns only on editable control columns.
   docsSh.getRange(2, 7, 2999, 1).clearDataValidations();
+  docsSh.getRange(2, 20, 2999, 1).clearDataValidations();
   smcmReplaceBody_(docsSh, 20, docData);
   smcmReplaceBody_(rawSh, 20, rawData);
 
