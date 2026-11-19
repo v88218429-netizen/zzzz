@@ -466,8 +466,8 @@ function smcmUpdatePreview_(mass, cards, attrs, docs) {
   smcmRunPreviewStep_("B18_FORMULA", function() { mass.getRange("B18").setFormula("=COUNTIF('Карточки WB'!A2:A3000;TRUE)"); });
   smcmRunPreviewStep_("COUNTERS", function() { mass.getRange("B19:B20").setValues([[good], [bad]]); });
   smcmRunPreviewStep_("STATUS", function() { mass.getRange("B21").setValue(selected.length ? "Предпросмотр обновлён. Отправка в WB отключена." : "Отметь карточки на листе «Карточки WB»."); });
-  var last = smcmRunPreviewStep_("GET_LAST_ROW", function() { return Math.max(mass.getLastRow(), 24); });
-  smcmRunPreviewStep_("CLEAR_OUTPUT", function() { mass.getRange(24, 1, last - 23, 9).clearContent(); });
+  var clearRows = 3000 - 23;
+  smcmRunPreviewStep_("CLEAR_OUTPUT", function() { mass.getRange(24, 1, clearRows, 9).clearContent(); });
   if (output.length) smcmRunPreviewStep_("WRITE_OUTPUT", function() { mass.getRange(24, 1, output.length, 9).setValues(output); });
   else smcmRunPreviewStep_("EMPTY_OUTPUT", function() { mass.getRange("I24").setValue("Нет выбранных карточек"); });
   return { selected: selected.length, good: good, bad: bad };
