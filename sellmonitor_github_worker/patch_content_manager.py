@@ -9,7 +9,11 @@ if len(sys.argv) != 2:
 root = Path(sys.argv[1]).resolve()
 worker = root / "SELLMONITOR_GITHUB_WORKER.gs"
 helper_source = Path(__file__).with_name("WB_CONTENT_MANAGER_SYNC.gs")
-helper_target = root / "WB_CONTENT_MANAGER_SYNC.gs"
+helper_targets = [root / "WB_CONTENT_MANAGER_SYNC.gs", root / "WB_CONTENT_MANAGER_SYNC.js"]
+existing_helper_targets = [path for path in helper_targets if path.is_file()]
+if len(existing_helper_targets) > 1:
+    raise SystemExit("WB content manager helper exists with conflicting extensions")
+helper_target = existing_helper_targets[0] if existing_helper_targets else helper_targets[0]
 if not worker.is_file() or not helper_source.is_file():
     raise SystemExit("WB content manager adapter source is missing")
 
