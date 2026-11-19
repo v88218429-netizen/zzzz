@@ -72,7 +72,20 @@ function sellmonitorGithubPublishContentManagerSnapshot_(body) {
     docsSh.getRange(2, 20, 2999, 1).clearDataValidations();
     smcmReplaceBody_(docsSh, 20, docData);
   });
-  smcmRunStage_("raw_api_write", function() { smcmReplaceBody_(rawSh, 20, rawData); });
+  smcmRunStage_("raw_api_clear", function() {
+    var rawLast = Math.min(rawSh.getLastRow(), 3000);
+    if (rawLast > 1) rawSh.getRange(2, 1, rawLast - 1, 20).clearContent();
+  });
+  smcmRunStage_("raw_api_write", function() {
+    if (rawSh.getMaxColumns() < 20) throw new Error("WB_CONTENT_MANAGER_RAW_GRID_TOO_NARROW");
+    rawData.forEach(function(row) {
+      if (!Array.isArray(row) || row.length !== 20) throw new Error("WB_CONTENT_MANAGER_RAW_ROW_SHAPE");
+      row.forEach(function(value) {
+        if (typeof value === "string" && value.length > 50000) throw new Error("WB_CONTENT_MANAGER_RAW_CELL_SIZE_LIMIT");
+      });
+    });
+    if (rawData.length) rawSh.getRange(2, 1, rawData.length, 20).setValues(rawData);
+  });
 
   var preview = smcmRunStage_("mass_preview", function() { return smcmUpdatePreview_(massSh, cardData.rows, attrData, docData); });
   var statusB = "Свежие данные: " + cardData.rows.length + " карточек · " + attrData.length + " характеристик · " + docData.length + " строк документов";
@@ -115,10 +128,12 @@ function smcmRunStage_(stage, fn) {
     if (/data validation|violates data validation/.test(message)) code = "DATA_VALIDATION";
     else if (/number of columns|column count|columns in the data/.test(message)) code = "COLUMN_COUNT";
     else if (/50,?000|maximum.*character|cell.*character limit|exceeds.*characters/.test(message)) code = "CELL_SIZE_LIMIT";
-    else if (/protected|permission denied|not authorized/.test(message)) code = "PROTECTED_RANGE";
-    else if (/grid|not enough columns|not enough rows|out of bounds/.test(message)) code = "GRID_SIZE";
+    else if (/protected|permission|not allowed|not authorized|cannot edit|do not have permission/.test(message)) code = "PROTECTED_RANGE";
+    else if (/grid|not enough columns|not enough rows|out of bounds|dimension|range.*outside/.test(message)) code = "GRID_SIZE";
     else if (/payload.*large|request.*too large|limit exceeded/.test(message)) code = "REQUEST_LIMIT";
-    else if (/timed out|timeout|service spreadsheets/.test(message)) code = "SHEETS_SERVICE";
+    else if (/timed out|timeout|service spreadsheets|service.*failed|accessing document/.test(message)) code = "SHEETS_SERVICE";
+    else if (/invalid argument|parameters.*signature|invalid range/.test(message)) code = "INVALID_ARGUMENT";
+    else if (/null|undefined|not a function|cannot read|cannot set|array/.test(message)) code = "TYPE_OR_SHAPE";
     throw new Error("WB_CONTENT_MANAGER_STAGE_" + stage.toUpperCase() + "_" + code);
   }
 }
