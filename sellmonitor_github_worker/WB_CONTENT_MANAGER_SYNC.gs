@@ -72,10 +72,6 @@ function sellmonitorGithubPublishContentManagerSnapshot_(body) {
     docsSh.getRange(2, 20, 2999, 1).clearDataValidations();
     smcmReplaceBody_(docsSh, 20, docData);
   });
-  smcmRunStage_("raw_api_clear", function() {
-    var rawLast = Math.min(rawSh.getLastRow(), 3000);
-    if (rawLast > 1) rawSh.getRange(2, 1, rawLast - 1, 20).clearContent();
-  });
   smcmRunStage_("raw_api_write", function() {
     if (rawSh.getMaxColumns() < 20) throw new Error("WB_CONTENT_MANAGER_RAW_GRID_TOO_NARROW");
     rawData.forEach(function(row) {
@@ -84,7 +80,11 @@ function sellmonitorGithubPublishContentManagerSnapshot_(body) {
         if (typeof value === "string" && value.length > 50000) throw new Error("WB_CONTENT_MANAGER_RAW_CELL_SIZE_LIMIT");
       });
     });
-    if (rawData.length) rawSh.getRange(2, 1, rawData.length, 20).setValues(rawData);
+    var rawLast = Math.min(rawSh.getLastRow(), 3000);
+    var writeRows = rawData.slice();
+    var existingRows = Math.max(0, rawLast - 1);
+    while (writeRows.length < existingRows) writeRows.push(new Array(20).fill(""));
+    if (writeRows.length) rawSh.getRange(2, 1, writeRows.length, 20).setValues(writeRows);
   });
 
   var preview = smcmRunStage_("mass_preview", function() { return smcmUpdatePreview_(massSh, cardData.rows, attrData, docData); });
