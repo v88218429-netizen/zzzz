@@ -1,15 +1,16 @@
 name: WB content manager read-only sync
 
 on:
-  push:
-    branches:
-      - mainggg
-    paths:
-      - "wb_worker/github_content_manager_sync.py"
-      - ".github/workflows/wb-content-manager-sync.yml"
   workflow_dispatch:
   schedule:
     - cron: "17 */6 * * *"
+  workflow_run:
+    workflows:
+      - Sellmonitor GitHub worker deploy
+    branches:
+      - mainggg
+    types:
+      - completed
 
 permissions:
   contents: read
@@ -20,12 +21,13 @@ concurrency:
 
 jobs:
   sync:
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
       WB_API_TOKEN_AP: ${{ secrets.WB_API_TOKEN_AP }}
-      CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
-      TARGET_SPREADSHEET_ID: "1--8PzvW7quVjolA5FmMS9tBNHA-IXGtFJyadWbt3eSA"
+      WEBHOOK_SECRET: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
+      WEBAPP_DEPLOYMENT_ID: "AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -36,6 +38,7 @@ jobs:
         run: |
           set -euo pipefail
           test -n "$WB_API_TOKEN_AP"
-          test -n "$CLASPRC_JSON"
-      - name: Read WB Content API and refresh the sheet
+          test -n "$WEBHOOK_SECRET"
+          test -n "$WEBAPP_DEPLOYMENT_ID"
+      - name: Read WB Content API and publish through authenticated bridge
         run: python wb_worker/github_content_manager_sync.py
