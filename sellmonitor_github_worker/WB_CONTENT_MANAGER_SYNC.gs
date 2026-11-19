@@ -109,7 +109,18 @@ function sellmonitorGithubPublishContentManagerSnapshot_(body) {
 
 function smcmRunStage_(stage, fn) {
   try { return fn(); }
-  catch (ignored) { throw new Error("WB_CONTENT_MANAGER_STAGE_" + stage.toUpperCase()); }
+  catch (error) {
+    var message = String(error && error.message || error || "").toLowerCase();
+    var code = "UNKNOWN";
+    if (/data validation|violates data validation/.test(message)) code = "DATA_VALIDATION";
+    else if (/number of columns|column count|columns in the data/.test(message)) code = "COLUMN_COUNT";
+    else if (/50,?000|maximum.*character|cell.*character limit|exceeds.*characters/.test(message)) code = "CELL_SIZE_LIMIT";
+    else if (/protected|permission denied|not authorized/.test(message)) code = "PROTECTED_RANGE";
+    else if (/grid|not enough columns|not enough rows|out of bounds/.test(message)) code = "GRID_SIZE";
+    else if (/payload.*large|request.*too large|limit exceeded/.test(message)) code = "REQUEST_LIMIT";
+    else if (/timed out|timeout|service spreadsheets/.test(message)) code = "SHEETS_SERVICE";
+    throw new Error("WB_CONTENT_MANAGER_STAGE_" + stage.toUpperCase() + "_" + code);
+  }
 }
 
 function smcmReadBody_(sheet, width) {
