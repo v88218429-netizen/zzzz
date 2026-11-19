@@ -397,7 +397,16 @@ function smcmRunPreviewStep_(stage, fn) {
 }
 
 function smcmUpdatePreview_(mass, cards, attrs, docs) {
-  var params = smcmRunPreviewStep_("READ_CONTROLS", function() { return mass.getRange("B6:B17").getDisplayValues().map(function(row) { return String(row[0] || "").trim(); }); });
+  var controlRange = smcmRunPreviewStep_("CONTROL_RANGE", function() { return mass.getRange(6, 2, 11, 1); });
+  var controlValues = smcmRunPreviewStep_("CONTROL_VALUES", function() { return controlRange.getValues(); });
+  var params = smcmRunPreviewStep_("NORMALIZE_CONTROLS", function() {
+    var timeZone = mass.getParent().getSpreadsheetTimeZone();
+    return controlValues.map(function(row, index) {
+      var value = row[0];
+      if (value instanceof Date && (index === 8 || index === 9)) return Utilities.formatDate(value, timeZone, "yyyy-MM-dd");
+      return String(value || "").trim();
+    });
+  });
   var shopFilter = params[0] || "", categoryFilter = params[1] || "";
   var operation = params[2] || "Характеристика";
   var attrId = params[3] || "", attrName = params[4] || "", newValue = params[5] || "";
