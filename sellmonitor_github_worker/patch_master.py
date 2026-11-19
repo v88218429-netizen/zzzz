@@ -1696,9 +1696,9 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
 
 
     # Normalize Google Sheets date values before comparing Ozon Performance rows.
-    ozon_idempotency_marker = "OZON_PERF_DATE_VALUE_IDEMPOTENCY_V4"
+    ozon_idempotency_marker = "OZON_PERF_DATE_VALUE_IDEMPOTENCY_V5"
     if ozon_idempotency_marker not in worker_text:
-        new_daily = """  /* OZON_PERF_DATE_VALUE_IDEMPOTENCY_V4 */
+        new_daily = """  /* OZON_PERF_DATE_VALUE_IDEMPOTENCY_V5 */
   function comparableDateValue_(value) {
     if (value instanceof Date && isFinite(value.getTime())) return sellmonitorGithubOzonPerfDate_(value);
     if (typeof value === 'number' && isFinite(value) && value > 0) {
@@ -1722,16 +1722,35 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
     });
   }
   var dailyChanges=[],dailyAdds=[],periodChanges=[],periodAdds=[];
+  var dailyMismatchSample=[],periodMismatchSample=[];
+  function mismatchSample_(oldValues,newValues,dateIndexes,key) {
+    var oldRow=comparableDateRow_(oldValues,dateIndexes),newRow=comparableDateRow_(newValues,dateIndexes),differences=[];
+    for(var i=0;i<Math.min(oldRow.length,newRow.length);i++){
+      if(JSON.stringify(oldRow[i])!==JSON.stringify(newRow[i])){
+        differences.push({column:i+1,old_type:oldRow[i]===null?'null':typeof oldRow[i],new_type:newRow[i]===null?'null':typeof newRow[i],old_value:oldRow[i],new_value:newRow[i]});
+        if(differences.length>=6)break;
+      }
+    }
+    return {key:key,differences:differences};
+  }
   dailyKeys.sort().forEach(function(k){
     var old=oldDaily.map[k],row=dailyMap[k];
     if(!old)dailyAdds.push(row);
-    else if(JSON.stringify(comparableDateRow_(old.values,[1]))!==JSON.stringify(comparableDateRow_(row,[1])))dailyChanges.push({row:old.row,old:old.values,next:row});
+    else if(JSON.stringify(comparableDateRow_(old.values,[1]))!==JSON.stringify(comparableDateRow_(row,[1]))){
+      dailyChanges.push({row:old.row,old:old.values,next:row});
+      if(dailyMismatchSample.length<3)dailyMismatchSample.push(mismatchSample_(old.values,row,[1],k));
+    }
   });
   periodKeys.sort().forEach(function(k){
     var old=oldPeriods.map[k],row=periodMap[k];
     if(!old)periodAdds.push(row);
-    else if(JSON.stringify(comparableDateRow_(old.values,[1,2]))!==JSON.stringify(comparableDateRow_(row,[1,2])))periodChanges.push({row:old.row,old:old.values,next:row});
+    else if(JSON.stringify(comparableDateRow_(old.values,[1,2]))!==JSON.stringify(comparableDateRow_(row,[1,2]))){
+      periodChanges.push({row:old.row,old:old.values,next:row});
+      if(periodMismatchSample.length<3)periodMismatchSample.push(mismatchSample_(old.values,row,[1,2],k));
+    }
   });"""
+        v4_marker = "  /* OZON_PERF_DATE_VALUE_IDEMPOTENCY_V4 */"
+        v4_start = worker_text.find(v4_marker)
         v3_marker = "  /* OZON_PERF_DATE_VALUE_IDEMPOTENCY_V3 */"
         v3_start = worker_text.find(v3_marker)
         v2_marker = "  /* OZON_PERF_DATE_VALUE_IDEMPOTENCY_V2 */"
@@ -1739,10 +1758,13 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
         v1_marker = "  /* OZON_PERF_DATE_VALUE_IDEMPOTENCY_V1 */"
         v1_start = worker_text.find(v1_marker)
         helper_anchor = "\n\n  var helperSpecs=["
+        v4_end = worker_text.find(helper_anchor, v4_start) if v4_start >= 0 else -1
         v3_end = worker_text.find(helper_anchor, v3_start) if v3_start >= 0 else -1
         v2_end = worker_text.find(helper_anchor, v2_start) if v2_start >= 0 else -1
         v1_end = worker_text.find(helper_anchor, v1_start) if v1_start >= 0 else -1
-        if v3_start >= 0 and v3_end > v3_start:
+        if v4_start >= 0 and v4_end > v4_start:
+            worker_text = worker_text[:v4_start] + new_daily + worker_text[v4_end:]
+        elif v3_start >= 0 and v3_end > v3_start:
             worker_text = worker_text[:v3_start] + new_daily + worker_text[v3_end:]
         elif v2_start >= 0 and v2_end > v2_start:
             worker_text = worker_text[:v2_start] + new_daily + worker_text[v2_end:]
@@ -1762,7 +1784,17 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
         old_version=version_match.group(0)
         new_version="VERSION: 'github-worker-"+str(major)+"."+str(minor)+"."+str(patch_no+1)+"'"
         worker_text=worker_text.replace(old_version,new_version,1)
-        print("OZON_PERF_DATE_VALUE_IDEMPOTENCY_V4=patched")
+        print("OZON_PERF_DATE_VALUE_IDEMPOTENCY_V5=patched")
+        old_return = """    daily_sha256:sellmonitorGithubOzonPerfDigest_(dailyKeys.map(function(k){return dailyMap[k];})),
+    period_sha256:sellmonitorGithubOzonPerfDigest_(periodKeys.map(function(k){return periodMap[k];}))};"""
+        new_return = """    daily_sha256:sellmonitorGithubOzonPerfDigest_(dailyKeys.map(function(k){return dailyMap[k];})),
+    period_sha256:sellmonitorGithubOzonPerfDigest_(periodKeys.map(function(k){return periodMap[k];})),
+    comparison_sample:{daily:dailyMismatchSample,period:periodMismatchSample}};"""
+        if "comparison_sample:{daily:dailyMismatchSample,period:periodMismatchSample}" not in worker_text:
+            if old_return not in worker_text:
+                raise SystemExit("Ozon comparison result anchor changed")
+            worker_text=worker_text.replace(old_return,new_return,1)
+        print("OZON_PERF_COMPARISON_DIAGNOSTICS=patched")
         print("OZON_PERF_WORKER_VERSION="+str(major)+"."+str(minor)+"."+str(patch_no+1))
 
 
