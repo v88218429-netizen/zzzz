@@ -927,7 +927,7 @@ jobs:
               'period_typed_compare':'JSON.stringify(sellmonitorGithubCanonicalRow_(old.values,periodCompareSchema,SMC_OZON_SUMMARY.timezone))!==JSON.stringify(sellmonitorGithubCanonicalRow_(row,periodCompareSchema,SMC_OZON_SUMMARY.timezone))' in body,
               'shared_helper':'function sellmonitorGithubCanonicalValue_(value, kind, timezone)' in source,
               'blank_preserved':"if (value === null || value === undefined) return '';" in source,
-              'number_parser':'OZON_PERF_SHARED_NUMBER_CANONICALIZER_V1' in body,
+              'number_parser':'OZON_PERF_SHARED_NUMBER_CANONICALIZER_V1' in source,
               'seller_qty_parser':'OZON_SELLER_QTY_SHARED_CANONICALIZER_V1' in source,
               'ozon_summary_schema':'OZON_TYPED_NORMALIZER_CALL_SITES_V1' in source,
               'wb_rnp_schema':'WB_RNP_TYPED_COMPARISON_V1' in source,
