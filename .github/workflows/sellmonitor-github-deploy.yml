@@ -906,10 +906,31 @@ jobs:
           grep -Rqs "SELLMONITOR_OZON_EXPORT_DIAGNOSTIC_RESPONSE_V1" .
           grep -Rqs "function sellmonitorGithubEnsureTrigger_()" .
           grep -RqsF "$EXPECTED_WORKER_VERSION" .
-          grep -RqsF "OZON_PERF_DATE_VALUE_IDEMPOTENCY_V3" .
+          grep -RqsF "OZON_PERF_DATE_VALUE_IDEMPOTENCY_V4" .
           grep -RqsF "comparableDateRow_(row,[1])" .
           grep -RqsF "comparableDateRow_(row,[1,2])" .
-          echo "OZON_PERF_COMPARE_V3_READBACK=yes"
+          python - <<'PY'
+          import pathlib, re
+          files=[p for p in pathlib.Path('.').rglob('SELLMONITOR_GITHUB_WORKER.*') if p.is_file()]
+          if len(files)!=1:
+              raise SystemExit('LIVE_WORKER_FILE_COUNT='+str(len(files)))
+          source=files[0].read_text(encoding='utf-8',errors='replace')
+          name='function sellmonitorGithubPublishOzonPerformanceDaily_('
+          start=source.find(name)
+          if start<0: raise SystemExit('OZON_PERF_PUBLISH_FUNCTION_MISSING')
+          end=source.find('\nfunction ',start+len(name))
+          body=source[start:end if end>=0 else len(source)]
+          checks={
+              'marker':'OZON_PERF_DATE_VALUE_IDEMPOTENCY_V4' in body,
+              'daily':'comparableDateRow_(old.values,[1]))!==JSON.stringify(comparableDateRow_(row,[1]))' in body,
+              'period':'comparableDateRow_(old.values,[1,2]))!==JSON.stringify(comparableDateRow_(row,[1,2]))' in body,
+              'blank':'if (value==null) return' in body,
+          }
+          print('OZON_PERF_FUNCTION_READBACK='+str(checks))
+          if not all(checks.values()): raise SystemExit('OZON_PERF_FUNCTION_READBACK_FAILED')
+          print('OZON_PERF_COMPARE_V4_FUNCTION_READBACK=yes')
+          PY
+          echo "OZON_PERF_COMPARE_V4_READBACK=yes"
           grep -RqsF 'oldRnpNote.match(/Реклама доступна[^.]*\./)' .
           grep -Rqs "SELLMONITOR_WEBHOOK_HASH_NOT_COMPILED" .
           python - <<'PY'
