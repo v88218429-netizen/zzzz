@@ -3,42 +3,30 @@
   "request": "WB_MONETIZATION_20261102_2000_RECOVERY.json",
   "query": "как монетизировать экспертизу Wildberries кроме ведения кабинетов",
   "knowledge_tag": "WB_MONETIZATION",
-  "generated_at": "2026-11-18T22:56:30.705442+00:00",
+  "generated_at": "2026-11-19T23:02:26.935171+00:00",
   "videos": [
     {
-      "video_id": "ihRz8rbJmxQ",
-      "url": "https://www.youtube.com/watch?v=ihRz8rbJmxQ",
-      "title": "Новости Wildberries. Как СЕЙЧАС продавать на ВБ? ПОЛНЫЙ РАЗБОР что ждет селлеров на WB в 2026 году?",
-      "channel": "Дмитрий Москаленко | Деньги на нейросетях",
-      "duration": 1043,
-      "timestamp": null,
-      "query": "сервис для селлеров Wildberries бизнес",
-      "kind": "video",
-      "transcript": "transcripts/2026-11-18_WB_MONETIZATION_video_ihRz8rbJmxQ.md",
-      "method": "FreeTranscriptAPI"
-    },
-    {
-      "video_id": "rlFRilpPjMI",
-      "url": "https://www.youtube.com/watch?v=rlFRilpPjMI",
-      "title": "СЕКРЕТНОЕ SEO WILDBERRIES И OZONПОШАГОВО часть 3",
+      "video_id": "O3jh0YaLL14",
+      "url": "https://www.youtube.com/watch?v=O3jh0YaLL14",
+      "title": "SEO НА WILDBERRIES И OZON ПОШАГОВОПОШАГОВО часть 2",
       "channel": "Нина Нино",
-      "duration": 1098,
+      "duration": 952,
       "timestamp": null,
       "query": "сервис для селлеров Wildberries бизнес shorts",
       "kind": "video",
-      "transcript": "transcripts/2026-11-18_WB_MONETIZATION_video_rlFRilpPjMI.md",
+      "transcript": "transcripts/2026-11-19_WB_MONETIZATION_video_O3jh0YaLL14.md",
       "method": "FreeTranscriptAPI"
     },
     {
-      "video_id": "HBQxaFR92yc",
-      "url": "https://www.youtube.com/watch?v=HBQxaFR92yc",
-      "title": "УПД на уведомление о выкупе WB/Ozon в MarkZnak: пошагово, без ошибок",
-      "channel": "MarkZnak Media",
-      "duration": 146,
+      "video_id": "5V0a8aG74EI",
+      "url": "https://www.youtube.com/watch?v=5V0a8aG74EI",
+      "title": "SEO БУДУЩЕГО НА WB И OZONПОШАГОВО часть 1",
+      "channel": "Нина Нино",
+      "duration": 1161,
       "timestamp": null,
-      "query": "SaaS для селлеров Wildberries",
-      "kind": "short",
-      "transcript": "transcripts/2026-11-18_WB_MONETIZATION_short_HBQxaFR92yc.md",
+      "query": "сервис для селлеров Wildberries бизнес shorts",
+      "kind": "video",
+      "transcript": "transcripts/2026-11-19_WB_MONETIZATION_video_5V0a8aG74EI.md",
       "method": "FreeTranscriptAPI"
     }
   ],
@@ -54,6 +42,12 @@
       "url": "",
       "title": "как монетизировать экспертизу Wildberries кроме ведения кабинетов shorts",
       "error": "no results"
+    },
+    {
+      "video_id": "jKbp98ScKEI",
+      "url": "https://www.youtube.com/watch?v=jKbp98ScKEI",
+      "title": "AGI Labs SmartReply: Как ИИ Автоматизирует Ответы и Повышает Продажи на Ozon, WB, YM (2025)",
+      "error": "youtube_captions: \nCould not retrieve a transcript for the video https://www.youtube.com/watch?v=jKbp98ScKEI! This is most likely caused by:\n\nYouTube is blocking requests from your IP. This usually is due to one of the following reasons:\n- You have done too many requests and your IP has been blocked by YouTube\n- You are doing requests from an IP belonging to a cloud provider (like AWS, Google Cloud Platform, Azure, etc.). Unfortunately, most IPs from cloud providers are blocked by YouTube.\n\nThere are two things you can do to work around this:\n1. Use proxies to hide your IP address, as explained in the \"Working around IP bans\" section of the README (https://github.com/jdepoix/youtube-transcript-api?tab=readme-ov-file#working-around-ip-bans-requestblocked-or-ipblocked-exception).\n2. (NOT REC"
     }
   ]
 }
