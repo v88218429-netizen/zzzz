@@ -173,7 +173,11 @@ function smcmRunStage_(stage, fn) {
       var signature = signatureParts.join("_");
       code = signature ? "PREP_" + signature : "PREP_UNCLASSIFIED";
     }
-    throw new Error("WB_CONTENT_MANAGER_STAGE_" + stage.toUpperCase() + "_" + code);
+    var type = String(error && error.name || "ERROR").replace(/[^A-Za-z0-9]/g, "_").toUpperCase().slice(0, 24);
+    var stack = String(error && error.stack || "");
+    var lineMatch = stack.match(/:(\d+):\d+/);
+    var line = lineMatch ? "_LINE_" + lineMatch[1] : "";
+    throw new Error("WB_CONTENT_MANAGER_STAGE_" + stage.toUpperCase() + "_" + code + "_" + type + line);
   }
 }
 
@@ -474,8 +478,12 @@ function smcmUpdatePreview_(mass, cards, attrs, docs) {
   smcmRunPreviewStep_("B18_FORMULA", function() { mass.getRange("B18").setFormula("=COUNTIF('Карточки WB'!A2:A3000;TRUE)"); });
   smcmRunPreviewStep_("COUNTERS", function() { mass.getRange("B19:B20").setValues([[good], [bad]]); });
   smcmRunPreviewStep_("STATUS", function() { mass.getRange("B21").setValue(selected.length ? "Предпросмотр обновлён. Отправка в WB отключена." : "Отметь карточки на листе «Карточки WB»."); });
-  var clearRows = 3000 - 23;
-  smcmRunPreviewStep_("CLEAR_OUTPUT", function() { mass.getRange(24, 1, clearRows, 9).clearContent(); });
+  var outputState = smcmRunPreviewStep_("READ_EXISTING_OUTPUT", function() {
+    var response = Sheets.Spreadsheets.Values.get(mass.getParent().getId(), "'Массовая правка'!A24:I3000", {majorDimension: "ROWS", valueRenderOption: "FORMATTED_VALUE"});
+    return response && Array.isArray(response.values) ? response.values : [];
+  });
+  var clearRows = Math.max(outputState.length, output.length);
+  if (clearRows) smcmRunPreviewStep_("CLEAR_OUTPUT", function() { mass.getRange(24, 1, clearRows, 9).clearContent(); });
   if (output.length) smcmRunPreviewStep_("WRITE_OUTPUT", function() { mass.getRange(24, 1, output.length, 9).setValues(output); });
   else smcmRunPreviewStep_("EMPTY_OUTPUT", function() { mass.getRange("I24").setValue("Нет выбранных карточек"); });
   return { selected: selected.length, good: good, bad: bad };
