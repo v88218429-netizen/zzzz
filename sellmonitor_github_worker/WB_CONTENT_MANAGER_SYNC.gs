@@ -107,7 +107,6 @@ function sellmonitorGithubPublishContentManagerSnapshot_(body) {
     startSh.getRange("C5").setValue("Автоматическое обновление каждые 6 часов");
   });
 
-  smcmRunStage_("flush", function() { SpreadsheetApp.flush(); });
   var readback = smcmRunStage_("readback", function() { return cardsSh.getRange(2, 4, cardData.rows.length, 1).getDisplayValues(); });
   var matches = smcmRunStage_("readback_compare", function() { return readback.filter(function(row, index) {
     return smcmId_(row[0]) === smcmId_(cards[index].nmID || cards[index].nmId);
@@ -384,7 +383,6 @@ function smcmContentManagerPreviewOnEdit_(e) {
       smcmReadBody_(attrsSheet, 11),
       smcmReadBody_(docsSheet, 20)
     );
-    SpreadsheetApp.flush();
   } catch (error) {
     var type = String(error && error.name || "ERROR").replace(/[^A-Za-z0-9]/g, "_").toUpperCase().slice(0, 24);
     Logger.log("WB_CONTENT_MANAGER_PREVIEW_ONEDIT_FAILED_" + type);
