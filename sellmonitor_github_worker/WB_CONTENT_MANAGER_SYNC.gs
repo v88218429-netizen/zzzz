@@ -152,6 +152,22 @@ function smcmRunStage_(stage, fn) {
         code = sheetLocks.length || rangeLocks.length ? "PROTECTION_PRESENT" : "SETVALUES_FAILURE";
       } catch (diagnosticError) { code = "DIAGNOSTIC_FAILURE"; }
     }
+    if (code === "UNKNOWN" && stage.toLowerCase().indexOf("raw_api_prepare") === 0) {
+      var signature = message
+        .replace(/https?:\\/\\/[^\\s]+/g, " URL ")
+        .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/ig, " EMAIL ")
+        .replace(/\\b\\d{5,}\\b/g, " ID ")
+        .replace(/"[^"]*"|'[^']*'/g, " VALUE ")
+        .replace(/[^a-z0-9 ]/g, " ")
+        .replace(/\\s+/g, " ")
+        .trim()
+        .split(" ")
+        .filter(function(word) { return word && word.length <= 24; })
+        .slice(0, 8)
+        .join("_")
+        .toUpperCase();
+      code = signature ? "PREP_" + signature : "PREP_UNCLASSIFIED";
+    }
     throw new Error("WB_CONTENT_MANAGER_STAGE_" + stage.toUpperCase() + "_" + code);
   }
 }
