@@ -23,19 +23,30 @@ class SyncError(RuntimeError):
 
 
 def request_json(url: str, method: str, headers: dict[str, str], payload: Any | None = None,
-                 timeout: int = 120) -> dict[str, Any]:
+                 timeout: int = 120, retries: int = 2) -> dict[str, Any]:
     body = None if payload is None else json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     request_headers = {"Accept": "application/json", **headers}
     if body is not None:
         request_headers["Content-Type"] = "application/json"
-    request = urllib.request.Request(url, data=body, headers=request_headers, method=method)
-    try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            raw = response.read().decode("utf-8")
-    except urllib.error.HTTPError as exc:
-        raise SyncError(f"{method} {urllib.parse.urlsplit(url).path} returned HTTP {exc.code}") from None
-    except urllib.error.URLError as exc:
-        raise SyncError(f"{method} {urllib.parse.urlsplit(url).path} network error ({type(exc.reason).__name__})") from None
+    retryable_statuses = {408, 429, 500, 502, 503, 504}
+    raw = ""
+    for attempt in range(retries + 1):
+        request = urllib.request.Request(url, data=body, headers=request_headers, method=method)
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                raw = response.read().decode("utf-8")
+            break
+        except urllib.error.HTTPError as exc:
+            if exc.code in retryable_statuses and attempt < retries:
+                time.sleep(min(8, 2 ** attempt))
+                continue
+            raise SyncError(f"{method} {urllib.parse.urlsplit(url).path} returned HTTP {exc.code}") from None
+        except (urllib.error.URLError, TimeoutError) as exc:
+            if attempt < retries:
+                time.sleep(min(8, 2 ** attempt))
+                continue
+            reason = exc.reason if isinstance(exc, urllib.error.URLError) else exc
+            raise SyncError(f"{method} {urllib.parse.urlsplit(url).path} network error ({type(reason).__name__})") from None
     if not raw:
         return {}
     try:
@@ -45,7 +56,6 @@ def request_json(url: str, method: str, headers: dict[str, str], payload: Any | 
     if not isinstance(value, dict):
         raise SyncError(f"{method} {urllib.parse.urlsplit(url).path} returned a non-object response")
     return value
-
 
 def fetch_cards(api_token: str) -> list[dict[str, Any]]:
     all_cards: list[dict[str, Any]] = []
@@ -112,7 +122,8 @@ def main() -> None:
         "POST",
         {"Accept": "application/json"},
         body,
-        timeout=420,
+        timeout=180,
+        retries=1,
     )
     payload = result.get("result") if isinstance(result.get("result"), dict) else result
     if result.get("ok") is not True or payload.get("readback") != "pass":
