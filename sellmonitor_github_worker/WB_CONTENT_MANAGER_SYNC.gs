@@ -73,9 +73,10 @@ function sellmonitorGithubPublishContentManagerSnapshot_(body) {
   smcmRunStage_("attributes_write", function() { smcmReplaceBody_(attrsSh, 11, attrData); });
   smcmRunStage_("documents_write", function() {
     // Imported WB values can be numeric IDs/JSON; keep dropdowns only on editable control columns.
-    docsSh.getRange(2, 7, 2999, 5).clearDataValidations();   // G:K are imported WB document fields
-    docsSh.getRange(2, 17, 2999, 2).clearDataValidations(); // Q:R are imported WB ID/date fields
-    docsSh.getRange(2, 20, 2999, 1).clearDataValidations(); // T contains imported JSON
+    var importedDocRows = Math.max(docData.length, 1);
+    docsSh.getRange(2, 7, importedDocRows, 5).clearDataValidations();   // G:K are imported WB document fields
+    docsSh.getRange(2, 17, importedDocRows, 2).clearDataValidations(); // Q:R are imported WB ID/date fields
+    docsSh.getRange(2, 20, importedDocRows, 1).clearDataValidations(); // T contains imported JSON
     smcmReplaceBody_(docsSh, 20, docData);
   });
   var previousRawRows = Number(PropertiesService.getScriptProperties().getProperty("WB_CONTENT_MANAGER_RAW_ROW_COUNT_AP") || 0);
@@ -83,7 +84,6 @@ function sellmonitorGithubPublishContentManagerSnapshot_(body) {
   var rawBlankRow = [];
   for (var rawColumn = 0; rawColumn < 20; rawColumn++) rawBlankRow.push("");
   while (rawWriteRows.length < previousRawRows) rawWriteRows.push(rawBlankRow.slice());
-  if (rawWriteRows.length) smcmRunStage_("raw_api_clear_validations", function() { rawSh.getRange(2, 1, rawWriteRows.length, 20).clearDataValidations(); });
   for (var rawOffset = 0; rawOffset < rawWriteRows.length; rawOffset += 10) {
     var rawChunk = rawWriteRows.slice(rawOffset, rawOffset + 10);
     var rawChunkStart = rawOffset;
