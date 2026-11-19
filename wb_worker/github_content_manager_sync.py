@@ -62,11 +62,11 @@ def request_json(url: str, method: str, headers: dict[str, str], payload: Any | 
             raise SyncError(f"{method} {urllib.parse.urlsplit(url).path} network error ({type(reason).__name__})") from None
     if not raw:
         return {}
-    raw = raw.lstrip("\\ufeff\\r\\n\\t ")
+    raw = raw.lstrip("\ufeff\r\n\t ")
     try:
         value = json.loads(raw)
     except json.JSONDecodeError:
-        plain = re.sub(r"(?is)<(script|style).*?</\\1>", " ", raw)
+        plain = re.sub(r"(?is)<(script|style).*?</\1>", " ", raw)
         plain = re.sub(r"<[^>]*>", " ", plain)
         lowered = plain.lower()
         if "authorization is required" in lowered or "sign in" in lowered:
@@ -86,11 +86,11 @@ def request_json(url: str, method: str, headers: dict[str, str], payload: Any | 
         title_match = re.search(r"(?is)<title[^>]*>(.*?)</title>", raw)
         summary = title_match.group(1) if title_match else plain
         summary = re.sub(r"<[^>]*>", " ", summary)
-        summary = re.sub(r"https?://\\S+", "[url]", summary)
-        summary = re.sub(r"\\b[A-Za-z0-9_+/=-]{28,}\\b", "[redacted]", summary)
-        summary = re.sub(r"\\b\\d{7,}\\b", "[number]", summary)
-        summary = re.sub(r"\\b[\\w.+-]+@[\\w.-]+\\.[A-Za-z]{2,}\\b", "[email]", summary)
-        summary = re.sub(r"\\s+", " ", summary).strip()[:180]
+        summary = re.sub(r"https?://\S+", "[url]", summary)
+        summary = re.sub(r"\b[A-Za-z0-9_+/=-]{28,}\b", "[redacted]", summary)
+        summary = re.sub(r"\b\d{7,}\b", "[number]", summary)
+        summary = re.sub(r"\b[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}\b", "[email]", summary)
+        summary = re.sub(r"\s+", " ", summary).strip()[:180]
         raise SyncError(
             f"{method} {urllib.parse.urlsplit(url).path} returned invalid JSON "
             f"(status={response_status}; content_type={response_content_type}; category={category}; summary={summary or 'empty'})"
