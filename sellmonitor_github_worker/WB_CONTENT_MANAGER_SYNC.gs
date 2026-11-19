@@ -153,19 +153,13 @@ function smcmRunStage_(stage, fn) {
       } catch (diagnosticError) { code = "DIAGNOSTIC_FAILURE"; }
     }
     if (code === "UNKNOWN" && stage.toLowerCase().indexOf("raw_api_prepare") === 0) {
-      var signature = message
-        .replace(/https?:\\/\\/[^\\s]+/g, " URL ")
-        .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/ig, " EMAIL ")
-        .replace(/\\b\\d{5,}\\b/g, " ID ")
-        .replace(/"[^"]*"|'[^']*'/g, " VALUE ")
-        .replace(/[^a-z0-9 ]/g, " ")
-        .replace(/\\s+/g, " ")
-        .trim()
-        .split(" ")
-        .filter(function(word) { return word && word.length <= 24; })
-        .slice(0, 8)
-        .join("_")
-        .toUpperCase();
+      var signatureParts = [];
+      message.split(" ").forEach(function(word) {
+        if (signatureParts.length >= 8 || word.indexOf("@") >= 0 || word.indexOf("/") >= 0) return;
+        var token = word.replace(/[^a-z0-9]/g, "");
+        if (token && token.length <= 24 && !/^[0-9]+$/.test(token)) signatureParts.push(token.toUpperCase());
+      });
+      var signature = signatureParts.join("_");
       code = signature ? "PREP_" + signature : "PREP_UNCLASSIFIED";
     }
     throw new Error("WB_CONTENT_MANAGER_STAGE_" + stage.toUpperCase() + "_" + code);
