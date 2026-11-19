@@ -84,7 +84,8 @@ def request_json(url: str, method: str, headers: dict[str, str], payload: Any | 
         else:
             category = "NON_JSON_BODY"
         title_match = re.search(r"(?is)<title[^>]*>(.*?)</title>", raw)
-        summary = title_match.group(1) if title_match else plain
+        title_text = title_match.group(1).strip() if title_match else ""
+        summary = plain if not title_text or title_text.lower() in {"error", "google apps script"} else title_text
         summary = re.sub(r"<[^>]*>", " ", summary)
         summary = re.sub(r"https?://\S+", "[url]", summary)
         summary = re.sub(r"\b[A-Za-z0-9_+/=-]{28,}\b", "[redacted]", summary)
