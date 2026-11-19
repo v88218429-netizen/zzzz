@@ -906,6 +906,10 @@ jobs:
           grep -Rqs "SELLMONITOR_OZON_EXPORT_DIAGNOSTIC_RESPONSE_V1" .
           grep -Rqs "function sellmonitorGithubEnsureTrigger_()" .
           grep -RqsF "$EXPECTED_WORKER_VERSION" .
+          grep -RqsF "OZON_PERF_DATE_VALUE_IDEMPOTENCY_V3" .
+          grep -RqsF "comparableDateRow_(row,[1])" .
+          grep -RqsF "comparableDateRow_(row,[1,2])" .
+          echo "OZON_PERF_COMPARE_V3_READBACK=yes"
           grep -RqsF 'oldRnpNote.match(/Реклама доступна[^.]*\./)' .
           grep -Rqs "SELLMONITOR_WEBHOOK_HASH_NOT_COMPILED" .
           python - <<'PY'
