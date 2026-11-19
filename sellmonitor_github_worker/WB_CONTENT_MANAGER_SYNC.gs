@@ -57,18 +57,22 @@ function sellmonitorGithubPublishContentManagerSnapshot_(body) {
     throw new Error("WB_CONTENT_MANAGER_ROW_LIMIT");
   }
 
-  smcmReplaceBody_(cardsSh, 17, cardData.rows);
-  if (cardData.formulas.length) {
-    cardsSh.getRange(2, 2, cardData.formulas.length, 1).setFormulas(cardData.formulas);
-    cardsSh.setColumnWidth(2, 92);
-    cardsSh.setRowHeights(2, cardData.formulas.length, 106);
-  }
-  smcmReplaceBody_(attrsSh, 11, attrData);
-  // Imported WB values can be numeric IDs/JSON; keep dropdowns only on editable control columns.
-  docsSh.getRange(2, 7, 2999, 1).clearDataValidations();
-  docsSh.getRange(2, 20, 2999, 1).clearDataValidations();
-  smcmReplaceBody_(docsSh, 20, docData);
-  smcmReplaceBody_(rawSh, 20, rawData);
+  smcmRunStage_("cards_write", function() {
+    smcmReplaceBody_(cardsSh, 17, cardData.rows);
+    if (cardData.formulas.length) {
+      cardsSh.getRange(2, 2, cardData.formulas.length, 1).setFormulas(cardData.formulas);
+      cardsSh.setColumnWidth(2, 92);
+      cardsSh.setRowHeights(2, cardData.formulas.length, 106);
+    }
+  });
+  smcmRunStage_("attributes_write", function() { smcmReplaceBody_(attrsSh, 11, attrData); });
+  smcmRunStage_("documents_write", function() {
+    // Imported WB values can be numeric IDs/JSON; keep dropdowns only on editable control columns.
+    docsSh.getRange(2, 7, 2999, 1).clearDataValidations();
+    docsSh.getRange(2, 20, 2999, 1).clearDataValidations();
+    smcmReplaceBody_(docsSh, 20, docData);
+  });
+  smcmRunStage_("raw_api_write", function() { smcmReplaceBody_(rawSh, 20, rawData); });
 
   var preview = smcmRunStage_("mass_preview", function() { return smcmUpdatePreview_(massSh, cardData.rows, attrData, docData); });
   var statusB = "Свежие данные: " + cardData.rows.length + " карточек · " + attrData.length + " характеристик · " + docData.length + " строк документов";
