@@ -1,0 +1,44 @@
+name: WB content manager read-only sync
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_run:
+    workflows:
+      - Sellmonitor GitHub worker deploy
+    branches:
+      - mainggg
+    types:
+      - completed
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wb-content-manager-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      WB_API_TOKEN_AP: ${{ secrets.WB_API_TOKEN_AP }}
+      WEBHOOK_SECRET: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
+      WEBAPP_DEPLOYMENT_ID: "AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check configured credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$WB_API_TOKEN_AP"
+          test -n "$WEBHOOK_SECRET"
+          test -n "$WEBAPP_DEPLOYMENT_ID"
+      - name: Read WB Content API and publish through authenticated bridge
+        run: python wb_worker/github_content_manager_sync.py
