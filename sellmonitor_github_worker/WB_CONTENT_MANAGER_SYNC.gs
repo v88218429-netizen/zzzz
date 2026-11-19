@@ -125,15 +125,23 @@ function smcmRunStage_(stage, fn) {
   catch (error) {
     var message = String(error && error.message || error || "").toLowerCase();
     var code = "UNKNOWN";
-    if (/data validation|violates data validation/.test(message)) code = "DATA_VALIDATION";
-    else if (/number of columns|column count|columns in the data/.test(message)) code = "COLUMN_COUNT";
-    else if (/50,?000|maximum.*character|cell.*character limit|exceeds.*characters/.test(message)) code = "CELL_SIZE_LIMIT";
+    if (/raw_cell_size_limit|50,?000|maximum.*character|cell.*character limit|exceeds.*characters|too many characters/.test(message)) code = "CELL_SIZE_LIMIT";
+    else if (/raw_row_shape|number of columns|column count|columns in the data|row.*shape/.test(message)) code = "DATA_SHAPE";
+    else if (/data validation|violates data validation/.test(message)) code = "DATA_VALIDATION";
     else if (/protected|permission|not allowed|not authorized|cannot edit|do not have permission/.test(message)) code = "PROTECTED_RANGE";
     else if (/grid|not enough columns|not enough rows|out of bounds|dimension|range.*outside/.test(message)) code = "GRID_SIZE";
     else if (/payload.*large|request.*too large|limit exceeded/.test(message)) code = "REQUEST_LIMIT";
-    else if (/timed out|timeout|service spreadsheets|service.*failed|accessing document/.test(message)) code = "SHEETS_SERVICE";
+    else if (/timed out|timeout|service spreadsheets|service.*failed|accessing document|internal error|try again later|operation could not be completed/.test(message)) code = "SHEETS_SERVICE";
     else if (/invalid argument|parameters.*signature|invalid range/.test(message)) code = "INVALID_ARGUMENT";
     else if (/null|undefined|not a function|cannot read|cannot set|array/.test(message)) code = "TYPE_OR_SHAPE";
+    if (code === "UNKNOWN" && stage.toLowerCase() === "raw_api_write") {
+      try {
+        var diagnosticSheet = SpreadsheetApp.openById("1--8PzvW7quVjolA5FmMS9tBNHA-IXGtFJyadWbt3eSA").getSheetByName("Полный API");
+        var sheetLocks = diagnosticSheet.getProtections(SpreadsheetApp.ProtectionType.SHEET);
+        var rangeLocks = diagnosticSheet.getProtections(SpreadsheetApp.ProtectionType.RANGE);
+        code = sheetLocks.length || rangeLocks.length ? "PROTECTION_PRESENT" : "SETVALUES_FAILURE";
+      } catch (diagnosticError) { code = "DIAGNOSTIC_FAILURE"; }
+    }
     throw new Error("WB_CONTENT_MANAGER_STAGE_" + stage.toUpperCase() + "_" + code);
   }
 }
