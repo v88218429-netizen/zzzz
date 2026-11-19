@@ -9,13 +9,22 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
+from io import BytesIO
+from pathlib import Path
+import subprocess
 from typing import Any
+
+from PIL import Image
 
 CONTENT_URL = "https://content-api.wildberries.ru/content/v2/get/cards/list"
 TARGET_SPREADSHEET_ID = "1--8PzvW7quVjolA5FmMS9tBNHA-IXGtFJyadWbt3eSA"
 PAGE_SIZE = 20
 MAX_PAGES = 200
+IMAGE_ASSET_DIR = Path("wb-content-manager-images/AP")
+IMAGE_RAW_BASE = "https://raw.githubusercontent.com/v88218429-netizen/zzzz/mainggg/wb-content-manager-images/AP"
+MAX_IMAGE_BYTES = 5 * 1024 * 1024
 
 
 class SyncError(RuntimeError):
@@ -96,6 +105,129 @@ def fetch_cards(api_token: str) -> list[dict[str, Any]]:
     return list(unique.values())
 
 
+
+def photo_source(card: dict[str, Any]) -> str:
+    photos = card.get("photos")
+    if not isinstance(photos, list) or not photos or not isinstance(photos[0], dict):
+        return ""
+    photo = photos[0]
+    for key in ("c246x328", "big", "hq", "square"):
+        value = photo.get(key)
+        if isinstance(value, str) and value.startswith("https://"):
+            return value
+    return ""
+
+
+def convert_photo_to_jpeg(nm_id: str, source_url: str) -> str:
+    request = urllib.request.Request(
+        source_url,
+        headers={
+            "User-Agent": "Mozilla/5.0 (compatible; WBContentSheet/1.0)",
+            "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+        },
+    )
+    raw = b""
+    for attempt in range(3):
+        try:
+            with urllib.request.urlopen(request, timeout=30) as response:
+                raw = response.read(MAX_IMAGE_BYTES + 1)
+            break
+        except urllib.error.HTTPError as exc:
+            if exc.code in {408, 429, 500, 502, 503, 504} and attempt < 2:
+                time.sleep(1 + attempt)
+                continue
+            raise
+        except (urllib.error.URLError, TimeoutError):
+            if attempt < 2:
+                time.sleep(1 + attempt)
+                continue
+            raise
+    if not raw or len(raw) > MAX_IMAGE_BYTES:
+        raise ValueError("image_size")
+    with Image.open(BytesIO(raw)) as source:
+        source.seek(0)
+        rgba = source.convert("RGBA")
+        rgba.thumbnail((246, 328), Image.Resampling.LANCZOS)
+        background = Image.new("RGB", rgba.size, (255, 255, 255))
+        background.paste(rgba, mask=rgba.getchannel("A"))
+        output = BytesIO()
+        background.save(output, format="JPEG", quality=84, optimize=True, progressive=True)
+    target = IMAGE_ASSET_DIR / (nm_id + ".jpg")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(output.getvalue())
+    return IMAGE_RAW_BASE + "/" + nm_id + ".jpg"
+
+
+def publish_photo_assets() -> None:
+    added = subprocess.run(
+        ["git", "add", "-f", str(IMAGE_ASSET_DIR)],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+    )
+    if added.returncode:
+        raise SyncError("WB_PHOTO_ASSETS_GIT_ADD_FAILED")
+    staged = subprocess.run(
+        ["git", "diff", "--cached", "--quiet"],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+    )
+    if staged.returncode == 0:
+        return
+    if staged.returncode != 1:
+        raise SyncError("WB_PHOTO_ASSETS_GIT_DIFF_FAILED")
+    for args in (
+        ["git", "config", "user.name", "github-actions[bot]"],
+        ["git", "config", "user.email", "41898282+github-actions[bot]@users.noreply.github.com"],
+        ["git", "commit", "-m", "Refresh WB card photo thumbnails"],
+    ):
+        result = subprocess.run(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        if result.returncode:
+            raise SyncError("WB_PHOTO_ASSETS_GIT_COMMIT_FAILED")
+    pushed = subprocess.run(
+        ["git", "push", "origin", "HEAD:refs/heads/mainggg"],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+    )
+    if pushed.returncode:
+        raise SyncError("WB_PHOTO_ASSETS_GIT_PUSH_FAILED")
+    print("WB_PHOTO_ASSETS_PUBLISHED=yes")
+
+
+def prepare_photo_assets(cards: list[dict[str, Any]]) -> dict[str, str]:
+    sources: dict[str, str] = {}
+    for card in cards:
+        nm_id = str(card.get("nmID") or card.get("nmId") or "")
+        url = photo_source(card)
+        if re.fullmatch(r"[0-9]{1,20}", nm_id) and url:
+            sources[nm_id] = url
+    if not sources:
+        raise SyncError("WB_PHOTO_URLS_NOT_FOUND")
+
+    urls: dict[str, str] = {}
+    errors: list[str] = []
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        futures = {
+            pool.submit(convert_photo_to_jpeg, nm_id, url): nm_id
+            for nm_id, url in sources.items()
+        }
+        for future in as_completed(futures):
+            nm_id = futures[future]
+            try:
+                urls[nm_id] = future.result()
+            except Exception as exc:
+                errors.append(type(exc).__name__)
+    if errors:
+        raise SyncError("WB_PHOTO_ASSET_CONVERSION_FAILED count=" + str(len(errors)))
+
+    for card in cards:
+        nm_id = str(card.get("nmID") or card.get("nmId") or "")
+        image_url = urls.get(nm_id, "")
+        if image_url:
+            card["_smcm_image_url"] = image_url
+        else:
+            card.pop("_smcm_image_url", None)
+
+    publish_photo_assets()
+    print("WB_PHOTO_ASSETS_READY count=" + str(len(urls)) + " missing=" + str(len(cards) - len(urls)))
+    return urls
+
 def main() -> None:
     wb_token = os.environ.get("WB_API_TOKEN_AP", "").strip()
     webhook_secret = os.environ.get("WEBHOOK_SECRET", "").strip()
@@ -110,6 +242,7 @@ def main() -> None:
     cards = fetch_cards(wb_token)
     if not cards:
         raise SyncError("WB returned 0 cards; existing workbook data will remain unchanged")
+    photo_urls = prepare_photo_assets(cards)
 
     snapshot = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     body = {
@@ -151,6 +284,8 @@ def main() -> None:
         f" characteristics={int(payload.get('characteristics') or 0)}"
         f" document_rows={int(payload.get('document_rows') or 0)}"
         f" matched_existing={int(payload.get('matched_existing') or 0)}/{int(payload.get('existing_cards') or 0)}"
+        f" photo_assets={len(photo_urls)}"
+        f" preview_trigger_ready={str(payload.get('preview_trigger_ready') is True).lower()}"
         f" snapshot_utc={snapshot}"
     )
 
