@@ -14,7 +14,7 @@ from typing import Any
 
 CONTENT_URL = "https://content-api.wildberries.ru/content/v2/get/cards/list"
 TARGET_SPREADSHEET_ID = "1--8PzvW7quVjolA5FmMS9tBNHA-IXGtFJyadWbt3eSA"
-PAGE_SIZE = 100
+PAGE_SIZE = 20
 MAX_PAGES = 200
 
 
@@ -23,7 +23,7 @@ class SyncError(RuntimeError):
 
 
 def request_json(url: str, method: str, headers: dict[str, str], payload: Any | None = None,
-                 timeout: int = 120, retries: int = 2) -> dict[str, Any]:
+                 timeout: int = 60, retries: int = 2) -> dict[str, Any]:
     body = None if payload is None else json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     request_headers = {"Accept": "application/json", **headers}
     if body is not None:
@@ -63,18 +63,22 @@ def fetch_cards(api_token: str) -> list[dict[str, Any]]:
     for page in range(MAX_PAGES):
         if page:
             time.sleep(0.65)
-        response = request_json(
-            CONTENT_URL,
-            "POST",
-            {"Authorization": api_token},
-            {"settings": {"cursor": cursor, "filter": {"withPhoto": -1}}},
-        )
+        try:
+            response = request_json(
+                CONTENT_URL,
+                "POST",
+                {"Authorization": api_token},
+                {"settings": {"cursor": cursor, "filter": {"withPhoto": -1}}},
+            )
+        except SyncError as exc:
+            raise SyncError(f"WB_PAGE_{page + 1}_{exc}") from None
         batch = response.get("cards")
         if batch is None and isinstance(response.get("data"), dict):
             batch = response["data"].get("cards")
         if not isinstance(batch, list):
             raise SyncError("WB response did not contain a cards array")
         all_cards.extend(card for card in batch if isinstance(card, dict))
+        print(f"WB_PAGE_OK page={page + 1} cards={len(batch)}")
         next_cursor = response.get("cursor") or (
             response.get("data", {}).get("cursor") if isinstance(response.get("data"), dict) else {}
         ) or {}
