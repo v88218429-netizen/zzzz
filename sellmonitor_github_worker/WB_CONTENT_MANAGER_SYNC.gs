@@ -73,8 +73,9 @@ function sellmonitorGithubPublishContentManagerSnapshot_(body) {
   smcmRunStage_("attributes_write", function() { smcmReplaceBody_(attrsSh, 11, attrData); });
   smcmRunStage_("documents_write", function() {
     // Imported WB values can be numeric IDs/JSON; keep dropdowns only on editable control columns.
-    docsSh.getRange(2, 7, 2999, 1).clearDataValidations();
-    docsSh.getRange(2, 20, 2999, 1).clearDataValidations();
+    docsSh.getRange(2, 7, 2999, 5).clearDataValidations();   // G:K are imported WB document fields
+    docsSh.getRange(2, 17, 2999, 2).clearDataValidations(); // Q:R are imported WB ID/date fields
+    docsSh.getRange(2, 20, 2999, 1).clearDataValidations(); // T contains imported JSON
     smcmReplaceBody_(docsSh, 20, docData);
   });
   var previousRawRows = Number(PropertiesService.getScriptProperties().getProperty("WB_CONTENT_MANAGER_RAW_ROW_COUNT_AP") || 0);
