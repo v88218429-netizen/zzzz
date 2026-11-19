@@ -1695,16 +1695,29 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
         print("INNER_MCP_BOUNDED_RETRY=patched")
 
 
-    # Date-valued Sheets cells must compare to ISO source keys without creating false updates.
-    ozon_idempotency_marker = "OZON_PERF_DATE_VALUE_IDEMPOTENCY_V1"
+    # Normalize Google Sheets date values before comparing Ozon Performance rows.
+    ozon_idempotency_marker = "OZON_PERF_DATE_VALUE_IDEMPOTENCY_V2"
     if ozon_idempotency_marker not in worker_text:
-        old_daily = """  var dailyChanges=[],dailyAdds=[],periodChanges=[],periodAdds=[];
-  dailyKeys.sort().forEach(function(k){var old=oldDaily.map[k],row=dailyMap[k];if(!old)dailyAdds.push(row);else if(JSON.stringify(old.values)!==JSON.stringify(row))dailyChanges.push({row:old.row,old:old.values,next:row});});
-  periodKeys.sort().forEach(function(k){var old=oldPeriods.map[k],row=periodMap[k];if(!old)periodAdds.push(row);else if(JSON.stringify(old.values)!==JSON.stringify(row))periodChanges.push({row:old.row,old:old.values,next:row});});"""
-        new_daily = """  /* OZON_PERF_DATE_VALUE_IDEMPOTENCY_V1 */
+        new_daily = """  /* OZON_PERF_DATE_VALUE_IDEMPOTENCY_V2 */
+  function comparableDateValue_(value) {
+    if (value instanceof Date && isFinite(value.getTime())) return sellmonitorGithubOzonPerfDate_(value);
+    if (typeof value === 'number' && isFinite(value) && value > 0) {
+      var serialDate = new Date(Date.UTC(1899,11,30) + Math.floor(value) * 86400000);
+      if (isFinite(serialDate.getTime())) return Utilities.formatDate(serialDate,'UTC','yyyy-MM-dd');
+      return value;
+    }
+    if (typeof value === 'string') {
+      var raw = value.trim();
+      var iso = raw.match(/^(\\d{4}-\\d{2}-\\d{2})(?:$|T)/);
+      if (iso) return iso[1];
+      var dmy = raw.match(/^(\\d{1,2})\\.(\\d{1,2})\\.(\\d{4})$/);
+      if (dmy) return dmy[3]+'-'+('0'+dmy[2]).slice(-2)+'-'+('0'+dmy[1]).slice(-2);
+    }
+    return value;
+  }
   function comparableDateRow_(values, dateIndexes) {
     return values.map(function(value,index) {
-      return dateIndexes.indexOf(index)>=0 && value instanceof Date ? sellmonitorGithubOzonPerfDate_(value) : value;
+      return dateIndexes.indexOf(index)>=0 ? comparableDateValue_(value) : value;
     });
   }
   var dailyChanges=[],dailyAdds=[],periodChanges=[],periodAdds=[];
@@ -1718,10 +1731,20 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
     if(!old)periodAdds.push(row);
     else if(JSON.stringify(comparableDateRow_(old.values,[1,2]))!==JSON.stringify(row))periodChanges.push({row:old.row,old:old.values,next:row});
   });"""
-        if old_daily not in worker_text:
-            raise SystemExit("Ozon daily idempotency comparison anchor changed")
-        worker_text = worker_text.replace(old_daily,new_daily,1)
-        print("OZON_PERF_DATE_VALUE_IDEMPOTENCY=patched")
+        v1_marker = "  /* OZON_PERF_DATE_VALUE_IDEMPOTENCY_V1 */"
+        v1_start = worker_text.find(v1_marker)
+        helper_anchor = "\n\n  var helperSpecs=["
+        v1_end = worker_text.find(helper_anchor, v1_start) if v1_start >= 0 else -1
+        if v1_start >= 0 and v1_end > v1_start:
+            worker_text = worker_text[:v1_start] + new_daily + worker_text[v1_end:]
+        else:
+            old_daily = """  var dailyChanges=[],dailyAdds=[],periodChanges=[],periodAdds=[];
+  dailyKeys.sort().forEach(function(k){var old=oldDaily.map[k],row=dailyMap[k];if(!old)dailyAdds.push(row);else if(JSON.stringify(old.values)!==JSON.stringify(row))dailyChanges.push({row:old.row,old:old.values,next:row});});
+  periodKeys.sort().forEach(function(k){var old=oldPeriods.map[k],row=periodMap[k];if(!old)periodAdds.push(row);else if(JSON.stringify(old.values)!==JSON.stringify(row))periodChanges.push({row:old.row,old:old.values,next:row});});"""
+            if old_daily not in worker_text:
+                raise SystemExit("Ozon daily idempotency comparison anchor changed")
+            worker_text = worker_text.replace(old_daily,new_daily,1)
+        print("OZON_PERF_DATE_VALUE_IDEMPOTENCY_V2=patched")
 
 
 
