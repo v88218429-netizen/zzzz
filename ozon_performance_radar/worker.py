@@ -403,7 +403,8 @@ def main():
         + ";rnp_note_readback=" + str(result.get("rnp_note_readback"))
         + ";charts=" + str(result.get("charts"))
         + ";daily_sha256=" + str(result.get("daily_sha256"))
-        + ";period_sha256=" + str(result.get("period_sha256")),
+        + ";period_sha256=" + str(result.get("period_sha256"))
+        + ";comparison_sample=" + json.dumps(result.get("comparison_sample"), ensure_ascii=False, separators=(",", ":")),
         flush=True,
     )
     return 0
