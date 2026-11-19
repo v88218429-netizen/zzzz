@@ -141,9 +141,18 @@ if "OZON_TYPED_NORMALIZER_CALL_SITES_V1" not in source:
     for old, new, count in calls:
         source = replace_exact(source, old, new, count, "Ozon typed comparison call")
 if "SELLMONITOR_INNER_TYPED_METRIC_V1" not in source:
-    old = "  var number = Number(value);\n  return isFinite(number) ? number / (divisor || 1) : '';"
-    new = "  /* SELLMONITOR_INNER_TYPED_METRIC_V1 */\n  var number = sellmonitorGithubCanonicalValue_(value,'number','UTC');\n  return typeof number === 'number' ? number / (divisor || 1) : '';"
-    source = replace_exact(source, old, new, label="Sellmonitor Inner numeric metric")
+    start = source.find("function sellmonitorGithubInnerMetric_(")
+    end = source.find("\\nfunction ", start + 1) if start >= 0 else -1
+    if start < 0 or end < 0:
+        raise SystemExit("Sellmonitor Inner numeric metric function missing")
+    body = source[start:end]
+    pattern = re.compile(r"(?m)^([ \\t]*)var\\s+number\\s*=\\s*Number\\([^;\\n]*\\)\\s*;\\s*\\n[ \\t]*return\\s+isFinite\\(number\\)\\s*\\?\\s*number\\s*/\\s*\\(divisor\\s*\\|\\|\\s*1\\)\\s*:\\s*''\\s*;")
+    replacement = "  /* SELLMONITOR_INNER_TYPED_METRIC_V1 */\\n  var number = sellmonitorGithubCanonicalValue_(value,'number','UTC');\\n  return typeof number === 'number' ? number / (divisor || 1) : '';"
+    body, changed = pattern.subn(lambda match: replacement, body, count=1)
+    if changed != 1:
+        safe_lines = [line.strip() for line in body.splitlines() if "Number(" in line or ("number" in line.lower() and "return" in line.lower())]
+        raise SystemExit("Sellmonitor Inner numeric metric shape mismatch:" + "|".join(safe_lines[:4]))
+    source = source[:start] + body + source[end:]
 
 if "SELLMONITOR_INNER_TYPED_ID_WRITE_V1" not in source:
     old = "  if (merged.length) sheet.getRange(2,1,merged.length,width).setValues(merged);"
