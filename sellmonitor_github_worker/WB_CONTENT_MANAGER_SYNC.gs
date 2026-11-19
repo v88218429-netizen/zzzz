@@ -391,22 +391,28 @@ function smcmRunPreviewStep_(stage, fn) {
     else if (/merged/.test(message)) code = "MERGED_CELLS";
     else if (/grid|range|dimension|bounds|outside/.test(message)) code = "RANGE";
     else if (/timed out|timeout|service.*failed|internal error|try again later/.test(message)) code = "SHEETS_SERVICE";
+    var safeWords = {exception:1,error:1,argument:1,arguments:1,parameters:1,signature:1,method:1,property:1,object:1,context:1,access:1,denied:1,permission:1,permissions:1,protected:1,range:1,ranges:1,dimension:1,dimensions:1,bounds:1,row:1,rows:1,column:1,columns:1,value:1,values:1,invalid:1,spreadsheet:1,sheet:1,service:1,failed:1,failure:1,timed:1,timeout:1,internal:1,quota:1,exceeded:1,limit:1,cannot:1,call:1,read:1,write:1,not:1,found:1,available:1,google:1,sheets:1,getvalues:1,getvalue:1,getdisplayvalues:1};
+    if (code === "UNKNOWN") {
+      var tokens = message.match(/[a-z][a-z0-9]{1,20}/g) || [];
+      var signature = tokens.filter(function(token) { return safeWords[token]; }).slice(0, 5).join("_").toUpperCase();
+      if (signature) code += "_" + signature;
+    }
     var type = String(error && error.name || "ERROR").replace(/[^A-Za-z0-9]/g, "_").toUpperCase().slice(0, 24);
-    throw new Error("WB_CONTENT_MANAGER_PREVIEW_STEP_" + stage + "_" + code + "_" + type);
+    var stack = String(error && error.stack || "");
+    var lineMatch = stack.match(/:(\\d+):\\d+/);
+    var line = lineMatch ? "_LINE_" + lineMatch[1] : "";
+    throw new Error("WB_CONTENT_MANAGER_PREVIEW_STEP_" + stage + "_" + code + "_" + type + line);
   }
 }
 
 function smcmUpdatePreview_(mass, cards, attrs, docs) {
-  var controlRange = smcmRunPreviewStep_("CONTROL_RANGE", function() { return mass.getRange(6, 2, 11, 1); });
-  var controlValues = smcmRunPreviewStep_("CONTROL_VALUES", function() { return controlRange.getValues(); });
-  var params = smcmRunPreviewStep_("NORMALIZE_CONTROLS", function() {
-    var timeZone = mass.getParent().getSpreadsheetTimeZone();
-    return controlValues.map(function(row, index) {
-      var value = row[0];
-      if (value instanceof Date && (index === 8 || index === 9)) return Utilities.formatDate(value, timeZone, "yyyy-MM-dd");
-      return String(value || "").trim();
-    });
-  });
+  var params = [];
+  var timeZone = mass.getParent().getSpreadsheetTimeZone();
+  for (var controlRow = 6; controlRow <= 16; controlRow++) {
+    var controlValue = smcmRunPreviewStep_("CONTROL_CELL_" + controlRow, function() { return mass.getRange(controlRow, 2).getValue(); });
+    if (controlValue instanceof Date && (controlRow === 14 || controlRow === 15)) controlValue = Utilities.formatDate(controlValue, timeZone, "yyyy-MM-dd");
+    params.push(String(controlValue || "").trim());
+  }
   var shopFilter = params[0] || "", categoryFilter = params[1] || "";
   var operation = params[2] || "Характеристика";
   var attrId = params[3] || "", attrName = params[4] || "", newValue = params[5] || "";
