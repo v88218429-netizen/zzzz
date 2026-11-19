@@ -1696,9 +1696,9 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
 
 
     # Normalize Google Sheets date values before comparing Ozon Performance rows.
-    ozon_idempotency_marker = "OZON_PERF_DATE_VALUE_IDEMPOTENCY_V3"
+    ozon_idempotency_marker = "OZON_PERF_DATE_VALUE_IDEMPOTENCY_V4"
     if ozon_idempotency_marker not in worker_text:
-        new_daily = """  /* OZON_PERF_DATE_VALUE_IDEMPOTENCY_V3 */
+        new_daily = """  /* OZON_PERF_DATE_VALUE_IDEMPOTENCY_V4 */
   function comparableDateValue_(value) {
     if (value instanceof Date && isFinite(value.getTime())) return sellmonitorGithubOzonPerfDate_(value);
     if (typeof value === 'number' && isFinite(value) && value > 0) {
@@ -1717,6 +1717,7 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
   }
   function comparableDateRow_(values, dateIndexes) {
     return values.map(function(value,index) {
+      if (value==null) return '';
       return dateIndexes.indexOf(index)>=0 ? comparableDateValue_(value) : value;
     });
   }
@@ -1731,14 +1732,19 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
     if(!old)periodAdds.push(row);
     else if(JSON.stringify(comparableDateRow_(old.values,[1,2]))!==JSON.stringify(comparableDateRow_(row,[1,2])))periodChanges.push({row:old.row,old:old.values,next:row});
   });"""
+        v3_marker = "  /* OZON_PERF_DATE_VALUE_IDEMPOTENCY_V3 */"
+        v3_start = worker_text.find(v3_marker)
         v2_marker = "  /* OZON_PERF_DATE_VALUE_IDEMPOTENCY_V2 */"
         v2_start = worker_text.find(v2_marker)
         v1_marker = "  /* OZON_PERF_DATE_VALUE_IDEMPOTENCY_V1 */"
         v1_start = worker_text.find(v1_marker)
         helper_anchor = "\n\n  var helperSpecs=["
+        v3_end = worker_text.find(helper_anchor, v3_start) if v3_start >= 0 else -1
         v2_end = worker_text.find(helper_anchor, v2_start) if v2_start >= 0 else -1
         v1_end = worker_text.find(helper_anchor, v1_start) if v1_start >= 0 else -1
-        if v2_start >= 0 and v2_end > v2_start:
+        if v3_start >= 0 and v3_end > v3_start:
+            worker_text = worker_text[:v3_start] + new_daily + worker_text[v3_end:]
+        elif v2_start >= 0 and v2_end > v2_start:
             worker_text = worker_text[:v2_start] + new_daily + worker_text[v2_end:]
         elif v1_start >= 0 and v1_end > v1_start:
             worker_text = worker_text[:v1_start] + new_daily + worker_text[v1_end:]
@@ -1756,7 +1762,7 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
         old_version=version_match.group(0)
         new_version="VERSION: 'github-worker-"+str(major)+"."+str(minor)+"."+str(patch_no+1)+"'"
         worker_text=worker_text.replace(old_version,new_version,1)
-        print("OZON_PERF_DATE_VALUE_IDEMPOTENCY_V3=patched")
+        print("OZON_PERF_DATE_VALUE_IDEMPOTENCY_V4=patched")
         print("OZON_PERF_WORKER_VERSION="+str(major)+"."+str(minor)+"."+str(patch_no+1))
 
 
