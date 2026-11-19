@@ -6,6 +6,7 @@ on:
     paths:
       - "sellmonitor_github_worker/SELLMONITOR_GITHUB_WORKER.gs"
       - "sellmonitor_github_worker/patch_master.py"
+      - "sellmonitor_github_worker/patch_typed_values.py"
       - "wb_os/apps_script/WB_FBS_SUPPLY_DIRECT.gs"
       - ".github/workflows/sellmonitor-github-deploy.yml"
   workflow_dispatch:
@@ -332,6 +333,7 @@ jobs:
               env.write('EXPECTED_WORKER_VERSION=' + match.group(1) + '\n')
           PY
           python sellmonitor_github_worker/patch_master.py /tmp/sellmonitor-gh-worker
+          python sellmonitor_github_worker/patch_typed_values.py /tmp/sellmonitor-gh-worker
           python - <<'PY'
           import os, re
           from pathlib import Path
@@ -906,9 +908,8 @@ jobs:
           grep -Rqs "SELLMONITOR_OZON_EXPORT_DIAGNOSTIC_RESPONSE_V1" .
           grep -Rqs "function sellmonitorGithubEnsureTrigger_()" .
           grep -RqsF "$EXPECTED_WORKER_VERSION" .
-          grep -RqsF "OZON_PERF_DATE_VALUE_IDEMPOTENCY_V6" .
-          grep -RqsF "comparableDateRow_(row,[1],[3])" .
-          grep -RqsF "comparableDateRow_(row,[1,2],[4])" .
+          grep -RqsF "OZON_PERF_TYPED_IDEMPOTENCY_V7" .
+          grep -RqsF "OZON_TYPED_NORMALIZER_CALL_SITES_V1" .
           python - <<'PY'
           import pathlib, re
           files=[p for p in pathlib.Path('.').rglob('SELLMONITOR_GITHUB_WORKER.*') if p.is_file()]
@@ -921,18 +922,26 @@ jobs:
           end=source.find('\nfunction ',start+len(name))
           body=source[start:end if end>=0 else len(source)]
           checks={
-              'marker':'OZON_PERF_DATE_VALUE_IDEMPOTENCY_V6' in body,
-              'daily':'comparableDateRow_(old.values,[1],[3]))!==JSON.stringify(comparableDateRow_(row,[1],[3]))' in body,
-              'period':'comparableDateRow_(old.values,[1,2],[4]))!==JSON.stringify(comparableDateRow_(row,[1,2],[4]))' in body,
-              'blank':'if (value==null) return' in body,
-              'campaign_id_type':'stringIndexes.indexOf(index)>=0' in body,
+              'performance_marker':'OZON_PERF_TYPED_IDEMPOTENCY_V7' in body,
+              'daily_typed_compare':'JSON.stringify(sellmonitorGithubCanonicalRow_(old.values,dailyCompareSchema,SMC_OZON_SUMMARY.timezone))!==JSON.stringify(sellmonitorGithubCanonicalRow_(row,dailyCompareSchema,SMC_OZON_SUMMARY.timezone))' in body,
+              'period_typed_compare':'JSON.stringify(sellmonitorGithubCanonicalRow_(old.values,periodCompareSchema,SMC_OZON_SUMMARY.timezone))!==JSON.stringify(sellmonitorGithubCanonicalRow_(row,periodCompareSchema,SMC_OZON_SUMMARY.timezone))' in body,
+              'shared_helper':'function sellmonitorGithubCanonicalValue_(value, kind, timezone)' in source,
+              'blank_preserved':"if (value === null || value === undefined) return '';" in source,
+              'number_parser':'OZON_PERF_SHARED_NUMBER_CANONICALIZER_V1' in body,
+              'seller_qty_parser':'OZON_SELLER_QTY_SHARED_CANONICALIZER_V1' in source,
+              'ozon_summary_schema':'OZON_TYPED_NORMALIZER_CALL_SITES_V1' in source,
+              'wb_rnp_schema':'WB_RNP_TYPED_COMPARISON_V1' in source,
+              'daily_schema':"var ozonDailySchema={1:'date',2:'date',3:'number',4:'number',5:'number',6:'number',7:'number',8:'number'};" in source,
+              'sku_schema':"var ozonSkuSchema={1:'date',2:'date',3:'id',4:'id',6:'number',7:'number',8:'number',9:'number'};" in source,
+              'daily_readback':"sellmonitorGithubOzonNormalizeRows_(newDaily,null,ozonDailySchema)" in source,
+              'sku_readback':"sellmonitorGithubOzonNormalizeRows_(checkedView,null,ozonSkuSchema)" in source,
               'sample':'comparison_sample:{daily:dailyMismatchSample,period:periodMismatchSample}' in body,
           }
-          print('OZON_PERF_FUNCTION_READBACK='+str(checks))
-          if not all(checks.values()): raise SystemExit('OZON_PERF_FUNCTION_READBACK_FAILED')
-          print('OZON_PERF_COMPARE_V6_FUNCTION_READBACK=yes')
+          print('TYPED_VALUE_LIVE_READBACK='+str(checks))
+          if not all(checks.values()): raise SystemExit('TYPED_VALUE_LIVE_READBACK_FAILED')
+          print('OZON_PERF_COMPARE_V7_FUNCTION_READBACK=yes')
           PY
-          echo "OZON_PERF_COMPARE_V6_READBACK=yes"
+          echo "TYPED_VALUE_LIVE_READBACK=yes"
           grep -RqsF 'oldRnpNote.match(/Реклама доступна[^.]*\./)' .
           grep -Rqs "SELLMONITOR_WEBHOOK_HASH_NOT_COMPILED" .
           python - <<'PY'
