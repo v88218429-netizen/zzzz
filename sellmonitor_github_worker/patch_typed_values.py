@@ -288,7 +288,7 @@ if "SELLMONITOR_INNER_PRODUCT_SOURCE_ALIAS_V1" not in source:
 
 if "OZON_SUMMARY_SKU_IDS_AS_TEXT_V1" not in source:
     global_anchor = "function sellmonitorGithubOzonRows_(sheet, row, col, width) {"
-    id_helper = """/* OZON_SUMMARY_SKU_ID_READBACK_V1 */
+    id_helper = """/* OZON_SUMMARY_SKU_IDS_AS_TEXT_V1 */\n/* OZON_SUMMARY_SKU_ID_READBACK_V1 */
 function sellmonitorGithubOzonIdsAreText_(rows, columns) {
   return (rows || []).every(function(row) {
     return (columns || []).every(function(column) {
