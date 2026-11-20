@@ -285,7 +285,50 @@ if "SELLMONITOR_INNER_PRODUCT_SOURCE_ALIAS_V1" not in source:
 """
     runtime_anchor = "  return loadedSource;\n}\n\nfunction sellmonitorGithubRebindSource_(source, spreadsheetId) {"
     source = replace_exact(source, runtime_anchor, alias_patch + runtime_anchor, label="Sellmonitor product source alias patch")
+
+if "OZON_SUMMARY_SKU_IDS_AS_TEXT_V1" not in source:
+    global_anchor = "function sellmonitorGithubOzonRows_(sheet, row, col, width) {"
+    id_helper = """/* OZON_SUMMARY_SKU_ID_READBACK_V1 */
+function sellmonitorGithubOzonIdsAreText_(rows, columns) {
+  return (rows || []).every(function(row) {
+    return (columns || []).every(function(column) {
+      return row[column] == null || row[column] === '' || typeof row[column] === 'string';
+    });
+  });
+}
+"""
+    source = replace_exact(source, global_anchor, id_helper + global_anchor, label="Ozon SKU text readback helper")
+    source = replace_exact(
+        source,
+        "sameSku=skuDatesTyped&&JSON.stringify(sellmonitorGithubOzonNormalizeRows_(oldSku,null,ozonSkuSchema))===",
+        "sameSku=skuDatesTyped&&sellmonitorGithubOzonIdsAreText_(oldSku,[3,4])&&JSON.stringify(sellmonitorGithubOzonNormalizeRows_(oldSku,null,ozonSkuSchema))===",
+        label="Ozon SKU stored text type gate"
+    )
+    source = replace_exact(
+        source,
+        "      if(skuRows.length)skuSheet.getRange(skuStart,1,skuRowsForWrite.length,12).setValues(skuRowsForWrite);",
+        """      if(skuRows.length){
+        skuRowsForWrite.forEach(function(row){[3,4].forEach(function(index){row[index]=row[index]==null?'':String(row[index]);});});
+        skuSheet.getRange(skuStart,4,skuRowsForWrite.length,2).setNumberFormat('@');
+        skuSheet.getRange(skuStart,1,skuRowsForWrite.length,12).setValues(skuRowsForWrite);
+      }""",
+        label="Ozon SKU text writer"
+    )
+    source = replace_exact(
+        source,
+        "    var readSkuNorm=sellmonitorGithubOzonNormalizeRows_(newSku,true)",
+        "    if(!sellmonitorGithubOzonIdsAreText_(newSku,[3,4]))throw new Error('OZON_SKU_ID_TYPE_READBACK_FAILED:'+cfg.name);\n    var readSkuNorm=sellmonitorGithubOzonNormalizeRows_(newSku,true)",
+        label="Ozon SKU text readback gate"
+    )
+    version = re.search(r"VERSION:\s*'github-worker-(\d+)\.(\d+)\.(\d+)'", source)
+    if not version:
+        raise SystemExit("worker version missing for Ozon SKU text release")
+    major, minor, patch = map(int, version.groups())
+    next_version = "github-worker-" + str(major) + "." + str(minor) + "." + str(patch + 1)
+    source = source[:version.start()] + "VERSION: '" + next_version + "'" + source[version.end():]
+
 required = [
+    "OZON_SUMMARY_SKU_IDS_AS_TEXT_V1", "OZON_SUMMARY_SKU_ID_READBACK_V1",
     "SELLMONITOR_TYPED_VALUE_CANONICALIZER_V1", "OZON_SUMMARY_TYPED_CANONICALIZER_V1",
     "OZON_TYPED_NORMALIZER_CALL_SITES_V1", "OZON_PERF_SHARED_NUMBER_CANONICALIZER_V1",
     "OZON_SELLER_QTY_SHARED_CANONICALIZER_V1", "WB_RNP_TYPED_COMPARISON_V1",
