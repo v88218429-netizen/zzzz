@@ -140,8 +140,7 @@ if "OZON_TYPED_NORMALIZER_CALL_SITES_V1" not in source:
     ]
     for old, new, count in calls:
         source = replace_exact(source, old, new, count, "Ozon typed comparison call")
-if "SELLMONITOR_INNER_PRODUCT_SOURCE_ALIAS_V1",
-    "SELLMONITOR_INNER_TYPED_METRIC_V1" not in source:
+if "SELLMONITOR_INNER_TYPED_METRIC_V1" not in source:
     function_start = source.find("function sellmonitorGithubInnerMetric_(")
     function_end = source.find("\nfunction ", function_start + 1) if function_start >= 0 else -1
     if function_start < 0 or function_end < 0:
@@ -291,6 +290,7 @@ required = [
     "OZON_TYPED_NORMALIZER_CALL_SITES_V1", "OZON_PERF_SHARED_NUMBER_CANONICALIZER_V1",
     "OZON_SELLER_QTY_SHARED_CANONICALIZER_V1", "WB_RNP_TYPED_COMPARISON_V1",
     "OZON_PERF_TYPED_IDEMPOTENCY_V7", "comparison_sample:{daily:dailyMismatchSample,period:periodMismatchSample}",
+    "SELLMONITOR_INNER_PRODUCT_SOURCE_ALIAS_V1",
     "SELLMONITOR_INNER_TYPED_METRIC_V1", "SELLMONITOR_INNER_TYPED_ID_WRITE_V1",
     "SELLMONITOR_LEGACY_NUMBER_SHARED_CANONICALIZER_V1",
 ]
