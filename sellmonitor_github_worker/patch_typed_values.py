@@ -260,7 +260,8 @@ if "SELLMONITOR_LEGACY_NUMBER_SHARED_CANONICALIZER_V1" not in source:
 
 if "SELLMONITOR_INNER_PRODUCT_SOURCE_ALIAS_V1" not in source:
     alias_marker = "SELLMONITOR_INNER_PRODUCT_SOURCE_ALIAS_V1"
-    alias_patch = """  if (file === 'inner_prevday_preview_v270') {
+    alias_patch = """  /* SELLMONITOR_INNER_PRODUCT_SOURCE_ALIAS_V1 */
+  if (file === 'inner_prevday_preview_v270') {
     /* SELL MONITOR PRODUCT SOURCE NAME COMPATIBILITY */
     var previewRowToolNeedle = "String(v[i][1])===tool";
     var previewChunkToolNeedle = "String(z[1])===tool";
@@ -283,7 +284,7 @@ if "SELLMONITOR_INNER_PRODUCT_SOURCE_ALIAS_V1" not in source:
       .replace(harvestChunkToolNeedle, "(String(z[1])!==tool&&!(tool==='get_product_list'&&String(z[1])==='analytics_get_product_list'))");
   }
 """
-    runtime_anchor = "  return loadedSource;\\n}\\n\\nfunction sellmonitorGithubRebindSource_(source, spreadsheetId) {"
+    runtime_anchor = "  return loadedSource;\n}\n\nfunction sellmonitorGithubRebindSource_(source, spreadsheetId) {"
     source = replace_exact(source, runtime_anchor, alias_patch + runtime_anchor, label="Sellmonitor product source alias patch")
 required = [
     "SELLMONITOR_TYPED_VALUE_CANONICALIZER_V1", "OZON_SUMMARY_TYPED_CANONICALIZER_V1",
