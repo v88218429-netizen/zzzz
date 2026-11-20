@@ -898,6 +898,15 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
         print("OZON_ORDER_FRESHNESS_NOTE_READBACK=patched")
     elif "orderFreshnessSheet.getRange('A1').getValue()||'')!==newOrderFreshnessNote" not in worker_text:
         raise SystemExit("OZON order freshness readback patch partial")
+    # Flush the write before strict readback; Apps Script can otherwise expose the prior cell value.
+    freshness_flush_marker = "OZON_ORDER_FRESHNESS_READBACK_FLUSH_V1"
+    freshness_readback_probe = "if(String(orderFreshnessSheet.getRange('A1').getValue()||'')!==newOrderFreshnessNote)"
+    if freshness_flush_marker not in worker_text:
+        if worker_text.count(freshness_readback_probe) != 1:
+            raise SystemExit("OZON freshness readback flush anchor mismatch")
+        worker_text = worker_text.replace(freshness_readback_probe,
+            "SpreadsheetApp.flush(); /* " + freshness_flush_marker + " */\\n    " + freshness_readback_probe, 1)
+        print("OZON_ORDER_FRESHNESS_READBACK_FLUSH=patched")
     # Keep Ozon notes aligned with the connected store-level finance source.
     finance_note_marker = "OZON_FINANCE_COVERAGE_NOTE_V1"
     if finance_note_marker not in worker_text:
