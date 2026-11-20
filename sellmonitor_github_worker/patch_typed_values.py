@@ -140,7 +140,8 @@ if "OZON_TYPED_NORMALIZER_CALL_SITES_V1" not in source:
     ]
     for old, new, count in calls:
         source = replace_exact(source, old, new, count, "Ozon typed comparison call")
-if "SELLMONITOR_INNER_TYPED_METRIC_V1" not in source:
+if "SELLMONITOR_INNER_PRODUCT_SOURCE_ALIAS_V1",
+    "SELLMONITOR_INNER_TYPED_METRIC_V1" not in source:
     function_start = source.find("function sellmonitorGithubInnerMetric_(")
     function_end = source.find("\nfunction ", function_start + 1) if function_start >= 0 else -1
     if function_start < 0 or function_end < 0:
@@ -257,6 +258,33 @@ if "SELLMONITOR_LEGACY_NUMBER_SHARED_CANONICALIZER_V1" not in source:
 }"""
     source = replace_exact(source, old_number_helper, new_number_helper, label="legacy numeric parser")
 
+if "SELLMONITOR_INNER_PRODUCT_SOURCE_ALIAS_V1" not in source:
+    alias_marker = "SELLMONITOR_INNER_PRODUCT_SOURCE_ALIAS_V1"
+    alias_patch = """  if (file === 'inner_prevday_preview_v270') {
+    /* SELL MONITOR PRODUCT SOURCE NAME COMPATIBILITY */
+    var previewRowToolNeedle = "String(v[i][1])===tool";
+    var previewChunkToolNeedle = "String(z[1])===tool";
+    if (loadedSource.split(previewRowToolNeedle).length !== 2 || loadedSource.split(previewChunkToolNeedle).length !== 2) {
+      throw new Error('Inner preview source alias patch anchor mismatch');
+    }
+    loadedSource = loadedSource
+      .replace(previewRowToolNeedle, "(String(v[i][1])===tool||(tool==='get_product_list'&&String(v[i][1])==='analytics_get_product_list'))")
+      .replace(previewChunkToolNeedle, "(String(z[1])===tool||(tool==='get_product_list'&&String(z[1])==='analytics_get_product_list'))");
+  }
+  if (file === 'inner_harvest_to_raw_v217') {
+    /* SELL MONITOR PRODUCT SOURCE NAME COMPATIBILITY */
+    var harvestTargetToolNeedle = "String(r[1])!==tool";
+    var harvestChunkToolNeedle = "String(z[1])!==tool";
+    if (loadedSource.split(harvestTargetToolNeedle).length !== 2 || loadedSource.split(harvestChunkToolNeedle).length !== 2) {
+      throw new Error('Inner raw harvest source alias patch anchor mismatch');
+    }
+    loadedSource = loadedSource
+      .replace(harvestTargetToolNeedle, "(String(r[1])!==tool&&!(tool==='get_product_list'&&String(r[1])==='analytics_get_product_list'))")
+      .replace(harvestChunkToolNeedle, "(String(z[1])!==tool&&!(tool==='get_product_list'&&String(z[1])==='analytics_get_product_list'))");
+  }
+"""
+    runtime_anchor = "  return loadedSource;\\n}\\n\\nfunction sellmonitorGithubRebindSource_(source, spreadsheetId) {"
+    source = replace_exact(source, runtime_anchor, alias_patch + runtime_anchor, label="Sellmonitor product source alias patch")
 required = [
     "SELLMONITOR_TYPED_VALUE_CANONICALIZER_V1", "OZON_SUMMARY_TYPED_CANONICALIZER_V1",
     "OZON_TYPED_NORMALIZER_CALL_SITES_V1", "OZON_PERF_SHARED_NUMBER_CANONICALIZER_V1",
