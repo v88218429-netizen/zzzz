@@ -1,4 +1,4 @@
-name: WB content manager read-only sync
+name: WB content manager sync
 
 on:
   push:
@@ -31,6 +31,7 @@ jobs:
     timeout-minutes: 15
     env:
       WB_API_TOKEN_AP: ${{ secrets.WB_API_TOKEN_AP }}
+      WB_API_TOKEN_AP_WRITE: ${{ secrets.WB_API_TOKEN_AP_WRITE || secrets.WB_API_TOKEN_AP }}
       WEBHOOK_SECRET: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
       WEBAPP_DEPLOYMENT_ID: "AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw"
     steps:
@@ -47,6 +48,7 @@ jobs:
         run: |
           set -euo pipefail
           test -n "$WB_API_TOKEN_AP"
+          test -n "$WB_API_TOKEN_AP_WRITE"
           test -n "$WEBHOOK_SECRET"
           test -n "$WEBAPP_DEPLOYMENT_ID"
       - name: Read WB Content API and publish through authenticated bridge
