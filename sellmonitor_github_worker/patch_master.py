@@ -898,7 +898,7 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
         if worker_text.count(readback_anchor) != 1:
             raise SystemExit("OZON order freshness readback anchor mismatch")
         worker_text = worker_text.replace(readback_anchor,
-            readback_anchor + "\\n    " + readback_check, 1)
+            readback_anchor + "\n    " + readback_check, 1)
         print("OZON_ORDER_FRESHNESS_NOTE_READBACK=patched_v2")
     elif "expectedOrderFreshnessReadback=(apiMode&&apiPagesComplete)?helperNote:oldOrderFreshnessNote" not in worker_text:
         raise SystemExit("OZON order freshness readback patch partial")
