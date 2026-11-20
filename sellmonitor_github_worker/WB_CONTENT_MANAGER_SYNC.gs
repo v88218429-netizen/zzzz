@@ -111,9 +111,10 @@ function sellmonitorGithubPublishContentManagerSnapshot_(body) {
   var preview = smcmRunStage_("mass_preview", function() { return smcmUpdatePreview_(massSh, cardData.rows, attrData, docData); });
   var statusB = "Свежие данные: " + cardData.rows.length + " карточек · " + attrData.length + " характеристик · " + docData.length + " строк документов";
   smcmRunStage_("start_status", function() {
+    startSh.getRange("A2").setValue("Характеристики редактируются в матрице. Правки проверяются в очереди и отправляются по галочке на этой вкладке.");
     startSh.getRange("B4").setValue(statusB);
     var writeConfigured = !!PropertiesService.getScriptProperties().getProperty("WB_CONTENT_MANAGER_WRITE_TOKEN_AP");
-    startSh.getRange("C4").setValue("WB Content API · чтение и характеристики " + (writeConfigured ? "подключены" : "ключ записи ещё не передан") + " · Дом Саныча (AP) · " + snapshot);
+    startSh.getRange("C4").setValue("WB Content API · чтение подключено · ключ записи " + (writeConfigured ? "передаётся" : "ещё не передан") + " · права записи проверяются при отправке · " + snapshot);
     startSh.getRange("A5").setValue("Ручное обновление");
     startSh.getRange("B5").setFormula('=HYPERLINK("https://github.com/v88218429-netizen/zzzz/actions/workflows/wb-content-manager-sync.yml";"Открыть GitHub Actions")');
     startSh.getRange("C5").setValue("Автоматическое обновление каждые 6 часов");
@@ -594,7 +595,7 @@ function smcmEnsureCharacteristicEditorControls_(start, drafts) {
   start.getRange("B8").setFormula('=HYPERLINK("#gid=' + drafts.getSheetId() + '";"Открыть черновики")');
   var hasWriteToken = !!PropertiesService.getScriptProperties().getProperty("WB_CONTENT_MANAGER_WRITE_TOKEN_AP");
   start.getRange("C8").setValue(hasWriteToken
-    ? "Ключ записи получен из защищённой синхронизации; содержимое ключа не показывается."
+    ? "Ключ записи получен из защищённой синхронизации; WB проверит его права при отправке."
     : "Ключ записи пока не пришёл из GitHub Actions.");
 }
 
