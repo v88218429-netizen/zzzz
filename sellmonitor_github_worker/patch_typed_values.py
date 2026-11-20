@@ -243,12 +243,27 @@ if "OZON_PERF_TYPED_IDEMPOTENCY_V7" not in source:
     comparison_sample:{daily:dailyMismatchSample,period:periodMismatchSample}};"""
     if "comparison_sample:{daily:dailyMismatchSample,period:periodMismatchSample}" not in source:
         source = replace_exact(source, old_return, new_return, label="Ozon comparison result")
+if "SELLMONITOR_LEGACY_NUMBER_SHARED_CANONICALIZER_V1" not in source:
+    old_number_helper = """function sellmonitorGithubNumber_(v) {
+  if (typeof v === 'number') return isFinite(v) ? v : 0;
+  var s = String(v == null ? '' : v).replace(/\s/g,'').replace('%','').replace(',','.');
+  var n = Number(s);
+  return isFinite(n) ? n : 0;
+}"""
+    new_number_helper = """function sellmonitorGithubNumber_(v) {
+  /* SELLMONITOR_LEGACY_NUMBER_SHARED_CANONICALIZER_V1 */
+  var number = sellmonitorGithubCanonicalValue_(v, 'number', 'UTC');
+  return typeof number === 'number' && isFinite(number) ? number : 0;
+}"""
+    source = replace_exact(source, old_number_helper, new_number_helper, label="legacy numeric parser")
+
 required = [
     "SELLMONITOR_TYPED_VALUE_CANONICALIZER_V1", "OZON_SUMMARY_TYPED_CANONICALIZER_V1",
     "OZON_TYPED_NORMALIZER_CALL_SITES_V1", "OZON_PERF_SHARED_NUMBER_CANONICALIZER_V1",
     "OZON_SELLER_QTY_SHARED_CANONICALIZER_V1", "WB_RNP_TYPED_COMPARISON_V1",
     "OZON_PERF_TYPED_IDEMPOTENCY_V7", "comparison_sample:{daily:dailyMismatchSample,period:periodMismatchSample}",
     "SELLMONITOR_INNER_TYPED_METRIC_V1", "SELLMONITOR_INNER_TYPED_ID_WRITE_V1",
+    "SELLMONITOR_LEGACY_NUMBER_SHARED_CANONICALIZER_V1",
 ]
 missing = [x for x in required if x not in source]
 if missing:
