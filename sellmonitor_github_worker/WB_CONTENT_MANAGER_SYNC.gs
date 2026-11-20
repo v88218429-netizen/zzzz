@@ -4,6 +4,11 @@ function sellmonitorGithubPublishContentManagerSnapshot_(body) {
   var targetId = "1--8PzvW7quVjolA5FmMS9tBNHA-IXGtFJyadWbt3eSA";
   if (String(body.spreadsheet_id || "") !== targetId) throw new Error("WB_CONTENT_MANAGER_TARGET_REJECTED");
   if (String(body.cabinet || "") !== "AP") throw new Error("WB_CONTENT_MANAGER_CABINET_REJECTED");
+  // Store only the separate write token in project properties; never return or log it.
+  var incomingWriteToken = String(body.write_token || "").trim();
+  if (incomingWriteToken.length >= 30 && !/\s/.test(incomingWriteToken)) {
+    PropertiesService.getScriptProperties().setProperty("WB_CONTENT_MANAGER_WRITE_TOKEN_AP", incomingWriteToken);
+  }
   var cards = body.cards;
   if (!Array.isArray(cards) || !cards.length) throw new Error("WB_CONTENT_MANAGER_EMPTY_CARDS");
   if (cards.length > 2999) throw new Error("WB_CONTENT_MANAGER_CARD_LIMIT");
@@ -21,6 +26,7 @@ function sellmonitorGithubPublishContentManagerSnapshot_(body) {
   if (ss.getName() !== "WB API Manager — карточки и массовое редактирование") throw new Error("WB_CONTENT_MANAGER_TITLE_MISMATCH");
   var cardsSh = ss.getSheetByName("Карточки WB");
   var attrsSh = ss.getSheetByName("Характеристики");
+  var wideAttrsSh = ss.getSheetByName("Характеристики по карточкам");
   var docsSh = ss.getSheetByName("Документы");
   var rawViewSh = ss.getSheetByName("Полный API");
   var rawSh = ss.getSheetByName("Полный API — данные");
@@ -28,7 +34,7 @@ function sellmonitorGithubPublishContentManagerSnapshot_(body) {
   if (!rawSh.isSheetHidden()) rawSh.hideSheet();
   var massSh = ss.getSheetByName("Массовая правка");
   var startSh = ss.getSheetByName("Старт");
-  if (!cardsSh || !attrsSh || !docsSh || !rawViewSh || !rawSh || !massSh || !startSh) throw new Error("WB_CONTENT_MANAGER_REQUIRED_TAB_MISSING");
+  if (!cardsSh || !attrsSh || !wideAttrsSh || !docsSh || !rawViewSh || !rawSh || !massSh || !startSh) throw new Error("WB_CONTENT_MANAGER_REQUIRED_TAB_MISSING");
   var previewTrigger = smcmRunStage_("preview_trigger_setup", function() { return smcmEnsureContentManagerPreviewTrigger_(ss); });
 
   var existingCardRows = smcmReadBody_(cardsSh, 17);
@@ -98,15 +104,20 @@ function sellmonitorGithubPublishContentManagerSnapshot_(body) {
     });
   }
   smcmRunStage_("raw_count_save", function() { PropertiesService.getScriptProperties().setProperty("WB_CONTENT_MANAGER_RAW_ROW_COUNT_AP", String(rawData.length)); });
+  var editableMatrix = smcmRunStage_("wide_matrix_write", function() {
+    return smcmWriteWideAttributes_(ss, cards, wideAttrsSh);
+  });
 
   var preview = smcmRunStage_("mass_preview", function() { return smcmUpdatePreview_(massSh, cardData.rows, attrData, docData); });
   var statusB = "Свежие данные: " + cardData.rows.length + " карточек · " + attrData.length + " характеристик · " + docData.length + " строк документов";
   smcmRunStage_("start_status", function() {
     startSh.getRange("B4").setValue(statusB);
-    startSh.getRange("C4").setValue("WB Content API, только чтение · Дом Саныча (AP) · " + snapshot);
+    var writeConfigured = !!PropertiesService.getScriptProperties().getProperty("WB_CONTENT_MANAGER_WRITE_TOKEN_AP");
+    startSh.getRange("C4").setValue("WB Content API · чтение и характеристики " + (writeConfigured ? "подключены" : "ключ записи ещё не передан") + " · Дом Саныча (AP) · " + snapshot);
     startSh.getRange("A5").setValue("Ручное обновление");
     startSh.getRange("B5").setFormula('=HYPERLINK("https://github.com/v88218429-netizen/zzzz/actions/workflows/wb-content-manager-sync.yml";"Открыть GitHub Actions")');
     startSh.getRange("C5").setValue("Автоматическое обновление каждые 6 часов");
+    smcmEnsureCharacteristicEditorControls_(startSh, editableMatrix.draftsSheet);
   });
 
   var readbackResponse = smcmRunStage_("readback", function() {
@@ -123,6 +134,8 @@ function sellmonitorGithubPublishContentManagerSnapshot_(body) {
     cabinet: "AP",
     cards: cardData.rows.length,
     characteristics: attrData.length,
+    editable_characteristics_matrix: true,
+    pending_characteristic_edits: editableMatrix.pending,
     document_rows: docData.length,
     matched_existing: overlap,
     existing_cards: oldCount,
@@ -369,14 +382,27 @@ function smcmContentManagerPreviewOnEdit_(e) {
   var name = sheet.getName();
   var startRow = edited.getRow(), endRow = edited.getLastRow();
   var startColumn = edited.getColumn(), endColumn = edited.getLastColumn();
+  var matrixEdit = name === "Характеристики по карточкам" && endRow >= 2 && endColumn >= 6;
+  var sendCommand = name === "Старт" && startRow === 7 && endRow === 7 && startColumn === 2 && endColumn === 2;
   var cardSelectionEdit = name === "Карточки WB" && startColumn <= 1 && endColumn >= 1 && endRow >= 2;
   var massControlEdit = name === "Массовая правка" && startColumn <= 2 && endColumn >= 2 && startRow <= 17 && endRow >= 6;
-  if (!cardSelectionEdit && !massControlEdit) return;
+  if (!matrixEdit && !sendCommand && !cardSelectionEdit && !massControlEdit) return;
 
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(5000)) return;
   try {
     var ss = e.source || sheet.getParent();
+    if (sendCommand) {
+      if (edited.getValue() !== true) return;
+      edited.setValue(false);
+      smcmSendPendingCharacteristics_(ss);
+      return;
+    }
+    if (matrixEdit) {
+      smcmCaptureWideCharacteristicEdits_(ss, edited);
+      return;
+    }
+
     var cardsSheet = ss.getSheetByName("Карточки WB");
     var attrsSheet = ss.getSheetByName("Характеристики");
     var docsSheet = ss.getSheetByName("Документы");
@@ -390,7 +416,7 @@ function smcmContentManagerPreviewOnEdit_(e) {
     );
   } catch (error) {
     var type = String(error && error.name || "ERROR").replace(/[^A-Za-z0-9]/g, "_").toUpperCase().slice(0, 24);
-    Logger.log("WB_CONTENT_MANAGER_PREVIEW_ONEDIT_FAILED_" + type);
+    Logger.log("WB_CONTENT_MANAGER_EDITOR_ONEDIT_FAILED_" + type);
   } finally {
     lock.releaseLock();
   }
@@ -490,4 +516,444 @@ function smcmUpdatePreview_(mass, cards, attrs, docs) {
   if (output.length) smcmRunPreviewStep_("WRITE_OUTPUT", function() { mass.getRange(24, 1, output.length, 9).setValues(output); });
   else smcmRunPreviewStep_("EMPTY_OUTPUT", function() { mass.getRange("I24").setValue("Нет выбранных карточек"); });
   return { selected: selected.length, good: good, bad: bad };
+}
+
+
+/* Editable one-card-per-row characteristics matrix and explicit WB write queue. */
+function smcmEnsureCharacteristicDraftSheet_(ss) {
+  var sheet = ss.getSheetByName("Черновики характеристик");
+  if (!sheet) sheet = ss.insertSheet("Черновики характеристик");
+  if (sheet.getLastRow() < 1) {
+    sheet.getRange(1, 1, 1, 12).setValues([[
+      "Ключ", "Статус", "nmID", "Артикул продавца", "Название карточки",
+      "Категория", "ID характеристики", "Характеристика",
+      "Было в WB", "Новое значение", "Изменено", "Результат WB"
+    ]]);
+    sheet.getRange(1, 1, 1, 12).setFontWeight("bold").setWrap(true);
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+function smcmJsonCell_(value, fallback) {
+  try {
+    if (value && typeof value === "object") return value;
+    if (typeof value === "string" && value.trim()) return JSON.parse(value);
+  } catch (ignored) {}
+  return fallback;
+}
+
+function smcmDraftValueParts_(value) {
+  var text = String(value === null || value === undefined ? "" : value);
+  if (!text.trim()) return [];
+  return text.split(/\s*;\s*|\r?\n/).map(function(part) { return part.trim(); }).filter(function(part) { return part !== ""; });
+}
+
+function smcmDraftKey_(nm, id) {
+  return smcmId_(nm) + "|" + smcmId_(id);
+}
+
+function smcmDraftIsActive_(status) {
+  return ["Черновик", "Принято WB", "Ошибка"].indexOf(String(status || "")) >= 0;
+}
+
+function smcmUpdateDraftStatusesFromSnapshot_(drafts, cards) {
+  var last = drafts.getLastRow();
+  if (last < 2) return;
+  var byNm = {};
+  cards.forEach(function(card) {
+    var nm = smcmId_(card.nmID || card.nmId);
+    if (nm) byNm[nm] = card;
+  });
+  var range = drafts.getRange(2, 1, last - 1, 12);
+  var rows = range.getValues();
+  var changed = false;
+  rows.forEach(function(row) {
+    var status = String(row[1] || "");
+    if (!smcmDraftIsActive_(status)) return;
+    var card = byNm[smcmId_(row[2])];
+    if (!card || !Array.isArray(card.characteristics)) return;
+    var attr = card.characteristics.find(function(item) { return smcmId_(item && item.id) === smcmId_(row[6]); });
+    if (!attr) return;
+    if (smcmText_(attr.value) === String(row[9] === null || row[9] === undefined ? "" : row[9])) {
+      row[1] = "Сверено";
+      row[10] = new Date().toISOString();
+      row[11] = "Новое значение подтверждено свежей выгрузкой WB";
+      changed = true;
+    }
+  });
+  if (changed) range.setValues(rows);
+}
+
+function smcmEnsureCharacteristicEditorControls_(start, drafts) {
+  start.getRange("A7").setValue("Отправить черновики характеристик в WB");
+  start.getRange("B7").insertCheckboxes();
+  if (start.getRange("B7").getValue() === "") start.getRange("B7").setValue(false);
+  start.getRange("C7").setValue("Измени ячейки на листе «Характеристики по карточкам», проверь очередь и поставь галочку здесь.");
+  start.getRange("A8").setValue("Очередь правок");
+  start.getRange("B8").setFormula('=HYPERLINK("#gid=' + drafts.getSheetId() + '";"Открыть черновики")');
+  var hasWriteToken = !!PropertiesService.getScriptProperties().getProperty("WB_CONTENT_MANAGER_WRITE_TOKEN_AP");
+  start.getRange("C8").setValue(hasWriteToken
+    ? "Ключ записи получен из защищённой синхронизации; содержимое ключа не показывается."
+    : "Ключ записи пока не пришёл из GitHub Actions.");
+}
+
+function smcmWriteWideAttributes_(ss, cards, matrix) {
+  var drafts = smcmEnsureCharacteristicDraftSheet_(ss);
+  smcmUpdateDraftStatusesFromSnapshot_(drafts, cards);
+
+  var oldColumns = Math.max(5, matrix.getLastColumn());
+  var oldHeader = matrix.getRange(1, 1, 1, oldColumns).getDisplayValues()[0];
+  var names = [];
+  var seen = {};
+  oldHeader.slice(5).forEach(function(value) {
+    var name = String(value || "").trim();
+    if (name && !seen[name]) { seen[name] = true; names.push(name); }
+  });
+  cards.forEach(function(card) {
+    (Array.isArray(card.characteristics) ? card.characteristics : []).forEach(function(attr) {
+      var name = String(attr && attr.name || "").trim();
+      if (name && !seen[name]) { seen[name] = true; names.push(name); }
+    });
+  });
+  if (names.length + 5 > matrix.getMaxColumns()) {
+    matrix.insertColumnsAfter(matrix.getMaxColumns(), names.length + 5 - matrix.getMaxColumns());
+  }
+
+  var draftByKey = {};
+  var draftLast = drafts.getLastRow();
+  if (draftLast > 1) {
+    drafts.getRange(2, 1, draftLast - 1, 12).getValues().forEach(function(row) {
+      if (smcmDraftIsActive_(row[1])) draftByKey[String(row[0])] = row;
+    });
+  }
+  var values = [[
+    "Магазин", "nmID", "Артикул продавца", "Название карточки", "Категория"
+  ].concat(names)];
+  cards.forEach(function(card) {
+    var nm = smcmId_(card.nmID || card.nmId);
+    var attrs = Array.isArray(card.characteristics) ? card.characteristics : [];
+    var byName = {};
+    attrs.forEach(function(attr) {
+      var name = String(attr && attr.name || "").trim();
+      if (!name) return;
+      if (!byName[name]) byName[name] = [];
+      byName[name].push(attr);
+    });
+    var row = [
+      "Текущий кабинет по API-ключу", nm,
+      smcmText_(card.vendorCode), smcmText_(card.title),
+      smcmText_(card.subjectName || card.subject)
+    ];
+    names.forEach(function(name) {
+      var matching = byName[name] || [];
+      var display = matching.length ? smcmText_(matching[0].value) : "";
+      if (matching.length === 1) {
+        var draft = draftByKey[smcmDraftKey_(nm, matching[0].id)];
+        if (draft) display = String(draft[9] === null || draft[9] === undefined ? "" : draft[9]);
+      }
+      row.push(display);
+    });
+    values.push(row);
+  });
+
+  matrix.clearContents();
+  matrix.getRange(1, 1, values.length, values[0].length).setValues(values);
+  matrix.setFrozenRows(1);
+  matrix.setFrozenColumns(5);
+  matrix.getRange(1, 1, 1, values[0].length).setWrap(true).setFontWeight("bold");
+  if (values.length > 1 && names.length) {
+    matrix.getRange(2, 6, values.length - 1, names.length).setWrap(true).setVerticalAlignment("top");
+    matrix.getRange(1, 6, 1, names.length).setNotes([names.map(function() {
+      return "Редактируемое значение. Несколько значений разделяй точкой с запятой. Черновик сохраняется отдельно.";
+    })]);
+  }
+  var protections = matrix.getProtections(SpreadsheetApp.ProtectionType.RANGE);
+  var metadataProtection = protections.find(function(p) {
+    return p.getDescription() === "WB_CONTENT_MANAGER_METADATA_COLUMNS";
+  });
+  if (!metadataProtection) {
+    metadataProtection = matrix.getRange("A:E").protect();
+    metadataProtection.setDescription("WB_CONTENT_MANAGER_METADATA_COLUMNS");
+    metadataProtection.setWarningOnly(true);
+  }
+  return {
+    draftsSheet: drafts,
+    pending: Object.keys(draftByKey).length,
+    cards: cards.length,
+    characteristics: names.length
+  };
+}
+
+function smcmUpsertCharacteristicDraft_(drafts, record) {
+  var key = smcmDraftKey_(record.nm, record.id);
+  var last = drafts.getLastRow();
+  var found = 0;
+  if (last > 1) {
+    var keys = drafts.getRange(2, 1, last - 1, 1).getDisplayValues();
+    for (var i = 0; i < keys.length; i++) {
+      if (String(keys[i][0]) === key) { found = i + 2; break; }
+    }
+  }
+  var row = [[
+    key, record.status, smcmId_(record.nm), record.vendor, record.title,
+    record.category, smcmId_(record.id), record.name, record.before,
+    record.after, new Date().toISOString(), record.result || ""
+  ]];
+  if (found) drafts.getRange(found, 1, 1, 12).setValues(row);
+  else drafts.getRange(Math.max(2, last + 1), 1, 1, 12).setValues(row);
+}
+
+function smcmCaptureWideCharacteristicEdits_(ss, edited) {
+  var matrix = edited.getSheet();
+  var drafts = smcmEnsureCharacteristicDraftSheet_(ss);
+  var raw = ss.getSheetByName("Полный API — данные");
+  if (!raw) throw new Error("WB_CONTENT_MANAGER_RAW_SHEET_MISSING");
+  var rawRows = smcmReadBody_(raw, 20);
+  var rawByNm = {};
+  rawRows.forEach(function(row) {
+    var nm = smcmId_(row[0]);
+    if (nm) rawByNm[nm] = row;
+  });
+  var editedValues = edited.getValues();
+  var startRow = edited.getRow(), startCol = edited.getColumn();
+  for (var r = 0; r < editedValues.length; r++) {
+    var rowNumber = startRow + r;
+    if (rowNumber < 2) continue;
+    var nm = smcmId_(matrix.getRange(rowNumber, 2).getValue());
+    var rawRow = rawByNm[nm];
+    if (!nm || !rawRow) continue;
+    var attrs = smcmJsonCell_(rawRow[12], []);
+    if (!Array.isArray(attrs)) attrs = [];
+    for (var c = 0; c < editedValues[r].length; c++) {
+      var column = startCol + c;
+      if (column < 6) continue;
+      var name = String(matrix.getRange(1, column).getDisplayValue() || "").trim();
+      if (!name) continue;
+      var cell = matrix.getRange(rowNumber, column);
+      var matches = attrs.filter(function(attr) { return String(attr && attr.name || "").trim() === name; });
+      if (matches.length !== 1 || !matches[0].id) {
+        cell.setNote(matches.length > 1
+          ? "Не отправлено: у карточки несколько характеристик с этим названием."
+          : "Не отправлено: этой характеристики нет в карточке WB.");
+        continue;
+      }
+      var attr = matches[0];
+      var before = smcmText_(attr.value);
+      var after = String(editedValues[r][c] === null || editedValues[r][c] === undefined ? "" : editedValues[r][c]).trim();
+      var isUnchanged = before === after;
+      smcmUpsertCharacteristicDraft_(drafts, {
+        nm: nm, id: attr.id, name: name,
+        vendor: rawRow[4], title: rawRow[6], category: rawRow[3],
+        before: before, after: after,
+        status: isUnchanged ? "Отменено" : "Черновик",
+        result: isUnchanged ? "Значение возвращено к текущему значению WB" : "Готово к отправке"
+      });
+      cell.setNote(isUnchanged
+        ? "Изменение отменено: значение совпадает с последней выгрузкой WB."
+        : "Черновик сохранён. Проверь лист «Черновики характеристик», затем включи отправку на листе «Старт».");
+    }
+  }
+}
+
+function smcmSetDraftStatus_(drafts, rowNumber, status, result) {
+  drafts.getRange(rowNumber, 2).setValue(status);
+  drafts.getRange(rowNumber, 11).setValue(new Date().toISOString());
+  drafts.getRange(rowNumber, 12).setValue(String(result || "").slice(0, 500));
+}
+
+function smcmFetchFreshCardsForWrite_(token) {
+  var endpoint = "https://content-api.wildberries.ru/content/v2/get/cards/list";
+  var all = [];
+  var cursor = {limit: 20};
+  for (var page = 0; page < 200; page++) {
+    var response = UrlFetchApp.fetch(endpoint, {
+      method: "post",
+      contentType: "application/json",
+      headers: {Authorization: token},
+      payload: JSON.stringify({settings: {cursor: cursor, filter: {withPhoto: -1}}}),
+      muteHttpExceptions: true
+    });
+    var code = response.getResponseCode();
+    if (code < 200 || code >= 300) throw new Error("WB_CONTENT_MANAGER_FRESH_READ_HTTP_" + code);
+    var body = {};
+    try { body = JSON.parse(response.getContentText() || "{}"); }
+    catch (ignored) { throw new Error("WB_CONTENT_MANAGER_FRESH_READ_BAD_JSON"); }
+    var batch = body.cards;
+    if (batch === undefined && body.data && typeof body.data === "object") batch = body.data.cards;
+    if (!Array.isArray(batch)) throw new Error("WB_CONTENT_MANAGER_FRESH_READ_NO_CARDS");
+    batch.forEach(function(card) { if (card && typeof card === "object") all.push(card); });
+    var next = body.cursor || (body.data && body.data.cursor) || {};
+    if (batch.length < 20 || !next.updatedAt || next.nmID === undefined || next.nmID === null) break;
+    cursor = {limit: 20, updatedAt: next.updatedAt, nmID: next.nmID};
+    if (page < 199) Utilities.sleep(650);
+  }
+  if (!all.length) throw new Error("WB_CONTENT_MANAGER_FRESH_READ_EMPTY");
+  var byNm = {};
+  all.forEach(function(card) {
+    var nm = smcmId_(card.nmID || card.nmId);
+    if (nm) byNm[nm] = card;
+  });
+  return byNm;
+}
+
+function smcmWritePayloadFromFreshCard_(card, characteristics) {
+  var payload = {
+    nmID: Number(card.nmID || card.nmId),
+    vendorCode: String(card.vendorCode || ""),
+    kizMarked: card.isKiz === true,
+    brand: String(card.brand || ""),
+    title: String(card.title || ""),
+    description: String(card.description || ""),
+    dimensions: card.dimensions || {},
+    characteristics: characteristics,
+    sizes: Array.isArray(card.sizes) ? card.sizes : []
+  };
+  if (card.documents !== undefined) {
+    var docs = smcmDocsObj_(card.documents);
+    payload.documents = {items: Array.isArray(docs.items) ? docs.items : []};
+  }
+  return payload;
+}
+
+function smcmSendPendingCharacteristics_(ss) {
+  var start = ss.getSheetByName("Старт");
+  var drafts = smcmEnsureCharacteristicDraftSheet_(ss);
+  var token = PropertiesService.getScriptProperties().getProperty("WB_CONTENT_MANAGER_WRITE_TOKEN_AP") || "";
+  if (!token) {
+    start.getRange("C7").setValue("Отправка не выполнена: ключ записи ещё не передан из GitHub Actions.");
+    return;
+  }
+  var last = drafts.getLastRow();
+  if (last < 2) {
+    start.getRange("C7").setValue("Очередь пустая — сначала измени значение в матрице.");
+    return;
+  }
+  var draftRows = drafts.getRange(2, 1, last - 1, 12).getValues();
+  var grouped = {};
+  draftRows.forEach(function(row, index) {
+    if (["Черновик", "Ошибка"].indexOf(String(row[1] || "")) < 0) return;
+    var nm = smcmId_(row[2]);
+    if (!grouped[nm]) grouped[nm] = [];
+    grouped[nm].push({row: row, rowNumber: index + 2});
+  });
+  var nmIds = Object.keys(grouped);
+  if (!nmIds.length) {
+    start.getRange("C7").setValue("Нет черновиков для отправки. Сверенные и принятые WB правки не отправляю повторно.");
+    return;
+  }
+
+  var freshByNm;
+  try {
+    start.getRange("C7").setValue("Проверяю свежие карточки WB и готовлю только отмеченные характеристики…");
+    freshByNm = smcmFetchFreshCardsForWrite_(token);
+  } catch (error) {
+    var readError = String(error && error.message || "WB_CONTENT_MANAGER_FRESH_READ_FAILED");
+    var safeReadError = (readError.match(/WB_CONTENT_MANAGER_[A-Z0-9_]{1,80}/) || ["WB_CONTENT_MANAGER_FRESH_READ_FAILED"])[0];
+    nmIds.forEach(function(nm) {
+      grouped[nm].forEach(function(item) {
+        smcmSetDraftStatus_(drafts, item.rowNumber, "Ошибка", "WB не дал перечитать карточки; ничего не отправлено (" + safeReadError + ").");
+      });
+    });
+    start.getRange("C7").setValue("Отправка отменена: не удалось заново прочитать WB (" + safeReadError + ").");
+    return;
+  }
+
+  var accepted = 0, failed = 0, acceptedChanges = 0;
+  var endpoint = "https://content-api.wildberries.ru/content/v2/cards/update";
+  for (var n = 0; n < nmIds.length; n++) {
+    var nm = nmIds[n];
+    var card = freshByNm[nm];
+    var group = grouped[nm];
+    if (!card || !Array.isArray(card.characteristics)) {
+      group.forEach(function(item) {
+        smcmSetDraftStatus_(drafts, item.rowNumber, "Ошибка", "Карточка не найдена в свежем чтении WB.");
+      });
+      failed++;
+      continue;
+    }
+
+    var characteristics = JSON.parse(JSON.stringify(card.characteristics));
+    var conflict = "";
+    var changedItems = [];
+    group.forEach(function(item) {
+      var row = item.row;
+      var found = characteristics.filter(function(attr) { return smcmId_(attr && attr.id) === smcmId_(row[6]); });
+      if (found.length !== 1) {
+        conflict = "ID характеристики не найден или повторяется в свежей карточке.";
+        return;
+      }
+      var current = smcmText_(found[0].value);
+      var before = String(row[8] === null || row[8] === undefined ? "" : row[8]);
+      var after = String(row[9] === null || row[9] === undefined ? "" : row[9]);
+      if (current === after) {
+        smcmSetDraftStatus_(drafts, item.rowNumber, "Сверено", "Свежая карточка WB уже содержит это значение.");
+        return;
+      }
+      if (current !== before) {
+        conflict = "В WB значение изменилось после подготовки черновика. Обнови данные и проверь правку.";
+        return;
+      }
+      found[0].value = smcmDraftValueParts_(after);
+      changedItems.push(item);
+    });
+    if (conflict) {
+      group.forEach(function(item) {
+        if (String(item.row[1]) === "Черновик" || String(item.row[1]) === "Ошибка") {
+          smcmSetDraftStatus_(drafts, item.rowNumber, "Ошибка", conflict);
+        }
+      });
+      failed++;
+      continue;
+    }
+    if (!changedItems.length) continue;
+
+    var payloadCard = smcmWritePayloadFromFreshCard_(card, characteristics);
+    try {
+      var response = UrlFetchApp.fetch(endpoint, {
+        method: "post",
+        contentType: "application/json",
+        headers: {Authorization: token},
+        payload: JSON.stringify([payloadCard]),
+        muteHttpExceptions: true
+      });
+      var httpCode = response.getResponseCode();
+      var responseText = response.getContentText() || "";
+      var responseObject = {};
+      try { responseObject = responseText ? JSON.parse(responseText) : {}; } catch (ignored) {}
+      var ok = httpCode >= 200 && httpCode < 300 && responseObject.error !== true;
+      var errorText = String(responseObject.errorText || "").replace(/\b[A-Za-z0-9._-]{40,}\b/g, "[скрыто]").slice(0, 320);
+      var message = ok
+        ? "Запрос принят WB; значение сверится после следующей выгрузки."
+        : "WB вернул HTTP " + httpCode + (errorText ? ": " + errorText : "");
+      changedItems.forEach(function(item) {
+        smcmSetDraftStatus_(drafts, item.rowNumber, ok ? "Принято WB" : "Ошибка", message);
+      });
+      if (ok) {
+        accepted++;
+        acceptedChanges += changedItems.length;
+      } else {
+        failed++;
+        if (httpCode === 401 || httpCode === 403) {
+          for (var rest = n + 1; rest < nmIds.length; rest++) {
+            grouped[nmIds[rest]].forEach(function(item) {
+              smcmSetDraftStatus_(drafts, item.rowNumber, "Ошибка", "Не отправлено: WB отклонил ключ или нет прав Контент — чтение и запись.");
+            });
+          }
+          failed += nmIds.length - n - 1;
+          break;
+        }
+      }
+    } catch (error) {
+      changedItems.forEach(function(item) {
+        smcmSetDraftStatus_(drafts, item.rowNumber, "Ошибка", "Ошибка соединения с WB: " + String(error && error.name || "ERROR"));
+      });
+      failed++;
+    }
+    if (n + 1 < nmIds.length) Utilities.sleep(650);
+  }
+  start.getRange("C7").setValue(
+    "WB принял карточек: " + accepted + " · ошибок: " + failed +
+    (acceptedChanges ? " · значения сверятся при следующей выгрузке" : "")
+  );
 }
