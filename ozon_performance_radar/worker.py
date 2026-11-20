@@ -297,6 +297,22 @@ def main():
     secret = os.getenv("OZON_PERF_CLIENT_SECRET", "")
     last_date = dt.datetime.now(dt.timezone.utc).astimezone(dt.timezone(dt.timedelta(hours=3))).date() - dt.timedelta(days=1)
     bundle = collect_store(store, client_id, secret, last_date)
+    source_errors = [
+        {
+            "stage": item.get("stage"),
+            "status": item.get("status"),
+            "from": item.get("from"),
+            "to": item.get("to"),
+        }
+        for item in bundle.get("errors", [])
+        if isinstance(item, dict)
+    ]
+    if source_errors:
+        print(
+            "OZON_PERF_SOURCE_ERRORS="
+            + json.dumps(source_errors, ensure_ascii=False, separators=(",", ":"), sort_keys=True),
+            flush=True,
+        )
     for group_name in ("daily", "campaign_product"):
         windows_data = bundle.get(group_name) or []
         rows = [
