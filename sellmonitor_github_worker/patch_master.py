@@ -905,7 +905,7 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
         if worker_text.count(freshness_readback_probe) != 1:
             raise SystemExit("OZON freshness readback flush anchor mismatch")
         worker_text = worker_text.replace(freshness_readback_probe,
-            "SpreadsheetApp.flush(); /* " + freshness_flush_marker + " */\\n    " + freshness_readback_probe, 1)
+            "SpreadsheetApp.flush(); /* " + freshness_flush_marker + " */\n    " + freshness_readback_probe, 1)
         print("OZON_ORDER_FRESHNESS_READBACK_FLUSH=patched")
     # Keep Ozon notes aligned with the connected store-level finance source.
     finance_note_marker = "OZON_FINANCE_COVERAGE_NOTE_V1"
