@@ -612,9 +612,9 @@ jobs:
               raise SystemExit("OZON_API_STORE_PUBLISH_FAILED:" + json.dumps(failures, ensure_ascii=False)[:2400])
           if expected_order_stores - set(published):
               raise SystemExit("OZON_API_ORDER_READBACK_REQUIRED:" + json.dumps(sorted(expected_order_stores - set(published)), ensure_ascii=False))
-          # OZON_ANALYTICS_ACCESS_PROBE_V1: read-only availability check, one request per cabinet per scheduled run.
+          # OZON_ANALYTICS_ACCESS_PROBE_V2: one supported daily product metric probe per cabinet; no traffic or ad attribution is inferred.
           analytics_day = (datetime.datetime.now(MOSCOW).date() - datetime.timedelta(days=2)).isoformat()
-          analytics_metrics = ["hits_view", "session_view", "hits_tocart", "conv_tocart"]
+          analytics_metrics = ["revenue", "ordered_units"]
           for cabinet, label, client_var, key_var in stores:
               headers = {
                   "Client-Id": os.environ[client_var],
@@ -626,7 +626,7 @@ jobs:
                   "date_from": analytics_day,
                   "date_to": analytics_day,
                   "metrics": analytics_metrics,
-                  "dimension": ["day"],
+                  "dimension": ["sku", "day"],
                   "filters": [],
                   "sort": [],
                   "limit": 1000,
