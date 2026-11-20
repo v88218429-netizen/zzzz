@@ -264,6 +264,7 @@ def prepare_photo_assets(cards: list[dict[str, Any]]) -> dict[str, str]:
 
 def main() -> None:
     wb_token = os.environ.get("WB_API_TOKEN_AP", "").strip()
+    wb_write_token = os.environ.get("WB_API_TOKEN_AP_WRITE", "").strip() or wb_token
     webhook_secret = os.environ.get("WEBHOOK_SECRET", "").strip()
     deployment_id = os.environ.get("WEBAPP_DEPLOYMENT_ID", "").strip()
     if not wb_token:
@@ -285,6 +286,9 @@ def main() -> None:
         "spreadsheet_id": TARGET_SPREADSHEET_ID,
         "cabinet": "AP",
         "snapshot": snapshot,
+        # Passed only over the authenticated HTTPS bridge and stored in Apps Script Script Properties.
+        # Never print or include this field in logs.
+        "write_token": wb_write_token,
         "cards": cards,
     }
     bridge_url = "https://script.google.com/macros/s/" + deployment_id + "/exec"
