@@ -612,6 +612,54 @@ jobs:
               raise SystemExit("OZON_API_STORE_PUBLISH_FAILED:" + json.dumps(failures, ensure_ascii=False)[:2400])
           if expected_order_stores - set(published):
               raise SystemExit("OZON_API_ORDER_READBACK_REQUIRED:" + json.dumps(sorted(expected_order_stores - set(published)), ensure_ascii=False))
+          # OZON_ANALYTICS_ACCESS_PROBE_V1: read-only availability check, one request per cabinet per scheduled run.
+          analytics_day = (datetime.datetime.now(MOSCOW).date() - datetime.timedelta(days=2)).isoformat()
+          analytics_metrics = ["hits_view", "session_view", "hits_tocart", "conv_tocart"]
+          for cabinet, label, client_var, key_var in stores:
+              headers = {
+                  "Client-Id": os.environ[client_var],
+                  "Api-Key": os.environ[key_var],
+                  "Content-Type": "application/json",
+              }
+              api_context.update({"store": label, "flow": "ANALYTICS_PROBE", "page": 1})
+              analytics_body = {
+                  "date_from": analytics_day,
+                  "date_to": analytics_day,
+                  "metrics": analytics_metrics,
+                  "dimension": ["day"],
+                  "filters": [],
+                  "sort": [],
+                  "limit": 1000,
+                  "offset": 0,
+              }
+              try:
+                  analytics_response = api_post("/v1/analytics/data", analytics_body, headers)
+                  analytics_result = analytics_response.get("result", analytics_response)
+                  analytics_rows = analytics_result.get("data") if isinstance(analytics_result, dict) else None
+                  if not isinstance(analytics_rows, list):
+                      analytics_rows = []
+                  first = analytics_rows[0] if analytics_rows and isinstance(analytics_rows[0], dict) else {}
+                  metric_slots = first.get("metrics") if isinstance(first.get("metrics"), list) else []
+                  has_next = bool(analytics_result.get("has_next", False)) if isinstance(analytics_result, dict) else False
+                  api_code = analytics_response.get("code", 0)
+                  probe_status = "available" if analytics_rows and len(metric_slots) == len(analytics_metrics) else ("empty" if not analytics_rows else "shape_mismatch")
+                  print("OZON_ANALYTICS_DATA_PROBE=store=" + label
+                        + ";status=" + probe_status
+                        + ";day=" + analytics_day
+                        + ";rows=" + str(len(analytics_rows))
+                        + ";metric_slots=" + str(len(metric_slots))
+                        + ";requested_metrics=" + str(len(analytics_metrics))
+                        + ";has_next=" + str(has_next)
+                        + ";api_code=" + str(api_code), flush=True)
+              except Exception as analytics_error:
+                  message = str(analytics_error)
+                  http_code = message.split("HTTP_", 1)[1].split(":", 1)[0] if "HTTP_" in message else ""
+                  print("OZON_ANALYTICS_DATA_PROBE=store=" + label
+                        + ";status=unavailable"
+                        + ";day=" + analytics_day
+                        + ";http=" + (http_code or "n/a")
+                        + ";error_class=" + type(analytics_error).__name__, flush=True)
+
           from decimal import Decimal, InvalidOperation
           checkpoint("finance", "all", "RUNNING", exported_at + ":" + str(len(records)), "order_readback=true", "получить финансовую историю")
           finance_days = []
