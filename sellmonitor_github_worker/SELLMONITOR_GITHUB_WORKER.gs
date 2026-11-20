@@ -6159,16 +6159,24 @@ function sellmonitorGithubPublishOzonSummaryOrders_(payload) {
     /* OZON_STORE_ORDER_HELPERS_V1 */
     var ozonStoreHelperChecks=[];
     if(apiMode&&apiPagesComplete){
-      var helperData={day:{},week:{},month:{}};
+      var helperData={day:{},week:{},month:{}},helperLastFull=lastFullDay||'';
+      function addClosedOrderPeriod_(kind,start,end,values){
+        var key=start+'|'+end,slot=helperData[kind][key]||(helperData[kind][key]=[0,0,0]);
+        for(var metric=0;metric<3;metric++)slot[metric]+=Number(values[metric])||0;
+      }
       agg.summary.forEach(function(r){
-        var label=String(r[0]||''),kind=label==='День'?'day':label==='Неделя'?'week':label==='Месяц'?'month':'';
-        if(!kind||!(r[1]&&r[2]))return;
-        var start=String(r[1]),end=String(r[2]);
-        helperData[kind][start+'|'+end]=[Number(r[3])||0,Number(r[4])||0,Number(r[5])||0];
+        if(String(r[0]||'')!=='День'||!r[1])return;
+        var day=String(r[1]);
+        if(!helperLastFull||day>helperLastFull)return;
+        var dayValues=[Number(r[3])||0,Number(r[4])||0,Number(r[5])||0];
+        addClosedOrderPeriod_('day',day,day,dayValues);
+        var weekStart=sellmonitorGithubOzonWeekStart_(day);
+        addClosedOrderPeriod_('week',weekStart,sellmonitorGithubOzonShiftDay_(weekStart,6),dayValues);
+        var monthStart=day.slice(0,7)+'-01';
+        addClosedOrderPeriod_('month',monthStart,sellmonitorGithubOzonMonthEnd_(monthStart),dayValues);
       });
-      var helperLastFull=lastFullDay||'';
       var helperAdCoverage=adMin&&adMax?adMin+'–'+adMax:'нет подтверждённых строк';
-      var helperNote=newOrderFreshnessNote;
+      var helperNote=newOrderFreshnessNote+' В неполных неделе и месяце сумма рассчитана только по закрытым датам до '+(helperLastFull||'нет подтверждённой даты')+'; текущий неполный день исключён.';
       var helperSpecsForOrders=[
         {name:'06_Магазин_дни',kind:'day'},
         {name:'07_Магазин_недели',kind:'week'},
@@ -6202,7 +6210,7 @@ function sellmonitorGithubPublishOzonSummaryOrders_(payload) {
         var newSeries=Array.from({length:5},function(){return Array(periodCount).fill('');});
         for(var c=0;c<periodCount;c++){
           var period=sellmonitorGithubOzonPerfParsePeriod_(spec.kind,headers[c],shown[c]);
-          if(!period||period.from>coverageTo||period.to<coverageFrom||!helperLastFull||period.to>helperLastFull)continue;
+          if(!period||period.from>coverageTo||period.to<coverageFrom||!helperLastFull||period.from>helperLastFull)continue;
           var key=period.from+'|'+period.to,values=helperData[spec.kind][key]||[0,0,0];
           newSeries[0][c]=values[0];
           newSeries[1][c]=values[1];
