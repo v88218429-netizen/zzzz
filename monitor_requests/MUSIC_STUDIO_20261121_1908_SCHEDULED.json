@@ -1,0 +1,15 @@
+{
+  "task_id": "MUSIC_STUDIO",
+  "query": "домашняя музыкальная студия в частном доме обзор",
+  "extra_queries": [
+    "home recording studio acoustic treatment soundproofing",
+    "домашняя музыкальная студия звукоизоляция акустика",
+    "home music production studio tour"
+  ],
+  "content": "Видео",
+  "limit_video": 2,
+  "limit_shorts": 0,
+  "depth_days": 90,
+  "knowledge_tag": "MUSIC",
+  "language": "ru"
+}
