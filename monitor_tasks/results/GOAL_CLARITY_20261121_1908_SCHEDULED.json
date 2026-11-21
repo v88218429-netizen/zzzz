@@ -1,0 +1,58 @@
+{
+  "task_id": "GOAL_CLARITY",
+  "request": "GOAL_CLARITY_20261121_1908_SCHEDULED.json",
+  "query": "как понять чего я действительно хочу от жизни",
+  "knowledge_tag": "LIFE",
+  "generated_at": "2026-11-21T16:12:51.365784+00:00",
+  "videos": [
+    {
+      "video_id": "h7DZkDLh0MY",
+      "url": "https://www.youtube.com/watch?v=h7DZkDLh0MY",
+      "title": "3 Способа Понять, ЧЕГО Я ХОЧУ на САМОМ ДЕЛЕ",
+      "channel": "Дарья Вексель Психология ПРОТИВ Правил",
+      "duration": 804,
+      "timestamp": null,
+      "query": "как понять чего я действительно хочу от жизни",
+      "kind": "video",
+      "transcript": "transcripts/2026-11-21_GOAL_CLARITY_video_h7DZkDLh0MY.md",
+      "method": "verified GitHub transcript cache"
+    },
+    {
+      "video_id": "Tjiich9v3RE",
+      "url": "https://www.youtube.com/watch?v=Tjiich9v3RE",
+      "title": "Как понять, чего я хочу?",
+      "channel": "Андрей Курпатов",
+      "duration": 2111,
+      "timestamp": null,
+      "query": "как понять чего я действительно хочу от жизни",
+      "kind": "video",
+      "transcript": "transcripts/2026-11-21_GOAL_CLARITY_video_Tjiich9v3RE.md",
+      "method": "verified GitHub transcript cache"
+    },
+    {
+      "video_id": "of4B3aw7MXo",
+      "url": "https://www.youtube.com/watch?v=of4B3aw7MXo",
+      "title": "In 52 seconds I will change you",
+      "channel": "Костя Костёр",
+      "duration": 53,
+      "timestamp": null,
+      "query": "как понять чего я действительно хочу от жизни shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-11-21_GOAL_CLARITY_short_of4B3aw7MXo.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "9KNFssp7x34",
+      "url": "https://www.youtube.com/watch?v=9KNFssp7x34",
+      "title": "ГРЕГ ПЛИТТ - ПРЕВОСХОДСТВО - Грег Плитт Мотивация #shorts",
+      "channel": "ПАЦАНСКИЙ ДВИЖ",
+      "duration": 58,
+      "timestamp": null,
+      "query": "идеальная жизнь упражнение 5 лет shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-11-21_GOAL_CLARITY_short_9KNFssp7x34.md",
+      "method": "FreeTranscriptAPI"
+    }
+  ],
+  "errors": []
+}
