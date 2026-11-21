@@ -3,45 +3,51 @@
   "request": "CAR_20261121_1908_SCHEDULED.json",
   "query": "лучшие семейные автомобили 2026 Россия обзор",
   "knowledge_tag": "CAR",
-  "generated_at": "2026-11-21T16:12:35.726491+00:00",
+  "generated_at": "2026-11-21T16:14:38.976462+00:00",
   "videos": [
     {
-      "video_id": "iwo08AvtRvI",
-      "url": "https://www.youtube.com/watch?v=iwo08AvtRvI",
-      "title": "New Geely EX2, a quick review after purchase #spring2026",
-      "channel": "Жизнь Беларуса",
-      "duration": 132,
+      "video_id": "K0BYFXCB6tw",
+      "url": "https://www.youtube.com/watch?v=K0BYFXCB6tw",
+      "title": "Ford Tourneo",
+      "channel": "JAPAUTOBUY | Автомобили со всего мира",
+      "duration": 888,
       "timestamp": null,
-      "query": "семейный электромобиль 2026 shorts",
-      "kind": "short",
-      "transcript": "transcripts/2026-11-21_CAR_short_iwo08AvtRvI.md",
+      "query": "лучшие семейные автомобили 2026 Россия обзор",
+      "kind": "video",
+      "transcript": "transcripts/2026-11-21_CAR_video_K0BYFXCB6tw.md",
       "method": "FreeTranscriptAPI"
     },
     {
-      "video_id": "SpIX1PDQud0",
-      "url": "https://www.youtube.com/watch?v=SpIX1PDQud0",
-      "title": "Kia India | Kia Syros 2026 | На любой вкус | Эпизод 5",
-      "channel": "Kia India",
-      "duration": 34,
+      "video_id": "G1R_denlV84",
+      "url": "https://www.youtube.com/watch?v=G1R_denlV84",
+      "title": "Самый доступный последовательный гибрид в России. Evolute i-Space | Своими глазами",
+      "channel": "АВТО ПЛЮС",
+      "duration": 768,
       "timestamp": null,
-      "query": "семейный электромобиль 2026 shorts",
+      "query": "лучшие семейные автомобили 2026 Россия обзор",
+      "kind": "video",
+      "transcript": "transcripts/2026-11-21_CAR_video_G1R_denlV84.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "S53NIJe8jOA",
+      "url": "https://www.youtube.com/watch?v=S53NIJe8jOA",
+      "title": "The best family car in every respect.",
+      "channel": "",
+      "duration": 139,
+      "timestamp": null,
+      "query": "премиальный семейный автомобиль реальные расходы",
       "kind": "short",
-      "transcript": "transcripts/2026-11-21_CAR_short_SpIX1PDQud0.md",
+      "transcript": "transcripts/2026-11-21_CAR_short_S53NIJe8jOA.md",
       "method": "FreeTranscriptAPI"
     }
   ],
   "errors": [
     {
-      "video_id": "K0BYFXCB6tw",
-      "url": "https://www.youtube.com/watch?v=K0BYFXCB6tw",
-      "title": "Ford Tourneo",
-      "error": "youtube_captions: \nCould not retrieve a transcript for the video https://www.youtube.com/watch?v=K0BYFXCB6tw! This is most likely caused by:\n\nYouTube is blocking requests from your IP. This usually is due to one of the following reasons:\n- You have done too many requests and your IP has been blocked by YouTube\n- You are doing requests from an IP belonging to a cloud provider (like AWS, Google Cloud Platform, Azure, etc.). Unfortunately, most IPs from cloud providers are blocked by YouTube.\n\nThere are two things you can do to work around this:\n1. Use proxies to hide your IP address, as explained in the \"Working around IP bans\" section of the README (https://github.com/jdepoix/youtube-transcript-api?tab=readme-ov-file#working-around-ip-bans-requestblocked-or-ipblocked-exception).\n2. (NOT REC"
-    },
-    {
-      "video_id": "gIWgBSIwhuE",
-      "url": "https://www.youtube.com/watch?v=gIWgBSIwhuE",
-      "title": "Production of German-made cars will resume in Russia in 2026. BMWs will be the first.",
-      "error": "youtube_captions: \nCould not retrieve a transcript for the video https://www.youtube.com/watch?v=gIWgBSIwhuE! This is most likely caused by:\n\nYouTube is blocking requests from your IP. This usually is due to one of the following reasons:\n- You have done too many requests and your IP has been blocked by YouTube\n- You are doing requests from an IP belonging to a cloud provider (like AWS, Google Cloud Platform, Azure, etc.). Unfortunately, most IPs from cloud providers are blocked by YouTube.\n\nThere are two things you can do to work around this:\n1. Use proxies to hide your IP address, as explained in the \"Working around IP bans\" section of the README (https://github.com/jdepoix/youtube-transcript-api?tab=readme-ov-file#working-around-ip-bans-requestblocked-or-ipblocked-exception).\n2. (NOT REC"
+      "video_id": "ls8UI5Do128",
+      "url": "https://www.youtube.com/watch?v=ls8UI5Do128",
+      "title": "The New 2026 BYD SONG Ultra EV Review & Walkaround",
+      "error": "youtube_captions: \nCould not retrieve a transcript for the video https://www.youtube.com/watch?v=ls8UI5Do128! This is most likely caused by:\n\nYouTube is blocking requests from your IP. This usually is due to one of the following reasons:\n- You have done too many requests and your IP has been blocked by YouTube\n- You are doing requests from an IP belonging to a cloud provider (like AWS, Google Cloud Platform, Azure, etc.). Unfortunately, most IPs from cloud providers are blocked by YouTube.\n\nThere are two things you can do to work around this:\n1. Use proxies to hide your IP address, as explained in the \"Working around IP bans\" section of the README (https://github.com/jdepoix/youtube-transcript-api?tab=readme-ov-file#working-around-ip-bans-requestblocked-or-ipblocked-exception).\n2. (NOT REC"
     }
   ]
 }

@@ -3,42 +3,78 @@
   "request": "WB_MONETIZATION_20261106_1924_SCHEDULED.json",
   "query": "как монетизировать экспертизу Wildberries кроме ведения кабинетов",
   "knowledge_tag": "WB_MONETIZATION",
-  "generated_at": "2026-11-21T16:13:55.510906+00:00",
+  "generated_at": "2026-11-21T16:15:48.543801+00:00",
   "videos": [
     {
-      "video_id": "e2p-TjBry9Y",
-      "url": "https://www.youtube.com/watch?v=e2p-TjBry9Y",
-      "title": "SEO карточки товара за 7 минут | Как поднять продажи на Вайлдберриз?",
-      "channel": "Точка Развития",
-      "duration": 399,
-      "timestamp": null,
-      "query": "сервис для селлеров Wildberries бизнес shorts",
-      "kind": "video",
-      "transcript": "transcripts/2026-11-21_WB_MONETIZATION_video_e2p-TjBry9Y.md",
-      "method": "FreeTranscriptAPI"
-    },
-    {
-      "video_id": "bfK2vXT-XXw",
-      "url": "https://www.youtube.com/watch?v=bfK2vXT-XXw",
-      "title": "Главный секрет SEO-продвижения на Wildberries и Ozon ЧАСТЬ 2",
-      "channel": "Нина Нино",
-      "duration": 835,
-      "timestamp": null,
-      "query": "сервис для селлеров Wildberries бизнес shorts",
-      "kind": "video",
-      "transcript": "transcripts/2026-11-21_WB_MONETIZATION_video_bfK2vXT-XXw.md",
-      "method": "FreeTranscriptAPI"
-    },
-    {
-      "video_id": "GcT7K8faZBs",
-      "url": "https://www.youtube.com/watch?v=GcT7K8faZBs",
-      "title": "Закрытый эфир \"Иммунитет к изменениям на ВБ: реклама, органика, масштабирование\"",
-      "channel": "Михаил Шебзухов. Продажи на Wildberries",
-      "duration": 8745,
+      "video_id": "5QKjeM3nHrA",
+      "url": "https://www.youtube.com/watch?v=5QKjeM3nHrA",
+      "title": "Как собрать команду для работы на маркетплейсе? Создание узнаваемого личного бренда на Wildberries",
+      "channel": "",
+      "duration": 1728,
       "timestamp": null,
       "query": "агентство Wildberries масштабирование",
       "kind": "video",
-      "transcript": "transcripts/2026-11-21_WB_MONETIZATION_video_GcT7K8faZBs.md",
+      "transcript": "transcripts/2026-11-21_WB_MONETIZATION_video_5QKjeM3nHrA.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "nMTjvLHKaKY",
+      "url": "https://www.youtube.com/watch?v=nMTjvLHKaKY",
+      "title": "Интервью с топ 500 селлеров на Wildberries. Сергей Полежака про масштабирование на маркетплейсах",
+      "channel": "",
+      "duration": 3479,
+      "timestamp": null,
+      "query": "агентство Wildberries масштабирование",
+      "kind": "video",
+      "transcript": "transcripts/2026-11-21_WB_MONETIZATION_video_nMTjvLHKaKY.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "KaszLRelWAU",
+      "url": "https://www.youtube.com/watch?v=KaszLRelWAU",
+      "title": "Стратегическое масштабирование на маркетплейсах. Тигран Варданян | Подкаст «Маркетинг и реальность»",
+      "channel": "",
+      "duration": 3330,
+      "timestamp": null,
+      "query": "агентство Wildberries масштабирование",
+      "kind": "video",
+      "transcript": "transcripts/2026-11-21_WB_MONETIZATION_video_KaszLRelWAU.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "N9d28sPLdPc",
+      "url": "https://www.youtube.com/watch?v=N9d28sPLdPc",
+      "title": "Продажи детского коврика для ванной на Wildberries. Аналитика маркетплейса",
+      "channel": "Moneyplace — аналитика маркетплейсов",
+      "duration": 100,
+      "timestamp": null,
+      "query": "продукт для продавцов WB shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-11-21_WB_MONETIZATION_short_N9d28sPLdPc.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "BgQAPKO3Zv4",
+      "url": "https://www.youtube.com/watch?v=BgQAPKO3Zv4",
+      "title": "Продажи профессиональной бумаги для выпечки на Wildberries. Аналитика маркетплейса",
+      "channel": "Moneyplace — аналитика маркетплейсов",
+      "duration": 118,
+      "timestamp": null,
+      "query": "продукт для продавцов WB shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-11-21_WB_MONETIZATION_short_BgQAPKO3Zv4.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "Q2uRTfKD5FA",
+      "url": "https://www.youtube.com/watch?v=Q2uRTfKD5FA",
+      "title": "Как правильно вписывать слова в карточку товара Wildberries для SEO оптимизации, прямое вхождение",
+      "channel": "Дмитрий Shorts коротко о продажах на Wildberries",
+      "duration": 61,
+      "timestamp": null,
+      "query": "продукт для продавцов WB shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-11-21_WB_MONETIZATION_short_Q2uRTfKD5FA.md",
       "method": "FreeTranscriptAPI"
     }
   ],
@@ -54,24 +90,6 @@
       "url": "",
       "title": "как монетизировать экспертизу Wildberries кроме ведения кабинетов shorts",
       "error": "no results"
-    },
-    {
-      "video_id": "XqLpruJ7Ggk",
-      "url": "https://www.youtube.com/watch?v=XqLpruJ7Ggk",
-      "title": "Как работает креатин 2 Часть 1 #Креатин #Здоровье #Shorts",
-      "error": "youtube_captions: \nCould not retrieve a transcript for the video https://www.youtube.com/watch?v=XqLpruJ7Ggk! This is most likely caused by:\n\nYouTube is blocking requests from your IP. This usually is due to one of the following reasons:\n- You have done too many requests and your IP has been blocked by YouTube\n- You are doing requests from an IP belonging to a cloud provider (like AWS, Google Cloud Platform, Azure, etc.). Unfortunately, most IPs from cloud providers are blocked by YouTube.\n\nThere are two things you can do to work around this:\n1. Use proxies to hide your IP address, as explained in the \"Working around IP bans\" section of the README (https://github.com/jdepoix/youtube-transcript-api?tab=readme-ov-file#working-around-ip-bans-requestblocked-or-ipblocked-exception).\n2. (NOT REC"
-    },
-    {
-      "video_id": "DTc-_0t67Co",
-      "url": "https://www.youtube.com/watch?v=DTc-_0t67Co",
-      "title": "Набор для спортсмена — распаковка 4 #Спортпит #Здоровье #Shorts",
-      "error": "youtube_captions: \nCould not retrieve a transcript for the video https://www.youtube.com/watch?v=DTc-_0t67Co! This is most likely caused by:\n\nYouTube is blocking requests from your IP. This usually is due to one of the following reasons:\n- You have done too many requests and your IP has been blocked by YouTube\n- You are doing requests from an IP belonging to a cloud provider (like AWS, Google Cloud Platform, Azure, etc.). Unfortunately, most IPs from cloud providers are blocked by YouTube.\n\nThere are two things you can do to work around this:\n1. Use proxies to hide your IP address, as explained in the \"Working around IP bans\" section of the README (https://github.com/jdepoix/youtube-transcript-api?tab=readme-ov-file#working-around-ip-bans-requestblocked-or-ipblocked-exception).\n2. (NOT REC"
-    },
-    {
-      "video_id": "yiMRXG0vhWs",
-      "url": "https://www.youtube.com/watch?v=yiMRXG0vhWs",
-      "title": "Набор протеин и креатин — смотрим 3 #Креатин #Тренировка #Shorts",
-      "error": "youtube_captions: \nCould not retrieve a transcript for the video https://www.youtube.com/watch?v=yiMRXG0vhWs! This is most likely caused by:\n\nYouTube is blocking requests from your IP. This usually is due to one of the following reasons:\n- You have done too many requests and your IP has been blocked by YouTube\n- You are doing requests from an IP belonging to a cloud provider (like AWS, Google Cloud Platform, Azure, etc.). Unfortunately, most IPs from cloud providers are blocked by YouTube.\n\nThere are two things you can do to work around this:\n1. Use proxies to hide your IP address, as explained in the \"Working around IP bans\" section of the README (https://github.com/jdepoix/youtube-transcript-api?tab=readme-ov-file#working-around-ip-bans-requestblocked-or-ipblocked-exception).\n2. (NOT REC"
     }
   ]
 }
