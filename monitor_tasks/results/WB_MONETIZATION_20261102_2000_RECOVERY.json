@@ -3,31 +3,31 @@
   "request": "WB_MONETIZATION_20261102_2000_RECOVERY.json",
   "query": "как монетизировать экспертизу Wildberries кроме ведения кабинетов",
   "knowledge_tag": "WB_MONETIZATION",
-  "generated_at": "2026-11-21T16:15:20.369947+00:00",
+  "generated_at": "2026-11-21T21:38:27.080896+00:00",
   "videos": [
     {
-      "video_id": "QRbY0WX_5Ec",
-      "url": "https://www.youtube.com/watch?v=QRbY0WX_5Ec",
-      "title": "Это должен знать каждый селлер. В чем секрет УСПЕШНЫХ ПРОДАЖ на Вайлдберриз?",
-      "channel": "Азиз Кенжаев | Е-ком бизнес",
-      "duration": 3500,
+      "video_id": "czw9TBK34HY",
+      "url": "https://www.youtube.com/watch?v=czw9TBK34HY",
+      "title": "SEO на Wildberries и Ozon в 2026 - Что Действительно Работает?",
+      "channel": "Артем Юрьев / Тайны Маркетплейсов / OZON & WB ",
+      "duration": 1518,
       "timestamp": null,
-      "query": "сервис для селлеров Wildberries бизнес",
+      "query": "SaaS для селлеров Wildberries",
       "kind": "video",
-      "transcript": "transcripts/2026-11-21_WB_MONETIZATION_video_QRbY0WX_5Ec.md",
+      "transcript": "transcripts/2026-11-21_WB_MONETIZATION_video_czw9TBK34HY.md",
       "method": "FreeTranscriptAPI"
     },
     {
-      "video_id": "vhILqv6B410",
-      "url": "https://www.youtube.com/watch?v=vhILqv6B410",
-      "title": "Крутой сервис внутренней аналитики на Вайлдберриз. Как выйти в топы? MarketData и Артур Мустафин",
-      "channel": "",
-      "duration": 3188,
+      "video_id": "r5tGROfv5lA",
+      "url": "https://www.youtube.com/watch?v=r5tGROfv5lA",
+      "title": "Самовыкупы на Маркетплейсах: 4 способа, риски и штрафы | Что выбрать селлеру?",
+      "channel": "Артем Юрьев / Тайны Маркетплейсов / OZON & WB ",
+      "duration": 1362,
       "timestamp": null,
-      "query": "сервис для селлеров Wildberries бизнес shorts",
+      "query": "SaaS для селлеров Wildberries",
       "kind": "video",
-      "transcript": "transcripts/2026-11-21_WB_MONETIZATION_video_vhILqv6B410.md",
-      "method": "FreeTranscriptAPI"
+      "transcript": "transcripts/2026-11-21_WB_MONETIZATION_video_r5tGROfv5lA.md",
+      "method": "verified GitHub transcript cache"
     }
   ],
   "errors": [
