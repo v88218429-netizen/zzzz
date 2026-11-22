@@ -226,6 +226,7 @@ jobs:
                       print("STORE=" + store_id + " PHASE=" + phase + " OK=no ERROR=" + last, flush=True)
                       break
                   item = result["stores"][0]
+                  no_source_expected = False
                   if phase == "summary":
                       for period in ("day", "week", "month"):
                           data = item.get(period)
@@ -249,7 +250,8 @@ jobs:
                       matrices = rnp.get("matrices") or []
                       expected_latest = None
                       expected_earliest = None
-                      source_max = item.get("source_max")
+                      source_max = item.get("source_max") or store_result.get("source_max")
+                      no_source_expected = False
                       if source_max and grain == "week":
                           source_day = date.fromisoformat(str(source_max))
                           expected_latest = (source_day - __import__("datetime").timedelta(days=source_day.weekday())).isoformat()
@@ -267,8 +269,21 @@ jobs:
                               phase_end = date(phase_year, phase_month, phase_end_day)
                               source_day = date.fromisoformat(str(source_max)) if source_max else phase_end
                               expected_latest = min(phase_end, source_day).isoformat()
+                              no_source_expected = bool(
+                                  source_max
+                                  and expected_earliest
+                                  and date.fromisoformat(str(source_max)[:10]) < date.fromisoformat(expected_earliest)
+                                  and len(matrices) == 1
+                                  and str(matrices[0].get("target_periods", "")).strip() == "0"
+                                  and not matrices[0].get("source_periods")
+                                  and not matrices[0].get("readback_periods")
+                                  and matrices[0].get("coverage_verified") is True
+                              )
+                              if no_source_expected:
+                                  expected_latest = None
+                                  expected_earliest = None
                       latest_matches = len(matrices) == 1 and (expected_latest is None or matrices[0].get("max") == expected_latest) and (expected_earliest is None or matrices[0].get("min") == expected_earliest)
-                      coverage_matches = len(matrices) == 1 and (matrices[0].get("no_source_data") is True or (matrices[0].get("coverage_verified") is True and matrices[0].get("source_periods") == matrices[0].get("readback_periods")))
+                      coverage_matches = len(matrices) == 1 and (no_source_expected or matrices[0].get("no_source_data") is True or (matrices[0].get("coverage_verified") is True and matrices[0].get("source_periods") == matrices[0].get("readback_periods")))
                       if rnp.get("ok") is not True or rnp.get("readback") is not True or len(matrices) != 1 or matrices[0].get("sheet") != {"day":"01_Дни","week":"02_Недели","month":"03_Месяцы"}[grain] or not latest_matches or not coverage_matches:
                           last = "RNP matrix readback mismatch: " + json.dumps(rnp, ensure_ascii=False)[:1200]
                           errors.append("WB finance RNP readback failed for " + store_id + "/" + grain + ": " + last)
@@ -285,11 +300,12 @@ jobs:
                           print("STORE=" + store_id + " PHASE=dashboard OK=no ERROR=" + last, flush=True)
                           break
                       store_result["dashboard"] = dashboard
+                  phase_no_source_data = bool(no_source_expected or item.get("no_source_data"))
                   source_facts = {
                       "ids": item.get("source_ids") or [],
-                      "rows": item.get("source_rows"),
-                      "min": item.get("source_min"),
-                      "max": item.get("source_max"),
+                      "rows": item.get("source_rows") if item.get("source_rows") is not None else store_result.get("source_rows"),
+                      "min": item.get("source_min") if item.get("source_min") is not None else store_result.get("source_min"),
+                      "max": item.get("source_max") if item.get("source_max") is not None else store_result.get("source_max"),
                   }
                   source_version = hashlib.sha256(json.dumps(source_facts, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
                   verification = "readback=verified"
@@ -304,12 +320,12 @@ jobs:
                       if not summary_header_written:
                           checkpoint_file.write("### Контроль публикации WB\n\n| Кабинет | Период | Фаза | Версия источника | Итог | Проверка чтением | Следующее действие |\n|---|---|---|---|---|---|---|\n")
                           summary_header_written = True
-                      checkpoint_file.write("| " + store_id + " | " + str(item.get("source_min")) + "–" + str(item.get("source_max")) + " | " + phase + " | " + source_version + " | VERIFIED | " + verification + " | " + next_action + " |\n")
+                      checkpoint_file.write("| " + store_id + " | " + str(source_facts["min"]) + "–" + str(source_facts["max"]) + " | " + phase + " | " + source_version + " | " + ("NO_SOURCE_DATA" if phase_no_source_data else "VERIFIED") + " | " + verification + " | " + next_action + " |\n")
                   next_phase = phases[phase_index + 1] if phase_index + 1 < len(phases) else "complete"
                   checkpoint_resume(store_id, next_phase)
                   phase_item = (result.get("stores") or [{}])[0] if isinstance(result, dict) else {}
-                  if phase_item.get("no_source_data"):
-                      print("STORE=" + store_id + " PHASE=" + phase + " STATUS=NO_SOURCE_DATA", flush=True)
+                  if phase_no_source_data:
+                      print("STORE=" + store_id + " PHASE=" + phase + " STATUS=NO_SOURCE_DATA;source_max=" + str(source_facts["max"]), flush=True)
                   else:
                       print("STORE=" + store_id + " PHASE=" + phase + " OK=yes", flush=True)
               missing_state = []
