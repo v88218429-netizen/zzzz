@@ -3,69 +3,69 @@
   "request": "LOCATION_20261122_1948_SCHEDULED.json",
   "query": "лучшие места для жизни с семьей предпринимателю Россия 2026",
   "knowledge_tag": "LOCATION",
-  "generated_at": "2026-11-22T16:51:13.213094+00:00",
+  "generated_at": "2026-11-22T16:54:06.322691+00:00",
   "videos": [
     {
-      "video_id": "nLX8NOtcEw0",
-      "url": "https://www.youtube.com/watch?v=nLX8NOtcEw0",
-      "title": "Guide to Choosing a Country for Emigration in 2026",
-      "channel": "Вадим из Уругвая",
-      "duration": 1415,
+      "video_id": "02EaMc2iEQc",
+      "url": "https://www.youtube.com/watch?v=02EaMc2iEQc",
+      "title": "Переезд в Грузию в 2026: ЗА и ПРОТИВ/ Стоит того?",
+      "channel": "Александр Пеккер | Новостройки Батуми",
+      "duration": 440,
       "timestamp": null,
       "query": "лучшие места для жизни с семьей предпринимателю Россия 2026",
       "kind": "video",
-      "transcript": "transcripts/2026-11-22_LOCATION_video_nLX8NOtcEw0.md",
+      "transcript": "transcripts/2026-11-22_LOCATION_video_02EaMc2iEQc.md",
       "method": "FreeTranscriptAPI"
     },
     {
-      "video_id": "-4KihZPWvMk",
-      "url": "https://www.youtube.com/watch?v=-4KihZPWvMk",
-      "title": "Where to Move from Europe? The Best Countries of 2026",
-      "channel": "Artur Yarilo ",
-      "duration": 1022,
+      "video_id": "Sg15fFNPnPo",
+      "url": "https://www.youtube.com/watch?v=Sg15fFNPnPo",
+      "title": "Where to Move From Russia in 2026? | Kazakhstan, Uzbekistan, Tajikistan, Kyrgyzstan | Migration",
+      "channel": "МАКС ЮРИЧ",
+      "duration": 955,
       "timestamp": null,
       "query": "лучшие места для жизни с семьей предпринимателю Россия 2026",
       "kind": "video",
-      "transcript": "transcripts/2026-11-22_LOCATION_video_-4KihZPWvMk.md",
+      "transcript": "transcripts/2026-11-22_LOCATION_video_Sg15fFNPnPo.md",
       "method": "FreeTranscriptAPI"
     },
     {
-      "video_id": "mR0TMbY7MIw",
-      "url": "https://www.youtube.com/watch?v=mR0TMbY7MIw",
-      "title": "Moving to Belarus in 2026: A Fatal Mistake or the BEST Decision of Your Life?",
-      "channel": "Недвижимость Минска | Дмитрий Новицкий",
-      "duration": 1423,
+      "video_id": "hYzOxtqAeSk",
+      "url": "https://www.youtube.com/watch?v=hYzOxtqAeSk",
+      "title": "Стоит ли переезжать в Германию в 2026 году?",
+      "channel": "Валентина Васильева | Германия пошагово ",
+      "duration": 1269,
       "timestamp": null,
       "query": "лучшие места для жизни с семьей предпринимателю Россия 2026",
       "kind": "video",
-      "transcript": "transcripts/2026-11-22_LOCATION_video_mR0TMbY7MIw.md",
+      "transcript": "transcripts/2026-11-22_LOCATION_video_hYzOxtqAeSk.md",
       "method": "FreeTranscriptAPI"
     },
     {
-      "video_id": "-exRSkZh8W0",
-      "url": "https://www.youtube.com/watch?v=-exRSkZh8W0",
-      "title": "Опрос: в какой район Красноярска вы бы хотели переехать?",
-      "channel": "Новое Утро ТВК Красноярск",
-      "duration": 135,
+      "video_id": "E7tFJAWBNxc",
+      "url": "https://www.youtube.com/watch?v=E7tFJAWBNxc",
+      "title": "BIRYUSINSK/IRKUTSK OBLAST/CITIES OF RUSSIA/Tourism/Travel",
+      "channel": "Tora, Go Travel!",
+      "duration": 128,
       "timestamp": null,
       "query": "лучшие города России для жизни с семьей 2026 shorts",
       "kind": "short",
-      "transcript": "transcripts/2026-11-22_LOCATION_short_-exRSkZh8W0.md",
+      "transcript": "transcripts/2026-11-22_LOCATION_short_E7tFJAWBNxc.md",
       "method": "FreeTranscriptAPI"
     }
   ],
   "errors": [
     {
-      "video_id": "E7tFJAWBNxc",
-      "url": "https://www.youtube.com/watch?v=E7tFJAWBNxc",
-      "title": "BIRYUSINSK/IRKUTSK OBLAST/CITIES OF RUSSIA/Tourism/Travel",
-      "error": "youtube_captions: \nCould not retrieve a transcript for the video https://www.youtube.com/watch?v=E7tFJAWBNxc! This is most likely caused by:\n\nYouTube is blocking requests from your IP. This usually is due to one of the following reasons:\n- You have done too many requests and your IP has been blocked by YouTube\n- You are doing requests from an IP belonging to a cloud provider (like AWS, Google Cloud Platform, Azure, etc.). Unfortunately, most IPs from cloud providers are blocked by YouTube.\n\nThere are two things you can do to work around this:\n1. Use proxies to hide your IP address, as explained in the \"Working around IP bans\" section of the README (https://github.com/jdepoix/youtube-transcript-api?tab=readme-ov-file#working-around-ip-bans-requestblocked-or-ipblocked-exception).\n2. (NOT REC"
-    },
-    {
       "video_id": "BgxMiSvyiUQ",
       "url": "https://www.youtube.com/watch?v=BgxMiSvyiUQ",
       "title": "Новый современный дом в г.Абинске на Юге России!",
       "error": "youtube_captions: \nCould not retrieve a transcript for the video https://www.youtube.com/watch?v=BgxMiSvyiUQ! This is most likely caused by:\n\nYouTube is blocking requests from your IP. This usually is due to one of the following reasons:\n- You have done too many requests and your IP has been blocked by YouTube\n- You are doing requests from an IP belonging to a cloud provider (like AWS, Google Cloud Platform, Azure, etc.). Unfortunately, most IPs from cloud providers are blocked by YouTube.\n\nThere are two things you can do to work around this:\n1. Use proxies to hide your IP address, as explained in the \"Working around IP bans\" section of the README (https://github.com/jdepoix/youtube-transcript-api?tab=readme-ov-file#working-around-ip-bans-requestblocked-or-ipblocked-exception).\n2. (NOT REC"
+    },
+    {
+      "video_id": "kWRoREpyYFk",
+      "url": "https://www.youtube.com/watch?v=kWRoREpyYFk",
+      "title": "Продажа дома в станице Натухаевская",
+      "error": "youtube_captions: \nCould not retrieve a transcript for the video https://www.youtube.com/watch?v=kWRoREpyYFk! This is most likely caused by:\n\nYouTube is blocking requests from your IP. This usually is due to one of the following reasons:\n- You have done too many requests and your IP has been blocked by YouTube\n- You are doing requests from an IP belonging to a cloud provider (like AWS, Google Cloud Platform, Azure, etc.). Unfortunately, most IPs from cloud providers are blocked by YouTube.\n\nThere are two things you can do to work around this:\n1. Use proxies to hide your IP address, as explained in the \"Working around IP bans\" section of the README (https://github.com/jdepoix/youtube-transcript-api?tab=readme-ov-file#working-around-ip-bans-requestblocked-or-ipblocked-exception).\n2. (NOT REC"
     }
   ]
 }
