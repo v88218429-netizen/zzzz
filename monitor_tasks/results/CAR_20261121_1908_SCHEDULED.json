@@ -3,34 +3,28 @@
   "request": "CAR_20261121_1908_SCHEDULED.json",
   "query": "лучшие семейные автомобили 2026 Россия обзор",
   "knowledge_tag": "CAR",
-  "generated_at": "2026-11-21T21:37:59.484985+00:00",
+  "generated_at": "2026-11-22T16:49:46.323129+00:00",
   "videos": [
     {
-      "video_id": "gIWgBSIwhuE",
-      "url": "https://www.youtube.com/watch?v=gIWgBSIwhuE",
-      "title": "Production of German-made cars will resume in Russia in 2026. BMWs will be the first.",
-      "channel": "AvtoREVIZORRO",
-      "duration": 830,
+      "video_id": "Ld7EMaUpjqQ",
+      "url": "https://www.youtube.com/watch?v=Ld7EMaUpjqQ",
+      "title": "FACT: WHICH HYBRID IS THE BEST 2026? (Record 47% ICE efficiency on gasoline)",
+      "channel": "Big Look Auto - Интересно об автомобилях",
+      "duration": 789,
       "timestamp": null,
       "query": "лучшие семейные автомобили 2026 Россия обзор",
       "kind": "video",
-      "transcript": "transcripts/2026-11-21_CAR_video_gIWgBSIwhuE.md",
-      "method": "FreeTranscriptAPI"
-    },
-    {
-      "video_id": "eB2hBXQVGhY",
-      "url": "https://www.youtube.com/watch?v=eB2hBXQVGhY",
-      "title": "2026 GAC M6 Max — Did the Best Family Minivan Get Even Better? Honest Review",
-      "channel": "АвтоФренд",
-      "duration": 323,
-      "timestamp": null,
-      "query": "лучшие семейные автомобили 2026 Россия обзор",
-      "kind": "video",
-      "transcript": "transcripts/2026-11-21_CAR_video_eB2hBXQVGhY.md",
+      "transcript": "transcripts/2026-11-22_CAR_video_Ld7EMaUpjqQ.md",
       "method": "FreeTranscriptAPI"
     }
   ],
   "errors": [
+    {
+      "video_id": "bfE4tXLmwXU",
+      "url": "https://www.youtube.com/watch?v=bfE4tXLmwXU",
+      "title": "You Have 2 Million: What to Buy in 2026? 7 Actually Good Options",
+      "error": "youtube_captions: \nCould not retrieve a transcript for the video https://www.youtube.com/watch?v=bfE4tXLmwXU! This is most likely caused by:\n\nYouTube is blocking requests from your IP. This usually is due to one of the following reasons:\n- You have done too many requests and your IP has been blocked by YouTube\n- You are doing requests from an IP belonging to a cloud provider (like AWS, Google Cloud Platform, Azure, etc.). Unfortunately, most IPs from cloud providers are blocked by YouTube.\n\nThere are two things you can do to work around this:\n1. Use proxies to hide your IP address, as explained in the \"Working around IP bans\" section of the README (https://github.com/jdepoix/youtube-transcript-api?tab=readme-ov-file#working-around-ip-bans-requestblocked-or-ipblocked-exception).\n2. (NOT REC"
+    },
     {
       "video_id": "ls8UI5Do128",
       "url": "https://www.youtube.com/watch?v=ls8UI5Do128",
