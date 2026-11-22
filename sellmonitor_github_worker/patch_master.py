@@ -1484,6 +1484,110 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
         raise SystemExit("OZON_GRAPH_LABEL_FRESHNESS_PATCH_PARTIAL")
 
 
+    # Keep Seller API order chart titles synchronized with the published week and month coverage.
+    order_period_chart_marker = "OZON_ORDER_PERIOD_CHART_TITLES_V1"
+    if order_period_chart_marker not in worker_text:
+        title_anchor = "    var dailyOrderChartTitle='Дни · '+cfg.name+' · Seller API: уникальные заказы · '+firstDayLabel+'–'+lastFullDayLabel+'; только полные дни';"
+        title_code = """    /* OZON_ORDER_PERIOD_CHART_TITLES_V1 */
+    function ozonOrderPeriodChartDateLabel_(key,pattern){
+      return Utilities.formatDate(new Date(String(key)+'T12:00:00Z'),'UTC',pattern||'dd.MM.yyyy');
+    }
+    var orderChartStart=String(agg.minDay||lastFullDay);
+    var firstWeekStart=sellmonitorGithubOzonWeekStart_(orderChartStart);
+    var lastWeekStart=sellmonitorGithubOzonWeekStart_(lastFullDay);
+    var lastWeekEnd=sellmonitorGithubOzonShiftDay_(lastWeekStart,6);
+    var weekRangeStartLabel=ozonOrderPeriodChartDateLabel_(firstWeekStart,firstWeekStart.slice(0,4)===lastWeekEnd.slice(0,4)?'dd.MM':'dd.MM.yyyy');
+    var weekRangeEndLabel=ozonOrderPeriodChartDateLabel_(lastWeekEnd,'dd.MM.yyyy');
+    var firstWeekPartial=orderChartStart!==firstWeekStart;
+    var lastWeekPartial=lastFullDay!==lastWeekEnd;
+    var weekPartialLabel=firstWeekPartial&&lastWeekPartial?'крайние недели неполные':
+      (firstWeekPartial?'первая неделя неполная':(lastWeekPartial?'последняя неделя неполная':'все недели полные'));
+    var weekOrderChartTitle='Недели · '+cfg.name+' · Seller API: уникальные заказы · '+weekRangeStartLabel+'–'+weekRangeEndLabel+'; '+weekPartialLabel;
+    var orderChartMonthNames=['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
+    var firstMonthIndex=Number(orderChartStart.slice(5,7))-1,lastMonthIndex=Number(lastFullDay.slice(5,7))-1;
+    var firstMonthYear=Number(orderChartStart.slice(0,4)),lastMonthYear=Number(lastFullDay.slice(0,4));
+    var monthRangeLabel=firstMonthYear===lastMonthYear?
+      orderChartMonthNames[firstMonthIndex]+'–'+orderChartMonthNames[lastMonthIndex]+' '+lastMonthYear:
+      orderChartMonthNames[firstMonthIndex]+' '+firstMonthYear+'–'+orderChartMonthNames[lastMonthIndex]+' '+lastMonthYear;
+    var firstMonthPartial=orderChartStart.slice(8,10)!=='01';
+    var lastMonthEnd=sellmonitorGithubOzonMonthEnd_(lastFullDay.slice(0,7)+'-01');
+    var lastMonthPartial=lastFullDay!==lastMonthEnd;
+    var monthPartialLabel=firstMonthPartial&&lastMonthPartial&&firstMonthIndex!==lastMonthIndex?
+      orderChartMonthNames[firstMonthIndex]+' и '+orderChartMonthNames[lastMonthIndex]+' неполные':
+      (firstMonthPartial&&lastMonthPartial?orderChartMonthNames[firstMonthIndex]+' неполный':
+        (firstMonthPartial?orderChartMonthNames[firstMonthIndex]+' неполный':
+          (lastMonthPartial?orderChartMonthNames[lastMonthIndex]+' неполный':'все месяцы полные')));
+    var monthOrderChartTitle='Месяцы · '+cfg.name+' · Seller API: уникальные заказы · '+monthRangeLabel+'; '+monthPartialLabel;
+    var periodOrderChartSpecs=[
+      {kind:'week',prefix:'Недели · '+cfg.name+' · Seller API: уникальные заказы ·',title:weekOrderChartTitle},
+      {kind:'month',prefix:'Месяцы · '+cfg.name+' · Seller API: уникальные заказы ·',title:monthOrderChartTitle}
+    ];
+    var periodOrderChartMatches={week:0,month:0},periodOrderChartUpdated=false;"""
+        if worker_text.count(title_anchor) != 1:
+            raise SystemExit("OZON_ORDER_PERIOD_CHART_TITLE_ANCHOR_MISMATCH")
+        worker_text = worker_text.replace(title_anchor,title_anchor + "\n" + title_code,1)
+
+        update_anchor = "    SpreadsheetApp.flush();\n    var graphNoteReadback=String(graphSheet.getRange('A2').getValue()||'')===newGraphNote;"
+        update_code = """    if(lastFullDay){
+      graphSheet.getCharts().forEach(function(ch){
+        var oldTitle=String(ch.getOptions().get('title')||'');
+        periodOrderChartSpecs.forEach(function(spec){
+          if(oldTitle.indexOf(spec.prefix)!==0)return;
+          periodOrderChartMatches[spec.kind]++;
+          if(oldTitle===spec.title)return;
+          archived+=sellmonitorGithubOzonArchive_(archive,'10_Графики_магазина','chart:'+ch.getChartId()+':title',[[oldTitle]],sourceUpdated,archiveId);
+          graphSheet.updateChart(ch.modify().setOption('title',spec.title).build());
+          periodOrderChartUpdated=true;
+        });
+      });
+    }
+    SpreadsheetApp.flush();
+    var periodOrderChartTitlesReadback=!lastFullDay||periodOrderChartSpecs.every(function(spec){
+      var exact=graphSheet.getCharts().filter(function(ch){return String(ch.getOptions().get('title')||'')===spec.title;}).length;
+      return periodOrderChartMatches[spec.kind]===1&&exact===1;
+    });"""
+        if worker_text.count(update_anchor) != 1:
+            raise SystemExit("OZON_ORDER_PERIOD_CHART_UPDATE_ANCHOR_MISMATCH")
+        worker_text = worker_text.replace(update_anchor,update_code + "\n    var graphNoteReadback=String(graphSheet.getRange('A2').getValue()||'')===newGraphNote;",1)
+
+        gate_options = [
+          "    if(!graphNoteReadback||!graphCaptionReadback||!dailyOrderChartReadback||(lastFullDay&&dailyOrderChartMatches!==1))",
+          "    if(!graphNoteReadback||!dailyOrderChartReadback||(lastFullDay&&dailyOrderChartMatches!==1))"
+        ]
+        gate_anchor = next((candidate for candidate in gate_options if worker_text.count(candidate)==1),None)
+        if not gate_anchor:
+            raise SystemExit("OZON_ORDER_PERIOD_CHART_READBACK_GATE_ANCHOR_MISMATCH")
+        gate_replacement = gate_anchor[:-1] + "||!periodOrderChartTitlesReadback)"
+        worker_text = worker_text.replace(gate_anchor,gate_replacement,1)
+
+        hash_anchor = "daily_order_chart_title:lastFullDay?dailyOrderChartTitle:''});"
+        if worker_text.count(hash_anchor) != 1:
+            raise SystemExit("OZON_ORDER_PERIOD_CHART_HASH_ANCHOR_MISMATCH")
+        worker_text = worker_text.replace(hash_anchor,
+            "daily_order_chart_title:lastFullDay?dailyOrderChartTitle:'',period_order_chart_titles:lastFullDay?periodOrderChartSpecs.map(function(x){return x.title;}):[]});",1)
+
+        result_anchor = "daily_order_chart_readback:dailyOrderChartReadback,charts:charts.length"
+        if worker_text.count(result_anchor) != 1:
+            raise SystemExit("OZON_ORDER_PERIOD_CHART_RESULT_ANCHOR_MISMATCH")
+        worker_text = worker_text.replace(result_anchor,
+            "daily_order_chart_readback:dailyOrderChartReadback,period_order_chart_titles:periodOrderChartSpecs.map(function(x){return x.title;}),period_order_chart_updated:periodOrderChartUpdated,period_order_chart_readback:periodOrderChartTitlesReadback,charts:charts.length",1)
+
+        period_versions = re.findall(r"VERSION:\s*'github-worker-(\d+)\.(\d+)\.(\d+)'",worker_text)
+        if len(period_versions)!=1:
+            raise SystemExit("OZON_ORDER_PERIOD_CHART_VERSION_PATTERN_MISMATCH")
+        period_major,period_minor,period_patch=[int(value) for value in period_versions[0]]
+        period_current=".".join(str(value) for value in (period_major,period_minor,period_patch))
+        period_next=".".join(str(value) for value in (period_major,period_minor,period_patch+1))
+        period_version_anchor="VERSION: 'github-worker-"+period_current+"'"
+        if worker_text.count(period_version_anchor)!=1:
+            raise SystemExit("OZON_ORDER_PERIOD_CHART_VERSION_ANCHOR_MISMATCH")
+        worker_text=worker_text.replace(period_version_anchor,"VERSION: 'github-worker-"+period_next+"'",1)
+        print("OZON_ORDER_PERIOD_CHART_WORKER_VERSION="+period_current+"->"+period_next)
+        print("OZON_ORDER_PERIOD_CHART_TITLES=patched")
+    elif "periodOrderChartTitlesReadback" not in worker_text or "period_order_chart_titles:" not in worker_text:
+        raise SystemExit("OZON_ORDER_PERIOD_CHART_TITLES_PATCH_PARTIAL")
+
+
     # Read-only shape check for the existing WB raw report and expense APIs.
     # It records units and per-operation totals without item identifiers or raw rows.
     finance_shape_marker = "INNER_FINANCE_RAW_REPORT_FIELD_SHAPE_V8"
