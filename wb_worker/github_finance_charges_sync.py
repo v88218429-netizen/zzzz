@@ -4,6 +4,8 @@ import csv
 import datetime as dt
 import json
 import os
+import time
+from email.utils import parsedate_to_datetime
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
@@ -543,6 +545,81 @@ def _write_sheet_csv(path: Path, rows: list[list[Any]]) -> None:
 
 
 
+def _retry_delay_seconds(response: httpx.Response | None, attempt: int) -> float:
+    fallback = min(60.0, 5.0 * (2 ** (attempt - 1)))
+    if response is None:
+        return fallback
+    value = response.headers.get("Retry-After", "").strip()
+    if not value:
+        return fallback
+    try:
+        return max(1.0, float(value))
+    except ValueError:
+        try:
+            retry_at = parsedate_to_datetime(value)
+            if retry_at.tzinfo is None:
+                retry_at = retry_at.replace(tzinfo=dt.timezone.utc)
+            now = dt.datetime.now(dt.timezone.utc)
+            return max(1.0, (retry_at - now).total_seconds())
+        except (TypeError, ValueError, OverflowError):
+            return fallback
+
+
+class BridgeRetriesExhausted(RuntimeError):
+    """A temporary bridge failure persisted through the bounded retry budget."""
+
+
+def _bridge_post_with_retry(
+    client: httpx.Client,
+    payload: dict,
+    *,
+    context: str,
+    max_attempts: int = 3,
+) -> tuple[Any, int]:
+    transient_statuses = {408, 429, 500, 502, 503, 504}
+    for attempt in range(1, max_attempts + 1):
+        response: httpx.Response | None = None
+        error_kind: str | None = None
+        try:
+            response = client.post(BRIDGE_URL, json=payload)
+        except httpx.TransportError as exc:
+            error_kind = type(exc).__name__
+            if attempt >= max_attempts:
+                raise BridgeRetriesExhausted(
+                    f"bridge transport retries exhausted for {context} ({error_kind})"
+                ) from exc
+
+        if response is not None and response.status_code in transient_statuses:
+            error_kind = f"HTTP_{response.status_code}"
+            if attempt >= max_attempts:
+                raise BridgeRetriesExhausted(
+                    f"bridge temporary HTTP retries exhausted for {context} ({error_kind})"
+                )
+        elif response is not None:
+            response.raise_for_status()
+            try:
+                return response.json(), attempt
+            except json.JSONDecodeError as exc:
+                error_kind = "InvalidJSON"
+                if attempt >= max_attempts:
+                    raise BridgeRetriesExhausted(
+                        f"bridge response decoding retries exhausted for {context} ({error_kind})"
+                    ) from exc
+
+        delay = _retry_delay_seconds(response, attempt)
+        print(json.dumps({
+            "event": "wb_finance_bridge_retry",
+            "context": context,
+            "attempt": attempt,
+            "next_attempt": attempt + 1,
+            "wait_seconds": round(delay, 1),
+            "error": error_kind or "TransientFailure",
+        }, ensure_ascii=False, sort_keys=True), flush=True)
+        time.sleep(delay)
+
+    raise BridgeRetriesExhausted(f"bridge retries exhausted for {context}")
+
+
 def _publish_legacy_penalties(key: str, sync_run_id: str) -> None:
     path = OUT_DIR / "penalties_sheet.csv"
     if not path.exists():
@@ -568,19 +645,12 @@ def _publish_legacy_penalties(key: str, sync_run_id: str) -> None:
     encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     if len(encoded) > MAX_REQUEST_BYTES:
         raise RuntimeError("Penalty publication payload exceeds safe limit")
-    with httpx.Client(timeout=httpx.Timeout(180.0, connect=15.0), follow_redirects=True) as client:
-        result = None
-        for attempt in range(2):
-            response = client.post(BRIDGE_URL, json=payload)
-            response.raise_for_status()
-            try:
-                result = response.json()
-                break
-            except json.JSONDecodeError:
-                if attempt:
-                    raise RuntimeError("Google Sheets bridge returned an empty or invalid response twice")
-                import time
-                time.sleep(5)
+    with httpx.Client(timeout=httpx.Timeout(60.0, connect=15.0), follow_redirects=True) as client:
+        result, attempts = _bridge_post_with_retry(
+            client,
+            payload,
+            context="penalty_snapshot",
+        )
     if not isinstance(result, dict) or result.get("ok") is not True or result.get("action") != "publish_wb_penalties_snapshot":
         detail = str((result or {}).get("error") or (result or {}).get("message") or "unknown bridge response")[:240]
         raise RuntimeError(f"Google Sheets bridge rejected penalty publication: {detail}")
@@ -588,13 +658,16 @@ def _publish_legacy_penalties(key: str, sync_run_id: str) -> None:
         raise RuntimeError("Penalty publication row-count mismatch")
     print(json.dumps({
         "penalty_snapshot": "OK",
+        "status": "VERIFIED_BY_BRIDGE",
         "spreadsheet_id": result.get("spreadsheet_id"),
         "sheet": result.get("sheet"),
         "rows": result.get("written"),
         "min_date": result.get("min_date"),
         "max_date": result.get("max_date"),
+        "attempts": attempts,
         "sync_run_id": sync_run_id,
     }, ensure_ascii=False, sort_keys=True), flush=True)
+
 
 def _publish() -> None:
     path = OUT_DIR / "charges_all.csv"
@@ -628,42 +701,117 @@ def _publish() -> None:
         raise RuntimeError("Google Sheets bridge URL is not configured")
 
     sync_run_id = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
-    with httpx.Client(timeout=httpx.Timeout(180.0, connect=15.0), follow_redirects=True) as client:
+    failures: list[dict[str, str]] = []
+    with httpx.Client(timeout=httpx.Timeout(60.0, connect=15.0), follow_redirects=True) as client:
         for (shop, month), rows in sorted(groups.items()):
+            context = f"{shop}/{month}"
             natural_keys = [(row[5][:10], row[6]) for row in rows]
             if len(set(natural_keys)) != len(natural_keys):
-                raise RuntimeError(f"Duplicate WB finance natural key in {shop}/{month}")
+                failures.append({"context": context, "status": "FAILED_VALIDATION", "error": "DuplicateNaturalKey"})
+                print(json.dumps({
+                    "event": "wb_finance_partition",
+                    "shop": shop,
+                    "month": month,
+                    "status": "FAILED_VALIDATION",
+                    "error": "DuplicateNaturalKey",
+                }, ensure_ascii=False, sort_keys=True), flush=True)
+                continue
             payload = {
                 "token": key,
                 "action": "publish_wb_finance",
                 "shop": shop,
                 "month": month,
                 "sync_run_id": sync_run_id,
+                "operation_id": f"WB|{shop}|{month}|finance-charge-month-v1",
                 "rows": rows,
             }
             encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
             if len(encoded) > MAX_REQUEST_BYTES:
-                raise RuntimeError(f"Finance publication payload exceeds safe limit for {shop}/{month}")
-            response = client.post(BRIDGE_URL, json=payload)
-            response.raise_for_status()
-            result = response.json()
-            if not isinstance(result, dict) or result.get("ok") is not True or result.get("action") != "publish_wb_finance":
-                detail = str((result or {}).get("error") or (result or {}).get("message") or "unknown bridge response")[:240]
-                raise RuntimeError(f"Google Sheets bridge rejected finance publication for {shop}/{month}: {detail}")
-            if result.get("written") != len(rows) or result.get("distinct_keys") != len(rows):
-                raise RuntimeError(f"WB finance partition row-count mismatch for {shop}/{month}")
-            print(json.dumps({
-                "finance_partition": "OK",
-                "shop": shop,
-                "month": month,
-                "rows": len(rows),
-                "added": result.get("added"),
-                "updated": result.get("updated"),
-                "min_date": result.get("min_date"),
-                "max_date": result.get("max_date"),
-            }, ensure_ascii=False, sort_keys=True), flush=True)
+                failures.append({"context": context, "status": "FAILED_VALIDATION", "error": "PayloadTooLarge"})
+                print(json.dumps({
+                    "event": "wb_finance_partition",
+                    "shop": shop,
+                    "month": month,
+                    "status": "FAILED_VALIDATION",
+                    "error": "PayloadTooLarge",
+                }, ensure_ascii=False, sort_keys=True), flush=True)
+                continue
+            try:
+                result, attempts = _bridge_post_with_retry(
+                    client,
+                    payload,
+                    context=context,
+                )
+                if not isinstance(result, dict) or result.get("ok") is not True or result.get("action") != "publish_wb_finance":
+                    detail = str((result or {}).get("error") or (result or {}).get("message") or "unknown bridge response")[:240]
+                    raise RuntimeError(f"Google Sheets bridge rejected finance publication: {detail}")
+                if result.get("written") != len(rows) or result.get("distinct_keys") != len(rows):
+                    raise RuntimeError("WB finance partition row-count mismatch")
+                print(json.dumps({
+                    "finance_partition": "OK",
+                    "status": "VERIFIED_BY_BRIDGE",
+                    "shop": shop,
+                    "month": month,
+                    "rows": len(rows),
+                    "added": result.get("added"),
+                    "updated": result.get("updated"),
+                    "min_date": result.get("min_date"),
+                    "max_date": result.get("max_date"),
+                    "attempts": attempts,
+                    "operation_id": payload["operation_id"],
+                }, ensure_ascii=False, sort_keys=True), flush=True)
+            except BridgeRetriesExhausted as exc:
+                failures.append({"context": context, "status": "RETRY_REQUIRED", "error": type(exc).__name__})
+                print(json.dumps({
+                    "event": "wb_finance_partition",
+                    "shop": shop,
+                    "month": month,
+                    "status": "RETRY_REQUIRED",
+                    "error": type(exc).__name__,
+                    "next_attempt": "next scheduled run replays idempotent period upsert",
+                }, ensure_ascii=False, sort_keys=True), flush=True)
+            except Exception as exc:
+                failures.append({"context": context, "status": "FAILED_VERIFICATION", "error": type(exc).__name__})
+                print(json.dumps({
+                    "event": "wb_finance_partition",
+                    "shop": shop,
+                    "month": month,
+                    "status": "FAILED_VERIFICATION",
+                    "error": type(exc).__name__,
+                    "next_attempt": "inspect failure before claiming verified",
+                }, ensure_ascii=False, sort_keys=True), flush=True)
 
-    _publish_legacy_penalties(key, sync_run_id)
+    try:
+        _publish_legacy_penalties(key, sync_run_id)
+    except BridgeRetriesExhausted as exc:
+        failures.append({"context": "penalty_snapshot", "status": "RETRY_REQUIRED", "error": type(exc).__name__})
+        print(json.dumps({
+            "event": "wb_finance_penalties",
+            "status": "RETRY_REQUIRED",
+            "error": type(exc).__name__,
+            "next_attempt": "next scheduled run",
+        }, ensure_ascii=False, sort_keys=True), flush=True)
+    except Exception as exc:
+        failures.append({"context": "penalty_snapshot", "status": "FAILED_VERIFICATION", "error": type(exc).__name__})
+        print(json.dumps({
+            "event": "wb_finance_penalties",
+            "status": "FAILED_VERIFICATION",
+            "error": type(exc).__name__,
+        }, ensure_ascii=False, sort_keys=True), flush=True)
+
+    if failures:
+        print(json.dumps({
+            "event": "wb_finance_publish_summary",
+            "status": "RETRY_REQUIRED",
+            "failed_phases": failures,
+            "completed_partitions_are_retained": True,
+            "next_attempt": "scheduled run re-fetches the rolling 30-day window and idempotently upserts by shop, month, RR Date and RRD ID",
+        }, ensure_ascii=False, sort_keys=True), flush=True)
+        retryable = sum(1 for item in failures if item["status"] == "RETRY_REQUIRED")
+        permanent = len(failures) - retryable
+        raise RuntimeError(
+            f"WB finance publication incomplete: retry_required={retryable}; failed_verification={permanent}"
+        )
 
 async def main() -> int:
     parser = argparse.ArgumentParser()
