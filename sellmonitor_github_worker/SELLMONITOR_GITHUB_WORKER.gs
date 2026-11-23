@@ -5685,6 +5685,13 @@ function sellmonitorGithubPublishOzonPerformanceDaily_(body) {
       for(var j=0;j<vals.length;j++)newRows[j][col]=vals[j];
     }
     var rowsChanged=axisChanged||newRows.some(function(row,i){return JSON.stringify(row)!==JSON.stringify(oldRows[i]||[]);});
+    var percentMetricRows=[13,16,17];
+    percentMetricRows.forEach(function(metricRow){
+      if(!usedCount)return;
+      var priorFormats=sh.getRange(metricRow,startCol,1,usedCount).getNumberFormats()[0];
+      if(priorFormats.some(function(pattern){return pattern!=='0.00%';}))
+        helperArchive.push({sheet:spec.name,range:'F'+metricRow+':'+colLabel_(startCol+usedCount-1)+metricRow,values:[priorFormats]});
+    });
     var oldNote=sh.getRange('A1').getValue();
     if(rowsChanged){for(var j=0;j<oldRows.length;j++)if(oldRows[j].length)helperArchive.push({sheet:spec.name,range:'F'+(spec.firstMetricRow+j)+':'+colLabel_(startCol+oldCount-1)+(spec.firstMetricRow+j),values:oldRows[j]});}
     if(String(oldNote||'')!==spec.note)helperArchive.push({sheet:spec.name,range:'A1',values:[oldNote]});
@@ -5751,6 +5758,9 @@ function sellmonitorGithubPublishOzonPerformanceDaily_(body) {
     if(x.rowsChanged){
       x.newRows.forEach(function(row,i){x.sh.getRange(x.spec.firstMetricRow+i,x.startCol,1,row.length).setValues([row]);});
     }
+    if(['day','week','month'].indexOf(x.spec.kind)>=0){
+      [13,16,17].forEach(function(metricRow){x.sh.getRange(metricRow,x.startCol,1,x.headers.length).setNumberFormat('0.00%');});
+    }
     if(x.note!==undefined)x.sh.getRange(x.spec.kind==='note'||x.spec.kind==='rnpnote'?'A2':'A1').setValue(x.note);
   });
   dailySheet.getRange('A1').setValue(dailySheetTitle);
@@ -5774,6 +5784,12 @@ function sellmonitorGithubPublishOzonPerformanceDaily_(body) {
   var periodCheck=periodSheet.getLastRow()>=3?periodSheet.getRange(3,26,periodSheet.getLastRow()-2,1).getValues().map(function(r){return String(r[0]||'');}):[];
   var dailyOk=dailyKeys.every(function(k){return dailyCheck.indexOf(k)>=0;});
   var periodOk=periodKeys.every(function(k){return periodCheck.indexOf(k)>=0;});
+  var percentFormatsOk=helperWrites.filter(function(x){return ['day','week','month'].indexOf(x.spec.kind)>=0;}).every(function(x){
+    return [13,16,17].every(function(metricRow){
+      var formats=x.sh.getRange(metricRow,x.startCol,1,x.headers.length).getNumberFormats()[0];
+      return formats.length===x.headers.length&&formats.every(function(pattern){return pattern==='0.00%';});
+    });
+  });
   var aggregatesOk=helperWrites.every(function(x){
     if(!x.rowsChanged)return true;
     for(var i=0;i<x.newRows.length;i++){
@@ -5796,14 +5812,14 @@ function sellmonitorGithubPublishOzonPerformanceDaily_(body) {
     var ranges=chart.getRanges();
     return expected.checks.every(function(check){return ranges.some(function(r){return r.getSheet().getName()===check.sheet&&r.getColumn()===check.start&&r.getLastColumn()>=check.end;});});
   });
-  if(!dailyOk||!periodOk||!aggregatesOk||!axesOk||!rnpNoteReadback||!chartRangesOk)throw new Error('OZON_PERF_READBACK_FAILED:'+cfg.name+':'+dailyOk+':'+periodOk+':'+aggregatesOk+':'+axesOk+':'+rnpNoteReadback+':'+chartRangesOk);
+  if(!dailyOk||!periodOk||!aggregatesOk||!percentFormatsOk||!axesOk||!rnpNoteReadback||!chartRangesOk)throw new Error('OZON_PERF_READBACK_FAILED:'+cfg.name+':'+dailyOk+':'+periodOk+':'+aggregatesOk+':'+percentFormatsOk+':'+axesOk+':'+rnpNoteReadback+':'+chartRangesOk);
   var charts=chartsAfter.length;
   if(charts<1)throw new Error('OZON_PERF_CHARTS_MISSING:'+cfg.name);
   return {ok:true,action:'publish_ozon_performance_daily',store:cfg.name,coverage_from:coverageFrom,coverage_to:coverageTo,
     source_daily_rows:inputDaily.length,daily_added:dailyAdded,daily_changed:dailyChanges.length,daily_archived:dailyChanges.length,
     source_period_rows:inputPeriods.length,period_added:periodsAdded,period_changed:periodChanges.length,period_archived:periodChanges.length,
     archived_rows:archiveRows.length,archive_sheet:archiveTab.getName(),readback:true,daily_keys_readback:dailyKeys.length,
-    period_keys_readback:periodKeys.length,helper_readback:aggregatesOk,axes_readback:axesOk,rnp_note_readback:rnpNoteReadback,chart_ranges_updated:chartRangesUpdated,chart_ranges_readback:chartRangesOk,charts:charts,
+    period_keys_readback:periodKeys.length,helper_readback:aggregatesOk,percent_formats_readback:percentFormatsOk,axes_readback:axesOk,rnp_note_readback:rnpNoteReadback,chart_ranges_updated:chartRangesUpdated,chart_ranges_readback:chartRangesOk,charts:charts,
     daily_sha256:sellmonitorGithubOzonPerfDigest_(dailyKeys.map(function(k){return dailyMap[k];})),
     period_sha256:sellmonitorGithubOzonPerfDigest_(periodKeys.map(function(k){return periodMap[k];}))};
 }
