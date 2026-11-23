@@ -111,6 +111,12 @@ function sellmonitorGithubPublishOzonPerformanceSkuDaily_(body) {
   }
   function now_(){return new Date().toISOString();}
   function keyOf_(row,col){return String(row[col-1]||'').trim();}
+  function dateKey_(v){
+    if(v instanceof Date)return Utilities.formatDate(v,'GMT+03:00','yyyy-MM-dd');
+    if(typeof v==='number'&&isFinite(v))return Utilities.formatDate(new Date(Date.UTC(1899,11,30)+Math.floor(v)*86400000),'UTC','yyyy-MM-dd');
+    if(typeof v==='string'&&/^\d{4}-\d{2}-\d{2}/.test(v))return v.slice(0,10);
+    return '';
+  }
   function load_(sheet,width,keyCol){
     var last=sheet.getLastRow(),out={map:{},rows:[]};
     if(last>=5)sheet.getRange(5,1,last-4,width).getValues().forEach(function(row,i){
@@ -134,7 +140,7 @@ function sellmonitorGithubPublishOzonPerformanceSkuDaily_(body) {
     var archives=[],remove=[];
     old.rows.forEach(function(item){
       var replacement=next[item.key];
-      if(!replacement){archives.push([now_(),sheet.getName(),item.key,'Источник подтвердил отсутствие в покрываемой части',JSON.stringify(item.values)]);remove.push(item.row);}
+      if(!replacement){archives.push([now_(),sheet.getName(),item.key,'Пересчёт убрал строку; предыдущее значение сохранено',JSON.stringify(item.values)]);remove.push(item.row);}
       else if(JSON.stringify(item.values)!==JSON.stringify(replacement))archives.push([now_(),sheet.getName(),item.key,'Заменено подтверждённым повторным ответом API',JSON.stringify(item.values)]);
     });
     archiveRows_(archives);
@@ -183,14 +189,14 @@ function sellmonitorGithubPublishOzonPerformanceSkuDaily_(body) {
   var toDelete=[];
   if(confirmed.length){
     allOld.rows.forEach(function(item){
-      var row=item.values, rowDate=String(row[1]||'').slice(0,10), camp=String(row[3]||'');
+      var row=item.values, rowDate=dateKey_(row[1]), camp=String(row[3]||'');
       if(rowDate===date&&successSet[camp]&&!incomingMap[item.key])toDelete.push(item.key);
     });
   }
   var retained=allOld.rows.filter(function(item){return toDelete.indexOf(item.key)<0;}).map(function(item){return item.values;});
   // sync_ receives the complete desired daily table so confirmed missing products are removed only for confirmed campaigns/date.
   var keepKeys={};retained.forEach(function(r){keepKeys[String(r[21]||'')]=true;});
-  var desired=retained.filter(function(r){return !(String(r[1]||'').slice(0,10)===date&&successSet[String(r[3]||'')]&&!incomingMap[String(r[21]||'')]);});
+  var desired=retained.filter(function(r){return !(dateKey_(r[1])===date&&successSet[String(r[3]||'')]&&!incomingMap[String(r[21]||'')]);});
   targetRows.forEach(function(r){desired.push(r);});
   var daySync=sync_(daily,22,22,desired);
 
@@ -213,7 +219,7 @@ function sellmonitorGithubPublishOzonPerformanceSkuDaily_(body) {
   var coverageRows=load_(coverage,10,10).rows.map(function(x){return x.values;});
   var goodDates={};
   coverageRows.forEach(function(r){
-    if(String(r[0])===cfg.key&&['COMPLETE','COMPLETE_EMPTY','NO_CPC_CAMPAIGNS'].indexOf(String(r[3]))>=0)goodDates[String(r[1]).slice(0,10)]=true;
+    if(String(r[0])===cfg.key&&['COMPLETE','COMPLETE_EMPTY','NO_CPC_CAMPAIGNS'].indexOf(String(r[3]))>=0)goodDates[dateKey_(r[1])]=true;
   });
   function datePlus_(key,n){var p=key.split('-').map(Number);return Utilities.formatDate(new Date(Date.UTC(p[0],p[1]-1,p[2]+n)),'UTC','yyyy-MM-dd');}
   function weekStart_(key){var p=key.split('-').map(Number),d=new Date(Date.UTC(p[0],p[1]-1,p[2]));return datePlus_(key,-((d.getUTCDay()+6)%7));}
@@ -222,7 +228,7 @@ function sellmonitorGithubPublishOzonPerformanceSkuDaily_(body) {
     var groups={};
     dailyRows.forEach(function(r){
       if(String(r[0])!==cfg.key)return;
-      var d=String(r[1]).slice(0,10),start=kind==='week'?weekStart_(d):d.slice(0,7)+'-01',end=kind==='week'?datePlus_(start,6):monthEnd_(d);
+      var d=dateKey_(r[1]);if(!d)return;var start=kind==='week'?weekStart_(d):d.slice(0,7)+'-01',end=kind==='week'?datePlus_(start,6):monthEnd_(d);
       var k=cfg.key+'|'+start+'|'+String(r[3])+'|'+String(r[6]);
       if(!groups[k])groups[k]={key:k,start:start,end:end,campaign:String(r[3]),title:String(r[4]),offer:String(r[5]),sku:String(r[6]),product:String(r[7]),dates:{},sum:[0,0,0,0,0,0,0,0],unknown:[false,false,false,false,false,false,false,false]};
       var g=groups[k];g.dates[d]=true;
@@ -264,10 +270,16 @@ function sellmonitorGithubPublishOzonPerformanceSkuDaily_(body) {
   var dailyCheck=load_(daily,22,22),weekCheck=load_(weekly,26,26),monthCheck=load_(monthly,26,26),covCheck=load_(coverage,10,10);
   function normalizeRow_(row,dateCols){
     return row.map(function(v,i){
-      if(dateCols.indexOf(i)<0)return v;
-      if(v instanceof Date)return Utilities.formatDate(v,'GMT+03:00','yyyy-MM-dd');
-      if(typeof v==='number'&&isFinite(v))return Utilities.formatDate(new Date(Date.UTC(1899,11,30)+Math.floor(v)*86400000),'UTC','yyyy-MM-dd');
-      if(typeof v==='string'&&/^\d{4}-\d{2}-\d{2}/.test(v))return v.slice(0,10);
+      if(dateCols.indexOf(i)>=0)return dateKey_(v);
+      if(v===null||v===undefined||v==='')return '';
+      if(typeof v==='number')return isFinite(v)?v:'';
+      if(typeof v==='string'){
+        var t=v.trim();
+        if(t==='')return '';
+        if(/^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?$/.test(t)){
+          var n=Number(t);if(isFinite(n))return n;
+        }
+      }
       return v;
     });
   }
