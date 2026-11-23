@@ -260,6 +260,9 @@ def collect_store(store, client_id, secret, last_date):
     campaign_rows_total = 0
     campaign_rows_with_ids = 0
     campaign_payment_types = {}
+    campaign_payment_fields = set()
+    campaign_field_names = set()
+    campaign_adv_object_types = {}
     campaign_unknown_payment_rows = 0
     campaign_list_complete = False
     page = 1
@@ -281,12 +284,27 @@ def collect_store(store, client_id, secret, last_date):
         for row in campaign_rows:
             if not isinstance(row, dict):
                 continue
-            payment_type = str(row.get("paymentType") or "").strip().upper()
+            campaign_field_names.update(str(key) for key in row.keys())
+            for field_name in row.keys():
+                if "pay" in str(field_name).lower():
+                    campaign_payment_fields.add(str(field_name))
+            payment_field = next(
+                (
+                    key for key in ("paymentType", "PaymentType", "payment_type", "paymentMethod", "payment_method")
+                    if row.get(key) not in (None, "")
+                ),
+                None,
+            )
+            payment_type = str(row.get(payment_field) or "").strip().upper() if payment_field else ""
             if payment_type:
                 safe_payment_type = "".join(ch for ch in payment_type if ch.isalnum() or ch == "_")[:40] or "OTHER"
                 campaign_payment_types[safe_payment_type] = campaign_payment_types.get(safe_payment_type, 0) + 1
             else:
                 campaign_unknown_payment_rows += 1
+            adv_object_type = str(row.get("advObjectType") or row.get("adv_object_type") or "").strip().upper()
+            if adv_object_type:
+                safe_adv_type = "".join(ch for ch in adv_object_type if ch.isalnum() or ch == "_")[:40] or "OTHER"
+                campaign_adv_object_types[safe_adv_type] = campaign_adv_object_types.get(safe_adv_type, 0) + 1
             if row.get("id") is None:
                 continue
             campaign_rows_with_ids += 1
@@ -306,6 +324,9 @@ def collect_store(store, client_id, secret, last_date):
         "rows": campaign_rows_total,
         "rows_with_ids": campaign_rows_with_ids,
         "payment_types": campaign_payment_types,
+        "payment_fields": sorted(campaign_payment_fields),
+        "field_names": sorted(campaign_field_names),
+        "adv_object_types": campaign_adv_object_types,
         "rows_without_payment_type": campaign_unknown_payment_rows,
         "complete": campaign_list_complete,
     }
@@ -502,6 +523,9 @@ def main():
                     "rows": campaign_diag.get("rows", 0),
                     "rows_with_ids": campaign_diag.get("rows_with_ids", 0),
                     "payment_types": campaign_diag.get("payment_types", {}),
+                    "payment_fields": campaign_diag.get("payment_fields", []),
+                    "field_names": campaign_diag.get("field_names", []),
+                    "adv_object_types": campaign_diag.get("adv_object_types", {}),
                     "rows_without_payment_type": campaign_diag.get("rows_without_payment_type", 0),
                     "complete": campaign_diag.get("complete", False),
                     "sku_state": bundle.get("sku_state"),

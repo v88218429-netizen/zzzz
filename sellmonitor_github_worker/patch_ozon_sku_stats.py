@@ -265,7 +265,7 @@ function sellmonitorGithubPublishOzonPerformanceSkuDaily_(body) {
   function normalizeRow_(row,dateCols){
     return row.map(function(v,i){
       if(dateCols.indexOf(i)<0)return v;
-      if(v instanceof Date)return Utilities.formatDate(v,ss.getSpreadsheetTimeZone(),'yyyy-MM-dd');
+      if(v instanceof Date)return Utilities.formatDate(v,'GMT+03:00','yyyy-MM-dd');
       if(typeof v==='number'&&isFinite(v))return Utilities.formatDate(new Date(Date.UTC(1899,11,30)+Math.floor(v)*86400000),'UTC','yyyy-MM-dd');
       if(typeof v==='string'&&/^\d{4}-\d{2}-\d{2}/.test(v))return v.slice(0,10);
       return v;
