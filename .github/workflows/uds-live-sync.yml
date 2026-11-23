@@ -1,0 +1,37 @@
+name: UDS and Ozon live unit economics
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 09:15 and 21:15 Moscow time (UTC+3).
+    - cron: "15 6,18 * * *"
+  push:
+    branches: [mainggg]
+    paths:
+      - ".github/workflows/uds-live-sync.yml"
+      - ".github/scripts/uds_live_sync.py"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uds-live-unit-economics
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+      OZON_CLIENT_ID: ${{ secrets.OZON_SELLER_HOZYAYUSHKA_CLIENT_ID }}
+      OZON_API_KEY: ${{ secrets.OZON_SELLER_HOZYAYUSHKA_API_KEY }}
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Refresh UDS catalog, Ozon prices, unit economics, and orders
+        run: python .github/scripts/uds_live_sync.py
+        shell: bash
