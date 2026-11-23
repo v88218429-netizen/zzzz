@@ -96,6 +96,116 @@ def fetch_json(session, path, params):
     return None, last_status or 0
 
 
+
+
+def fetch_product_sku_chunk(session, campaign_ids, day):
+    request_body = {
+        "campaignIds": [str(campaign_id) for campaign_id in campaign_ids],
+        "dateFrom": day.isoformat(),
+        "dateTo": day.isoformat(),
+    }
+    last_status = 0
+    for attempt in range(4):
+        try:
+            response = session.post(
+                BASE + "/api/client/statistics/products/sku",
+                json=request_body,
+                timeout=45,
+            )
+            last_status = response.status_code
+            if response.status_code == 401:
+                return None, 401
+            if response.status_code in {408, 425, 429} or response.status_code >= 500:
+                retry_after = response.headers.get("Retry-After", "")
+                try:
+                    delay = min(max(float(retry_after), 0.5), 30.0) if retry_after else min(1.5 * (2 ** attempt), 12.0)
+                except (TypeError, ValueError):
+                    delay = min(1.5 * (2 ** attempt), 12.0)
+                if attempt < 3:
+                    time.sleep(delay)
+                    continue
+                return None, response.status_code
+            if response.status_code >= 400:
+                return None, response.status_code
+            try:
+                result = response.json()
+            except Exception:
+                last_status = "invalid_json"
+                if attempt < 3:
+                    time.sleep(min(1.5 * (2 ** attempt), 12.0))
+                    continue
+                return None, last_status
+            rows = result.get("rows") if isinstance(result, dict) else None
+            if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
+                last_status = "invalid_schema"
+                if attempt < 3:
+                    time.sleep(min(1.5 * (2 ** attempt), 12.0))
+                    continue
+                return None, last_status
+            return rows, response.status_code
+        except Exception as exc:
+            last_status = type(exc).__name__
+            if attempt < 3:
+                time.sleep(min(1.5 * (2 ** attempt), 12.0))
+    return None, last_status
+
+
+def collect_product_sku(session, campaign_ids, day):
+    rows = []
+    confirmed = []
+    errors = []
+
+    def collect_batch(ids):
+        batch_rows, status = fetch_product_sku_chunk(session, ids, day)
+        if batch_rows is not None:
+            return batch_rows, list(ids), []
+        if status == 400 and len(ids) > 1:
+            midpoint = len(ids) // 2
+            left_rows, left_ok, left_errors = collect_batch(ids[:midpoint])
+            right_rows, right_ok, right_errors = collect_batch(ids[midpoint:])
+            return left_rows + right_rows, left_ok + right_ok, left_errors + right_errors
+        return [], [], [{"code": str(status), "campaign_count": len(ids)}]
+
+    for offset in range(0, len(campaign_ids), 20):
+        batch = campaign_ids[offset:offset + 20]
+        batch_rows, batch_confirmed, batch_errors = collect_batch(batch)
+        rows.extend(batch_rows)
+        confirmed.extend(batch_confirmed)
+        errors.extend(batch_errors)
+        time.sleep(0.2)
+
+    confirmed_set = set(confirmed)
+    invalid_campaigns = set()
+    seen = set()
+    accepted = []
+    expected_day = day.isoformat()
+    for row in rows:
+        campaign_id = str(row.get("campaignId") or "").strip()
+        sku = str(row.get("sku") or "").strip()
+        source_day = str(row.get("date") or "")[:10]
+        if campaign_id not in confirmed_set or not sku or source_day != expected_day:
+            if campaign_id in confirmed_set:
+                invalid_campaigns.add(campaign_id)
+            errors.append({"code": "invalid_row_key", "campaign_count": 1})
+            continue
+        key = (source_day, campaign_id, sku)
+        if key in seen:
+            invalid_campaigns.add(campaign_id)
+            errors.append({"code": "duplicate_sku_key", "campaign_count": 1})
+            continue
+        seen.add(key)
+        item = dict(row)
+        item["campaignId"] = campaign_id
+        item["date"] = source_day
+        accepted.append(item)
+
+    if invalid_campaigns:
+        confirmed = [campaign_id for campaign_id in confirmed if campaign_id not in invalid_campaigns]
+        accepted = [row for row in accepted if str(row.get("campaignId") or "") not in invalid_campaigns]
+
+    return accepted, confirmed, errors
+
+
 def collect_store(store, client_id, secret, last_date):
     bundle = {
         "store": store,
@@ -103,6 +213,14 @@ def collect_store(store, client_id, secret, last_date):
         "period_end": last_date.isoformat(),
         "daily": [],
         "campaign_product": [],
+        "sku_rows": [],
+        "sku_date": last_date.isoformat(),
+        "sku_requested_campaign_ids": [],
+        "sku_confirmed_campaign_ids": [],
+        "sku_campaign_names": {},
+        "sku_errors": [],
+        "sku_state": "NOT_STARTED",
+        "sku_complete": False,
         "errors": [],
     }
     if not client_id or not secret:
@@ -136,6 +254,8 @@ def collect_store(store, client_id, secret, last_date):
         "Accept": "application/json",
     })
     campaign_ids = []
+    cpc_campaign_ids = []
+    campaign_names = {}
     page = 1
     while page <= 20:
         campaign_data, campaign_status = fetch_json(
@@ -147,12 +267,34 @@ def collect_store(store, client_id, secret, last_date):
             bundle["errors"].append({"stage": "campaign_list", "status": campaign_status})
             break
         campaign_rows = campaign_data.get("list") or []
-        campaign_ids.extend(
-            str(row.get("id")) for row in campaign_rows if row.get("id") is not None
-        )
+        for row in campaign_rows:
+            if not isinstance(row, dict) or row.get("id") is None:
+                continue
+            campaign_id = str(row.get("id")).strip()
+            campaign_ids.append(campaign_id)
+            campaign_names[campaign_id] = str(row.get("title") or "")
+            if str(row.get("paymentType") or "").upper() == "CPC":
+                cpc_campaign_ids.append(campaign_id)
         if len(campaign_rows) < 100:
             break
         page += 1
+
+    bundle["sku_requested_campaign_ids"] = sorted(set(cpc_campaign_ids))
+    bundle["sku_campaign_names"] = campaign_names
+    if cpc_campaign_ids:
+        sku_rows, sku_confirmed, sku_errors = collect_product_sku(
+            session, sorted(set(cpc_campaign_ids)), last_date
+        )
+        bundle["sku_rows"] = sku_rows
+        bundle["sku_confirmed_campaign_ids"] = sku_confirmed
+        bundle["sku_errors"] = sku_errors
+        bundle["sku_complete"] = not sku_errors and len(sku_confirmed) == len(set(cpc_campaign_ids))
+        bundle["sku_state"] = "COMPLETE" if bundle["sku_complete"] and sku_rows else (
+            "COMPLETE_EMPTY" if bundle["sku_complete"] else "PARTIAL_RETRY_REQUIRED"
+        )
+    else:
+        bundle["sku_state"] = "NO_CPC_CAMPAIGNS"
+        bundle["sku_complete"] = True
 
     for path in STAT_ENDPOINTS:
         key = "daily" if path.endswith("/daily/json") else "campaign_product"
@@ -237,6 +379,11 @@ def perf_rows(bundle, key):
 
 
 def post_publish(payload):
+    expected_action = str(payload.get("action") or "publish_ozon_performance_daily")
+    if expected_action == "publish_ozon_performance_sku_daily":
+        required_readbacks = ("daily_readback", "weekly_readback", "monthly_readback", "coverage_readback", "sku_readback")
+    else:
+        required_readbacks = ("readback", "helper_readback", "axes_readback", "chart_ranges_readback", "rnp_note_readback")
     deployment = os.getenv("WEBAPP_DEPLOYMENT_ID", "").strip()
     secret = os.getenv("OZON_PUBLISH_WEBHOOK_SECRET", "").strip()
     if not deployment or not secret:
@@ -258,12 +405,8 @@ def post_publish(payload):
             if (
                 isinstance(result, dict)
                 and result.get("ok") is True
-                and result.get("action") == "publish_ozon_performance_daily"
-                and result.get("readback") is True
-                and result.get("helper_readback") is True
-                and result.get("axes_readback") is True
-                and result.get("chart_ranges_readback") is True
-                and result.get("rnp_note_readback") is True
+                and result.get("action") == expected_action
+                and all(result.get(field) is True for field in required_readbacks)
             ):
                 return result
             safe_result = {
@@ -423,6 +566,41 @@ def main():
         + ";comparison_sample=" + json.dumps(result.get("comparison_sample"), ensure_ascii=False, separators=(",", ":")),
         flush=True,
     )
+    sku_payload = {
+        "token": os.getenv("OZON_PUBLISH_WEBHOOK_SECRET", ""),
+        "action": "publish_ozon_performance_sku_daily",
+        "store": store,
+        "date": bundle.get("sku_date"),
+        "source": "ozon_performance_api",
+        "source_status": bundle.get("sku_state"),
+        "complete": bundle.get("sku_complete") is True,
+        "requested_campaign_ids": bundle.get("sku_requested_campaign_ids") or [],
+        "confirmed_campaign_ids": bundle.get("sku_confirmed_campaign_ids") or [],
+        "campaign_names": bundle.get("sku_campaign_names") or {},
+        "sku_rows": bundle.get("sku_rows") or [],
+        "sku_errors": bundle.get("sku_errors") or [],
+    }
+    sku_result = post_publish(sku_payload)
+    print(
+        "OZON_PERF_SKU_PUBLISH="
+        + str(sku_result.get("source_status"))
+        + ";store=" + str(sku_result.get("store"))
+        + ";date=" + str(sku_result.get("date"))
+        + ";source_rows=" + str(sku_result.get("source_rows"))
+        + ";daily_added=" + str(sku_result.get("daily_added"))
+        + ";daily_changed=" + str(sku_result.get("daily_changed"))
+        + ";daily_removed=" + str(sku_result.get("daily_removed"))
+        + ";weekly_rows=" + str(sku_result.get("weekly_rows"))
+        + ";monthly_rows=" + str(sku_result.get("monthly_rows"))
+        + ";readback=" + str(sku_result.get("sku_readback"))
+        + ";coverage=" + str(sku_result.get("coverage_readback"))
+        + ";archive_rows=" + str(sku_result.get("archive_rows"))
+        + ";error_codes=" + json.dumps([e.get("code") for e in (bundle.get("sku_errors") or [])], ensure_ascii=False, separators=(",", ":")),
+        flush=True,
+    )
+    if bundle.get("sku_errors"):
+        print("OZON_PERF_SKU_RETRY_REQUIRED=yes;next_scheduled_run_will_retry=true", flush=True)
+        return 5
     return 0
 
 if __name__ == "__main__":

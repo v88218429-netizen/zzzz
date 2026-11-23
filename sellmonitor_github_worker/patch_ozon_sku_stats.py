@@ -60,7 +60,10 @@ function sellmonitorGithubPublishOzonPerformanceSkuDaily_(body) {
       sh.getRange(4,1,1,headers.length).setBackground('#1F4E78').setFontColor('#FFFFFF').setFontWeight('bold').setWrap(true);
     }else{
       var actual=sh.getRange(4,1,1,headers.length).getDisplayValues()[0];
-      if(JSON.stringify(actual)!==JSON.stringify(headers))throw new Error('OZON_SKU_HEADER_MISMATCH:'+name);
+      if(JSON.stringify(actual)!==JSON.stringify(headers)){
+        if(actual.every(function(v){return v===''||v===null;})&&sh.getLastRow()<=4){sh.getRange(4,1,1,headers.length).setValues([headers]);}
+        else throw new Error('OZON_SKU_HEADER_MISMATCH:'+name);
+      }
     }
     sh.setFrozenRows(4);
     sh.setHiddenGridlines(true);
@@ -74,7 +77,11 @@ function sellmonitorGithubPublishOzonPerformanceSkuDaily_(body) {
   if(!archive)archive=ss.insertSheet('Архив_Реклама_SKU_до_обновления');
   ensureRows_(archive,1);
   if(archive.getLastRow()===0)archive.getRange(1,1,1,archiveHeader.length).setValues([archiveHeader]);
-  else if(JSON.stringify(archive.getRange(1,1,1,archiveHeader.length).getDisplayValues()[0])!==JSON.stringify(archiveHeader))throw new Error('OZON_SKU_ARCHIVE_HEADER_MISMATCH');
+  else if(JSON.stringify(archive.getRange(1,1,1,archiveHeader.length).getDisplayValues()[0])!==JSON.stringify(archiveHeader)){
+    var ah=archive.getRange(1,1,1,archiveHeader.length).getDisplayValues()[0];
+    if(ah.every(function(v){return v===''||v===null;})&&archive.getLastRow()<=1)archive.getRange(1,1,1,archiveHeader.length).setValues([archiveHeader]);
+    else throw new Error('OZON_SKU_ARCHIVE_HEADER_MISMATCH');
+  }
 
   var skuMap={};
   var mapping=ss.getSheetByName('12_API_Заказы_SKU');
@@ -165,7 +172,9 @@ function sellmonitorGithubPublishOzonPerformanceSkuDaily_(body) {
       ratio_(clicks,views),ratio_(expense,clicks),ratio_(expense,sales),
       n_(x.modelOrders),n_(x.modelSales),
       'Ozon Performance API /api/client/statistics/products/sku',
-      state==='COMPLETE'?'Данные за предыдущий день; API может пересчитать':'Частичная выгрузка: только подтверждённые кампании; будет повторена',
+      state==='COMPLETE'?'Финальные данные за предыдущий день по Ozon API':
+      state==='COMPLETE_EMPTY'?'Ответ полный, товаров для кампаний за этот день нет':
+      state==='NO_CPC_CAMPAIGNS'?'На эту дату CPC-кампаний нет':'Частичная выгрузка: только подтверждённые кампании; будет повторена',
       key
     ];
   });
@@ -253,15 +262,23 @@ function sellmonitorGithubPublishOzonPerformanceSkuDaily_(body) {
   SpreadsheetApp.flush();
 
   var dailyCheck=load_(daily,22,22),weekCheck=load_(weekly,26,26),monthCheck=load_(monthly,26,26),covCheck=load_(coverage,10,10);
-  var coverageRead=!!covCheck.map[covKey]&&covCheck.map[covKey].values[3]===state;
+  function exactRows_(loaded,expected){
+    if(loaded.rows.length!==expected.length)return false;
+    var map={};
+    expected.forEach(function(r){var k=String(r[r.length-1]||'');if(!k||map[k])map.__invalid__=true;map[k]=r;});
+    if(map.__invalid__)return false;
+    return loaded.rows.every(function(x){return map[x.key]&&JSON.stringify(x.values)===JSON.stringify(map[x.key]);});
+  }
+  var coverageRead=!!covCheck.map[covKey]&&JSON.stringify(covCheck.map[covKey].values)===JSON.stringify(covRow);
   var rangeRead=targetRows.every(function(r){var k=String(r[21]);return dailyCheck.map[k]&&JSON.stringify(dailyCheck.map[k].values)===JSON.stringify(r);});
-  if(!rangeRead||!coverageRead)throw new Error('OZON_SKU_READBACK_FAILED:'+cfg.key);
+  var weekRead=exactRows_(weekCheck,weekRows),monthRead=exactRows_(monthCheck,monthRows);
+  if(!rangeRead||!coverageRead||!weekRead||!monthRead)throw new Error('OZON_SKU_READBACK_FAILED:'+cfg.key);
   return {ok:true,action:'publish_ozon_performance_sku_daily',store:cfg.name,date:date,source_status:state,
     source_rows:input.length,daily_added:daySync.added,daily_changed:daySync.changed,daily_removed:daySync.removed,
     weekly_rows:weekRows.length,weekly_added:weekSync.added,weekly_changed:weekSync.changed,
     monthly_rows:monthRows.length,monthly_added:monthSync.added,monthly_changed:monthSync.changed,
-    daily_readback:true,weekly_readback:weekCheck.rows.length===weekRows.length,
-    monthly_readback:monthCheck.rows.length===monthRows.length,coverage_readback:coverageRead,
+    daily_readback:true,weekly_readback:weekRead,
+    monthly_readback:monthRead,coverage_readback:coverageRead,
     archive_rows:archive.getLastRow()-1,sku_readback:rangeRead};
 }
 '''

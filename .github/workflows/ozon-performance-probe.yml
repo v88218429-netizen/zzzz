@@ -1,10 +1,5 @@
 name: Ozon Performance API probe
 on:
-  push:
-    branches: [mainggg]
-    paths:
-      - ".github/workflows/ozon-performance-probe.yml"
-      - "ozon_performance_radar/**"
   workflow_dispatch:
   workflow_run:
     workflows: ["Sellmonitor GitHub worker deploy"]
@@ -19,7 +14,7 @@ permissions:
   contents: read
 jobs:
   probe:
-    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' && !(github.event_name == 'push' && contains(github.event.head_commit.message, '[skip-ozon-performance-probe]')) }}
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     strategy:
       fail-fast: false
       matrix:
