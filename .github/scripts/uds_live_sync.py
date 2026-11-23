@@ -151,38 +151,67 @@ def google_auth_and_key():
     if not candidates:
         raise RuntimeError("CLASPRC_JSON contains no Google token profiles")
 
-    selected_token = ""
+    drive_token = ""
+    sheets_token = ""
     document_text = ""
-    for profile in candidates:
+    diagnostics = []
+    for index, profile in enumerate(candidates):
+        scopes = str(profile.get("scope", "")).lower()
         access = deep_find(profile, ["access_token", "accessToken"])
         attempts = [access] if access else []
         refreshed = refresh_google_token(profile, config)
         if refreshed and refreshed not in attempts:
             attempts.append(refreshed)
+        drive_state = "not_checked"
+        sheets_state = "not_checked"
         for token in attempts:
             if not token:
                 continue
-            try:
-                text = google_export_key_doc(token)
-                google_sheet_metadata(token)
-                selected_token, document_text = token, text
-                break
-            except HttpFailure as exc:
-                if exc.status in (401, 403, 404):
-                    continue
-                raise
-        if selected_token:
+            if not drive_token:
+                try:
+                    document_text = google_export_key_doc(token)
+                    drive_token = token
+                    drive_state = "ok"
+                except HttpFailure as exc:
+                    drive_state = f"HTTP{exc.status}"
+                    if exc.status not in (401, 403, 404):
+                        raise
+                except RuntimeError:
+                    drive_state = "transport_error"
+            if not sheets_token:
+                try:
+                    google_sheet_metadata(token)
+                    sheets_token = token
+                    sheets_state = "ok"
+                except HttpFailure as exc:
+                    sheets_state = f"HTTP{exc.status}"
+                    if exc.status not in (401, 403, 404):
+                        raise
+                except RuntimeError:
+                    sheets_state = "transport_error"
+        diagnostics.append(
+            f"profile{index}:drive_scope={'yes' if 'drive' in scopes else 'no'},"
+            f"sheets_scope={'yes' if 'spreadsheets' in scopes else 'no'},"
+            f"refresh={'yes' if bool(refreshed) else 'no'},drive={drive_state},sheets={sheets_state}"
+        )
+        if drive_token and sheets_token:
             break
-    if not selected_token:
-        raise RuntimeError("Google authorization needs Drive read and Sheets access for the saved UDS key document and target workbook")
+    if not drive_token or not sheets_token:
+        missing = []
+        if not drive_token:
+            missing.append("Drive read for the saved UDS key document")
+        if not sheets_token:
+            missing.append("Google Sheets access for the target workbook")
+        raise RuntimeError("Google authorization missing " + " and ".join(missing) + " (" + "; ".join(diagnostics) + ")")
 
     tokens = sorted(set(re.findall(r"(?m)^\s*([A-Za-z0-9_-]{35,})\s*$", document_text)))
     if len(tokens) != 1:
         raise RuntimeError("Saved UDS key document must contain exactly one standalone API key")
     api_key = tokens[0]
-    gh_mask(selected_token)
+    gh_mask(drive_token)
+    gh_mask(sheets_token)
     gh_mask(api_key)
-    return selected_token, api_key
+    return sheets_token, api_key
 
 
 def google_json(access_token, endpoint, method="GET", payload=None, label="Google API"):
