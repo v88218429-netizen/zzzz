@@ -195,9 +195,9 @@ function sellmonitorGithubPublishOzonPerformanceSkuDaily_(body) {
   }
   var retained=allOld.rows.filter(function(item){return toDelete.indexOf(item.key)<0;}).map(function(item){return item.values;});
   // sync_ receives the complete desired daily table so confirmed missing products are removed only for confirmed campaigns/date.
-  var keepKeys={};retained.forEach(function(r){keepKeys[String(r[21]||'')]=true;});
-  var desired=retained.filter(function(r){return !(dateKey_(r[1])===date&&successSet[String(r[3]||'')]&&!incomingMap[String(r[21]||'')]);});
-  targetRows.forEach(function(r){desired.push(r);});
+  var desired=retained.map(function(r){var k=String(r[21]||'');return incomingMap[k]||r;});
+  var desiredKeys={};desired.forEach(function(r){desiredKeys[String(r[21]||'')]=true;});
+  targetRows.forEach(function(r){var k=String(r[21]||'');if(!desiredKeys[k]){desired.push(r);desiredKeys[k]=true;}});
   var daySync=sync_(daily,22,22,desired);
 
   var errors=(body.sku_errors||[]).map(function(e){return String((e&&e.code)||e||'').slice(0,80);}).filter(String).join(';').slice(0,450);
