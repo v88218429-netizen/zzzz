@@ -1,0 +1,46 @@
+{
+  "task_id": "BUSINESS_MODELS",
+  "request": "BUSINESS_MODELS_20261123_1910_SCHEDULED.json",
+  "query": "бизнес модели 2026 масштабируемый бизнес Россия",
+  "knowledge_tag": "BUSINESS",
+  "generated_at": "2026-11-23T16:13:47.282929+00:00",
+  "videos": [
+    {
+      "video_id": "Te3Kq1Zcv9Q",
+      "url": "https://www.youtube.com/watch?v=Te3Kq1Zcv9Q",
+      "title": "Самые тупые идеи для бизнеса в 2026 году. Кто это вообще придумал?",
+      "channel": "ЮЛИЯ ТРУС ПРО БИЗНЕС",
+      "duration": 3041,
+      "timestamp": null,
+      "query": "бизнес модели 2026 масштабируемый бизнес Россия",
+      "kind": "video",
+      "transcript": "transcripts/2026-11-23_BUSINESS_MODELS_video_Te3Kq1Zcv9Q.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "YFMWjnGjpgI",
+      "url": "https://www.youtube.com/watch?v=YFMWjnGjpgI",
+      "title": "EPISODE",
+      "channel": "Бизнес с нуля",
+      "duration": 1309,
+      "timestamp": null,
+      "query": "бизнес модели 2026 масштабируемый бизнес Россия",
+      "kind": "video",
+      "transcript": "transcripts/2026-11-23_BUSINESS_MODELS_video_YFMWjnGjpgI.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "XFyN97zmT0Q",
+      "url": "https://www.youtube.com/watch?v=XFyN97zmT0Q",
+      "title": "Тизер к выпуску №28:«Vendor Lock-in: как заказчика запирают в экосистеме.Как выйти?»",
+      "channel": "Belyaev_Security",
+      "duration": 46,
+      "timestamp": null,
+      "query": "бизнес без привязки к владельцу кейс",
+      "kind": "short",
+      "transcript": "transcripts/2026-11-23_BUSINESS_MODELS_short_XFyN97zmT0Q.md",
+      "method": "FreeTranscriptAPI"
+    }
+  ],
+  "errors": []
+}

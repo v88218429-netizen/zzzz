@@ -3,45 +3,51 @@
   "request": "CAR_20261121_1908_SCHEDULED.json",
   "query": "лучшие семейные автомобили 2026 Россия обзор",
   "knowledge_tag": "CAR",
-  "generated_at": "2026-11-22T21:44:15.834872+00:00",
+  "generated_at": "2026-11-23T16:14:16.045819+00:00",
   "videos": [
     {
-      "video_id": "iIFBd2thoLQ",
-      "url": "https://www.youtube.com/watch?v=iIFBd2thoLQ",
-      "title": "These Electric Cars Are Worth Buying in Russia. The Rest Are Not (TOP 5)",
-      "channel": "PRO АВТО",
-      "duration": 414,
+      "video_id": "OqIP5Gs6b48",
+      "url": "https://www.youtube.com/watch?v=OqIP5Gs6b48",
+      "title": "Топ-5 самых дешёвых электромобилей в 2026 — что реально стоит купить?",
+      "channel": "Rucars: электромобили",
+      "duration": 560,
       "timestamp": null,
       "query": "лучшие семейные автомобили 2026 Россия обзор",
       "kind": "video",
-      "transcript": "transcripts/2026-11-22_CAR_video_iIFBd2thoLQ.md",
+      "transcript": "transcripts/2026-11-23_CAR_video_OqIP5Gs6b48.md",
       "method": "FreeTranscriptAPI"
     },
     {
-      "video_id": "hMppcdJPlC4",
-      "url": "https://www.youtube.com/watch?v=hMppcdJPlC4",
-      "title": "Denza D9. Комфорт и тишина. ТОП Минивэны (MPV) захватывают рынок. Обзор и тест-драйв. #авто #mpv",
-      "channel": "Гилевич Сергей",
-      "duration": 1249,
+      "video_id": "mfoG41Lveck",
+      "url": "https://www.youtube.com/watch?v=mfoG41Lveck",
+      "title": "Top 3 Electric Cars and Why They're the Best in 2026 | Asia Motors",
+      "channel": "Asia Motors",
+      "duration": 200,
       "timestamp": null,
       "query": "лучшие семейные автомобили 2026 Россия обзор",
       "kind": "video",
-      "transcript": "transcripts/2026-11-22_CAR_video_hMppcdJPlC4.md",
+      "transcript": "transcripts/2026-11-23_CAR_video_mfoG41Lveck.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "u3J8MkalMdQ",
+      "url": "https://www.youtube.com/watch?v=u3J8MkalMdQ",
+      "title": "Очень надёжный 7-ми  местный автомобиль!!!",
+      "channel": "BOBBI АВТО",
+      "duration": 143,
+      "timestamp": null,
+      "query": "премиальный семейный автомобиль реальные расходы shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-11-23_CAR_short_u3J8MkalMdQ.md",
       "method": "FreeTranscriptAPI"
     }
   ],
   "errors": [
     {
-      "video_id": "1F4GkeluNPQ",
-      "url": "https://www.youtube.com/watch?v=1F4GkeluNPQ",
-      "title": "Топ 20 лучших китайских кроссоверов 2021 #shorts",
-      "error": "youtube_captions: \nCould not retrieve a transcript for the video https://www.youtube.com/watch?v=1F4GkeluNPQ! This is most likely caused by:\n\nYouTube is blocking requests from your IP. This usually is due to one of the following reasons:\n- You have done too many requests and your IP has been blocked by YouTube\n- You are doing requests from an IP belonging to a cloud provider (like AWS, Google Cloud Platform, Azure, etc.). Unfortunately, most IPs from cloud providers are blocked by YouTube.\n\nThere are two things you can do to work around this:\n1. Use proxies to hide your IP address, as explained in the \"Working around IP bans\" section of the README (https://github.com/jdepoix/youtube-transcript-api?tab=readme-ov-file#working-around-ip-bans-requestblocked-or-ipblocked-exception).\n2. (NOT REC"
-    },
-    {
-      "video_id": "ls8UI5Do128",
-      "url": "https://www.youtube.com/watch?v=ls8UI5Do128",
-      "title": "The New 2026 BYD SONG Ultra EV Review & Walkaround",
-      "error": "youtube_captions: \nCould not retrieve a transcript for the video https://www.youtube.com/watch?v=ls8UI5Do128! This is most likely caused by:\n\nYouTube is blocking requests from your IP. This usually is due to one of the following reasons:\n- You have done too many requests and your IP has been blocked by YouTube\n- You are doing requests from an IP belonging to a cloud provider (like AWS, Google Cloud Platform, Azure, etc.). Unfortunately, most IPs from cloud providers are blocked by YouTube.\n\nThere are two things you can do to work around this:\n1. Use proxies to hide your IP address, as explained in the \"Working around IP bans\" section of the README (https://github.com/jdepoix/youtube-transcript-api?tab=readme-ov-file#working-around-ip-bans-requestblocked-or-ipblocked-exception).\n2. (NOT REC"
+      "video_id": "pmlu9dhrmHQ",
+      "url": "https://www.youtube.com/watch?v=pmlu9dhrmHQ",
+      "title": "Пригон авто Renault Kangoo Luxe 2012 Рено Кенго Люкс оригинальный пассажир 2012",
+      "error": "youtube_captions: \nCould not retrieve a transcript for the video https://www.youtube.com/watch?v=pmlu9dhrmHQ! This is most likely caused by:\n\nYouTube is blocking requests from your IP. This usually is due to one of the following reasons:\n- You have done too many requests and your IP has been blocked by YouTube\n- You are doing requests from an IP belonging to a cloud provider (like AWS, Google Cloud Platform, Azure, etc.). Unfortunately, most IPs from cloud providers are blocked by YouTube.\n\nThere are two things you can do to work around this:\n1. Use proxies to hide your IP address, as explained in the \"Working around IP bans\" section of the README (https://github.com/jdepoix/youtube-transcript-api?tab=readme-ov-file#working-around-ip-bans-requestblocked-or-ipblocked-exception).\n2. (NOT REC"
     }
   ]
 }

@@ -3,30 +3,42 @@
   "request": "HOME_20261122_1948_SCHEDULED.json",
   "query": "современные дома для семьи обзор планировок 150 200 м2",
   "knowledge_tag": "HOME",
-  "generated_at": "2026-11-22T21:45:17.226228+00:00",
+  "generated_at": "2026-11-23T16:15:34.692042+00:00",
   "videos": [
     {
-      "video_id": "iDnaPi7b-N0",
-      "url": "https://www.youtube.com/watch?v=iDnaPi7b-N0",
-      "title": "One-story dream house - a large overview of the house 200 m², 6 rooms, 150 m² terraces.",
-      "channel": "",
-      "duration": 1031,
+      "video_id": "Mk-c0A98p5Q",
+      "url": "https://www.youtube.com/watch?v=Mk-c0A98p5Q",
+      "title": "A review of a one-story house for a large family, in which everything has been thought of / MIKEA...",
+      "channel": "SKY HOME Строительство домов",
+      "duration": 828,
       "timestamp": null,
       "query": "современные дома для семьи обзор планировок 150 200 м2",
       "kind": "video",
-      "transcript": "transcripts/2026-11-22_HOME_video_iDnaPi7b-N0.md",
+      "transcript": "transcripts/2026-11-23_HOME_video_Mk-c0A98p5Q.md",
       "method": "FreeTranscriptAPI"
     },
     {
-      "video_id": "YDfRJdXP3kk",
-      "url": "https://www.youtube.com/watch?v=YDfRJdXP3kk",
-      "title": "ОДНОЭТАЖНЫЙ ДОМ С ГАРАЖОМ 150М2 ИЗ ГАЗОБЕТОНА ОБЗОР! ИДЕАЛЬНЫЙ ДОМ ЛУЧШАЯ ПЛАНИРОВКА #одноэтажныйдом",
-      "channel": "",
-      "duration": 868,
+      "video_id": "wQUJnkyE5sw",
+      "url": "https://www.youtube.com/watch?v=wQUJnkyE5sw",
+      "title": "Дом, в котором спланировано ВСЕ! Обзор двухэтажного дома в Сибири",
+      "channel": "Сергей Корнев | Загородные дома с Root House",
+      "duration": 2659,
       "timestamp": null,
       "query": "современные дома для семьи обзор планировок 150 200 м2",
       "kind": "video",
-      "transcript": "transcripts/2026-11-22_HOME_video_YDfRJdXP3kk.md",
+      "transcript": "transcripts/2026-11-23_HOME_video_wQUJnkyE5sw.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "K-F93GKtpaI",
+      "url": "https://www.youtube.com/watch?v=K-F93GKtpaI",
+      "title": "Проект одноэтажного дома 150 квадратных метров (№-1400)",
+      "channel": "Строительство в Анапе домов - дома у моря, проекты",
+      "duration": 121,
+      "timestamp": null,
+      "query": "современные дома для семьи обзор планировок 150 200 м2 shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-11-23_HOME_short_K-F93GKtpaI.md",
       "method": "FreeTranscriptAPI"
     }
   ],
@@ -38,22 +50,16 @@
       "error": "youtube_captions: \nCould not retrieve a transcript for the video https://www.youtube.com/watch?v=cPqNOWC63mI! This is most likely caused by:\n\nYouTube is blocking requests from your IP. This usually is due to one of the following reasons:\n- You have done too many requests and your IP has been blocked by YouTube\n- You are doing requests from an IP belonging to a cloud provider (like AWS, Google Cloud Platform, Azure, etc.). Unfortunately, most IPs from cloud providers are blocked by YouTube.\n\nThere are two things you can do to work around this:\n1. Use proxies to hide your IP address, as explained in the \"Working around IP bans\" section of the README (https://github.com/jdepoix/youtube-transcript-api?tab=readme-ov-file#working-around-ip-bans-requestblocked-or-ipblocked-exception).\n2. (NOT REC"
     },
     {
-      "video_id": "i4n0r-SC4rs",
-      "url": "https://www.youtube.com/watch?v=i4n0r-SC4rs",
-      "title": "Современный двухэтажный дом с 6 спальнями 200 м.кв. #строительстводомов #загородныйдом #коттедж",
-      "error": "youtube_captions: \nCould not retrieve a transcript for the video https://www.youtube.com/watch?v=i4n0r-SC4rs! This is most likely caused by:\n\nYouTube is blocking requests from your IP. This usually is due to one of the following reasons:\n- You have done too many requests and your IP has been blocked by YouTube\n- You are doing requests from an IP belonging to a cloud provider (like AWS, Google Cloud Platform, Azure, etc.). Unfortunately, most IPs from cloud providers are blocked by YouTube.\n\nThere are two things you can do to work around this:\n1. Use proxies to hide your IP address, as explained in the \"Working around IP bans\" section of the README (https://github.com/jdepoix/youtube-transcript-api?tab=readme-ov-file#working-around-ip-bans-requestblocked-or-ipblocked-exception).\n2. (NOT REC"
-    },
-    {
-      "video_id": "nDlQVpgtR64",
-      "url": "https://www.youtube.com/watch?v=nDlQVpgtR64",
-      "title": "Современный одноэтажный дом Z428 с гаражом на одну машину от Z500",
-      "error": "youtube_captions: \nCould not retrieve a transcript for the video https://www.youtube.com/watch?v=nDlQVpgtR64! This is most likely caused by:\n\nYouTube is blocking requests from your IP. This usually is due to one of the following reasons:\n- You have done too many requests and your IP has been blocked by YouTube\n- You are doing requests from an IP belonging to a cloud provider (like AWS, Google Cloud Platform, Azure, etc.). Unfortunately, most IPs from cloud providers are blocked by YouTube.\n\nThere are two things you can do to work around this:\n1. Use proxies to hide your IP address, as explained in the \"Working around IP bans\" section of the README (https://github.com/jdepoix/youtube-transcript-api?tab=readme-ov-file#working-around-ip-bans-requestblocked-or-ipblocked-exception).\n2. (NOT REC"
-    },
-    {
       "video_id": "DXGS6ejRiSI",
       "url": "https://www.youtube.com/watch?v=DXGS6ejRiSI",
       "title": "Уютный дом 150 кв м во 2-м Иркутске",
       "error": "youtube_captions: \nCould not retrieve a transcript for the video https://www.youtube.com/watch?v=DXGS6ejRiSI! This is most likely caused by:\n\nYouTube is blocking requests from your IP. This usually is due to one of the following reasons:\n- You have done too many requests and your IP has been blocked by YouTube\n- You are doing requests from an IP belonging to a cloud provider (like AWS, Google Cloud Platform, Azure, etc.). Unfortunately, most IPs from cloud providers are blocked by YouTube.\n\nThere are two things you can do to work around this:\n1. Use proxies to hide your IP address, as explained in the \"Working around IP bans\" section of the README (https://github.com/jdepoix/youtube-transcript-api?tab=readme-ov-file#working-around-ip-bans-requestblocked-or-ipblocked-exception).\n2. (NOT REC"
+    },
+    {
+      "video_id": "i4n0r-SC4rs",
+      "url": "https://www.youtube.com/watch?v=i4n0r-SC4rs",
+      "title": "Современный двухэтажный дом с 6 спальнями 200 м.кв. #строительстводомов #загородныйдом #коттедж",
+      "error": "youtube_captions: \nCould not retrieve a transcript for the video https://www.youtube.com/watch?v=i4n0r-SC4rs! This is most likely caused by:\n\nYouTube is blocking requests from your IP. This usually is due to one of the following reasons:\n- You have done too many requests and your IP has been blocked by YouTube\n- You are doing requests from an IP belonging to a cloud provider (like AWS, Google Cloud Platform, Azure, etc.). Unfortunately, most IPs from cloud providers are blocked by YouTube.\n\nThere are two things you can do to work around this:\n1. Use proxies to hide your IP address, as explained in the \"Working around IP bans\" section of the README (https://github.com/jdepoix/youtube-transcript-api?tab=readme-ov-file#working-around-ip-bans-requestblocked-or-ipblocked-exception).\n2. (NOT REC"
     }
   ]
 }
