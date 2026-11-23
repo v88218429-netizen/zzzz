@@ -5,7 +5,7 @@
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.99',
+  VERSION: 'github-worker-1.3.100',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -6994,7 +6994,7 @@ function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId,onl
     }
     refreshHeads();
     var axisRebuilt=false,axisArchiveRows=0;
-    if(storeId==='sanych_wb'&&spec.grain==='week'){
+    if(spec.grain==='week'){
       var actualAxis=[],existingColumns={};
       for(var ac=0;ac<heads.length;ac++){
         var rawHead=heads[ac],headKey=key(rawHead);
