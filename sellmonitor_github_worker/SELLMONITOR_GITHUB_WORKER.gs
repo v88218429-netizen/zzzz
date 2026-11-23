@@ -7305,6 +7305,80 @@ function sellmonitorGithubResumeOzonExport_() {
   return {ok:true,started_fresh_export:true,continuation_pending:true,reason:'scheduled_existing_ozon_export_wrapper'};
 }
 
+/** Narrow Sheets API bridge for the scheduled UDS/Ozon sync. */
+function sellmonitorGithubUdsSheetBridge_(body) {
+  var spreadsheetId = '1SGzwWBZITqTEECvDSWaAa-MdcqQk47Dm2VefpS9bDkc';
+  var operation = String(body && body.operation || '').trim();
+  var allowed = [
+    'UDS — СВОДКА', 'UDS — КАТАЛОГ (88)', 'UDS — Контроль цен',
+    'OZON — ФАКТ SKU 19.10', 'ЮНИТКА', 'UDS ЮНИТКА',
+    'UDS — API LIVE', 'OZON — API LIVE', 'OZON — ЗАКАЗЫ 30д', 'OZON — ПРОДАЖИ 30д'
+  ];
+  var live = ['UDS — API LIVE', 'OZON — API LIVE', 'OZON — ЗАКАЗЫ 30д', 'OZON — ПРОДАЖИ 30д'];
+
+  function rangeTitle(a1) {
+    var value = String(a1 || '').trim();
+    var match = value.match(/^'((?:[^']|'')+)'!/);
+    if (!match) throw new Error('UDS_BRIDGE_RANGE_MUST_NAME_A_TAB');
+    return match[1].replace(/''/g, "'");
+  }
+  function assertRange(a1) {
+    var title = rangeTitle(a1);
+    if (allowed.indexOf(title) < 0) throw new Error('UDS_BRIDGE_TAB_NOT_ALLOWED');
+  }
+  function metadata() {
+    return Sheets.Spreadsheets.get(spreadsheetId, {
+      fields: 'spreadsheetId,properties(title),sheets(properties(sheetId,title,gridProperties(rowCount,columnCount,frozenRowCount)))'
+    });
+  }
+
+  if (operation === 'metadata') return metadata();
+  if (operation === 'read') {
+    var range = String(body.range || '').trim();
+    assertRange(range);
+    return Sheets.Spreadsheets.Values.get(spreadsheetId, range, {
+      majorDimension: 'ROWS',
+      valueRenderOption: 'UNFORMATTED_VALUE'
+    });
+  }
+  if (operation === 'write_values') {
+    var data = body.data;
+    if (!Array.isArray(data) || data.length > 12000) throw new Error('UDS_BRIDGE_WRITE_VALUES_LIMIT');
+    data.forEach(function(item) {
+      if (!item || !item.range || !Array.isArray(item.values)) throw new Error('UDS_BRIDGE_WRITE_VALUES_INVALID');
+      assertRange(item.range);
+    });
+    return Sheets.Spreadsheets.Values.batchUpdate({valueInputOption:'RAW', data:data}, spreadsheetId);
+  }
+  if (operation === 'batch_update') {
+    var requests = body.requests;
+    if (!Array.isArray(requests) || requests.length > 500) throw new Error('UDS_BRIDGE_BATCH_UPDATE_LIMIT');
+    var props = metadata().sheets || [];
+    var titleById = {};
+    props.forEach(function(sheet) {
+      var p = sheet.properties || {};
+      titleById[String(p.sheetId)] = p.title;
+    });
+    requests.forEach(function(request) {
+      if (request.addSheet) {
+        var title = String(((request.addSheet || {}).properties || {}).title || '');
+        if (live.indexOf(title) < 0) throw new Error('UDS_BRIDGE_ADD_SHEET_NOT_ALLOWED');
+      } else if (request.updateSheetProperties) {
+        var properties = request.updateSheetProperties.properties || {};
+        var title = titleById[String(properties.sheetId)];
+        if (allowed.indexOf(title) < 0) throw new Error('UDS_BRIDGE_SHEET_UPDATE_NOT_ALLOWED');
+      } else if (request.repeatCell) {
+        var title = titleById[String(((request.repeatCell || {}).range || {}).sheetId)];
+        if (live.indexOf(title) < 0) throw new Error('UDS_BRIDGE_FORMAT_RANGE_NOT_ALLOWED');
+      } else {
+        throw new Error('UDS_BRIDGE_REQUEST_TYPE_NOT_ALLOWED');
+      }
+    });
+    return Sheets.Spreadsheets.batchUpdate({requests:requests}, spreadsheetId);
+  }
+  throw new Error('UDS_BRIDGE_OPERATION_NOT_ALLOWED');
+}
+
 function doPost(e) {
   try {
     var body = JSON.parse((e && e.postData && e.postData.contents) || '{}');
@@ -7319,6 +7393,11 @@ function doPost(e) {
         action: action,
         result: seeded
       });
+    }
+
+    if (action === 'uds_sheet_bridge') {
+      var udsSheetResult = sellmonitorGithubUdsSheetBridge_(body);
+      return sellmonitorGithubWebJson_({ok:true,action:action,result:udsSheetResult});
     }
 
     if (action === 'bridge_ping') {
