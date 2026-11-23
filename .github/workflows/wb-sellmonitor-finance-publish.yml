@@ -54,6 +54,7 @@ jobs:
     outputs:
       resume_phase: ${{ steps.publish.outputs.resume_phase }}
       resume_store: ${{ steps.publish.outputs.resume_store }}
+      resume_failure_class: ${{ steps.publish.outputs.resume_failure_class }}
     if: ${{ (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && contains(github.event.workflow_run.head_commit.message, '[publish-sellmonitor]'))) && !(github.event_name == 'push' && contains(github.event.head_commit.message, '[skip-finance-publish]')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 360
@@ -182,11 +183,8 @@ jobs:
                           break
                       except (urllib.error.URLError, http.client.HTTPException, OSError, json.JSONDecodeError) as exc:
                           last = type(exc).__name__ + ": " + str(exc)[:240]
-                          if attempt < 4:
-                              delay = min(60, 15 * (2 ** (attempt - 1)))
-                              print("WB_FINANCE_PHASE_RETRY=store:" + store_id + ";phase:" + phase + ";attempt:" + str(attempt + 1) + "/4;wait:" + str(delay) + "s;reason:" + type(exc).__name__, flush=True)
-                              time.sleep(delay)
-                              continue
+                          # A lost response does not prove the Apps Script stopped. Resume from the checkpoint after the lease window.
+                          print("WB_FINANCE_PHASE_RETRY_DEFERRED=store:" + store_id + ";phase:" + phase + ";reason:" + type(exc).__name__ + ";resume=checkpoint", flush=True)
                           break
                       if isinstance(result, dict) and result.get("ok") is True:
                           stores = result.get("stores") or []
@@ -369,9 +367,21 @@ jobs:
           if errors or len(verified) != len(expected):
               retry_phase = failed_phases[0][1] if failed_phases else "summary"
               retry_store = failed_phases[0][0] if failed_phases else (expected[0] if expected else "all")
+              failure_text = " ".join(str(error) for error in errors).lower()
+              transient_failure_markers = (
+                  "timed out", "timeout", "remote end closed", "remotedisconnected",
+                  "connection reset", "connectionreseterror", "connection refused",
+                  "jsondecodeerror", "empty response", "lock_busy", "gate_busy",
+                  "http_408", "http_425", "http_429", "http_500", "http_502",
+                  "http_503", "http_504", "rate limit", "temporarily unavailable",
+                  "service spreadsheets", "urlerror", "httpexception",
+              )
+              failure_class = "transient" if any(marker in failure_text for marker in transient_failure_markers) else "nontransient"
               with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output_file:
                   output_file.write("resume_phase=" + retry_phase + "\n")
                   output_file.write("resume_store=" + retry_store + "\n")
+                  output_file.write("resume_failure_class=" + failure_class + "\n")
+              print("WB_FAILURE_CLASS=" + failure_class + ";store=" + retry_store + ";phase=" + retry_phase, flush=True)
               with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as checkpoint_file:
                   checkpoint_file.write("\n| all | current | " + retry_phase + " | unknown | RETRY_REQUIRED | этап не прошёл проверку | повторить с этой фазы |\n")
               raise SystemExit("WB finance phased publication incomplete: " + json.dumps({"verified": len(verified), "expected": len(expected), "errors": errors}, ensure_ascii=False))
@@ -394,6 +404,7 @@ jobs:
           RECOVERY_PHASE: ${{ needs.publish.outputs.resume_phase || 'summary' }}
           RECOVERY_ATTEMPT: ${{ github.event_name == 'workflow_dispatch' && inputs.resume_attempt || '0' }}
           RECOVERY_RUN_ID: ${{ github.run_id }}
+          RECOVERY_FAILURE_CLASS: ${{ needs.publish.outputs.resume_failure_class || 'unknown' }}
         run: |
           set -euo pipefail
           python - <<'PY'
@@ -488,6 +499,12 @@ jobs:
                           store, phase = last[1], last[2]
           except Exception as exc:
               print("WB_RECOVERY_LOG_READ=unavailable;reason="+type(exc).__name__, flush=True)
+              if os.environ.get("RECOVERY_FAILURE_CLASS", "unknown").strip().lower() == "transient" and not recovery_wait:
+                  recovery_wait = 610
+                  recovery_wait_reason = "transient_publish_error_log_unavailable"
+          if not recovery_wait and os.environ.get("RECOVERY_FAILURE_CLASS", "unknown").strip().lower() == "transient":
+              recovery_wait = 610
+              recovery_wait_reason = "transient_publish_error"
           print("WB_RECOVERY_CHECKPOINT=store:"+store+";phase:"+phase, flush=True)
           attempt = int(os.environ.get("RECOVERY_ATTEMPT", "0") or "0")
           if attempt >= 10:
@@ -499,7 +516,7 @@ jobs:
                   "http_429", "http_500", "http_502", "http_503", "http_504",
                   "rate limit", "temporarily unavailable", "service spreadsheets",
               )
-              if not any(marker in failure_text for marker in transient_markers):
+              if os.environ.get("RECOVERY_FAILURE_CLASS", "unknown").strip().lower() != "transient" and not any(marker in failure_text for marker in transient_markers):
                   print("WB_AUTOMATIC_RECOVERY=paused;attempt=10;reason=non_transient_or_unreadable_failure;scheduled_retry=retained", flush=True)
                   raise SystemExit(0)
           if not recovery_wait:
