@@ -74,168 +74,56 @@ def http_json(url, method="GET", headers=None, payload=None, timeout=45, label="
     return value
 
 
-def norm_key(value):
-    return re.sub(r"[^a-z0-9]", "", str(value).lower())
-
-
-def deep_find(obj, names):
-    wanted = {norm_key(item) for item in names}
-    if isinstance(obj, dict):
-        for key, value in obj.items():
-            if norm_key(key) in wanted and isinstance(value, str) and value:
-                return value
-        for value in obj.values():
-            found = deep_find(value, names)
-            if found:
-                return found
-    elif isinstance(obj, list):
-        for value in obj:
-            found = deep_find(value, names)
-            if found:
-                return found
-    return ""
-
-
-def google_profiles(config):
-    tokens = config.get("tokens") or {}
-    values = list(tokens.values()) if isinstance(tokens, dict) else (tokens if isinstance(tokens, list) else [])
-    profiles = [item for item in values if isinstance(item, dict)]
-    profiles.sort(key=lambda item: 0 if ("drive" in str(item.get("scope", "")).lower() and "spreadsheets" in str(item.get("scope", "")).lower()) else 1)
-    return profiles
-
-
-def refresh_google_token(profile, config):
-    refresh = deep_find(profile, ["refresh_token", "refreshToken"])
-    client_id = deep_find(profile, ["client_id", "clientId"]) or deep_find(config, ["client_id", "clientId"])
-    client_secret = deep_find(profile, ["client_secret", "clientSecret"]) or deep_find(config, ["client_secret", "clientSecret"])
-    if not (refresh and client_id and client_secret):
-        return ""
-    form = urllib.parse.urlencode({
-        "client_id": client_id,
-        "client_secret": client_secret,
-        "refresh_token": refresh,
-        "grant_type": "refresh_token",
-    }).encode("utf-8")
-    try:
-        raw = http_bytes("https://oauth2.googleapis.com/token", method="POST", headers={"Content-Type": "application/x-www-form-urlencoded"}, body=form, timeout=30, label="Google OAuth refresh")
-        parsed = json.loads(raw.decode("utf-8"))
-        return str(parsed.get("access_token") or "")
-    except Exception:
-        return ""
-
-
-def google_export_key_doc(access_token):
-    url = "https://www.googleapis.com/drive/v3/files/" + urllib.parse.quote(UDS_KEY_DOC_ID, safe="") + "/export?mimeType=" + urllib.parse.quote("text/plain", safe="")
-    raw = http_bytes(url, headers={"Authorization": "Bearer " + access_token}, timeout=45, label="Google Drive key document")
-    try:
-        return raw.decode("utf-8")
-    except UnicodeDecodeError:
-        raise RuntimeError("Google Drive key document is not UTF-8 text") from None
-
-
-def google_sheet_metadata(access_token):
-    fields = "spreadsheetId,properties(title),sheets(properties(sheetId,title,gridProperties(rowCount,columnCount,frozenRowCount)))"
-    url = f"https://sheets.googleapis.com/v4/spreadsheets/{SPREADSHEET_ID}?fields={urllib.parse.quote(fields, safe=',().')}"
-    return http_json(url, headers={"Authorization": "Bearer " + access_token}, label="Google Sheets access probe")
+def apps_script_call(operation, payload=None, label="Apps Script bridge"):
+    deployment_id = os.environ.get("WEBAPP_DEPLOYMENT_ID", "").strip()
+    webhook_secret = os.environ.get("SELLMONITOR_GITHUB_WEBHOOK_SECRET", "").strip()
+    if not deployment_id or not webhook_secret:
+        raise RuntimeError("Protected Apps Script bridge configuration is missing")
+    url = f"https://script.google.com/macros/s/{deployment_id}/exec"
+    body = {"action": "uds_sheet_bridge", "operation": operation, "token": webhook_secret}
+    if payload:
+        body.update(payload)
+    result = http_json(url, method="POST", payload=body, timeout=180, label=label)
+    if result.get("ok") is not True or result.get("action") != "uds_sheet_bridge":
+        raise RuntimeError(f"{label}: protected bridge returned an invalid response")
+    value = result.get("result")
+    if not isinstance(value, dict):
+        raise RuntimeError(f"{label}: protected bridge response has no result")
+    return value
 
 
 def google_auth_and_key():
-    raw_config = os.environ.get("CLASPRC_JSON", "")
-    if not raw_config:
-        raise RuntimeError("CLASPRC_JSON missing")
-    try:
-        config = json.loads(raw_config)
-    except json.JSONDecodeError:
-        raise RuntimeError("CLASPRC_JSON is not valid JSON") from None
-    candidates = google_profiles(config)
-    if not candidates:
-        raise RuntimeError("CLASPRC_JSON contains no Google token profiles")
-
-    drive_token = ""
-    sheets_token = ""
-    document_text = ""
-    diagnostics = []
-    for index, profile in enumerate(candidates):
-        scopes = str(profile.get("scope", "")).lower()
-        access = deep_find(profile, ["access_token", "accessToken"])
-        attempts = [access] if access else []
-        refreshed = refresh_google_token(profile, config)
-        if refreshed and refreshed not in attempts:
-            attempts.append(refreshed)
-        drive_state = "not_checked"
-        sheets_state = "not_checked"
-        for token in attempts:
-            if not token:
-                continue
-            if not drive_token:
-                try:
-                    document_text = google_export_key_doc(token)
-                    drive_token = token
-                    drive_state = "ok"
-                except HttpFailure as exc:
-                    drive_state = f"HTTP{exc.status}"
-                    if exc.status not in (401, 403, 404):
-                        raise
-                except RuntimeError:
-                    drive_state = "transport_error"
-            if not sheets_token:
-                try:
-                    google_sheet_metadata(token)
-                    sheets_token = token
-                    sheets_state = "ok"
-                except HttpFailure as exc:
-                    sheets_state = f"HTTP{exc.status}"
-                    if exc.status not in (401, 403, 404):
-                        raise
-                except RuntimeError:
-                    sheets_state = "transport_error"
-        diagnostics.append(
-            f"profile{index}:drive_scope={'yes' if 'drive' in scopes else 'no'},"
-            f"sheets_scope={'yes' if 'spreadsheets' in scopes else 'no'},"
-            f"refresh={'yes' if bool(refreshed) else 'no'},drive={drive_state},sheets={sheets_state}"
-        )
-        if drive_token and sheets_token:
-            break
-    if not drive_token or not sheets_token:
-        missing = []
-        if not drive_token:
-            missing.append("Drive read for the saved UDS key document")
-        if not sheets_token:
-            missing.append("Google Sheets access for the target workbook")
-        raise RuntimeError("Google authorization missing " + " and ".join(missing) + " (" + "; ".join(diagnostics) + ")")
-
-    tokens = sorted(set(re.findall(r"(?m)^\s*([A-Za-z0-9_-]{35,})\s*$", document_text)))
-    if len(tokens) != 1:
-        raise RuntimeError("Saved UDS key document must contain exactly one standalone API key")
-    api_key = tokens[0]
-    gh_mask(drive_token)
-    gh_mask(sheets_token)
+    api_key = os.environ.get("UDS_API_KEY", "").strip()
+    if not api_key:
+        raise RuntimeError("UDS_API_KEY secret is missing")
+    if not os.environ.get("OZON_CLIENT_ID", "").strip() or not os.environ.get("OZON_API_KEY", "").strip():
+        raise RuntimeError("Ozon Hozyayushka Seller API credentials are missing")
     gh_mask(api_key)
-    return sheets_token, api_key
+    gh_mask(os.environ.get("OZON_CLIENT_ID", ""))
+    gh_mask(os.environ.get("OZON_API_KEY", ""))
+    gh_mask(os.environ.get("SELLMONITOR_GITHUB_WEBHOOK_SECRET", ""))
+    return "apps-script-bridge", api_key
 
 
-def google_json(access_token, endpoint, method="GET", payload=None, label="Google API"):
-    url = endpoint if endpoint.startswith("https://") else "https://sheets.googleapis.com/v4/spreadsheets/" + SPREADSHEET_ID + endpoint
-    headers = {"Authorization": "Bearer " + access_token, "Accept": "application/json"}
-    return http_json(url, method=method, headers=headers, payload=payload, timeout=60, label=label)
+def google_sheet_metadata(_access_token):
+    return apps_script_call("metadata", label="Google Sheets metadata")
 
 
-def google_values(access_token, range_a1):
-    encoded = urllib.parse.quote(range_a1, safe="")
-    result = google_json(access_token, f"/values/{encoded}?majorDimension=ROWS&valueRenderOption=UNFORMATTED_VALUE", label="Google Sheets read")
+def google_values(_access_token, range_a1):
+    result = apps_script_call("read", {"range": range_a1}, label="Google Sheets read")
     return result.get("values") or []
 
 
-def google_values_batch(access_token, data):
+def google_values_batch(_access_token, data):
     if not data:
         return
-    google_json(access_token, "/values:batchUpdate", method="POST", payload={"valueInputOption": "RAW", "data": data}, label="Google Sheets write")
+    apps_script_call("write_values", {"data": data}, label="Google Sheets write")
 
 
-def google_batch_update(access_token, requests):
+def google_batch_update(_access_token, requests):
     if not requests:
         return
-    google_json(access_token, ":batchUpdate", method="POST", payload={"requests": requests}, label="Google Sheets structure update")
+    apps_script_call("batch_update", {"requests": requests}, label="Google Sheets structure update")
 
 
 def col_letter(n):
