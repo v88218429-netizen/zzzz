@@ -1417,16 +1417,31 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
         worker_text = worker_text.replace(performance_write_anchor,
             "  graphCaptionWrites.forEach(function(x){chartSheet.getRange(x.cell).setValue(x.value);});\n" + performance_write_anchor, 1)
         performance_readback_anchor = "  if(!dailyOk||!periodOk||!aggregatesOk||!axesOk||!rnpNoteReadback||!chartRangesOk)throw new Error('OZON_PERF_READBACK_FAILED:'+cfg.name+':'+dailyOk+':'+periodOk+':'+aggregatesOk+':'+axesOk+':'+rnpNoteReadback+':'+chartRangesOk);"
-        if worker_text.count(performance_readback_anchor) != 1:
-            raise SystemExit("OZON_GRAPH_LABEL_PERFORMANCE_READBACK_ANCHOR_MISMATCH")
-        performance_readback = """  var graphCaptionsOk=graphCaptionWrites.every(function(x){return String(chartSheet.getRange(x.cell).getValue()||'')===x.value;});
+        if worker_text.count(performance_readback_anchor) == 1:
+            performance_readback = """  var graphCaptionsOk=graphCaptionWrites.every(function(x){return String(chartSheet.getRange(x.cell).getValue()||'')===x.value;});
   if(!dailyOk||!periodOk||!aggregatesOk||!axesOk||!rnpNoteReadback||!chartRangesOk||!graphCaptionsOk)throw new Error('OZON_PERF_READBACK_FAILED:'+cfg.name+':'+dailyOk+':'+periodOk+':'+aggregatesOk+':'+axesOk+':'+rnpNoteReadback+':'+chartRangesOk+':captions='+graphCaptionsOk);"""
-        worker_text = worker_text.replace(performance_readback_anchor, performance_readback, 1)
+            worker_text = worker_text.replace(performance_readback_anchor, performance_readback, 1)
+        else:
+            readback_matches = list(re.finditer(r"(?m)^(\s*)if\s*\(([^)]*)\)\s*throw\s+new Error\('OZON_PERF_READBACK_FAILED:", worker_text))
+            if len(readback_matches) != 1:
+                raise SystemExit("OZON_GRAPH_LABEL_PERFORMANCE_READBACK_ANCHOR_MISMATCH")
+            readback_match = readback_matches[0]
+            if not re.search(r"\bvar\s+graphCaptionsOk\s*=", worker_text):
+                declaration = "var graphCaptionsOk=graphCaptionWrites.every(function(x){return String(chartSheet.getRange(x.cell).getValue()||'')===x.value;});"
+                worker_text = worker_text[:readback_match.start()] + readback_match.group(1) + declaration + "\n" + worker_text[readback_match.start():]
+                readback_matches = list(re.finditer(r"(?m)^(\s*)if\s*\(([^)]*)\)\s*throw\s+new Error\('OZON_PERF_READBACK_FAILED:", worker_text))
+                if len(readback_matches) != 1:
+                    raise SystemExit("OZON_GRAPH_LABEL_PERFORMANCE_READBACK_RESCAN_MISMATCH")
+                readback_match = readback_matches[0]
+            if "graphCaptionsOk" not in readback_match.group(2):
+                worker_text = worker_text[:readback_match.start(2)] + readback_match.group(2) + "||!graphCaptionsOk" + worker_text[readback_match.end(2):]
+            print("OZON_GRAPH_LABEL_PERFORMANCE_READBACK=verified_existing_condition")
         performance_result_anchor = "chart_ranges_readback:chartRangesOk,charts:charts,"
-        if worker_text.count(performance_result_anchor) != 1:
+        if worker_text.count(performance_result_anchor) == 1:
+            worker_text = worker_text.replace(performance_result_anchor,
+                "chart_ranges_readback:chartRangesOk,graph_captions_readback:graphCaptionsOk,charts:charts,", 1)
+        elif worker_text.count(performance_result_anchor) == 0 and "graph_captions_readback:graphCaptionsOk" not in worker_text:
             raise SystemExit("OZON_GRAPH_LABEL_PERFORMANCE_RESULT_ANCHOR_MISMATCH")
-        worker_text = worker_text.replace(performance_result_anchor,
-            "chart_ranges_readback:chartRangesOk,graph_captions_readback:graphCaptionsOk,charts:charts,", 1)
 
         order_anchor = "    var dailyOrderChartMatches=0,dailyOrderChartUpdated=false;"
         order_code = """    /* OZON_GRAPH_LABEL_FRESHNESS_V1 */
@@ -1480,9 +1495,63 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
         worker_text = worker_text.replace(graph_version_anchor,"VERSION: 'github-worker-" + graph_next + "'",1)
         print("OZON_GRAPH_LABEL_WORKER_VERSION="+graph_current+"->"+graph_next)
         print("OZON_GRAPH_LABEL_FRESHNESS=patched")
-    elif "graphCaptionWrites" not in worker_text or "graphCaptionReadback" not in worker_text or "sellerGraphCaptionChanges" not in worker_text:
+    elif "graphCaptionWrites" not in worker_text or ("graphCaptionsOk" not in worker_text and "graphCaptionReadback" not in worker_text) or "sellerGraphCaptionChanges" not in worker_text:
         raise SystemExit("OZON_GRAPH_LABEL_FRESHNESS_PATCH_PARTIAL")
 
+
+    # Apply real percentage formats to Ozon campaign summary ratios and verify the formats after writing.
+    ozon_percent_format_marker = "OZON_SUMMARY_PERCENT_FORMATS_V1"
+    if ozon_percent_format_marker not in worker_text:
+        percent_archive_anchor = "    var oldNote=sh.getRange('A1').getValue();"
+        if worker_text.count(percent_archive_anchor) != 1:
+            raise SystemExit("OZON_SUMMARY_PERCENT_ARCHIVE_ANCHOR_MISMATCH")
+        percent_archive_code = """    /* OZON_SUMMARY_PERCENT_FORMATS_V1 */
+    [13,16,17].forEach(function(metricRow){
+      if(usedCount<=0)return;
+      var priorFormats=sh.getRange(metricRow,startCol,1,usedCount).getNumberFormats()[0];
+      if(priorFormats.some(function(pattern){return pattern!=='0.00%';}))
+        helperArchive.push({sheet:spec.name,range:'F'+metricRow+':'+colLabel_(startCol+usedCount-1)+metricRow,values:[priorFormats]});
+    });
+"""
+        worker_text = worker_text.replace(percent_archive_anchor, percent_archive_code + percent_archive_anchor, 1)
+        percent_write_anchor = "  SpreadsheetApp.flush();\n\n  var dailyCheck="
+        if worker_text.count(percent_write_anchor) != 1:
+            raise SystemExit("OZON_SUMMARY_PERCENT_WRITE_ANCHOR_MISMATCH")
+        percent_write_code = """  helperWrites.filter(function(x){return ['day','week','month'].indexOf(x.spec.kind)>=0;}).forEach(function(x){
+    [13,16,17].forEach(function(metricRow){x.sh.getRange(metricRow,x.startCol,1,x.headers.length).setNumberFormat('0.00%');});
+  });
+"""
+        worker_text = worker_text.replace(percent_write_anchor, percent_write_code + percent_write_anchor, 1)
+        percent_readback_anchor = "  var aggregatesOk=helperWrites.every(function(x){"
+        if worker_text.count(percent_readback_anchor) != 1:
+            raise SystemExit("OZON_SUMMARY_PERCENT_READBACK_ANCHOR_MISMATCH")
+        percent_readback_code = """  var percentFormatsOk=helperWrites.filter(function(x){return ['day','week','month'].indexOf(x.spec.kind)>=0;}).every(function(x){
+    return [13,16,17].every(function(metricRow){
+      var formats=x.sh.getRange(metricRow,x.startCol,1,x.headers.length).getNumberFormats()[0];
+      return formats.length===x.headers.length&&formats.every(function(pattern){return pattern==='0.00%';});
+    });
+  });
+  if(!percentFormatsOk)throw new Error('OZON_PERCENT_FORMAT_READBACK_FAILED:'+cfg.name);
+"""
+        worker_text = worker_text.replace(percent_readback_anchor, percent_readback_code + percent_readback_anchor, 1)
+        percent_result_anchor = "helper_readback:aggregatesOk,"
+        if worker_text.count(percent_result_anchor) == 1:
+            worker_text = worker_text.replace(percent_result_anchor,
+                "helper_readback:aggregatesOk,percent_formats_readback:percentFormatsOk,", 1)
+        elif "percent_formats_readback:percentFormatsOk" not in worker_text:
+            raise SystemExit("OZON_SUMMARY_PERCENT_RESULT_ANCHOR_MISMATCH")
+        percent_versions = re.findall(r"VERSION:\s*'github-worker-(\d+)\.(\d+)\.(\d+)'", worker_text)
+        if len(percent_versions) != 1:
+            raise SystemExit("OZON_SUMMARY_PERCENT_VERSION_PATTERN_MISMATCH")
+        percent_major,percent_minor,percent_patch=[int(value) for value in percent_versions[0]]
+        percent_current=".".join(str(value) for value in (percent_major,percent_minor,percent_patch))
+        percent_next=".".join(str(value) for value in (percent_major,percent_minor,percent_patch+1))
+        percent_version_anchor="VERSION: 'github-worker-"+percent_current+"'"
+        if worker_text.count(percent_version_anchor) != 1:
+            raise SystemExit("OZON_SUMMARY_PERCENT_VERSION_ANCHOR_MISMATCH")
+        worker_text=worker_text.replace(percent_version_anchor,"VERSION: 'github-worker-"+percent_next+"'",1)
+        print("OZON_SUMMARY_PERCENT_WORKER_VERSION="+percent_current+"->"+percent_next)
+        print("OZON_SUMMARY_PERCENT_FORMATS=patched_and_readback")
 
     # Keep Seller API order chart titles synchronized with the published week and month coverage.
     order_period_chart_marker = "OZON_ORDER_PERIOD_CHART_TITLES_V1"
