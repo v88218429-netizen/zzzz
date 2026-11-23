@@ -524,7 +524,7 @@ jobs:
                   )
 
           url = "https://script.google.com/macros/s/" + os.environ["WEBAPP_DEPLOYMENT_ID"] + "/exec"
-          exported_at = now.isoformat().replace("+00:00", "Z")
+          exported_at = datetime.datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
           accepted_actions = {"publish_ozon_api_orders", "publish_ozon_summary_orders"}
           store_jobs = (("1", "ДОМ"), ("2", "Хозяюшка"))
           if resume_phase == "finance":
@@ -682,6 +682,7 @@ jobs:
           checkpoint("finance", "all", "RUNNING", exported_at + ":" + str(len(records)), "order_readback=true", "получить финансовую историю")
           finance_days = []
           finance_ok_accounts = []
+          finance_exported_at_by_cabinet = {}
           finance_failures = []
           first_day = datetime.date.fromisoformat(COVERAGE_FROM)
           last_day = datetime.date.fromisoformat(coverage_to)
@@ -813,6 +814,7 @@ jobs:
                       day += datetime.timedelta(days=1)
                   finance_days.extend(store_daily)
                   finance_ok_accounts.append(cabinet)
+                  finance_exported_at_by_cabinet[cabinet] = datetime.datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
                   print("OZON_FINANCE_SOURCE=store="+label+";status=complete;days="+str(len(store_daily))+";rows="+str(finance_rows)+";pages="+str(finance_pages)+";coverage="+COVERAGE_FROM+".."+coverage_to+";category_sums="+json.dumps({k:str(v) for k,v in category_totals.items()},sort_keys=True),flush=True)
               except Exception as exc:
                   finance_failures.append(label + ":" + type(exc).__name__ + ":" + str(exc)[:240])
@@ -831,7 +833,7 @@ jobs:
                   "completed_accounts": [cabinet],
                   "coverage_from": COVERAGE_FROM,
                   "coverage_to": coverage_to,
-                  "exported_at": exported_at,
+                  "exported_at": finance_exported_at_by_cabinet[cabinet],
                   "daily": daily,
               }
               body = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
