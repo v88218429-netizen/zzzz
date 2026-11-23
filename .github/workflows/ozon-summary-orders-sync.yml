@@ -184,6 +184,9 @@ jobs:
                   if name.endswith("sellmonitor_github_worker/patch_master.py") and any(k in patch for k in ("OZON_FINANCE", "OZON_SUMMARY", "OZON_COVERAGE", "OZON_GRAPH_LABEL")):
                       phase = "finance"
                       touched.append(name)
+                  if name.endswith("sellmonitor_github_worker/patch_ozon_sku_stats.py") and any(k in patch for k in ("OZON_SKU_ITEM_STATS_V1", "sellmonitorGithubOzonSkuCoverageNote_")):
+                      phase = "source"
+                      touched.append(name)
                   if name.endswith("sellmonitor_github_worker/SELLMONITOR_GITHUB_WORKER.gs") and any(k in patch for k in ("SMC_OZON_SUMMARY", "sellmonitorGithubPublishOzon", "publish_ozon_summary_orders", "publish_ozon_api_finance")):
                       phase = "source"
                       touched.append(name)
