@@ -711,6 +711,31 @@ jobs:
               print("CLIENT=" + str(client.get("store_id")) + ",status=" + str(client.get("status")) + ",last_seen=" + str(client.get("last_seen")))
           PY
 
+      - name: Verify protected UDS sheet bridge
+        if: github.event_name == 'push' && github.event.head_commit.message == 'Verify protected UDS sheet bridge'
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, os, urllib.request
+          url='https://script.google.com/macros/s/'+os.environ['WEBAPP_DEPLOYMENT_ID']+'/exec'
+          body={'token':os.environ['WEBHOOK_SECRET'],'action':'uds_sheet_bridge','operation':'metadata'}
+          request=urllib.request.Request(url,data=json.dumps(body).encode('utf-8'),
+              headers={'Content-Type':'application/json'},method='POST')
+          with urllib.request.urlopen(request,timeout=120) as response:
+              result=json.loads(response.read().decode('utf-8'))
+          metadata=result.get('result') or {}
+          titles={((item.get('properties') or {}).get('title') or '') for item in metadata.get('sheets') or []}
+          required={'UDS — СВОДКА','UDS — КАТАЛОГ (88)','UDS — Контроль цен','OZON — ФАКТ SKU 19.10','ЮНИТКА','UDS ЮНИТКА'}
+          if result.get('ok') is not True or result.get('action')!='uds_sheet_bridge':
+              raise SystemExit('UDS_SHEET_BRIDGE_RESPONSE_INVALID')
+          if metadata.get('spreadsheetId')!='1SGzwWBZITqTEECvDSWaAa-MdcqQk47Dm2VefpS9bDkc':
+              raise SystemExit('UDS_SHEET_BRIDGE_WRONG_SPREADSHEET')
+          if not required.issubset(titles):
+              raise SystemExit('UDS_SHEET_BRIDGE_REQUIRED_TABS_MISSING')
+          print('UDS_SHEET_BRIDGE_METADATA_READBACK=ok')
+          print('UDS_SHEET_BRIDGE_REQUIRED_TABS='+str(len(required)))
+          PY
+
       - name: Read AIR FBS technical log via protected GitHub bridge
         if: ${{ github.event_name == 'push' && (github.event.head_commit.message == 'Repair AIR FBS log inspection through GitHub' || github.event.head_commit.message == 'Inspect FBS audit source via GitHub') }}
         shell: bash
