@@ -25,7 +25,7 @@ function sellmonitorGithubPublishOzonPerformanceSkuDaily_(body) {
     store==='HOZYAIKA'?{key:'HOZYAIKA',name:'Хозяюшка',id:'1Rl-IVihrZ56wKwDsf76wspZ53a8ntN3hCVN1gd4Tguo'}:null;
   if(!cfg)throw new Error('OZON_SKU_STORE_INVALID');
   var date=String(body.date||'');
-  if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(date))throw new Error('OZON_SKU_DATE_INVALID');
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(date))throw new Error('OZON_SKU_DATE_INVALID');
   var state=String(body.source_status||'RETRY_REQUIRED');
   var requested=(body.requested_campaign_ids||[]).map(function(x){return String(x);});
   var confirmed=(body.confirmed_campaign_ids||[]).map(function(x){return String(x);});
@@ -94,7 +94,7 @@ function sellmonitorGithubPublishOzonPerformanceSkuDaily_(body) {
   function n_(v){
     if(v===null||v===undefined||v==='')return '';
     if(typeof v==='number')return isFinite(v)?v:'';
-    var s=String(v).trim().replace(/\\s/g,'').replace(',','.');
+    var s=String(v).trim().replace(/\s/g,'').replace(',','.');
     if(!s)return '';
     var n=Number(s);
     return isFinite(n)?n:'';
