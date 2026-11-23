@@ -3,54 +3,54 @@
   "request": "FAMILY_LIFE_20261122_1948_SCHEDULED.json",
   "query": "семейная жизнь предпринимателя как совмещать бизнес и семью",
   "knowledge_tag": "FAMILY",
-  "generated_at": "2026-11-23T16:14:47.630651+00:00",
+  "generated_at": "2026-11-23T16:18:37.542500+00:00",
   "videos": [
     {
-      "video_id": "gazFwZnh5Fk",
-      "url": "https://www.youtube.com/watch?v=gazFwZnh5Fk",
-      "title": "Материнство и бизнес одновременно: 4 правила которые мне помогли",
-      "channel": "Jane Milovanova",
-      "duration": 1063,
+      "video_id": "cVbiael_X9g",
+      "url": "https://www.youtube.com/watch?v=cVbiael_X9g",
+      "title": "Из деревни в большой бизнес. Как без связей и денег построить миллиардный бизнес и счастливую семью",
+      "channel": "Saida Hallid",
+      "duration": 3864,
       "timestamp": null,
       "query": "семейная жизнь предпринимателя как совмещать бизнес и семью",
       "kind": "video",
-      "transcript": "transcripts/2026-11-23_FAMILY_LIFE_video_gazFwZnh5Fk.md",
+      "transcript": "transcripts/2026-11-23_FAMILY_LIFE_video_cVbiael_X9g.md",
       "method": "FreeTranscriptAPI"
     },
     {
-      "video_id": "dLfRC4EoAtc",
-      "url": "https://www.youtube.com/watch?v=dLfRC4EoAtc",
-      "title": "Дети PRO семью",
-      "channel": "PRO Буда-Кошелево",
-      "duration": 160,
+      "video_id": "-wtQR-VZOF8",
+      "url": "https://www.youtube.com/watch?v=-wtQR-VZOF8",
+      "title": "Бизнес семья, как это? / Екатерина Суханова / Бизнес архитектор, серийный предприниматель",
+      "channel": "Бизнес с Любовью ",
+      "duration": 3875,
       "timestamp": null,
-      "query": "предприниматель семья дети образ жизни shorts",
-      "kind": "short",
-      "transcript": "transcripts/2026-11-23_FAMILY_LIFE_short_dLfRC4EoAtc.md",
+      "query": "семейная жизнь предпринимателя как совмещать бизнес и семью",
+      "kind": "video",
+      "transcript": "transcripts/2026-11-23_FAMILY_LIFE_video_-wtQR-VZOF8.md",
       "method": "FreeTranscriptAPI"
     },
     {
-      "video_id": "IJf1c16oquQ",
-      "url": "https://www.youtube.com/watch?v=IJf1c16oquQ",
-      "title": "Parents Don't Get My Hustle? Old School vs. Entrepreneurship #shorts",
-      "channel": "Sunshine Tha Goddess",
-      "duration": 93,
-      "timestamp": null,
-      "query": "family entrepreneur parenting schedule shorts",
-      "kind": "short",
-      "transcript": "transcripts/2026-11-23_FAMILY_LIFE_short_IJf1c16oquQ.md",
-      "method": "FreeTranscriptAPI"
-    },
-    {
-      "video_id": "Xk6JsIayAUI",
-      "url": "https://www.youtube.com/watch?v=Xk6JsIayAUI",
-      "title": "Meet Carey Ng from Malaysia: Finding Balance in Motherhood and Entrepreneurship",
-      "channel": "Supermom",
-      "duration": 89,
+      "video_id": "_hg3wLz5gdg",
+      "url": "https://www.youtube.com/watch?v=_hg3wLz5gdg",
+      "title": "Boost resilience as an entrepreneur with a family",
+      "channel": "START-with-Gudrun",
+      "duration": 148,
       "timestamp": null,
       "query": "family entrepreneur parenting schedule shorts",
       "kind": "short",
-      "transcript": "transcripts/2026-11-23_FAMILY_LIFE_short_Xk6JsIayAUI.md",
+      "transcript": "transcripts/2026-11-23_FAMILY_LIFE_short__hg3wLz5gdg.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "T8gtbY_6xnc",
+      "url": "https://www.youtube.com/watch?v=T8gtbY_6xnc",
+      "title": "Know Your Child #parenting #shorts #entrepreneurship EP:1252 #tamericatv",
+      "channel": "Tamerica TV",
+      "duration": 3553,
+      "timestamp": null,
+      "query": "family entrepreneur parenting schedule shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-11-23_FAMILY_LIFE_short_T8gtbY_6xnc.md",
       "method": "FreeTranscriptAPI"
     }
   ],
@@ -62,10 +62,10 @@
       "error": "youtube_captions: \nCould not retrieve a transcript for the video https://www.youtube.com/watch?v=VEdS1mMONpI! This is most likely caused by:\n\nYouTube is blocking requests from your IP. This usually is due to one of the following reasons:\n- You have done too many requests and your IP has been blocked by YouTube\n- You are doing requests from an IP belonging to a cloud provider (like AWS, Google Cloud Platform, Azure, etc.). Unfortunately, most IPs from cloud providers are blocked by YouTube.\n\nThere are two things you can do to work around this:\n1. Use proxies to hide your IP address, as explained in the \"Working around IP bans\" section of the README (https://github.com/jdepoix/youtube-transcript-api?tab=readme-ov-file#working-around-ip-bans-requestblocked-or-ipblocked-exception).\n2. (NOT REC"
     },
     {
-      "video_id": "lycnDv0y7bk",
-      "url": "https://www.youtube.com/watch?v=lycnDv0y7bk",
-      "title": "Как совмещать серийное предпринимательство в эмиграции и оставаться женщиной для своей семьи.",
-      "error": "youtube_captions: \nCould not retrieve a transcript for the video https://www.youtube.com/watch?v=lycnDv0y7bk! This is most likely caused by:\n\nYouTube is blocking requests from your IP. This usually is due to one of the following reasons:\n- You have done too many requests and your IP has been blocked by YouTube\n- You are doing requests from an IP belonging to a cloud provider (like AWS, Google Cloud Platform, Azure, etc.). Unfortunately, most IPs from cloud providers are blocked by YouTube.\n\nThere are two things you can do to work around this:\n1. Use proxies to hide your IP address, as explained in the \"Working around IP bans\" section of the README (https://github.com/jdepoix/youtube-transcript-api?tab=readme-ov-file#working-around-ip-bans-requestblocked-or-ipblocked-exception).\n2. (NOT REC"
+      "video_id": "bVKmfF7KRqY",
+      "url": "https://www.youtube.com/watch?v=bVKmfF7KRqY",
+      "title": "«Семейный бизнес»: Вовочка о ритме своей жизни",
+      "error": "youtube_captions: \nCould not retrieve a transcript for the video https://www.youtube.com/watch?v=bVKmfF7KRqY! This is most likely caused by:\n\nThe video is unplayable for the following reason: Please sign in\n\nAdditional Details:\n - This helps protect our community. \n - Learn more\n\nIf you are sure that the described cause is not responsible for this error and that a transcript should be retrievable, please create an issue at https://github.com/jdepoix/youtube-transcript-api/issues. Please add which version of youtube_transcript_api you are using and provide the information needed to replicate the error. Also make sure that there are no open issues which already describe your problem! | transcript_ai: HTTP Error 401: Unauthorized | free_api: HTTP Error 404: Not Found"
     }
   ]
 }

@@ -3,44 +3,75 @@
   "request": "LOCATION_20261122_1948_SCHEDULED.json",
   "query": "лучшие места для жизни с семьей предпринимателю Россия 2026",
   "knowledge_tag": "LOCATION",
-  "generated_at": "2026-11-23T16:16:20.979093+00:00",
-  "videos": [],
+  "generated_at": "2026-11-23T16:19:54.205747+00:00",
+  "videos": [
+    {
+      "video_id": "Bs-AX5XEzsc",
+      "url": "https://www.youtube.com/watch?v=Bs-AX5XEzsc",
+      "title": "Это поможет СЭКОНОМИТЬ на ипотеке! Как ПРАВИЛЬНО взять ипотеку в 2026?",
+      "channel": "Светлана Наумова / Всё о недвижимости",
+      "duration": 582,
+      "timestamp": null,
+      "query": "лучшие места для жизни с семьей предпринимателю Россия 2026",
+      "kind": "video",
+      "transcript": "transcripts/2026-11-23_LOCATION_video_Bs-AX5XEzsc.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "56e5JXtYETI",
+      "url": "https://www.youtube.com/watch?v=56e5JXtYETI",
+      "title": "Slovenia | Why are Russians moving to Slovenia?🇸🇮",
+      "channel": "sunduk travel",
+      "duration": 2256,
+      "timestamp": null,
+      "query": "лучшие места для жизни с семьей предпринимателю Россия 2026 shorts",
+      "kind": "video",
+      "transcript": "transcripts/2026-11-23_LOCATION_video_56e5JXtYETI.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "vbPoNGlpUUo",
+      "url": "https://www.youtube.com/watch?v=vbPoNGlpUUo",
+      "title": "05/26/2026 About Russia v 6 4k",
+      "channel": "StandUp PATRIKI",
+      "duration": 1758,
+      "timestamp": null,
+      "query": "лучшие места для жизни с семьей предпринимателю Россия 2026 shorts",
+      "kind": "video",
+      "transcript": "transcripts/2026-11-23_LOCATION_video_vbPoNGlpUUo.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "xCq20LSdzSQ",
+      "url": "https://www.youtube.com/watch?v=xCq20LSdzSQ",
+      "title": "Федеральный проект \"Ты - предприниматель\"",
+      "channel": "Телеканал ННТ",
+      "duration": 124,
+      "timestamp": null,
+      "query": "лучшие места для жизни с семьей предпринимателю Россия 2026 shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-11-23_LOCATION_short_xCq20LSdzSQ.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "MMmky2mJD8Y",
+      "url": "https://www.youtube.com/watch?v=MMmky2mJD8Y",
+      "title": "Лето 2026 в Нижнем Новгороде: атмосферная прогулка по городу",
+      "channel": "Видеограф Дин Шарапов | Москва | Нижний Новгород",
+      "duration": 135,
+      "timestamp": null,
+      "query": "лучшие города России для жизни с семьей 2026 shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-11-23_LOCATION_short_MMmky2mJD8Y.md",
+      "method": "FreeTranscriptAPI"
+    }
+  ],
   "errors": [
-    {
-      "video_id": "D90JkodMmY8",
-      "url": "https://www.youtube.com/watch?v=D90JkodMmY8",
-      "title": "Португалия для переезда. Стоит ли оно того? Плюсы и минусы жизни",
-      "error": "youtube_captions: \nCould not retrieve a transcript for the video https://www.youtube.com/watch?v=D90JkodMmY8! This is most likely caused by:\n\nYouTube is blocking requests from your IP. This usually is due to one of the following reasons:\n- You have done too many requests and your IP has been blocked by YouTube\n- You are doing requests from an IP belonging to a cloud provider (like AWS, Google Cloud Platform, Azure, etc.). Unfortunately, most IPs from cloud providers are blocked by YouTube.\n\nThere are two things you can do to work around this:\n1. Use proxies to hide your IP address, as explained in the \"Working around IP bans\" section of the README (https://github.com/jdepoix/youtube-transcript-api?tab=readme-ov-file#working-around-ip-bans-requestblocked-or-ipblocked-exception).\n2. (NOT REC"
-    },
-    {
-      "video_id": "El29aDwJaGI",
-      "url": "https://www.youtube.com/watch?v=El29aDwJaGI",
-      "title": "Каково РЕАЛЬНО ЖИТЬ в Грузии. Все Плюсы и Минусы. Неудобная правда.",
-      "error": "youtube_captions: \nCould not retrieve a transcript for the video https://www.youtube.com/watch?v=El29aDwJaGI! This is most likely caused by:\n\nYouTube is blocking requests from your IP. This usually is due to one of the following reasons:\n- You have done too many requests and your IP has been blocked by YouTube\n- You are doing requests from an IP belonging to a cloud provider (like AWS, Google Cloud Platform, Azure, etc.). Unfortunately, most IPs from cloud providers are blocked by YouTube.\n\nThere are two things you can do to work around this:\n1. Use proxies to hide your IP address, as explained in the \"Working around IP bans\" section of the README (https://github.com/jdepoix/youtube-transcript-api?tab=readme-ov-file#working-around-ip-bans-requestblocked-or-ipblocked-exception).\n2. (NOT REC"
-    },
-    {
-      "video_id": "wKJ5dLlTP2I",
-      "url": "https://www.youtube.com/watch?v=wKJ5dLlTP2I",
-      "title": "ALL ABOUT RELOCATION TO BATUMI! What should you be prepared for in 2026?",
-      "error": "youtube_captions: \nCould not retrieve a transcript for the video https://www.youtube.com/watch?v=wKJ5dLlTP2I! This is most likely caused by:\n\nYouTube is blocking requests from your IP. This usually is due to one of the following reasons:\n- You have done too many requests and your IP has been blocked by YouTube\n- You are doing requests from an IP belonging to a cloud provider (like AWS, Google Cloud Platform, Azure, etc.). Unfortunately, most IPs from cloud providers are blocked by YouTube.\n\nThere are two things you can do to work around this:\n1. Use proxies to hide your IP address, as explained in the \"Working around IP bans\" section of the README (https://github.com/jdepoix/youtube-transcript-api?tab=readme-ov-file#working-around-ip-bans-requestblocked-or-ipblocked-exception).\n2. (NOT REC"
-    },
-    {
-      "video_id": "nkcvGq_R3Js",
-      "url": "https://www.youtube.com/watch?v=nkcvGq_R3Js",
-      "title": "КАК построить дом и переехать в Анапу?Переезд на ЮГ России!",
-      "error": "youtube_captions: \nCould not retrieve a transcript for the video https://www.youtube.com/watch?v=nkcvGq_R3Js! This is most likely caused by:\n\nYouTube is blocking requests from your IP. This usually is due to one of the following reasons:\n- You have done too many requests and your IP has been blocked by YouTube\n- You are doing requests from an IP belonging to a cloud provider (like AWS, Google Cloud Platform, Azure, etc.). Unfortunately, most IPs from cloud providers are blocked by YouTube.\n\nThere are two things you can do to work around this:\n1. Use proxies to hide your IP address, as explained in the \"Working around IP bans\" section of the README (https://github.com/jdepoix/youtube-transcript-api?tab=readme-ov-file#working-around-ip-bans-requestblocked-or-ipblocked-exception).\n2. (NOT REC"
-    },
     {
       "video_id": "kWRoREpyYFk",
       "url": "https://www.youtube.com/watch?v=kWRoREpyYFk",
       "title": "Продажа дома в станице Натухаевская",
       "error": "youtube_captions: \nCould not retrieve a transcript for the video https://www.youtube.com/watch?v=kWRoREpyYFk! This is most likely caused by:\n\nYouTube is blocking requests from your IP. This usually is due to one of the following reasons:\n- You have done too many requests and your IP has been blocked by YouTube\n- You are doing requests from an IP belonging to a cloud provider (like AWS, Google Cloud Platform, Azure, etc.). Unfortunately, most IPs from cloud providers are blocked by YouTube.\n\nThere are two things you can do to work around this:\n1. Use proxies to hide your IP address, as explained in the \"Working around IP bans\" section of the README (https://github.com/jdepoix/youtube-transcript-api?tab=readme-ov-file#working-around-ip-bans-requestblocked-or-ipblocked-exception).\n2. (NOT REC"
-    },
-    {
-      "video_id": "W_vzK5xIkRo",
-      "url": "https://www.youtube.com/watch?v=W_vzK5xIkRo",
-      "title": "what they dont tell you about living alone.",
-      "error": "youtube_captions: \nCould not retrieve a transcript for the video https://www.youtube.com/watch?v=W_vzK5xIkRo! This is most likely caused by:\n\nYouTube is blocking requests from your IP. This usually is due to one of the following reasons:\n- You have done too many requests and your IP has been blocked by YouTube\n- You are doing requests from an IP belonging to a cloud provider (like AWS, Google Cloud Platform, Azure, etc.). Unfortunately, most IPs from cloud providers are blocked by YouTube.\n\nThere are two things you can do to work around this:\n1. Use proxies to hide your IP address, as explained in the \"Working around IP bans\" section of the README (https://github.com/jdepoix/youtube-transcript-api?tab=readme-ov-file#working-around-ip-bans-requestblocked-or-ipblocked-exception).\n2. (NOT REC"
     }
   ]
 }

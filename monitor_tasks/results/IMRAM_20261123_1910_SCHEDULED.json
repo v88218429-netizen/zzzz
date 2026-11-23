@@ -3,30 +3,30 @@
   "request": "IMRAM_20261123_1910_SCHEDULED.json",
   "query": "Имрам как правильно формулировать желание конечный результат",
   "knowledge_tag": "IMRAM",
-  "generated_at": "2026-11-23T16:15:48.142217+00:00",
+  "generated_at": "2026-11-23T16:19:16.484746+00:00",
   "videos": [
     {
-      "video_id": "pXmeMeQKXno",
-      "url": "https://www.youtube.com/watch?v=pXmeMeQKXno",
-      "title": "Духовный рост и аскезы. Женская и мужская аскеза",
+      "video_id": "wDlELANUM-k",
+      "url": "https://www.youtube.com/watch?v=wDlELANUM-k",
+      "title": "Как правильно загадать ЖЕЛАНИЕ? Самая действенная карта желаний",
       "channel": "Имрам Крийя - Йога",
-      "duration": 660,
+      "duration": 1115,
       "timestamp": null,
-      "query": "Имрам как правильно формулировать желание конечный результат shorts",
+      "query": "Имрам как правильно формулировать желание конечный результат",
       "kind": "video",
-      "transcript": "transcripts/2026-11-23_IMRAM_video_pXmeMeQKXno.md",
-      "method": "FreeTranscriptAPI"
+      "transcript": "transcripts/2026-11-23_IMRAM_video_wDlELANUM-k.md",
+      "method": "verified GitHub transcript cache"
     },
     {
-      "video_id": "rJrSWvM3j0s",
-      "url": "https://www.youtube.com/watch?v=rJrSWvM3j0s",
-      "title": "Как реагировать на мысли?",
-      "channel": "Имрам Крийя Shorts",
-      "duration": 125,
+      "video_id": "a8xX9di2pC4",
+      "url": "https://www.youtube.com/watch?v=a8xX9di2pC4",
+      "title": "Знаки, что вы на пороге больших перемен! / Предвестники лучшей жизни",
+      "channel": "Имрам Крийя - Йога",
+      "duration": 1068,
       "timestamp": null,
-      "query": "Имрам состояние исполненного желания shorts",
-      "kind": "short",
-      "transcript": "transcripts/2026-11-23_IMRAM_short_rJrSWvM3j0s.md",
+      "query": "Имрам как правильно формулировать желание конечный результат",
+      "kind": "video",
+      "transcript": "transcripts/2026-11-23_IMRAM_video_a8xX9di2pC4.md",
       "method": "verified GitHub transcript cache"
     }
   ],
@@ -36,12 +36,6 @@
       "url": "",
       "title": "Имрам визуализация желаемого как будто уже есть shorts",
       "error": "no results"
-    },
-    {
-      "video_id": "BjSrdHrhG5w",
-      "url": "https://www.youtube.com/watch?v=BjSrdHrhG5w",
-      "title": "Женское счастье. Имрам о том, что лежит в основе женской гармонии",
-      "error": "youtube_captions: \nCould not retrieve a transcript for the video https://www.youtube.com/watch?v=BjSrdHrhG5w! This is most likely caused by:\n\nYouTube is blocking requests from your IP. This usually is due to one of the following reasons:\n- You have done too many requests and your IP has been blocked by YouTube\n- You are doing requests from an IP belonging to a cloud provider (like AWS, Google Cloud Platform, Azure, etc.). Unfortunately, most IPs from cloud providers are blocked by YouTube.\n\nThere are two things you can do to work around this:\n1. Use proxies to hide your IP address, as explained in the \"Working around IP bans\" section of the README (https://github.com/jdepoix/youtube-transcript-api?tab=readme-ov-file#working-around-ip-bans-requestblocked-or-ipblocked-exception).\n2. (NOT REC"
     }
   ]
 }
