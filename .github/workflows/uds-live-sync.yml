@@ -23,9 +23,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+      UDS_API_KEY: ${{ secrets.UDS_API_KEY }}
       OZON_CLIENT_ID: ${{ secrets.OZON_SELLER_HOZYAYUSHKA_CLIENT_ID }}
       OZON_API_KEY: ${{ secrets.OZON_SELLER_HOZYAYUSHKA_API_KEY }}
+      SELLMONITOR_GITHUB_WEBHOOK_SECRET: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
+      WEBAPP_DEPLOYMENT_ID: AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw
       PYTHONUNBUFFERED: "1"
     steps:
       - uses: actions/checkout@v4
