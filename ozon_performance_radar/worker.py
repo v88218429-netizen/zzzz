@@ -256,8 +256,15 @@ def collect_store(store, client_id, secret, last_date):
     campaign_ids = []
     cpc_campaign_ids = []
     campaign_names = {}
+    campaign_pages = 0
+    campaign_rows_total = 0
+    campaign_rows_with_ids = 0
+    campaign_payment_types = {}
+    campaign_unknown_payment_rows = 0
+    campaign_list_complete = False
     page = 1
     while page <= 20:
+        campaign_pages += 1
         campaign_data, campaign_status = fetch_json(
             session,
             "/api/client/campaign",
@@ -266,19 +273,42 @@ def collect_store(store, client_id, secret, last_date):
         if campaign_data is None:
             bundle["errors"].append({"stage": "campaign_list", "status": campaign_status})
             break
-        campaign_rows = campaign_data.get("list") or []
+        campaign_rows = campaign_data.get("list")
+        if not isinstance(campaign_rows, list):
+            bundle["errors"].append({"stage": "campaign_list_schema", "status": "list_not_array"})
+            break
+        campaign_rows_total += len(campaign_rows)
         for row in campaign_rows:
-            if not isinstance(row, dict) or row.get("id") is None:
+            if not isinstance(row, dict):
                 continue
+            payment_type = str(row.get("paymentType") or "").strip().upper()
+            if payment_type:
+                safe_payment_type = "".join(ch for ch in payment_type if ch.isalnum() or ch == "_")[:40] or "OTHER"
+                campaign_payment_types[safe_payment_type] = campaign_payment_types.get(safe_payment_type, 0) + 1
+            else:
+                campaign_unknown_payment_rows += 1
+            if row.get("id") is None:
+                continue
+            campaign_rows_with_ids += 1
             campaign_id = str(row.get("id")).strip()
             campaign_ids.append(campaign_id)
             campaign_names[campaign_id] = str(row.get("title") or "")
-            if str(row.get("paymentType") or "").upper() == "CPC":
+            if payment_type == "CPC":
                 cpc_campaign_ids.append(campaign_id)
         if len(campaign_rows) < 100:
+            campaign_list_complete = True
             break
         page += 1
-
+    if campaign_pages >= 20 and campaign_rows_total >= 2000 and not campaign_list_complete:
+        bundle["errors"].append({"stage": "campaign_list", "status": "page_limit_reached"})
+    bundle["sku_campaign_diagnostic"] = {
+        "pages": campaign_pages,
+        "rows": campaign_rows_total,
+        "rows_with_ids": campaign_rows_with_ids,
+        "payment_types": campaign_payment_types,
+        "rows_without_payment_type": campaign_unknown_payment_rows,
+        "complete": campaign_list_complete,
+    }
     bundle["sku_requested_campaign_ids"] = sorted(set(cpc_campaign_ids))
     bundle["sku_campaign_names"] = campaign_names
     if cpc_campaign_ids:
@@ -293,8 +323,13 @@ def collect_store(store, client_id, secret, last_date):
             "COMPLETE_EMPTY" if bundle["sku_complete"] else "PARTIAL_RETRY_REQUIRED"
         )
     else:
-        bundle["sku_state"] = "NO_CPC_CAMPAIGNS"
-        bundle["sku_complete"] = True
+        diagnostic = bundle.get("sku_campaign_diagnostic") or {}
+        if diagnostic.get("rows_without_payment_type"):
+            bundle["sku_state"] = "CAMPAIGN_PAYMENT_TYPE_UNRESOLVED"
+            bundle["sku_complete"] = False
+        else:
+            bundle["sku_state"] = "NO_CPC_CAMPAIGNS"
+            bundle["sku_complete"] = True
 
     for path in STAT_ENDPOINTS:
         key = "daily" if path.endswith("/daily/json") else "campaign_product"
@@ -454,6 +489,28 @@ def main():
         print(
             "OZON_PERF_SOURCE_ERRORS="
             + json.dumps(source_errors, ensure_ascii=False, separators=(",", ":"), sort_keys=True),
+            flush=True,
+        )
+    campaign_diag = bundle.get("sku_campaign_diagnostic") or {}
+    if campaign_diag:
+        print(
+            "OZON_PERF_CAMPAIGN_COVERAGE="
+            + json.dumps(
+                {
+                    "store": store,
+                    "pages": campaign_diag.get("pages", 0),
+                    "rows": campaign_diag.get("rows", 0),
+                    "rows_with_ids": campaign_diag.get("rows_with_ids", 0),
+                    "payment_types": campaign_diag.get("payment_types", {}),
+                    "rows_without_payment_type": campaign_diag.get("rows_without_payment_type", 0),
+                    "complete": campaign_diag.get("complete", False),
+                    "sku_state": bundle.get("sku_state"),
+                    "sku_requested": len(bundle.get("sku_requested_campaign_ids") or []),
+                },
+                ensure_ascii=False,
+                separators=(",", ":"),
+                sort_keys=True,
+            ),
             flush=True,
         )
     for group_name in ("daily", "campaign_product"):

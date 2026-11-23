@@ -262,17 +262,29 @@ function sellmonitorGithubPublishOzonPerformanceSkuDaily_(body) {
   SpreadsheetApp.flush();
 
   var dailyCheck=load_(daily,22,22),weekCheck=load_(weekly,26,26),monthCheck=load_(monthly,26,26),covCheck=load_(coverage,10,10);
-  function exactRows_(loaded,expected){
+  function normalizeRow_(row,dateCols){
+    return row.map(function(v,i){
+      if(dateCols.indexOf(i)<0)return v;
+      if(v instanceof Date)return Utilities.formatDate(v,ss.getSpreadsheetTimeZone(),'yyyy-MM-dd');
+      if(typeof v==='number'&&isFinite(v))return Utilities.formatDate(new Date(Date.UTC(1899,11,30)+Math.floor(v)*86400000),'UTC','yyyy-MM-dd');
+      if(typeof v==='string'&&/^\d{4}-\d{2}-\d{2}/.test(v))return v.slice(0,10);
+      return v;
+    });
+  }
+  function sameRow_(actual,expected,dateCols){
+    return JSON.stringify(normalizeRow_(actual,dateCols))===JSON.stringify(normalizeRow_(expected,dateCols));
+  }
+  function exactRows_(loaded,expected,dateCols){
     if(loaded.rows.length!==expected.length)return false;
     var map={};
     expected.forEach(function(r){var k=String(r[r.length-1]||'');if(!k||map[k])map.__invalid__=true;map[k]=r;});
     if(map.__invalid__)return false;
-    return loaded.rows.every(function(x){return map[x.key]&&JSON.stringify(x.values)===JSON.stringify(map[x.key]);});
+    return loaded.rows.every(function(x){return map[x.key]&&sameRow_(x.values,map[x.key],dateCols);});
   }
-  var coverageRead=!!covCheck.map[covKey]&&JSON.stringify(covCheck.map[covKey].values)===JSON.stringify(covRow);
-  var rangeRead=targetRows.every(function(r){var k=String(r[21]);return dailyCheck.map[k]&&JSON.stringify(dailyCheck.map[k].values)===JSON.stringify(r);});
-  var weekRead=exactRows_(weekCheck,weekRows),monthRead=exactRows_(monthCheck,monthRows);
-  if(!rangeRead||!coverageRead||!weekRead||!monthRead)throw new Error('OZON_SKU_READBACK_FAILED:'+cfg.key);
+  var coverageRead=!!covCheck.map[covKey]&&sameRow_(covCheck.map[covKey].values,covRow,[1]);
+  var rangeRead=targetRows.every(function(r){var k=String(r[21]);return dailyCheck.map[k]&&sameRow_(dailyCheck.map[k].values,r,[1]);});
+  var weekRead=exactRows_(weekCheck,weekRows,[1,2]),monthRead=exactRows_(monthCheck,monthRows,[1,2]);
+  if(!rangeRead||!coverageRead||!weekRead||!monthRead)throw new Error('OZON_SKU_READBACK_FAILED:'+cfg.key+':daily='+rangeRead+':coverage='+coverageRead+':weekly='+weekRead+':monthly='+monthRead);
   return {ok:true,action:'publish_ozon_performance_sku_daily',store:cfg.name,date:date,source_status:state,
     source_rows:input.length,daily_added:daySync.added,daily_changed:daySync.changed,daily_removed:daySync.removed,
     weekly_rows:weekRows.length,weekly_added:weekSync.added,weekly_changed:weekSync.changed,
