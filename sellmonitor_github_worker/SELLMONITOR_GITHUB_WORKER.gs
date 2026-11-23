@@ -6995,7 +6995,33 @@ function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId,onl
     refreshHeads();
     var axisRebuilt=false,axisArchiveRows=0;
     if(spec.grain==='week'){
-      var actualAxis=[],existingColumns={};
+      var metadataLast=sh.getLastRow();
+    for(var hm=0;hm<heads.length;hm++){
+      var metadataColumn=startCol+hm,metadataHeader=heads[hm],metadataText=String(metadataHeader==null?'':metadataHeader).trim();
+      var metadataTop=String(sh.getRange(1,metadataColumn).getDisplayValue()||'').trim();
+      var isPresetHelper=metadataText==='__Показывать_по_пресету';
+      var isEmptyStatus=metadataText===''&&metadataTop==='⚪ Н/Д';
+      if(!isPresetHelper&&!isEmptyStatus)continue;
+      var metadataRange=sh.getRange(1,metadataColumn,metadataLast,1);
+      var metadataValues=metadataRange.getValues().map(function(r){return r[0];});
+      var metadataFormulas=metadataRange.getFormulas().map(function(r){return r[0];});
+      var metadataSafe=true;
+      for(var mi=0;mi<metadataValues.length;mi++){
+        var metadataValue=metadataValues[mi],metadataFormula=String(metadataFormulas[mi]||'');
+        var metadataBlank=metadataValue===''||metadataValue===null;
+        var expectedStatus=mi===0&&metadataTop==='⚪ Н/Д'&&String(metadataValue)==='⚪ Н/Д';
+        var expectedPreset=isPresetHelper&&mi===1&&String(metadataValue)==='__Показывать_по_пресету';
+        if(metadataFormula||(!(expectedStatus||expectedPreset)&&!metadataBlank))metadataSafe=false;
+      }
+      if(!metadataSafe)throw new Error('WB_RNP_AXIS_METADATA_COLUMN_NOT_EMPTY:'+spec.name+':'+metadataColumn+':'+metadataText);
+      var metadataKey=isPresetHelper?'__Показывать_по_пресету':'__Пустой_статус_оси';
+      var metadataReason='Служебный столбец не является периодом; значение сохранено перед сортировкой оси недель';
+      axisArchiveRows+=archiveSnapshot(sh,metadataColumn,metadataKey,metadataReason,metadataLast,metadataValues);
+      metadataRange.clearContent();SpreadsheetApp.flush();
+      if(!metadataRange.isBlank())throw new Error('WB_RNP_AXIS_METADATA_CLEAR_READBACK_FAILED:'+spec.name+':'+metadataColumn);
+      heads[hm]='';
+    }
+    var actualAxis=[],existingColumns={};
       for(var ac=0;ac<heads.length;ac++){
         var rawHead=heads[ac],headKey=key(rawHead);
         if(headKey){actualAxis.push({period:headKey,col:startCol+ac});if(!existingColumns[headKey])existingColumns[headKey]=[];existingColumns[headKey].push(startCol+ac);}
