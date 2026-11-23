@@ -380,7 +380,7 @@ jobs:
 
   recover:
     needs: publish
-    if: ${{ always() && (needs.publish.result == 'failure' || needs.publish.result == 'cancelled') && (github.event_name != 'workflow_dispatch' || inputs.resume_attempt != '10') }}
+    if: ${{ always() && (needs.publish.result == 'failure' || needs.publish.result == 'cancelled') }}
     runs-on: ubuntu-latest
     permissions:
       actions: write
@@ -489,8 +489,20 @@ jobs:
           except Exception as exc:
               print("WB_RECOVERY_LOG_READ=unavailable;reason="+type(exc).__name__, flush=True)
           print("WB_RECOVERY_CHECKPOINT=store:"+store+";phase:"+phase, flush=True)
+          attempt = int(os.environ.get("RECOVERY_ATTEMPT", "0") or "0")
+          if attempt >= 10:
+              failure_text = (last_failure or "").lower()
+              transient_markers = (
+                  "lock_busy", "gate_busy", "timeout", "timed out", "remotedisconnected",
+                  "connectionreseterror", "connection reset", "connection refused",
+                  "jsondecodeerror", "empty response", "http_408", "http_425",
+                  "http_429", "http_500", "http_502", "http_503", "http_504",
+                  "rate limit", "temporarily unavailable", "service spreadsheets",
+              )
+              if not any(marker in failure_text for marker in transient_markers):
+                  print("WB_AUTOMATIC_RECOVERY=paused;attempt=10;reason=non_transient_or_unreadable_failure;scheduled_retry=retained", flush=True)
+                  raise SystemExit(0)
           if not recovery_wait:
-              attempt = int(os.environ.get("RECOVERY_ATTEMPT", "0") or "0")
               recovery_wait = min(600, 15 * (2 ** min(6, max(0, attempt))))
               recovery_wait_reason = "bounded_exponential_backoff"
           print("WB_RECOVERY_WAIT=seconds:"+str(recovery_wait)+";reason:"+recovery_wait_reason, flush=True)
