@@ -2,6 +2,7 @@
 """Set supported WB product cards to VAT rate 5 and verify by reading cards back."""
 from __future__ import annotations
 
+import base64
 import json
 import os
 import re
@@ -180,11 +181,27 @@ def verify_cards(token: str, nmids: set[int]) -> dict[int, bool]:
 
 def main() -> int:
     read_token = os.environ.get("WB_API_TOKEN_AP", "").strip()
-    write_token = os.environ.get("WB_API_TOKEN_AP_WRITE", "").strip()
+    configured_write_token = os.environ.get("WB_API_TOKEN_AP_WRITE", "").strip()
+    write_token = configured_write_token or read_token
     if not read_token:
         raise RuntimeError("WB_API_TOKEN_AP secret is empty")
     if not write_token:
-        raise RuntimeError("WB_API_TOKEN_AP_WRITE is missing; no write was attempted and WB_API_TOKEN_AP was left unchanged")
+        raise RuntimeError("No WB API token is configured")
+    token_parts = write_token.split(".")
+    if len(token_parts) != 3:
+        raise RuntimeError("WB write token is not a JWT")
+    encoded_payload = token_parts[1] + "=" * (-len(token_parts[1]) % 4)
+    token_claims = json.loads(base64.urlsafe_b64decode(encoded_payload.encode("ascii")))
+    token_flags = int(token_claims.get("s") or 0)
+    personal = token_claims.get("acc") == 3 and token_claims.get("for") == "self" and token_claims.get("t") is False
+    readonly_bit_29 = bool(token_flags & (1 << 29))
+    readonly_bit_30 = bool(token_flags & (1 << 30))
+    print("WB_TOKEN_TYPE_PERSONAL=" + ("yes" if personal else "no"))
+    print("WB_TOKEN_READ_ONLY_BIT_29=" + ("yes" if readonly_bit_29 else "no"))
+    print("WB_TOKEN_READ_ONLY_BIT_30=" + ("yes" if readonly_bit_30 else "no"))
+    print("WB_WRITE_TOKEN_SOURCE=" + ("WB_API_TOKEN_AP_WRITE" if configured_write_token else "WB_API_TOKEN_AP"))
+    if readonly_bit_29 or readonly_bit_30:
+        raise RuntimeError("WB token metadata marks this credential read-only; no write was attempted")
     vat_dir = request_json(read_token, "GET", VAT_DIRECTORY_URL)
     vat_values = values_as_strings(vat_dir.get("data"))
     if "5" not in vat_values:
