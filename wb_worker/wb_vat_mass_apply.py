@@ -179,14 +179,17 @@ def verify_cards(token: str, nmids: set[int]) -> dict[int, bool]:
 
 
 def main() -> int:
-    token = os.environ.get("WB_API_TOKEN_AP", "").strip()
-    if not token:
+    read_token = os.environ.get("WB_API_TOKEN_AP", "").strip()
+    write_token = os.environ.get("WB_API_TOKEN_AP_WRITE", "").strip()
+    if not read_token:
         raise RuntimeError("WB_API_TOKEN_AP secret is empty")
-    vat_dir = request_json(token, "GET", VAT_DIRECTORY_URL)
+    if not write_token:
+        raise RuntimeError("WB_API_TOKEN_AP_WRITE is missing; no write was attempted and WB_API_TOKEN_AP was left unchanged")
+    vat_dir = request_json(read_token, "GET", VAT_DIRECTORY_URL)
     vat_values = values_as_strings(vat_dir.get("data"))
     if "5" not in vat_values:
         raise RuntimeError("WB VAT directory does not contain the value 5")
-    cards = fetch_cards(token)
+    cards = fetch_cards(read_token)
     if not cards:
         raise RuntimeError("WB returned no cards; no writes were made")
     current_with_vat = sum(1 for card in cards if has_vat_five(card))
@@ -202,7 +205,7 @@ def main() -> int:
         append_vat = not vat_present
         if append_vat:
             subject_id = int(card.get("subjectID") or 0)
-            if not subject_id or not get_subject_has_vat(token, subject_id, subject_support):
+            if not subject_id or not get_subject_has_vat(read_token, subject_id, subject_support):
                 skipped.append((nm_id, "VAT_CHARACTERISTIC_NOT_SUPPORTED_BY_SUBJECT"))
                 continue
         changes.append(project_card(card, append_vat=append_vat))
@@ -213,7 +216,7 @@ def main() -> int:
     if skipped:
         print("WB_SKIPPED_IDS=" + ",".join(str(nm_id) + ":" + reason for nm_id, reason in skipped))
     if not changes:
-        result = verify_cards(token, {int(card["nmID"]) for card in cards})
+        result = verify_cards(read_token, {int(card["nmID"]) for card in cards})
         failed = [str(nm_id) for nm_id, ok in result.items() if not ok]
         if failed:
             raise RuntimeError("No cards were written but VAT 5 readback is incomplete")
@@ -223,7 +226,7 @@ def main() -> int:
     if len(body) > 10 * 1024 * 1024:
         raise RuntimeError("WB update request exceeds the 10 MB API limit")
     try:
-        response = request_json(token, "POST", UPDATE_URL, changes, timeout=120)
+        response = request_json(write_token, "POST", UPDATE_URL, changes, timeout=120)
     except WBError as exc:
         print(f"WB_UPDATE_HTTP_STATUS={exc.status}")
         print(f"WB_UPDATE_ERROR={safe_error_body(exc.body)}")
@@ -236,7 +239,7 @@ def main() -> int:
     deadline = time.time() + 150
     readback: dict[int, bool] = {}
     while time.time() < deadline:
-        readback = verify_cards(token, target_ids)
+        readback = verify_cards(read_token, target_ids)
         passed = sum(readback.values())
         print(f"WB_READBACK={passed}/{len(target_ids)}")
         if passed == len(target_ids):
