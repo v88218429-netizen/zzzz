@@ -142,7 +142,7 @@ def ensure_live_sheets(access_token, metadata, row_targets):
     props = sheet_props(metadata)
     headers = {
         LIVE_SHEETS["uds"]: ["SKU UDS", "Товар UDS", "Вариант", "Текущая цена UDS API, ₽", "Цена до скидки UDS, ₽", "Остаток", "UDS goods ID", "External ID (Ozon product_id)", "Тип UDS", "Категория ID", "Offer ID Ozon", "Скрыт", "Заблокирован", "Статус API", "Последняя цена кабинета/CSV, ₽", "Обновлено, MSK"],
-        LIVE_SHEETS["ozon"]: ["Ozon product_id", "offer_id", "SKU UDS", "Наименование Ozon", "Цена продавца API, ₽", "Цена на витрине/акции, ₽", "marketing_seller_price, ₽", "Старая цена, ₽", "min_price, ₽", "net_price, ₽", "Валюта", "НДС", "Вес/объёмный вес", "Статус получения", "Обновлено, MSK"],
+        LIVE_SHEETS["ozon"]: ["Ozon product_id", "offer_id", "SKU UDS", "Наименование Ozon", "Цена продавца API, ₽", "Цена на витрине/акции, ₽", "marketing_seller_price, ₽", "Старая цена, ₽", "min_price, ₽", "net_price, ₽", "Валюта", "НДС", "Вес/объёмный вес", "Статус получения", "Есть цена", "Есть остаток", "В архиве", "Автоархив", "Статус продажи по Ozon", "Обновлено, MSK"],
         LIVE_SHEETS["orders"]: ["Кабинет", "Схема", "Дата заказа", "Дата отправления/в обработке", "Статус", "Подстатус", "Номер заказа", "Номер отправления", "offer_id", "Ozon SKU", "product_id", "SKU UDS", "Товар", "Количество", "Цена строки, ₽", "Сумма строки, ₽", "Причина отмены", "Обновлено, MSK"],
         LIVE_SHEETS["sales"]: ["SKU UDS", "offer_id", "product_id", "Товар", "Заказов за 30 дней", "Единиц в заказах", "Доставлено, шт", "Отменено, шт", "Возврат/на склад, шт", "Открыто/прочие статусы, шт", "Сумма строк заказов, ₽", "Сумма доставленных строк, ₽", "Текущая цена Ozon API, ₽", "Строк с ценой / товарных строк", "Статусы за 30 дней", "Обновлено, MSK"],
     }
@@ -469,6 +469,67 @@ def fetch_ozon_prices(client_id, api_key, product_ids, offer_ids):
     return by_product, by_offer, request_count
 
 
+def boolean_value(value):
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)) and value in (0, 1):
+        return bool(value)
+    if isinstance(value, str):
+        text = value.strip().lower()
+        if text in {"true", "1", "yes", "да"}:
+            return True
+        if text in {"false", "0", "no", "нет"}:
+            return False
+    return None
+
+
+def ozon_sale_fields(info):
+    if not isinstance(info, dict):
+        return ["", "", "", "", "Product Info API не вернул карточку"]
+    has_price = boolean_value(info.get("has_price"))
+    has_stock = boolean_value(info.get("has_stock"))
+    archived = boolean_value(info.get("is_archived"))
+    autoarchived = boolean_value(info.get("is_autoarchived"))
+    labels = lambda value: "Да" if value is True else "Нет" if value is False else ""
+    reasons = []
+    if archived is True:
+        reasons.append("архив")
+    if autoarchived is True:
+        reasons.append("автоархив")
+    if has_price is False:
+        reasons.append("нет цены")
+    if has_stock is False:
+        reasons.append("нет остатка")
+    if reasons:
+        status = "Не выставлен: " + ", ".join(reasons)
+    elif all(value is True or value is False for value in (has_price, has_stock, archived, autoarchived)):
+        status = "Выставлен на продажу"
+    else:
+        status = "Не подтверждён: не хватает флагов Product Info API"
+    return [labels(has_price), labels(has_stock), labels(archived), labels(autoarchived), status]
+
+
+def fetch_ozon_product_info(client_id, api_key, product_ids):
+    info_by_id = {}
+    request_count = 0
+    ids = sorted({norm_id(value) for value in product_ids if norm_id(value).isdigit()})
+    for start in range(0, len(ids), 1000):
+        chunk = ids[start:start + 1000]
+        body = {"product_id": [int(value) for value in chunk]}
+        response = ozon_post(client_id, api_key, "/v3/product/info/list", body, "Ozon product sale status")
+        request_count += 1
+        result = response.get("result", response)
+        if not isinstance(result, dict) or not isinstance(result.get("items"), list):
+            raise RuntimeError("Ozon /v3/product/info/list response has no items")
+        for item in result["items"]:
+            if not isinstance(item, dict):
+                continue
+            product_id = norm_id(item.get("id") or item.get("product_id"))
+            if product_id:
+                info_by_id[product_id] = item
+    return info_by_id, request_count
+
+
 def iso_parse(value):
     if not value:
         return None
@@ -638,6 +699,11 @@ def main():
     gh_mask(ozon_key)
 
     by_product, by_offer, price_requests = fetch_ozon_prices(client_id, ozon_key, product_ids, offer_ids)
+    product_info_by_id, product_info_requests = fetch_ozon_product_info(client_id, ozon_key, sorted(set(product_ids) | set(by_product)))
+    sale_fields_by_product = {pid: ozon_sale_fields(product_info_by_id.get(pid)) for pid in by_product}
+    saleable_count = sum(1 for fields in sale_fields_by_product.values() if fields[4] == "Выставлен на продажу")
+    not_saleable_count = sum(1 for fields in sale_fields_by_product.values() if fields[4].startswith("Не выставлен:"))
+    sale_status_unknown_count = sum(1 for fields in sale_fields_by_product.values() if not (fields[4] == "Выставлен на продажу" or fields[4].startswith("Не выставлен:")))
     order_lines, posting_count, order_requests, since, until = fetch_ozon_orders(client_id, ozon_key, now)
     order_item_lines = sum(1 for line in order_lines if line["quantity"] > 0)
     priced_order_lines = sum(1 for line in order_lines if line["quantity"] > 0 and line["unit_price"] is not None)
@@ -678,19 +744,21 @@ def main():
             mapping_status = "Цена API получена; product_id связан с несколькими SKU UDS"
         elif len(product_skus) == 1 and offer_skus and product_skus.isdisjoint(offer_skus):
             mapping_status = "Цена API получена; сопоставлено по product_id, offer_id конфликтует"
-        price_rows.append([record["product_id"], record["offer_id"], uds_sku, price_name_by_offer.get(record["offer_id"], ""), record["price"], record["marketing_price"], record["marketing_seller_price"], record["old_price"], record["min_price"], record["net_price"], record["currency"], record["vat"], record["volume_weight"], mapping_status, stamp])
+        sale_fields = sale_fields_by_product.get(record["product_id"], ["", "", "", "", "Product Info API не вернул карточку"])
+        price_rows.append([record["product_id"], record["offer_id"], uds_sku, price_name_by_offer.get(record["offer_id"], ""), record["price"], record["marketing_price"], record["marketing_seller_price"], record["old_price"], record["min_price"], record["net_price"], record["currency"], record["vat"], record["volume_weight"], mapping_status, *sale_fields, stamp])
         used_price_keys.add((record["product_id"], record["offer_id"]))
     returned_offer_ids = set(by_offer)
     returned_product_ids = set(by_product)
     for offer in offer_ids:
         if offer not in returned_offer_ids:
             mapped = unique_sku_by_offer.get(offer, "")
-            price_rows.append(["", offer, mapped, price_name_by_offer.get(offer, ""), "", "", "", "", "", "", "", "", "", "Ozon API не вернул offer_id", stamp])
+            price_rows.append(["", offer, mapped, price_name_by_offer.get(offer, ""), "", "", "", "", "", "", "", "", "", "Ozon API не вернул offer_id", "", "", "", "", "Нет product_id для статуса", stamp])
     for product_id in product_ids:
         if product_id not in returned_product_ids:
             mapped = unique_sku_by_product.get(product_id, "")
             if not any(r[0] == product_id for r in price_rows):
-                price_rows.append([product_id, "", mapped, "", "", "", "", "", "", "", "", "", "", "Ozon API не вернул product_id", stamp])
+                sale_fields = ozon_sale_fields(product_info_by_id.get(product_id))
+                price_rows.append([product_id, "", mapped, "", "", "", "", "", "", "", "", "", "", "Ozon API не вернул product_id", *sale_fields, stamp])
 
     # Current UDS catalog, including prior SKUs that the API did not return.
     catalog_values = workbook["catalog"]
@@ -1146,7 +1214,7 @@ def main():
     summary = [
         {"range": "'UDS — СВОДКА'!A1", "values": [["UDS × OZON — АВТООБНОВЛЕНИЕ"]]},
         {"range": "'UDS — СВОДКА'!A2", "values": [[f"Последний цикл: {stamp}. Источники: UDS Partner API, Ozon Seller API. Новые SKU добавляются в каталог автоматически; без точного соответствия строке юнитки прибыль не придумывается."]]},
-        {"range": "'UDS — СВОДКА'!A3", "values": [[f"Ozon цены обновлены: {current_price_count}; строк юнитки с актуальной Ozon ценой обновлено: {len(model_writes)}; цен UDS по API записано: {len(uds_unitka_writes)}; неоднозначных связок Ozon → UDS: {ambiguous_price_count}; без связи: {unmapped_price_count}. Детализация — лист {LIVE_SHEETS['uds']} и OZON — API LIVE."]]},
+        {"range": "'UDS — СВОДКА'!A3", "values": [[f"Ozon цены обновлены: {current_price_count}; выставлены на продажу: {saleable_count}; не выставлены по API: {not_saleable_count}; статус продажи не подтверждён: {sale_status_unknown_count}; строк юнитки с актуальной Ozon ценой обновлено: {len(model_writes)}; цен UDS по API записано: {len(uds_unitka_writes)}; неоднозначных связок Ozon → UDS: {ambiguous_price_count}; без связи: {unmapped_price_count}. Детализация — лист {LIVE_SHEETS['uds']} и OZON — API LIVE."]]},
         {"range": "'UDS — СВОДКА'!A4:D4", "values": [["SKU UDS в текущем каталоге", "Вернул Partner API", "Не вернул API", "Новых SKU добавлено"]]},
         {"range": "'UDS — СВОДКА'!A5:D5", "values": [[len(old_skus | returned_skus), len(returned_skus), len(missing_skus), new_sku_count]]},
         {"range": "'UDS — СВОДКА'!A6", "values": [[f"Заказы Ozon, последние 30 дней: {posting_count} отправлений, {len(order_lines)} строк товара; доставлено {delivered_units:g} шт., отменено {cancelled_units:g} шт., возвраты/на склад {returned_units:g} шт. Цена есть у {priced_order_lines}/{order_item_lines} товарных строк. Сумма строк с известной ценой: {amount_sum:.2f} ₽ (не выплаты Ozon)."]]},
@@ -1156,7 +1224,7 @@ def main():
 
     # Capture refreshed sales and order rows together with fresh source status.
     write_live_table(access_token, LIVE_SHEETS["uds"], [headers[LIVE_SHEETS["uds"]]] + uds_live_rows, 16)
-    write_live_table(access_token, LIVE_SHEETS["ozon"], [headers[LIVE_SHEETS["ozon"]]] + price_rows, 15)
+    write_live_table(access_token, LIVE_SHEETS["ozon"], [headers[LIVE_SHEETS["ozon"]]] + price_rows, len(headers[LIVE_SHEETS["ozon"]]))
     write_live_table(access_token, LIVE_SHEETS["orders"], [headers[LIVE_SHEETS["orders"]]] + order_rows, 18)
     write_live_table(access_token, LIVE_SHEETS["sales"], [headers[LIVE_SHEETS["sales"]]] + sales_rows, len(headers[LIVE_SHEETS["sales"]]))
     google_values_batch(access_token, final_writes)
@@ -1189,6 +1257,11 @@ def main():
     log("UDS_SKU_NOT_RETURNED", len(missing_skus))
     log("UDS_SKU_NEW", new_sku_count)
     log("OZON_PRICE_RECORDS", current_price_count)
+    log("OZON_LISTED_FOR_SALE", saleable_count)
+    log("OZON_NOT_LISTED_FOR_SALE", not_saleable_count)
+    log("OZON_SALE_STATUS_UNKNOWN", sale_status_unknown_count)
+    log("OZON_PRODUCT_INFO_RECORDS", len(product_info_by_id))
+    log("OZON_PRODUCT_INFO_REQUESTS", product_info_requests)
     log("OZON_PRICE_AMBIGUOUS_UDS", ambiguous_price_count)
     log("OZON_PRICE_UNMAPPED_UDS", unmapped_price_count)
     log("UNITKA_MODEL_ROWS_UPDATED", len(model_writes))
