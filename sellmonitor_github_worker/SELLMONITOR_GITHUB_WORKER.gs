@@ -5,7 +5,7 @@
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.100',
+  VERSION: 'github-worker-1.3.101',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -7010,7 +7010,7 @@ function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId,onl
     }
     refreshHeads();
     var axisRebuilt=false,axisArchiveRows=0;
-    if(spec.grain==='week'){
+    if(['day','week','month'].indexOf(spec.grain)>=0){
       var metadataLast=sh.getLastRow();
     for(var hm=0;hm<heads.length;hm++){
       var metadataColumn=startCol+hm,metadataHeader=heads[hm],metadataText=String(metadataHeader==null?'':metadataHeader).trim();
@@ -7031,7 +7031,7 @@ function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId,onl
       }
       if(!metadataSafe)throw new Error('WB_RNP_AXIS_METADATA_COLUMN_NOT_EMPTY:'+spec.name+':'+metadataColumn+':'+metadataText);
       var metadataKey=isPresetHelper?'__Показывать_по_пресету':'__Пустой_статус_оси';
-      var metadataReason='Служебный столбец не является периодом; значение сохранено перед сортировкой оси недель';
+      var metadataReason='Служебный столбец не является периодом; значение сохранено перед сортировкой оси периодов';
       axisArchiveRows+=archiveSnapshot(sh,metadataColumn,metadataKey,metadataReason,metadataLast,metadataValues);
       metadataRange.clearContent();SpreadsheetApp.flush();
       if(!metadataRange.isBlank())throw new Error('WB_RNP_AXIS_METADATA_CLEAR_READBACK_FAILED:'+spec.name+':'+metadataColumn);
@@ -7043,57 +7043,64 @@ function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId,onl
         if(headKey){actualAxis.push({period:headKey,col:startCol+ac});if(!existingColumns[headKey])existingColumns[headKey]=[];existingColumns[headKey].push(startCol+ac);}
         else if(rawHead!==''&&rawHead!=null)throw new Error('WB_RNP_AXIS_UNPARSEABLE_HEADER:'+spec.name+':'+(startCol+ac)+':'+String(rawHead));
       }
-      var compactNeeded=false;
-      for(var ax=0;ax<actualAxis.length;ax++)if((ax>0&&actualAxis[ax-1].period>actualAxis[ax].period)||actualAxis[ax].col!==startCol+ax)compactNeeded=true;
+      var compactNeeded=false,axisAscending=false;
+      for(var ax=0;ax<actualAxis.length;ax++){
+        var outOfOrder=ax>0&&(axisAscending?actualAxis[ax-1].period>actualAxis[ax].period:actualAxis[ax-1].period<actualAxis[ax].period);
+        if(outOfOrder||actualAxis[ax].col!==startCol+ax)compactNeeded=true;
+      }
       Object.keys(existingColumns).forEach(function(period){if(existingColumns[period].length>1)throw new Error('WB_RNP_AXIS_DUPLICATE_HEADER:'+spec.name+':'+period);});
       if(compactNeeded){
         var currentLast=sh.getLastRow(),blankStart=-1;
-        for(var ac=0;ac<=heads.length;ac++){
-          var blankAxisColumn=ac===heads.length||!key(heads[ac]);
-          if(blankAxisColumn){if(blankStart<0)blankStart=ac;}
+        for(var bc=0;bc<=heads.length;bc++){
+          var blankAxisColumn=bc===heads.length?false:!key(heads[bc]);
+          if(blankAxisColumn){if(blankStart<0)blankStart=bc;}
           else if(blankStart>=0){
-            if(!sh.getRange(1,startCol+blankStart,currentLast,ac-blankStart).isBlank())throw new Error('WB_RNP_AXIS_UNMAPPED_COLUMN_NOT_BLANK:'+spec.name+':'+(startCol+blankStart)+':'+(startCol+ac-1));
+            if(!sh.getRange(1,startCol+blankStart,currentLast,bc-blankStart).isBlank())throw new Error('WB_RNP_AXIS_UNMAPPED_COLUMN_NOT_BLANK:'+spec.name+':'+(startCol+blankStart)+':'+(startCol+bc-1));
             blankStart=-1;
           }
         }
-        var preserveColumns={};
-        Object.keys(existingColumns).sort().forEach(function(period){
-          var oldCol=existingColumns[period][0],oldRange=sh.getRange(1,oldCol,currentLast,1),formulas=oldRange.getFormulas();
-          if(formulas.some(function(r){return String(r[0]||'')!=='';}))throw new Error('WB_RNP_AXIS_FORMULA_PRESENT:'+spec.name+':'+period);
-          var oldValues=oldRange.getValues().map(function(r){return r[0];});
-          axisArchiveRows+=archiveSnapshot(sh,oldCol,period,'Сжатие и сортировка оси недель перед заменой',currentLast,oldValues);
-          if(!periodMap[period])preserveColumns[period]=oldValues;
-        });
-        var clearWidth=lastCol-startCol+1;
-        if(clearWidth>0){
-          var axisRange=sh.getRange(1,startCol,currentLast,clearWidth);
-          axisRange.clearContent();
+        var periodCols=actualAxis.map(function(x){return x.col;}).sort(function(a,b){return a-b;});
+        if(periodCols.length&&periodCols[0]>startCol&&periodCols[periodCols.length-1]-periodCols[0]+1===periodCols.length){
+          sh.moveColumns(sh.getRange(1,periodCols[0],sh.getMaxRows(),periodCols.length),startCol);
           SpreadsheetApp.flush();
-          if(!axisRange.isBlank())throw new Error('WB_RNP_AXIS_CLEAR_READBACK_FAILED:'+spec.name);
         }
         var axisSet=Object.create(null);
         targets.forEach(function(period){axisSet[period]=true;});
         Object.keys(existingColumns).forEach(function(period){axisSet[period]=true;});
         var orderedAxis=Object.keys(axisSet).sort();
-        if(orderedAxis.length){
-          sh.getRange(2,startCol,1,orderedAxis.length).setValues([orderedAxis.map(date_)]);
-          sh.getRange(2,startCol,1,orderedAxis.length).setNumberFormat(spec.format);
-          Object.keys(preserveColumns).forEach(function(period){
-            var dst=startCol+orderedAxis.indexOf(period),values=preserveColumns[period].map(function(v){return [v];});
-            sh.getRange(1,dst,currentLast,1).setValues(values);
-            var readback=sh.getRange(1,dst,currentLast,1).getValues();
-            for(var rr=0;rr<currentLast;rr++)if(cellKey(readback[rr][0])!==cellKey(values[rr][0]))throw new Error('WB_RNP_AXIS_PRESERVE_READBACK_FAILED:'+spec.name+':'+period+':'+(rr+1));
-          });
+        orderedAxis.reverse();
+        var currentEndCol=Math.max(startCol-1,sh.getLastColumn());
+        var currentKeys=currentEndCol>=startCol?sh.getRange(2,startCol,1,currentEndCol-startCol+1).getValues()[0].map(key):[];
+        for(var oi=0;oi<orderedAxis.length;oi++){
+          var wantedPeriod=orderedAxis[oi],found=-1;
+          for(var oj=oi;oj<currentKeys.length;oj++)if(currentKeys[oj]===wantedPeriod){found=oj;break;}
+          if(found>=0){
+            if(found!==oi){
+              sh.moveColumns(sh.getRange(1,startCol+found,sh.getMaxRows(),1),startCol+oi);
+              var movedKey=currentKeys.splice(found,1)[0];currentKeys.splice(oi,0,movedKey);
+            }
+          }else{
+            sh.insertColumnBefore(startCol+oi);
+            currentKeys.splice(oi,0,wantedPeriod);
+            var insertedCol=startCol+oi,formatSource=insertedCol>startCol?insertedCol-1:insertedCol+1;
+            if(formatSource>0&&formatSource<=sh.getMaxColumns())sh.getRange(1,formatSource,sh.getMaxRows(),1).copyFormatToRange(sh.getSheetId(),insertedCol,insertedCol,1,sh.getMaxRows());
+            sh.getRange(2,insertedCol).setValue(date_(wantedPeriod));
+            sh.getRange(2,insertedCol).setNumberFormat(spec.format);
+          }
         }
+        var axisHeaderRange=orderedAxis.length?sh.getRange(2,startCol,1,orderedAxis.length):null;
+        var axisHeaderReadback=axisHeaderRange?axisHeaderRange.getValues()[0].map(key):[];
+        if(JSON.stringify(axisHeaderReadback)!==JSON.stringify(orderedAxis))throw new Error('WB_RNP_AXIS_HEADER_READBACK_FAILED_BEFORE_FORMAT:'+spec.name+':'+JSON.stringify({expected:orderedAxis,actual:axisHeaderReadback}));
+        if(axisHeaderRange)axisHeaderRange.setNumberFormat(spec.format);
         SpreadsheetApp.flush();
-        var axisHeaderReadback=orderedAxis.length?sh.getRange(2,startCol,1,orderedAxis.length).getValues()[0].map(key):[];
-        if(JSON.stringify(axisHeaderReadback)!==JSON.stringify(orderedAxis))throw new Error('WB_RNP_AXIS_HEADER_READBACK_FAILED:'+spec.name+':'+JSON.stringify({expected:orderedAxis,actual:axisHeaderReadback}));
+        var axisHeaderVerify=axisHeaderRange?axisHeaderRange.getValues()[0].map(key):[];
+        if(JSON.stringify(axisHeaderVerify)!==JSON.stringify(orderedAxis))throw new Error('WB_RNP_AXIS_HEADER_READBACK_FAILED:'+spec.name+':'+JSON.stringify({expected:orderedAxis,actual:axisHeaderVerify}));
         axisRebuilt=true;
         refreshHeads();
       }
     }
-    var existedBefore={};
-    if(!axisRebuilt)Object.keys(positions).forEach(function(k){if(positions[k]&&positions[k].length)existedBefore[k]=true;});
+    var existedBefore=Object.create(null);
+    Object.keys(existingColumns).forEach(function(k){existedBefore[k]=true;});
     var missingByAnchor={};
     targets.forEach(function(period){
       if(positions[period]&&positions[period].length)return;
@@ -7154,7 +7161,7 @@ function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId,onl
       for(var sRow=0;sRow<storeSummaryRows;sRow++)if(cellKey(current[sRow+2])!==cellKey(next[sRow+2])){storeSummaryChanged=true;break;}
       if(storeSummaryChanged&&!changed)archives+=archiveSnapshot(sh,col,period,'Архив строки магазина перед обязательной публикацией фактов',last,current,true);
       storeSummaryWrites.push({col:col,period:period,values:next.slice(0,storeSummaryRows+2)});
-      if(changed){if(existedBefore[period]&&!axisRebuilt)archives+=archiveSnapshot(sh,col,period,'Значения заменены проверенными фактами Sellmonitor Inner',last,current,true);updates.push({col:col,values:next});periodCount++;}
+      if(changed){if(existedBefore[period]){var overwriteFormulas=sh.getRange(1,col,last,1).getFormulas();if(overwriteFormulas.some(function(row){return String(row[0]||'')!=='';}))throw new Error('WB_RNP_AXIS_FORMULA_PRESENT:'+spec.name+':'+period);archives+=archiveSnapshot(sh,col,period,'Значения заменены проверенными фактами Sellmonitor Inner',last,current,true);}updates.push({col:col,values:next});periodCount++;}
     });
     if(queuedArchiveRecords.length){archiveWrite_(queuedArchiveRecords);queuedArchiveRecords=[];}
     updates.sort(function(a,b){return a.col-b.col;});
