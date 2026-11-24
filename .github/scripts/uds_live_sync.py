@@ -802,11 +802,24 @@ def main():
 
     # Update only exact, existing UDS-unitka mappings. The offset is verified against the live row names.
     price_updates = []
-    uds_input_updates = []
+    valid_unitka_qs = set()
     updated_model_by_sku = {}
     mapped_ozon_by_sku = {}
     main_values = workbook["main"]
     uds_unitka_values = workbook["uds_unitka"]
+    # A row in the UDS unitka tab may represent several old/new catalog SKUs.
+    # Keep only rows whose model name is still aligned, then verify SKU IDs before
+    # writing a current UDS price into column N.
+    for q in q_to_skus:
+        if q <= 0 or q > len(uds_unitka_values):
+            continue
+        main_row_number = q - 13
+        if main_row_number < 3 or main_row_number > len(main_values):
+            continue
+        unitka_name = str(row_value(uds_unitka_values[q - 1], 1)).strip()
+        main_name = str(row_value(main_values[main_row_number - 1], 1)).strip()
+        if unitka_name and unitka_name == main_name:
+            valid_unitka_qs.add(q)
     for sku, items in control_by_sku.items():
         if len(items) != 1:
             continue
@@ -834,10 +847,7 @@ def main():
         if current_ozon and current_ozon["price"] is not None:
             price_updates.append((main_row_number, current_ozon["price"], sku))
             updated_model_by_sku[sku] = q
-        if uds_item and num(uds_item.get("price")) is not None:
-            uds_input_updates.append((q, num(uds_item.get("price")), sku))
-
-    # Repeated mappings may be updated only when all mapped SKUs agree on the same value.
+    # Repeated Ozon mappings may be updated only when all mapped SKUs agree on the same value.
     price_by_q = defaultdict(list)
     for row_number, price, sku in price_updates:
         q = row_number + 13
@@ -853,13 +863,34 @@ def main():
         row_number = values[0][2]
         model_writes.append((row_number, values[0][0]))
         model_q_written.add(q)
-    uds_by_q = defaultdict(list)
-    for q, price, sku in uds_input_updates:
-        uds_by_q[q].append((price, sku))
     uds_unitka_writes = []
-    for q, values in uds_by_q.items():
-        if len({round(item[0], 8) for item in values}) == 1:
-            uds_unitka_writes.append((q, values[0][0]))
+    uds_unitka_clears = []
+    for q in sorted(valid_unitka_qs):
+        unitka_row = uds_unitka_values[q - 1]
+        mapped_skus = set(q_to_skus.get(q, []))
+        explicit_sku = norm_id(row_value(unitka_row, 2))
+        if explicit_sku:
+            if explicit_sku not in mapped_skus:
+                uds_unitka_clears.append(q)
+                continue
+            candidate_skus = {explicit_sku}
+        else:
+            candidate_skus = mapped_skus
+        prices = []
+        price_mapping_is_current = bool(candidate_skus)
+        for candidate_sku in sorted(candidate_skus):
+            item = uds_unique.get(candidate_sku)
+            price = num(item.get("price")) if item else None
+            if price is None:
+                price_mapping_is_current = False
+                break
+            prices.append(price)
+        if price_mapping_is_current and len({round(price, 8) for price in prices}) == 1:
+            uds_unitka_writes.append((q, prices[0]))
+        else:
+            # Clear stale/manual values when this row's SKU is missing, ambiguous,
+            # or has no current price in the UDS Partner API.
+            uds_unitka_clears.append(q)
 
     # Refresh source tabs and model inputs before reading formulas for the updated profitability.
     uds_live_rows = []
@@ -980,6 +1011,8 @@ def main():
     first_writes = []
     for row_number, price in model_writes:
         add_value(first_writes, "ЮНИТКА", f"J{row_number}", price)
+    for q in uds_unitka_clears:
+        add_value(first_writes, "UDS ЮНИТКА", f"N{q}", "")
     for q, price in uds_unitka_writes:
         add_value(first_writes, "UDS ЮНИТКА", f"N{q}", price)
     for index, row in enumerate(workbook["facts"][1:], start=2):
@@ -1039,6 +1072,17 @@ def main():
             model_readback_failures.append(row_number)
     if model_readback_failures:
         raise RuntimeError("Ozon price input readback failed for unitka rows: " + ",".join(map(str, model_readback_failures[:20])))
+    uds_price_readback_failures = []
+    for q, expected in uds_unitka_writes:
+        actual = num(row_value(refreshed_unitka[q - 1], 13))
+        if actual is None or abs(actual - expected) > 0.01:
+            uds_price_readback_failures.append(q)
+    for q in uds_unitka_clears:
+        actual = num(row_value(refreshed_unitka[q - 1], 13))
+        if actual is not None:
+            uds_price_readback_failures.append(q)
+    if uds_price_readback_failures:
+        raise RuntimeError("UDS unitka price input readback failed for rows: " + ",".join(map(str, uds_price_readback_failures[:30])))
 
     economics_by_sku = {}
     for sku, entries in control_by_sku.items():
@@ -1238,12 +1282,12 @@ def main():
     summary = [
         {"range": "'UDS — СВОДКА'!A1", "values": [["UDS × OZON — АВТООБНОВЛЕНИЕ"]]},
         {"range": "'UDS — СВОДКА'!A2", "values": [[f"Последний цикл: {stamp}. Источники: UDS Partner API, Ozon Seller API. Новые SKU добавляются в каталог автоматически; без точного соответствия строке юнитки прибыль не придумывается."]]},
-        {"range": "'UDS — СВОДКА'!A3", "values": [[f"Ozon цены обновлены: {current_price_count}; выставлены на продажу: {saleable_count}; не выставлены по API: {not_saleable_count}; статус продажи не подтверждён: {sale_status_unknown_count}; строк юнитки с актуальной Ozon ценой обновлено: {len(model_writes)}; цен UDS по API записано: {len(uds_unitka_writes)}; неоднозначных связок Ozon → UDS: {ambiguous_price_count}; без связи: {unmapped_price_count}. Детализация — лист {LIVE_SHEETS['uds']} и OZON — API LIVE."]]},
+        {"range": "'UDS — СВОДКА'!A3", "values": [[f"Ozon цены обновлены: {current_price_count}; выставлены на продажу: {saleable_count}; не выставлены по API: {not_saleable_count}; статус продажи не подтверждён: {sale_status_unknown_count}; строк юнитки с актуальной Ozon ценой обновлено: {len(model_writes)}; цен UDS по API записано: {len(uds_unitka_writes)}; неподтверждённых цен UDS очищено: {len(uds_unitka_clears)}; неоднозначных связок Ozon → UDS: {ambiguous_price_count}; без связи: {unmapped_price_count}. Детализация — лист {LIVE_SHEETS['uds']} и OZON — API LIVE."]]},
         {"range": "'UDS — СВОДКА'!A4:D4", "values": [["SKU UDS в текущем каталоге", "Вернул Partner API", "Не вернул API", "Новых SKU добавлено"]]},
         {"range": "'UDS — СВОДКА'!A5:D5", "values": [[len(old_skus | returned_skus), len(returned_skus), len(missing_skus), new_sku_count]]},
         {"range": "'UDS — СВОДКА'!A6", "values": [[f"Заказы Ozon за 30 дней: {posting_count} отправлений (FBS {len(posting_date_coverage['FBS']['postings'])}, FBO {len(posting_date_coverage['FBO']['postings'])}), {len(order_lines)} строк товара; доставлено {delivered_units:g} шт., отменено {cancelled_units:g} шт., возвраты/на склад {returned_units:g} шт. Цена есть у {priced_order_lines}/{order_item_lines} товарных строк. Сумма строк с известной ценой: {amount_sum:.2f} ₽ (не выплаты Ozon)."]]},
-        {"range": "'UDS — СВОДКА'!A8", "values": [[f"Даты создания отправления (created_at): FBO {len(posting_date_coverage['FBO']['created_at'])}/{len(posting_date_coverage['FBO']['postings'])}, FBS {len(posting_date_coverage['FBS']['created_at'])}/{len(posting_date_coverage['FBS']['postings'])}. Начало обработки (in_process_at): FBO {len(posting_date_coverage['FBO']['in_process_at'])}/{len(posting_date_coverage['FBO']['postings'])}, FBS {len(posting_date_coverage['FBS']['in_process_at'])}/{len(posting_date_coverage['FBS']['postings'])}."]]},
-        {"range": "'UDS — СВОДКА'!A7", "values": [["Историческая сверка 23–25.10 ниже; текущие API-статусы и новые SKU — на листах UDS — API LIVE и OZON — API LIVE."]]},
+        {"range": "'UDS — СВОДКА'!A8", "values": [[""]]},
+        {"range": "'UDS — СВОДКА'!A7", "values": [[f"Историческая сверка 23–25.10 ниже. Даты создания отправления (created_at): FBO {len(posting_date_coverage['FBO']['created_at'])}/{len(posting_date_coverage['FBO']['postings'])}, FBS {len(posting_date_coverage['FBS']['created_at'])}/{len(posting_date_coverage['FBS']['postings'])}; начало обработки (in_process_at): FBO {len(posting_date_coverage['FBO']['in_process_at'])}/{len(posting_date_coverage['FBO']['postings'])}, FBS {len(posting_date_coverage['FBS']['in_process_at'])}/{len(posting_date_coverage['FBS']['postings'])}."]]},
     ]
     final_writes.extend(summary)
 
@@ -1255,7 +1299,7 @@ def main():
     google_values_batch(access_token, final_writes)
 
     # Read back the written source and dashboard values before reporting success.
-    readback = google_values(access_token, "'UDS — СВОДКА'!A1:D8")
+    readback = google_values(access_token, "'UDS — СВОДКА'!A1:D7")
     catalog_readback = google_values(access_token, "'UDS — КАТАЛОГ (88)'!A1:P5")
     live_uds_readback = google_values(access_token, f"'{LIVE_SHEETS['uds']}'!A1:P3")
     if not readback or not catalog_readback or not live_uds_readback:
@@ -1273,6 +1317,7 @@ def main():
             out.write(f"- Успешно: {stamp}\n")
             out.write(f"- UDS API: {len(returned_skus)} SKU, новых: {new_sku_count}, не вернул API: {len(missing_skus)}\n")
             out.write(f"- Ozon API: {current_price_count} цен; обновлено строк модели: {len(model_writes)}\n")
+            out.write(f"- UDS unitka prices: {len(uds_unitka_writes)} confirmed, {len(uds_unitka_clears)} cleared as unconfirmed\n")
             out.write(f"- Заказы за 30 дней: {posting_count} отправлений, {len(order_lines)} строк товара, доставлено {delivered_units:g} шт., отменено {cancelled_units:g} шт.\n")
             out.write(f"- Таблица: https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/edit\n")
 
@@ -1291,6 +1336,7 @@ def main():
     log("OZON_PRICE_UNMAPPED_UDS", unmapped_price_count)
     log("UNITKA_MODEL_ROWS_UPDATED", len(model_writes))
     log("UDS_UNITKA_PRICE_INPUTS_UPDATED", len(uds_unitka_writes))
+    log("UDS_UNITKA_PRICE_INPUTS_CLEARED", len(uds_unitka_clears))
     log("UNITKA_PROFIT_ROWS_REFRESHED", profit_updated)
     log("UDS_HIDDEN", hidden_count)
     log("UDS_BLOCKED", blocked_count)
