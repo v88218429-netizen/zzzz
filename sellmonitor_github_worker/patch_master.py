@@ -2215,6 +2215,45 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
         worker_text = worker_text.replace(format_anchor, format_new, 1)
         print("WB_SUMMARY_GRAIN_PHASES=patched")
 
+    # Report partial source facts as waiting for Sellmonitor's weekly report, not as an error.
+    weekly_wait_marker = "INNER_FINANCE_WEEKLY_WAIT_STATUS_V1"
+    if weekly_wait_marker not in worker_text:
+        logger_anchor = "      var syncStatus = sync.ok === false ? 'ERROR' : sync.deferred ? 'WAITING_SOURCE' : sync.partial ? 'PARTIAL' : 'DONE';"
+        if worker_text.count(logger_anchor) != 1:
+            raise SystemExit("INNER_FINANCE_WEEKLY_WAIT_LOG_STATUS_ANCHOR_MISMATCH")
+        logger_replacement = """/* INNER_FINANCE_WEEKLY_WAIT_STATUS_V1 */
+      var financeReportDueAt = Date.parse(sync.source_report_due_at || '');
+      var financeAwaitingMonday = sync.partial === true && isFinite(financeReportDueAt) && Date.now() < financeReportDueAt;
+      var syncStatus = sync.ok === false ? 'ERROR' : financeAwaitingMonday ? 'WAITING_WEEKLY_REPORT' : sync.deferred || sync.partial ? 'WAITING_SOURCE' : 'DONE';"""
+        worker_text = worker_text.replace(logger_anchor, logger_replacement, 1)
+        message_anchor = """var syncMessage = sync.deferred
+        ? String(sync.reason || 'awaiting_monday_report') + '; next_retry_at=' + String(sync.next_retry_at || '')
+        : sync.ok === false ? sync.error : sync.partial ? String(sync.date) + '; report_due=' + String(sync.source_report_due_at || '') : sync.date;"""
+        if worker_text.count(message_anchor) != 1:
+            raise SystemExit("INNER_FINANCE_WEEKLY_WAIT_LOG_MESSAGE_ANCHOR_MISMATCH")
+        message_replacement = """var syncMessage = sync.ok === false ? String(sync.error || '') : sync.partial
+        ? (financeAwaitingMonday ? 'Ожидается недельный отчёт Sellmonitor' : 'Источник Sellmonitor ещё неполный после срока отчёта')
+          + '; дата=' + String(sync.date || '') + '; следующий повтор=' + String(sync.next_retry_at || '')
+        : sync.deferred ? String(sync.reason || 'источник ожидается') + '; следующий повтор=' + String(sync.next_retry_at || '')
+        : sync.date;"""
+        worker_text = worker_text.replace(message_anchor, message_replacement, 1)
+        source_status_anchor = "source_status:sync.partial===true?'PARTIAL':(sync.ok===false?'ERROR':(sync.attempted===true?'COMPLETE':'SKIPPED'))"
+        if worker_text.count(source_status_anchor) != 1:
+            raise SystemExit("INNER_FINANCE_WEEKLY_WAIT_TICK_STATUS_ANCHOR_MISMATCH")
+        source_status_replacement = "source_status:sync.ok===false?'ERROR':(sync.partial===true?(Date.parse(sync.source_report_due_at||'')>Date.now()?'WAITING_WEEKLY_REPORT':'WAITING_SOURCE'):(sync.deferred===true?'WAITING_SOURCE':(sync.attempted===true?'COMPLETE':'SKIPPED')))"
+        worker_text = worker_text.replace(source_status_anchor, source_status_replacement, 1)
+        wait_versions = re.findall(r"VERSION:\\s*'github-worker-(\\d+)\\.(\\d+)\\.(\\d+)'", worker_text)
+        if len(wait_versions) != 1:
+            raise SystemExit("INNER_FINANCE_WEEKLY_WAIT_VERSION_PATTERN_MISMATCH")
+        wait_major, wait_minor, wait_patch = [int(value) for value in wait_versions[0]]
+        wait_current = ".".join(str(value) for value in (wait_major, wait_minor, wait_patch))
+        wait_next = ".".join(str(value) for value in (wait_major, wait_minor, wait_patch + 1))
+        wait_version_anchor = "VERSION: 'github-worker-" + wait_current + "'"
+        if worker_text.count(wait_version_anchor) != 1:
+            raise SystemExit("INNER_FINANCE_WEEKLY_WAIT_VERSION_ANCHOR_MISMATCH")
+        worker_text = worker_text.replace(wait_version_anchor, "VERSION: 'github-worker-" + wait_next + "'", 1)
+        print("INNER_FINANCE_WEEKLY_WAIT_STATUS=patched")
+
     worker.write_text(worker_text, encoding="utf-8")
     print("WORKER_TRIGGER_REFRESH_V2=patched")
 candidates = []
