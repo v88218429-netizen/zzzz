@@ -2,11 +2,6 @@ name: WB VAT 5 percent update
 
 on:
   workflow_dispatch:
-  push:
-    branches: [mainggg]
-    paths:
-      - "wb_worker/wb_vat_mass_apply.py"
-      - ".github/workflows/wb-vat-mass-update.yml"
 
 permissions:
   contents: read
@@ -31,22 +26,5 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Inspect saved token flags without printing the token
-        shell: bash
-        run: |
-          python - <<'PY'
-          import base64, json, os
-          token = os.environ.get("WB_API_TOKEN_AP", "").strip()
-          parts = token.split(".")
-          if len(parts) != 3:
-              raise SystemExit("WB_TOKEN_METADATA=unavailable")
-          payload = parts[1] + "=" * (-len(parts[1]) % 4)
-          claims = json.loads(base64.urlsafe_b64decode(payload.encode("ascii")))
-          flags = int(claims.get("s") or 0)
-          personal = claims.get("acc") == 3 and claims.get("for") == "self" and claims.get("t") is False
-          print("WB_TOKEN_TYPE_PERSONAL=" + ("yes" if personal else "no"))
-          print("WB_TOKEN_READ_ONLY_BIT_29=" + ("yes" if flags & (1 << 29) else "no"))
-          print("WB_TOKEN_READ_ONLY_BIT_30=" + ("yes" if flags & (1 << 30) else "no"))
-          PY
       - name: Apply VAT 5 and verify
         run: python wb_worker/wb_vat_mass_apply.py
