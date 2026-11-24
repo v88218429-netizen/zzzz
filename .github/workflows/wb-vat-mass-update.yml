@@ -1,0 +1,29 @@
+name: WB VAT 5 percent update
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wb-vat-mass-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      WB_API_TOKEN_AP: ${{ secrets.WB_API_TOKEN_AP }}
+    steps:
+      - name: Get repository
+        uses: actions/checkout@v4
+        with:
+          ref: mainggg
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Apply VAT 5 and verify
+        run: python wb_worker/wb_vat_mass_apply.py
