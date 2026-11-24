@@ -2117,6 +2117,93 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
     elif "weekRangeMatch=phase.match" not in worker_text:
         raise SystemExit("WB weekly chunk marker exists without phase handler")
 
+    # Bounded WB summary-grain phases: keep each write/readback under Apps Script runtime limits.
+    summary_phase_marker = "WB_SUMMARY_GRAIN_PHASES_V1"
+    if summary_phase_marker not in worker_text:
+        phase_start = "  var dayMonthMatch=phase.match(/^rnp_day_(\\d{4}_\\d{2})$/);"
+        phase_new = "  /* WB_SUMMARY_GRAIN_PHASES_V1 */\n  var summaryGrainMatch=phase.match(/^summary_(day|week|month)$/);\n" + phase_start
+        if worker_text.count(phase_start) != 1:
+            raise SystemExit("WB summary phase start anchor mismatch")
+        worker_text = worker_text.replace(phase_start, phase_new, 1)
+
+        phase_guard = "if(['all','summary','rnp_day','rnp_week','rnp_month','dashboard'].indexOf(phase)<0&&!dayMonthMatch&&!dayRangeMatch&&!weekRangeMatch)throw new Error('WB_INNER_UNKNOWN_PHASE:'+phase);"
+        phase_guard_new = "if(['all','summary','rnp_day','rnp_week','rnp_month','dashboard'].indexOf(phase)<0&&!summaryGrainMatch&&!dayMonthMatch&&!dayRangeMatch&&!weekRangeMatch)throw new Error('WB_INNER_UNKNOWN_PHASE:'+phase);"
+        if worker_text.count(phase_guard) != 1:
+            raise SystemExit("WB summary phase guard anchor mismatch")
+        worker_text = worker_text.replace(phase_guard, phase_guard_new, 1)
+
+        summary_anchor = """      if(phase==='all'||phase==='summary'){
+        res.day=sellmonitorGithubWbInnerUpsert_(ss,day,head,built.day,cfg.name);
+        res.week=sellmonitorGithubWbInnerUpsert_(ss,week,head,built.week,cfg.name);
+        res.month=sellmonitorGithubWbInnerUpsert_(ss,month,head,built.month,cfg.name);
+      }"""
+        summary_new = """      if(phase==='all'||phase==='summary'){
+        res.day=sellmonitorGithubWbInnerUpsert_(ss,day,head,built.day,cfg.name);
+        res.week=sellmonitorGithubWbInnerUpsert_(ss,week,head,built.week,cfg.name);
+        res.month=sellmonitorGithubWbInnerUpsert_(ss,month,head,built.month,cfg.name);
+      }else if(phase==='summary_day'){
+        res.day=sellmonitorGithubWbInnerUpsert_(ss,day,head,built.day,cfg.name);
+      }else if(phase==='summary_week'){
+        res.week=sellmonitorGithubWbInnerUpsert_(ss,week,head,built.week,cfg.name);
+      }else if(phase==='summary_month'){
+        res.month=sellmonitorGithubWbInnerUpsert_(ss,month,head,built.month,cfg.name);
+      }"""
+        if worker_text.count(summary_anchor) != 1:
+            raise SystemExit("WB summary phase upsert anchor mismatch")
+        worker_text = worker_text.replace(summary_anchor, summary_new, 1)
+
+        log_anchor = """      if(phase==='all'||phase==='summary'){
+        var log=sellmonitorGithubWbInnerEnsureSheet_(ss,SMC_WB_INNER_SUMMARY_V1.tabs.log,['Время запуска','Магазин','Источник частей','Строк фактов','Период с','Период по','Дней точных','Дней предварительных','Строк день/неделя/месяц','Новых','Изменённых','Архивировано','SHA-256']);
+        var counts=[res.day.rows,res.week.rows,res.month.rows],newCount=res.day.new_rows+res.week.new_rows+res.month.new_rows,changeCount=res.day.changed_rows+res.week.changed_rows+res.month.changed_rows,archCount=res.day.archived_rows+res.week.archived_rows+res.month.archived_rows;
+        var logRow=[new Date(),cfg.name,sourceIds.join(','),built.sourceRows,built.min,built.max,built.factualDays,built.partialDays,counts.join('/'),newCount,changeCount,archCount,[res.day.sha256,res.week.sha256,res.month.sha256].join('/')];
+        var at=log.getLastRow()+1;if(at>log.getMaxRows())log.insertRowsAfter(log.getMaxRows(),100);
+        log.getRange(at,1,1,13).setValues([logRow]);
+        var check=log.getRange(at,1,1,13).getValues()[0];
+        if(String(check[12])!==String(logRow[12]))throw new Error('WB_INNER_STORE_LOG_READBACK_FAILED:'+cfg.name);
+        SpreadsheetApp.flush();
+      }"""
+        log_new = """      if(phase==='all'||phase==='summary'||summaryGrainMatch){
+        var log=sellmonitorGithubWbInnerEnsureSheet_(ss,SMC_WB_INNER_SUMMARY_V1.tabs.log,['Время запуска','Магазин','Источник частей','Строк фактов','Период с','Период по','Дней точных','Дней предварительных','Строк день/неделя/месяц','Новых','Изменённых','Архивировано','SHA-256']);
+        var dayRes=res.day||{},weekRes=res.week||{},monthRes=res.month||{};
+        var counts=[dayRes.rows==null?'':dayRes.rows,weekRes.rows==null?'':weekRes.rows,monthRes.rows==null?'':monthRes.rows];
+        var newCount=(dayRes.new_rows||0)+(weekRes.new_rows||0)+(monthRes.new_rows||0),changeCount=(dayRes.changed_rows||0)+(weekRes.changed_rows||0)+(monthRes.changed_rows||0),archCount=(dayRes.archived_rows||0)+(weekRes.archived_rows||0)+(monthRes.archived_rows||0);
+        var sourceLabel=sourceIds.join(',')+(summaryGrainMatch?' | '+phase:'');
+        var logRow=[new Date(),cfg.name,sourceLabel,built.sourceRows,built.min,built.max,built.factualDays,built.partialDays,counts.join('/'),newCount,changeCount,archCount,[dayRes.sha256||'',weekRes.sha256||'',monthRes.sha256||''].join('/')];
+        var at=log.getLastRow()+1;if(at>log.getMaxRows())log.insertRowsAfter(log.getMaxRows(),100);
+        log.getRange(at,1,1,13).setValues([logRow]);
+        var check=log.getRange(at,1,1,13).getValues()[0];
+        if(String(check[12])!==String(logRow[12]))throw new Error('WB_INNER_STORE_LOG_READBACK_FAILED:'+cfg.name+':'+phase);
+        SpreadsheetApp.flush();
+      }"""
+        if worker_text.count(log_anchor) != 1:
+            raise SystemExit("WB summary phase log anchor mismatch")
+        worker_text = worker_text.replace(log_anchor, log_new, 1)
+
+        format_anchor = """  if(final.length>1){
+    var fmts=new Array(keyCol).fill('');fmts[1]='dd.mm.yyyy';fmts[2]='dd.mm.yyyy';
+    headers.forEach(function(h,i){if(/_rub$/.test(String(h)))fmts[i]='#,##0.00';else if(/^(margin|roi|buyout)$/.test(String(h)))fmts[i]='0.0%';else if(/(_qty|_count)$/.test(String(h)))fmts[i]='#,##0.##';});
+    var fmtStart=-1,fmtCurrent='';for(var fi=0;fi<=fmts.length;fi++){var fmt=fi<fmts.length?fmts[fi]:'';if(fmt!==fmtCurrent){if(fmtCurrent)sh.getRange(2,fmtStart+1,final.length,fi-fmtStart).setNumberFormat(fmtCurrent);fmtCurrent=fmt;fmtStart=fi;}}
+    if(!sh.getFilter())sh.getRange(1,1,finalLast,keyCol).createFilter();
+  }"""
+        format_new = """  if(final.length>1){
+    var fmts=new Array(keyCol).fill('');fmts[1]='dd.mm.yyyy';fmts[2]='dd.mm.yyyy';
+    headers.forEach(function(h,i){if(/_rub$/.test(String(h)))fmts[i]='#,##0.00';else if(/^(margin|roi|buyout)$/.test(String(h)))fmts[i]='0.0%';else if(/(_qty|_count)$/.test(String(h)))fmts[i]='#,##0.##';});
+    var dirtyRows=changedRows.map(function(x){return x.row;});
+    if(newRows.length)for(var nr=last+1;nr<=last+newRows.length;nr++)dirtyRows.push(nr);
+    dirtyRows.sort(function(a,b){return a-b;});
+    var dirtyRanges=[];
+    for(var dr=0;dr<dirtyRows.length;dr++){var rowNo=dirtyRows[dr];if(!dirtyRanges.length||rowNo>dirtyRanges[dirtyRanges.length-1][0]+dirtyRanges[dirtyRanges.length-1][1])dirtyRanges.push([rowNo,1]);else dirtyRanges[dirtyRanges.length-1][1]=rowNo-dirtyRanges[dirtyRanges.length-1][0]+1;}
+    for(var d=0;d<dirtyRanges.length;d++){
+      var rowStart=dirtyRanges[d][0],rowCount=dirtyRanges[d][1],fmtStart=-1,fmtCurrent='';
+      for(var fi=0;fi<=fmts.length;fi++){var fmt=fi<fmts.length?fmts[fi]:'';if(fmt!==fmtCurrent){if(fmtCurrent)sh.getRange(rowStart,fmtStart+1,rowCount,fi-fmtStart).setNumberFormat(fmtCurrent);fmtCurrent=fmt;fmtStart=fi;}}
+    }
+    if(!sh.getFilter())sh.getRange(1,1,finalLast,keyCol).createFilter();
+  }"""
+        if worker_text.count(format_anchor) != 1:
+            raise SystemExit("WB dirty-row format anchor mismatch")
+        worker_text = worker_text.replace(format_anchor, format_new, 1)
+        print("WB_SUMMARY_GRAIN_PHASES=patched")
+
     worker.write_text(worker_text, encoding="utf-8")
     print("WORKER_TRIGGER_REFRESH_V2=patched")
 candidates = []

@@ -65,7 +65,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       PUBLISH_ONLY_STORE: ${{ github.event_name == 'workflow_dispatch' && inputs.store != 'all' && inputs.store || contains(github.event.head_commit.message || github.event.workflow_run.head_commit.message, '[air-only]') && 'air_wb' || contains(github.event.head_commit.message || github.event.workflow_run.head_commit.message, '[hozyayushka-only]') && 'hozyayushka_wb' || contains(github.event.head_commit.message || github.event.workflow_run.head_commit.message, '[sanych-only]') && 'sanych_wb' || '' }}
       RESUME_ATTEMPT: ${{ github.event_name == 'workflow_dispatch' && inputs.resume_attempt || '0' }}
-      RESUME_PHASE: ${{ github.event_name == 'workflow_dispatch' && inputs.resume_phase || github.event_name == 'push' && format('push:{0}', github.event.head_commit.message) || github.event_name == 'workflow_run' && format('push:{0}', github.event.workflow_run.head_commit.message) || 'summary' }}
+      RESUME_PHASE: ${{ github.event_name == 'workflow_dispatch' && inputs.resume_phase || github.event_name == 'push' && format('push:{0}', github.event.head_commit.message) || github.event_name == 'workflow_run' && format('push:{0}', github.event.workflow_run.head_commit.message) || 'summary_day' }}
     steps:
       - name: Check configured authorization
         shell: bash
@@ -135,6 +135,8 @@ jobs:
               resume_phase = resume_phase_input[marker_start + len(marker_prefix):marker_end] if marker_end > marker_start else "summary"
           else:
               resume_phase = resume_phase_input
+          if resume_phase == "summary":
+              resume_phase = "summary_day"
           expected = (selected_store,) if selected_store in ("air_wb", "hozyayushka_wb", "sanych_wb") else ("air_wb", "hozyayushka_wb", "sanych_wb")
           today = date.today()
           end_year, end_month = today.year, today.month
@@ -176,14 +178,15 @@ jobs:
 
           for store_index, store_id in enumerate(expected):
               daily_phases = sanych_chunks if store_id == "sanych_wb" else months
-              all_phases = ["summary", *daily_phases, *week_phases, "rnp_month", "dashboard"]
+              all_phases = ["summary_day", "summary_week", "summary_month", *daily_phases, *week_phases, "rnp_month", "dashboard"]
               store_result = {"store_id": store_id}
-              phase_checkpoint = resume_phase if resume_phase in all_phases else "summary"
+              phase_checkpoint = resume_phase if resume_phase in all_phases else "summary_day"
               checkpoint_index = all_phases.index(phase_checkpoint)
               completed_phases = all_phases[:checkpoint_index]
               # Re-read the compact summary, then continue from the last phase whose readback was confirmed.
               # Earlier phases are only trusted when the recovery job derived this checkpoint from the completed log.
-              phases = all_phases if checkpoint_index == 0 else ["summary", *all_phases[checkpoint_index:]]
+              summary_phases = all_phases[:3]
+              phases = all_phases if checkpoint_index == 0 else (summary_phases + all_phases[max(3, checkpoint_index):])
               prior_rnp = [p for p in completed_phases if p.startswith("rnp_")]
               if prior_rnp:
                   store_result["rnp"] = {}
@@ -294,6 +297,19 @@ jobs:
                           "source_max": item.get("source_max"),
                           "summary": {p: {"rows": item[p]["rows"], "verified": item[p]["verified"], "sha256": item[p]["sha256"]} for p in ("day", "week", "month")},
                       })
+                  elif phase.startswith("summary_"):
+                      grain = phase[len("summary_"):]
+                      data = item.get(grain)
+                      if grain not in ("day", "week", "month") or not isinstance(data, dict) or int(data.get("verified", -1)) != int(data.get("rows", -2)) or not data.get("sha256"):
+                          last = "WB summary readback mismatch in " + grain + ": " + json.dumps(item, ensure_ascii=False)[:1200]
+                          errors.append("WB finance summary readback failed for " + store_id + ": " + last)
+                          failed_phases.append((store_id, phase))
+                          print("STORE=" + store_id + " PHASE=" + phase + " OK=no ERROR=" + last, flush=True)
+                          break
+                      store_result["source_rows"] = item.get("source_rows", store_result.get("source_rows"))
+                      store_result["source_min"] = item.get("source_min", store_result.get("source_min"))
+                      store_result["source_max"] = item.get("source_max", store_result.get("source_max"))
+                      store_result.setdefault("summary", {})[grain] = {"rows": data["rows"], "verified": data["verified"], "sha256": data["sha256"]}
                   elif phase.startswith("rnp_"):
                       rnp = item.get("rnp") or {}
                       grain = "day" if phase.startswith("rnp_day_") else "week" if phase.startswith("rnp_week_") else phase[4:]
@@ -374,6 +390,10 @@ jobs:
                   verification = "readback=verified"
                   if phase == "summary":
                       verification = "day=" + str(item["day"].get("verified")) + "/" + str(item["day"].get("rows")) + ";week=" + str(item["week"].get("verified")) + "/" + str(item["week"].get("rows")) + ";month=" + str(item["month"].get("verified")) + "/" + str(item["month"].get("rows"))
+                  elif phase.startswith("summary_"):
+                      grain = phase[len("summary_"):]
+                      data = (item.get(grain) or {})
+                      verification = grain + "=" + str(data.get("verified")) + "/" + str(data.get("rows")) + ";sha256=" + str(bool(data.get("sha256")))
                   elif phase.startswith("rnp_"):
                       verification = "matrix_readback=" + str((item.get("rnp") or {}).get("readback")) + ";matrices=" + str(len((item.get("rnp") or {}).get("matrices") or []))
                   else:
@@ -392,8 +412,10 @@ jobs:
                   else:
                       print("STORE=" + store_id + " PHASE=" + phase + " OK=yes", flush=True)
               missing_state = []
-              if "summary" not in store_result:
-                  missing_state.append("summary")
+              summary_state = store_result.get("summary") or {}
+              missing_summary = [grain for grain in ("day", "week", "month") if grain not in summary_state]
+              if missing_summary:
+                  missing_state.extend("summary." + grain for grain in missing_summary)
               if "rnp" not in store_result:
                   missing_state.extend(("rnp.day", "rnp.week", "rnp.month"))
               else:
@@ -412,8 +434,12 @@ jobs:
                   for e in errors
               )
               if store_id in expected and missing_state and not has_phase_error:
-                  if "summary" in missing_state:
-                      incomplete_phase = "summary"
+                  if "summary.day" in missing_state:
+                      incomplete_phase = "summary_day"
+                  elif "summary.week" in missing_state:
+                      incomplete_phase = "summary_week"
+                  elif "summary.month" in missing_state:
+                      incomplete_phase = "summary_month"
                   elif "rnp.day" in missing_state:
                       incomplete_phase = daily_phases[0] if daily_phases else "rnp_week"
                   elif "rnp.week" in missing_state:
@@ -426,15 +452,15 @@ jobs:
                   failed_phases.append((store_id, incomplete_phase))
                   print("STORE=" + store_id + " STATUS=RETRY_REQUIRED MISSING=" + ",".join(missing_state) + ";RESUME=" + incomplete_phase, flush=True)
               if store_id in expected and not any(e.startswith("WB finance phase failed for " + store_id) or e.startswith("WB finance summary readback failed for " + store_id) or e.startswith("WB finance RNP readback failed for " + store_id) or e.startswith("WB finance dashboard failed for " + store_id) for e in errors):
-                  if all(k in store_result for k in ("summary", "rnp", "dashboard")) and all(k in store_result["rnp"] for k in ("day", "week", "month")):
+                  if all(k in store_result for k in ("summary", "rnp", "dashboard")) and all(k in store_result["summary"] for k in ("day", "week", "month")) and all(k in store_result["rnp"] for k in ("day", "week", "month")):
                       verified.append(store_result)
                       print("STORE=" + store_id + " OK=yes SOURCE_ROWS=" + str(store_result["source_rows"]) + " SOURCE_PERIOD=" + str(store_result["source_min"]) + ".." + str(store_result["source_max"]) + " DASHBOARD_OK=yes", flush=True)
                       if store_index + 1 < len(expected):
-                          checkpoint_resume(expected[store_index + 1], "summary")
+                          checkpoint_resume(expected[store_index + 1], "summary_day")
                       else:
                           checkpoint_resume(store_id, "complete")
           if errors or len(verified) != len(expected):
-              retry_phase = failed_phases[0][1] if failed_phases else "summary"
+              retry_phase = failed_phases[0][1] if failed_phases else "summary_day"
               retry_store = failed_phases[0][0] if failed_phases else (expected[0] if expected else "all")
               failure_text = " ".join(str(error) for error in errors).lower()
               transient_failure_markers = (
@@ -467,7 +493,7 @@ jobs:
       - name: Queue one serialized recovery attempt
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
           RECOVERY_STORE: ${{ needs.publish.outputs.resume_store || (github.event_name == 'workflow_dispatch' && inputs.store != 'all' && inputs.store) || contains(github.event.head_commit.message || github.event.workflow_run.head_commit.message, '[air-only]') && 'air_wb' || contains(github.event.head_commit.message || github.event.workflow_run.head_commit.message, '[hozyayushka-only]') && 'hozyayushka_wb' || contains(github.event.head_commit.message || github.event.workflow_run.head_commit.message, '[sanych-only]') && 'sanych_wb' || 'all' }}
           RECOVERY_REF: ${{ github.ref_name }}
           RECOVERY_PHASE: ${{ needs.publish.outputs.resume_phase || 'summary' }}
@@ -513,7 +539,7 @@ jobs:
               while week_start <= today:
                   weekly.append("rnp_week_" + week_start.strftime("%Y_%m_%d"))
                   week_start += timedelta(days=7)
-              return ["summary", *daily, *weekly, "rnp_month", "dashboard"]
+              return ["summary_day", "summary_week", "summary_month", *daily, *weekly, "rnp_month", "dashboard"]
           # Always read the failed publisher log, even for a store-specific continuation.
           try:
               jobs_payload = json.loads(api_get("https://api.github.com/repos/"+repo+"/actions/runs/"+os.environ["RECOVERY_RUN_ID"]+"/jobs?per_page=100"))
@@ -608,5 +634,24 @@ jobs:
           with urllib.request.urlopen(req, timeout=30) as response:
               if response.status != 204:
                   raise SystemExit("WB_RECOVERY_DISPATCH_HTTP_" + str(response.status))
-          print("WB_AUTOMATIC_RECOVERY=queued; attempt=" + str(min(10, int(os.environ.get("RECOVERY_ATTEMPT", "0")) + 1)) + "; store=" + store)
+          print("WB_AUTOMATIC_RECOVERY=dispatch_accepted; attempt=" + str(min(10, int(os.environ.get("RECOVERY_ATTEMPT", "0")) + 1)) + "; store=" + store)
+          # A 204 response only accepts the dispatch; verify a child run exists before reporting recovery success.
+          dispatch_after = int(time.time()) - 5
+          runs_url = "https://api.github.com/repos/" + repo + "/actions/workflows/wb-sellmonitor-finance-publish.yml/runs?branch=" + __import__("urllib.parse").quote(os.environ["RECOVERY_REF"], safe="") + "&event=workflow_dispatch&per_page=20"
+          child = None
+          for verify_attempt in range(15):
+              run_list = json.loads(api_get(runs_url)).get("workflow_runs", [])
+              for candidate in run_list:
+                  if (str(candidate.get("id")) != str(os.environ["RECOVERY_RUN_ID"])
+                      and candidate.get("event") == "workflow_dispatch"
+                      and candidate.get("head_branch") == os.environ["RECOVERY_REF"]
+                      and int(time.mktime(time.strptime(candidate.get("created_at", "")[:19], "%Y-%m-%dT%H:%M:%S"))) >= dispatch_after):
+                      child = candidate
+                      break
+              if child:
+                  break
+              time.sleep(2)
+          if not child:
+              raise SystemExit("WB_RECOVERY_CHILD_RUN_NOT_VISIBLE")
+          print("WB_RECOVERY_CHILD_RUN=id:" + str(child.get("id")) + ";status:" + str(child.get("status")) + ";conclusion:" + str(child.get("conclusion") or "pending") + ";store:" + store + ";phase:" + phase)
           PY
