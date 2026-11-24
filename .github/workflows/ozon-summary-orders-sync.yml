@@ -30,10 +30,10 @@ on:
     branches: [mainggg]
     paths:
       - ".github/workflows/ozon-summary-orders-sync.yml"
-  # Часовое обновление Seller API; изменение этого файла запускает штатную проверку публикации.
+  # Часовое обновление Seller API с запасом времени на завершение полной выгрузки; изменение этого файла запускает штатную проверку публикации.
   # Повторная выгрузка после исправления подсчёта SKU в неделях и месяцах.
   schedule:
-    - cron: "4,34 * * * *"
+    - cron: "4 * * * *"
 
 permissions:
   actions: read
@@ -64,7 +64,7 @@ jobs:
           test -n "$WEBHOOK_SECRET"
           echo "::add-mask::$WEBHOOK_SECRET"
 
-      - name: Run scheduled Ozon refresh on every half-hour slot
+      - name: Run scheduled Ozon refresh on hourly slot
         id: schedule_freshness
         if: ${{ github.event_name == 'schedule' }}
         shell: bash
