@@ -1090,10 +1090,16 @@ def main():
     # Write live catalog values by columns; these columns are values, not formulas.
     final_writes = []
     existing_end = max(last_catalog_row, max((row for row, _ in new_catalog_rows), default=last_catalog_row))
-    target_cols = sorted(catalog_updates.keys(), key=lambda c: ord(c[0]) - 64)
+    def column_number(label):
+        number = 0
+        for character in label.upper():
+            number = number * 26 + ord(character) - 64
+        return number
+
+    target_cols = sorted(catalog_updates.keys(), key=column_number)
     for col in target_cols:
         values = []
-        col_num = ord(col) - 64
+        col_num = column_number(col)
         for row_number in range(2, existing_end + 1):
             if row_number in catalog_updates[col]:
                 value = catalog_updates[col][row_number]
