@@ -2242,7 +2242,7 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
             raise SystemExit("INNER_FINANCE_WEEKLY_WAIT_TICK_STATUS_ANCHOR_MISMATCH")
         source_status_replacement = "source_status:sync.ok===false?'ERROR':(sync.partial===true?(Date.parse(sync.source_report_due_at||'')>Date.now()?'WAITING_WEEKLY_REPORT':'WAITING_SOURCE'):(sync.deferred===true?'WAITING_SOURCE':(sync.attempted===true?'COMPLETE':'SKIPPED')))"
         worker_text = worker_text.replace(source_status_anchor, source_status_replacement, 1)
-        wait_versions = re.findall(r"VERSION:\\s*'github-worker-(\\d+)\\.(\\d+)\\.(\\d+)'", worker_text)
+        wait_versions = re.findall(r"VERSION:\s*'github-worker-(\d+)\.(\d+)\.(\d+)'", worker_text)
         if len(wait_versions) != 1:
             raise SystemExit("INNER_FINANCE_WEEKLY_WAIT_VERSION_PATTERN_MISMATCH")
         wait_major, wait_minor, wait_patch = [int(value) for value in wait_versions[0]]
