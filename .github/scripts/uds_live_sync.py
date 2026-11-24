@@ -597,12 +597,15 @@ def update_column(data, sheet, col, start_row, values):
 
 
 def pick_price(offer_id, product_id, by_offer, by_product):
+    expected_offer = str(offer_id or "").strip()
     pid = norm_id(product_id)
-    if pid and pid in by_product:
-        return by_product[pid]
-    if offer_id and offer_id in by_offer:
-        return by_offer[offer_id]
-    return None
+    product_record = by_product.get(pid) if pid else None
+    offer_record = by_offer.get(expected_offer) if expected_offer else None
+    if product_record and (not expected_offer or product_record.get("offer_id") == expected_offer):
+        return product_record
+    if offer_record:
+        return offer_record
+    return product_record
 
 
 def text_bool(value):
@@ -671,7 +674,9 @@ def main():
         candidates = product_skus if product_skus else offer_skus
         uds_sku = next(iter(candidates)) if len(candidates) == 1 else ("AMBIGUOUS" if candidates else "")
         mapping_status = "Цена API получена"
-        if len(product_skus) == 1 and offer_skus and product_skus.isdisjoint(offer_skus):
+        if len(product_skus) > 1:
+            mapping_status = "Цена API получена; product_id связан с несколькими SKU UDS"
+        elif len(product_skus) == 1 and offer_skus and product_skus.isdisjoint(offer_skus):
             mapping_status = "Цена API получена; сопоставлено по product_id, offer_id конфликтует"
         price_rows.append([record["product_id"], record["offer_id"], uds_sku, price_name_by_offer.get(record["offer_id"], ""), record["price"], record["marketing_price"], record["marketing_seller_price"], record["old_price"], record["min_price"], record["net_price"], record["currency"], record["vat"], record["volume_weight"], mapping_status, stamp])
         used_price_keys.add((record["product_id"], record["offer_id"]))
@@ -816,7 +821,7 @@ def main():
     aggregates = {}
     for line in order_lines:
         offer = line["offer_id"] or ("product:" + line["product_id"] if line["product_id"] else "unmapped")
-        key = (line["flow"], line["product_id"] or offer, offer)
+        key = (line["flow"], line["uds_sku"] or line["product_id"] or offer, offer)
         agg = aggregates.setdefault(key, {"flow": line["flow"], "offer": line["offer_id"], "product_id": line["product_id"], "uds_sku": line["uds_sku"], "name": line["name"], "orders": set(), "qty": 0.0, "delivered": 0.0, "cancelled": 0.0, "returned": 0.0, "open": 0.0, "amount": 0.0, "delivered_amount": 0.0, "lines": 0, "priced_lines": 0, "statuses": set()})
         agg["orders"].add((line["flow"], line["posting_number"]))
         agg["qty"] += line["quantity"]
@@ -1132,6 +1137,8 @@ def main():
     missing_skus = sorted(old_skus - returned_skus)
     new_sku_count = len(new_skus)
     current_price_count = sum(1 for record in by_product.values() if record["price"] is not None)
+    ambiguous_price_count = sum(1 for row in price_rows if row[2] == "AMBIGUOUS" and str(row[13]).startswith("Цена API получена"))
+    unmapped_price_count = sum(1 for row in price_rows if not row[2] and str(row[13]).startswith("Цена API получена"))
     delivered_units = sum(agg["delivered"] for agg in aggregates.values())
     cancelled_units = sum(agg["cancelled"] for agg in aggregates.values())
     returned_units = sum(agg["returned"] for agg in aggregates.values())
@@ -1139,7 +1146,7 @@ def main():
     summary = [
         {"range": "'UDS — СВОДКА'!A1", "values": [["UDS × OZON — АВТООБНОВЛЕНИЕ"]]},
         {"range": "'UDS — СВОДКА'!A2", "values": [[f"Последний цикл: {stamp}. Источники: UDS Partner API, Ozon Seller API. Новые SKU добавляются в каталог автоматически; без точного соответствия строке юнитки прибыль не придумывается."]]},
-        {"range": "'UDS — СВОДКА'!A3", "values": [[f"Ozon цены обновлены: {current_price_count}; строк юнитки с актуальной Ozon ценой обновлено: {len(model_writes)}; цен UDS по API записано: {len(uds_unitka_writes)}. Детализация новых товаров и статусов — лист {LIVE_SHEETS['uds']}."]]},
+        {"range": "'UDS — СВОДКА'!A3", "values": [[f"Ozon цены обновлены: {current_price_count}; строк юнитки с актуальной Ozon ценой обновлено: {len(model_writes)}; цен UDS по API записано: {len(uds_unitka_writes)}; неоднозначных связок Ozon → UDS: {ambiguous_price_count}; без связи: {unmapped_price_count}. Детализация — лист {LIVE_SHEETS['uds']} и OZON — API LIVE."]]},
         {"range": "'UDS — СВОДКА'!A4:D4", "values": [["SKU UDS в текущем каталоге", "Вернул Partner API", "Не вернул API", "Новых SKU добавлено"]]},
         {"range": "'UDS — СВОДКА'!A5:D5", "values": [[len(old_skus | returned_skus), len(returned_skus), len(missing_skus), new_sku_count]]},
         {"range": "'UDS — СВОДКА'!A6", "values": [[f"Заказы Ozon, последние 30 дней: {posting_count} отправлений, {len(order_lines)} строк товара; доставлено {delivered_units:g} шт., отменено {cancelled_units:g} шт., возвраты/на склад {returned_units:g} шт. Цена есть у {priced_order_lines}/{order_item_lines} товарных строк. Сумма строк с известной ценой: {amount_sum:.2f} ₽ (не выплаты Ozon)."]]},
@@ -1182,6 +1189,8 @@ def main():
     log("UDS_SKU_NOT_RETURNED", len(missing_skus))
     log("UDS_SKU_NEW", new_sku_count)
     log("OZON_PRICE_RECORDS", current_price_count)
+    log("OZON_PRICE_AMBIGUOUS_UDS", ambiguous_price_count)
+    log("OZON_PRICE_UNMAPPED_UDS", unmapped_price_count)
     log("UNITKA_MODEL_ROWS_UPDATED", len(model_writes))
     log("UDS_UNITKA_PRICE_INPUTS_UPDATED", len(uds_unitka_writes))
     log("UNITKA_PROFIT_ROWS_REFRESHED", profit_updated)
