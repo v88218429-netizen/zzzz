@@ -27,7 +27,7 @@ on:
       resume_attempt:
         description: Число автоматических повторов
         type: choice
-        options: ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]
+        options: ["0", "1", "2", "3"]
         default: "0"
         required: true
   workflow_run:
@@ -43,6 +43,7 @@ on:
     - cron: "58 */6 * * *"
 
 permissions:
+  actions: read
   contents: read
 
 concurrency:
@@ -61,6 +62,7 @@ jobs:
     env:
       WEBAPP_DEPLOYMENT_ID: AKfycbyU_OXpFYqvBx0KDuGCgEHsnzkts_fnJzVe8DM8crRDD1A_fr5DqOfVfW_PYJriaXU_jw
       WEBHOOK_SECRET: ${{ secrets.SELLMONITOR_GITHUB_WEBHOOK_SECRET }}
+      GH_TOKEN: ${{ github.token }}
       PUBLISH_ONLY_STORE: ${{ github.event_name == 'workflow_dispatch' && inputs.store != 'all' && inputs.store || contains(github.event.head_commit.message || github.event.workflow_run.head_commit.message, '[air-only]') && 'air_wb' || contains(github.event.head_commit.message || github.event.workflow_run.head_commit.message, '[hozyayushka-only]') && 'hozyayushka_wb' || contains(github.event.head_commit.message || github.event.workflow_run.head_commit.message, '[sanych-only]') && 'sanych_wb' || '' }}
       RESUME_ATTEMPT: ${{ github.event_name == 'workflow_dispatch' && inputs.resume_attempt || '0' }}
       RESUME_PHASE: ${{ github.event_name == 'workflow_dispatch' && inputs.resume_phase || github.event_name == 'push' && format('push:{0}', github.event.head_commit.message) || github.event_name == 'workflow_run' && format('push:{0}', github.event.workflow_run.head_commit.message) || 'summary' }}
@@ -79,12 +81,53 @@ jobs:
         run: |
           set -euo pipefail
           python - <<'PY'
-          import hashlib, http.client, json, os, time, urllib.error, urllib.request
-          from datetime import date
+          import hashlib, http.client, io, json, os, re, time, urllib.error, urllib.request, zipfile
+          from datetime import date, timedelta
 
           url = "https://script.google.com/macros/s/" + os.environ["WEBAPP_DEPLOYMENT_ID"] + "/exec"
           selected_store = os.environ.get("PUBLISH_ONLY_STORE", "").strip()
           resume_phase_input = os.environ.get("RESUME_PHASE", "summary").strip() or "summary"
+          # A scheduled run resumes the last failed, readback-unverified phase.
+          if os.environ.get("GITHUB_EVENT_NAME") == "schedule":
+              try:
+                  gh_headers = {"Accept":"application/vnd.github+json","Authorization":"Bearer "+os.environ["GH_TOKEN"],"X-GitHub-Api-Version":"2022-11-28"}
+                  def gh_get(url):
+                      with urllib.request.urlopen(urllib.request.Request(url,headers=gh_headers),timeout=30) as response:
+                          return response.read()
+                  schedule_url = "https://api.github.com/repos/"+os.environ["GITHUB_REPOSITORY"]+"/actions/workflows/wb-sellmonitor-finance-publish.yml/runs?branch=mainggg&per_page=20"
+                  schedule_runs = json.loads(gh_get(schedule_url)).get("workflow_runs", [])
+                  current_run_id = str(os.environ.get("GITHUB_RUN_ID", ""))
+                  previous = next((r for r in schedule_runs if str(r.get("id")) != current_run_id and r.get("status") == "completed"), None)
+                  if previous and previous.get("conclusion") in ("failure","cancelled","timed_out"):
+                      jobs = json.loads(gh_get("https://api.github.com/repos/"+os.environ["GITHUB_REPOSITORY"]+"/actions/runs/"+str(previous["id"])+"/jobs?per_page=100")).get("jobs", [])
+                      publish_job = next((j for j in jobs if j.get("name") == "publish"), None)
+                      if publish_job:
+                          archive = gh_get("https://api.github.com/repos/"+os.environ["GITHUB_REPOSITORY"]+"/actions/jobs/"+str(publish_job["id"])+"/logs")
+                          with zipfile.ZipFile(io.BytesIO(archive)) as zf:
+                              prior_log = "\n".join(zf.read(name).decode("utf-8","replace") for name in zf.namelist())
+                          failures = list(re.finditer(r"STORE=([a-z_]+) PHASE=([a-z0-9_]+) OK=no ERROR=", prior_log))
+                          if failures:
+                              selected_store, resume_phase_input = failures[-1].group(1), failures[-1].group(2)
+                              print("WB_SCHEDULE_RESUME=store:"+selected_store+";phase:"+resume_phase_input+";from_run:"+str(previous["id"]),flush=True)
+                          else:
+                              open_phase = None
+                              for line in prior_log.splitlines():
+                                  started = re.search(r"WB_PHASE_START=store:([a-z_]+);phase:([a-z0-9_]+)",line)
+                                  finished = re.search(r"STORE=([a-z_]+) PHASE=([a-z0-9_]+) OK=(yes|no)",line)
+                                  if started: open_phase=(started.group(1),started.group(2))
+                                  if finished and open_phase==(finished.group(1),finished.group(2)): open_phase=None
+                              if open_phase:
+                                  selected_store,resume_phase_input=open_phase
+                                  print("WB_SCHEDULE_RESUME=store:"+selected_store+";phase:"+resume_phase_input+";from_run:"+str(previous["id"]),flush=True)
+                              else:
+                                  selected_store,resume_phase_input="", "summary"
+                                  print("WB_SCHEDULE_RESUME=all_stores;phase:summary;reason:no_unverified_phase_in_previous_run",flush=True)
+                  else:
+                      print("WB_SCHEDULE_RESUME=all_stores;phase:summary;reason:no_prior_failed_run",flush=True)
+              except Exception as exc:
+                  # If the checkpoint API is temporarily unavailable, rerun the idempotent full publication.
+                  print("WB_SCHEDULE_CHECKPOINT_READ=unavailable;reason:"+type(exc).__name__+";fallback=full_summary",flush=True)
+                  selected_store,resume_phase_input="", "summary"
           if resume_phase_input.startswith("push:"):
               marker_prefix = "[resume-phase:"
               marker_start = resume_phase_input.find(marker_prefix)
@@ -113,6 +156,14 @@ jobs:
               month += 1
               if month == 13:
                   year, month = year + 1, 1
+          week_phases = []
+          week_start = date(2026, 8, 31)
+          while week_start <= today:
+              week_phases.append("rnp_week_" + week_start.strftime("%Y_%m_%d"))
+              week_start += timedelta(days=7)
+          # The pre-chunk checkpoint name resumes from the first weekly period.
+          if resume_phase == "rnp_week":
+              resume_phase = week_phases[0] if week_phases else "rnp_month"
           print("PUBLISH_SCOPE=" + (selected_store or "all_stores"), flush=True)
           verified = []
           errors = []
@@ -125,7 +176,7 @@ jobs:
 
           for store_index, store_id in enumerate(expected):
               daily_phases = sanych_chunks if store_id == "sanych_wb" else months
-              all_phases = ["summary", *daily_phases, "rnp_week", "rnp_month", "dashboard"]
+              all_phases = ["summary", *daily_phases, *week_phases, "rnp_month", "dashboard"]
               store_result = {"store_id": store_id}
               phase_checkpoint = resume_phase if resume_phase in all_phases else "summary"
               checkpoint_index = all_phases.index(phase_checkpoint)
@@ -138,8 +189,9 @@ jobs:
                   store_result["rnp"] = {}
                   if any(p.startswith("rnp_day_") for p in prior_rnp):
                       store_result["rnp"]["day"] = []
-                  if "rnp_week" in prior_rnp:
-                      store_result["rnp"]["week"] = []
+                  prior_week_phases = [p for p in completed_phases if p.startswith("rnp_week_")]
+                  if prior_week_phases:
+                      store_result["rnp"]["week"] = [{"phase":p,"previously_verified":True} for p in prior_week_phases]
                   if "rnp_month" in prior_rnp:
                       store_result["rnp"]["month"] = []
               print("WB_RESUME_CHECKPOINT=store:" + store_id + ";phase:" + phase_checkpoint + ";skip_verified:" + str(len(completed_phases)) + ";summary_readback=yes", flush=True)
@@ -244,13 +296,26 @@ jobs:
                       })
                   elif phase.startswith("rnp_"):
                       rnp = item.get("rnp") or {}
-                      grain = "day" if phase.startswith("rnp_day_") else phase[4:]
+                      grain = "day" if phase.startswith("rnp_day_") else "week" if phase.startswith("rnp_week_") else phase[4:]
                       matrices = rnp.get("matrices") or []
                       expected_latest = None
                       expected_earliest = None
+                      source_min = item.get("source_min") or store_result.get("source_min")
                       source_max = item.get("source_max") or store_result.get("source_max")
                       no_source_expected = False
-                      if source_max and grain == "week":
+                      if phase.startswith("rnp_week_"):
+                          week_parts = phase.split("_")
+                          week_start = date(int(week_parts[2]), int(week_parts[3]), int(week_parts[4]))
+                          week_end = week_start + timedelta(days=6)
+                          expected_earliest = week_start.isoformat()
+                          expected_latest = expected_earliest
+                          target_count = int(matrices[0].get("target_periods", -1)) if len(matrices) == 1 else -1
+                          outside_source = bool(source_max and str(source_max) < expected_earliest) or bool(source_min and str(source_min) > week_end.isoformat())
+                          no_source_everywhere = bool(item.get("no_source_data") and not source_min and not source_max)
+                          if target_count == 0 and (outside_source or no_source_everywhere):
+                              no_source_expected = True
+                              expected_earliest = expected_latest = None
+                      elif source_max and grain == "week":
                           source_day = date.fromisoformat(str(source_max))
                           expected_latest = (source_day - __import__("datetime").timedelta(days=source_day.weekday())).isoformat()
                       elif source_max and grain == "month":
@@ -333,6 +398,10 @@ jobs:
                   missing_state.extend(("rnp.day", "rnp.week", "rnp.month"))
               else:
                   missing_state.extend("rnp." + grain for grain in ("day", "week", "month") if grain not in store_result["rnp"])
+                  if len(store_result["rnp"].get("day", [])) != len(daily_phases):
+                      missing_state.append("rnp.day")
+                  if len(store_result["rnp"].get("week", [])) != len(week_phases):
+                      missing_state.append("rnp.week")
               if "dashboard" not in store_result:
                   missing_state.append("dashboard")
               has_phase_error = any(
@@ -348,7 +417,7 @@ jobs:
                   elif "rnp.day" in missing_state:
                       incomplete_phase = daily_phases[0] if daily_phases else "rnp_week"
                   elif "rnp.week" in missing_state:
-                      incomplete_phase = "rnp_week"
+                      incomplete_phase = week_phases[min(len(store_result.get("rnp", {}).get("week", [])), len(week_phases)-1)] if week_phases else "rnp_week"
                   elif "rnp.month" in missing_state:
                       incomplete_phase = "rnp_month"
                   else:
@@ -439,7 +508,12 @@ jobs:
                   m += 1
                   if m == 13:
                       y, m = y + 1, 1
-              return ["summary", *daily, "rnp_week", "rnp_month", "dashboard"]
+              weekly = []
+              week_start = date(2026, 8, 31)
+              while week_start <= today:
+                  weekly.append("rnp_week_" + week_start.strftime("%Y_%m_%d"))
+                  week_start += timedelta(days=7)
+              return ["summary", *daily, *weekly, "rnp_month", "dashboard"]
           # Always read the failed publisher log, even for a store-specific continuation.
           try:
               jobs_payload = json.loads(api_get("https://api.github.com/repos/"+repo+"/actions/runs/"+os.environ["RECOVERY_RUN_ID"]+"/jobs?per_page=100"))
@@ -507,18 +581,9 @@ jobs:
               recovery_wait_reason = "transient_publish_error"
           print("WB_RECOVERY_CHECKPOINT=store:"+store+";phase:"+phase, flush=True)
           attempt = int(os.environ.get("RECOVERY_ATTEMPT", "0") or "0")
-          if attempt >= 10:
-              failure_text = (last_failure or "").lower()
-              transient_markers = (
-                  "lock_busy", "gate_busy", "timeout", "timed out", "remotedisconnected",
-                  "connectionreseterror", "connection reset", "connection refused",
-                  "jsondecodeerror", "empty response", "http_408", "http_425",
-                  "http_429", "http_500", "http_502", "http_503", "http_504",
-                  "rate limit", "temporarily unavailable", "service spreadsheets",
-              )
-              if os.environ.get("RECOVERY_FAILURE_CLASS", "unknown").strip().lower() != "transient" and not any(marker in failure_text for marker in transient_markers):
-                  print("WB_AUTOMATIC_RECOVERY=paused;attempt=10;reason=non_transient_or_unreadable_failure;scheduled_retry=retained", flush=True)
-                  raise SystemExit(0)
+          if attempt >= 3:
+              print("WB_AUTOMATIC_RECOVERY=paused;attempt="+str(attempt)+";reason=bounded_retry_budget;scheduled_checkpoint_resume=enabled", flush=True)
+              raise SystemExit(0)
           if not recovery_wait:
               recovery_wait = min(600, 15 * (2 ** min(6, max(0, attempt))))
               recovery_wait_reason = "bounded_exponential_backoff"
@@ -526,7 +591,7 @@ jobs:
           time.sleep(recovery_wait)
           payload = {
               "ref": os.environ["RECOVERY_REF"],
-              "inputs": {"store": store, "resume_phase": phase, "resume_attempt": str(min(10, int(os.environ.get("RECOVERY_ATTEMPT", "0")) + 1))},
+              "inputs": {"store": store, "resume_phase": phase, "resume_attempt": str(min(3, int(os.environ.get("RECOVERY_ATTEMPT", "0")) + 1))},
           }
           url = "https://api.github.com/repos/" + os.environ["GITHUB_REPOSITORY"] + "/actions/workflows/wb-sellmonitor-finance-publish.yml/dispatches"
           req = urllib.request.Request(

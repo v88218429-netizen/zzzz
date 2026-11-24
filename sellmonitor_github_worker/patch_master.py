@@ -2042,6 +2042,81 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
         print("INNER_FINANCE_ACCOUNT_FRESHNESS_NORMALIZER=patched")
 
 
+
+    # Bounded one-week RNP chunks; select only source months that overlap the requested week.
+    week_chunk_marker = "WB_RNP_WEEK_PERIOD_CHUNK_V1"
+    if week_chunk_marker not in worker_text:
+        phase_anchor = """  var dayMonthMatch=phase.match(/^rnp_day_(\\d{4}_\\d{2})$/);
+  var dayRangeMatch=phase.match(/^rnp_day_(\\d{4})_(\\d{2})_(\\d{2})_(\\d{2})$/);
+  if(['all','summary','rnp_day','rnp_week','rnp_month','dashboard'].indexOf(phase)<0&&!dayMonthMatch&&!dayRangeMatch)throw new Error('WB_INNER_UNKNOWN_PHASE:'+phase);
+  var dayMonthPrefix=dayMonthMatch?dayMonthMatch[1].replace('_','-'):'';
+  var dayRangeStart=dayRangeMatch?dayRangeMatch[1]+'-'+dayRangeMatch[2]+'-'+dayRangeMatch[3]:'';
+  var dayRangeEnd=dayRangeMatch?dayRangeMatch[1]+'-'+dayRangeMatch[2]+'-'+dayRangeMatch[4]:'';"""
+        phase_replacement = """  /* WB_RNP_WEEK_PERIOD_CHUNK_V1 */
+  var dayMonthMatch=phase.match(/^rnp_day_(\\d{4}_\\d{2})$/);
+  var dayRangeMatch=phase.match(/^rnp_day_(\\d{4})_(\\d{2})_(\\d{2})_(\\d{2})$/);
+  var weekRangeMatch=phase.match(/^rnp_week_(\\d{4})_(\\d{2})_(\\d{2})$/);
+  if(['all','summary','rnp_day','rnp_week','rnp_month','dashboard'].indexOf(phase)<0&&!dayMonthMatch&&!dayRangeMatch&&!weekRangeMatch)throw new Error('WB_INNER_UNKNOWN_PHASE:'+phase);
+  var dayMonthPrefix=dayMonthMatch?dayMonthMatch[1].replace('_','-'):'';
+  var dayRangeStart=dayRangeMatch?dayRangeMatch[1]+'-'+dayRangeMatch[2]+'-'+dayRangeMatch[3]:'';
+  var dayRangeEnd=dayRangeMatch?dayRangeMatch[1]+'-'+dayRangeMatch[2]+'-'+dayRangeMatch[4]:'';
+  var weekRangeStart=weekRangeMatch?weekRangeMatch[1]+'-'+weekRangeMatch[2]+'-'+weekRangeMatch[3]:'';
+  var weekRangeEnd='';
+  if(weekRangeMatch){
+    var weekStartDate=new Date(Date.UTC(Number(weekRangeMatch[1]),Number(weekRangeMatch[2])-1,Number(weekRangeMatch[3])));
+    if(!isFinite(weekStartDate.getTime())||Utilities.formatDate(weekStartDate,'UTC','yyyy-MM-dd')!==weekRangeStart||weekStartDate.getUTCDay()!==1)throw new Error('WB_INNER_WEEK_PHASE_NOT_MONDAY:'+phase);
+    weekRangeEnd=sellmonitorGithubWbInnerAddDays_(weekRangeStart,6);
+  }
+  var periodRangeStart=weekRangeMatch?weekRangeStart:dayRangeStart;
+  var periodRangeEnd=weekRangeMatch?weekRangeEnd:dayRangeEnd;"""
+        if worker_text.count(phase_anchor) != 1:
+            raise SystemExit("WB weekly chunk phase anchor mismatch")
+        worker_text = worker_text.replace(phase_anchor, phase_replacement, 1)
+
+        source_anchor = """        if(dayMonthMatch)return period.indexOf(dayMonthPrefix)===0;
+        if(dayRangeMatch){var rangeMonth=dayRangeStart.slice(0,7);return (period>=dayRangeStart&&period<=dayRangeEnd)||(rangeMonth===dayRangeEnd.slice(0,7)&&period===rangeMonth+'-01');}
+        return true;"""
+        source_replacement = """        if(dayMonthMatch)return period.indexOf(dayMonthPrefix)===0;
+        if(dayRangeMatch||weekRangeMatch){
+          var rangeStart=weekRangeMatch?weekRangeStart:dayRangeStart,rangeEnd=weekRangeMatch?weekRangeEnd:dayRangeEnd;
+          var startMonth=rangeStart.slice(0,7),endMonth=rangeEnd.slice(0,7),sourceMonth=period.slice(0,7);
+          return /^\\d{4}-\\d{2}$/.test(sourceMonth)&&sourceMonth>=startMonth&&sourceMonth<=endMonth;
+        }
+        return true;"""
+        if worker_text.count(source_anchor) != 1:
+            raise SystemExit("WB weekly chunk source-month anchor mismatch")
+        worker_text = worker_text.replace(source_anchor, source_replacement, 1)
+
+        no_source_anchor = """      if(!chosen.length&&(dayMonthMatch||dayRangeMatch)){
+        results.push({store:cfg.name,ok:true,phase:phase,source_parts:0,source_rows:0,no_source_data:true,rnp:{ok:true,readback:true,no_source_data:true,matrices:[{sheet:'01_Дни',rows:0,verified:0,sha256:'',no_source_data:true}]}});
+        return;
+      }"""
+        no_source_replacement = """      if(!chosen.length&&(dayMonthMatch||dayRangeMatch||weekRangeMatch)){
+        var emptySheet=weekRangeMatch?'02_Недели':'01_Дни';
+        results.push({store:cfg.name,ok:true,phase:phase,source_parts:0,source_rows:0,no_source_data:true,rnp:{ok:true,readback:true,no_source_data:true,matrices:[{sheet:emptySheet,rows:0,verified:0,sha256:'',target_periods:0,source_periods:[],readback_periods:[],coverage_verified:true,min:'',max:'',no_source_data:true}]}});
+        return;
+      }"""
+        if worker_text.count(no_source_anchor) != 1:
+            raise SystemExit("WB weekly chunk no-source anchor mismatch")
+        worker_text = worker_text.replace(no_source_anchor, no_source_replacement, 1)
+
+        grain_anchor = """        var onlyGrain=phase==='all'?'':((dayMonthMatch||dayRangeMatch)?'day':phase.slice(4));
+        res.rnp=sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,cfg.name,shop,onlyGrain,dayMonthPrefix,dayRangeStart,dayRangeEnd);"""
+        grain_replacement = """        var onlyGrain=phase==='all'?'':((dayMonthMatch||dayRangeMatch)?'day':(weekRangeMatch?'week':phase.slice(4)));
+        res.rnp=sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,cfg.name,shop,onlyGrain,dayMonthPrefix,periodRangeStart,periodRangeEnd);"""
+        if worker_text.count(grain_anchor) != 1:
+            raise SystemExit("WB weekly chunk matrix-call anchor mismatch")
+        worker_text = worker_text.replace(grain_anchor, grain_replacement, 1)
+
+        period_filter_anchor = """      if(period<spec.min||(spec.grain==='day'&&onlyPeriodPrefix&&period.indexOf(onlyPeriodPrefix)!==0)||(spec.grain==='day'&&onlyPeriodStart&&(period<onlyPeriodStart||period>onlyPeriodEnd)))return;"""
+        period_filter_replacement = """      if(period<spec.min||(spec.grain==='day'&&onlyPeriodPrefix&&period.indexOf(onlyPeriodPrefix)!==0)||(spec.grain==='day'&&onlyPeriodStart&&(period<onlyPeriodStart||period>onlyPeriodEnd))||(spec.grain==='week'&&onlyPeriodStart&&(period<onlyPeriodStart||period>onlyPeriodEnd)))return;"""
+        if worker_text.count(period_filter_anchor) != 1:
+            raise SystemExit("WB weekly chunk period-filter anchor mismatch")
+        worker_text = worker_text.replace(period_filter_anchor, period_filter_replacement, 1)
+        print("WB_RNP_WEEK_PERIOD_CHUNK=patched")
+    elif "weekRangeMatch=phase.match" not in worker_text:
+        raise SystemExit("WB weekly chunk marker exists without phase handler")
+
     worker.write_text(worker_text, encoding="utf-8")
     print("WORKER_TRIGGER_REFRESH_V2=patched")
 candidates = []
