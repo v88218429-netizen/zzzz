@@ -158,14 +158,12 @@ jobs:
               month += 1
               if month == 13:
                   year, month = year + 1, 1
-          week_phases = []
-          week_start = date(2026, 8, 31)
-          while week_start <= today:
-              week_phases.append("rnp_week_" + week_start.strftime("%Y_%m_%d"))
-              week_start += timedelta(days=7)
-          # The pre-chunk checkpoint name resumes from the first weekly period.
-          if resume_phase == "rnp_week":
-              resume_phase = week_phases[0] if week_phases else "rnp_month"
+          # One grain-level weekly publish is bounded and was readback-verified for all three stores.
+          # Range-per-week calls timed out on the first week even though the full weekly phase completed.
+          week_phases = ["rnp_week"]
+          # Convert checkpoints written by the earlier per-week runner to the current grain-level phase.
+          if resume_phase.startswith("rnp_week_"):
+              resume_phase = "rnp_week"
           print("PUBLISH_SCOPE=" + (selected_store or "all_stores"), flush=True)
           verified = []
           errors = []
@@ -192,7 +190,7 @@ jobs:
                   store_result["rnp"] = {}
                   if any(p.startswith("rnp_day_") for p in prior_rnp):
                       store_result["rnp"]["day"] = []
-                  prior_week_phases = [p for p in completed_phases if p.startswith("rnp_week_")]
+                  prior_week_phases = [p for p in completed_phases if p == "rnp_week" or p.startswith("rnp_week_")]
                   if prior_week_phases:
                       store_result["rnp"]["week"] = [{"phase":p,"previously_verified":True} for p in prior_week_phases]
                   if "rnp_month" in prior_rnp:
