@@ -2,6 +2,11 @@ name: WB VAT 5 percent update
 
 on:
   workflow_dispatch:
+  push:
+    branches: [mainggg]
+    paths:
+      - "wb_worker/wb_vat_mass_apply.py"
+      - ".github/workflows/wb-vat-mass-update.yml"
 
 permissions:
   contents: read
