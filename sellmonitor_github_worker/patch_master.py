@@ -944,7 +944,7 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
             log_block_anchor = "    if (sync.attempted) {"
             if worker_text.count(log_block_anchor) != 1:
                 raise SystemExit("INNER_FINANCE_PARTIAL_LOG_STATUS_MARKER_ANCHOR_MISMATCH")
-            worker_text = worker_text.replace(log_block_anchor, "    /* INNER_FINANCE_PARTIAL_STATUS_V1 */\\n" + log_block_anchor, 1)
+            worker_text = worker_text.replace(log_block_anchor, "    /* INNER_FINANCE_PARTIAL_STATUS_V1 */\n" + log_block_anchor, 1)
             print("INNER_FINANCE_PARTIAL_STATUS=already_present")
         registry_anchor = "Object.keys(byKey).length,dates[0] || '',dates[dates.length - 1] || '',digest,'OK','PASS','',''"
         if worker_text.count(registry_anchor) != 1:
