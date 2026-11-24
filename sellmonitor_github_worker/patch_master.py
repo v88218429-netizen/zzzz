@@ -934,10 +934,18 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
     partial_status_marker = "INNER_FINANCE_PARTIAL_STATUS_V1"
     if partial_status_marker not in worker_text:
         log_status_anchor = "sync.ok ? 'DONE' : 'ERROR',sync.ok ? sync.date : sync.error,sync"
-        if worker_text.count(log_status_anchor) != 1:
-            raise SystemExit("INNER_FINANCE_PARTIAL_LOG_STATUS_ANCHOR_MISMATCH")
-        worker_text = worker_text.replace(log_status_anchor, """/* INNER_FINANCE_PARTIAL_STATUS_V1 */
+        if worker_text.count(log_status_anchor) == 1:
+            worker_text = worker_text.replace(log_status_anchor, """/* INNER_FINANCE_PARTIAL_STATUS_V1 */
         sync.partial === true ? 'PARTIAL' : (sync.ok ? 'DONE' : 'ERROR'),sync.ok ? sync.date : sync.error,sync""", 1)
+        else:
+            existing_status_anchor = "      var syncStatus = sync.ok === false ? 'ERROR' : sync.deferred ? 'WAITING_SOURCE' : sync.partial ? 'PARTIAL' : 'DONE';"
+            if worker_text.count(existing_status_anchor) != 1:
+                raise SystemExit("INNER_FINANCE_PARTIAL_LOG_STATUS_ANCHOR_MISMATCH")
+            log_block_anchor = "    if (sync.attempted) {"
+            if worker_text.count(log_block_anchor) != 1:
+                raise SystemExit("INNER_FINANCE_PARTIAL_LOG_STATUS_MARKER_ANCHOR_MISMATCH")
+            worker_text = worker_text.replace(log_block_anchor, "    /* INNER_FINANCE_PARTIAL_STATUS_V1 */\\n" + log_block_anchor, 1)
+            print("INNER_FINANCE_PARTIAL_STATUS=already_present")
         registry_anchor = "Object.keys(byKey).length,dates[0] || '',dates[dates.length - 1] || '',digest,'OK','PASS','',''"
         if worker_text.count(registry_anchor) != 1:
             raise SystemExit("INNER_FINANCE_PARTIAL_REGISTRY_ANCHOR_MISMATCH")
