@@ -3,31 +3,31 @@
   "request": "IMRAM_20261123_1910_SCHEDULED.json",
   "query": "Имрам как правильно формулировать желание конечный результат",
   "knowledge_tag": "IMRAM",
-  "generated_at": "2026-11-23T16:19:16.484746+00:00",
+  "generated_at": "2026-11-24T02:57:41.336249+00:00",
   "videos": [
     {
-      "video_id": "wDlELANUM-k",
-      "url": "https://www.youtube.com/watch?v=wDlELANUM-k",
-      "title": "Как правильно загадать ЖЕЛАНИЕ? Самая действенная карта желаний",
+      "video_id": "BjSrdHrhG5w",
+      "url": "https://www.youtube.com/watch?v=BjSrdHrhG5w",
+      "title": "Женское счастье. Имрам о том, что лежит в основе женской гармонии",
       "channel": "Имрам Крийя - Йога",
-      "duration": 1115,
+      "duration": 1687,
       "timestamp": null,
-      "query": "Имрам как правильно формулировать желание конечный результат",
+      "query": "Имрам как правильно формулировать желание конечный результат shorts",
       "kind": "video",
-      "transcript": "transcripts/2026-11-23_IMRAM_video_wDlELANUM-k.md",
-      "method": "verified GitHub transcript cache"
+      "transcript": "transcripts/2026-11-24_IMRAM_video_BjSrdHrhG5w.md",
+      "method": "FreeTranscriptAPI"
     },
     {
-      "video_id": "a8xX9di2pC4",
-      "url": "https://www.youtube.com/watch?v=a8xX9di2pC4",
-      "title": "Знаки, что вы на пороге больших перемен! / Предвестники лучшей жизни",
+      "video_id": "SZ66cbv3_64",
+      "url": "https://www.youtube.com/watch?v=SZ66cbv3_64",
+      "title": "Откуда берутся желания? Энергия желаний",
       "channel": "Имрам Крийя - Йога",
-      "duration": 1068,
+      "duration": 284,
       "timestamp": null,
-      "query": "Имрам как правильно формулировать желание конечный результат",
+      "query": "Имрам состояние исполненного желания",
       "kind": "video",
-      "transcript": "transcripts/2026-11-23_IMRAM_video_a8xX9di2pC4.md",
-      "method": "verified GitHub transcript cache"
+      "transcript": "transcripts/2026-11-24_IMRAM_video_SZ66cbv3_64.md",
+      "method": "FreeTranscriptAPI"
     }
   ],
   "errors": [
