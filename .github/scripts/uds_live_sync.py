@@ -143,7 +143,7 @@ def ensure_live_sheets(access_token, metadata, row_targets):
     headers = {
         LIVE_SHEETS["uds"]: ["SKU UDS", "Товар UDS", "Вариант", "Текущая цена UDS API, ₽", "Цена до скидки UDS, ₽", "Остаток", "UDS goods ID", "External ID (Ozon product_id)", "Тип UDS", "Категория ID", "Offer ID Ozon", "Скрыт", "Заблокирован", "Статус API", "Последняя цена кабинета/CSV, ₽", "Обновлено, MSK"],
         LIVE_SHEETS["ozon"]: ["Ozon product_id", "offer_id", "SKU UDS", "Наименование Ozon", "Цена продавца API, ₽", "Цена на витрине/акции, ₽", "marketing_seller_price, ₽", "Старая цена, ₽", "min_price, ₽", "net_price, ₽", "Валюта", "НДС", "Вес/объёмный вес", "Статус получения", "Есть цена", "Есть остаток", "В архиве", "Автоархив", "Статус продажи по Ozon", "Обновлено, MSK"],
-        LIVE_SHEETS["orders"]: ["Кабинет", "Схема", "Дата заказа", "Дата отправления/в обработке", "Статус", "Подстатус", "Номер заказа", "Номер отправления", "offer_id", "Ozon SKU", "product_id", "SKU UDS", "Товар", "Количество", "Цена строки, ₽", "Сумма строки, ₽", "Причина отмены", "Обновлено, MSK"],
+        LIVE_SHEETS["orders"]: ["Кабинет", "Схема", "Создано отправление (created_at)", "Начало обработки (in_process_at)", "Статус", "Подстатус", "Номер заказа", "Номер отправления", "offer_id", "Ozon SKU", "product_id", "SKU UDS", "Товар", "Количество", "Цена строки, ₽", "Сумма строки, ₽", "Причина отмены", "Обновлено, MSK"],
         LIVE_SHEETS["sales"]: ["SKU UDS", "offer_id", "product_id", "Товар", "Заказов за 30 дней", "Единиц в заказах", "Доставлено, шт", "Отменено, шт", "Возврат/на склад, шт", "Открыто/прочие статусы, шт", "Сумма строк заказов, ₽", "Сумма доставленных строк, ₽", "Текущая цена Ozon API, ₽", "Строк с ценой / товарных строк", "Статусы за 30 дней", "Обновлено, MSK"],
     }
     adds = []
@@ -1220,6 +1220,20 @@ def main():
     delivered_units = sum(agg["delivered"] for agg in aggregates.values())
     cancelled_units = sum(agg["cancelled"] for agg in aggregates.values())
     returned_units = sum(agg["returned"] for agg in aggregates.values())
+    posting_date_coverage = {
+        flow: {"postings": set(), "created_at": set(), "in_process_at": set()}
+        for flow in ("FBS", "FBO")
+    }
+    for line in order_lines:
+        flow = line["flow"]
+        if flow not in posting_date_coverage:
+            continue
+        posting = line["posting_number"]
+        posting_date_coverage[flow]["postings"].add(posting)
+        if line["created_at"]:
+            posting_date_coverage[flow]["created_at"].add(posting)
+        if line["in_process_at"]:
+            posting_date_coverage[flow]["in_process_at"].add(posting)
     amount_sum = sum(agg["amount"] for agg in aggregates.values())
     summary = [
         {"range": "'UDS — СВОДКА'!A1", "values": [["UDS × OZON — АВТООБНОВЛЕНИЕ"]]},
@@ -1227,7 +1241,8 @@ def main():
         {"range": "'UDS — СВОДКА'!A3", "values": [[f"Ozon цены обновлены: {current_price_count}; выставлены на продажу: {saleable_count}; не выставлены по API: {not_saleable_count}; статус продажи не подтверждён: {sale_status_unknown_count}; строк юнитки с актуальной Ozon ценой обновлено: {len(model_writes)}; цен UDS по API записано: {len(uds_unitka_writes)}; неоднозначных связок Ozon → UDS: {ambiguous_price_count}; без связи: {unmapped_price_count}. Детализация — лист {LIVE_SHEETS['uds']} и OZON — API LIVE."]]},
         {"range": "'UDS — СВОДКА'!A4:D4", "values": [["SKU UDS в текущем каталоге", "Вернул Partner API", "Не вернул API", "Новых SKU добавлено"]]},
         {"range": "'UDS — СВОДКА'!A5:D5", "values": [[len(old_skus | returned_skus), len(returned_skus), len(missing_skus), new_sku_count]]},
-        {"range": "'UDS — СВОДКА'!A6", "values": [[f"Заказы Ozon, последние 30 дней: {posting_count} отправлений, {len(order_lines)} строк товара; доставлено {delivered_units:g} шт., отменено {cancelled_units:g} шт., возвраты/на склад {returned_units:g} шт. Цена есть у {priced_order_lines}/{order_item_lines} товарных строк. Сумма строк с известной ценой: {amount_sum:.2f} ₽ (не выплаты Ozon)."]]},
+        {"range": "'UDS — СВОДКА'!A6", "values": [[f"Заказы Ozon за 30 дней: {posting_count} отправлений (FBS {len(posting_date_coverage['FBS']['postings'])}, FBO {len(posting_date_coverage['FBO']['postings'])}), {len(order_lines)} строк товара; доставлено {delivered_units:g} шт., отменено {cancelled_units:g} шт., возвраты/на склад {returned_units:g} шт. Цена есть у {priced_order_lines}/{order_item_lines} товарных строк. Сумма строк с известной ценой: {amount_sum:.2f} ₽ (не выплаты Ozon)."]]},
+        {"range": "'UDS — СВОДКА'!A8", "values": [[f"Даты создания отправления (created_at): FBO {len(posting_date_coverage['FBO']['created_at'])}/{len(posting_date_coverage['FBO']['postings'])}, FBS {len(posting_date_coverage['FBS']['created_at'])}/{len(posting_date_coverage['FBS']['postings'])}. Начало обработки (in_process_at): FBO {len(posting_date_coverage['FBO']['in_process_at'])}/{len(posting_date_coverage['FBO']['postings'])}, FBS {len(posting_date_coverage['FBS']['in_process_at'])}/{len(posting_date_coverage['FBS']['postings'])}."]]},
         {"range": "'UDS — СВОДКА'!A7", "values": [["Историческая сверка 23–25.10 ниже; текущие API-статусы и новые SKU — на листах UDS — API LIVE и OZON — API LIVE."]]},
     ]
     final_writes.extend(summary)
@@ -1240,7 +1255,7 @@ def main():
     google_values_batch(access_token, final_writes)
 
     # Read back the written source and dashboard values before reporting success.
-    readback = google_values(access_token, "'UDS — СВОДКА'!A1:D6")
+    readback = google_values(access_token, "'UDS — СВОДКА'!A1:D8")
     catalog_readback = google_values(access_token, "'UDS — КАТАЛОГ (88)'!A1:P5")
     live_uds_readback = google_values(access_token, f"'{LIVE_SHEETS['uds']}'!A1:P3")
     if not readback or not catalog_readback or not live_uds_readback:
