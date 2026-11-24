@@ -265,6 +265,7 @@ def prepare_photo_assets(cards: list[dict[str, Any]]) -> dict[str, str]:
 def main() -> None:
     wb_token = os.environ.get("WB_API_TOKEN_AP", "").strip()
     wb_write_token = os.environ.get("WB_API_TOKEN_AP_WRITE", "").strip() or wb_token
+    print("WB_WRITE_TOKEN_MODE=" + ("same_as_read_or_fallback" if wb_write_token == wb_token else "separate_write_secret"))
     webhook_secret = os.environ.get("WEBHOOK_SECRET", "").strip()
     deployment_id = os.environ.get("WEBAPP_DEPLOYMENT_ID", "").strip()
     if not wb_token:
