@@ -16,6 +16,7 @@ jobs:
     timeout-minutes: 10
     env:
       WB_API_TOKEN_AP: ${{ secrets.WB_API_TOKEN_AP }}
+      WB_API_TOKEN_AP_WRITE: ${{ secrets.WB_API_TOKEN_AP_WRITE }}
     steps:
       - name: Get repository
         uses: actions/checkout@v4
