@@ -352,9 +352,13 @@ function sellmonitorGithubInnerFinanceTick() {
     cfg = SMC_INNER_FINANCE_STORES[storeId];
     var sync = sellmonitorGithubMaybeSyncInnerFinance_(cfg,cc) || {};
     if (sync.attempted) {
+      var syncStatus = sync.ok === false ? 'ERROR' : sync.deferred ? 'WAITING_SOURCE' : sync.partial ? 'PARTIAL' : 'DONE';
+      var syncMessage = sync.deferred
+        ? String(sync.reason || 'awaiting_monday_report') + '; next_retry_at=' + String(sync.next_retry_at || '')
+        : sync.ok === false ? sync.error : sync.partial ? String(sync.date) + '; report_due=' + String(sync.source_report_due_at || '') : sync.date;
       sellmonitorGithubLog_(
         cc,cfg.spreadsheetId,'INNER_FINANCE_MONTHLY_PARTITION',
-        sync.ok ? 'DONE' : 'ERROR',sync.ok ? sync.date : sync.error,sync
+        syncStatus,syncMessage,sync
       );
     }
     SpreadsheetApp.flush();
@@ -3535,6 +3539,16 @@ function sellmonitorGithubNextDate_(dateKey) {
   return Utilities.formatDate(new Date(Date.UTC(parts[0],parts[1] - 1,parts[2] + 1)),'GMT','yyyy-MM-dd');
 }
 
+// Sellmonitor Inner publishes trusted weekly analytics on Mondays.
+// Recheck each date at noon Moscow time, then retry every six hours if still partial.
+function sellmonitorGithubInnerWeeklyReportDueAtMs_(dateKey) {
+  var parts = String(dateKey).split('-').map(Number);
+  var date = new Date(Date.UTC(parts[0],parts[1] - 1,parts[2]));
+  var daysUntilMonday = (8 - date.getUTCDay()) % 7;
+  if (daysUntilMonday === 0) daysUntilMonday = 7;
+  return Date.UTC(parts[0],parts[1] - 1,parts[2] + daysUntilMonday,9,0,0,0);
+}
+
 function sellmonitorGithubMaybeSyncInnerFinance_(cfg,cc) {
   var props = sellmonitorClientProperties_(cfg.spreadsheetId);
   var auth = sellmonitorGithubEnsureClientAuth_(cfg.spreadsheetId);
@@ -3569,10 +3583,15 @@ function sellmonitorGithubMaybeSyncInnerFinance_(cfg,cc) {
         .filter(function(x) { return /^\d{4}-\d{2}-\d{2}$/.test(x); });
     }
   } catch (ignored) {}
+  partialDates = partialDates.filter(function(d,index,all) { return all.indexOf(d) === index; }).sort();
   var now = Date.now();
   var lastPartialReplay = Number(props.getProperty(partialReplayAtKey) || 0);
-  var partialReplayIntervalMs = 15 * 60 * 1000;
-  var replayDate = partialDates.length && now - lastPartialReplay >= partialReplayIntervalMs ? partialDates[0] : '';
+  var partialReplayIntervalMs = 6 * 60 * 60 * 1000;
+  var eligiblePartialDates = partialDates.filter(function(d) {
+    return sellmonitorGithubInnerWeeklyReportDueAtMs_(d) <= now;
+  });
+  var replayDate = eligiblePartialDates.length && now - lastPartialReplay >= partialReplayIntervalMs
+    ? eligiblePartialDates[0] : '';
   if (replayDate) {
     dateKey = replayDate;
     isPartialReplay = true;
@@ -3591,7 +3610,6 @@ function sellmonitorGithubMaybeSyncInnerFinance_(cfg,cc) {
   }
 
   props.setProperty('SMC_INNER_FINANCE_LAST_ATTEMPT_MS',String(now));
-  if (isPartialReplay) props.setProperty(partialReplayAtKey,String(now));
   try {
     var nextDay = sellmonitorGithubNextDate_(dateKey);
     var data = sellmonitorGithubInnerMcpCall_(cfg.spreadsheetId,'analytics_get_product_list',{
@@ -3602,19 +3620,36 @@ function sellmonitorGithubMaybeSyncInnerFinance_(cfg,cc) {
     var freshness = sellmonitorGithubInnerFreshness_(data);
     var products = sellmonitorGithubInnerProducts_(data);
     var minimum = Number(cfg.minProductCount || 50);
-    if (products.length < minimum) throw new Error('INNER_FINANCE_SOURCE_COVERAGE_LOW:' + products.length + '<' + minimum);
-    if (partial) {
-      if (!Object.keys(freshness).length) throw new Error('INNER_FINANCE_PARTIAL_FRESHNESS_MISSING:' + JSON.stringify(sellmonitorGithubInnerDiagnosticShape_(data)));
-      if (!sellmonitorGithubInnerCategoryFresh_(freshness,'products')) throw new Error('INNER_FINANCE_PARTIAL_PRODUCTS_STALE');
-      var hasFreshFactCategory =
-        sellmonitorGithubInnerCategoryFresh_(freshness,'orders') ||
-        sellmonitorGithubInnerCategoryFresh_(freshness,'postaggregated_orders') ||
-        sellmonitorGithubInnerCategoryFresh_(freshness,'stocks');
-      if (!hasFreshFactCategory) throw new Error('INNER_FINANCE_PARTIAL_NO_FRESH_FACT_CATEGORIES');
-    }
     var freshCategories = Object.keys(freshness).filter(function(name) {
       return sellmonitorGithubInnerCategoryFresh_(freshness,name);
     });
+    var productsFresh = sellmonitorGithubInnerCategoryFresh_(freshness,'products');
+    var hasFreshFactCategory =
+      sellmonitorGithubInnerCategoryFresh_(freshness,'orders') ||
+      sellmonitorGithubInnerCategoryFresh_(freshness,'postaggregated_orders') ||
+      sellmonitorGithubInnerCategoryFresh_(freshness,'stocks');
+    if (partial && (!freshCategories.length || !productsFresh || !hasFreshFactCategory || products.length < minimum)) {
+      var queuedDates = partialDates.filter(function(d) { return d !== dateKey; });
+      queuedDates.push(dateKey);
+      queuedDates = queuedDates.filter(function(d,index,all) { return all.indexOf(d) === index; }).sort();
+      props.setProperty(partialQueueKey,JSON.stringify(queuedDates));
+      var deferredAt = Date.now();
+      var reportDueAt = sellmonitorGithubInnerWeeklyReportDueAtMs_(dateKey);
+      if (isHistorical) props.setProperty('SMC_INNER_FINANCE_BACKFILL_NEXT_DATE',nextDay);
+      else if (!isPartialReplay) props.setProperty('SMC_INNER_FINANCE_NEXT_DATE',nextDay);
+      if (isPartialReplay || deferredAt >= reportDueAt) props.setProperty(partialReplayAtKey,String(deferredAt));
+      props.setProperty('SMC_INNER_FINANCE_LAST_ERROR','');
+      props.setProperty('SMC_INNER_FINANCE_LAST_DEFERRED_AT',new Date(deferredAt).toISOString());
+      return {
+        ok:true,attempted:true,deferred:true,partial:true,date:dateKey,
+        next_date:String(props.getProperty('SMC_INNER_FINANCE_NEXT_DATE') || nextDay),
+        reason:deferredAt < reportDueAt ? 'awaiting_monday_report' : 'source_still_partial_after_monday',
+        source_report_due_at:new Date(reportDueAt).toISOString(),
+        next_retry_at:new Date(deferredAt < reportDueAt ? reportDueAt : deferredAt + partialReplayIntervalMs).toISOString(),
+        fresh_categories:freshCategories,source_rows:products.length,finance_rows:0
+      };
+    }
+    if (products.length < minimum) throw new Error('INNER_FINANCE_SOURCE_COVERAGE_LOW:' + products.length + '<' + minimum);
     var rows = sellmonitorGithubInnerFinanceRows_(cfg,dateKey,nextDay,products,new Date(),{partial:partial,freshness:freshness});
     var runId = 'INNER-' + cfg.storeId + '-' + dateKey + '-' + now;
     var part = sellmonitorGithubWriteInnerFinancePart_(cfg,rows,dateKey,runId);
@@ -3626,18 +3661,29 @@ function sellmonitorGithubMaybeSyncInnerFinance_(cfg,cc) {
     } else {
       props.deleteProperty(partialQueueKey);
     }
-    if (partial || isPartialReplay) props.setProperty(partialReplayAtKey,String(now));
+    if (isPartialReplay || (partial && Date.now() >= sellmonitorGithubInnerWeeklyReportDueAtMs_(dateKey))) {
+      props.setProperty(partialReplayAtKey,String(Date.now()));
+    }
 
     if (!isPartialReplay) {
       if (isHistorical) props.setProperty('SMC_INNER_FINANCE_BACKFILL_NEXT_DATE',nextDay);
       else props.setProperty('SMC_INNER_FINANCE_NEXT_DATE',nextDay);
     }
-    props.setProperty('SMC_INNER_FINANCE_LAST_SUCCESS_AT',new Date().toISOString());
+    if (partial) {
+      props.setProperty('SMC_INNER_FINANCE_LAST_PARTIAL_AT',new Date().toISOString());
+      props.setProperty('SMC_INNER_FINANCE_LAST_DEFERRED_AT',new Date().toISOString());
+    } else {
+      props.setProperty('SMC_INNER_FINANCE_LAST_SUCCESS_AT',new Date().toISOString());
+      props.deleteProperty('SMC_INNER_FINANCE_LAST_DEFERRED_AT');
+    }
     props.setProperty('SMC_INNER_FINANCE_LAST_ERROR','');
     return {
       ok:true,attempted:true,date:dateKey,next_date:String(props.getProperty('SMC_INNER_FINANCE_NEXT_DATE') || nextDay),
-      historical:isHistorical,partial_replay:isPartialReplay,partial:partial,fresh_categories:freshCategories,
-      source_rows:products.length,finance_rows:rows.length,part:part
+      historical:isHistorical,partial_replay:isPartialReplay,partial:partial,deferred:partial,
+      reason:partial ? (Date.now() < sellmonitorGithubInnerWeeklyReportDueAtMs_(dateKey) ? 'awaiting_monday_report' : 'source_still_partial_after_monday') : '',
+      source_report_due_at:partial ? new Date(sellmonitorGithubInnerWeeklyReportDueAtMs_(dateKey)).toISOString() : '',
+      next_retry_at:partial ? new Date(Math.max(sellmonitorGithubInnerWeeklyReportDueAtMs_(dateKey),Date.now() + partialReplayIntervalMs)).toISOString() : '',
+      fresh_categories:freshCategories,source_rows:products.length,finance_rows:rows.length,part:part
     };
   } catch (e) {
     var message = String(e && e.message ? e.message : e).slice(0,1000);
@@ -6980,6 +7026,38 @@ function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId,onl
     });
     var targets=Object.keys(periodMap).sort();
     var startCol=spec.startCol,lastCol=Math.max(startCol-1,sh.getLastColumn()),heads=lastCol>=startCol?sh.getRange(2,startCol,1,lastCol-startCol+1).getValues()[0]:[];
+    var axisHeaderRestored=0;
+    if(spec.name==='01_Дни'&&storeId==='sanych_wb'){
+      var oldAxisSheet=ss.getSheetByName('Архив_01_Дни_до_сверки_25.10.2026');
+      if(!oldAxisSheet)throw new Error('WB_RNP_SANYCH_AXIS_ARCHIVE_MISSING');
+      var oldAxisLast=Math.min(oldAxisSheet.getLastColumn(),startCol+heads.length-1);
+      if(oldAxisLast>=startCol){
+        var oldAxisHeaders=oldAxisSheet.getRange(2,startCol,1,oldAxisLast-startCol+1).getValues()[0];
+        var restorePairs=[];
+        for(var ahi=0;ahi<oldAxisHeaders.length;ahi++){
+          if(!key(heads[ahi])&&key(oldAxisHeaders[ahi]))restorePairs.push({offset:ahi,value:oldAxisHeaders[ahi]});
+        }
+        for(var api=0;api<restorePairs.length;){
+          var runStart=restorePairs[api].offset,runValues=[restorePairs[api].value],next=api+1;
+          while(next<restorePairs.length&&restorePairs[next].offset===restorePairs[next-1].offset+1){
+            runValues.push(restorePairs[next].value);next++;
+          }
+          var restoreCol=startCol+runStart,oldHeaderValues=sh.getRange(2,restoreCol,1,runValues.length).getValues()[0];
+          var archiveRecord=[new Date(),storeName,sh.getName(),'AXIS_HEADER_RESTORE_'+restoreCol+'_'+runValues.length,2,
+            JSON.stringify({old:oldHeaderValues,restored:runValues}),'Восстановление пустых заголовков дат из архива той же книги'];
+          archiveWrite_([archiveRecord]);
+          var restoreRange=sh.getRange(2,restoreCol,1,runValues.length);
+          restoreRange.setValues([runValues]);
+          SpreadsheetApp.flush();
+          var restoredReadback=restoreRange.getValues()[0];
+          for(var arbi=0;arbi<runValues.length;arbi++){
+            if(key(restoredReadback[arbi])!==key(runValues[arbi]))throw new Error('WB_RNP_SANYCH_AXIS_HEADER_READBACK_FAILED:'+restoreCol+':'+(arbi+1));
+            heads[runStart+arbi]=restoredReadback[arbi];
+          }
+          axisHeaderRestored+=runValues.length;api=next;
+        }
+      }
+    }
     var positions={};
     for(var ci=0;ci<heads.length;ci++){
       var k=key(heads[ci]);if(!k)continue;
@@ -7204,7 +7282,7 @@ function sellmonitorGithubWbInnerSyncRnpMatrices_(ss,built,storeName,storeId,onl
     var readbackPeriods=targets.map(function(period){var cols=positions[period]||[];return cols.length===1?key(sh.getRange(2,cols[0]).getValue()):'';});
     var coverageVerified=readbackPeriods.length===targets.length&&readbackPeriods.every(function(period,index){return !!period&&period===targets[index]&&(positions[targets[index]]||[]).length===1;});
     if(!coverageVerified)throw new Error('WB_RNP_PERIOD_COVERAGE_READBACK_FAILED:'+spec.name+':'+JSON.stringify({source:targets,readback:readbackPeriods}));
-    stats.push({sheet:spec.name,target_periods:targets.length,source_periods:targets,readback_periods:readbackPeriods,coverage_verified:coverageVerified,axis_rebuilt:axisRebuilt,axis_archive_segments:axisArchiveRows,updated_columns:updates.length,store_summary_columns:storeSummaryWrites.length,store_summary_rows_verified:storeSummaryReadbackCells,store_summary_readback:true,archived_segments:archives,written_values:written,duplicates_removed:dupDates.length,min:targets[0]||'',max:targets.length?targets[targets.length-1]:''});
+    stats.push({sheet:spec.name,target_periods:targets.length,source_periods:targets,readback_periods:readbackPeriods,coverage_verified:coverageVerified,axis_rebuilt:axisRebuilt,axis_archive_segments:axisArchiveRows,axis_headers_restored:axisHeaderRestored,updated_columns:updates.length,store_summary_columns:storeSummaryWrites.length,store_summary_rows_verified:storeSummaryReadbackCells,store_summary_readback:true,archived_segments:archives,written_values:written,duplicates_removed:dupDates.length,min:targets[0]||'',max:targets.length?targets[targets.length-1]:''});
   });
   archive.hideSheet();
   var chartTab=ss.getSheetByName('05_Графики_РНП'),charts=chartTab?chartTab.getCharts():[];
