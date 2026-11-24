@@ -144,7 +144,7 @@ def ensure_live_sheets(access_token, metadata, row_targets):
         LIVE_SHEETS["uds"]: ["SKU UDS", "Товар UDS", "Вариант", "Текущая цена UDS API, ₽", "Цена до скидки UDS, ₽", "Остаток", "UDS goods ID", "External ID (Ozon product_id)", "Тип UDS", "Категория ID", "Offer ID Ozon", "Скрыт", "Заблокирован", "Статус API", "Последняя цена кабинета/CSV, ₽", "Обновлено, MSK"],
         LIVE_SHEETS["ozon"]: ["Ozon product_id", "offer_id", "SKU UDS", "Наименование Ozon", "Цена продавца API, ₽", "Цена на витрине/акции, ₽", "marketing_seller_price, ₽", "Старая цена, ₽", "min_price, ₽", "net_price, ₽", "Валюта", "НДС", "Вес/объёмный вес", "Статус получения", "Обновлено, MSK"],
         LIVE_SHEETS["orders"]: ["Кабинет", "Схема", "Дата заказа", "Дата отправления/в обработке", "Статус", "Подстатус", "Номер заказа", "Номер отправления", "offer_id", "Ozon SKU", "product_id", "SKU UDS", "Товар", "Количество", "Цена строки, ₽", "Сумма строки, ₽", "Причина отмены", "Обновлено, MSK"],
-        LIVE_SHEETS["sales"]: ["SKU UDS", "offer_id", "product_id", "Товар", "Заказов за 30 дней", "Единиц в заказах", "Доставлено, шт", "Отменено, шт", "Возврат/на склад, шт", "Открыто/прочие статусы, шт", "Сумма строк заказов, ₽", "Сумма доставленных строк, ₽", "Текущая цена Ozon API, ₽", "Статусы за 30 дней", "Обновлено, MSK"],
+        LIVE_SHEETS["sales"]: ["SKU UDS", "offer_id", "product_id", "Товар", "Заказов за 30 дней", "Единиц в заказах", "Доставлено, шт", "Отменено, шт", "Возврат/на склад, шт", "Открыто/прочие статусы, шт", "Сумма строк заказов, ₽", "Сумма доставленных строк, ₽", "Текущая цена Ozon API, ₽", "Строк с ценой / товарных строк", "Статусы за 30 дней", "Обновлено, MSK"],
     }
     adds = []
     for title, header in headers.items():
@@ -498,7 +498,7 @@ def fetch_ozon_orders(client_id, api_key, now):
             filt = {"since": since, "to": until}
             if flow == "FBS":
                 filt["status"] = ""
-            body = {"dir": "DESC", "filter": filt, "limit": 100, "cursor": cursor, "with": {"analytics_data": False, "financial_data": False}}
+            body = {"dir": "DESC", "filter": filt, "limit": 100, "cursor": cursor, "with": {"analytics_data": False, "financial_data": True}}
             response = ozon_post(client_id, api_key, endpoint, body, "Ozon " + flow + " orders")
             request_count += 1
             result = response.get("result", response)
@@ -528,6 +528,8 @@ def fetch_ozon_orders(client_id, api_key, now):
                 seen_signatures[key] = signature
                 posting_keys.add((flow, posting_number))
                 products = posting.get("products") if isinstance(posting.get("products"), list) else []
+                financial_data = posting.get("financial_data") if isinstance(posting.get("financial_data"), dict) else {}
+                financial_products = financial_data.get("products") if isinstance(financial_data.get("products"), list) else []
                 cancellation = posting.get("cancellation") or {}
                 cancel_reason = cancellation.get("cancel_reason") or cancellation.get("cancel_reason_name") or posting.get("cancellation_reason") or ""
                 if not products:
@@ -539,14 +541,17 @@ def fetch_ozon_orders(client_id, api_key, now):
                         "quantity": 0, "unit_price": None, "line_amount": None, "cancel_reason": str(cancel_reason or ""),
                     })
                     continue
-                for product in products:
+                for product_index, product in enumerate(products):
                     if not isinstance(product, dict):
                         continue
+                    financial_item = financial_products[product_index] if product_index < len(financial_products) and isinstance(financial_products[product_index], dict) else {}
                     offer_id = str(product.get("offer_id") or "").strip()
                     ozon_sku = norm_id(product.get("sku"))
-                    product_id = norm_id(product.get("product_id"))
+                    product_id = norm_id(product.get("product_id")) or norm_id(financial_item.get("product_id"))
                     quantity = num(product.get("quantity")) or 0
                     unit_price = num(product.get("price"))
+                    if unit_price is None:
+                        unit_price = num(financial_item.get("price"))
                     if quantity < 0:
                         raise RuntimeError("Ozon returned a negative order line quantity")
                     lines.append({
@@ -592,11 +597,11 @@ def update_column(data, sheet, col, start_row, values):
 
 
 def pick_price(offer_id, product_id, by_offer, by_product):
-    if offer_id and offer_id in by_offer:
-        return by_offer[offer_id]
     pid = norm_id(product_id)
     if pid and pid in by_product:
         return by_product[pid]
+    if offer_id and offer_id in by_offer:
+        return by_offer[offer_id]
     return None
 
 
@@ -631,6 +636,10 @@ def main():
 
     by_product, by_offer, price_requests = fetch_ozon_prices(client_id, ozon_key, product_ids, offer_ids)
     order_lines, posting_count, order_requests, since, until = fetch_ozon_orders(client_id, ozon_key, now)
+    order_item_lines = sum(1 for line in order_lines if line["quantity"] > 0)
+    priced_order_lines = sum(1 for line in order_lines if line["quantity"] > 0 and line["unit_price"] is not None)
+    if order_item_lines and not priced_order_lines:
+        raise RuntimeError("Ozon order API returned no line prices; refusing to publish zero order totals")
     del ozon_key
 
     sku_by_product = defaultdict(set)
@@ -657,13 +666,14 @@ def main():
             price_name_by_offer[offer] = name
     used_price_keys = set()
     for record in sorted(by_product.values(), key=lambda item: (item["offer_id"], item["product_id"])):
-        sku_set = set()
-        if record["product_id"] in sku_by_product:
-            sku_set |= sku_by_product[record["product_id"]]
-        if record["offer_id"] in sku_by_offer:
-            sku_set |= sku_by_offer[record["offer_id"]]
-        uds_sku = next(iter(sku_set)) if len(sku_set) == 1 else ("AMBIGUOUS" if sku_set else "")
-        price_rows.append([record["product_id"], record["offer_id"], uds_sku, price_name_by_offer.get(record["offer_id"], ""), record["price"], record["marketing_price"], record["marketing_seller_price"], record["old_price"], record["min_price"], record["net_price"], record["currency"], record["vat"], record["volume_weight"], "Цена API получена", stamp])
+        product_skus = sku_by_product.get(record["product_id"], set())
+        offer_skus = sku_by_offer.get(record["offer_id"], set())
+        candidates = product_skus if product_skus else offer_skus
+        uds_sku = next(iter(candidates)) if len(candidates) == 1 else ("AMBIGUOUS" if candidates else "")
+        mapping_status = "Цена API получена"
+        if len(product_skus) == 1 and offer_skus and product_skus.isdisjoint(offer_skus):
+            mapping_status = "Цена API получена; сопоставлено по product_id, offer_id конфликтует"
+        price_rows.append([record["product_id"], record["offer_id"], uds_sku, price_name_by_offer.get(record["offer_id"], ""), record["price"], record["marketing_price"], record["marketing_seller_price"], record["old_price"], record["min_price"], record["net_price"], record["currency"], record["vat"], record["volume_weight"], mapping_status, stamp])
         used_price_keys.add((record["product_id"], record["offer_id"]))
     returned_offer_ids = set(by_offer)
     returned_product_ids = set(by_product)
@@ -797,19 +807,23 @@ def main():
         if len(skus) == 1:
             order_to_uds[("product", pid)] = next(iter(skus))
     for line in order_lines:
-        if line["offer_id"] and ("offer", line["offer_id"]) in order_to_uds:
-            line["uds_sku"] = order_to_uds[("offer", line["offer_id"])]
-        elif line["product_id"] and ("product", line["product_id"]) in order_to_uds:
+        if line["product_id"] and ("product", line["product_id"]) in order_to_uds:
             line["uds_sku"] = order_to_uds[("product", line["product_id"])]
+        elif line["offer_id"] and ("offer", line["offer_id"]) in order_to_uds:
+            line["uds_sku"] = order_to_uds[("offer", line["offer_id"])]
 
     # Build per-offer sales aggregates from the order list; this is order status data, not payout accounting.
     aggregates = {}
     for line in order_lines:
         offer = line["offer_id"] or ("product:" + line["product_id"] if line["product_id"] else "unmapped")
-        key = (line["flow"], offer)
-        agg = aggregates.setdefault(key, {"flow": line["flow"], "offer": line["offer_id"], "product_id": line["product_id"], "uds_sku": line["uds_sku"], "name": line["name"], "orders": set(), "qty": 0.0, "delivered": 0.0, "cancelled": 0.0, "returned": 0.0, "open": 0.0, "amount": 0.0, "delivered_amount": 0.0, "statuses": set()})
+        key = (line["flow"], line["product_id"] or offer, offer)
+        agg = aggregates.setdefault(key, {"flow": line["flow"], "offer": line["offer_id"], "product_id": line["product_id"], "uds_sku": line["uds_sku"], "name": line["name"], "orders": set(), "qty": 0.0, "delivered": 0.0, "cancelled": 0.0, "returned": 0.0, "open": 0.0, "amount": 0.0, "delivered_amount": 0.0, "lines": 0, "priced_lines": 0, "statuses": set()})
         agg["orders"].add((line["flow"], line["posting_number"]))
         agg["qty"] += line["quantity"]
+        if line["quantity"] > 0:
+            agg["lines"] += 1
+            if line["unit_price"] is not None:
+                agg["priced_lines"] += 1
         status = (line["status"] or "").lower()
         agg["statuses"].add(line["status"] or "(пусто)")
         amount = line["line_amount"] or 0
@@ -826,7 +840,7 @@ def main():
     sales_rows = []
     for agg in sorted(aggregates.values(), key=lambda item: (-item["qty"], item["offer"])):
         current = pick_price(agg["offer"], agg["product_id"], by_offer, by_product)
-        sales_rows.append([agg["uds_sku"], agg["offer"], agg["product_id"], agg["name"], len(agg["orders"]), agg["qty"], agg["delivered"], agg["cancelled"], agg["returned"], agg["open"], agg["amount"], agg["delivered_amount"], current["price"] if current else "", ", ".join(sorted(agg["statuses"])), stamp])
+        sales_rows.append([agg["uds_sku"], agg["offer"], agg["product_id"], agg["name"], len(agg["orders"]), agg["qty"], agg["delivered"], agg["cancelled"], agg["returned"], agg["open"], agg["amount"], agg["delivered_amount"], current["price"] if current else "", f'{agg["priced_lines"]}/{agg["lines"]}', ", ".join(sorted(agg["statuses"])), stamp])
 
     order_rows = []
     for line in sorted(order_lines, key=lambda item: (item["created_at"], item["posting_number"], item["offer_id"])):
@@ -1128,7 +1142,7 @@ def main():
         {"range": "'UDS — СВОДКА'!A3", "values": [[f"Ozon цены обновлены: {current_price_count}; строк юнитки с актуальной Ozon ценой обновлено: {len(model_writes)}; цен UDS по API записано: {len(uds_unitka_writes)}. Детализация новых товаров и статусов — лист {LIVE_SHEETS['uds']}."]]},
         {"range": "'UDS — СВОДКА'!A4:D4", "values": [["SKU UDS в текущем каталоге", "Вернул Partner API", "Не вернул API", "Новых SKU добавлено"]]},
         {"range": "'UDS — СВОДКА'!A5:D5", "values": [[len(old_skus | returned_skus), len(returned_skus), len(missing_skus), new_sku_count]]},
-        {"range": "'UDS — СВОДКА'!A6", "values": [[f"Заказы Ozon, последние 30 дней: {posting_count} отправлений, {len(order_lines)} строк товара; доставлено {delivered_units:g} шт., отменено {cancelled_units:g} шт., возвраты/на склад {returned_units:g} шт. Сумма строк заказов: {amount_sum:.2f} ₽ (не выплаты Ozon)."]]},
+        {"range": "'UDS — СВОДКА'!A6", "values": [[f"Заказы Ozon, последние 30 дней: {posting_count} отправлений, {len(order_lines)} строк товара; доставлено {delivered_units:g} шт., отменено {cancelled_units:g} шт., возвраты/на склад {returned_units:g} шт. Цена есть у {priced_order_lines}/{order_item_lines} товарных строк. Сумма строк с известной ценой: {amount_sum:.2f} ₽ (не выплаты Ozon)."]]},
         {"range": "'UDS — СВОДКА'!A7", "values": [["Историческая сверка 23–25.10 ниже; текущие API-статусы и новые SKU — на листах UDS — API LIVE и OZON — API LIVE."]]},
     ]
     final_writes.extend(summary)
@@ -1137,7 +1151,7 @@ def main():
     write_live_table(access_token, LIVE_SHEETS["uds"], [headers[LIVE_SHEETS["uds"]]] + uds_live_rows, 16)
     write_live_table(access_token, LIVE_SHEETS["ozon"], [headers[LIVE_SHEETS["ozon"]]] + price_rows, 15)
     write_live_table(access_token, LIVE_SHEETS["orders"], [headers[LIVE_SHEETS["orders"]]] + order_rows, 18)
-    write_live_table(access_token, LIVE_SHEETS["sales"], [headers[LIVE_SHEETS["sales"]]] + sales_rows, 15)
+    write_live_table(access_token, LIVE_SHEETS["sales"], [headers[LIVE_SHEETS["sales"]]] + sales_rows, len(headers[LIVE_SHEETS["sales"]]))
     google_values_batch(access_token, final_writes)
 
     # Read back the written source and dashboard values before reporting success.
@@ -1176,6 +1190,7 @@ def main():
     log("UDS_DUPLICATE_SKUS", duplicate_count)
     log("OZON_POSTINGS_30D", posting_count)
     log("OZON_ORDER_LINES_30D", len(order_lines))
+    log("OZON_ORDER_LINES_WITH_PRICE", priced_order_lines)
     log("OZON_DELIVERED_UNITS_30D", delivered_units)
     log("OZON_CANCELLED_UNITS_30D", cancelled_units)
     log("UDS_REQUESTS", uds_requests)
