@@ -486,8 +486,18 @@ def boolean_value(value):
 def ozon_sale_fields(info):
     if not isinstance(info, dict):
         return ["", "", "", "", "Product Info API не вернул карточку"]
-    has_price = boolean_value(info.get("has_price"))
-    has_stock = boolean_value(info.get("has_stock"))
+    visibility_details = info.get("visibility_details") if isinstance(info.get("visibility_details"), dict) else {}
+    stock_details = info.get("stocks") if isinstance(info.get("stocks"), dict) else {}
+    has_price_raw = info.get("has_price")
+    if has_price_raw is None:
+        has_price_raw = visibility_details.get("has_price")
+    has_stock_raw = info.get("has_stock")
+    if has_stock_raw is None:
+        has_stock_raw = stock_details.get("has_stock")
+    if has_stock_raw is None:
+        has_stock_raw = visibility_details.get("has_stock")
+    has_price = boolean_value(has_price_raw)
+    has_stock = boolean_value(has_stock_raw)
     archived = boolean_value(info.get("is_archived"))
     autoarchived = boolean_value(info.get("is_autoarchived"))
     labels = lambda value: "Да" if value is True else "Нет" if value is False else ""
