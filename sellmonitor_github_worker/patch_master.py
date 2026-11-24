@@ -1061,10 +1061,12 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
     }
 """
         worker_text = worker_text.replace(probe_anchor, probe_code + "\n" + probe_anchor, 1)
-        finance_return_anchor = "fresh_categories:freshCategories,"
+        # Bind diagnostics to the completed-result object. The deferred (pre-Monday)
+        # response has the same freshness key, so a generic key anchor is ambiguous.
+        finance_return_anchor = "fresh_categories:freshCategories,source_rows:products.length,finance_rows:rows.length,part:part"
         if worker_text.count(finance_return_anchor) != 1:
             raise SystemExit("INNER_FINANCE_RAW_REPORT_PROBE_RETURN_ANCHOR_MISMATCH")
-        worker_text = worker_text.replace(finance_return_anchor, "fresh_categories:freshCategories,finance_tools_probe:financeToolsProbe,finance_raw_probe:financeRawProbe,", 1)
+        worker_text = worker_text.replace(finance_return_anchor, "fresh_categories:freshCategories,finance_tools_probe:financeToolsProbe,finance_raw_probe:financeRawProbe,source_rows:products.length,finance_rows:rows.length,part:part", 1)
         probe_versions = re.findall(r"VERSION:\s*'github-worker-(\d+)\.(\d+)\.(\d+)'", worker_text)
         if len(probe_versions) != 1:
             raise SystemExit("INNER_FINANCE_RAW_REPORT_PROBE_VERSION_PATTERN_MISMATCH")
