@@ -5,7 +5,7 @@
  * the authorized Google adapter. Make is not part of the execution path.
  */
 const SMC_GH = Object.freeze({
-  VERSION: 'github-worker-1.3.101',
+  VERSION: 'github-worker-1.3.102',
   CONTROL_CENTER_ID: '1sW51KKwQIvB7GZKyUhukqHXAL_CxJZKL-mjKWGbZLE0',
   CLIENTS_SHEET: 'Clients',
   LOG_SHEET: 'Log',
@@ -7413,7 +7413,8 @@ function sellmonitorGithubUdsSheetBridge_(body) {
   var allowed = [
     'UDS — СВОДКА', 'UDS — КАТАЛОГ (88)', 'UDS — Контроль цен',
     'OZON — ФАКТ SKU 19.10', 'ЮНИТКА', 'UDS ЮНИТКА',
-    'UDS — API LIVE', 'OZON — API LIVE', 'OZON — ЗАКАЗЫ 30д', 'OZON — ПРОДАЖИ 30д'
+    'UDS — API LIVE', 'OZON — API LIVE', 'OZON — ЗАКАЗЫ 30д', 'OZON — ПРОДАЖИ 30д',
+    'UDS — Юнитка без Ozon'
   ];
   var live = ['UDS — API LIVE', 'OZON — API LIVE', 'OZON — ЗАКАЗЫ 30д', 'OZON — ПРОДАЖИ 30д'];
 
