@@ -467,8 +467,8 @@ if open_period_marker not in source:
   }"""
     source = replace_exact(source, aggregate_old, aggregate_new, 1, "WB available metric aggregation")
 
-    store_value_old = "storeAggregateValue_(storePeriodFacts.rows,code):rnpValue(all,code);"
-    store_value_new = "storeAggregateValue_(storePeriodFacts.rows,code,storePeriodFacts.allow_partial===true):rnpValue(all,code);"
+    store_value_old = "storeValueCache[code]=storeAggregateValue_(storePeriodFacts.rows,code);"
+    store_value_new = "storeValueCache[code]=storeAggregateValue_(storePeriodFacts.rows,code,storePeriodFacts.allow_partial===true);"
     source = replace_exact(source, store_value_old, store_value_new, 1, "WB open-period value call")
 
     version = re.search(r"VERSION:\s*'github-worker-(\d+)\.(\d+)\.(\d+)'", source)
