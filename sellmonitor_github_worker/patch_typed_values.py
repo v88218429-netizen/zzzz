@@ -572,7 +572,7 @@ if available_period_marker not in source:
     result_old = "    var result={rows:rows,exact_days:exactDays.length,expected_days:expectedDays,status:status};"
     result_new = "    var result={rows:rows,exact_days:exactDays.length,expected_days:expectedDays,observed_days:observedDays,allow_partial:(isCurrentOpenPeriod||exactDays.length!==expectedDays),status:status};"
     source = replace_available_anchor(source, result_old, result_new, "WB calendar-period result")
-    version = re.search(r"VERSION:\\s*'github-worker-(\\d+)\\.(\\d+)\\.(\\d+)'", source)
+    version = re.search(r"VERSION:\s*'github-worker-(\d+)\.(\d+)\.(\d+)'", source)
     if not version:
         raise SystemExit("worker version missing for calendar-period release")
     major, minor, patch = map(int, version.groups())
