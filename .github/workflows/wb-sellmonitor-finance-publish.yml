@@ -65,7 +65,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       PUBLISH_ONLY_STORE: ${{ github.event_name == 'workflow_dispatch' && inputs.store != 'all' && inputs.store || contains(github.event.head_commit.message || github.event.workflow_run.head_commit.message, '[air-only]') && 'air_wb' || contains(github.event.head_commit.message || github.event.workflow_run.head_commit.message, '[hozyayushka-only]') && 'hozyayushka_wb' || contains(github.event.head_commit.message || github.event.workflow_run.head_commit.message, '[sanych-only]') && 'sanych_wb' || '' }}
       RESUME_ATTEMPT: ${{ github.event_name == 'workflow_dispatch' && inputs.resume_attempt || '0' }}
-      RESUME_PHASE: ${{ github.event_name == 'workflow_dispatch' && inputs.resume_phase || github.event_name == 'push' && format('push:{0}', github.event.head_commit.message) || github.event_name == 'workflow_run' && format('push:{0}', github.event.workflow_run.head_commit.message) || 'summary_day' }}
+      RESUME_PHASE: ${{ github.event_name == 'workflow_dispatch' && inputs.resume_phase || github.event_name == 'push' && format('push:{0}', github.event.head_commit.message) || github.event_name == 'workflow_run' && format('push:{0}', github.event.workflow_run.head_commit.message) || 'summary_week' }}
     steps:
       - name: Check configured authorization
         shell: bash
@@ -136,7 +136,7 @@ jobs:
           else:
               resume_phase = resume_phase_input
           if resume_phase == "summary":
-              resume_phase = "summary_day"
+              resume_phase = "summary_week"
           expected = (selected_store,) if selected_store in ("air_wb", "hozyayushka_wb", "sanych_wb") else ("air_wb", "hozyayushka_wb", "sanych_wb")
           today = date.today()
           end_year, end_month = today.year, today.month
@@ -176,14 +176,14 @@ jobs:
 
           for store_index, store_id in enumerate(expected):
               daily_phases = sanych_chunks if store_id in ("sanych_wb", "hozyayushka_wb") else months
-              all_phases = ["summary_day", "summary_week", "summary_month", *daily_phases, *week_phases, "rnp_month", "dashboard"]
+              all_phases = ["summary_week", "summary_month", "summary_day", *daily_phases, *week_phases, "rnp_month", "dashboard"]
               store_result = {"store_id": store_id}
               candidate_resume_phase = resume_phase
               if store_id in ("sanych_wb", "hozyayushka_wb"):
                   legacy_daily = re.fullmatch(r"rnp_day_(\\d{4})_(\\d{2})", candidate_resume_phase)
                   if legacy_daily:
                       candidate_resume_phase = f"rnp_day_{legacy_daily.group(1)}_{legacy_daily.group(2)}_01_07"
-              phase_checkpoint = candidate_resume_phase if candidate_resume_phase in all_phases else "summary_day"
+              phase_checkpoint = candidate_resume_phase if candidate_resume_phase in all_phases else "summary_week"
               checkpoint_index = all_phases.index(phase_checkpoint)
               completed_phases = all_phases[:checkpoint_index]
               # Re-read the compact summary, then continue from the last phase whose readback was confirmed.

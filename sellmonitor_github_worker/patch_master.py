@@ -2254,6 +2254,26 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
         worker_text = worker_text.replace(wait_version_anchor, "VERSION: 'github-worker-" + wait_next + "'", 1)
         print("INNER_FINANCE_WEEKLY_WAIT_STATUS=patched")
 
+    # Build only daily rows during the daily summary phase; week/month rollups run in their own phases.
+    daily_only_marker = "WB_INNER_DAILY_ONLY_SUMMARY_V1"
+    if daily_only_marker not in worker_text:
+        build_anchor = "var built=sellmonitorGithubWbInnerBuildRows_(allRows,headers,shop,Session.getScriptTimeZone(),!!(dayMonthMatch||dayRangeMatch));"
+        build_replacement = "/* WB_INNER_DAILY_ONLY_SUMMARY_V1 */\n      var built=sellmonitorGithubWbInnerBuildRows_(allRows,headers,shop,Session.getScriptTimeZone(),!!(dayMonthMatch||dayRangeMatch||(summaryGrainMatch&&summaryGrainMatch[1]==='day')));"
+        if worker_text.count(build_anchor) != 1:
+            raise SystemExit("WB daily-only summary build anchor mismatch")
+        worker_text = worker_text.replace(build_anchor, build_replacement, 1)
+        daily_versions = re.findall(r"VERSION:\s*'github-worker-(\d+)\.(\d+)\.(\d+)'", worker_text)
+        if len(daily_versions) != 1:
+            raise SystemExit("WB daily-only summary version pattern mismatch")
+        daily_major, daily_minor, daily_patch = [int(value) for value in daily_versions[0]]
+        daily_current = ".".join(str(value) for value in (daily_major, daily_minor, daily_patch))
+        daily_next = ".".join(str(value) for value in (daily_major, daily_minor, daily_patch + 1))
+        daily_version_anchor = "VERSION: 'github-worker-" + daily_current + "'"
+        if worker_text.count(daily_version_anchor) != 1:
+            raise SystemExit("WB daily-only summary version anchor mismatch")
+        worker_text = worker_text.replace(daily_version_anchor, "VERSION: 'github-worker-" + daily_next + "'", 1)
+        print("WB_INNER_DAILY_ONLY_SUMMARY=patched")
+
     worker.write_text(worker_text, encoding="utf-8")
     print("WORKER_TRIGGER_REFRESH_V2=patched")
 candidates = []
