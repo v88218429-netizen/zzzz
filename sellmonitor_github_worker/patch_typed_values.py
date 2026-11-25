@@ -327,11 +327,167 @@ function sellmonitorGithubOzonIdsAreText_(rows, columns) {
     next_version = "github-worker-" + str(major) + "." + str(minor) + "." + str(patch + 1)
     source = source[:version.start()] + "VERSION: '" + next_version + "'" + source[version.end():]
 
+open_period_marker = "WB_RNP_OPEN_PERIOD_AVAILABLE_DAILY_V1"
+if open_period_marker not in source:
+    period_bounds_old = """    var today=Utilities.formatDate(new Date(),ss.getSpreadsheetTimeZone(),'yyyy-MM-dd');
+    var closedThrough=storeAddDay_(today,-1);
+    var first=storeSourceMin_&&storeSourceMin_>start?storeSourceMin_:start;
+    var last=end<closedThrough?end:closedThrough;"""
+    period_bounds_new = """    var today=Utilities.formatDate(new Date(),ss.getSpreadsheetTimeZone(),'yyyy-MM-dd');
+    var closedThrough=storeAddDay_(today,-1);
+    var todayDate=new Date(today+'T12:00:00Z');
+    var currentWeekStart=storeAddDay_(today,-((todayDate.getUTCDay()+6)%7));
+    var isCurrentOpenPeriod=(grain==='week'&&period===currentWeekStart)||(grain==='month'&&period===today.slice(0,7)+'-01');
+    var first=storeSourceMin_&&storeSourceMin_>start?storeSourceMin_:start;
+    var last=isCurrentOpenPeriod?(end<today?end:today):(end<closedThrough?end:closedThrough);"""
+    source = replace_exact(source, period_bounds_old, period_bounds_new, 1, "WB open-period bounds")
+
+    period_rows_old = """    var expectedDays=0,exactDays=[],rows=[];
+    if(first<=last){
+      for(var d=first;d<=last;d=storeAddDay_(d,1)){
+        expectedDays++;
+        var daily=storeDayGroups_[d];
+        if(daily&&daily.exact){exactDays.push(d);rows=rows.concat(daily.rows);}
+        if(expectedDays>400)throw new Error('WB_RNP_STORE_PERIOD_GUARD:'+grain+':'+period);
+      }
+    }
+    var periodOpen=end>closedThrough;
+    var status=expectedDays===0?'🟡 ПРЕДВ.':(exactDays.length===expectedDays?(periodOpen?'🟡 ЧАСТИЧНО':'🟢 ФАКТ'):(exactDays.length?'🟡 ЧАСТИЧНО':'🟠 НЕПОЛНЫЙ'));
+    var result={rows:rows,exact_days:exactDays.length,expected_days:expectedDays,status:status};"""
+    period_rows_new = """    var expectedDays=0,exactDays=[],observedDays=0,rows=[];
+    if(first<=last){
+      for(var d=first;d<=last;d=storeAddDay_(d,1)){
+        expectedDays++;
+        var daily=storeDayGroups_[d];
+        if(daily&&daily.rows&&daily.rows.length)observedDays++;
+        if(daily&&daily.exact)exactDays.push(d);
+        if(daily&&(daily.exact||isCurrentOpenPeriod))rows=rows.concat(daily.rows);
+        if(expectedDays>400)throw new Error('WB_RNP_STORE_PERIOD_GUARD:'+grain+':'+period);
+      }
+    }
+    var periodOpen=isCurrentOpenPeriod;
+    var status=expectedDays===0?'🟡 ПРЕДВ.':(exactDays.length===expectedDays?(periodOpen?'🟡 ЧАСТИЧНО':'🟢 ФАКТ'):(exactDays.length?'🟡 ЧАСТИЧНО':(isCurrentOpenPeriod&&observedDays?'🟡 ПРЕДВ.':'🟠 НЕПОЛНЫЙ')));
+    var result={rows:rows,exact_days:exactDays.length,expected_days:expectedDays,observed_days:observedDays,allow_partial:isCurrentOpenPeriod,status:status};"""
+    source = replace_exact(source, period_rows_old, period_rows_new, 1, "WB open-period rows")
+
+    aggregate_old = """  function storeStrictSum_(rows,field){
+    var idx=metricIx[field];
+    if(idx==null||!rows||!rows.length)return null;
+    var salesIx=metricIx.net_sales_qty,returnsIx=metricIx.returns_qty,total=0;
+    for(var i=0;i<rows.length;i++){
+      var raw=rows[i][idx];
+      if(raw===''||raw==null||typeof raw==='boolean'||!isFinite(Number(raw))){
+        var sold=salesIx==null?null:Number(rows[i][salesIx]);
+        var returned=returnsIx==null?null:Number(rows[i][returnsIx]);
+        if((field==='revenue_rub'||field==='customer_revenue_rub'||field==='marketplace_discount_rub')&&sold===0&&returned===0)raw=0;
+        else if(field==='returns_revenue_rub'&&returned===0)raw=0;
+        else return null;
+      }
+      total+=Number(raw);
+    }
+    return total;
+  }
+  function storeAggregateCode_(code){
+    return Object.prototype.hasOwnProperty.call(storeAggregateDirectFields_,String(code||''))||
+      Object.prototype.hasOwnProperty.call(storeAggregateRatioFields_,String(code||''));
+  }
+  function storeAggregateValue_(rows,code){
+    code=String(code||'');
+    var direct=storeAggregateDirectFields_[code];
+    if(direct){var total=storeStrictSum_(rows,direct);return total==null?'':total;}
+    var ratio=storeAggregateRatioFields_[code];
+    if(!ratio)return '';
+    var n=storeStrictSum_(rows,ratio[0]),d=storeStrictSum_(rows,ratio[1]);
+    return n==null||d==null||d===0?'':n/d;
+  }"""
+    aggregate_new = """  function storeMetricValue_(row,field){
+    var idx=metricIx[field],exact=String(row&&row[storeTrustIx_]||'')==='FACTUAL_INNER_ANALYTICS';
+    if(idx==null||!row)return {known:false,exact:exact,value:null};
+    var raw=row[idx];
+    if(raw===''||raw==null||typeof raw==='boolean'||!isFinite(Number(raw))){
+      var salesIx=metricIx.net_sales_qty,returnsIx=metricIx.returns_qty;
+      var salesRaw=salesIx==null?null:row[salesIx],returnsRaw=returnsIx==null?null:row[returnsIx];
+      var sold=salesRaw===''||salesRaw==null||typeof salesRaw==='boolean'||!isFinite(Number(salesRaw))?null:Number(salesRaw);
+      var returned=returnsRaw===''||returnsRaw==null||typeof returnsRaw==='boolean'||!isFinite(Number(returnsRaw))?null:Number(returnsRaw);
+      if(exact&&(field==='revenue_rub'||field==='customer_revenue_rub'||field==='marketplace_discount_rub')&&sold===0&&returned===0)raw=0;
+      else if(exact&&field==='returns_revenue_rub'&&returned===0)raw=0;
+      else return {known:false,exact:exact,value:null};
+    }
+    return {known:true,exact:exact,value:Number(raw)};
+  }
+  function storeStrictSum_(rows,field){
+    if(!rows||!rows.length)return null;
+    var total=0,count=0;
+    for(var i=0;i<rows.length;i++){
+      var item=storeMetricValue_(rows[i],field);
+      if(!item.known)return null;
+      total+=item.value;count++;
+    }
+    return count?total:null;
+  }
+  function storeAvailableSum_(rows,field){
+    if(!rows||!rows.length)return null;
+    var total=0,count=0;
+    for(var i=0;i<rows.length;i++){
+      var item=storeMetricValue_(rows[i],field);
+      if(!item.known){if(item.exact)return null;continue;}
+      total+=item.value;count++;
+    }
+    return count?total:null;
+  }
+  function storeAvailableRatio_(rows,numeratorField,denominatorField){
+    if(!rows||!rows.length)return null;
+    var numerator=0,denominator=0,count=0;
+    for(var i=0;i<rows.length;i++){
+      var n=storeMetricValue_(rows[i],numeratorField),d=storeMetricValue_(rows[i],denominatorField);
+      if(!n.known||!d.known){if(n.exact||d.exact)return null;continue;}
+      numerator+=n.value;denominator+=d.value;count++;
+    }
+    return count&&denominator!==0?numerator/denominator:null;
+  }
+  function storeAggregateCode_(code){
+    return Object.prototype.hasOwnProperty.call(storeAggregateDirectFields_,String(code||''))||
+      Object.prototype.hasOwnProperty.call(storeAggregateRatioFields_,String(code||''));
+  }
+  function storeAggregateValue_(rows,code,allowPartial){
+    code=String(code||'');
+    var direct=storeAggregateDirectFields_[code];
+    if(direct){
+      var total=allowPartial?storeAvailableSum_(rows,direct):storeStrictSum_(rows,direct);
+      return total==null?'':total;
+    }
+    var ratio=storeAggregateRatioFields_[code];
+    if(!ratio)return '';
+    if(allowPartial){
+      var partialRatio=storeAvailableRatio_(rows,ratio[0],ratio[1]);
+      return partialRatio==null?'':partialRatio;
+    }
+    var n=storeStrictSum_(rows,ratio[0]),d=storeStrictSum_(rows,ratio[1]);
+    return n==null||d==null||d===0?'':n/d;
+  }"""
+    source = replace_exact(source, aggregate_old, aggregate_new, 1, "WB available metric aggregation")
+
+    store_value_old = "storeAggregateValue_(storePeriodFacts.rows,code):rnpValue(all,code);"
+    store_value_new = "storeAggregateValue_(storePeriodFacts.rows,code,storePeriodFacts.allow_partial===true):rnpValue(all,code);"
+    source = replace_exact(source, store_value_old, store_value_new, 1, "WB open-period value call")
+
+    version = re.search(r"VERSION:\s*'github-worker-(\d+)\.(\d+)\.(\d+)'", source)
+    if not version:
+        raise SystemExit("worker version missing for open-period partial release")
+    major, minor, patch = map(int, version.groups())
+    next_version = "github-worker-" + str(major) + "." + str(minor) + "." + str(patch + 1)
+    source = source[:version.start()] + "VERSION: '" + next_version + "'" + source[version.end():]
+    source = source.replace("function sellmonitorGithubWbInnerSyncRnpMatrices_(", "function sellmonitorGithubWbInnerSyncRnpMatrices_(/* WB_RNP_OPEN_PERIOD_AVAILABLE_DAILY_V1 */", 1)
+    print("WB_RNP_OPEN_PERIOD_PARTIAL=patched")
+elif "function storeAvailableRatio_(" not in source:
+    raise SystemExit("WB_RNP_OPEN_PERIOD_PATCH_PARTIAL")
+
 required = [
     "OZON_SUMMARY_SKU_IDS_AS_TEXT_V1", "OZON_SUMMARY_SKU_ID_READBACK_V1",
     "SELLMONITOR_TYPED_VALUE_CANONICALIZER_V1", "OZON_SUMMARY_TYPED_CANONICALIZER_V1",
     "OZON_TYPED_NORMALIZER_CALL_SITES_V1", "OZON_PERF_SHARED_NUMBER_CANONICALIZER_V1",
     "OZON_SELLER_QTY_SHARED_CANONICALIZER_V1", "WB_RNP_TYPED_COMPARISON_V1",
+    "WB_RNP_OPEN_PERIOD_AVAILABLE_DAILY_V1",
     "OZON_PERF_TYPED_IDEMPOTENCY_V7", "comparison_sample:{daily:dailyMismatchSample,period:periodMismatchSample}",
     "SELLMONITOR_INNER_PRODUCT_SOURCE_ALIAS_V1",
     "SELLMONITOR_INNER_TYPED_METRIC_V1", "SELLMONITOR_INNER_TYPED_ID_WRITE_V1",
