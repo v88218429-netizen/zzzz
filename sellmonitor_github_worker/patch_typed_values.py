@@ -339,7 +339,7 @@ if open_period_marker not in source:
     var currentWeekStart=storeAddDay_(today,-((todayDate.getUTCDay()+6)%7));
     var isCurrentOpenPeriod=(grain==='week'&&period===currentWeekStart)||(grain==='month'&&period===today.slice(0,7)+'-01');
     var first=storeSourceMin_&&storeSourceMin_>start?storeSourceMin_:start;
-    var last=end<closedThrough?end:closedThrough;"""
+    var last=end<today?end:today; /* WB_RNP_OPEN_PERIOD_CURRENT_DATE_V1 */"""
     source = replace_exact(source, period_bounds_old, period_bounds_new, 1, "WB open-period bounds")
 
     period_rows_old = """    var expectedDays=0,exactDays=[],rows=[];
@@ -370,22 +370,57 @@ if open_period_marker not in source:
     var result={rows:rows,exact_days:exactDays.length,expected_days:expectedDays,observed_days:observedDays,allow_partial:isCurrentOpenPeriod,status:status};"""
     source = replace_exact(source, period_rows_old, period_rows_new, 1, "WB open-period rows")
 
-    # Keep today's partial facts in the daily layer, but exclude them from week/month rollups.
+    # Keep observed current-date facts provisional in the open week/month; never count future dates.
     complete_period_marker = "WB_RNP_COMPLETED_DAY_WEEK_MONTH_ROLLUP_V1"
     complete_rows_marker = "WB_RNP_COMPLETED_DAY_WEEK_MONTH_ROLLUP_ROWS_V1"
     if complete_period_marker not in source:
         completed_anchor = "  var dayRows=[],weekGroups={},monthGroups={};"
         completed_replacement = """  var dayRows=[],weekGroups={},monthGroups={};
   /* WB_RNP_COMPLETED_DAY_WEEK_MONTH_ROLLUP_V1 */
-  var completedThrough=sellmonitorGithubWbInnerAddDays_(sellmonitorGithubWbInnerDateKey_(new Date(),tz),-1);"""
+  /* WB_RNP_CURRENT_DATE_PROVISIONAL_WEEK_MONTH_V1 */\n  var reportThrough=sellmonitorGithubWbInnerDateKey_(new Date(),tz);"""
         source = replace_exact(source, completed_anchor, completed_replacement, 1, "WB completed-period setup")
         completed_rows_anchor = "    var ws=sellmonitorGithubWbInnerWeekStart_(x.day),ms=sellmonitorGithubWbInnerMonthStart_(x.day),wk=ws+'|'+x.nm,mk=ms+'|'+x.nm;"
         completed_rows_replacement = completed_rows_anchor + """
     /* WB_RNP_COMPLETED_DAY_WEEK_MONTH_ROLLUP_ROWS_V1 */
-    if(x.day>completedThrough)return;"""
+    if(x.day>reportThrough)return;"""
         source = replace_exact(source, completed_rows_anchor, completed_rows_replacement, 1, "WB completed-period rows")
     elif complete_rows_marker not in source:
         raise SystemExit("WB completed-period rollup patch incomplete")
+
+    # Upgrade deployed workers created before current-date facts were included
+    # in open week/month aggregates. Keep the current day provisional.
+    current_open_marker = "WB_RNP_OPEN_PERIOD_CURRENT_DATE_V1"
+    period_changed = False
+    if current_open_marker not in source:
+        source = replace_exact(
+            source,
+            "var last=end<closedThrough?end:closedThrough;",
+            "/* " + current_open_marker + " */\n    var last=end<today?end:today;",
+            1,
+            "WB current-date open-period bounds",
+        )
+        period_changed = True
+
+    current_rollup_marker = "WB_RNP_CURRENT_DATE_PROVISIONAL_WEEK_MONTH_V1"
+    if current_rollup_marker not in source:
+        source = replace_exact(
+            source,
+            "var completedThrough=sellmonitorGithubWbInnerAddDays_(sellmonitorGithubWbInnerDateKey_(new Date(),tz),-1);",
+            "/* " + current_rollup_marker + " */\n  var reportThrough=sellmonitorGithubWbInnerDateKey_(new Date(),tz);",
+            1,
+            "WB current-date rollup bound",
+        )
+        source = replace_exact(source, "if(x.day>completedThrough)return;", "if(x.day>reportThrough)return;", 1, "WB current-date rollup rows")
+        period_changed = True
+
+    if period_changed:
+        version = re.search(r"VERSION:\s*'github-worker-(\d+)\.(\d+)\.(\d+)'", source)
+        if not version:
+            raise SystemExit("worker version missing for current-date period release")
+        major, minor, patch = map(int, version.groups())
+        next_version = "github-worker-" + str(major) + "." + str(minor) + "." + str(patch + 1)
+        source = source[:version.start()] + "VERSION: '" + next_version + "'" + source[version.end():]
+        print("WB_CURRENT_DATE_PROVISIONAL_PERIODS=patched")
 
     aggregate_old = """  function storeStrictSum_(rows,field){
     var idx=metricIx[field];
@@ -505,6 +540,7 @@ required = [
     "OZON_TYPED_NORMALIZER_CALL_SITES_V1", "OZON_PERF_SHARED_NUMBER_CANONICALIZER_V1",
     "OZON_SELLER_QTY_SHARED_CANONICALIZER_V1", "WB_RNP_TYPED_COMPARISON_V1",
     "WB_RNP_OPEN_PERIOD_AVAILABLE_DAILY_V1",
+    "WB_RNP_OPEN_PERIOD_CURRENT_DATE_V1","WB_RNP_CURRENT_DATE_PROVISIONAL_WEEK_MONTH_V1",
     "WB_RNP_COMPLETED_DAY_WEEK_MONTH_ROLLUP_V1","WB_RNP_COMPLETED_DAY_WEEK_MONTH_ROLLUP_ROWS_V1",
     "OZON_PERF_TYPED_IDEMPOTENCY_V7", "comparison_sample:{daily:dailyMismatchSample,period:periodMismatchSample}",
     "SELLMONITOR_INNER_PRODUCT_SOURCE_ALIAS_V1",
