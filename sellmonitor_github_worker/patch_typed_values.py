@@ -361,13 +361,13 @@ if open_period_marker not in source:
         var daily=storeDayGroups_[d];
         if(daily&&daily.rows&&daily.rows.length)observedDays++;
         if(daily&&daily.exact)exactDays.push(d);
-        if(daily&&(daily.exact||isCurrentOpenPeriod))rows=rows.concat(daily.rows);
+        if(daily&&daily.rows&&daily.rows.length)rows=rows.concat(daily.rows); /* WB_RNP_COMPLETED_PERIOD_AVAILABLE_METRICS_V1 */
         if(expectedDays>400)throw new Error('WB_RNP_STORE_PERIOD_GUARD:'+grain+':'+period);
       }
     }
     var periodOpen=isCurrentOpenPeriod;
     var status=expectedDays===0?'🟡 ПРЕДВ.':(exactDays.length===expectedDays?(periodOpen?'🟡 ЧАСТИЧНО':'🟢 ФАКТ'):(exactDays.length?'🟡 ЧАСТИЧНО':(isCurrentOpenPeriod&&observedDays?'🟡 ПРЕДВ.':'🟠 НЕПОЛНЫЙ')));
-    var result={rows:rows,exact_days:exactDays.length,expected_days:expectedDays,observed_days:observedDays,allow_partial:isCurrentOpenPeriod,status:status};"""
+    var result={rows:rows,exact_days:exactDays.length,expected_days:expectedDays,observed_days:observedDays,allow_partial:(isCurrentOpenPeriod||exactDays.length!==expectedDays),status:status};"""
     source = replace_exact(source, period_rows_old, period_rows_new, 1, "WB open-period rows")
 
     # Keep observed current-date facts provisional in the open week/month; never count future dates.
@@ -613,7 +613,7 @@ required = [
     "SELLMONITOR_TYPED_VALUE_CANONICALIZER_V1", "OZON_SUMMARY_TYPED_CANONICALIZER_V1",
     "OZON_TYPED_NORMALIZER_CALL_SITES_V1", "OZON_PERF_SHARED_NUMBER_CANONICALIZER_V1",
     "OZON_SELLER_QTY_SHARED_CANONICALIZER_V1", "WB_RNP_TYPED_COMPARISON_V1",
-    "WB_RNP_OPEN_PERIOD_AVAILABLE_DAILY_V1",
+    "WB_RNP_OPEN_PERIOD_AVAILABLE_DAILY_V1","WB_RNP_COMPLETED_PERIOD_AVAILABLE_METRICS_V1",
     "WB_RNP_OPEN_PERIOD_CURRENT_DATE_V1","WB_RNP_CURRENT_DATE_PROVISIONAL_WEEK_MONTH_V1",
     "WB_RNP_COMPLETED_DAY_WEEK_MONTH_ROLLUP_V1","WB_RNP_COMPLETED_DAY_WEEK_MONTH_ROLLUP_ROWS_V1",
     "OZON_PERF_TYPED_IDEMPOTENCY_V7", "comparison_sample:{daily:dailyMismatchSample,period:periodMismatchSample}",
