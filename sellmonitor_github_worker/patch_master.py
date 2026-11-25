@@ -2359,6 +2359,99 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
         worker_text = worker_text.replace(duplicate_version_anchor, "VERSION: 'github-worker-" + duplicate_next + "'", 1)
         print("WB_RNP_EMPTY_DUPLICATE_AXIS=patched")
 
+
+    # Batch the verified archive and header clears for empty duplicate RNP columns.
+    duplicate_batch_marker = "WB_RNP_EMPTY_DUPLICATE_AXIS_BATCH_ARCHIVE_V1"
+    if duplicate_batch_marker not in worker_text:
+        duplicate_batch_open = "      if(duplicateAxisPeriods.length){"
+        if worker_text.count(duplicate_batch_open) != 1:
+            raise SystemExit("WB RNP duplicate-axis batch opening anchor mismatch")
+        worker_text = worker_text.replace(
+            duplicate_batch_open,
+            duplicate_batch_open + "\n        /* WB_RNP_EMPTY_DUPLICATE_AXIS_BATCH_ARCHIVE_V1 */\n        var duplicateAxisPendingClears=[];",
+            1,
+        )
+        duplicate_remove_old = """            var duplicateHeaderRange=sh.getRange(1,col,2,1);
+            var duplicateHeaderValues=duplicateHeaderRange.getValues().map(function(row){return row[0];});
+            var duplicateHeaderFormulas=duplicateHeaderRange.getFormulas().map(function(row){return row[0]||'';});
+            var duplicateHeaderSnapshot=duplicateHeaderValues.map(function(value,index){return {value:value,formula:duplicateHeaderFormulas[index]};});
+            archiveSnapshot(sh,col,period,'Удалена пустая дублирующая колонка оси; заголовки и формулы сохранены до очистки',2,duplicateHeaderSnapshot,false);
+            SpreadsheetApp.flush();
+            duplicateHeaderRange.clearContent();
+            SpreadsheetApp.flush();
+            if(!duplicateHeaderRange.isBlank())throw new Error('WB_RNP_AXIS_DUPLICATE_EMPTY_CLEAR_READBACK_FAILED:'+spec.name+':'+period+':'+col);
+            var duplicateHeadIndex=col-startCol;
+            if(duplicateHeadIndex>=0&&duplicateHeadIndex<heads.length)heads[duplicateHeadIndex]='';
+            actualAxis=actualAxis.filter(function(item){return item.col!==col;});
+            duplicateRemovedColumns.push(col);"""
+        duplicate_remove_new = """            var duplicateHeaderRange=sh.getRange(1,col,2,1);
+            var duplicateHeaderValues=duplicateHeaderRange.getValues().map(function(row){return row[0];});
+            var duplicateHeaderFormulas=duplicateHeaderRange.getFormulas().map(function(row){return row[0]||'';});
+            var duplicateHeaderSnapshot=duplicateHeaderValues.map(function(value,index){return {value:value,formula:duplicateHeaderFormulas[index]};});
+            archiveSnapshot(sh,col,period,'Удалена пустая дублирующая колонка оси; заголовки и формулы сохранены до очистки',2,duplicateHeaderSnapshot,true);
+            duplicateAxisPendingClears.push({period:period,col:col});
+            duplicateRemovedColumns.push(col);"""
+        if worker_text.count(duplicate_remove_old) != 1:
+            raise SystemExit("WB RNP duplicate-axis batch remove anchor mismatch")
+        worker_text = worker_text.replace(duplicate_remove_old, duplicate_remove_new, 1)
+        duplicate_batch_end_old = """          Logger.log('WB_RNP_AXIS_DUPLICATE_EMPTY_ARCHIVED:'+spec.name+':'+period+':removed='+duplicateRemovedColumns.join(',')+';kept='+duplicateKeepColumn);
+        });
+      }"""
+        duplicate_batch_end_new = """          Logger.log('WB_RNP_AXIS_DUPLICATE_EMPTY_ARCHIVED:'+spec.name+':'+period+':queued='+duplicateRemovedColumns.join(',')+';kept='+duplicateKeepColumn);
+        });
+        if(duplicateAxisPendingClears.length){
+          var duplicateArchiveCount=archiveWrite_(queuedArchiveRecords);
+          queuedArchiveRecords=[];
+          Logger.log('WB_RNP_AXIS_DUPLICATE_EMPTY_ARCHIVE_READBACK=verified:'+spec.name+':columns='+duplicateAxisPendingClears.length+';archiveRows='+duplicateArchiveCount);
+          var duplicateClearColumns=duplicateAxisPendingClears.map(function(item){return item.col;}).sort(function(a,b){return a-b;});
+          var duplicateClearSpans=[];
+          duplicateClearColumns.forEach(function(col){
+            var lastClearSpan=duplicateClearSpans[duplicateClearSpans.length-1];
+            if(!lastClearSpan||col>lastClearSpan.end+1)duplicateClearSpans.push({start:col,end:col});
+            else lastClearSpan.end=col;
+          });
+          for(var duplicateClearSpanIndex=0;duplicateClearSpanIndex<duplicateClearSpans.length;duplicateClearSpanIndex++){
+            var duplicateClearSpan=duplicateClearSpans[duplicateClearSpanIndex];
+            sh.getRange(1,duplicateClearSpan.start,2,duplicateClearSpan.end-duplicateClearSpan.start+1).clearContent();
+          }
+          SpreadsheetApp.flush();
+          for(var duplicateReadSpanIndex=0;duplicateReadSpanIndex<duplicateClearSpans.length;duplicateReadSpanIndex++){
+            var duplicateReadSpan=duplicateClearSpans[duplicateReadSpanIndex];
+            var duplicateReadRange=sh.getRange(1,duplicateReadSpan.start,2,duplicateReadSpan.end-duplicateReadSpan.start+1);
+            var duplicateReadValues=duplicateReadRange.getValues(),duplicateReadFormulas=duplicateReadRange.getFormulas();
+            for(var duplicateReadRow=0;duplicateReadRow<2;duplicateReadRow++){
+              for(var duplicateReadCol=0;duplicateReadCol<duplicateReadSpan.end-duplicateReadSpan.start+1;duplicateReadCol++){
+                if((duplicateReadValues[duplicateReadRow][duplicateReadCol]!==''&&duplicateReadValues[duplicateReadRow][duplicateReadCol]!==null)||String(duplicateReadFormulas[duplicateReadRow][duplicateReadCol]||'')){
+                  throw new Error('WB_RNP_AXIS_DUPLICATE_EMPTY_CLEAR_READBACK_FAILED:'+spec.name+':'+(duplicateReadSpan.start+duplicateReadCol));
+                }
+              }
+            }
+          }
+          duplicateClearColumns.forEach(function(col){
+            var duplicateHeadIndex=col-startCol;
+            if(duplicateHeadIndex>=0&&duplicateHeadIndex<heads.length)heads[duplicateHeadIndex]='';
+          });
+          actualAxis=actualAxis.filter(function(item){return duplicateClearColumns.indexOf(item.col)<0;});
+          Logger.log('WB_RNP_AXIS_DUPLICATE_EMPTY_CLEAR_READBACK=verified:'+spec.name+':columns='+duplicateClearColumns.join(','));
+        }
+      }"""
+        if worker_text.count(duplicate_batch_end_old) != 1:
+            raise SystemExit("WB RNP duplicate-axis batch close anchor mismatch")
+        worker_text = worker_text.replace(duplicate_batch_end_old, duplicate_batch_end_new, 1)
+        batch_versions = re.findall(r"VERSION:\s*'github-worker-(\d+)\.(\d+)\.(\d+)'", worker_text)
+        if len(batch_versions) != 1:
+            raise SystemExit("WB RNP duplicate-axis batch version pattern mismatch")
+        batch_major, batch_minor, batch_patch = [int(value) for value in batch_versions[0]]
+        batch_current = ".".join(str(value) for value in (batch_major, batch_minor, batch_patch))
+        batch_next = ".".join(str(value) for value in (batch_major, batch_minor, batch_patch + 1))
+        batch_version_anchor = "VERSION: 'github-worker-" + batch_current + "'"
+        if worker_text.count(batch_version_anchor) != 1:
+            raise SystemExit("WB RNP duplicate-axis batch version anchor mismatch")
+        worker_text = worker_text.replace(batch_version_anchor, "VERSION: 'github-worker-" + batch_next + "'", 1)
+        print("WB_RNP_EMPTY_DUPLICATE_AXIS_BATCH_ARCHIVE=patched")
+    elif "WB_RNP_AXIS_DUPLICATE_EMPTY_ARCHIVE_READBACK=verified" not in worker_text:
+        raise SystemExit("WB RNP duplicate-axis batch patch partial")
+
     worker.write_text(worker_text, encoding="utf-8")
     print("WORKER_TRIGGER_REFRESH_V2=patched")
 candidates = []
