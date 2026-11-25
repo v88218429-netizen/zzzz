@@ -339,7 +339,7 @@ if open_period_marker not in source:
     var currentWeekStart=storeAddDay_(today,-((todayDate.getUTCDay()+6)%7));
     var isCurrentOpenPeriod=(grain==='week'&&period===currentWeekStart)||(grain==='month'&&period===today.slice(0,7)+'-01');
     var first=storeSourceMin_&&storeSourceMin_>start?storeSourceMin_:start;
-    var last=isCurrentOpenPeriod?(end<today?end:today):(end<closedThrough?end:closedThrough);"""
+    var last=end<closedThrough?end:closedThrough;"""
     source = replace_exact(source, period_bounds_old, period_bounds_new, 1, "WB open-period bounds")
 
     period_rows_old = """    var expectedDays=0,exactDays=[],rows=[];
@@ -369,6 +369,23 @@ if open_period_marker not in source:
     var status=expectedDays===0?'🟡 ПРЕДВ.':(exactDays.length===expectedDays?(periodOpen?'🟡 ЧАСТИЧНО':'🟢 ФАКТ'):(exactDays.length?'🟡 ЧАСТИЧНО':(isCurrentOpenPeriod&&observedDays?'🟡 ПРЕДВ.':'🟠 НЕПОЛНЫЙ')));
     var result={rows:rows,exact_days:exactDays.length,expected_days:expectedDays,observed_days:observedDays,allow_partial:isCurrentOpenPeriod,status:status};"""
     source = replace_exact(source, period_rows_old, period_rows_new, 1, "WB open-period rows")
+
+    # Keep today's partial facts in the daily layer, but exclude them from week/month rollups.
+    complete_period_marker = "WB_RNP_COMPLETED_DAY_WEEK_MONTH_ROLLUP_V1"
+    complete_rows_marker = "WB_RNP_COMPLETED_DAY_WEEK_MONTH_ROLLUP_ROWS_V1"
+    if complete_period_marker not in source:
+        completed_anchor = "  var dayRows=[],weekGroups={},monthGroups={};"
+        completed_replacement = """  var dayRows=[],weekGroups={},monthGroups={};
+  /* WB_RNP_COMPLETED_DAY_WEEK_MONTH_ROLLUP_V1 */
+  var completedThrough=sellmonitorGithubWbInnerAddDays_(sellmonitorGithubWbInnerDateKey_(new Date(),tz),-1);"""
+        source = replace_exact(source, completed_anchor, completed_replacement, 1, "WB completed-period setup")
+        completed_rows_anchor = "    var ws=sellmonitorGithubWbInnerWeekStart_(x.day),ms=sellmonitorGithubWbInnerMonthStart_(x.day),wk=ws+'|'+x.nm,mk=ms+'|'+x.nm;"
+        completed_rows_replacement = completed_rows_anchor + """
+    /* WB_RNP_COMPLETED_DAY_WEEK_MONTH_ROLLUP_ROWS_V1 */
+    if(x.day>completedThrough)return;"""
+        source = replace_exact(source, completed_rows_anchor, completed_rows_replacement, 1, "WB completed-period rows")
+    elif complete_rows_marker not in source:
+        raise SystemExit("WB completed-period rollup patch incomplete")
 
     aggregate_old = """  function storeStrictSum_(rows,field){
     var idx=metricIx[field];
@@ -488,6 +505,7 @@ required = [
     "OZON_TYPED_NORMALIZER_CALL_SITES_V1", "OZON_PERF_SHARED_NUMBER_CANONICALIZER_V1",
     "OZON_SELLER_QTY_SHARED_CANONICALIZER_V1", "WB_RNP_TYPED_COMPARISON_V1",
     "WB_RNP_OPEN_PERIOD_AVAILABLE_DAILY_V1",
+    "WB_RNP_COMPLETED_DAY_WEEK_MONTH_ROLLUP_V1","WB_RNP_COMPLETED_DAY_WEEK_MONTH_ROLLUP_ROWS_V1",
     "OZON_PERF_TYPED_IDEMPOTENCY_V7", "comparison_sample:{daily:dailyMismatchSample,period:periodMismatchSample}",
     "SELLMONITOR_INNER_PRODUCT_SOURCE_ALIAS_V1",
     "SELLMONITOR_INNER_TYPED_METRIC_V1", "SELLMONITOR_INNER_TYPED_ID_WRITE_V1",
