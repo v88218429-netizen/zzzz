@@ -534,7 +534,81 @@ if open_period_marker not in source:
 elif "function storeAvailableRatio_(" not in source:
     raise SystemExit("WB_RNP_OPEN_PERIOD_PATCH_PARTIAL")
 
+
+ozon_notes_marker = "OZON_HELPER_NOTES_ARITY_FIX_V1"
+if ozon_notes_marker not in source:
+    note_old = """          [commonCoverage,'Штуки суммируются по строкам заказа; текущий день включается только по фактическим строкам API и не считается завершённым.']
+          ['Нет надёжного источника суммы заказов в выгрузке Ozon Seller API.','Пусто = неизвестно, не ноль; рекламная выручка не подставляется.'],"""
+    note_new = """          [commonCoverage,'Штуки суммируются по строкам заказа; текущий день включается только по фактическим строкам API и не считается завершённым.'],
+          ['Нет надёжного источника суммы заказов в выгрузке Ozon Seller API.','Пусто = неизвестно, не ноль; рекламная выручка не подставляется.'],"""
+    if note_old in source:
+        source = replace_exact(source, note_old, note_new, 1, "Ozon helper notes row count")
+    elif note_new not in source:
+        raise SystemExit("Ozon helper notes anchor changed")
+    if ozon_notes_marker not in source:
+        source = replace_exact(source, "        var newNotes=[", "        /* " + ozon_notes_marker + " */\n        var newNotes=[", 1, "Ozon helper notes marker")
+
+ozon_archive_marker = "OZON_ARCHIVE_IDEMPOTENCY_V1"
+if ozon_archive_marker not in source:
+    archive_old = """function sellmonitorGithubOzonArchive_(archive, target, rangeA1, oldRows, sourceUpdated, archiveId) {
+  if (!oldRows || !oldRows.length) return 0;
+  var start = Math.max(2, archive.getLastRow()+1);
+  sellmonitorGithubOzonEnsureRows_(archive, start + oldRows.length - 1);
+  var stamp = new Date();
+  var payload = oldRows.map(function(row, i) {
+    return [archiveId, stamp, target, rangeA1, i+1, sourceUpdated, JSON.stringify(row)];
+  });
+  archive.getRange(start, 1, payload.length, 7).setValues(payload);
+  var check = archive.getRange(start, 1, payload.length, 7).getValues();
+  if (check.length !== payload.length || check.some(function(r, i) { return String(r[0]) !== archiveId || String(r[6]) !== JSON.stringify(oldRows[i]); })) {
+    throw new Error('OZON_ARCHIVE_READBACK_MISMATCH:' + target + ':' + rangeA1);
+  }
+  return payload.length;
+}"""
+    archive_new = """function sellmonitorGithubOzonArchive_(archive, target, rangeA1, oldRows, sourceUpdated, archiveId) {
+  if (!oldRows || !oldRows.length) return 0;
+  /* OZON_ARCHIVE_IDEMPOTENCY_V1 */
+  var expected = oldRows.map(function(row) { return JSON.stringify(row); });
+  var lastArchiveRow = archive.getLastRow();
+  if (lastArchiveRow > 1) {
+    var prior = archive.getRange(2, 1, lastArchiveRow-1, 7).getValues();
+    var groups = Object.create(null);
+    prior.forEach(function(r) {
+      if (String(r[2]||'') !== String(target) || String(r[3]||'') !== String(rangeA1)) return;
+      var id = String(r[0]||''), rowIndex = Number(r[4]);
+      if (!id || !isFinite(rowIndex) || rowIndex < 1 || Math.floor(rowIndex) !== rowIndex || rowIndex > expected.length) return;
+      var group = groups[id] || (groups[id] = []);
+      group[rowIndex-1] = String(r[6]||'');
+    });
+    var alreadyArchived = Object.keys(groups).some(function(id) {
+      var group = groups[id];
+      if (group.length !== expected.length) return false;
+      for (var i=0; i<expected.length; i++) {
+        if (!Object.prototype.hasOwnProperty.call(group,i) || group[i] !== expected[i]) return false;
+      }
+      return true;
+    });
+    if (alreadyArchived) return 0;
+  }
+  var operationId = 'ozon-' + sellmonitorGithubOzonHash_({target:String(target),range:String(rangeA1),rows:oldRows});
+  var start = Math.max(2, archive.getLastRow()+1);
+  sellmonitorGithubOzonEnsureRows_(archive, start + oldRows.length - 1);
+  var stamp = new Date();
+  var payload = oldRows.map(function(row, i) {
+    return [operationId, stamp, target, rangeA1, i+1, sourceUpdated, JSON.stringify(row)];
+  });
+  archive.getRange(start, 1, payload.length, 7).setValues(payload);
+  var check = archive.getRange(start, 1, payload.length, 7).getValues();
+  if (check.length !== payload.length || check.some(function(r, i) { return String(r[0]) !== operationId || String(r[6]) !== expected[i]; })) {
+    throw new Error('OZON_ARCHIVE_READBACK_MISMATCH:' + target + ':' + rangeA1);
+  }
+  return payload.length;
+}"""
+    source = replace_exact(source, archive_old, archive_new, 1, "Ozon archive idempotency")
+
 required = [
+    "OZON_HELPER_NOTES_ARITY_FIX_V1",
+    "OZON_ARCHIVE_IDEMPOTENCY_V1",
     "OZON_SUMMARY_SKU_IDS_AS_TEXT_V1", "OZON_SUMMARY_SKU_ID_READBACK_V1",
     "SELLMONITOR_TYPED_VALUE_CANONICALIZER_V1", "OZON_SUMMARY_TYPED_CANONICALIZER_V1",
     "OZON_TYPED_NORMALIZER_CALL_SITES_V1", "OZON_PERF_SHARED_NUMBER_CANONICALIZER_V1",
