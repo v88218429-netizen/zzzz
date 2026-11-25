@@ -1062,58 +1062,14 @@ def main():
             stock_value,
             "Закупки нет в UDS API — укажите себестоимость продаваемой единицы в H.",
             "",
-            "=$V$6",
-            "=$V$7",
-            "=$V$2",
-            "=$V$3",
-            f'=IF(OR(D{row_number}="";H{row_number}="");"";D{row_number}*(1-J{row_number})*(1-K{row_number}-L{row_number})-H{row_number}-I{row_number})',
-            f'=IF(M{row_number}="";"";MAX(0;M{row_number})*$V$4)',
-            f'=IF(M{row_number}="";"";M{row_number}-N{row_number})',
-            f'=IFERROR(O{row_number}/(D{row_number}*(1-J{row_number}));"")',
-            f'=IF(OR(H{row_number}="";((1-J{row_number})*(1-K{row_number}-L{row_number})*(1-$V$4)-$V$5)<=0);"";ROUNDUP((H{row_number}+I{row_number})*(1-$V$4)/((1-J{row_number})*((1-K{row_number}-L{row_number})*(1-$V$4)-$V$5))/10;0)*10)',
-            f'=IF(OR(D{row_number}="";Q{row_number}="");"";MAX(D{row_number};Q{row_number}))',
-            "UDS Partner API · " + stamp + "; введите закупку в H для расчёта цены",
         ]
         direct_unitka_new_rows.append((row_number, new_row))
         direct_unitka_expected.append((row_number, sku, price))
 
-    # Expand the direct UDS unitka and copy its established row formatting to appended products.
-    direct_sheet_props = workbook["props"]["UDS — Юнитка без Ozon"]
-    direct_sheet_id = direct_sheet_props["sheetId"]
-    direct_grid = direct_sheet_props.get("gridProperties", {})
-    direct_structure_requests = []
-    if next_direct_row - 1 > int(direct_grid.get("rowCount", 0)):
-        direct_structure_requests.append({
-            "updateSheetProperties": {
-                "properties": {
-                    "sheetId": direct_sheet_id,
-                    "gridProperties": {"rowCount": next_direct_row + 50},
-                },
-                "fields": "gridProperties.rowCount",
-            }
-        })
-    for row_number, _ in direct_unitka_new_rows:
-        direct_structure_requests.append({
-            "copyPaste": {
-                "source": {
-                    "sheetId": direct_sheet_id,
-                    "startRowIndex": 1,
-                    "endRowIndex": 2,
-                    "startColumnIndex": 0,
-                    "endColumnIndex": 19,
-                },
-                "destination": {
-                    "sheetId": direct_sheet_id,
-                    "startRowIndex": row_number - 1,
-                    "endRowIndex": row_number,
-                    "startColumnIndex": 0,
-                    "endColumnIndex": 19,
-                },
-                "pasteType": "PASTE_FORMAT",
-                "pasteOrientation": "NORMAL",
-            }
-        })
-    google_batch_update(access_token, direct_structure_requests)
+    # The direct UDS unitka has formulas prefilled down its reserved rows.
+    direct_grid_rows = int(workbook["props"]["UDS — Юнитка без Ozon"].get("gridProperties", {}).get("rowCount", 0))
+    if next_direct_row - 1 > direct_grid_rows:
+        raise RuntimeError("UDS direct unitka reached its prefilled row capacity")
 
     # Expand catalog grid only if needed.
     catalog_sheet_id = workbook["props"]["UDS — КАТАЛОГ (88)"]["sheetId"]
@@ -1141,10 +1097,11 @@ def main():
         add_value(first_writes, "UDS — Юнитка без Ozon", f"S{row_number}", source_note)
     for row_number, new_row in direct_unitka_new_rows:
         first_writes.append({
-            "range": f"'UDS — Юнитка без Ozon'!A{row_number}:S{row_number}",
+            "range": f"'UDS — Юнитка без Ozon'!A{row_number}:H{row_number}",
             "majorDimension": "ROWS",
             "values": [new_row],
         })
+        add_value(first_writes, "UDS — Юнитка без Ozon", f"S{row_number}", "UDS Partner API · " + stamp + "; введите закупку в H для расчёта цены")
     for row_number, price in model_writes:
         add_value(first_writes, "ЮНИТКА", f"J{row_number}", price)
     for q in uds_unitka_clears:
