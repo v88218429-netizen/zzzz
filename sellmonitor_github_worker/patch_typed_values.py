@@ -719,7 +719,7 @@ if ozon_readback_archive_marker not in source:
         raise SystemExit("Ozon chunked readback anchor changed")
     if "OZON_ARCHIVE_IDEMPOTENCY_V2" not in source or "OZON_CHUNKED_READBACK_V1" not in source:
         raise SystemExit("Ozon bounded readback markers missing")
-    version = re.search(r"VERSION:\\s*'github-worker-(\\d+)\\.(\\d+)\\.(\\d+)'", source)
+    version = re.search(r"VERSION:\s*'github-worker-(\d+)\.(\d+)\.(\d+)'", source)
     if not version:
         raise SystemExit("worker version missing for Ozon bounded readback release")
     major, minor, patch = map(int, version.groups())
