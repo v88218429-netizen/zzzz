@@ -604,11 +604,134 @@ if ozon_archive_marker not in source:
   }
   return payload.length;
 }"""
+
     source = replace_exact(source, archive_old, archive_new, 1, "Ozon archive idempotency")
+
+ozon_readback_archive_marker = "OZON_CHUNKED_READBACK_ARCHIVE_V1"
+if ozon_readback_archive_marker not in source:
+    archive_v1 = """function sellmonitorGithubOzonArchive_(archive, target, rangeA1, oldRows, sourceUpdated, archiveId) {
+  if (!oldRows || !oldRows.length) return 0;
+  /* OZON_ARCHIVE_IDEMPOTENCY_V1 */
+  var expected = oldRows.map(function(row) { return JSON.stringify(row); });
+  var lastArchiveRow = archive.getLastRow();
+  if (lastArchiveRow > 1) {
+    var prior = archive.getRange(2, 1, lastArchiveRow-1, 7).getValues();
+    var groups = Object.create(null);
+    prior.forEach(function(r) {
+      if (String(r[2]||'') !== String(target) || String(r[3]||'') !== String(rangeA1)) return;
+      var id = String(r[0]||''), rowIndex = Number(r[4]);
+      if (!id || !isFinite(rowIndex) || rowIndex < 1 || Math.floor(rowIndex) !== rowIndex || rowIndex > expected.length) return;
+      var group = groups[id] || (groups[id] = []);
+      group[rowIndex-1] = String(r[6]||'');
+    });
+    var alreadyArchived = Object.keys(groups).some(function(id) {
+      var group = groups[id];
+      if (group.length !== expected.length) return false;
+      for (var i=0; i<expected.length; i++) {
+        if (!Object.prototype.hasOwnProperty.call(group,i) || group[i] !== expected[i]) return false;
+      }
+      return true;
+    });
+    if (alreadyArchived) return 0;
+  }
+  var operationId = 'ozon-' + sellmonitorGithubOzonHash_({target:String(target),range:String(rangeA1),rows:oldRows});
+  var start = Math.max(2, archive.getLastRow()+1);
+  sellmonitorGithubOzonEnsureRows_(archive, start + oldRows.length - 1);
+  var stamp = new Date();
+  var payload = oldRows.map(function(row, i) {
+    return [operationId, stamp, target, rangeA1, i+1, sourceUpdated, JSON.stringify(row)];
+  });
+  archive.getRange(start, 1, payload.length, 7).setValues(payload);
+  var check = archive.getRange(start, 1, payload.length, 7).getValues();
+  if (check.length !== payload.length || check.some(function(r, i) { return String(r[0]) !== operationId || String(r[6]) !== expected[i]; })) {
+    throw new Error('OZON_ARCHIVE_READBACK_MISMATCH:' + target + ':' + rangeA1);
+  }
+  return payload.length;
+}"""
+    archive_v2 = """function sellmonitorGithubOzonArchive_(archive, target, rangeA1, oldRows, sourceUpdated, archiveId) {
+  if (!oldRows || !oldRows.length) return 0;
+  /* OZON_ARCHIVE_IDEMPOTENCY_V2 */
+  var operationId = 'ozon-' + sellmonitorGithubOzonHash_({target:String(target),range:String(rangeA1),rows:oldRows});
+  var expected = oldRows.map(function(row) { return JSON.stringify(row); });
+  var existing = Object.create(null), lastArchiveRow = archive.getLastRow();
+  var rowsPerChunk = Math.max(1, Math.floor(20000 / 7));
+  if (lastArchiveRow > 1) {
+    var matches = archive.getRange(2,1,lastArchiveRow-1,1).createTextFinder(operationId).matchEntireCell(true).findAll();
+    if (matches.length) {
+      var matchedRows = matches.map(function(cell){return cell.getRow();}).sort(function(a,b){return a-b;});
+      var minRow = matchedRows[0], maxRow = matchedRows[matchedRows.length-1];
+      for (var scan=minRow; scan<=maxRow; scan+=rowsPerChunk) {
+        var scanCount = Math.min(rowsPerChunk,maxRow-scan+1);
+        var prior = archive.getRange(scan,1,scanCount,7).getValues();
+        prior.forEach(function(r) {
+          if (String(r[0]||'') !== operationId) return;
+          var rowIndex=Number(r[4]);
+          if (!isFinite(rowIndex) || rowIndex < 1 || Math.floor(rowIndex)!==rowIndex || rowIndex>expected.length)
+            throw new Error('OZON_ARCHIVE_OPERATION_INDEX_INVALID:'+target+':'+rangeA1);
+          if (String(r[2]||'')!==String(target) || String(r[3]||'')!==String(rangeA1) || String(r[6]||'')!==expected[rowIndex-1])
+            throw new Error('OZON_ARCHIVE_OPERATION_READBACK_MISMATCH:'+target+':'+rangeA1+':'+rowIndex);
+          if (existing[rowIndex]) throw new Error('OZON_ARCHIVE_OPERATION_DUPLICATE:'+target+':'+rangeA1+':'+rowIndex);
+          existing[rowIndex]=true;
+        });
+      }
+    }
+  }
+  var stamp=new Date(),payload=[];
+  for(var i=0;i<oldRows.length;i++)if(!existing[i+1])
+    payload.push([operationId,stamp,target,rangeA1,i+1,sourceUpdated,expected[i]]);
+  if(!payload.length)return 0;
+  var start=Math.max(2,archive.getLastRow()+1);
+  sellmonitorGithubOzonEnsureRows_(archive,start+payload.length-1);
+  for(var off=0;off<payload.length;off+=rowsPerChunk){
+    var chunk=payload.slice(off,off+rowsPerChunk),at=start+off;
+    archive.getRange(at,1,chunk.length,7).setValues(chunk);
+    var check=archive.getRange(at,1,chunk.length,7).getValues();
+    if(check.length!==chunk.length||check.some(function(r,j){
+      return String(r[0])!==operationId||String(r[2])!==String(target)||String(r[3])!==String(rangeA1)||
+        Number(r[4])!==Number(chunk[j][4])||String(r[6])!==String(chunk[j][6]);
+    }))throw new Error('OZON_ARCHIVE_READBACK_MISMATCH:'+target+':'+rangeA1+':'+off);
+  }
+  return payload.length;
+}"""
+    if archive_v1 in source:
+        source = replace_exact(source, archive_v1, archive_v2, 1, "Ozon archive idempotency v2")
+    elif "OZON_ARCHIVE_IDEMPOTENCY_V2" not in source:
+        raise SystemExit("Ozon archive migration anchor changed")
+    rows_old = """function sellmonitorGithubOzonRows_(sheet, row, col, width) {
+  var last = sellmonitorGithubOzonLastValueRow_(sheet,col);
+  if (last < row) return [];
+  return sheet.getRange(row, col, last-row+1, width).getValues();
+}"""
+    rows_new = """function sellmonitorGithubOzonRows_(/* OZON_CHUNKED_READBACK_V1 */sheet, row, col, width) {
+  var last=sellmonitorGithubOzonLastValueRow_(sheet,col);
+  if(last<row)return [];
+  var total=last-row+1,chunkRows=Math.max(1,Math.floor(20000/Math.max(1,width))),out=[];
+  for(var off=0;off<total;off+=chunkRows){
+    var count=Math.min(chunkRows,total-off),part=sheet.getRange(row+off,col,count,width).getValues();
+    if(part.length!==count)throw new Error('OZON_CHUNKED_READBACK_ROW_COUNT:'+sheet.getName()+':'+(row+off));
+    for(var i=0;i<part.length;i++)out.push(part[i]);
+  }
+  return out;
+}"""
+    if rows_old in source:
+        source = replace_exact(source, rows_old, rows_new, 1, "Ozon chunked readback")
+    elif "OZON_CHUNKED_READBACK_V1" not in source:
+        raise SystemExit("Ozon chunked readback anchor changed")
+    if "OZON_ARCHIVE_IDEMPOTENCY_V2" not in source or "OZON_CHUNKED_READBACK_V1" not in source:
+        raise SystemExit("Ozon bounded readback markers missing")
+    version = re.search(r"VERSION:\\s*'github-worker-(\\d+)\\.(\\d+)\\.(\\d+)'", source)
+    if not version:
+        raise SystemExit("worker version missing for Ozon bounded readback release")
+    major, minor, patch = map(int, version.groups())
+    next_version = "github-worker-" + str(major) + "." + str(minor) + "." + str(patch + 1)
+    source = source[:version.start()] + "VERSION: '" + next_version + "'" + source[version.end():]
+    source = source.replace("function sellmonitorGithubOzonRows_(", "function sellmonitorGithubOzonRows_(/* OZON_CHUNKED_READBACK_ARCHIVE_V1 */", 1)
+    print("OZON_CHUNKED_READBACK_ARCHIVE=patched")
 
 required = [
     "OZON_HELPER_NOTES_ARITY_FIX_V1",
     "OZON_ARCHIVE_IDEMPOTENCY_V1",
+    "OZON_ARCHIVE_IDEMPOTENCY_V2","OZON_CHUNKED_READBACK_V1","OZON_CHUNKED_READBACK_ARCHIVE_V1",
     "OZON_SUMMARY_SKU_IDS_AS_TEXT_V1", "OZON_SUMMARY_SKU_ID_READBACK_V1",
     "SELLMONITOR_TYPED_VALUE_CANONICALIZER_V1", "OZON_SUMMARY_TYPED_CANONICALIZER_V1",
     "OZON_TYPED_NORMALIZER_CALL_SITES_V1", "OZON_PERF_SHARED_NUMBER_CANONICALIZER_V1",
