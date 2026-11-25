@@ -2274,6 +2274,91 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
         worker_text = worker_text.replace(daily_version_anchor, "VERSION: 'github-worker-" + daily_next + "'", 1)
         print("WB_INNER_DAILY_ONLY_SUMMARY=patched")
 
+
+    # Remove only duplicate RNP date columns with no metric data below the header.
+    # Archive the two header cells in the existing in-book RNP archive before clearing them.
+    duplicate_axis_marker = "WB_RNP_EMPTY_DUPLICATE_AXIS_V1"
+    if duplicate_axis_marker not in worker_text:
+        duplicate_axis_anchor = "      Object.keys(existingColumns).forEach(function(period){if(existingColumns[period].length>1)throw new Error('WB_RNP_AXIS_DUPLICATE_HEADER:'+spec.name+':'+period);});"
+        duplicate_axis_replacement = """      /* WB_RNP_EMPTY_DUPLICATE_AXIS_V1 */
+      var duplicateAxisPeriods=Object.keys(existingColumns).filter(function(period){return existingColumns[period].length>1;});
+      if(duplicateAxisPeriods.length){
+        var duplicateAxisColumns=[];
+        duplicateAxisPeriods.forEach(function(period){duplicateAxisColumns=duplicateAxisColumns.concat(existingColumns[period]);});
+        duplicateAxisColumns=duplicateAxisColumns.filter(function(col,index,all){return all.indexOf(col)===index;}).sort(function(a,b){return a-b;});
+        var duplicateAxisSpans=[];
+        duplicateAxisColumns.forEach(function(col){
+          var lastSpan=duplicateAxisSpans[duplicateAxisSpans.length-1];
+          if(!lastSpan||col>lastSpan.end+1)duplicateAxisSpans.push({start:col,end:col});
+          else lastSpan.end=col;
+        });
+        var duplicateAxisHasData=Object.create(null);
+        var duplicateAxisLast=sh.getLastRow();
+        for(var duplicateSpanIndex=0;duplicateSpanIndex<duplicateAxisSpans.length;duplicateSpanIndex++){
+          var duplicateSpan=duplicateAxisSpans[duplicateSpanIndex];
+          var pendingDuplicateColumns=Object.create(null);
+          duplicateAxisColumns.forEach(function(col){if(col>=duplicateSpan.start&&col<=duplicateSpan.end)pendingDuplicateColumns[col]=true;});
+          for(var duplicateRowStart=3;duplicateRowStart<=duplicateAxisLast&&Object.keys(pendingDuplicateColumns).length;duplicateRowStart+=1200){
+            var duplicateRowCount=Math.min(1200,duplicateAxisLast-duplicateRowStart+1);
+            var duplicateRange=sh.getRange(duplicateRowStart,duplicateSpan.start,duplicateRowCount,duplicateSpan.end-duplicateSpan.start+1);
+            var duplicateValues=duplicateRange.getValues(),duplicateFormulas=duplicateRange.getFormulas();
+            for(var duplicateRow=0;duplicateRow<duplicateValues.length;duplicateRow++){
+              for(var duplicateOffset=0;duplicateOffset<duplicateSpan.end-duplicateSpan.start+1;duplicateOffset++){
+                var duplicateColumn=duplicateSpan.start+duplicateOffset;
+                if(!pendingDuplicateColumns[duplicateColumn])continue;
+                var duplicateValue=duplicateValues[duplicateRow][duplicateOffset],duplicateFormula=duplicateFormulas[duplicateRow][duplicateOffset];
+                if((duplicateValue!==''&&duplicateValue!==null)||String(duplicateFormula||'')){
+                  duplicateAxisHasData[duplicateColumn]=true;
+                  delete pendingDuplicateColumns[duplicateColumn];
+                }
+              }
+            }
+          }
+          Object.keys(pendingDuplicateColumns).forEach(function(col){duplicateAxisHasData[col]=false;});
+        }
+        duplicateAxisPeriods.forEach(function(period){
+          var duplicatePeriodColumns=existingColumns[period].slice().sort(function(a,b){return a-b;});
+          var duplicatePopulatedColumns=duplicatePeriodColumns.filter(function(col){return duplicateAxisHasData[col]===true;});
+          if(duplicatePopulatedColumns.length>1)throw new Error('WB_RNP_AXIS_DUPLICATE_DATA_CONFLICT:'+spec.name+':'+period+':'+duplicatePopulatedColumns.join(','));
+          var duplicateKeepColumn=duplicatePopulatedColumns.length?duplicatePopulatedColumns[0]:duplicatePeriodColumns[0];
+          var duplicateRemovedColumns=[];
+          duplicatePeriodColumns.forEach(function(col){
+            if(col===duplicateKeepColumn)return;
+            if(duplicateAxisHasData[col]===true)throw new Error('WB_RNP_AXIS_DUPLICATE_DATA_CONFLICT:'+spec.name+':'+period+':'+col);
+            var duplicateHeaderRange=sh.getRange(1,col,2,1);
+            var duplicateHeaderValues=duplicateHeaderRange.getValues().map(function(row){return row[0];});
+            var duplicateHeaderFormulas=duplicateHeaderRange.getFormulas().map(function(row){return row[0]||'';});
+            var duplicateHeaderSnapshot=duplicateHeaderValues.map(function(value,index){return {value:value,formula:duplicateHeaderFormulas[index]};});
+            archiveSnapshot(sh,col,period,'Удалена пустая дублирующая колонка оси; заголовки и формулы сохранены до очистки',2,duplicateHeaderSnapshot,false);
+            SpreadsheetApp.flush();
+            duplicateHeaderRange.clearContent();
+            SpreadsheetApp.flush();
+            if(!duplicateHeaderRange.isBlank())throw new Error('WB_RNP_AXIS_DUPLICATE_EMPTY_CLEAR_READBACK_FAILED:'+spec.name+':'+period+':'+col);
+            var duplicateHeadIndex=col-startCol;
+            if(duplicateHeadIndex>=0&&duplicateHeadIndex<heads.length)heads[duplicateHeadIndex]='';
+            actualAxis=actualAxis.filter(function(item){return item.col!==col;});
+            duplicateRemovedColumns.push(col);
+          });
+          existingColumns[period]=[duplicateKeepColumn];
+          Logger.log('WB_RNP_AXIS_DUPLICATE_EMPTY_ARCHIVED:'+spec.name+':'+period+':removed='+duplicateRemovedColumns.join(',')+';kept='+duplicateKeepColumn);
+        });
+      }
+"""
+        if worker_text.count(duplicate_axis_anchor) != 1:
+            raise SystemExit("WB RNP duplicate-axis cleanup anchor mismatch")
+        worker_text = worker_text.replace(duplicate_axis_anchor, duplicate_axis_replacement, 1)
+        duplicate_versions = re.findall(r"VERSION:\s*'github-worker-(\d+)\.(\d+)\.(\d+)'", worker_text)
+        if len(duplicate_versions) != 1:
+            raise SystemExit("WB RNP duplicate-axis cleanup version pattern mismatch")
+        duplicate_major, duplicate_minor, duplicate_patch = [int(value) for value in duplicate_versions[0]]
+        duplicate_current = ".".join(str(value) for value in (duplicate_major, duplicate_minor, duplicate_patch))
+        duplicate_next = ".".join(str(value) for value in (duplicate_major, duplicate_minor, duplicate_patch + 1))
+        duplicate_version_anchor = "VERSION: 'github-worker-" + duplicate_current + "'"
+        if worker_text.count(duplicate_version_anchor) != 1:
+            raise SystemExit("WB RNP duplicate-axis cleanup version anchor mismatch")
+        worker_text = worker_text.replace(duplicate_version_anchor, "VERSION: 'github-worker-" + duplicate_next + "'", 1)
+        print("WB_RNP_EMPTY_DUPLICATE_AXIS=patched")
+
     worker.write_text(worker_text, encoding="utf-8")
     print("WORKER_TRIGGER_REFRESH_V2=patched")
 candidates = []
