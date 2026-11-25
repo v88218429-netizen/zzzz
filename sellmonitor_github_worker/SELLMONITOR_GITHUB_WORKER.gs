@@ -6221,24 +6221,25 @@ function sellmonitorGithubPublishOzonSummaryOrders_(payload) {
     /* OZON_STORE_ORDER_HELPERS_V1 */
     var ozonStoreHelperChecks=[];
     if(apiMode&&apiPagesComplete){
-      var helperData={day:{},week:{},month:{}},helperLastFull=lastFullDay||'';
-      function addClosedOrderPeriod_(kind,start,end,values){
+      /* OZON_OPEN_PERIOD_INCLUDES_PROVISIONAL_TODAY_V1 */
+      var helperData={day:{},week:{},month:{}},helperLastFull=lastFullDay||'',helperLastAvailable=agg.maxDay||'';
+      function addObservedOrderPeriod_(kind,start,end,values){
         var key=start+'|'+end,slot=helperData[kind][key]||(helperData[kind][key]=[0,0,0]);
         for(var metric=0;metric<3;metric++)slot[metric]+=Number(values[metric])||0;
       }
       agg.summary.forEach(function(r){
         if(String(r[0]||'')!=='День'||!r[1])return;
         var day=String(r[1]);
-        if(!helperLastFull||day>helperLastFull)return;
+        if(day>today)return;
         var dayValues=[Number(r[3])||0,Number(r[4])||0,Number(r[5])||0];
-        addClosedOrderPeriod_('day',day,day,dayValues);
+        addObservedOrderPeriod_('day',day,day,dayValues);
         var weekStart=sellmonitorGithubOzonWeekStart_(day);
-        addClosedOrderPeriod_('week',weekStart,sellmonitorGithubOzonShiftDay_(weekStart,6),dayValues);
+        addObservedOrderPeriod_('week',weekStart,sellmonitorGithubOzonShiftDay_(weekStart,6),dayValues);
         var monthStart=day.slice(0,7)+'-01';
-        addClosedOrderPeriod_('month',monthStart,sellmonitorGithubOzonMonthEnd_(monthStart),dayValues);
+        addObservedOrderPeriod_('month',monthStart,sellmonitorGithubOzonMonthEnd_(monthStart),dayValues);
       });
       var helperAdCoverage=adMin&&adMax?adMin+'–'+adMax:'нет подтверждённых строк';
-      var helperNote=newOrderFreshnessNote+' В неполных неделе и месяце сумма рассчитана только по закрытым датам до '+(helperLastFull||'нет подтверждённой даты')+'; текущий неполный день исключён.';
+      var helperNote=newOrderFreshnessNote+' Закрытая дата с данными — '+(helperLastFull||'не подтверждена')+'. В текущей неполной неделе и месяце учтены фактические строки до '+(helperLastAvailable||'нет строк источника')+'; текущий день остаётся предварительным и не считается завершённым.';
       var helperSpecsForOrders=[
         {name:'06_Магазин_дни',kind:'day'},
         {name:'07_Магазин_недели',kind:'week'},
@@ -6263,16 +6264,16 @@ function sellmonitorGithubPublishOzonSummaryOrders_(payload) {
         ];
         var commonCoverage='Ozon Seller API; строки всех страниц; покрытие '+coverageFrom+'–'+coverageTo+'; последняя полная дата '+(helperLastFull||'не подтверждена');
         var newNotes=[
-          [commonCoverage,'Полные завершённые дни и периоды; ноль означает отсутствие заказов в полном ответе API.'],
-          [commonCoverage,'Уникальный ключ отправления — кабинет + posting number.'],
-          [commonCoverage,'Штуки суммируются по строкам заказа; текущий неполный период оставлен пустым.'],
+          [commonCoverage,'Закрытые даты агрегируются по полному ответу API; строки текущего дня, если они уже получены, включаются в открытые неделю и месяц предварительно.'],
+          [commonCoverage,'Уникальный ключ отправления — кабинет + posting number; текущая неполная дата имеет предварительный статус.'],
+          [commonCoverage,'Штуки суммируются по строкам заказа; текущий день включается только по фактическим строкам API и не считается завершённым.']
           ['Нет надёжного источника суммы заказов в выгрузке Ozon Seller API.','Пусто = неизвестно, не ноль; рекламная выручка не подставляется.'],
           ['Нет надёжного источника отмен в этой выгрузке.','Пусто = неизвестно, не ноль.']
         ];
         var newSeries=Array.from({length:5},function(){return Array(periodCount).fill('');});
         for(var c=0;c<periodCount;c++){
           var period=sellmonitorGithubOzonPerfParsePeriod_(spec.kind,headers[c],shown[c]);
-          if(!period||period.from>coverageTo||period.to<coverageFrom||!helperLastFull||period.from>helperLastFull)continue;
+          if(!period||period.from>coverageTo||period.to<coverageFrom||!helperLastAvailable||period.from>helperLastAvailable)continue;
           var key=period.from+'|'+period.to,values=helperData[spec.kind][key]||[0,0,0];
           newSeries[0][c]=values[0];
           newSeries[1][c]=values[1];
@@ -6297,7 +6298,7 @@ function sellmonitorGithubPublishOzonSummaryOrders_(payload) {
         var checkNote=String(sh.getRange('A1').getValue()||'');
         if(JSON.stringify(checkLabels)!==JSON.stringify(newLabels)||JSON.stringify(checkNotes)!==JSON.stringify(newNotes)||JSON.stringify(checkSeries)!==JSON.stringify(newSeries)||checkNote!==helperNote)
           throw new Error('OZON_STORE_ORDER_HELPER_READBACK_MISMATCH:'+cfg.name+':'+spec.name);
-        ozonStoreHelperChecks.push({sheet:spec.name,periods:periodCount,coverage_from:coverageFrom,coverage_to:helperLastFull,sha256:sellmonitorGithubOzonHash_({labels:checkLabels,notes:checkNotes,series:checkSeries,note:checkNote}),readback:true});
+        ozonStoreHelperChecks.push({sheet:spec.name,periods:periodCount,coverage_from:coverageFrom,coverage_to:helperLastAvailable,sha256:sellmonitorGithubOzonHash_({labels:checkLabels,notes:checkNotes,series:checkSeries,note:checkNote}),readback:true});
       });
     }
     var newDaily=sellmonitorGithubOzonRows_(daily,dailyStart,1,10),newSku=sellmonitorGithubOzonRows_(skuSheet,5,1,12),newHelper=sellmonitorGithubOzonRows_(daily,1,12,4);
