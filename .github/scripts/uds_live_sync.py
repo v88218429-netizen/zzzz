@@ -105,12 +105,31 @@ def google_auth_and_key():
     return "apps-script-bridge", api_key
 
 
+def apps_script_read(operation, payload=None, label="Google Sheets read"):
+    """Retry idempotent Apps Script reads after transient transport or server failures."""
+    attempts = 3
+    retryable_statuses = {408, 429, 500, 502, 503, 504}
+    for attempt in range(attempts):
+        try:
+            return apps_script_call(operation, payload, label=label)
+        except HttpFailure as exc:
+            if exc.status not in retryable_statuses or attempt + 1 == attempts:
+                raise
+        except RuntimeError as exc:
+            if "transport " not in str(exc) or attempt + 1 == attempts:
+                raise
+        delay = min(30, 5 * (2 ** attempt))
+        log("SHEETS_READ_RETRY", f"{label}; attempt {attempt + 1}/{attempts}; retry in {delay}s")
+        time.sleep(delay)
+    raise RuntimeError(f"{label}: retries exhausted")
+
+
 def google_sheet_metadata(_access_token):
-    return apps_script_call("metadata", label="Google Sheets metadata")
+    return apps_script_read("metadata", label="Google Sheets metadata")
 
 
 def google_values(_access_token, range_a1):
-    result = apps_script_call("read", {"range": range_a1}, label="Google Sheets read")
+    result = apps_script_read("read", {"range": range_a1}, label="Google Sheets read")
     return result.get("values") or []
 
 
@@ -1308,6 +1327,14 @@ def main():
         raise RuntimeError("Summary readback title did not match the written value")
     if not live_uds_readback[0] or len(live_uds_readback[0]) < 14:
         raise RuntimeError("UDS live table readback did not contain its header")
+    if new_catalog_rows:
+        import_start = min(row_number for row_number, _ in new_catalog_rows)
+        import_end = max(row_number for row_number, _ in new_catalog_rows)
+        imported_rows = google_values(access_token, f"'UDS — КАТАЛОГ (88)'!A{import_start}:C{import_end}")
+        imported_skus = {norm_id(row_value(row, 0)) for row in imported_rows}
+        missing_imports = sorted({norm_id(row[0]) for _, row in new_catalog_rows} - imported_skus)
+        if missing_imports:
+            raise RuntimeError("UDS new SKU import readback missing SKU(s): " + ",".join(missing_imports[:20]))
 
     # GitHub job summary contains only non-secret totals.
     step_summary = os.environ.get("GITHUB_STEP_SUMMARY")
