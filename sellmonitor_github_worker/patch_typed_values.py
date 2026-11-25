@@ -535,6 +535,51 @@ elif "function storeAvailableRatio_(" not in source:
     raise SystemExit("WB_RNP_OPEN_PERIOD_PATCH_PARTIAL")
 
 
+# Calendar weeks include every observed day through Sunday; the open week/month remains provisional.
+available_period_marker = "WB_RNP_COMPLETED_PERIOD_AVAILABLE_METRICS_V1"
+if available_period_marker not in source:
+    if "var isCurrentOpenPeriod=" not in source:
+        raise SystemExit("WB current open-period bounds missing")
+    def replace_available_anchor(text, old, new, label):
+        if old in text:
+            return replace_exact(text, old, new, 1, label)
+        if new in text:
+            return text
+        raise SystemExit(label + " changed")
+    source = replace_available_anchor(
+        source,
+        "var expectedDays=0,exactDays=[],rows=[];",
+        "var expectedDays=0,exactDays=[],observedDays=0,rows=[];",
+        "WB available-period counters"
+    )
+    source = replace_available_anchor(
+        source,
+        "        if(daily&&daily.exact){exactDays.push(d);rows=rows.concat(daily.rows);}",
+        """        if(daily&&daily.rows&&daily.rows.length)observedDays++;
+        if(daily&&daily.exact)exactDays.push(d);
+        if(daily&&daily.rows&&daily.rows.length)rows=rows.concat(daily.rows); /* WB_RNP_COMPLETED_PERIOD_AVAILABLE_METRICS_V1 */""",
+        "WB calendar-period observed rows"
+    )
+    source = replace_available_anchor(
+        source,
+        "    var periodOpen=end>closedThrough;",
+        "    var periodOpen=isCurrentOpenPeriod;",
+        "WB open-period state"
+    )
+    status_old = "    var status=expectedDays===0?'🟡 ПРЕДВ.':(exactDays.length===expectedDays?(periodOpen?'🟡 ЧАСТИЧНО':'🟢 ФАКТ'):(exactDays.length?'🟡 ЧАСТИЧНО':'🟠 НЕПОЛНЫЙ'));"
+    status_new = "    var status=expectedDays===0?'🟡 ПРЕДВ.':(exactDays.length===expectedDays?(periodOpen?'🟡 ЧАСТИЧНО':'🟢 ФАКТ'):(exactDays.length?'🟡 ЧАСТИЧНО':(isCurrentOpenPeriod&&observedDays?'🟡 ПРЕДВ.':'🟠 НЕПОЛНЫЙ')));"
+    source = replace_available_anchor(source, status_old, status_new, "WB calendar-period status")
+    result_old = "    var result={rows:rows,exact_days:exactDays.length,expected_days:expectedDays,status:status};"
+    result_new = "    var result={rows:rows,exact_days:exactDays.length,expected_days:expectedDays,observed_days:observedDays,allow_partial:(isCurrentOpenPeriod||exactDays.length!==expectedDays),status:status};"
+    source = replace_available_anchor(source, result_old, result_new, "WB calendar-period result")
+    version = re.search(r"VERSION:\\s*'github-worker-(\\d+)\\.(\\d+)\\.(\\d+)'", source)
+    if not version:
+        raise SystemExit("worker version missing for calendar-period release")
+    major, minor, patch = map(int, version.groups())
+    next_version = "github-worker-" + str(major) + "." + str(minor) + "." + str(patch + 1)
+    source = source[:version.start()] + "VERSION: '" + next_version + "'" + source[version.end():]
+    print("WB_CALENDAR_PERIOD_AVAILABLE_FACTS=patched")
+
 ozon_notes_marker = "OZON_HELPER_NOTES_ARITY_FIX_V1"
 if ozon_notes_marker not in source:
     note_old = """          [commonCoverage,'Штуки суммируются по строкам заказа; текущий день включается только по фактическим строкам API и не считается завершённым.']
