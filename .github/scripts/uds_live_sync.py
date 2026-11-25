@@ -345,7 +345,7 @@ def row_value(row, index, default=""):
 
 def read_existing_workbook(access_token, metadata):
     props = sheet_props(metadata)
-    required = ["UDS — КАТАЛОГ (88)", "UDS — Контроль цен", "OZON — ФАКТ SKU 19.10", "ЮНИТКА", "UDS ЮНИТКА", "UDS — СВОДКА"]
+    required = ["UDS — КАТАЛОГ (88)", "UDS — Контроль цен", "OZON — ФАКТ SKU 19.10", "ЮНИТКА", "UDS ЮНИТКА", "UDS — Юнитка без Ozon", "UDS — СВОДКА"]
     missing = [title for title in required if title not in props]
     if missing:
         raise RuntimeError("Required workbook tabs missing: " + ", ".join(missing))
@@ -359,6 +359,7 @@ def read_existing_workbook(access_token, metadata):
         "facts": rows("OZON — ФАКТ SKU 19.10", "N"),
         "main": rows("ЮНИТКА", "AN"),
         "uds_unitka": rows("UDS ЮНИТКА", "Q"),
+        "uds_direct": rows("UDS — Юнитка без Ozon", "S"),
     }
 
 
@@ -1020,6 +1021,100 @@ def main():
         new_catalog_rows.append((next_catalog_row, row))
         next_catalog_row += 1
 
+    # Keep the standalone UDS unitka current without pulling the Ozon assortment into it.
+    # Existing direct rows are refreshed from UDS; only genuinely new catalog SKUs are appended.
+    direct_rows_by_sku = defaultdict(list)
+    last_direct_row = 1
+    for direct_row_number, direct_row in enumerate(workbook["uds_direct"][1:], start=2):
+        direct_sku = norm_id(row_value(direct_row, 0))
+        if direct_sku:
+            direct_rows_by_sku[direct_sku].append(direct_row_number)
+            last_direct_row = direct_row_number
+
+    direct_unitka_updates = []
+    direct_unitka_new_rows = []
+    direct_unitka_expected = []
+    next_direct_row = last_direct_row + 1
+
+    for sku, uds in sorted(uds_unique.items()):
+        existing_direct_rows = direct_rows_by_sku.get(sku, [])
+        if existing_direct_rows:
+            for direct_row_number in existing_direct_rows:
+                direct_unitka_updates.append((direct_row_number, sku, uds))
+                direct_unitka_expected.append((direct_row_number, sku, num(uds.get("price"))))
+            continue
+        if sku not in new_skus:
+            continue
+
+        row_number = next_direct_row
+        next_direct_row += 1
+        name = str(uds.get("name") or "").strip()
+        variant = str(uds.get("variant") or "").strip()
+        price = num(uds.get("price"))
+        old_price = num(uds.get("offer_price"))
+        stock_value = "Безлимит" if uds.get("stock") is None else num(uds.get("stock"))
+        new_row = [
+            sku,
+            name,
+            variant,
+            "" if price is None else price,
+            "" if old_price is None else old_price,
+            stock_value,
+            "Закупки нет в UDS API — укажите себестоимость продаваемой единицы в H.",
+            "",
+            "=$V$6",
+            "=$V$7",
+            "=$V$2",
+            "=$V$3",
+            f'=IF(OR(D{row_number}="";H{row_number}="");"";D{row_number}*(1-J{row_number})*(1-K{row_number}-L{row_number})-H{row_number}-I{row_number})',
+            f'=IF(M{row_number}="";"";MAX(0;M{row_number})*$V$4)',
+            f'=IF(M{row_number}="";"";M{row_number}-N{row_number})',
+            f'=IFERROR(O{row_number}/(D{row_number}*(1-J{row_number}));"")',
+            f'=IF(OR(H{row_number}="";((1-J{row_number})*(1-K{row_number}-L{row_number})*(1-$V$4)-$V$5)<=0);"";ROUNDUP((H{row_number}+I{row_number})*(1-$V$4)/((1-J{row_number})*((1-K{row_number}-L{row_number})*(1-$V$4)-$V$5))/10;0)*10)',
+            f'=IF(OR(D{row_number}="";Q{row_number}="");"";MAX(D{row_number};Q{row_number}))',
+            "UDS Partner API · " + stamp + "; введите закупку в H для расчёта цены",
+        ]
+        direct_unitka_new_rows.append((row_number, new_row))
+        direct_unitka_expected.append((row_number, sku, price))
+
+    # Expand the direct UDS unitka and copy its established row formatting to appended products.
+    direct_sheet_props = workbook["props"]["UDS — Юнитка без Ozon"]
+    direct_sheet_id = direct_sheet_props["sheetId"]
+    direct_grid = direct_sheet_props.get("gridProperties", {})
+    direct_structure_requests = []
+    if next_direct_row - 1 > int(direct_grid.get("rowCount", 0)):
+        direct_structure_requests.append({
+            "updateSheetProperties": {
+                "properties": {
+                    "sheetId": direct_sheet_id,
+                    "gridProperties": {"rowCount": next_direct_row + 50},
+                },
+                "fields": "gridProperties.rowCount",
+            }
+        })
+    for row_number, _ in direct_unitka_new_rows:
+        direct_structure_requests.append({
+            "copyPaste": {
+                "source": {
+                    "sheetId": direct_sheet_id,
+                    "startRowIndex": 1,
+                    "endRowIndex": 2,
+                    "startColumnIndex": 0,
+                    "endColumnIndex": 19,
+                },
+                "destination": {
+                    "sheetId": direct_sheet_id,
+                    "startRowIndex": row_number - 1,
+                    "endRowIndex": row_number,
+                    "startColumnIndex": 0,
+                    "endColumnIndex": 19,
+                },
+                "pasteType": "PASTE_FORMAT",
+                "pasteOrientation": "NORMAL",
+            }
+        })
+    google_batch_update(access_token, direct_structure_requests)
+
     # Expand catalog grid only if needed.
     catalog_sheet_id = workbook["props"]["UDS — КАТАЛОГ (88)"]["sheetId"]
     current_catalog_grid = workbook["props"]["UDS — КАТАЛОГ (88)"].get("gridProperties", {})
@@ -1028,6 +1123,28 @@ def main():
 
     # Replace current API/model source values in the existing raw tabs.
     first_writes = []
+    for row_number, sku, uds in direct_unitka_updates:
+        name = str(uds.get("name") or "").strip()
+        variant = str(uds.get("variant") or "").strip()
+        price = num(uds.get("price"))
+        old_price = num(uds.get("offer_price"))
+        stock_value = "Безлимит" if uds.get("stock") is None else num(uds.get("stock"))
+        add_value(first_writes, "UDS — Юнитка без Ozon", f"A{row_number}", sku)
+        add_value(first_writes, "UDS — Юнитка без Ozon", f"B{row_number}", name)
+        add_value(first_writes, "UDS — Юнитка без Ozon", f"C{row_number}", variant)
+        add_value(first_writes, "UDS — Юнитка без Ozon", f"D{row_number}", price)
+        add_value(first_writes, "UDS — Юнитка без Ozon", f"E{row_number}", old_price)
+        add_value(first_writes, "UDS — Юнитка без Ozon", f"F{row_number}", stock_value)
+        source_note = "UDS Partner API · " + stamp
+        if price is None:
+            source_note += "; цена не вернулась из API"
+        add_value(first_writes, "UDS — Юнитка без Ozon", f"S{row_number}", source_note)
+    for row_number, new_row in direct_unitka_new_rows:
+        first_writes.append({
+            "range": f"'UDS — Юнитка без Ozon'!A{row_number}:S{row_number}",
+            "majorDimension": "ROWS",
+            "values": [new_row],
+        })
     for row_number, price in model_writes:
         add_value(first_writes, "ЮНИТКА", f"J{row_number}", price)
     for q in uds_unitka_clears:
@@ -1084,6 +1201,7 @@ def main():
     refreshed_workbook = read_existing_workbook(access_token, refreshed_metadata)
     refreshed_unitka = refreshed_workbook["uds_unitka"]
     refreshed_main = refreshed_workbook["main"]
+    refreshed_direct = refreshed_workbook["uds_direct"]
     model_readback_failures = []
     for row_number, expected in model_writes:
         actual = num(row_value(refreshed_main[row_number - 1], 9))
@@ -1102,6 +1220,22 @@ def main():
             uds_price_readback_failures.append(q)
     if uds_price_readback_failures:
         raise RuntimeError("UDS unitka price input readback failed for rows: " + ",".join(map(str, uds_price_readback_failures[:30])))
+    direct_unitka_readback_failures = []
+    for row_number, expected_sku, expected_price in direct_unitka_expected:
+        if row_number > len(refreshed_direct):
+            direct_unitka_readback_failures.append(expected_sku)
+            continue
+        actual_row = refreshed_direct[row_number - 1]
+        actual_sku = norm_id(row_value(actual_row, 0))
+        actual_price = num(row_value(actual_row, 3))
+        if actual_sku != expected_sku:
+            direct_unitka_readback_failures.append(expected_sku)
+        elif expected_price is None and actual_price is not None:
+            direct_unitka_readback_failures.append(expected_sku)
+        elif expected_price is not None and (actual_price is None or abs(actual_price - expected_price) > 0.01):
+            direct_unitka_readback_failures.append(expected_sku)
+    if direct_unitka_readback_failures:
+        raise RuntimeError("UDS direct unitka readback failed for SKU(s): " + ",".join(direct_unitka_readback_failures[:30]))
 
     economics_by_sku = {}
     for sku, entries in control_by_sku.items():
@@ -1305,7 +1439,7 @@ def main():
         {"range": "'UDS — СВОДКА'!A4:D4", "values": [["SKU UDS в текущем каталоге", "Вернул Partner API", "Не вернул API", "Новых SKU добавлено"]]},
         {"range": "'UDS — СВОДКА'!A5:D5", "values": [[len(old_skus | returned_skus), len(returned_skus), len(missing_skus), new_sku_count]]},
         {"range": "'UDS — СВОДКА'!A6", "values": [[f"Заказы Ozon за 30 дней: {posting_count} отправлений (FBS {len(posting_date_coverage['FBS']['postings'])}, FBO {len(posting_date_coverage['FBO']['postings'])}), {len(order_lines)} строк товара; доставлено {delivered_units:g} шт., отменено {cancelled_units:g} шт., возвраты/на склад {returned_units:g} шт. Цена есть у {priced_order_lines}/{order_item_lines} товарных строк. Сумма строк с известной ценой: {amount_sum:.2f} ₽ (не выплаты Ozon)."]]},
-        {"range": "'UDS — СВОДКА'!A8", "values": [[""]]},
+        {"range": "'UDS — СВОДКА'!A8", "values": [[f"UDS — Юнитка без Ozon: API-цен обновлено {len(direct_unitka_updates)}; новых SKU добавлено {len(direct_unitka_new_rows)}. Себестоимость не приходит из API и вводится в колонке H."]]},
         {"range": "'UDS — СВОДКА'!A7", "values": [[f"Историческая сверка 23–25.10 ниже. Даты создания отправления (created_at): FBO {len(posting_date_coverage['FBO']['created_at'])}/{len(posting_date_coverage['FBO']['postings'])}, FBS {len(posting_date_coverage['FBS']['created_at'])}/{len(posting_date_coverage['FBS']['postings'])}; начало обработки (in_process_at): FBO {len(posting_date_coverage['FBO']['in_process_at'])}/{len(posting_date_coverage['FBO']['postings'])}, FBS {len(posting_date_coverage['FBS']['in_process_at'])}/{len(posting_date_coverage['FBS']['postings'])}."]]},
     ]
     final_writes.extend(summary)
@@ -1345,6 +1479,7 @@ def main():
             out.write(f"- UDS API: {len(returned_skus)} SKU, новых: {new_sku_count}, не вернул API: {len(missing_skus)}\n")
             out.write(f"- Ozon API: {current_price_count} цен; обновлено строк модели: {len(model_writes)}\n")
             out.write(f"- UDS unitka prices: {len(uds_unitka_writes)} confirmed, {len(uds_unitka_clears)} cleared as unconfirmed\n")
+            out.write(f"- UDS-only unitka: refreshed {len(direct_unitka_updates)} API rows; added {len(direct_unitka_new_rows)} new SKUs; readback passed\n")
             out.write(f"- Заказы за 30 дней: {posting_count} отправлений, {len(order_lines)} строк товара, доставлено {delivered_units:g} шт., отменено {cancelled_units:g} шт.\n")
             out.write(f"- Таблица: https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/edit\n")
 
@@ -1353,6 +1488,8 @@ def main():
     log("UDS_SKU_RETURNED", len(returned_skus))
     log("UDS_SKU_NOT_RETURNED", len(missing_skus))
     log("UDS_SKU_NEW", new_sku_count)
+    log("UDS_DIRECT_UNITKA_ROWS_SYNCED", len(direct_unitka_updates) + len(direct_unitka_new_rows))
+    log("UDS_DIRECT_UNITKA_NEW", len(direct_unitka_new_rows))
     log("OZON_PRICE_RECORDS", current_price_count)
     log("OZON_LISTED_FOR_SALE", saleable_count)
     log("OZON_NOT_LISTED_FOR_SALE", not_saleable_count)
