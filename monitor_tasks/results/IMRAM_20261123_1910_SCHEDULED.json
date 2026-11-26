@@ -3,31 +3,31 @@
   "request": "IMRAM_20261123_1910_SCHEDULED.json",
   "query": "Имрам как правильно формулировать желание конечный результат",
   "knowledge_tag": "IMRAM",
-  "generated_at": "2026-11-25T00:38:28.177103+00:00",
+  "generated_at": "2026-11-26T00:17:55.973961+00:00",
   "videos": [
     {
-      "video_id": "EIVCda8XWCw",
-      "url": "https://www.youtube.com/watch?v=EIVCda8XWCw",
-      "title": "Сделайте ПРАВИЛЬНО и вы будете удивлены результатам! / Как наладить жизнь через АСКЕЗУ?",
+      "video_id": "k-OGXuarmFY",
+      "url": "https://www.youtube.com/watch?v=k-OGXuarmFY",
+      "title": "МАГНИТ УДАЧИ: мысли так, проблемы решатся и усилится везение! Мастер Имрам",
       "channel": "Имрам Крийя - Йога",
-      "duration": 1603,
+      "duration": 1503,
       "timestamp": null,
-      "query": "Имрам как правильно формулировать желание конечный результат",
+      "query": "Имрам состояние исполненного желания",
       "kind": "video",
-      "transcript": "transcripts/2026-11-25_IMRAM_video_EIVCda8XWCw.md",
+      "transcript": "transcripts/2026-11-26_IMRAM_video_k-OGXuarmFY.md",
       "method": "verified GitHub transcript cache"
     },
     {
-      "video_id": "sB6aQYGH4UM",
-      "url": "https://www.youtube.com/watch?v=sB6aQYGH4UM",
-      "title": "Как аффирмации влияют на подсознание и на исполнение желаний",
+      "video_id": "FaEl9AyeRJ4",
+      "url": "https://www.youtube.com/watch?v=FaEl9AyeRJ4",
+      "title": "Вся правда о долголетии / Простой способ сохранить молодость и здоровье",
       "channel": "Имрам Крийя - Йога",
-      "duration": 458,
+      "duration": 1555,
       "timestamp": null,
-      "query": "Имрам как правильно формулировать желание конечный результат",
+      "query": "Имрам состояние исполненного желания",
       "kind": "video",
-      "transcript": "transcripts/2026-11-25_IMRAM_video_sB6aQYGH4UM.md",
-      "method": "verified GitHub transcript cache"
+      "transcript": "transcripts/2026-11-26_IMRAM_video_FaEl9AyeRJ4.md",
+      "method": "FreeTranscriptAPI"
     }
   ],
   "errors": [

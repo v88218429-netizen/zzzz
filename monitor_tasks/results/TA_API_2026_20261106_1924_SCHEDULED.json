@@ -3,18 +3,30 @@
   "request": "TA_API_2026_20261106_1924_SCHEDULED.json",
   "query": "официальный API Wildberries поиск/воронка; Wordstat API; Google Trends API; TikTok и Instagram — источники трендов",
   "knowledge_tag": "TREND_API",
-  "generated_at": "2026-11-25T00:39:13.266950+00:00",
+  "generated_at": "2026-11-26T00:18:43.133506+00:00",
   "videos": [
     {
-      "video_id": "3g28CmoapOw",
-      "url": "https://www.youtube.com/watch?v=3g28CmoapOw",
-      "title": "Use DeepSeek Harness for FREE — No VRAM, No Paid API",
-      "channel": "Bart Slodyczka",
-      "duration": 826,
+      "video_id": "pwrYhbVoPNM",
+      "url": "https://www.youtube.com/watch?v=pwrYhbVoPNM",
+      "title": "5 Advanced Tips to STOP Hitting Claude Cowork Limits",
+      "channel": "Ryan & Matt Data Science",
+      "duration": 872,
       "timestamp": null,
       "query": "WB Excel/API лимиты",
       "kind": "video",
-      "transcript": "transcripts/2026-11-25_TA_API_2026_video_3g28CmoapOw.md",
+      "transcript": "transcripts/2026-11-26_TA_API_2026_video_pwrYhbVoPNM.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "3QclAjmu5Tw",
+      "url": "https://www.youtube.com/watch?v=3QclAjmu5Tw",
+      "title": "Claude Just Solved Session Limits",
+      "channel": "Nate Herk | AI Automation",
+      "duration": 622,
+      "timestamp": null,
+      "query": "WB Excel/API лимиты",
+      "kind": "video",
+      "transcript": "transcripts/2026-11-26_TA_API_2026_video_3QclAjmu5Tw.md",
       "method": "FreeTranscriptAPI"
     }
   ],
@@ -26,16 +38,10 @@
       "error": "no results"
     },
     {
-      "video_id": "c9qXFcn3njw",
-      "url": "https://www.youtube.com/watch?v=c9qXFcn3njw",
-      "title": "The new DeepSeek: from zero to pro. The full course. Free, smart, and comparable to ChatGPT for $20.",
-      "error": "youtube_captions: \nCould not retrieve a transcript for the video https://www.youtube.com/watch?v=c9qXFcn3njw! This is most likely caused by:\n\nYouTube is blocking requests from your IP. This usually is due to one of the following reasons:\n- You have done too many requests and your IP has been blocked by YouTube\n- You are doing requests from an IP belonging to a cloud provider (like AWS, Google Cloud Platform, Azure, etc.). Unfortunately, most IPs from cloud providers are blocked by YouTube.\n\nThere are two things you can do to work around this:\n1. Use proxies to hide your IP address, as explained in the \"Working around IP bans\" section of the README (https://github.com/jdepoix/youtube-transcript-api?tab=readme-ov-file#working-around-ip-bans-requestblocked-or-ipblocked-exception).\n2. (NOT REC"
-    },
-    {
-      "video_id": "fK37eBirbSQ",
-      "url": "https://www.youtube.com/watch?v=fK37eBirbSQ",
-      "title": "Яндекс Вордстат - КАК ПОЛЬЗОВАТЬСЯ/Обзор Yandex Wordstat/Сбор статистики запросов",
-      "error": "youtube_captions: \nCould not retrieve a transcript for the video https://www.youtube.com/watch?v=fK37eBirbSQ! This is most likely caused by:\n\nYouTube is blocking requests from your IP. This usually is due to one of the following reasons:\n- You have done too many requests and your IP has been blocked by YouTube\n- You are doing requests from an IP belonging to a cloud provider (like AWS, Google Cloud Platform, Azure, etc.). Unfortunately, most IPs from cloud providers are blocked by YouTube.\n\nThere are two things you can do to work around this:\n1. Use proxies to hide your IP address, as explained in the \"Working around IP bans\" section of the README (https://github.com/jdepoix/youtube-transcript-api?tab=readme-ov-file#working-around-ip-bans-requestblocked-or-ipblocked-exception).\n2. (NOT REC"
+      "video_id": "kbYGFIo0WGc",
+      "url": "https://www.youtube.com/watch?v=kbYGFIo0WGc",
+      "title": "Microsoft Power Automate | Add data to Excel, get data from Excel, Conditions and Send Email | Guide",
+      "error": "youtube_captions: \nCould not retrieve a transcript for the video https://www.youtube.com/watch?v=kbYGFIo0WGc! This is most likely caused by:\n\nYouTube is blocking requests from your IP. This usually is due to one of the following reasons:\n- You have done too many requests and your IP has been blocked by YouTube\n- You are doing requests from an IP belonging to a cloud provider (like AWS, Google Cloud Platform, Azure, etc.). Unfortunately, most IPs from cloud providers are blocked by YouTube.\n\nThere are two things you can do to work around this:\n1. Use proxies to hide your IP address, as explained in the \"Working around IP bans\" section of the README (https://github.com/jdepoix/youtube-transcript-api?tab=readme-ov-file#working-around-ip-bans-requestblocked-or-ipblocked-exception).\n2. (NOT REC"
     }
   ]
 }
