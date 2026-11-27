@@ -595,9 +595,28 @@ jobs:
                   print("STORE=" + store_name + " OK=false ERROR=SOURCE_FALLBACK_USED", flush=True)
                   continue
               store_result = next((item for item in (result.get("stores") or []) if item.get("store") == store_name), None)
-              if not store_result or store_result.get("ok") is not True or store_result.get("readback") is not True:
-                  failures.append(store_name + ":" + json.dumps(store_result or result, ensure_ascii=False)[:1200])
-                  print("STORE=" + store_name + " OK=false ERROR=READBACK_FAILED", flush=True)
+              if not store_result:
+                  failures.append(store_name + ":STORE_RESULT_MISSING:" + json.dumps(result, ensure_ascii=False)[:1200])
+                  print("STORE=" + store_name + " OK=false ERROR=STORE_RESULT_MISSING", flush=True)
+                  continue
+              if store_result.get("ok") is not True:
+                  stage = str(store_result.get("failure_stage") or "unknown")
+                  failure_class = "SOURCE_FAILED" if stage.lower().startswith("source") else ("READBACK_FAILED" if stage.lower().startswith("readback") else "WRITE_FAILED")
+                  error_text = str(store_result.get("error") or store_result.get("reason") or "unknown")[:600]
+                  target_range = str(store_result.get("target_range") or store_result.get("range") or "unknown")[:240]
+                  grid_before = str(store_result.get("grid_cells_before") or "unknown")
+                  grid_after = str(store_result.get("grid_cells_after") or "unknown")
+                  failures.append(store_name + ":" + failure_class + ":" + json.dumps(store_result, ensure_ascii=False)[:1200])
+                  print("STORE=" + store_name + " OK=false ERROR=" + failure_class + ";STAGE=" + stage
+                        + ";RANGE=" + target_range + ";GRID_CELLS_BEFORE=" + grid_before
+                        + ";GRID_CELLS_AFTER=" + grid_after + ";DETAIL=" + error_text, flush=True)
+                  continue
+              if store_result.get("readback") is not True:
+                  stage = str(store_result.get("failure_stage") or "readback")
+                  target_range = str(store_result.get("target_range") or store_result.get("range") or "unknown")[:240]
+                  failures.append(store_name + ":READBACK_FAILED:" + json.dumps(store_result, ensure_ascii=False)[:1200])
+                  print("STORE=" + store_name + " OK=false ERROR=READBACK_FAILED;STAGE=" + stage
+                        + ";RANGE=" + target_range, flush=True)
                   continue
               if int(store_result.get("source_rows") or 0) <= 0 or not store_result.get("source_min") or not store_result.get("source_max") or not store_result.get("sha256"):
                   failures.append(store_name + ":INCOMPLETE_READBACK")
