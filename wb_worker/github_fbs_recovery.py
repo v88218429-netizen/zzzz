@@ -265,6 +265,7 @@ def ingest(client: str, orders: list[dict]) -> dict:
         payload = {"token": BRIDGE_KEY, "action": "fbs_ingest_batch",
                    "client": client, "orders": batch}
         network_failures = 0
+        write_failures = 0
         for attempt in range(1, INGEST_ATTEMPTS + 1):
             try:
                 obj = request(BRIDGE_URL, body=payload, max_attempts=1, timeout=BRIDGE_INGEST_TIMEOUT)
@@ -276,7 +277,11 @@ def ingest(client: str, orders: list[dict]) -> dict:
                 state_batch_transient = bool(
                     state_batch_http and int(state_batch_http.group(1)) in (408, 425, 429, 500, 502, 503, 504)
                 )
-                retryable = result.get("retryable") or state_batch_transient or any(
+                state_write_http = re.search(r"FBS_PATCH_BATCH_HTTP_(\d{3})", details)
+                state_write_transient = bool(
+                    state_write_http and int(state_write_http.group(1)) in (408, 425, 429, 500, 502, 503, 504)
+                )
+                retryable = result.get("retryable") or state_batch_transient or state_write_transient or any(
                     marker in details for marker in (
                         "GITHUB_FBS_LOCK_BUSY", "Service invoked too many times",
                         "Service Spreadsheets failed", "Exceeded maximum execution",
@@ -289,6 +294,25 @@ def ingest(client: str, orders: list[dict]) -> dict:
                         "FBS_SHEET_RANGE_READ_RETRY_EXHAUSTED_"
                     )
                 )
+                if state_write_transient:
+                    write_failures += 1
+                    write_code = state_write_http.group(1)
+                    if write_failures >= NETWORK_FAILURE_LIMIT or attempt == INGEST_ATTEMPTS:
+                        print("FBS_INGEST_WRITE_RETRY_EXHAUSTED=HTTP_" + write_code, flush=True)
+                        raise RuntimeError("FBS_INGEST_OUTCOME_UNCERTAIN_AFTER_IDEMPOTENT_RETRIES")
+                    retry_wait_seconds = 430  # Let the seven-minute Apps Script lease expire before replay.
+                    print("FBS_INGEST_RETRY=" + str(attempt) + ":SHEETS_PATCH_HTTP_" + write_code +
+                          ":SAME_IDEMPOTENT_BATCH:WAIT_SECONDS=" + str(retry_wait_seconds) +
+                          ":REFRESH_ROW_HINTS=yes", flush=True)
+                    time.sleep(retry_wait_seconds)
+                    _, refreshed = read_current_states(client, batch)
+                    main_sheet_last_row = int(refreshed["sheetLastRow"])
+                    for item in batch:
+                        oid = str(item.get("id") or "")
+                        item["_fbsRowHint"] = int(refreshed["rowMap"].get(oid, 0))
+                        item["_fbsSheetLastRow"] = main_sheet_last_row
+                    payload["orders"] = batch
+                    continue
                 if "GITHUB_FBS_LOCK_BUSY" in details:
                     if attempt == INGEST_ATTEMPTS:
                         raise RuntimeError("INGEST_REJECTED:GITHUB_FBS_LOCK_BUSY")
