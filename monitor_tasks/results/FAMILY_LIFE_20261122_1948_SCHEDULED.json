@@ -3,30 +3,54 @@
   "request": "FAMILY_LIFE_20261122_1948_SCHEDULED.json",
   "query": "семейная жизнь предпринимателя как совмещать бизнес и семью",
   "knowledge_tag": "FAMILY",
-  "generated_at": "2026-11-26T00:17:08.137566+00:00",
+  "generated_at": "2026-11-27T00:34:11.791509+00:00",
   "videos": [
     {
-      "video_id": "9mLTMrzBpPE",
-      "url": "https://www.youtube.com/watch?v=9mLTMrzBpPE",
-      "title": "FAMILY CYBER BUSINESS: How to Combine Business and Relationships",
-      "channel": "COLIZEUM | Сеть киберспортивных клубов",
-      "duration": 929,
+      "video_id": "XLePMK8ibYM",
+      "url": "https://www.youtube.com/watch?v=XLePMK8ibYM",
+      "title": "«ЭКВИУМ» ОБЪЕДИНЯЕТ. FAMILY DAY В БИЗНЕС-СООБЩЕСТВЕ. СЕМЬЯ И БИЗНЕС: КАК СОВМЕСТИТЬ?",
+      "channel": "Бизнес-сообщество Эквиум",
+      "duration": 141,
       "timestamp": null,
       "query": "семейная жизнь предпринимателя как совмещать бизнес и семью",
-      "kind": "video",
-      "transcript": "transcripts/2026-11-26_FAMILY_LIFE_video_9mLTMrzBpPE.md",
+      "kind": "short",
+      "transcript": "transcripts/2026-11-27_FAMILY_LIFE_short_XLePMK8ibYM.md",
       "method": "FreeTranscriptAPI"
     },
     {
-      "video_id": "iNiuUisdQh4",
-      "url": "https://www.youtube.com/watch?v=iNiuUisdQh4",
-      "title": "Стрем или Норм в бизнесе и семье: как не потерять деньги, карьеру и отношения? — Александр Высоцкий",
-      "channel": "Александр Высоцкий",
-      "duration": 1418,
+      "video_id": "zKiWMkiIQ7g",
+      "url": "https://www.youtube.com/watch?v=zKiWMkiIQ7g",
+      "title": "Стратегия роста: как понять, что пора перестать делать | Залевская",
+      "channel": "Колосок",
+      "duration": 5413,
       "timestamp": null,
       "query": "семейная жизнь предпринимателя как совмещать бизнес и семью",
       "kind": "video",
-      "transcript": "transcripts/2026-11-26_FAMILY_LIFE_video_iNiuUisdQh4.md",
+      "transcript": "transcripts/2026-11-27_FAMILY_LIFE_video_zKiWMkiIQ7g.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "Xuv8zSyDd58",
+      "url": "https://www.youtube.com/watch?v=Xuv8zSyDd58",
+      "title": "Бизнес и семья: Как найти идеальный баланс?",
+      "channel": "Ирина Блонская",
+      "duration": 208,
+      "timestamp": null,
+      "query": "семейная жизнь предпринимателя как совмещать бизнес и семью",
+      "kind": "video",
+      "transcript": "transcripts/2026-11-27_FAMILY_LIFE_video_Xuv8zSyDd58.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "kviXDO5AtBU",
+      "url": "https://www.youtube.com/watch?v=kviXDO5AtBU",
+      "title": "История успеха проекта \"ПапаЗал\"",
+      "channel": "Social Weekend Belarus",
+      "duration": 177,
+      "timestamp": null,
+      "query": "предприниматель семья дети образ жизни shorts",
+      "kind": "short",
+      "transcript": "transcripts/2026-11-27_FAMILY_LIFE_short_kviXDO5AtBU.md",
       "method": "FreeTranscriptAPI"
     }
   ],
@@ -38,10 +62,10 @@
       "error": "youtube_captions: \nCould not retrieve a transcript for the video https://www.youtube.com/watch?v=VEdS1mMONpI! This is most likely caused by:\n\nYouTube is blocking requests from your IP. This usually is due to one of the following reasons:\n- You have done too many requests and your IP has been blocked by YouTube\n- You are doing requests from an IP belonging to a cloud provider (like AWS, Google Cloud Platform, Azure, etc.). Unfortunately, most IPs from cloud providers are blocked by YouTube.\n\nThere are two things you can do to work around this:\n1. Use proxies to hide your IP address, as explained in the \"Working around IP bans\" section of the README (https://github.com/jdepoix/youtube-transcript-api?tab=readme-ov-file#working-around-ip-bans-requestblocked-or-ipblocked-exception).\n2. (NOT REC"
     },
     {
-      "video_id": "HuI8SZAnIBE",
-      "url": "https://www.youtube.com/watch?v=HuI8SZAnIBE",
-      "title": "Ника 5 лет. Интервью маленького предпринимателя. Благотворительного семейного фестиваля ДЕТКИ",
-      "error": "youtube_captions: \nCould not retrieve a transcript for the video https://www.youtube.com/watch?v=HuI8SZAnIBE! This is most likely caused by:\n\nYouTube is blocking requests from your IP. This usually is due to one of the following reasons:\n- You have done too many requests and your IP has been blocked by YouTube\n- You are doing requests from an IP belonging to a cloud provider (like AWS, Google Cloud Platform, Azure, etc.). Unfortunately, most IPs from cloud providers are blocked by YouTube.\n\nThere are two things you can do to work around this:\n1. Use proxies to hide your IP address, as explained in the \"Working around IP bans\" section of the README (https://github.com/jdepoix/youtube-transcript-api?tab=readme-ov-file#working-around-ip-bans-requestblocked-or-ipblocked-exception).\n2. (NOT REC"
+      "video_id": "7h50s6L4oaA",
+      "url": "https://www.youtube.com/watch?v=7h50s6L4oaA",
+      "title": "Семья Петренко встречает гостей",
+      "error": "youtube_captions: \nCould not retrieve a transcript for the video https://www.youtube.com/watch?v=7h50s6L4oaA! This is most likely caused by:\n\nYouTube is blocking requests from your IP. This usually is due to one of the following reasons:\n- You have done too many requests and your IP has been blocked by YouTube\n- You are doing requests from an IP belonging to a cloud provider (like AWS, Google Cloud Platform, Azure, etc.). Unfortunately, most IPs from cloud providers are blocked by YouTube.\n\nThere are two things you can do to work around this:\n1. Use proxies to hide your IP address, as explained in the \"Working around IP bans\" section of the README (https://github.com/jdepoix/youtube-transcript-api?tab=readme-ov-file#working-around-ip-bans-requestblocked-or-ipblocked-exception).\n2. (NOT REC"
     }
   ]
 }
