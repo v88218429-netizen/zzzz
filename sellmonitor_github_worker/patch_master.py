@@ -1468,7 +1468,7 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
         if worker_text.count(order_anchor) != 1:
             raise SystemExit("OZON_GRAPH_LABEL_ORDER_ANCHOR_MISMATCH")
         worker_text = worker_text.replace(order_anchor, order_code + order_anchor, 1)
-        order_archive_anchor = "    if(!sameGraphNote)archived+=sellmonitorGithubOzonArchive_(archive,'10_Графики_магазина','A2',[[oldGraphNote]],sourceUpdated,archiveId);"
+        order_archive_anchor = "    if(!sameGraphNote)archived+=sellmonitorGithubOzonArchive_(archive,'10_Графики_магазина','A2',[[oldGraphNote]],sourceUpdated,archiveId,ozonGridAudit);"
         if worker_text.count(order_archive_anchor) != 1:
             raise SystemExit("OZON_GRAPH_LABEL_ORDER_ARCHIVE_ANCHOR_MISMATCH")
         worker_text = worker_text.replace(order_archive_anchor,
@@ -2452,6 +2452,32 @@ function sellmonitorGithubPublishOzonFinance_(payload) {
     elif "WB_RNP_AXIS_DUPLICATE_EMPTY_ARCHIVE_READBACK=verified" not in worker_text:
         raise SystemExit("WB RNP duplicate-axis batch patch partial")
 
+    # Add stable finance source keys, exact grid preflight, and readback audit in the same Apps Script runtime.
+    finance_source_key_marker = "OZON_FINANCE_SOURCE_KEY_V2"
+    if finance_source_key_marker not in worker_text:
+        def finance_replace_once(source, old, new, label):
+            count = source.count(old)
+            if count != 1:
+                raise SystemExit("Ozon finance source-key anchor mismatch: " + label + ":" + str(count))
+            return source.replace(old, new, 1)
+        worker_text = finance_replace_once(worker_text, "function sellmonitorGithubPublishOzonFinance_(payload) {", "function sellmonitorGithubPublishOzonFinance_(payload) {\n  /* OZON_FINANCE_SOURCE_KEY_V2 */", "marker")
+        worker_text = finance_replace_once(worker_text, "  var from=String(payload.coverage_from||''),to=String(payload.coverage_to||''),exported=String(payload.exported_at||'');", "  var from=String(payload.coverage_from||''),to=String(payload.coverage_to||''),exported=String(payload.exported_at||''),sourceKey=String(payload.source_key||'').trim();", "source key field")
+        worker_text = finance_replace_once(worker_text, "  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(from)||!/^\\d{4}-\\d{2}-\\d{2}$/.test(to)||from>'2026-09-01'||to<from||!isFinite(new Date(exported).getTime())) throw new Error('OZON_FINANCE_COVERAGE_INVALID');", "  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(from)||!/^\\d{4}-\\d{2}-\\d{2}$/.test(to)||from>'2026-09-01'||to<from||!isFinite(new Date(exported).getTime())) throw new Error('OZON_FINANCE_COVERAGE_INVALID');\n  if(accounts.length!==1)throw new Error('OZON_FINANCE_SOURCE_KEY_REQUIRES_ONE_CABINET');\n  var sourcePrefix='ozon-finance-v2|cabinet='+accounts[0]+'|period='+from+'..'+to+'|sha256=';\n  if(sourceKey.indexOf(sourcePrefix)!==0||!/^[a-f0-9]{64}$/.test(sourceKey.slice(sourcePrefix.length)))throw new Error('OZON_FINANCE_SOURCE_KEY_INVALID');", "source key validate")
+        worker_text = finance_replace_once(worker_text, "  if(dailyIn.length!==dates.length*accounts.length)throw new Error('OZON_FINANCE_DAY_COUNT_MISMATCH:'+dailyIn.length+':'+(dates.length*accounts.length));", "  var financeCanonicalRows=dailyIn.map(function(r){return [String(r.cabinet||''),String(r.day||''),String(r.rows),String(r.total),String(r.item),String(r.posting),String(r.non_item),String(r.other),String(r.unknown_categories||0)];});\n  financeCanonicalRows.sort(function(a,b){return a[1]<b[1]?-1:(a[1]>b[1]?1:0);});\n  if(sellmonitorGithubOzonHash_(financeCanonicalRows)!==sourceKey.slice(sourcePrefix.length))throw new Error('OZON_FINANCE_SOURCE_KEY_DIGEST_MISMATCH');\n  if(dailyIn.length!==dates.length*accounts.length)throw new Error('OZON_FINANCE_DAY_COUNT_MISMATCH:'+dailyIn.length+':'+(dates.length*accounts.length));", "finance data digest")
+        worker_text = finance_replace_once(worker_text, "  function buildStore_(cabinet,cfg){\n    var dayRows=", "  function buildStore_(cabinet,cfg){\n    var financeGridAudit=[],financeGridCellsBefore=null;\n    var dayRows=", "finance audit init")
+        worker_text = finance_replace_once(worker_text, "    var ss=SpreadsheetApp.openById(cfg.id),archive=ss.getSheetByName('13_API_Заказы_Архив');", "    var ss=SpreadsheetApp.openById(cfg.id),archive=ss.getSheetByName('13_API_Заказы_Архив');\n    financeGridCellsBefore=sellmonitorGithubOzonWorkbookGridCells_(ss);", "finance initial cells")
+        worker_text = finance_replace_once(worker_text, "    var archiveId='FIN_'+cabinet+'_'+exported,archiveRows=0;", "    var archiveId='FIN_'+sourceKey,archiveRows=0;", "finance stable archive ID")
+        worker_text = finance_replace_once(worker_text, "        archiveRows+=sellmonitorGithubOzonArchive_(archive,name,'A1:'+oldWidth+':'+oldLast,old,exported,archiveId);", "        archiveRows+=sellmonitorGithubOzonArchive_(archive,name,'A1:'+oldWidth+':'+oldLast,old,exported,archiveId,financeGridAudit);", "finance archive audit")
+        worker_text = finance_replace_once(worker_text, "      sh.clearContents();", "      sellmonitorGithubOzonEnsureRows_(sh,rows.length,{stage:'finance_write',target_range:name+'!A1:'+sellmonitorGithubOzonColumnLabel_(width)+rows.length},financeGridAudit);\n      sh.clearContents();", "finance preflight writes")
+        worker_text = finance_replace_once(worker_text, "    var row=[exported,cfg.name,'Ozon Seller API · accrual/by-day',from,to,dates.length,storeDays.reduce(function(n,r){return n+Number(r[6]||0);},0),dayResult.rows,periodResult.rows,dayResult.sha256+' / '+periodResult.sha256,'OK: запись перечитана; пустой день отделён от сбоя'];", "    var row=[exported,cfg.name,'Ozon Seller API · accrual/by-day',from,to,dates.length,storeDays.reduce(function(n,r){return n+Number(r[6]||0);},0),dayResult.rows,periodResult.rows,dayResult.sha256+' / '+periodResult.sha256,'OK: запись перечитана; пустой день отделён от сбоя; ключ='+sourceKey];", "finance journal key")
+        worker_text = finance_replace_once(worker_text, "    var at=journal.getLastRow()+1;sellmonitorGithubOzonEnsureRows_(journal,at);", "    var at=journal.getLastRow()+1;sellmonitorGithubOzonEnsureRows_(journal,at,{stage:'finance_journal',target_range:'20_API_Финансы_журнал!A'+at+':K'+at},financeGridAudit);", "journal preflight")
+        worker_text = finance_replace_once(worker_text, "      sh.clearContents();", "      var clearRows=Math.max(oldLast,rows.length),clearColumns=Math.max(oldWidth,width);\n      if(clearRows&&clearColumns)sh.getRange(1,1,clearRows,clearColumns).clearContent();", "bounded finance clear")
+        worker_text = finance_replace_once(worker_text, "    return {store:cfg.name,days:dayResult.rows,periods:periodResult.rows,accrual_rows:row[6],archived_rows:archiveRows,daily_sha256:dayResult.sha256,period_sha256:periodResult.sha256,readback:true};", "    return {store:cfg.name,days:dayResult.rows,periods:periodResult.rows,accrual_rows:row[6],archived_rows:archiveRows,daily_sha256:dayResult.sha256,period_sha256:periodResult.sha256,source_key:sourceKey,grid_cells_before:financeGridCellsBefore,grid_cells_after:sellmonitorGithubOzonWorkbookGridCells_(ss),grid_audit:financeGridAudit,readback:true};", "finance result")
+        print("OZON_FINANCE_SOURCE_KEY_AND_GRID_PREFLIGHT=patched")
+    elif "function sellmonitorGithubPublishOzonFinance_(" not in worker_text:
+        raise SystemExit("Ozon finance source-key publisher missing")
+    elif "source_key:sourceKey" not in worker_text:
+        raise SystemExit("Ozon finance source-key patch partial")
     worker.write_text(worker_text, encoding="utf-8")
     print("WORKER_TRIGGER_REFRESH_V2=patched")
 candidates = []

@@ -7,7 +7,7 @@ on:
       resume_store:
         description: Кабинет из контрольной точки
         type: choice
-        options: [all, ДОМ, Хозяюшка]
+        options: [all, ДОМ, Хозяюшка, "ДОМ,Хозяюшка"]
         default: all
         required: true
       resume_phase:
@@ -22,6 +22,11 @@ on:
         options: ["0", "1", "2", "3", "4", "5"]
         default: "0"
         required: true
+      resume_source_key:
+        description: Стабильный ключ контрольной точки
+        type: string
+        required: false
+        default: ""
   workflow_run:
     workflows: ["Sellmonitor GitHub worker deploy"]
     types: [completed]
@@ -48,6 +53,7 @@ jobs:
     outputs:
       resume_store: ${{ steps.publish.outputs.resume_store }}
       resume_phase: ${{ steps.publish.outputs.resume_phase }}
+      resume_source_key: ${{ steps.publish.outputs.resume_source_key }}
     if: ${{ (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success') && !(github.event_name == 'push' && contains(fromJSON('["Serialize Ozon publication after worker deployment","Repair Ozon finance journal and resume checkpoint","Gate Ozon runs to relevant worker changes","Fix Ozon scope gate output newlines","Fix Ozon finance publication store labels"]'), github.event.head_commit.message)) && !(github.event_name == 'push' && contains(github.event.head_commit.message, '[skip-ozon-summary]')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -146,6 +152,20 @@ jobs:
                   if name.endswith("sellmonitor_github_worker/SELLMONITOR_GITHUB_WORKER.gs") and any(k in patch for k in ("SMC_OZON_SUMMARY", "sellmonitorGithubPublishOzon", "publish_ozon_summary_orders", "publish_ozon_api_finance")):
                       phase = "source"
                       touched.append(name)
+              worker_source_changed = any(
+                  str(item.get("filename") or "").endswith("sellmonitor_github_worker/SELLMONITOR_GITHUB_WORKER.gs")
+                  and any(k in str(item.get("patch") or "") for k in ("SMC_OZON_SUMMARY", "sellmonitorGithubPublishOzon", "publish_ozon_summary_orders", "publish_ozon_api_finance"))
+                  for item in files
+              )
+              finance_patch_changed = any(
+                  str(item.get("filename") or "").endswith("sellmonitor_github_worker/patch_master.py")
+                  and any(k in str(item.get("patch") or "") for k in ("OZON_FINANCE", "OZON_SUMMARY", "OZON_COVERAGE", "OZON_GRAPH_LABEL"))
+                  for item in files
+              )
+              if worker_source_changed:
+                  phase = "source"
+              elif finance_patch_changed:
+                  phase = "finance"
               if phase:
                   decide("true", phase, "OZON_CODE_CHANGED: " + ", ".join(sorted(set(touched))))
               else:
@@ -164,6 +184,7 @@ jobs:
           RESUME_STORE: ${{ github.event_name == 'workflow_dispatch' && inputs.resume_store || 'all' }}
           RESUME_PHASE: ${{ github.event_name == 'workflow_dispatch' && inputs.resume_phase || steps.deploy_scope.outputs.resume_phase || 'source' }}
           RESUME_ATTEMPT: ${{ github.event_name == 'workflow_dispatch' && inputs.resume_attempt || '0' }}
+          RESUME_SOURCE_KEY: ${{ github.event_name == 'workflow_dispatch' && inputs.resume_source_key || '' }}
           OZON_DOM_CLIENT_ID: ${{ secrets.OZON_SELLER_DOM_CLIENT_ID }}
           OZON_DOM_API_KEY: ${{ secrets.OZON_SELLER_DOM_API_KEY }}
           OZON_HOZYAYUSHKA_CLIENT_ID: ${{ secrets.OZON_SELLER_HOZYAYUSHKA_CLIENT_ID }}
@@ -188,23 +209,32 @@ jobs:
 
           resume_store = os.environ.get("RESUME_STORE", "all")
           resume_phase = os.environ.get("RESUME_PHASE", "source")
+          resume_source_key = os.environ.get("RESUME_SOURCE_KEY", "").strip()
           checkpoint_header_written = False
           def checkpoint(phase, store, state, source_version="pending", readback="pending", next_action=""):
               global checkpoint_header_written
+              source_version = str(source_version or "pending").replace("\r", " ").replace("\n", " ")
               with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as f:
                   f.write("resume_phase=" + phase + "\n")
                   f.write("resume_store=" + store + "\n")
+                  f.write("resume_source_key=" + source_version + "\n")
               with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as f:
                   if not checkpoint_header_written:
                       f.write("### Контроль публикации Ozon\n\n| Кабинет | Период | Фаза | Версия источника | Состояние | Проверка чтением | Следующее действие |\n|---|---|---|---|---|---|---|\n")
                       checkpoint_header_written = True
-                  f.write("| " + store + " | " + COVERAGE_FROM + "–" + coverage_to + " | " + phase + " | " + source_version + " | " + state + " | " + readback + " | " + next_action + " |\n")
+                  summary_source = source_version.replace("|", "\\|")
+                  f.write("| " + store + " | " + COVERAGE_FROM + "–" + coverage_to + " | " + phase + " | " + summary_source + " | " + state + " | " + readback + " | " + next_action + " |\n")
               print("OZON_CHECKPOINT=store=" + store + ";period=" + COVERAGE_FROM + ".." + coverage_to + ";phase=" + phase + ";source=" + source_version + ";state=" + state + ";readback=" + readback + ";next=" + next_action, flush=True)
           if resume_phase not in {"source", "orders", "finance"}:
               raise SystemExit("INVALID_RESUME_PHASE:" + resume_phase)
-          if resume_store not in {"all", "ДОМ", "Хозяюшка"}:
+          allowed_resume_stores = {"all", "ДОМ", "Хозяюшка", "ДОМ,Хозяюшка"}
+          if resume_store not in allowed_resume_stores:
               raise SystemExit("INVALID_RESUME_STORE:" + resume_store)
-          checkpoint(resume_phase, resume_store, "RUNNING", until, "not_written", "продолжить с сохранённой фазы " + resume_phase)
+          selected_store_names = {"ДОМ", "Хозяюшка"} if resume_store == "all" else set(resume_store.split(","))
+          if not selected_store_names <= {"ДОМ", "Хозяюшка"} or not selected_store_names:
+              raise SystemExit("INVALID_RESUME_STORE_SET:" + resume_store)
+          initial_checkpoint_key = resume_source_key or ("ozon-" + resume_phase + "-request-v2|cabinet=" + resume_store + "|period=" + COVERAGE_FROM + ".." + coverage_to)
+          checkpoint(resume_phase, resume_store, "RUNNING", initial_checkpoint_key, "not_written", "продолжить с сохранённой фазы " + resume_phase)
           api_context = {"store": "", "flow": "", "page": 0}
 
           def api_post(endpoint, body, headers):
@@ -489,11 +519,41 @@ jobs:
                   fee_item = next((x for x in fee_items or [] if isinstance(x, dict)), {})
                   non_item = sample.get("non_item_fee") if isinstance(sample, dict) else {}
                   category_counts = {}
+                  fee_group_count = sku_group_count = fee_item_count = 0
+                  total_currency_counts = {}
+                  distinct_sku_keys = set()
                   for accrual in probe_rows:
-                      category = str(accrual.get("accrued_category") or "<empty>") if isinstance(accrual, dict) else "<invalid>"
+                      if not isinstance(accrual, dict):
+                          category = "<invalid>"
+                          accrual = {}
+                      else:
+                          category = str(accrual.get("accrued_category") or "<empty>")
                       category_counts[category] = category_counts.get(category, 0) + 1
+                      total = accrual.get("total_amount")
+                      if isinstance(total, dict):
+                          currency = str(total.get("currency") or total.get("currency_code") or total.get("currencyCode") or "<missing>").strip().upper()
+                      else:
+                          currency = "<scalar>"
+                      total_currency_counts[currency] = total_currency_counts.get(currency, 0) + 1
+                      fees = accrual.get("item_fees")
+                      groups = fees.get("fees") if isinstance(fees, dict) else []
+                      for group in groups if isinstance(groups, list) else []:
+                          if not isinstance(group, dict):
+                              continue
+                          fee_group_count += 1
+                          sku = str(group.get("sku") or "").strip()
+                          if sku:
+                              sku_group_count += 1
+                              distinct_sku_keys.add(sku)
+                          leaves = group.get("fees")
+                          fee_item_count += sum(1 for leaf in leaves if isinstance(leaf, dict)) if isinstance(leaves, list) else 0
+                  total_object = sample.get("total_amount") if isinstance(sample, dict) else None
+                  nested_amount = fee_item.get("accrued") if isinstance(fee_item, dict) else None
                   schema = {
                       "accrual": safe_keys(sample),
+                      "total_amount_type": type(total_object).__name__,
+                      "total_amount_keys": safe_keys(total_object),
+                      "total_amount_currency": str((total_object or {}).get("currency") or (total_object or {}).get("currency_code") or (total_object or {}).get("currencyCode") or "") if isinstance(total_object, dict) else "",
                       "posting": safe_keys(posting),
                       "product": safe_keys(product),
                       "commission": safe_keys(commission),
@@ -501,8 +561,15 @@ jobs:
                       "delivery_service": safe_keys(next((x for x in services or [] if isinstance(x, dict)), {})),
                       "item_fees": safe_keys(item_fees),
                       "fee_group": safe_keys(fee_group),
-                      "fee_item": safe_keys(fee_item),
+                      "fee_group_sku_present": bool(fee_group.get("sku")) if isinstance(fee_group, dict) else False,
+                      "fee_group_count": fee_group_count,
+                      "sku_linked_group_count": sku_group_count,
+                      "distinct_sku_count": len(distinct_sku_keys),
+                      "fee_item_count": fee_item_count,
+                      "fee_item_accrued_type": type(nested_amount).__name__,
+                      "fee_item_accrued_keys": safe_keys(nested_amount),
                       "non_item_fee": safe_keys(non_item),
+                      "currency_counts": total_currency_counts,
                   }
                   print(
                       "OZON_FINANCE_PROBE=store=" + label
@@ -527,25 +594,54 @@ jobs:
           exported_at = datetime.datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
           accepted_actions = {"publish_ozon_api_orders", "publish_ozon_summary_orders"}
           store_jobs = (("1", "ДОМ"), ("2", "Хозяюшка"))
+          store_label_by_cabinet = {"1": "ДОМ", "2": "Хозяюшка"}
           if resume_phase == "finance":
               active_store_jobs = ()
-          elif resume_store == "Хозяюшка":
-              active_store_jobs = store_jobs[1:]
           else:
-              active_store_jobs = store_jobs
+              active_store_jobs = tuple(item for item in store_jobs if item[1] in selected_store_names)
+          finance_store_jobs = stores if resume_phase != "finance" or resume_store == "all" else tuple(
+              item for item in stores if store_label_by_cabinet[item[0]] in selected_store_names
+          )
           expected_order_stores = {store_name for _, store_name in active_store_jobs}
           records_by_cabinet = {cabinet: [] for cabinet, _ in store_jobs}
           for record in records:
               records_by_cabinet[record["cabinet"]].append(record)
+          def stable_source_value(value):
+              if value is None:
+                  return ""
+              if isinstance(value, float) and value.is_integer():
+                  return str(int(value))
+              return str(value)
+          order_fields = ("cabinet", "day", "posting", "order", "offer", "sku", "title", "qty")
+          order_source_keys = {}
+          for cabinet, store_name in active_store_jobs:
+              source_records = records_by_cabinet[cabinet]
+              if not source_records:
+                  continue
+              canonical_rows = sorted(
+                  [[stable_source_value(record.get(field)) for field in order_fields] for record in source_records],
+                  key=lambda row: tuple(row[:6]),
+              )
+              source_digest = hashlib.sha256(
+                  json.dumps(canonical_rows, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+              ).hexdigest()
+              order_source_keys[cabinet] = (
+                  "ozon-orders-v2|cabinet=" + cabinet + "|period=" + COVERAGE_FROM + ".." + coverage_to
+                  + "|sha256=" + source_digest
+              )
           published = {}
           failures = []
           for cabinet, store_name in active_store_jobs:
-              checkpoint("orders", store_name, "RUNNING", exported_at + ":" + str(len(records)), "not_written", "записать кабинет и перечитать листы")
               store_records = records_by_cabinet[cabinet]
               if not store_records:
+                  request_key = "ozon-orders-v2-request|cabinet=" + cabinet + "|period=" + COVERAGE_FROM + ".." + coverage_to
+                  checkpoint("orders", store_name, "RETRY_REQUIRED", request_key, "source_readback=false", "повторить получение кабинета")
                   failures.append(store_name + ":EMPTY_COMPLETE_EXPORT")
                   print("STORE=" + store_name + " OK=false ERROR=EMPTY_COMPLETE_EXPORT", flush=True)
                   continue
+              source_key = order_source_keys[cabinet]
+              source_digest = source_key.rsplit("=", 1)[1]
+              checkpoint("orders", store_name, "RUNNING", source_key, "not_written", "записать кабинет и перечитать листы")
               payload = {
                   "token": os.environ["WEBHOOK_SECRET"],
                   "action": "publish_ozon_api_orders",
@@ -555,11 +651,12 @@ jobs:
                   "exported_at": exported_at,
                   "coverage_from": COVERAGE_FROM,
                   "coverage_to": coverage_to,
+                  "source_key": source_key,
+                  "source_data_sha256": source_digest,
                   "records": store_records,
               }
               body = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-              source_digest = hashlib.sha256(body).hexdigest()
-              print(f"OZON_API_STORE_EXPORT=store={store_name};records={len(store_records)};bytes={len(body)};coverage={COVERAGE_FROM}..{coverage_to};source_sha256={source_digest}", flush=True)
+              print(f"OZON_API_STORE_EXPORT=store={store_name};records={len(store_records)};bytes={len(body)};coverage={COVERAGE_FROM}..{coverage_to};source_key={source_key}", flush=True)
               result = None
               publish_error = None
               for attempt in range(1, 6):
@@ -599,28 +696,38 @@ jobs:
                   failures.append(store_name + ":STORE_RESULT_MISSING:" + json.dumps(result, ensure_ascii=False)[:1200])
                   print("STORE=" + store_name + " OK=false ERROR=STORE_RESULT_MISSING", flush=True)
                   continue
+              for audit in store_result.get("grid_audit") or []:
+                  print("OZON_GRID_AUDIT=" + json.dumps(audit, ensure_ascii=False, sort_keys=True), flush=True)
               if store_result.get("ok") is not True:
                   stage = str(store_result.get("failure_stage") or "unknown")
-                  failure_class = "SOURCE_FAILED" if stage.lower().startswith("source") else ("READBACK_FAILED" if stage.lower().startswith("readback") else "WRITE_FAILED")
                   error_text = str(store_result.get("error") or store_result.get("reason") or "unknown")[:600]
+                  failure_class = "SOURCE_FAILED" if stage.lower().startswith("source") else (
+                      "READBACK_FAILED" if stage.lower().startswith("readback") or "READBACK" in error_text.upper() else "WRITE_FAILED"
+                  )
                   target_range = str(store_result.get("target_range") or store_result.get("range") or "unknown")[:240]
                   grid_before = str(store_result.get("grid_cells_before") or "unknown")
                   grid_after = str(store_result.get("grid_cells_after") or "unknown")
                   failures.append(store_name + ":" + failure_class + ":" + json.dumps(store_result, ensure_ascii=False)[:1200])
                   print("STORE=" + store_name + " OK=false ERROR=" + failure_class + ";STAGE=" + stage
                         + ";RANGE=" + target_range + ";GRID_CELLS_BEFORE=" + grid_before
-                        + ";GRID_CELLS_AFTER=" + grid_after + ";DETAIL=" + error_text, flush=True)
+                        + ";GRID_CELLS_AFTER=" + grid_after + ";SOURCE_KEY=" + source_key
+                        + ";DETAIL=" + error_text, flush=True)
+                  continue
+              if store_result.get("source_key") != source_key:
+                  failures.append(store_name + ":SOURCE_KEY_READBACK_MISMATCH:" + json.dumps(store_result, ensure_ascii=False)[:500])
+                  print("STORE=" + store_name + " OK=false ERROR=SOURCE_KEY_READBACK_MISMATCH;EXPECTED=" + source_key
+                        + ";ACTUAL=" + str(store_result.get("source_key")), flush=True)
                   continue
               if store_result.get("readback") is not True:
                   stage = str(store_result.get("failure_stage") or "readback")
                   target_range = str(store_result.get("target_range") or store_result.get("range") or "unknown")[:240]
                   failures.append(store_name + ":READBACK_FAILED:" + json.dumps(store_result, ensure_ascii=False)[:1200])
                   print("STORE=" + store_name + " OK=false ERROR=READBACK_FAILED;STAGE=" + stage
-                        + ";RANGE=" + target_range, flush=True)
+                        + ";RANGE=" + target_range + ";SOURCE_KEY=" + source_key, flush=True)
                   continue
               if int(store_result.get("source_rows") or 0) <= 0 or not store_result.get("source_min") or not store_result.get("source_max") or not store_result.get("sha256"):
                   failures.append(store_name + ":INCOMPLETE_READBACK")
-                  print("STORE=" + store_name + " OK=false ERROR=INCOMPLETE_READBACK", flush=True)
+                  print("STORE=" + store_name + " OK=false ERROR=INCOMPLETE_READBACK;SOURCE_KEY=" + source_key, flush=True)
                   continue
               published[store_name] = store_result
               print("STORE=" + store_name + " OK=true SOURCE_ROWS=" + str(store_result.get("source_rows"))
@@ -629,21 +736,31 @@ jobs:
                     + " SKU_ROWS=" + str(store_result.get("sku_rows"))
                     + " ARCHIVED_ROWS=" + str(store_result.get("archived_rows"))
                     + " READBACK=" + str(store_result.get("readback"))
-                    + " SHA256=" + str(store_result.get("sha256")), flush=True)
-              if not failures:
-                  completed_count = len(published)
-                  if completed_count < len(active_store_jobs):
-                      next_store = active_store_jobs[completed_count][1]
-                      checkpoint("orders", next_store, "RUNNING", exported_at + ":" + str(len(records)), "previous_store_readback=true", "продолжить со следующего кабинета")
-                  else:
-                      checkpoint("finance", "all", "RUNNING", exported_at + ":" + str(len(records)), "order_readback=true", "проверить финансовый источник")
+                    + " SOURCE_KEY=" + source_key
+                    + " SHA256=" + str(store_result.get("sha256"))
+                    + " GRID_CELLS_BEFORE=" + str(store_result.get("grid_cells_before"))
+                    + " GRID_CELLS_AFTER=" + str(store_result.get("grid_cells_after")), flush=True)
+              checkpoint("orders", store_name, "VERIFIED", source_key, "readback=true;sha256=" + str(store_result.get("sha256")), "кабинет подтверждён")
           if failures:
-              failed_name = failures[0].split(":", 1)[0]
-              failed_store = failed_name if failed_name in {"ДОМ", "Хозяюшка"} else (resume_store if resume_store != "all" else "ДОМ")
-              checkpoint("orders", failed_store, "RETRY_REQUIRED", exported_at + ":" + str(len(records)), "readback=false", "повторить только неподтверждённый кабинет")
+              failed_names = []
+              for failure in failures:
+                  candidate = failure.split(":", 1)[0]
+                  if candidate in {"ДОМ", "Хозяюшка"} and candidate not in failed_names:
+                      failed_names.append(candidate)
+              if not failed_names:
+                  failed_names = [name for _, name in active_store_jobs] or ["ДОМ", "Хозяюшка"]
+              failed_store = ",".join(name for name in ("ДОМ", "Хозяюшка") if name in failed_names)
+              failed_keys = [order_source_keys[cabinet] for cabinet, name in active_store_jobs if name in failed_names and cabinet in order_source_keys]
+              if not failed_keys:
+                  failed_keys = ["ozon-orders-v2-request|cabinet=" + failed_store + "|period=" + COVERAGE_FROM + ".." + coverage_to]
+              checkpoint("orders", failed_store, "RETRY_REQUIRED", ";".join(failed_keys), "readback=false", "повторить только неподтверждённые кабинеты")
               raise SystemExit("OZON_API_STORE_PUBLISH_FAILED:" + json.dumps(failures, ensure_ascii=False)[:2400])
           if expected_order_stores - set(published):
               raise SystemExit("OZON_API_ORDER_READBACK_REQUIRED:" + json.dumps(sorted(expected_order_stores - set(published)), ensure_ascii=False))
+          if active_store_jobs:
+              ordered_keys = [order_source_keys[cabinet] for cabinet, store_name in active_store_jobs if store_name in published]
+              order_batch_digest = hashlib.sha256(json.dumps(sorted(ordered_keys), ensure_ascii=False, separators=(",", ":")).encode("utf-8")).hexdigest()
+              checkpoint("finance", "all", "RUNNING", "ozon-orders-batch-v2|period=" + COVERAGE_FROM + ".." + coverage_to + "|sha256=" + order_batch_digest, "order_readback=true", "проверить финансовый источник")
           # OZON_ANALYTICS_ACCESS_PROBE_V2: one supported daily product metric probe per cabinet; no traffic or ad attribution is inferred.
           analytics_day = (datetime.datetime.now(MOSCOW).date() - datetime.timedelta(days=2)).isoformat()
           analytics_metrics = ["revenue", "ordered_units"]
@@ -698,7 +815,16 @@ jobs:
                         + ";reason=" + json.dumps(message, ensure_ascii=True), flush=True)
 
           from decimal import Decimal, InvalidOperation
-          checkpoint("finance", "all", "RUNNING", exported_at + ":" + str(len(records)), "order_readback=true", "получить финансовую историю")
+          finance_store_names = [store_label_by_cabinet[cabinet] for cabinet, _, _, _ in finance_store_jobs]
+          finance_request_keys = {
+              cabinet: "ozon-finance-request-v2|cabinet=" + cabinet + "|period=" + COVERAGE_FROM + ".." + coverage_to
+              for cabinet, _, _, _ in finance_store_jobs
+          }
+          finance_source_keys = {}
+          finance_checkpoint_store = ",".join(finance_store_names) or "all"
+          checkpoint("finance", finance_checkpoint_store, "RUNNING",
+                     "ozon-finance-batch-request-v2|period=" + COVERAGE_FROM + ".." + coverage_to,
+                     "order_readback=true", "получить финансовую историю выбранных кабинетов")
           finance_days = []
           finance_ok_accounts = []
           finance_exported_at_by_cabinet = {}
@@ -708,16 +834,18 @@ jobs:
 
           def finance_amount(value, store, day):
               if isinstance(value, dict):
-                  currency = str(value.get("currency") or "").strip().upper()
+                  currency = str(value.get("currency") or value.get("currency_code") or value.get("currencyCode") or "").strip().upper()
                   if currency not in {"RUB", "RUR", "643"}:
                       raise RuntimeError("OZON_FINANCE_CURRENCY_UNSUPPORTED:" + store + ":" + day + ":" + (currency or "MISSING"))
-                  amount_object = value
-                  currency = str(amount_object.get("currency") or "").strip().upper()
-                  if currency not in {"RUB", "RUR", "643"}:
-                      raise RuntimeError("OZON_FINANCE_CURRENCY_UNSUPPORTED:" + store + ":" + day + ":" + (currency or "MISSING"))
-                  value = amount_object.get("amount")
-                  if value is None or value == "":
-                      value = amount_object.get("value")
+                  amount_value = value.get("amount")
+                  if amount_value is None or amount_value == "":
+                      amount_value = value.get("value")
+                  if amount_value is None and "units" in value and "nanos" in value:
+                      try:
+                          amount_value = Decimal(str(value.get("units"))) + Decimal(str(value.get("nanos"))) / Decimal("1000000000")
+                      except (InvalidOperation, TypeError, ValueError):
+                          raise RuntimeError("OZON_FINANCE_AMOUNT_INVALID:" + store + ":" + day)
+                  value = amount_value
               if value is None or value == "":
                   raise RuntimeError("OZON_FINANCE_AMOUNT_MISSING:" + store + ":" + day)
               raw = str(value).strip()
@@ -733,7 +861,10 @@ jobs:
                   raise RuntimeError("OZON_FINANCE_AMOUNT_NONFINITE:" + store + ":" + day)
               return amount.quantize(Decimal("0.01"))
 
-          for cabinet, label, client_var, key_var in stores:
+          for cabinet, label, client_var, key_var in finance_store_jobs:
+              store_name = store_label_by_cabinet[cabinet]
+              finance_request_key = finance_request_keys[cabinet]
+              checkpoint("finance", store_name, "RUNNING", finance_request_key, "source_not_read", "получить все дневные начисления кабинета")
               store_daily = []
               try:
                   headers = {
@@ -770,6 +901,7 @@ jobs:
                           for accrual in accruals:
                               if not isinstance(accrual, dict):
                                   raise RuntimeError("OZON_FINANCE_INVALID_ROW:" + label + ":" + day_key)
+                              # Reconcile store/category totals from top-level total_amount only; nested item_fees are SKU diagnostics and are never added again.
                               total_raw = accrual.get("total_amount")
                               raw_category = str(accrual.get("accrued_category") or "").strip().upper()
                               try:
@@ -834,16 +966,35 @@ jobs:
                   finance_days.extend(store_daily)
                   finance_ok_accounts.append(cabinet)
                   finance_exported_at_by_cabinet[cabinet] = datetime.datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
-                  print("OZON_FINANCE_SOURCE=store="+label+";status=complete;days="+str(len(store_daily))+";rows="+str(finance_rows)+";pages="+str(finance_pages)+";coverage="+COVERAGE_FROM+".."+coverage_to+";category_sums="+json.dumps({k:str(v) for k,v in category_totals.items()},sort_keys=True),flush=True)
+                  finance_fields = ("cabinet", "day", "rows", "total", "item", "posting", "non_item", "other", "unknown_categories")
+                  canonical_finance_rows = sorted(
+                      [[stable_source_value(row.get(field)) for field in finance_fields] for row in store_daily],
+                      key=lambda row: row[1],
+                  )
+                  finance_digest = hashlib.sha256(
+                      json.dumps(canonical_finance_rows, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+                  ).hexdigest()
+                  finance_source_key = (
+                      "ozon-finance-v2|cabinet=" + cabinet + "|period=" + COVERAGE_FROM + ".." + coverage_to
+                      + "|sha256=" + finance_digest
+                  )
+                  finance_source_keys[cabinet] = finance_source_key
+                  checkpoint("finance", store_name, "RUNNING", finance_source_key, "source_readback=true;write_pending", "опубликовать и перечитать фактический диапазон")
+                  category_digest = hashlib.sha256(json.dumps({k: str(v) for k, v in category_totals.items()}, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+                  print("OZON_FINANCE_SOURCE=store="+label+";status=complete;days="+str(len(store_daily))+";rows="+str(finance_rows)+";pages="+str(finance_pages)+";coverage="+COVERAGE_FROM+".."+coverage_to+";source_key="+finance_source_key+";category_sums_sha256="+category_digest,flush=True)
               except Exception as exc:
                   finance_failures.append(label + ":" + type(exc).__name__ + ":" + str(exc)[:240])
+                  checkpoint("finance", store_name, "RETRY_REQUIRED", finance_source_keys.get(cabinet, finance_request_key), "source_readback=false", "повторить получение только этого кабинета")
                   print("OZON_FINANCE_SOURCE=store="+label+";status=retry_required;error_class="+type(exc).__name__+";reason="+str(exc)[:220],flush=True)
 
           finance_published = {}
-          for cabinet, label, client_var, key_var in stores:
+          for cabinet, label, client_var, key_var in finance_store_jobs:
               if cabinet not in finance_ok_accounts:
                   continue
               daily = [row for row in finance_days if row["cabinet"] == cabinet]
+              finance_source_key = finance_source_keys[cabinet]
+              finance_store_name = store_label_by_cabinet[cabinet]
+              checkpoint("finance", finance_store_name, "RUNNING", finance_source_key, "source_readback=true;not_written", "записать дневные и периодные итоги, затем перечитать")
               payload = {
                   "token": os.environ["WEBHOOK_SECRET"],
                   "action": "publish_ozon_api_finance",
@@ -853,6 +1004,7 @@ jobs:
                   "coverage_from": COVERAGE_FROM,
                   "coverage_to": coverage_to,
                   "exported_at": finance_exported_at_by_cabinet[cabinet],
+                  "source_key": finance_source_key,
                   "daily": daily,
               }
               body = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
@@ -879,21 +1031,48 @@ jobs:
                       time.sleep(delay)
               expected_store_name = {"DOM": "ДОМ", "HOZYAYUSHKA": "Хозяюшка"}.get(label)
               item = next((x for x in (result or {}).get("stores", []) if x.get("store") == expected_store_name), None) if isinstance(result, dict) else None
-              if not isinstance(result, dict) or result.get("ok") is not True or not item or item.get("readback") is not True:
-                  finance_failures.append(label + ":PUBLISH_READBACK_FAILED:" + json.dumps(item or result, ensure_ascii=False)[:500])
-                  print("OZON_FINANCE_PUBLISH=store="+label+";status=retry_required;readback=false",flush=True)
+              item_audit = item.get("grid_audit") or [] if isinstance(item, dict) else []
+              for audit in item_audit:
+                  print("OZON_FINANCE_GRID_AUDIT=" + json.dumps(audit, ensure_ascii=False, sort_keys=True), flush=True)
+              if not isinstance(result, dict) or result.get("ok") is not True or not item or item.get("readback") is not True or item.get("source_key") != finance_source_key:
+                  finance_failures.append(label + ":PUBLISH_READBACK_FAILED:" + json.dumps(item or result, ensure_ascii=False)[:900])
+                  print("OZON_FINANCE_PUBLISH=store="+label+";status=retry_required;readback="+str(bool(item and item.get("readback")))+";expected_source_key="+finance_source_key+";actual_source_key="+str((item or {}).get("source_key") if isinstance(item,dict) else None)+";detail="+json.dumps(item or result,ensure_ascii=False)[:1000],flush=True)
                   continue
               finance_published[label] = item
-              print("OZON_FINANCE_PUBLISH=store="+label+";status=verified;days="+str(item.get("days"))+";periods="+str(item.get("periods"))+";accrual_rows="+str(item.get("accrual_rows"))+";archive_rows="+str(item.get("archived_rows"))+";readback=true;daily_sha256="+str(item.get("daily_sha256"))+";period_sha256="+str(item.get("period_sha256")),flush=True)
+              print("OZON_FINANCE_PUBLISH=store="+label+";status=verified;source_key="+finance_source_key+";days="+str(item.get("days"))+";periods="+str(item.get("periods"))+";accrual_rows="+str(item.get("accrual_rows"))+";archive_rows="+str(item.get("archived_rows"))+";readback=true;daily_sha256="+str(item.get("daily_sha256"))+";period_sha256="+str(item.get("period_sha256"))+";grid_cells_before="+str(item.get("grid_cells_before"))+";grid_cells_after="+str(item.get("grid_cells_after")),flush=True)
+              checkpoint("finance", finance_store_name, "VERIFIED", finance_source_key, "readback=true;daily_sha256="+str(item.get("daily_sha256"))+";period_sha256="+str(item.get("period_sha256")), "кабинет и фактический диапазон подтверждены")
 
           if finance_failures:
-              checkpoint("finance", "all", "RETRY_REQUIRED", exported_at + ":" + str(len(records)), "finance_readback_incomplete", "повторить финансовый этап")
+              failed_labels = []
+              for failure in finance_failures:
+                  candidate = failure.split(":", 1)[0]
+                  if candidate in {"DOM", "HOZYAYUSHKA"} and candidate not in failed_labels:
+                      failed_labels.append(candidate)
+              if not failed_labels:
+                  failed_labels = [label for _, label, _, _ in finance_store_jobs]
+              failed_cabinets = [cabinet for cabinet, label, _, _ in finance_store_jobs if label in failed_labels]
+              failed_names = [store_label_by_cabinet[cabinet] for cabinet in ("1", "2") if cabinet in failed_cabinets]
+              failed_store = ",".join(failed_names) or "all"
+              failed_keys = [finance_source_keys.get(cabinet) or finance_request_keys.get(cabinet, "") for cabinet in failed_cabinets]
+              checkpoint("finance", failed_store, "RETRY_REQUIRED", ";".join(k for k in failed_keys if k), "finance_readback_incomplete", "повторить только неподтверждённые кабинеты")
               raise SystemExit("OZON_FINANCE_SYNC_RETRY_REQUIRED:" + json.dumps(finance_failures, ensure_ascii=False)[:1800])
-          if set(finance_published) != {label for _, label, _, _ in stores}:
-              checkpoint("finance", "all", "RETRY_REQUIRED", exported_at + ":" + str(len(records)), "finance_readback_incomplete", "повторить финансовый этап")
-              raise SystemExit("OZON_FINANCE_BOTH_STORE_READBACKS_REQUIRED:" + json.dumps(sorted(finance_published), ensure_ascii=False))
-          print("OZON_FINANCE_PUBLISH_OK=true;stores=2;coverage="+COVERAGE_FROM+".."+coverage_to,flush=True)
-          checkpoint("complete", "all", "VERIFIED", exported_at + ":" + str(len(records)), "orders_and_finance_readback=true", "ожидать следующего штатного запуска")
+          expected_finance_labels = {label for _, label, _, _ in finance_store_jobs}
+          if set(finance_published) != expected_finance_labels:
+              missing_labels = sorted(expected_finance_labels - set(finance_published))
+              failed_cabinets = [cabinet for cabinet, label, _, _ in finance_store_jobs if label in missing_labels]
+              failed_names = [store_label_by_cabinet[cabinet] for cabinet in ("1", "2") if cabinet in failed_cabinets]
+              failed_keys = [finance_source_keys.get(cabinet) or finance_request_keys.get(cabinet, "") for cabinet in failed_cabinets]
+              checkpoint("finance", ",".join(failed_names) or "all", "RETRY_REQUIRED", ";".join(k for k in failed_keys if k), "finance_readback_incomplete", "повторить недостающие кабинеты")
+              raise SystemExit("OZON_FINANCE_STORE_READBACKS_REQUIRED:" + json.dumps(missing_labels, ensure_ascii=False))
+          verified_keys = sorted(
+              [str(item.get("source_key")) for item in published.values() if item.get("source_key")]
+              + [str(item.get("source_key")) for item in finance_published.values() if item.get("source_key")]
+          )
+          cycle_digest = hashlib.sha256(json.dumps(verified_keys, ensure_ascii=False, separators=(",", ":")).encode("utf-8")).hexdigest()
+          cycle_key = "ozon-cycle-v2|period=" + COVERAGE_FROM + ".." + coverage_to + "|sha256=" + cycle_digest
+          print("OZON_FINANCE_PUBLISH_OK=true;stores="+str(len(finance_published))+";coverage="+COVERAGE_FROM+".."+coverage_to,flush=True)
+          final_readback = "finance_readback=true;orders_preverified_by_recovery_parent=true" if resume_phase == "finance" else "orders_and_finance_readback=true"
+          checkpoint("complete", "all", "VERIFIED", cycle_key, final_readback, "ожидать следующего штатного запуска")
 
           PY
 
@@ -912,6 +1091,7 @@ jobs:
           RECOVERY_STORE: ${{ needs.publish.outputs.resume_store || 'all' }}
           RECOVERY_PHASE: ${{ needs.publish.outputs.resume_phase || 'source' }}
           RECOVERY_ATTEMPT: ${{ github.event_name == 'workflow_dispatch' && inputs.resume_attempt || '0' }}
+          RECOVERY_SOURCE_KEY: ${{ needs.publish.outputs.resume_source_key || '' }}
         run: |
           set -euo pipefail
           python - <<'PY'
@@ -930,6 +1110,7 @@ jobs:
                   "resume_store": os.environ["RECOVERY_STORE"],
                   "resume_phase": os.environ["RECOVERY_PHASE"],
                   "resume_attempt": next_attempt,
+                  "resume_source_key": os.environ.get("RECOVERY_SOURCE_KEY", ""),
               },
           }
           request = urllib.request.Request(

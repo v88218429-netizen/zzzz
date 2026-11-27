@@ -5908,24 +5908,167 @@ function sellmonitorGithubOzonHash_(rows) {
   return bytes.map(function(b) { var n = (b + 256) % 256; return ('0' + n.toString(16)).slice(-2); }).join('');
 }
 
-function sellmonitorGithubOzonEnsureRows_(sheet, lastRow) {
-  if (sheet.getMaxRows() < lastRow) sheet.insertRowsAfter(sheet.getMaxRows(), lastRow - sheet.getMaxRows());
+function sellmonitorGithubOzonColumnLabel_(column) {
+  var n=Number(column),label='';
+  if(!isFinite(n)||n<1)return 'A';
+  n=Math.floor(n);
+  while(n>0){var r=(n-1)%26;label=String.fromCharCode(65+r)+label;n=Math.floor((n-1)/26);}
+  return label;
 }
 
-function sellmonitorGithubOzonArchive_(archive, target, rangeA1, oldRows, sourceUpdated, archiveId) {
-  if (!oldRows || !oldRows.length) return 0;
-  var start = Math.max(2, archive.getLastRow()+1);
-  sellmonitorGithubOzonEnsureRows_(archive, start + oldRows.length - 1);
-  var stamp = new Date();
-  var payload = oldRows.map(function(row, i) {
-    return [archiveId, stamp, target, rangeA1, i+1, sourceUpdated, JSON.stringify(row)];
-  });
-  archive.getRange(start, 1, payload.length, 7).setValues(payload);
-  var check = archive.getRange(start, 1, payload.length, 7).getValues();
-  if (check.length !== payload.length || check.some(function(r, i) { return String(r[0]) !== archiveId || String(r[6]) !== JSON.stringify(oldRows[i]); })) {
-    throw new Error('OZON_ARCHIVE_READBACK_MISMATCH:' + target + ':' + rangeA1);
+function sellmonitorGithubOzonWorkbookGridCells_(spreadsheet) {
+  return spreadsheet.getSheets().reduce(function(total,sheet){
+    return total+Number(sheet.getMaxRows())*Number(sheet.getMaxColumns());
+  },0);
+}
+
+function sellmonitorGithubOzonEnsureRows_(sheet, lastRow, context, audit) {
+  /* OZON_GRID_PREFLIGHT_V1 */
+  context=context||{};
+  var wanted=Math.ceil(Number(lastRow)),oldRows=Number(sheet.getMaxRows()),columns=Number(sheet.getMaxColumns());
+  if(!isFinite(wanted)||wanted<1)throw new Error('OZON_GRID_TARGET_INVALID:'+sheet.getName()+':'+String(lastRow));
+  var spreadsheet=sheet.getParent(),cellsBefore=sellmonitorGithubOzonWorkbookGridCells_(spreadsheet);
+  var addedRows=Math.max(0,wanted-oldRows),cellsAfter=cellsBefore+addedRows*columns;
+  var range=String(context.target_range||sheet.getName()+'!A'+Math.min(oldRows+1,wanted)+':'+sellmonitorGithubOzonColumnLabel_(columns)+wanted);
+  var detail={
+    spreadsheet_id:spreadsheet.getId(),sheet:sheet.getName(),stage:String(context.stage||'ensure_rows'),
+    target_range:range,old_grid_rows:oldRows,old_grid_columns:columns,
+    new_grid_rows:Math.max(oldRows,wanted),new_grid_columns:columns,inserted_rows:addedRows,
+    cells_before:cellsBefore,cells_after:cellsAfter,cell_limit:20000000,
+    within_existing_grid:oldRows>=wanted
+  };
+  if(audit)audit.push(detail);
+  console.log('OZON_GRID_PREFLIGHT='+JSON.stringify(detail));
+  if(cellsAfter>20000000)throw new Error('OZON_GRID_LIMIT_PREFLIGHT:'+JSON.stringify(detail));
+  if(oldRows>=wanted)return detail;
+  sheet.insertRowsAfter(oldRows,addedRows);
+  detail.new_grid_rows=Number(sheet.getMaxRows());
+  detail.cells_after=sellmonitorGithubOzonWorkbookGridCells_(spreadsheet);
+  console.log('OZON_GRID_EXPANDED='+JSON.stringify(detail));
+  if(detail.cells_after>20000000)throw new Error('OZON_GRID_LIMIT_POSTCHECK:'+JSON.stringify(detail));
+  return detail;
+}
+
+function sellmonitorGithubOzonArchive_(archive, target, rangeA1, oldRows, sourceUpdated, archiveId, gridAudit) {
+  if(!oldRows||!oldRows.length)return 0;
+  var operationKey='OZON_ARCHIVE_V2_'+sellmonitorGithubOzonHash_({target:String(target),range:String(rangeA1),rows:oldRows});
+  var props=PropertiesService.getScriptProperties();
+  var propertyKey='SM_OZON_ARCHIVE_STATE_V2_'+archive.getParent().getId();
+  var stateMap={};
+  try{stateMap=JSON.parse(props.getProperty(propertyKey)||'{}')||{};}catch(stateErr){throw new Error('OZON_ARCHIVE_STATE_INVALID:'+String(stateErr&&stateErr.message||stateErr));}
+  function saveState(){
+    var keys=Object.keys(stateMap);
+    if(keys.length>520){
+      var pending=keys.filter(function(k){return stateMap[k]&&stateMap[k].state==='PENDING';});
+      var verified=keys.filter(function(k){return stateMap[k]&&stateMap[k].state==='VERIFIED';})
+        .sort(function(a,b){return String(stateMap[a].updated_at||'').localeCompare(String(stateMap[b].updated_at||''));});
+      var compact={};
+      pending.concat(verified.slice(-500)).forEach(function(k){compact[k]=stateMap[k];});
+      stateMap=compact;
+    }
+    props.setProperty(propertyKey,JSON.stringify(stateMap));
   }
-  return payload.length;
+  function makeChunks_(rows){
+    var chunks=[],cursor=0;
+    function add_(part,startRow){
+      var estimate=JSON.stringify({version:2,chunk_index:999999,total_chunks:999999,row_start:startRow,row_count:part.length,sha256:'0'.repeat(64),rows:part});
+      if(estimate.length>38000&&part.length>1){
+        var split=Math.ceil(part.length/2);
+        add_(part.slice(0,split),startRow);
+        add_(part.slice(split),startRow+split);
+        return;
+      }
+      if(estimate.length>38000)throw new Error('OZON_ARCHIVE_CELL_PAYLOAD_TOO_LARGE:'+target+':'+rangeA1+':row='+startRow+':chars='+estimate.length);
+      chunks.push({rows:part,row_start:startRow});
+    }
+    for(cursor=0;cursor<rows.length;cursor+=100)add_(rows.slice(cursor,Math.min(rows.length,cursor+100)),cursor+1);
+    return chunks;
+  }
+  var chunks=makeChunks_(oldRows);
+  function encodeChunk_(chunk,index){
+    return JSON.stringify({
+      version:2,chunk_index:index+1,total_chunks:chunks.length,row_start:chunk.row_start,
+      row_count:chunk.rows.length,sha256:sellmonitorGithubOzonHash_(chunk.rows),rows:chunk.rows
+    });
+  }
+  function rowMatches_(row,chunk,index){
+    if(!row||String(row[0])!==operationKey||String(row[2])!==String(target)
+       ||String(row[3])!==String(rangeA1)||Number(row[4])!==chunk.row_start)return false;
+    try{
+      var saved=JSON.parse(String(row[6]||''));
+      return saved.version===2&&Number(saved.chunk_index)===index+1
+        &&Number(saved.total_chunks)===chunks.length&&Number(saved.row_start)===chunk.row_start
+        &&Number(saved.row_count)===chunk.rows.length
+        &&String(saved.sha256)===sellmonitorGithubOzonHash_(chunk.rows)
+        &&JSON.stringify(saved.rows)===JSON.stringify(chunk.rows);
+    }catch(parseErr){return false;}
+  }
+  function allRowsMatch(check){
+    return check.length===chunks.length&&check.every(function(row,index){return rowMatches_(row,chunks[index],index);});
+  }
+  var entry=stateMap[operationKey],start;
+  if(entry){
+    if(Number(entry.rows)!==oldRows.length||Number(entry.chunks)!==chunks.length)
+      throw new Error('OZON_ARCHIVE_KEY_SHAPE_MISMATCH:'+target+':'+rangeA1);
+    start=Number(entry.start);
+    if(!isFinite(start)||start<2)throw new Error('OZON_ARCHIVE_KEY_START_INVALID:'+target+':'+rangeA1);
+    if(start+chunks.length-1<=archive.getMaxRows()){
+      var previous=archive.getRange(start,1,chunks.length,7).getValues();
+      if(allRowsMatch(previous)){
+        if(entry.state!=='VERIFIED'){entry.state='VERIFIED';entry.next_chunk=chunks.length;entry.updated_at=new Date().toISOString();saveState();}
+        return 0;
+      }
+      if(entry.state==='VERIFIED')throw new Error('OZON_ARCHIVE_VERIFIED_READBACK_MISMATCH:'+target+':'+rangeA1);
+      if(previous.some(function(row){return String(row[0]||'')&&String(row[0])!==operationKey;}))
+        throw new Error('OZON_ARCHIVE_PENDING_RANGE_CONFLICT:'+target+':'+rangeA1+':row='+start);
+    }
+  }else{
+    start=Math.max(2,archive.getLastRow()+1);
+  }
+  var end=start+chunks.length-1;
+  var appendRange=archive.getName()+'!A'+start+':G'+end+';snapshot='+target+'!'+rangeA1;
+  sellmonitorGithubOzonEnsureRows_(archive,end,{stage:'archive_append',target_range:appendRange},gridAudit);
+  var stamp=new Date();
+  stateMap[operationKey]=stateMap[operationKey]||{start:start,rows:oldRows.length,chunks:chunks.length,state:'PENDING',next_chunk:0,updated_at:new Date().toISOString()};
+  stateMap[operationKey].state='PENDING';
+  saveState();
+  var partSize=25;
+  for(var partStart=0;partStart<chunks.length;partStart+=partSize){
+    var partEnd=Math.min(chunks.length,partStart+partSize),partChunks=chunks.slice(partStart,partEnd);
+    var payload=partChunks.map(function(chunk,offset){
+      var index=partStart+offset;
+      return [operationKey,stamp,target,rangeA1,chunk.row_start,sourceUpdated,encodeChunk_(chunk,index)];
+    });
+    var writeStart=start+partStart,writeEnd=writeStart+payload.length-1;
+    var beforePart=sellmonitorGithubOzonWorkbookGridCells_(archive.getParent());
+    archive.getRange(writeStart,1,payload.length,7).setValues(payload);
+    SpreadsheetApp.flush();
+    var check=archive.getRange(writeStart,1,payload.length,7).getValues();
+    var partOk=check.length===payload.length&&check.every(function(row,offset){
+      return rowMatches_(row,partChunks[offset],partStart+offset);
+    });
+    var partDetail={
+      spreadsheet_id:archive.getParent().getId(),sheet:archive.getName(),
+      stage:'archive_part_readback',target_range:archive.getName()+'!A'+writeStart+':G'+writeEnd,
+      snapshot:String(target)+'!'+String(rangeA1),source_rows:partChunks.reduce(function(n,x){return n+x.rows.length;},0),
+      archive_rows:payload.length,first_source_row:partChunks[0].row_start,
+      last_source_row:partChunks[partChunks.length-1].row_start+partChunks[partChunks.length-1].rows.length-1,
+      sha256:sellmonitorGithubOzonHash_(partChunks.map(function(x){return x.rows;})),
+      cells_before:beforePart,cells_after:sellmonitorGithubOzonWorkbookGridCells_(archive.getParent()),
+      readback:partOk
+    };
+    if(gridAudit)gridAudit.push(partDetail);
+    console.log('OZON_ARCHIVE_PART_VERIFIED='+JSON.stringify(partDetail));
+    if(!partOk)throw new Error('OZON_ARCHIVE_READBACK_MISMATCH:'+target+':'+rangeA1+':'+partDetail.target_range);
+    stateMap[operationKey].next_chunk=partEnd;
+    stateMap[operationKey].updated_at=new Date().toISOString();
+    saveState();
+  }
+  stateMap[operationKey].state='VERIFIED';
+  stateMap[operationKey].next_chunk=chunks.length;
+  stateMap[operationKey].updated_at=new Date().toISOString();
+  saveState();
+  return oldRows.length;
 }
 
 function sellmonitorGithubOzonNormalizeRows_(rows, idColumnsAsText) {
@@ -6094,8 +6237,12 @@ function sellmonitorGithubPublishOzonSummaryOrders_(payload) {
   var today=Utilities.formatDate(new Date(),String(SMC_OZON_SUMMARY.timezone),'yyyy-MM-dd'), results=[];
   Object.keys(SMC_OZON_SUMMARY.stores).forEach(function(cabinet){
     var cfg=SMC_OZON_SUMMARY.stores[cabinet];
+    var ss=null,sourceKey='',ozonGridAudit=[],ozonGridCellsBefore=null,ozonFailureStage='open_target',ozonFailureRange='unknown';
     try {
-    var ss=SpreadsheetApp.openById(cfg.id),daily=ss.getSheetByName('11_API_Заказы'),skuSheet=ss.getSheetByName('12_API_Заказы_SKU');var sheetTimezone=String(ss.getSpreadsheetTimeZone()||'Etc/GMT'),businessTimezone=String(SMC_OZON_SUMMARY.timezone);
+    ss=SpreadsheetApp.openById(cfg.id);
+    ozonGridCellsBefore=sellmonitorGithubOzonWorkbookGridCells_(ss);
+    ozonFailureStage='validate_target';ozonFailureRange='11_API_Заказы!A4:J4;12_API_Заказы_SKU!A4:L4';
+    var daily=ss.getSheetByName('11_API_Заказы'),skuSheet=ss.getSheetByName('12_API_Заказы_SKU');var sheetTimezone=String(ss.getSpreadsheetTimeZone()||'Etc/GMT'),businessTimezone=String(SMC_OZON_SUMMARY.timezone);
     if(!daily||!skuSheet)throw new Error('OZON_TARGET_TAB_MISSING:'+cfg.name);
     var storeRecords=records.filter(function(r){return r.cabinet===cabinet;});
     if(!storeRecords.length){results.push({store:cfg.name,ok:true,skipped:true,reason:'empty_source_preserved'});return;}
@@ -6146,7 +6293,24 @@ function sellmonitorGithubPublishOzonSummaryOrders_(payload) {
     var archive=ss.getSheetByName('13_API_Заказы_Архив');
     if(!archive){archive=ss.insertSheet('13_API_Заказы_Архив');archive.getRange(1,1,1,7).setValues([['Архив ID','Время','Лист','Диапазон','Строка в диапазоне','Последний успешный экспорт источника','Старое значение JSON']]);}
     else if(archive.getLastRow()===0)archive.getRange(1,1,1,7).setValues([['Архив ID','Время','Лист','Диапазон','Строка в диапазоне','Время источника','Старое значение JSON']]);
-    var archiveId=Utilities.getUuid(), archived=0;
+    var sourceVersionRows=storeRecords.slice().sort(function(a,b){
+      var left=[a.day,a.posting,a.sku,a.offer].join('\u001f'),right=[b.day,b.posting,b.sku,b.offer].join('\u001f');
+      return left<right?-1:(left>right?1:0);
+    });
+    var sourceCanonicalRows=storeRecords.map(function(r){return [String(r.cabinet||''),String(r.day||''),String(r.posting||''),String(r.order||''),String(r.offer||''),String(r.sku||''),String(r.title||''),String(r.qty)];});
+    sourceCanonicalRows.sort(function(a,b){for(var ci=0;ci<6;ci++){if(a[ci]<b[ci])return -1;if(a[ci]>b[ci])return 1;}return 0;});
+    var calculatedDigest=sellmonitorGithubOzonHash_(sourceCanonicalRows);
+    if(apiMode){
+      var providedDigest=String(payload.source_data_sha256||'').trim();
+      var providedKey=String(payload.source_key||'').trim();
+      var expectedKey='ozon-orders-v2|cabinet='+cabinet+'|period='+coverageFrom+'..'+coverageTo+'|sha256='+providedDigest;
+      if(!/^[a-f0-9]{64}$/.test(providedDigest)||providedDigest!==calculatedDigest||providedKey!==expectedKey)
+        throw new Error('OZON_SOURCE_KEY_INVALID:'+cfg.name);
+      sourceKey=providedKey;
+    }else{
+      sourceKey='ozon-orders-v1|cabinet='+cabinet+'|'+agg.minDay+'..'+agg.maxDay+'|'+sellmonitorGithubOzonHash_(sourceVersionRows);
+    }
+    var archiveId=sourceKey, archived=0;
     var summarySheet=ss.getSheetByName('00_РНП_магазин');
     if(!summarySheet)throw new Error('OZON_SUMMARY_RNP_TAB_MISSING:'+cfg.name);
     var oldSummaryNote=String(summarySheet.getRange('A2').getValue()||'');
@@ -6182,36 +6346,43 @@ function sellmonitorGithubPublishOzonSummaryOrders_(payload) {
     var firstDayLabel=agg.minDay?Utilities.formatDate(new Date(agg.minDay+'T12:00:00Z'),'UTC','dd.MM.yyyy'):'';
     var dailyOrderChartTitle='Дни · '+cfg.name+' · Seller API: уникальные заказы · '+firstDayLabel+'–'+lastFullDayLabel+'; только полные дни';
     var dailyOrderChartMatches=0,dailyOrderChartUpdated=false;
-    if(!sameGraphNote)archived+=sellmonitorGithubOzonArchive_(archive,'10_Графики_магазина','A2',[[oldGraphNote]],sourceUpdated,archiveId);
-    if(!sameStamp) archived+=sellmonitorGithubOzonArchive_(archive,'11_API_Заказы','A2',[[oldStamp]],sourceUpdated,archiveId);
-    if(!sameSummaryNote) archived+=sellmonitorGithubOzonArchive_(archive,'00_РНП_магазин','A2:A2',[[oldSummaryNote]],sourceUpdated,archiveId);
-    if(!sameDaily) archived+=sellmonitorGithubOzonArchive_(archive,'11_API_Заказы','A5:J'+(4+oldDaily.length),oldDaily,sourceUpdated,archiveId);
-    if(!sameSku) archived+=sellmonitorGithubOzonArchive_(archive,'12_API_Заказы_SKU','A5:L'+(4+oldSku.length),oldSku,sourceUpdated,archiveId);
-    if(!sameHelper) archived+=sellmonitorGithubOzonArchive_(archive,'11_API_Заказы','L1:O'+(1+oldHelper.length),oldHelper,sourceUpdated,archiveId);
+    ozonFailureStage='archive_snapshot';ozonFailureRange='13_API_Заказы_Архив!A:G';
+    if(!sameGraphNote)archived+=sellmonitorGithubOzonArchive_(archive,'10_Графики_магазина','A2',[[oldGraphNote]],sourceUpdated,archiveId,ozonGridAudit);
+    if(!sameStamp) archived+=sellmonitorGithubOzonArchive_(archive,'11_API_Заказы','A2',[[oldStamp]],sourceUpdated,archiveId,ozonGridAudit);
+    if(!sameSummaryNote) archived+=sellmonitorGithubOzonArchive_(archive,'00_РНП_магазин','A2:A2',[[oldSummaryNote]],sourceUpdated,archiveId,ozonGridAudit);
+    if(!sameDaily) archived+=sellmonitorGithubOzonArchive_(archive,'11_API_Заказы','A5:J'+(4+oldDaily.length),oldDaily,sourceUpdated,archiveId,ozonGridAudit);
+    if(!sameSku) archived+=sellmonitorGithubOzonArchive_(archive,'12_API_Заказы_SKU','A5:L'+(4+oldSku.length),oldSku,sourceUpdated,archiveId,ozonGridAudit);
+    if(!sameHelper) archived+=sellmonitorGithubOzonArchive_(archive,'11_API_Заказы','L1:O'+(1+oldHelper.length),oldHelper,sourceUpdated,archiveId,ozonGridAudit);
     var written=0;
     if(sourceActivityVerified){
       var activity=sourceActivityByCabinet[cabinet];
       if(Number(activity.rows)!==Number(agg.sourceRows)||String(activity.maxDay)!==String(agg.maxDay))throw new Error('OZON_SOURCE_ACTIVITY_READBACK_MISMATCH:'+cfg.name);
     }
+    ozonFailureStage='source_stamp_write';ozonFailureRange='11_API_Заказы!A2';
     if(!sameStamp)daily.getRange(2,1,1,1).setValue(newStamp);
+    ozonFailureStage='summary_note_write';ozonFailureRange='00_РНП_магазин!A2';
     if(!sameSummaryNote)summarySheet.getRange('A2').setValue(newSummaryNote);
+    ozonFailureStage='graph_note_write';ozonFailureRange='10_Графики_магазина!A2';
     if(!sameGraphNote)graphSheet.getRange('A2').setValue(newGraphNote);
+    ozonFailureStage='daily_write';ozonFailureRange='11_API_Заказы!A5:J'+(4+Math.max(oldDaily.length,dailyRows.length));
     if(!sameDaily){
-      var need=dailyStart+dailyRows.length-1;sellmonitorGithubOzonEnsureRows_(daily,need);
+      var need=dailyStart+dailyRows.length-1;sellmonitorGithubOzonEnsureRows_(daily,need,{stage:'daily_write',target_range:'11_API_Заказы!A'+dailyStart+':J'+need},ozonGridAudit);
       var clear=Math.max(oldDaily.length,dailyRows.length);
       if(clear)daily.getRange(dailyStart,1,clear,10).clearContent();
       if(dailyRows.length)daily.getRange(dailyStart,1,dailyRowsForWrite.length,10).setValues(dailyRowsForWrite);
       written+=dailyRows.length;
     }
+    ozonFailureStage='sku_write';ozonFailureRange='12_API_Заказы_SKU!A5:L'+(4+Math.max(oldSku.length,agg.products.length));
     if(!sameSku){
-      var skuRows=agg.products,skuStart=5,skuNeed=skuStart+skuRows.length-1;sellmonitorGithubOzonEnsureRows_(skuSheet,skuNeed);
+      var skuRows=agg.products,skuStart=5,skuNeed=skuStart+skuRows.length-1;sellmonitorGithubOzonEnsureRows_(skuSheet,skuNeed,{stage:'sku_write',target_range:'12_API_Заказы_SKU!A'+skuStart+':L'+skuNeed},ozonGridAudit);
       var skuClear=Math.max(oldSku.length,skuRows.length);
       if(skuClear)skuSheet.getRange(skuStart,1,skuClear,12).clearContent();
       if(skuRows.length)skuSheet.getRange(skuStart,1,skuRowsForWrite.length,12).setValues(skuRowsForWrite);
       written+=skuRows.length;
     }
+    ozonFailureStage='chart_helper_write';ozonFailureRange='11_API_Заказы!L1:O'+(1+Math.max(oldHelper.length,helper.length-1));
     if(!sameHelper){
-      var helpNeed=1+helper.length;sellmonitorGithubOzonEnsureRows_(daily,helpNeed);
+      var helpNeed=1+helper.length;sellmonitorGithubOzonEnsureRows_(daily,helpNeed,{stage:'chart_helper_write',target_range:'11_API_Заказы!L1:O'+helpNeed},ozonGridAudit);
       var helpClear=Math.max(oldHelper.length,helper.length-1);
       if(helpClear)daily.getRange(2,12,helpClear,4).clearContent();
       daily.getRange(1,12,1,4).setValues([helper[0]]);
@@ -6284,10 +6455,10 @@ function sellmonitorGithubPublishOzonSummaryOrders_(payload) {
         var labelsChanged=JSON.stringify(oldLabels)!==JSON.stringify(newLabels);
         var notesChanged=JSON.stringify(oldNotes)!==JSON.stringify(newNotes);
         var noteChanged=oldNote!==helperNote;
-        if(seriesChanged&&periodCount)archived+=sellmonitorGithubOzonArchive_(archive,spec.name,'F3:'+helperColumnLabelForOrders_(lastCol)+'7',oldSeries,sourceUpdated,archiveId);
-        if(labelsChanged)archived+=sellmonitorGithubOzonArchive_(archive,spec.name,'A3:A7',oldLabels,sourceUpdated,archiveId);
-        if(notesChanged)archived+=sellmonitorGithubOzonArchive_(archive,spec.name,'C3:D7',oldNotes,sourceUpdated,archiveId);
-        if(noteChanged)archived+=sellmonitorGithubOzonArchive_(archive,spec.name,'A1',[[oldNote]],sourceUpdated,archiveId);
+        if(seriesChanged&&periodCount)archived+=sellmonitorGithubOzonArchive_(archive,spec.name,'F3:'+helperColumnLabelForOrders_(lastCol)+'7',oldSeries,sourceUpdated,archiveId,ozonGridAudit);
+        if(labelsChanged)archived+=sellmonitorGithubOzonArchive_(archive,spec.name,'A3:A7',oldLabels,sourceUpdated,archiveId,ozonGridAudit);
+        if(notesChanged)archived+=sellmonitorGithubOzonArchive_(archive,spec.name,'C3:D7',oldNotes,sourceUpdated,archiveId,ozonGridAudit);
+        if(noteChanged)archived+=sellmonitorGithubOzonArchive_(archive,spec.name,'A1',[[oldNote]],sourceUpdated,archiveId,ozonGridAudit);
         if(labelsChanged)sh.getRange(3,1,5,1).setValues(newLabels);
         if(notesChanged)sh.getRange(3,3,5,2).setValues(newNotes);
         if(seriesChanged&&periodCount)sh.getRange(3,6,5,periodCount).setValues(newSeries);
@@ -6337,7 +6508,7 @@ function sellmonitorGithubPublishOzonSummaryOrders_(payload) {
         if(oldTitle.indexOf('Дни · '+cfg.name+' · Seller API: уникальные заказы ·')!==0)return;
         dailyOrderChartMatches++;
         if(oldTitle===dailyOrderChartTitle)return;
-        archived+=sellmonitorGithubOzonArchive_(archive,'10_Графики_магазина','chart:'+ch.getChartId()+':title',[[oldTitle]],sourceUpdated,archiveId);
+        archived+=sellmonitorGithubOzonArchive_(archive,'10_Графики_магазина','chart:'+ch.getChartId()+':title',[[oldTitle]],sourceUpdated,archiveId,ozonGridAudit);
         graphSheet.updateChart(ch.modify().setOption('title',dailyOrderChartTitle).build());
         dailyOrderChartUpdated=true;
       });
@@ -6348,6 +6519,7 @@ function sellmonitorGithubPublishOzonSummaryOrders_(payload) {
       return String(ch.getOptions().get('title')||'')===dailyOrderChartTitle;
     });
     if(!graphNoteReadback||!dailyOrderChartReadback||(lastFullDay&&dailyOrderChartMatches!==1))throw new Error('OZON_GRAPH_FRESHNESS_READBACK_FAILED:'+cfg.name+':'+graphNoteReadback+':'+dailyOrderChartReadback+':'+dailyOrderChartMatches);
+    ozonFailureStage='charts_update';ozonFailureRange='11_API_Заказы chart ranges';
     var charts=daily.getCharts();
     if(charts.length){var range=daily.getRange(1,12,helper.length,4);charts.forEach(function(ch){daily.updateChart(ch.modify().clearRanges().addRange(range).build());});}
     var articleTargets=[
@@ -6356,6 +6528,7 @@ function sellmonitorGithubPublishOzonSummaryOrders_(payload) {
       {name:'03_Месяцы_артикулы',kind:'month',label:'Месяцы'}
     ];
     var articleViews=[];
+    ozonFailureStage='article_view_write';ozonFailureRange='article views 01/02/03';
     articleTargets.forEach(function(target){
       var view=ss.getSheetByName(target.name);
       if(!view)throw new Error('OZON_ARTICLE_TAB_MISSING:'+target.name);
@@ -6380,9 +6553,9 @@ function sellmonitorGithubPublishOzonSummaryOrders_(payload) {
       if(!sameView){
         var viewArchiveId=archiveId;
         var archiveColNumber=oldWidth,archiveColName='';while(archiveColNumber>0){var archiveRemainder=(archiveColNumber-1)%26;archiveColName=String.fromCharCode(65+archiveRemainder)+archiveColName;archiveColNumber=Math.floor((archiveColNumber-1)/26);}
-        archived+=sellmonitorGithubOzonArchive_(archive,target.name,'A1:'+archiveColName+oldLast,oldView,sourceUpdated,viewArchiveId);
+        archived+=sellmonitorGithubOzonArchive_(archive,target.name,'A1:'+archiveColName+oldLast,oldView,sourceUpdated,viewArchiveId,ozonGridAudit);
         var viewNeed=4+viewRows.length;
-        sellmonitorGithubOzonEnsureRows_(view,viewNeed);
+        sellmonitorGithubOzonEnsureRows_(view,viewNeed,{stage:'article_view_write',target_range:target.name+'!A1:L'+viewNeed},ozonGridAudit);
         if(view.getFilter())view.getFilter().remove();
         view.getRange(1,1,Math.max(oldLast,viewNeed),oldWidth).clearContent();
         view.getRange(1,1,3,1).setValues([[viewTitle[0]],[viewDescription[0]],[viewCoverage[0]]]);
@@ -6423,16 +6596,18 @@ function sellmonitorGithubPublishOzonSummaryOrders_(payload) {
     var log=ss.getSheetByName('14_API_Заказы_Журнал');
     if(!log){log=ss.insertSheet('14_API_Заказы_Журнал');log.getRange(1,1,1,12).setValues([['Время запуска','Магазин','Источник','Последний успешный экспорт','Строк источника','Период с','Период по','Строк сводки','Строк SKU','Строк в архиве','SHA-256 сводки','Проверка']]);}
     else if(log.getLastRow()===0)log.getRange(1,1,1,12).setValues([['Время','Магазин','Источник','Время изменения источника','Строк источника','Период с','Период по','Строк сводки','Строк SKU','Строк в архиве','SHA-256 сводки','Проверка']]);
-    var finalHash=sellmonitorGithubOzonHash_({summary:newDaily,products:newSku,helper:newHelper,store_helpers:ozonStoreHelperChecks,articleViews:articleViews,summary_note:newSummaryNote,graph_note:newGraphNote,daily_order_chart_title:lastFullDay?dailyOrderChartTitle:''});
+    var finalHash=sellmonitorGithubOzonHash_({source_key:sourceKey,summary:newDaily,products:newSku,helper:newHelper,store_helpers:ozonStoreHelperChecks,articleViews:articleViews,summary_note:newSummaryNote,graph_note:newGraphNote,daily_order_chart_title:lastFullDay?dailyOrderChartTitle:''});
     var articleLog=articleViews.map(function(x){return x.sheet+'='+x.rows+' строк; SHA-256='+x.sha256;}).join('; ');
+    logStatus+='; стабильный ключ='+sourceKey;
     var logStatus=(apiMode?'OK: FBO/FBS API; все страницы периода получены; запись перечитана':'OK: запись и чтение сводки совпали; пустые дни не заменены нулями')+'; листы дней/недель/месяцев перечитаны: '+articleLog+(ozonStoreHelperChecks.length?'; магазинские 06/07/08 readback: '+ozonStoreHelperChecks.map(function(x){return x.sheet+'='+x.periods+' периодов; SHA-256='+x.sha256;}).join(', '):'');
     var logRow=[new Date(),cfg.name,apiMode?'Ozon Seller API через GitHub':SMC_OZON_SUMMARY.sourceSheet,sourceUpdated,agg.sourceRows,agg.minDay,agg.maxDay,newDaily.length,newSku.length,archived,finalHash,logStatus];
-    var logAt=log.getLastRow()+1;sellmonitorGithubOzonEnsureRows_(log,logAt);log.getRange(logAt,1,1,12).setValues([logRow]);
+    var logAt=log.getLastRow()+1;sellmonitorGithubOzonEnsureRows_(log,logAt,{stage:'journal_write',target_range:'14_API_Заказы_Журнал!A'+logAt+':L'+logAt},ozonGridAudit);log.getRange(logAt,1,1,12).setValues([logRow]);
     var logRead=log.getRange(logAt,1,1,12).getValues()[0];
     if(String(logRead[10])!==finalHash||String(logRead[11])!==logRow[11])throw new Error('OZON_LOG_READBACK_MISMATCH:'+cfg.name);
-    results.push({store:cfg.name,ok:true,source_rows:agg.sourceRows,source_min:agg.minDay,source_max:agg.maxDay,daily_rows:newDaily.length,sku_rows:newSku.length,article_views:articleViews,store_helpers:ozonStoreHelperChecks,archived_rows:archived,source_last_success:sourceUpdated,sha256:finalHash,readback:true,graph_note_readback:graphNoteReadback,daily_order_chart_title:dailyOrderChartTitle,daily_order_chart_updated:dailyOrderChartUpdated,daily_order_chart_readback:dailyOrderChartReadback,charts:charts.length});
+    results.push({store:cfg.name,ok:true,source_rows:agg.sourceRows,source_min:agg.minDay,source_max:agg.maxDay,daily_rows:newDaily.length,sku_rows:newSku.length,article_views:articleViews,store_helpers:ozonStoreHelperChecks,archived_rows:archived,source_last_success:sourceUpdated,source_key:sourceKey,sha256:finalHash,readback:true,grid_cells_before:ozonGridCellsBefore,grid_cells_after:sellmonitorGithubOzonWorkbookGridCells_(ss),grid_audit:ozonGridAudit,graph_note_readback:graphNoteReadback,daily_order_chart_title:dailyOrderChartTitle,daily_order_chart_updated:dailyOrderChartUpdated,daily_order_chart_readback:dailyOrderChartReadback,charts:charts.length});
     } catch(err) {
-      results.push({store:cfg.name,ok:false,error:String(err && err.message || err),source_updated:sourceUpdated});
+      var failureGridCellsAfter=null;try{if(ss)failureGridCellsAfter=sellmonitorGithubOzonWorkbookGridCells_(ss);}catch(gridErr){}
+      results.push({store:cfg.name,ok:false,error:String(err && err.message || err),failure_stage:ozonFailureStage,target_range:ozonFailureRange,source_key:sourceKey||null,source_updated:sourceUpdated,grid_cells_before:ozonGridCellsBefore,grid_cells_after:failureGridCellsAfter,grid_audit:ozonGridAudit});
     }
   });
   return {ok:results.every(function(x){return x.ok===true;}),action:'publish_ozon_summary_orders',source_id:SMC_OZON_SUMMARY.sourceId,source_rows:records.length,ignored_rows:ignored,source_updated:sourceUpdated,source_status:sourceStatus,source_fallback_used:sourceFallback,source_activity_verified:sourceActivityVerified,api_pages_complete:apiPagesComplete,stores:results};
