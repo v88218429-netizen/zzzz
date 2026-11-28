@@ -3,30 +3,30 @@
   "request": "HOME_20261122_1948_SCHEDULED.json",
   "query": "современные дома для семьи обзор планировок 150 200 м2",
   "knowledge_tag": "HOME",
-  "generated_at": "2026-11-27T00:34:39.384711+00:00",
+  "generated_at": "2026-11-28T00:01:15.956417+00:00",
   "videos": [
     {
-      "video_id": "rxva7-cvi04",
-      "url": "https://www.youtube.com/watch?v=rxva7-cvi04",
-      "title": "Обзор классного одноэтажного дома 150 м2",
-      "channel": "IS STROI",
-      "duration": 434,
+      "video_id": "e0U70_07P_U",
+      "url": "https://www.youtube.com/watch?v=e0U70_07P_U",
+      "title": "150 m2 Aerated Concrete Stone House - The Ideal Home for a Young Family. Why Are Two Stories Bett...",
+      "channel": "",
+      "duration": 909,
       "timestamp": null,
       "query": "современные дома для семьи обзор планировок 150 200 м2",
       "kind": "video",
-      "transcript": "transcripts/2026-11-27_HOME_video_rxva7-cvi04.md",
+      "transcript": "transcripts/2026-11-28_HOME_video_e0U70_07P_U.md",
       "method": "FreeTranscriptAPI"
     },
     {
-      "video_id": "O6odFVsRgks",
-      "url": "https://www.youtube.com/watch?v=O6odFVsRgks",
-      "title": "Одноэтажный дом 150 кв.м. для большой семьи | Проект со Вторым Светом",
-      "channel": "RUBICON / студия дизайна интерьера",
-      "duration": 522,
+      "video_id": "SIojFK2FBdg",
+      "url": "https://www.youtube.com/watch?v=SIojFK2FBdg",
+      "title": "Дом в Белгороде с отделкой \"под тапочки\"",
+      "channel": "",
+      "duration": 617,
       "timestamp": null,
       "query": "современные дома для семьи обзор планировок 150 200 м2",
       "kind": "video",
-      "transcript": "transcripts/2026-11-27_HOME_video_O6odFVsRgks.md",
+      "transcript": "transcripts/2026-11-28_HOME_video_SIojFK2FBdg.md",
       "method": "FreeTranscriptAPI"
     }
   ],
@@ -50,10 +50,10 @@
       "error": "youtube_captions: \nCould not retrieve a transcript for the video https://www.youtube.com/watch?v=DXGS6ejRiSI! This is most likely caused by:\n\nYouTube is blocking requests from your IP. This usually is due to one of the following reasons:\n- You have done too many requests and your IP has been blocked by YouTube\n- You are doing requests from an IP belonging to a cloud provider (like AWS, Google Cloud Platform, Azure, etc.). Unfortunately, most IPs from cloud providers are blocked by YouTube.\n\nThere are two things you can do to work around this:\n1. Use proxies to hide your IP address, as explained in the \"Working around IP bans\" section of the README (https://github.com/jdepoix/youtube-transcript-api?tab=readme-ov-file#working-around-ip-bans-requestblocked-or-ipblocked-exception).\n2. (NOT REC"
     },
     {
-      "video_id": "KJGUhg6XfOY",
-      "url": "https://www.youtube.com/watch?v=KJGUhg6XfOY",
-      "title": "Лучший проект 2022 года «‎Тана» от строительной компании Михайловский дворик.",
-      "error": "youtube_captions: \nCould not retrieve a transcript for the video https://www.youtube.com/watch?v=KJGUhg6XfOY! This is most likely caused by:\n\nYouTube is blocking requests from your IP. This usually is due to one of the following reasons:\n- You have done too many requests and your IP has been blocked by YouTube\n- You are doing requests from an IP belonging to a cloud provider (like AWS, Google Cloud Platform, Azure, etc.). Unfortunately, most IPs from cloud providers are blocked by YouTube.\n\nThere are two things you can do to work around this:\n1. Use proxies to hide your IP address, as explained in the \"Working around IP bans\" section of the README (https://github.com/jdepoix/youtube-transcript-api?tab=readme-ov-file#working-around-ip-bans-requestblocked-or-ipblocked-exception).\n2. (NOT REC"
+      "video_id": "pnWkAlTEt4g",
+      "url": "https://www.youtube.com/watch?v=pnWkAlTEt4g",
+      "title": "Элитная двухкомнатная квартира 113,2 кв.м. в малоэтажном малоквартирном доме с закрытой территорией",
+      "error": "youtube_captions: \nCould not retrieve a transcript for the video https://www.youtube.com/watch?v=pnWkAlTEt4g! This is most likely caused by:\n\nYouTube is blocking requests from your IP. This usually is due to one of the following reasons:\n- You have done too many requests and your IP has been blocked by YouTube\n- You are doing requests from an IP belonging to a cloud provider (like AWS, Google Cloud Platform, Azure, etc.). Unfortunately, most IPs from cloud providers are blocked by YouTube.\n\nThere are two things you can do to work around this:\n1. Use proxies to hide your IP address, as explained in the \"Working around IP bans\" section of the README (https://github.com/jdepoix/youtube-transcript-api?tab=readme-ov-file#working-around-ip-bans-requestblocked-or-ipblocked-exception).\n2. (NOT REC"
     }
   ]
 }

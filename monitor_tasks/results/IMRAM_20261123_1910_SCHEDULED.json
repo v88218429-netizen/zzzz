@@ -3,30 +3,30 @@
   "request": "IMRAM_20261123_1910_SCHEDULED.json",
   "query": "Имрам как правильно формулировать желание конечный результат",
   "knowledge_tag": "IMRAM",
-  "generated_at": "2026-11-27T00:34:51.760964+00:00",
+  "generated_at": "2026-11-28T00:01:27.881717+00:00",
   "videos": [
     {
-      "video_id": "okrA19HdPMY",
-      "url": "https://www.youtube.com/watch?v=okrA19HdPMY",
-      "title": "Как встать на ПУТЬ К СЕБЕ НАСТОЯЩЕМУ через духовные практики? / Подкаст с Имрамом \"За пределами ума”",
+      "video_id": "U2YERsND90E",
+      "url": "https://www.youtube.com/watch?v=U2YERsND90E",
+      "title": "Ваше представление о мире сразу изменится / Как легко получать желаемое, зная законы мироздания?",
       "channel": "Имрам Крийя - Йога",
-      "duration": 5241,
-      "timestamp": null,
-      "query": "Имрам как правильно формулировать желание конечный результат shorts",
-      "kind": "video",
-      "transcript": "transcripts/2026-11-27_IMRAM_video_okrA19HdPMY.md",
-      "method": "FreeTranscriptAPI"
-    },
-    {
-      "video_id": "5vxt4YorraQ",
-      "url": "https://www.youtube.com/watch?v=5vxt4YorraQ",
-      "title": "Год начался непросто? Это НЕ ПРОСТО ТАК! Как проходит переход в новое время УЖЕ СЕЙЧАС?",
-      "channel": "Имрам Крийя - Йога",
-      "duration": 793,
+      "duration": 1335,
       "timestamp": null,
       "query": "Имрам состояние исполненного желания",
       "kind": "video",
-      "transcript": "transcripts/2026-11-27_IMRAM_video_5vxt4YorraQ.md",
+      "transcript": "transcripts/2026-11-28_IMRAM_video_U2YERsND90E.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "FMs8Mb8Llt0",
+      "url": "https://www.youtube.com/watch?v=FMs8Mb8Llt0",
+      "title": "Эти фразы привлекают счастливые события мгновенно. Всемогущие слова",
+      "channel": "Имрам Крийя - Йога",
+      "duration": 971,
+      "timestamp": null,
+      "query": "Имрам состояние исполненного желания",
+      "kind": "video",
+      "transcript": "transcripts/2026-11-28_IMRAM_video_FMs8Mb8Llt0.md",
       "method": "FreeTranscriptAPI"
     }
   ],

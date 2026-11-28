@@ -3,75 +3,63 @@
   "request": "LOCATION_20261122_1948_SCHEDULED.json",
   "query": "лучшие места для жизни с семьей предпринимателю Россия 2026",
   "knowledge_tag": "LOCATION",
-  "generated_at": "2026-11-27T00:35:19.546805+00:00",
+  "generated_at": "2026-11-28T00:01:59.887014+00:00",
   "videos": [
     {
-      "video_id": "mNvjyCfAbqU",
-      "url": "https://www.youtube.com/watch?v=mNvjyCfAbqU",
-      "title": "ЖК САМОЛЕТ: Бетонное гетто или Лучший район России? / Честный обзор 2026",
-      "channel": "Дмитрий Гармат | Честно о недвижимости",
-      "duration": 3765,
+      "video_id": "u0TgXCfpWX4",
+      "url": "https://www.youtube.com/watch?v=u0TgXCfpWX4",
+      "title": "Мир НЕ БУДЕТ прежним! Где жить и покупать недвижимость, чтобы не потерять всё в ближайшие 5 лет?",
+      "channel": "Артур Васильев ",
+      "duration": 3540,
+      "timestamp": null,
+      "query": "лучшие места для жизни с семьей предпринимателю Россия 2026",
+      "kind": "video",
+      "transcript": "transcripts/2026-11-28_LOCATION_video_u0TgXCfpWX4.md",
+      "method": "FreeTranscriptAPI"
+    },
+    {
+      "video_id": "gqwlMilOejQ",
+      "url": "https://www.youtube.com/watch?v=gqwlMilOejQ",
+      "title": "Жизнь в 70 лет. Уехали из России в Грузию.",
+      "channel": "Alexander Short",
+      "duration": 2289,
       "timestamp": null,
       "query": "лучшие места для жизни с семьей предпринимателю Россия 2026 shorts",
       "kind": "video",
-      "transcript": "transcripts/2026-11-27_LOCATION_video_mNvjyCfAbqU.md",
+      "transcript": "transcripts/2026-11-28_LOCATION_video_gqwlMilOejQ.md",
       "method": "FreeTranscriptAPI"
     },
     {
-      "video_id": "mPTcPm5Uefg",
-      "url": "https://www.youtube.com/watch?v=mPTcPm5Uefg",
-      "title": "Какой город в Нидерландах выбрать для жизни? | Амстердам, Роттердам, Гаага? | Личный опыт",
-      "channel": "Relocode",
-      "duration": 1176,
+      "video_id": "HALkTGdpDDA",
+      "url": "https://www.youtube.com/watch?v=HALkTGdpDDA",
+      "title": "Are universities abroad CLOSED to Russians? The reality of 2026",
+      "channel": "Канал о хорошей жизни | Сила прошлого and ОБРАЗОВАНИЕ ЗА РУБЕЖОМ 🌍🎓",
+      "duration": 386,
       "timestamp": null,
       "query": "лучшие места для жизни с семьей предпринимателю Россия 2026 shorts",
       "kind": "video",
-      "transcript": "transcripts/2026-11-27_LOCATION_video_mPTcPm5Uefg.md",
-      "method": "FreeTranscriptAPI"
-    },
-    {
-      "video_id": "OGe5hc-MjVM",
-      "url": "https://www.youtube.com/watch?v=OGe5hc-MjVM",
-      "title": "Штат Вашингтон - лучшее место для жизни и бизнеса?!",
-      "channel": "Конечно Вася",
-      "duration": 1231,
-      "timestamp": null,
-      "query": "лучшие места для жизни с семьей предпринимателю Россия 2026 shorts",
-      "kind": "video",
-      "transcript": "transcripts/2026-11-27_LOCATION_video_OGe5hc-MjVM.md",
-      "method": "FreeTranscriptAPI"
-    },
-    {
-      "video_id": "LXcUD4cpDSw",
-      "url": "https://www.youtube.com/watch?v=LXcUD4cpDSw",
-      "title": "Лучшие места на 🚝Ласточку в Краснодар какое место выбрать?",
-      "channel": "SergeyALL",
-      "duration": 114,
-      "timestamp": null,
-      "query": "Краснодар Ростов Сочи сравнение жизнь shorts",
-      "kind": "short",
-      "transcript": "transcripts/2026-11-27_LOCATION_short_LXcUD4cpDSw.md",
-      "method": "FreeTranscriptAPI"
-    },
-    {
-      "video_id": "q3Nnk7OwvYQ",
-      "url": "https://www.youtube.com/watch?v=q3Nnk7OwvYQ",
-      "title": "Shorts Забрала документы из школы Анапа жизнь на юге анапа сегодня",
-      "channel": "Мама и Оля Переезд на юг",
-      "duration": 47,
-      "timestamp": null,
-      "query": "город у моря Россия жизнь семья shorts",
-      "kind": "short",
-      "transcript": "transcripts/2026-11-27_LOCATION_short_q3Nnk7OwvYQ.md",
+      "transcript": "transcripts/2026-11-28_LOCATION_video_HALkTGdpDDA.md",
       "method": "FreeTranscriptAPI"
     }
   ],
   "errors": [
     {
-      "video_id": "uH53V5m3vCg",
-      "url": "https://www.youtube.com/watch?v=uH53V5m3vCg",
-      "title": "🔥 @user-Kurskderevny 💔 /  Сколько Зарабатывает Канал \"Жизнь в Курской деревне\" ⁉️ 🧐",
-      "error": "youtube_captions: \nCould not retrieve a transcript for the video https://www.youtube.com/watch?v=uH53V5m3vCg! This is most likely caused by:\n\nYouTube is blocking requests from your IP. This usually is due to one of the following reasons:\n- You have done too many requests and your IP has been blocked by YouTube\n- You are doing requests from an IP belonging to a cloud provider (like AWS, Google Cloud Platform, Azure, etc.). Unfortunately, most IPs from cloud providers are blocked by YouTube.\n\nThere are two things you can do to work around this:\n1. Use proxies to hide your IP address, as explained in the \"Working around IP bans\" section of the README (https://github.com/jdepoix/youtube-transcript-api?tab=readme-ov-file#working-around-ip-bans-requestblocked-or-ipblocked-exception).\n2. (NOT REC"
+      "video_id": "kWRoREpyYFk",
+      "url": "https://www.youtube.com/watch?v=kWRoREpyYFk",
+      "title": "Продажа дома в станице Натухаевская",
+      "error": "youtube_captions: \nCould not retrieve a transcript for the video https://www.youtube.com/watch?v=kWRoREpyYFk! This is most likely caused by:\n\nYouTube is blocking requests from your IP. This usually is due to one of the following reasons:\n- You have done too many requests and your IP has been blocked by YouTube\n- You are doing requests from an IP belonging to a cloud provider (like AWS, Google Cloud Platform, Azure, etc.). Unfortunately, most IPs from cloud providers are blocked by YouTube.\n\nThere are two things you can do to work around this:\n1. Use proxies to hide your IP address, as explained in the \"Working around IP bans\" section of the README (https://github.com/jdepoix/youtube-transcript-api?tab=readme-ov-file#working-around-ip-bans-requestblocked-or-ipblocked-exception).\n2. (NOT REC"
+    },
+    {
+      "video_id": "SYsTDKjF8u8",
+      "url": "https://www.youtube.com/watch?v=SYsTDKjF8u8",
+      "title": "Дом в хуторе Семигорский/80м2 на 4,5 сотках /т. 8 966 767 6868 Максим/🔽🔽🔽НИЖЕ ПОЛЕЗНАЯ ИНФОРМАЦИЯ🔽🔽🔽",
+      "error": "youtube_captions: \nCould not retrieve a transcript for the video https://www.youtube.com/watch?v=SYsTDKjF8u8! This is most likely caused by:\n\nYouTube is blocking requests from your IP. This usually is due to one of the following reasons:\n- You have done too many requests and your IP has been blocked by YouTube\n- You are doing requests from an IP belonging to a cloud provider (like AWS, Google Cloud Platform, Azure, etc.). Unfortunately, most IPs from cloud providers are blocked by YouTube.\n\nThere are two things you can do to work around this:\n1. Use proxies to hide your IP address, as explained in the \"Working around IP bans\" section of the README (https://github.com/jdepoix/youtube-transcript-api?tab=readme-ov-file#working-around-ip-bans-requestblocked-or-ipblocked-exception).\n2. (NOT REC"
+    },
+    {
+      "video_id": "450LrjcURUI",
+      "url": "https://www.youtube.com/watch?v=450LrjcURUI",
+      "title": "Зажигательный танец уборщицы в Хабаровске",
+      "error": "youtube_captions: \nCould not retrieve a transcript for the video https://www.youtube.com/watch?v=450LrjcURUI! This is most likely caused by:\n\nYouTube is blocking requests from your IP. This usually is due to one of the following reasons:\n- You have done too many requests and your IP has been blocked by YouTube\n- You are doing requests from an IP belonging to a cloud provider (like AWS, Google Cloud Platform, Azure, etc.). Unfortunately, most IPs from cloud providers are blocked by YouTube.\n\nThere are two things you can do to work around this:\n1. Use proxies to hide your IP address, as explained in the \"Working around IP bans\" section of the README (https://github.com/jdepoix/youtube-transcript-api?tab=readme-ov-file#working-around-ip-bans-requestblocked-or-ipblocked-exception).\n2. (NOT REC"
     }
   ]
 }
