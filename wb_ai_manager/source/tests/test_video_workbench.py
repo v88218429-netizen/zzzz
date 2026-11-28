@@ -4,8 +4,11 @@ import unittest
 
 from wb_control_center.video_workbench import (
     _promotion_recommendations,
+    _promotion_calendar,
     _price_table,
     _review_candidates,
+    _review_insights,
+    _pin_status,
     _chat_queue,
     build_video_workbench,
     evaluate_experiment_results,
@@ -129,6 +132,25 @@ class PromotionTests(unittest.TestCase):
         self.assertIs(row["is_auto"], True)
         self.assertIs(row["promotion_status"], False)
 
+    def test_campaign_calendar_deduplicates_product_rows_and_keeps_store_scope(self):
+        calendar = _promotion_calendar([
+            {"shop_code": "ap", "nmID": 1, "actionId": 12, "actionName": "Осень", "startDate": "2026-11-20", "productsCount": 9},
+            {"shop_code": "ap", "nmID": 2, "actionId": 12, "actionName": "Осень", "startDate": "2026-11-20", "productsCount": 9},
+            {"shop_code": "aa", "nmID": 3, "actionId": 12, "actionName": "Осень", "startDate": "2026-11-20", "productsCount": 4},
+        ], "2026-11-13T10:00:00Z")
+        self.assertEqual(calendar["row_count"], 2)
+        ap = next(row for row in calendar["rows"] if row["shop_code"] == "ap")
+        self.assertEqual(ap["product_count"], 2)
+        self.assertEqual(ap["eligible_products"], 9)
+
+    def test_campaign_calendar_marks_mixed_product_participation(self):
+        calendar = _promotion_calendar([
+            {"shop_code": "ap", "nmID": 1, "actionId": 12, "actionName": "Осень", "inAction": True},
+            {"shop_code": "ap", "nmID": 2, "actionId": 12, "actionName": "Осень", "inAction": False},
+        ], "t")
+        self.assertEqual(calendar["row_count"], 1)
+        self.assertEqual(calendar["rows"][0]["status"], "mixed")
+
 
 class PhotoExperimentTests(unittest.TestCase):
     def test_ab_test_is_two_variants_without_audience_and_requires_duration(self):
@@ -224,6 +246,39 @@ class CustomerAndCatalogTests(unittest.TestCase):
         self.assertEqual(result["rows"][0]["id"], "r1")
         self.assertNotIn("unanswered", [x["id"] for x in result["rows"]])
 
+    def test_pin_state_is_tri_state_not_missing_equals_unpinned(self):
+        self.assertEqual(_pin_status(False), "not_pinned")
+        self.assertEqual(_pin_status("unpinned"), "not_pinned")
+        self.assertEqual(_pin_status(None), "unknown")
+        self.assertEqual(_pin_status("unavailable"), "unknown")
+
+    def test_review_shares_are_by_exact_nm_id_and_only_returned_rows(self):
+        result = _review_insights({"reviews_questions": {"answered_feedbacks": {"created_at": "t", "data": [
+            {"productDetails": {"nmId": 111}, "productValuation": 5, "text": "Отлично"},
+            {"productDetails": {"nmId": 111}, "productValuation": 1, "text": "Сломано"},
+            {"productDetails": {"nmId": 222}, "productValuation": 3, "text": "Обычный товар"},
+        ]}}})
+        first = next(row for row in result["rows"] if row["nm_id"] == "111")
+        self.assertEqual(first["count"], 2)
+        self.assertEqual(first["positive_share_pct"], 50)
+        self.assertEqual(first["negative_share_pct"], 50)
+        self.assertEqual(result["source_rows"], 3)
+        self.assertIn("не нейросетевой", result["note"])
+
+    def test_ai_review_and_chat_summaries_are_shown_only_when_source_provided_them(self):
+        review = _review_insights({"reviews_questions": {
+            "answered_feedbacks": {"created_at": "review-time", "data": [{"productDetails": {"nmId": 111}, "productValuation": 5}]},
+            "answered_feedback_insights": {"created_at": "ai-time", "data": {"status": "available", "source_count": 1, "summary": "По одному отзыву выводы ограничены."}},
+        }})
+        chat = _chat_queue({"buyer_chats": {
+            "chat_events": {"created_at": "chat-time", "data": [{"chatId": "c1", "text": "Вопрос о размере"}]},
+            "chat_triage": {"created_at": "triage-time", "data": {"status": "not_configured", "source_count": 1, "note": "Модель не подключена."}},
+        }})
+        self.assertEqual(review["ai_summary"]["summary"], "По одному отзыву выводы ограничены.")
+        self.assertEqual(review["ai_summary"]["observed_at"], "ai-time")
+        self.assertEqual(chat["ai_summary"]["status"], "not_configured")
+        self.assertEqual(chat["ai_summary"]["observed_at"], "triage-time")
+
     def test_chat_drafts_are_never_sent_and_legal_cases_have_no_template(self):
         snapshots = {"buyer_chats": {"chat_events": {"data": [
             {"chatId": "c1", "text": "Где мой заказ, когда привезут?"},
@@ -260,3 +315,4 @@ class CustomerAndCatalogTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
